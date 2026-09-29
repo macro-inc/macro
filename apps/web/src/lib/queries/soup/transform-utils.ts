@@ -25,6 +25,7 @@ import type {
   EntityData,
   ForeignEntity,
   GithubPullRequestEntity,
+  InitiativeEntity,
   Notification,
   ProjectEntity,
   ReminderEntity,
@@ -73,6 +74,7 @@ type SoupEntity =
   | DocumentEntity
   | ChatEntity
   | ProjectEntity
+  | InitiativeEntity
   | EmailEntity
   | ChannelEntity
   | ChannelThreadEntity
@@ -355,7 +357,12 @@ export const useSearchResponseItemMapper = () => {
         ];
       }
       case 'document': {
-        if (!result.metadata || result.metadata.deleted_at) return [];
+        if (
+          !result.metadata ||
+          result.metadata.deleted_at ||
+          result.sub_type === 'initiative_description'
+        )
+          return [];
         const searchFileType =
           result.file_type === 'docx' ? 'pdf' : result.file_type;
         let search: SearchData;
@@ -644,7 +651,10 @@ const resolveDocumentEntityName = (
 
 export const isDisplayableSoupItem = (
   item: SoupPage['items'][number]
-): item is DisplayableSoupItem => Boolean(item);
+): item is DisplayableSoupItem =>
+  Boolean(item) &&
+  (item.tag !== 'document' ||
+    item.data.subType?.type !== 'initiative_description');
 
 /**
  * The email soup query encodes "no sort timestamp" — e.g. a never-viewed thread
@@ -762,6 +772,13 @@ export const mapApiSoupItemToEntity = (
       viewedAt: item.data.viewedAt,
       projectId: item.data.projectId ?? undefined,
     }))
+    .with({ tag: 'initiative' }, (item) => ({
+      ...item.data,
+      type: 'initiative' as const,
+      descriptionDocumentId: item.data.descriptionDocumentId ?? '',
+      name: item.data.name || 'Untitled project',
+      frecencyScore: item.frecency_score,
+    }))
     .with({ tag: 'project' }, (item) => ({
       createdAt: item.data.createdAt,
       updatedAt: item.data.updatedAt,
@@ -839,6 +856,7 @@ export const mapApiSoupItemToEntity = (
         attended: status === 'ATTENDED',
         durationMs: item.data.durationMs ?? undefined,
         participantIds: item.data.participants.map((p) => p.userId),
+        guests: item.data.guests,
         summary: item.data.summary ?? undefined,
         properties: item.data.properties,
       } satisfies CallEntity;
@@ -1056,7 +1074,10 @@ export const mapApiSoupItemToEntity = (
   );
   const notified = notifiedAt ? { ...touched, notifiedAt } : touched;
 
-  return withRawNotifications(notified, item);
+  return withRawNotifications(
+    { ...notified, isFavorited: item.is_favorited },
+    item
+  );
 };
 
 const toCalendarEventTime = (

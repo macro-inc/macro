@@ -1,9 +1,9 @@
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import { Button, type ButtonProps, cn } from '@ui';
+import { CollapseTransition } from '@ui/components/CollapseTransition';
 import type { JSX } from 'solid-js';
 import { Show, splitProps } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { CollapseTransition } from './CollapseTransition';
 import { ViewSidebarCloseButton, ViewSidebarToggle } from './ViewShell';
 
 function Root(props: JSX.HTMLAttributes<HTMLElement>) {
@@ -28,7 +28,7 @@ function Header(props: JSX.HTMLAttributes<HTMLDivElement>) {
     <div
       {...rest}
       class={cn(
-        'flex h-12 min-w-0 shrink-0 items-center justify-between gap-3 border-b border-edge-muted py-3 pl-(--sidebar-content-inset) pr-(--sidebar-header-action-inset) [&_[data-split-panel-close]]:ml-(--sidebar-control-overhang)',
+        'flex h-12 min-w-0 shrink-0 items-center justify-between gap-3 py-3 pl-(--sidebar-content-inset) pr-(--sidebar-header-action-inset) [&_[data-split-panel-close]]:ml-(--sidebar-control-overhang)',
         local.class
       )}
       data-view-sidebar-header=""
@@ -93,10 +93,7 @@ function Control(props: ButtonProps) {
       variant="ghost"
       size="icon-sm"
       {...rest}
-      class={cn(
-        'size-(--sidebar-control-size) shrink-0 rounded-lg',
-        local.class
-      )}
+      class={cn('size-(--sidebar-control-size) shrink-0', local.class)}
       data-view-sidebar-control=""
     />
   );
@@ -226,6 +223,7 @@ function TreeItem(props: {
       <Show when={props.expanded !== undefined}>
         <span class="absolute right-(--sidebar-action-inset) top-1/2 flex -translate-y-1/2">
           <Control
+            class="rounded-md"
             label={`${props.expanded ? 'Collapse' : 'Expand'} ${props.label}`}
             aria-expanded={props.expanded}
             onClick={props.onToggle}
@@ -253,7 +251,7 @@ function Branch(
       <div
         {...rest}
         class={cn(
-          'relative min-w-0 pl-(--sidebar-icon-slot) before:pointer-events-none before:absolute before:inset-y-0 before:left-(--sidebar-local-rail) before:w-px before:-translate-x-1/2 before:bg-edge-muted',
+          'relative min-w-0 pl-(--sidebar-icon-slot) before:pointer-events-none before:absolute before:inset-y-0 before:left-(--sidebar-local-rail) before:w-px before:-translate-x-1/2 before:bg-edge-divider',
           local.class
         )}
         data-view-sidebar-branch=""
@@ -268,16 +266,16 @@ function Branch(
 function Action(props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) {
   const [local, rest] = splitProps(props, ['children', 'class']);
   return (
-    <button
+    <Button
       type="button"
       {...rest}
       class={cn(
-        'flex h-(--sidebar-row-height) w-full min-w-0 shrink-0 items-center gap-(--sidebar-label-gap) rounded-lg bg-hover px-(--sidebar-item-inset) text-left text-sm leading-5 font-medium text-ink hover:bg-active focus-visible:outline-2 focus-visible:outline-accent touch:h-11',
+        'h-(--sidebar-row-height) w-full min-w-0 justify-start gap-(--sidebar-label-gap) px-(--sidebar-item-inset) text-left touch:h-11',
         local.class
       )}
     >
       {local.children}
-    </button>
+    </Button>
   );
 }
 
@@ -287,7 +285,7 @@ function Footer(props: JSX.HTMLAttributes<HTMLDivElement>) {
     <div
       {...rest}
       class={cn(
-        'shrink-0 border-t border-edge-muted px-(--sidebar-gutter) py-3',
+        'shrink-0 border-t border-edge-frame px-(--sidebar-gutter) py-3',
         local.class
       )}
     >

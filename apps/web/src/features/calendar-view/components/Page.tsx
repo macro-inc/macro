@@ -17,7 +17,6 @@ import { useTeamOooEvents } from '@app/features/calendar/hooks/use-team-ooo';
 import {
   type CalendarEvent,
   DEFAULT_CALENDAR_SOURCE,
-  isCalendarEventVisible,
 } from '@app/features/calendar/types';
 import { isCalendarRangeSupported } from '@app/features/calendar/utils/calendar-supported-range';
 import {
@@ -25,11 +24,13 @@ import {
   calendarEventTimeFromFullCalendar,
   canEditCalendarEventTime,
 } from '@app/features/calendar/utils/event-interaction';
+import { consumeSuppressedCalendarDateSelection } from '@app/features/calendar/utils/open-event-outside-press';
 import {
   scrollEventChipIntoView,
   timeGridScroller,
 } from '@app/features/calendar/utils/time-grid-scroller';
 import { useOpenEventComposer } from '@app/features/calendar-view/components/use-open-event-composer';
+import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
 import { toast } from '@core/component/Toast/Toast';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import { isMobile } from '@core/mobile/isMobile';
@@ -44,6 +45,7 @@ import {
 import { Button } from '@ui';
 import {
   type Accessor,
+  createDeferred,
   createEffect,
   createMemo,
   createSignal,
@@ -218,6 +220,7 @@ export function Page(props: {
   const pager = useCalendarPager();
   const calendarView = useCalendarView();
   const openEventComposer = useOpenEventComposer();
+  const quickCalls = useQuickCallsFlag();
   const calendarsQuery = useVisibleCalendarsQuery();
   const firstWritableCalendar = createMemo(() =>
     calendarsQuery.data?.find((calendar) => calendar.isWritable)
@@ -231,10 +234,16 @@ export function Page(props: {
   const isActive = () => pager.isActive(props.id);
   const useNarrowWeekdayHeaders = () =>
     props.useNarrowDayHeaders && !isMobile();
+  // Let the checkbox update before remapping occurrences and redrawing the grid.
+  // Each page has its own deferred update, so the scheduler can yield between
+  // the three FullCalendar instances.
+  const renderedHiddenSourceIds = createDeferred(calendarView.hiddenSourceIds);
+  const isRenderedSourceVisible = (sourceId: string) =>
+    !renderedHiddenSourceIds().has(sourceId);
   const data = useCalendarOccurrenceData({
     range,
     sourceById: calendarView.sourceById,
-    isSourceVisible: calendarView.isSourceVisible,
+    isSourceVisible: isRenderedSourceVisible,
     queryOptions: () => ({
       pollWhileSyncing: isActive(),
       refetchOnWindowFocus: isActive(),
@@ -242,7 +251,7 @@ export function Page(props: {
   });
   const teamOoo = useTeamOooEvents({
     range,
-    isSourceVisible: calendarView.isSourceVisible,
+    isSourceVisible: isRenderedSourceVisible,
     refetchOnWindowFocus: isActive,
   });
   const visibleEvents = createMemo(() => [
@@ -257,11 +266,21 @@ export function Page(props: {
   const updateEventTime = useUpdateCalendarEventMutation();
   const handleSelect = (selection: DateSelectArg) => {
     if (!isActive()) return;
+    // The press that closes open event details also hits the grid. FullCalendar
+    // selects on mouseup, after the details have already closed, so that
+    // gesture must not open a new event.
+    if (consumeSuppressedCalendarDateSelection()) {
+      selection.view.calendar.unselect();
+      return;
+    }
     const calendar = firstWritableCalendar();
     setSelectionColor(calendar?.color ?? DEFAULT_CALENDAR_SOURCE.color);
     openEventComposer({
       initialValues: {
-        ...calendarSelectionToEditorInitialValues(selection),
+        ...calendarSelectionToEditorInitialValues(
+          selection,
+          quickCalls().enabled && !quickCalls().loading
+        ),
         ...(calendar ? { calendarId: calendar.id } : {}),
       },
       onCalendarChange: (_calendarId: string, color: string) =>
@@ -379,6 +398,9 @@ function CalendarPageHost(props: {
     props.grid.chipMounts();
     const target = calendarFocus.pendingTarget();
     if (!target || !isActive()) return;
+    // Cached occurrences can resolve before onMount registers this page.
+    // Wait reactively so a no-op navigation cannot consume the request.
+    if (!pager.activePage()?.api()) return;
     const dateInfo = props.grid.dateInfo();
     if (!dateInfo) return;
     if (target.date < dateInfo.start || target.date >= dateInfo.end) {
@@ -443,21 +465,11 @@ function CalendarPageHost(props: {
 
         // Placeholder data is the previous range, so an absent event proves
         // nothing yet.
-        const selectedEvent = eventsById.get(selectedEventId);
-        if (selectedEvent) {
-          if (
-            isCalendarEventVisible(selectedEvent, calendarView.isSourceVisible)
-          ) {
-            calendarView.refreshSelectedEvent(selectedEvent);
-          } else {
-            calendarView.closeEventDetails();
-          }
-        } else if (
+        calendarView.refreshSelectedEventFromPage(
+          eventsById,
           props.data.occurrencesQuery.isSuccess &&
-          !props.data.occurrencesQuery.isPlaceholderData
-        ) {
-          calendarView.closeEventDetails();
-        }
+            !props.data.occurrencesQuery.isPlaceholderData
+        );
       }
     )
   );

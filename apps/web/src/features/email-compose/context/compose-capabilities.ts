@@ -119,10 +119,15 @@ export interface EmailAttachmentStorage {
 
 export interface EmailDelivery {
   sendMessage(input: SendEmailDraft): Promise<PersistedEmailIdentity>;
-  unschedule(input: { draftId: string; inboxId?: string }): Promise<void>;
+  unschedule(input: {
+    draftId: string;
+    threadId?: string;
+    inboxId?: string;
+  }): Promise<void>;
   schedule(
     input: {
       draftId: string;
+      threadId?: string;
       sendTime: string;
       includeSignature?: boolean;
     },

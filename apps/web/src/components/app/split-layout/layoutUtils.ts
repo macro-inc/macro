@@ -3,9 +3,11 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { createCallback } from '@solid-primitives/rootless';
 import {
   type Accessor,
+  createEffect,
   createMemo,
   createSignal,
   onCleanup,
+  untrack,
   useContext,
 } from 'solid-js';
 import { SplitLayoutContext, SplitPanelContext } from './context';
@@ -15,7 +17,10 @@ import type {
   SplitHandle,
   SplitManager,
 } from './layoutManager';
-import type { CollapsibleItemInput } from './utils/createPriorityCollapser';
+import type {
+  CollapsibleItemInput,
+  PriorityCollapser,
+} from './utils/createPriorityCollapser';
 
 const _isInSplit = createCallback(() => {
   return !!useContext(SplitPanelContext);
@@ -64,6 +69,46 @@ export function useSplitPanel() {
   return useContext(SplitPanelContext);
 }
 
+/**
+ * Own the split's display name while `name` is defined, then restore the name
+ * that was visible before this owner became active.
+ *
+ * Routed detail views remain mounted inside their list shell, so writing the
+ * name without restoring it leaves the browser tab titled after the departed
+ * detail.
+ */
+export function useSplitDisplayName(name: Accessor<string | undefined>) {
+  const handle = useSplitPanelOrThrow().handle;
+  let owned = false;
+  let previous = '';
+  let displayed: string | undefined;
+
+  const release = () => {
+    if (!owned) return;
+    if (handle.displayName() === displayed) {
+      handle.setDisplayName(previous);
+    }
+    owned = false;
+    displayed = undefined;
+  };
+
+  createEffect(() => {
+    const next = name();
+    if (next === undefined) {
+      release();
+      return;
+    }
+    if (!owned) {
+      previous = untrack(handle.displayName);
+      owned = true;
+    }
+    displayed = next;
+    handle.setDisplayName(next);
+  });
+
+  onCleanup(release);
+}
+
 /** Whether closing this split leaves another split visible. */
 export function shouldShowSplitCloseButton(manager: SplitManager) {
   return manager.getVisibleSplitCount() > 1;
@@ -87,7 +132,7 @@ export function closeSplitOrReturnToList(
   )
     return;
   handle.replace({
-    next: { type: 'component', id: LIST_VIEW_ID.inbox },
+    next: { type: 'component', id: LIST_VIEW_ID.home },
     mergeHistory: true,
   });
 }
@@ -173,9 +218,14 @@ function _createIsActiveSplitContentMemo(
   });
 }
 
-function useRegisterCollapsibleItem(
-  input: CollapsibleItemInput,
-  region: 'header' | 'toolbar'
+/**
+ * Register a collapsible item with an explicit collapser for the lifetime of
+ * the calling owner. Rows outside the split header (a ViewShell top bar with
+ * its own overflow sensor) hand their controller's collapser in directly.
+ */
+export function useRegisterPriorityCollapseItem(
+  collapser: PriorityCollapser,
+  input: CollapsibleItemInput
 ): Accessor<boolean> {
   const [collapsed, setCollapsedInner] = createSignal(false);
   const setCollapsed = (value: boolean, opts?: { silent?: boolean }) => {
@@ -183,9 +233,6 @@ function useRegisterCollapsibleItem(
     if (!opts?.silent) input.onCollapsedChange?.(value);
   };
   input.onCollapsedChange?.(false);
-  const ctx = useSplitPanelOrThrow();
-  const collapser =
-    region === 'header' ? ctx.headerCollapser : ctx.toolbarCollapser;
   const cleanup = collapser.register({
     ...input,
     collapsed,
@@ -193,6 +240,16 @@ function useRegisterCollapsibleItem(
   });
   onCleanup(cleanup);
   return collapsed;
+}
+
+function useRegisterCollapsibleItem(
+  input: CollapsibleItemInput,
+  region: 'header' | 'toolbar'
+): Accessor<boolean> {
+  const ctx = useSplitPanelOrThrow();
+  const collapser =
+    region === 'header' ? ctx.headerCollapser : ctx.toolbarCollapser;
+  return useRegisterPriorityCollapseItem(collapser, input);
 }
 
 export function useRegisterCollapsibleHeaderItem(

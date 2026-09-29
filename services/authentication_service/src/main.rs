@@ -415,7 +415,11 @@ async fn main() -> anyhow::Result<()> {
     // same persistence and delivery as every other channel message.
     let channel_messages: Arc<dyn messages::domain::api::MessageCommands> = Arc::new(
         messages::domain::service::MessageService::new(
-            messages::outbound::pg_message_repo::PgMessageRepository::new(db.clone()),
+            messages::outbound::pg_message_repo::PgMessageRepository::new(db.clone())
+                .with_initiatives(initiative::domain::lookup::InitiativeLookup::new(
+                    initiative::outbound::PgInitiativeRepo::new(db.clone()),
+                ))
+                .with_crm(crm::outbound::lookup::PgCrmParentReader::new(db.clone())),
             messages::domain::effects::MessageEffects::new(
                 messages::outbound::broker::BrokerMessagePublisher::new(macro_event_broker.clone()),
                 messages::domain::ports::NoMessageEventPublisher,
@@ -503,6 +507,7 @@ async fn main() -> anyhow::Result<()> {
         ai_billing::outbound::PgUsageReader::new(db.clone()),
         ai_billing::outbound::PgBillingRepo::new(db.clone()),
         ai_billing::outbound::StripePaymentGateway::new(stripe_client.clone()),
+        config.environment,
     ));
     let teams_service_impl = TeamServiceImpl::new_with_analytics(
         teams_repo_impl.clone(),

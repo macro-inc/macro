@@ -12,16 +12,17 @@ import { FileTypeChip } from '@core/component/FileTypeChip';
 import {
   getShareDrawerRecipientInput,
   ShareTrigger,
-  useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
-import { blockFileSignal } from '@core/signal/load';
+import { useShareModal } from '@core/component/TopBar/shareModal';
+import { blockFileSignal, blockMetadataSignal } from '@core/signal/load';
+import { useGetPermissions } from '@core/signal/permissions';
 import {
   useBlockDocumentDownloadName,
   useBlockDocumentName,
 } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
+import IconShared from '@icon/share.svg';
 import Download from '@phosphor/download.svg';
-import IconShared from '@phosphor/share.svg';
 import { createCallback } from '@solid-primitives/rootless';
 
 export function TopBar() {
@@ -30,7 +31,15 @@ export function TopBar() {
   const name = useBlockDocumentName();
   const downloadName = useBlockDocumentDownloadName();
 
-  const shareCtx = useShareDialogContext();
+  const permissions = useGetPermissions();
+  const openShare = useShareModal(() => ({
+    id: blockId,
+    blockAlias: 'image',
+    itemType: 'document',
+    name: name() ?? '',
+    userPermissions: permissions(),
+    owner: blockMetadataSignal()?.owner,
+  }));
 
   const downloadDocument = createCallback(async () => {
     const file = imageFile();
@@ -56,8 +65,8 @@ export function TopBar() {
       group: 'sharing',
       label: 'Share',
       icon: IconShared,
-      action: () => shareCtx.open(),
-      buttonComponent: () => <ShareTrigger />,
+      action: openShare,
+      buttonComponent: () => <ShareTrigger onClick={openShare} />,
       focusTarget: getShareDrawerRecipientInput,
     },
   ];

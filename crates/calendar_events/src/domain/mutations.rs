@@ -459,7 +459,7 @@ where
         }
     }
 
-    #[tracing::instrument(skip(self, requester_id), err)]
+    #[tracing::instrument(skip(self, requester_id, responding_email), err)]
     async fn respond_to_event(
         &self,
         requester_id: &str,
@@ -467,6 +467,7 @@ where
         calendar_id: Option<Uuid>,
         response: AttendeeResponseStatus,
         scope: CalendarRsvpScope,
+        responding_email: Option<String>,
     ) -> Result<CalendarEvent, CalendarMutationError> {
         let target = self
             .resolve_mutation_target(requester_id, event_id, calendar_id)
@@ -477,6 +478,14 @@ where
         let Some(actor) = target.actor.as_ref() else {
             return Err(CalendarMutationError::NotAttendee);
         };
+        let selected_actor = responding_email
+            .as_deref()
+            .map(|email| {
+                actor
+                    .select(email)
+                    .ok_or(CalendarMutationError::NotAttendee)
+            })
+            .transpose()?;
         let access_token = self.fetch_token(&target.token_identity).await?;
         let outcome = self
             .provider
@@ -484,7 +493,7 @@ where
                 &access_token,
                 &target.google_target(OccurrenceRange::maintenance_horizon(Utc::now())),
                 target.master_provider_event_id(),
-                actor,
+                selected_actor.as_ref().unwrap_or(actor),
                 response,
                 &scope,
             )

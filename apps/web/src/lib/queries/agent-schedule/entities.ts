@@ -1,4 +1,4 @@
-import type { AutomationEntity } from '@entity';
+import { type AutomationEntity, routineStatus } from '@entity/types/entity';
 import type { ScheduledAction } from '@service-scheduled-action/generated/schemas';
 import { createMemo } from 'solid-js';
 import { useSchedulesQuery } from './schedules';
@@ -28,9 +28,11 @@ export function scheduleToEntity(
     createdAt: schedule.created_at,
     updatedAt: schedule.updated_at,
     cron: trigger.schedule,
-    enabled: schedule.enabled,
-    nextRunAt: schedule.next_run_at,
-    isRunning: isClaimActive(schedule.claimed),
+    status: routineStatus({
+      enabled: schedule.enabled,
+      isRunning: isClaimActive(schedule.claimed),
+      nextRunAt: schedule.next_run_at,
+    }),
   };
 }
 

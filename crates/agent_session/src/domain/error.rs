@@ -23,6 +23,11 @@ pub enum AgentSessionError {
     AlreadyConnected(AgentSessionId),
     #[error("agent session {0} is managed by another live replica")]
     ManagedElsewhere(AgentSessionId),
+    /// This replica is shutting down, so it started nothing it could not
+    /// finish. Retryable: another replica is serving, and the retry lands
+    /// there.
+    #[error("this replica is draining; retry agent session {0} on another")]
+    Draining(AgentSessionId),
     #[error("agent session {0} write was fenced out: another replica claimed the session")]
     FencedOut(AgentSessionId),
     #[error("acp handshake failed: {0}")]
@@ -52,6 +57,8 @@ pub enum AgentSessionError {
     InvalidPullRequestUrl,
     #[error("invalid agent session name: {0}")]
     InvalidName(&'static str),
+    #[error("agent session {0} is archived")]
+    Archived(AgentSessionId),
     #[error("a preview request may name at most {0} sessions")]
     TooManyPreviewIds(usize),
     #[error("the caller may not control this agent session")]

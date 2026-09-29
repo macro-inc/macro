@@ -19,6 +19,8 @@ type TooltipProps = ParentProps<{
   as?: 'div' | 'span';
   class?: string;
   label: string;
+  /** Allows non-interactive tooltip targets, such as disabled actions, to receive keyboard focus. */
+  tabIndex?: number;
   disabled?: boolean;
 }>;
 
@@ -126,6 +128,7 @@ export function Tooltip(props: TooltipProps) {
           setTriggerRef(ref);
         }}
         class={cn('inline-flex items-center', props.class)}
+        tabIndex={props.tabIndex}
         as={props.as ?? 'div'}
       >
         {props.children}

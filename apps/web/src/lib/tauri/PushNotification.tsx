@@ -217,7 +217,11 @@ export function MaybePushNotificationRegistration(props: {
 }) {
   const { os } = useExpectTauri();
 
-  if (os !== 'android' && os !== 'ios') {
+  // Android remote push requires the token/permission/watcher implementation
+  // tracked by Android task 02. Its current scaffold throws without Firebase
+  // configuration and does not implement watchNotifications. Keep local
+  // notifications usable while the Android app shell is brought up.
+  if (os !== 'ios') {
     return (
       <PushNotificationContext.Provider value={'not-supported'}>
         <PlatformNotificationProvider

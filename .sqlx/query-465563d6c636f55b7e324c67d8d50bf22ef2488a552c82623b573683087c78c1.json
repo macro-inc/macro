@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                id as \"call_id!\",\n                channel_id as \"channel_id?\",\n                created_at as \"started_at!\",\n                NULL::timestamptz as \"ended_at\",\n                (SELECT title FROM call_meetings WHERE id = calls.meeting_id) as \"custom_name\"\n            FROM calls\n            WHERE id = ANY($1)\n            UNION ALL\n            SELECT\n                id as \"call_id!\",\n                channel_id as \"channel_id?\",\n                started_at as \"started_at!\",\n                ended_at as \"ended_at\",\n                custom_name as \"custom_name\"\n            FROM call_records\n            WHERE id = ANY($1)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "call_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "channel_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "started_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "ended_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "custom_name",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "465563d6c636f55b7e324c67d8d50bf22ef2488a552c82623b573683087c78c1"
+}

@@ -96,6 +96,7 @@ export function createLayoutAdapter<TSplitId>(
   };
 
   const apply = (options: {
+    open?: SplitRouterLayout<TSplitId>['open'];
     entry: SplitRouterEntry;
     target: TSplitId | 'new-split';
     replace: boolean;
@@ -113,12 +114,16 @@ export function createLayoutAdapter<TSplitId>(
       return { changed: false, layoutChanged: false };
     }
 
-    if (targetId !== undefined && current) {
+    if (!options.open && targetId !== undefined && current) {
       if (deepEqual(current.location, options.entry.location)) {
         return { changed: true, layoutChanged: false, splitId: targetId };
       }
 
-      layout.updateCurrentLocation(targetId, () => options.entry.location);
+      layout.updateCurrentLocation(
+        targetId,
+        () => options.entry.location,
+        options.replace
+      );
       const applied = find(targetId);
       if (!deepEqual(applied?.location, options.entry.location)) {
         throw new Error('Split layout did not apply the requested location');
@@ -127,7 +132,7 @@ export function createLayoutAdapter<TSplitId>(
     }
 
     const before = snapshot().entries;
-    const result = layout.open({
+    const result = (options.open ?? layout.open)({
       location: options.entry.location,
       target: options.target,
       replace: options.replace,

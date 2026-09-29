@@ -9,10 +9,11 @@ ai_tools = ["dep:ai_toolset", "dep:async-trait", "dep:schemars", "dep:serde", "p
 default = ["ai_tools", "outbound", "ports"]
 outbound = [
   "dep:cowlike",
-  "dep:document_sub_type",
+  "dep:documents",
   "dep:email",
   "dep:filter_ast",
   "dep:item_filters",
+  "dep:lexical_client",
   "dep:models_pagination",
   "dep:models_search",
   "dep:models_soup",
@@ -25,6 +26,8 @@ ports = []
 [dependencies]
 anyhow = { workspace = true }
 chrono = { workspace = true }
+document_sub_type = { path = "../document_sub_type" }
+entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
 macro_user_id = { path = "../macro_user_id" }
 system_skills = { path = "../system_skills" }
 thiserror = { workspace = true }
@@ -39,10 +42,11 @@ serde = { workspace = true, optional = true }
 
 # Outbound dependencies
 cowlike = { path = "../cowlike", optional = true }
-document_sub_type = { path = "../document_sub_type", optional = true }
+documents = { path = "../documents", default-features = false, features = ["ports"], optional = true }
 email = { path = "../email", default-features = false, optional = true }
 filter_ast = { path = "../filter_ast", optional = true }
 item_filters = { path = "../item_filters", optional = true }
+lexical_client = { path = "../lexical_client", optional = true }
 models_pagination = { path = "../models_pagination", optional = true }
 models_search = { path = "../models_search", optional = true }
 models_soup = { path = "../models_soup", optional = true }
@@ -52,4 +56,5 @@ soup = { path = "../soup", default-features = false, features = ["ports"], optio
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+serde_json = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt"] }

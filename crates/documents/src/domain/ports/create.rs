@@ -3,11 +3,10 @@
 use std::future::Future;
 use std::sync::Arc;
 
-use activity::Attribution;
-use macro_user_id::user_id::MacroUserIdStr;
+use model_owner::CreationPrincipal;
 
 use crate::domain::content::DocumentContent;
-use crate::domain::models::{CreateDocumentRepoArgs, CreateTaskRequest, DocumentError};
+use crate::domain::models::{CreateTaskRequest, DocumentError, NewDocument};
 use crate::domain::response::CreateDocumentResponseData;
 
 /// Uploaded document bytes and metadata for a presigned object-storage URL.
@@ -36,18 +35,17 @@ pub trait DocumentCreationService: Send + Sync {
     /// Create a document metadata row and any service-owned creation side effects.
     fn create_document(
         &self,
-        user_id: MacroUserIdStr<'static>,
-        args: CreateDocumentRepoArgs,
+        principal: &CreationPrincipal,
+        document: NewDocument,
         job_id: Option<String>,
     ) -> impl Future<Output = Result<CreateDocumentResponseData, DocumentError>> + Send;
 
     /// Assign task properties to a markdown task document.
     fn handle_task_properties(
         &self,
-        user_id: MacroUserIdStr<'static>,
+        principal: &CreationPrincipal,
         document_id: &str,
         request: &CreateTaskRequest,
-        attribution: &Attribution,
     ) -> impl Future<Output = Result<(), DocumentError>> + Send;
 
     /// Mark a created document's upload/finalization lifecycle as complete.
@@ -73,22 +71,21 @@ where
 {
     async fn create_document(
         &self,
-        user_id: MacroUserIdStr<'static>,
-        args: CreateDocumentRepoArgs,
+        principal: &CreationPrincipal,
+        document: NewDocument,
         job_id: Option<String>,
     ) -> Result<CreateDocumentResponseData, DocumentError> {
-        (**self).create_document(user_id, args, job_id).await
+        (**self).create_document(principal, document, job_id).await
     }
 
     async fn handle_task_properties(
         &self,
-        user_id: MacroUserIdStr<'static>,
+        principal: &CreationPrincipal,
         document_id: &str,
         request: &CreateTaskRequest,
-        attribution: &Attribution,
     ) -> Result<(), DocumentError> {
         (**self)
-            .handle_task_properties(user_id, document_id, request, attribution)
+            .handle_task_properties(principal, document_id, request)
             .await
     }
 

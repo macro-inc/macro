@@ -3,6 +3,7 @@ import {
   type EntityActionViewContext,
   makeAddTagAction,
 } from '@app/features/next-soup/actions';
+import { ProjectPickerPopover } from '@app/features/projects/project-property';
 import { ContextMenuContent, MenuSeparator } from '@core/component/ContextMenu';
 import { touchHandler } from '@core/directive/touchHandler';
 import { isMobile } from '@core/mobile/isMobile';
@@ -76,6 +77,7 @@ export const SoupEntityContextMenu: FlowComponent<
   const addTagAction = makeAddTagAction();
 
   const [tagPickerOpen, setTagPickerOpen] = createSignal(false);
+  const [projectTasks, setProjectTasks] = createSignal<string[]>();
   const [menuPosition, setMenuPosition] = createSignal<{
     x: number;
     y: number;
@@ -134,6 +136,10 @@ export const SoupEntityContextMenu: FlowComponent<
                   entities={menuEntities()}
                   list={props.list}
                   viewContext={props.viewContext}
+                  onSetProject={() => {
+                    const ids = menuEntities().map((entity) => entity.id);
+                    setTimeout(() => setProjectTasks(ids), 0);
+                  }}
                   onEditTags={
                     canEditTags()
                       ? () => setTimeout(() => setTagPickerOpen(true), 0)
@@ -148,6 +154,18 @@ export const SoupEntityContextMenu: FlowComponent<
             </Show>
           </ContextMenu.Portal>
         </ContextMenu>
+        <Show when={projectTasks()}>
+          {(ids) => (
+            <ProjectPickerPopover
+              taskIds={ids()}
+              open
+              onOpenChange={(open) => {
+                if (!open) setProjectTasks(undefined);
+              }}
+              getAnchorRect={() => menuPosition()}
+            />
+          )}
+        </Show>
         <Show when={tagPickerOpen() && tagEntityType(props.entity)}>
           {(entityType) => (
             <RowTagPicker

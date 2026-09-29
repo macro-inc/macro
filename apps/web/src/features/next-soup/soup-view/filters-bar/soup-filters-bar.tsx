@@ -36,9 +36,9 @@ export function SoupFiltersBar(props: { variant?: 'default' | 'tag' }) {
   const isTagView = createMemo(() => props.variant === 'tag');
 
   // The inbox hides sort (it's fixed to updated_at for this view).
-  const isInboxView = createMemo(() => {
+  const isHomeView = createMemo(() => {
     const content = panel.handle.content();
-    return content.type === 'component' && content.id === 'inbox';
+    return content.type === 'component' && content.id === 'home';
   });
 
   const CollapsibleGroup = () => (
@@ -66,14 +66,14 @@ export function SoupFiltersBar(props: { variant?: 'default' | 'tag' }) {
           when={!isSearchView() && !isTagView()}
           fallback={
             <Show when={isTagView()} fallback={<SearchFiltersRow />}>
-              <Show when={!isInboxView()}>
+              <Show when={!isHomeView()}>
                 <SoupViewContextSort />
               </Show>
               <CollapsibleGroup />
             </Show>
           }
         >
-          <Show when={!isInboxView()}>
+          <Show when={!isHomeView()}>
             <SoupViewContextSort />
           </Show>
           <CollapsibleGroup />

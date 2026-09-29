@@ -454,7 +454,15 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
     /// Persist the user-facing session name. Idempotent.
     fn set_name(&self, id: AgentSessionId, name: &str) -> impl Future<Output = Result<()>> + Send;
 
-    /// Persist an automatically generated name only while the default remains.
+    /// Archive or unarchive a session. Idempotent.
+    fn set_archived(
+        &self,
+        id: AgentSessionId,
+        is_archived: bool,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Persist an automatically generated name only while the default remains
+    /// and the session is not archived.
     fn set_name_if_default(
         &self,
         id: AgentSessionId,
@@ -485,6 +493,19 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
 
     /// Delete an agent session by id.
     fn delete(&self, id: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
+
+    /// The session's waiting actions, oldest first. Missing row is empty.
+    fn list_queued_actions(
+        &self,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<Vec<StoredQueuedAction>>> + Send;
+
+    /// Replace the session's waiting actions. An empty slice deletes the row.
+    fn replace_queued_actions(
+        &self,
+        id: AgentSessionId,
+        entries: &[StoredQueuedAction],
+    ) -> impl Future<Output = Result<()>> + Send;
 }
 
 /// The durable record of which provider-side agent an externally-served
@@ -565,13 +586,24 @@ pub trait SessionOwnership: Send + Sync + 'static {
         address: Option<&ReplicaAddress>,
     ) -> impl Future<Output = Result<()>> + Send;
 
-    /// The live manager of a session, if a replica with a fresh heartbeat
-    /// holds its lease. `None` covers both an unclaimed session and one whose
-    /// holder has gone stale - either way the session is claimable.
-    fn manager_of(
+    /// What the lease says about a session, from `replica`'s viewpoint: who
+    /// holds it (when a replica with a fresh heartbeat does - an absent
+    /// holder covers both an unclaimed session and one whose holder has gone
+    /// stale, either way claimable) and whether `replica` is itself draining.
+    fn lease_view(
         &self,
         session: AgentSessionId,
-    ) -> impl Future<Output = Result<Option<SessionManager>>> + Send;
+        replica: ReplicaId,
+    ) -> impl Future<Output = Result<LeaseView>> + Send;
+
+    /// Publish that `replica` is shutting down, so nothing new is routed to
+    /// it while it drains.
+    ///
+    /// A deploy's old task keeps heartbeating for its whole drain window, so
+    /// liveness alone cannot tell a replica that is serving from one that is
+    /// leaving; this is the replica saying which it is. Idempotent: the first
+    /// drain wins, and a replica never un-drains.
+    fn begin_draining(&self, replica: ReplicaId) -> impl Future<Output = Result<()>> + Send;
 }
 
 #[cfg_attr(feature = "test-utils", mockall::automock)]

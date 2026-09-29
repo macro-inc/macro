@@ -25,6 +25,7 @@ fn persisted_row_metadata_survives_property_enrichment() {
         pull_request_url: Some("https://github.com/macro/macro/pull/6712".to_owned()),
         turn_state: Some("running".to_owned()),
         thread_id: None,
+        is_archived: false,
         status: "event".to_owned(),
         status_event_name: Some("acp_ready".to_owned()),
         created_at,
@@ -398,5 +399,61 @@ async fn by_ids_respects_access(pool: PgPool) -> anyhow::Result<()> {
     )
     .await?;
     assert_eq!(ids(&member_items), vec![fixture.shared]);
+    Ok(())
+}
+
+/// An inline `@macro` session (`list_hidden`) is missing from broad lists for
+/// everyone, but a named id still finds it and hydrating by id still works.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn hidden_sessions_stay_out_of_broad_lists(pool: PgPool) -> anyhow::Result<()> {
+    let fixture = seed(&pool).await?;
+    sqlx::query!(
+        "UPDATE agent_session SET list_hidden = TRUE WHERE id = $1",
+        fixture.shared,
+    )
+    .execute(&pool)
+    .await?;
+
+    let owner_before = cursor_soup(
+        &pool,
+        request(OWNER, Some(Expr::val(AgentSessionLiteral::Include))),
+    )
+    .await?;
+    assert_eq!(
+        ids(&owner_before),
+        vec![fixture.private],
+        "the owner's list omits the unopened inline session"
+    );
+    let member_before = cursor_soup(
+        &pool,
+        request(MEMBER, Some(Expr::val(AgentSessionLiteral::Include))),
+    )
+    .await?;
+    assert!(
+        member_before.is_empty(),
+        "a channel member does not inherit the owner's list"
+    );
+
+    let named = cursor_soup(
+        &pool,
+        request(
+            OWNER,
+            Some(Expr::val(AgentSessionLiteral::Id(fixture.shared))),
+        ),
+    )
+    .await?;
+    assert_eq!(ids(&named), vec![fixture.shared]);
+
+    let entities = [EntityType::AgentSession.with_entity_string(fixture.shared.to_string())];
+    let hydrated = by_ids(
+        &pool,
+        AdvancedSortParams {
+            entities: &entities,
+            user_id: MacroUserIdStr::parse_from_str(MEMBER)?,
+        },
+    )
+    .await?;
+    assert_eq!(ids(&hydrated), vec![fixture.shared]);
+
     Ok(())
 }

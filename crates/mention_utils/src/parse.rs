@@ -1,3 +1,4 @@
+use bot_id::BotIdStr;
 use channel_sender::ChannelSender;
 use either::Either;
 use nom::{
@@ -59,6 +60,26 @@ pub trait XmlTaggedParsed<'de>: Deserialize<'de> {
 pub struct ParsedUserMention<'a> {
     #[serde(borrow)]
     pub user_id: ChannelSender<'a>,
+    /// For a bot mention this carries the bot's display name; see
+    /// [`crate::serialize::bot_mention`].
+    #[serde(borrow, default)]
+    pub email: Option<Cow<'a, str>>,
+    #[serde(borrow, default)]
+    pub display_name: Option<Cow<'a, str>>,
+}
+
+impl ParsedUserMention<'_> {
+    /// Display name for a mentioned bot. Prefers the names written into the
+    /// tag by the composer, then the first-party bot registry, so a bot never
+    /// renders under another bot's name.
+    fn bot_display_name(&self, bot: &BotIdStr<'_>) -> &str {
+        [self.display_name.as_deref(), self.email.as_deref()]
+            .into_iter()
+            .flatten()
+            .find(|name| !name.trim().is_empty())
+            .or_else(|| bot_id::system_bot(bot.bot_id()).map(|system| system.name))
+            .unwrap_or("Bot")
+    }
 }
 
 impl<'de> XmlTaggedParsed<'de> for ParsedUserMention<'de> {
@@ -376,7 +397,7 @@ impl XmlFormatter for PlainTextFormatter {
 
     fn format_user(user: &ParsedUserMention<'_>, f: &mut Formatter<'_>) -> std::fmt::Result {
         match &user.user_id.0 {
-            Either::Left(_l) => write!(f, "Macro"),
+            Either::Left(bot) => write!(f, "{}", user.bot_display_name(bot)),
             Either::Right(r) => write!(f, "{}", r.email_part().as_ref()),
         }
     }

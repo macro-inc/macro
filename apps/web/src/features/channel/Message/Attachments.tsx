@@ -1,3 +1,4 @@
+import { ProjectAttachment } from '@app/features/projects/project-attachment';
 import {
   type MediaItem,
   mapMediaItems,
@@ -42,10 +43,17 @@ export function Attachments(props: AttachmentsProps) {
           <div class="flex flex-row mt-2 gap-2 flex-wrap max-w-full">
             <For each={buckets().documentAttachments}>
               {(attachment) => (
-                <ItemPreview
-                  id={attachment.entity_id}
-                  type={stringToItemType(attachment.entity_type)}
-                />
+                <Show
+                  when={attachment.entity_type === 'initiative'}
+                  fallback={
+                    <ItemPreview
+                      id={attachment.entity_id}
+                      type={stringToItemType(attachment.entity_type)}
+                    />
+                  }
+                >
+                  <ProjectAttachment id={attachment.entity_id} />
+                </Show>
               )}
             </For>
           </div>

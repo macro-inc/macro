@@ -1,5 +1,4 @@
 import { createAssertedContextProvider } from '@core/context/createContext';
-import { makePersisted } from '@solid-primitives/storage';
 import {
   batch,
   createEffect,
@@ -8,11 +7,6 @@ import {
   on,
   type ParentProps,
 } from 'solid-js';
-import { createStore } from 'solid-js/store';
-import {
-  CALENDAR_PREFERENCES_KEY,
-  getPreferredCalendarPeriodView,
-} from '../calendar-preferences';
 import { useCalendarSources } from '../hooks/use-calendar-sources';
 import {
   type CalendarEvent,
@@ -21,21 +15,13 @@ import {
   type CalendarWeekStart,
   isCalendarEventVisible,
 } from '../types';
-import { getDefaultCalendarTimeFormat } from '../utils/time-format';
+import { useCalendarPreferences } from '../utils/preferences';
 
 interface CalendarDisplaySettings {
   readonly periodView: CalendarPeriodView;
   readonly showWeekends: boolean;
   readonly weekStartsOn: CalendarWeekStart;
   readonly timeFormat: CalendarTimeFormat;
-}
-
-interface CalendarPreferences {
-  periodView: CalendarPeriodView;
-  hiddenSourceIds: string[];
-  showWeekends: boolean;
-  weekStartsOn: CalendarWeekStart;
-  timeFormat: CalendarTimeFormat;
 }
 
 type CalendarViewContextProps = ParentProps<{
@@ -50,6 +36,7 @@ function createCalendarEventSelection(
 ) {
   const [event, setEvent] = createSignal<CalendarEvent>();
   const [anchor, setAnchor] = createSignal<HTMLElement>();
+  const [origin, setOrigin] = createSignal<'grid' | 'agenda'>('grid');
 
   const close = (notify = true) => {
     const hadSelection = event() !== undefined || anchor() !== undefined;
@@ -59,10 +46,15 @@ function createCalendarEventSelection(
     });
     if (notify && hadSelection) onFocusedEventIdChange?.(undefined);
   };
-  const select = (nextEvent: CalendarEvent, nextAnchor: HTMLElement) => {
+  const select = (
+    nextEvent: CalendarEvent,
+    nextAnchor: HTMLElement,
+    nextOrigin: 'grid' | 'agenda' = 'grid'
+  ) => {
     batch(() => {
       setEvent(() => nextEvent);
       setAnchor(nextAnchor);
+      setOrigin(nextOrigin);
     });
     onFocusedEventIdChange?.(nextEvent.eventId);
   };
@@ -70,35 +62,19 @@ function createCalendarEventSelection(
     if (event()?.id === nextEvent.id) setEvent(nextEvent);
   };
 
-  return { anchor, close, event, refresh, select };
+  return { anchor, close, event, origin, refresh, select };
 }
 
 export const [CalendarViewContextProvider, useCalendarView] =
   createAssertedContextProvider(
     'CalendarViewContext',
     (props: CalendarViewContextProps) => {
-      const defaultPreferences: CalendarPreferences = {
-        periodView: getPreferredCalendarPeriodView(),
-        hiddenSourceIds: [],
-        showWeekends: true,
-        weekStartsOn: 0,
-        timeFormat: getDefaultCalendarTimeFormat(),
-      };
-      const [preferences, setPreferences] = makePersisted(
-        createStore<CalendarPreferences>(defaultPreferences),
-        {
-          name: CALENDAR_PREFERENCES_KEY,
-          deserialize: (value) => ({
-            ...defaultPreferences,
-            ...(JSON.parse(value) as Partial<CalendarPreferences>),
-          }),
-        }
-      );
+      const [preferences, setPreferences] = useCalendarPreferences();
       const { sources, sourceById } = useCalendarSources();
       // Sources default to visible, so calendars discovered after a
       // preference was saved (or events whose calendar is still loading)
       // never silently disappear.
-      const hiddenSourceIds = createMemo(
+      const hiddenSourceIds = createMemo<ReadonlySet<string>>(
         () => new Set(preferences.hiddenSourceIds)
       );
       const isSourceVisible = (sourceId: string) =>
@@ -107,12 +83,16 @@ export const [CalendarViewContextProvider, useCalendarView] =
       const selection = createCalendarEventSelection(
         props.onFocusedEventIdChange
       );
-      createEffect(() => {
-        const periodView = props.periodView;
-        if (periodView && preferences.periodView !== periodView) {
-          setPreferences('periodView', periodView);
-        }
-      });
+      // Preferences are shared across providers; track only this route's period
+      // so two mounted calendars never overwrite each other in a loop.
+      createEffect(
+        on(
+          () => props.periodView,
+          (periodView) => {
+            if (periodView) setPreferences('periodView', periodView);
+          }
+        )
+      );
       createEffect(
         on(
           () => props.focusedEventId,
@@ -146,14 +126,38 @@ export const [CalendarViewContextProvider, useCalendarView] =
 
       const closeEventDetails = () => selection.close();
 
-      const setSourceVisibility = (sourceId: string, visible: boolean) => {
-        setPreferences('hiddenSourceIds', (current) =>
-          visible
-            ? current.filter((id) => id !== sourceId)
-            : current.includes(sourceId)
-              ? current
-              : [...current, sourceId]
-        );
+      const refreshSelectedEventFromPage = (
+        eventsById: ReadonlyMap<string, CalendarEvent>,
+        rangeIsCurrent: boolean
+      ) => {
+        const selected = selection.event();
+        if (!selected) return;
+        const event = eventsById.get(selected.id);
+        if (event) {
+          if (isCalendarEventVisible(event, isSourceVisible))
+            selection.refresh(event);
+          else closeEventDetails();
+        } else if (rangeIsCurrent && selection.origin() === 'grid') {
+          // Agenda selections can be outside the visible grid's date range.
+          closeEventDetails();
+        }
+      };
+
+      const setSourcesVisibility = (
+        sourceIds: readonly string[],
+        visible: boolean
+      ) => {
+        const hidden = new Set(preferences.hiddenSourceIds);
+        let changed = false;
+        for (const sourceId of sourceIds) {
+          if (visible) changed = hidden.delete(sourceId) || changed;
+          else if (!hidden.has(sourceId)) {
+            hidden.add(sourceId);
+            changed = true;
+          }
+        }
+        if (!changed) return;
+        setPreferences('hiddenSourceIds', [...hidden]);
 
         const selected = selection.event();
         if (
@@ -164,13 +168,17 @@ export const [CalendarViewContextProvider, useCalendarView] =
           closeEventDetails();
         }
       };
+      const setSourceVisibility = (sourceId: string, visible: boolean) =>
+        setSourcesVisibility([sourceId], visible);
 
       return {
         displaySettings,
         sources,
         sourceById,
+        hiddenSourceIds,
         isSourceVisible,
         setSourceVisibility,
+        setSourcesVisibility,
         selectedEvent: selection.event,
         selectedEventAnchor: selection.anchor,
         setPeriodView: (periodView: CalendarPeriodView) => {
@@ -186,6 +194,7 @@ export const [CalendarViewContextProvider, useCalendarView] =
         closeEventDetails,
         selectEvent: selection.select,
         refreshSelectedEvent: selection.refresh,
+        refreshSelectedEventFromPage,
       };
     }
   );

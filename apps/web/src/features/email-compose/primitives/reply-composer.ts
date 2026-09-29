@@ -678,6 +678,7 @@ export function createReplyComposer(
     draftId: savedDraftId,
     saveDraft: saveForSchedule,
     threadId: savedDraftThreadId,
+    threadInInbox: () => thread()?.inbox_visible,
     inboxId: activeInboxId,
     includeSignature: () => (includeSignature() ? undefined : false),
     generation: () =>
@@ -1252,11 +1253,16 @@ export function createReplyComposer(
 
       if (handledTerminalIdentity === `${state.draftId}:${state.type}`) return;
       handledTerminalIdentity = `${state.draftId}:${state.type}`;
+      // Only a confirmed schedule makes a delivery "the scheduled email"; any
+      // other draft was sent from another tab or device.
+      const wasScheduled = schedule.state().type === 'scheduled';
       if (editVersion > persistedEditVersion) {
         detachFromObsoleteDraft(
-          state.type === 'sent'
-            ? 'The scheduled email was sent while you were editing. Your newer text was kept as a new draft and was not sent.'
-            : 'The draft changed elsewhere. Your newer text was kept as a new draft.'
+          state.type !== 'sent'
+            ? 'The draft changed elsewhere. Your newer text was kept as a new draft.'
+            : wasScheduled
+              ? 'The scheduled email was sent while you were editing. Your newer text was kept as a new draft and was not sent.'
+              : 'This email was already sent. Your newer text was kept as a new draft and was not sent.'
         );
         return;
       }
@@ -1267,7 +1273,9 @@ export function createReplyComposer(
       setTerminalState(state.type);
       clearDraftState();
       if (state.type === 'sent') {
-        props.notices.feedback.success('Scheduled email sent');
+        if (wasScheduled)
+          props.notices.feedback.success('Scheduled email sent');
+        else props.notices.feedback.alert('This email was already sent');
       } else {
         props.notices.feedback.alert('This draft is no longer available.');
       }

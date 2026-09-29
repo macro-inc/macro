@@ -1,4 +1,5 @@
 import { type ListActivation, useListInteractions } from '@app/components/list';
+import { ListViewport } from '@app/components/list/ListViewport';
 import {
   resolveEntityActionViewContext,
   toEntityActionListState,
@@ -42,10 +43,9 @@ import {
   Match,
   type Setter,
   Show,
-  Suspense,
   Switch,
 } from 'solid-js';
-import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
+import type { VirtualizerHandle } from 'virtua/solid';
 import {
   createTasksListEntryStorage,
   DEFAULT_TASKS_LIST_STATE,
@@ -59,7 +59,13 @@ import {
 import { TaskGroupHeader } from './TaskGroupHeader';
 import { TaskListEntity } from './TaskListEntity';
 import { TaskListHeader } from './TaskListHeader';
+import { taskGridColumnCount } from './task-grid-template';
 import './task-list.css';
+import {
+  ProjectPickerPopover,
+  ProjectPropertyCell,
+} from '@app/features/projects/project-property';
+import { useTaskProjectReferences } from '@app/features/projects/projects';
 
 function ResponsiveTaskListHeader() {
   const layout = useListLayout();
@@ -92,11 +98,13 @@ export function TaskList(props: TaskListProps) {
   const panel = useSplitPanelOrThrow();
   const {
     state,
+    projectsEnabled,
     setState,
     source,
     list,
     registerListActivationHandler,
     openTask,
+    scopeKey,
   } = useTasksView();
   const forceEmptyState = useDebugSetting(
     DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
@@ -209,10 +217,20 @@ export function TaskList(props: TaskListProps) {
   };
   const [, setPersistedListState] = makePersistedState(
     [readListState, applyListState],
-    { storages: createTasksListEntryStorage(panel.handle) }
+    { storages: createTasksListEntryStorage(panel.handle, scopeKey) }
   );
 
   const visibleRows = source.items;
+  const projectReferences = useTaskProjectReferences(() =>
+    visibleRows().flatMap((row) =>
+      row.kind === 'entity' ? [row.entity.id] : []
+    )
+  );
+  const columnCount = () => taskGridColumnCount(projectsEnabled());
+  const [assigningProjectTasks, setAssigningProjectTasks] = createSignal<{
+    ids: string[];
+    anchor: HTMLElement;
+  }>();
   const tasksById = createMemo(() => {
     const tasks = new Map<string, TaskEntityWithProperties>();
     for (const row of visibleRows()) {
@@ -411,7 +429,6 @@ export function TaskList(props: TaskListProps) {
                   <Button
                     variant="outline"
                     size="sm"
-                    class="rounded-lg"
                     onClick={() => void source.refresh()}
                   >
                     Try again
@@ -426,7 +443,6 @@ export function TaskList(props: TaskListProps) {
                     <Button
                       variant="outline"
                       size="sm"
-                      class="rounded-lg"
                       disabled={source.isLoadingMore()}
                       onClick={() => void source.loadMore()}
                     >
@@ -443,214 +459,202 @@ export function TaskList(props: TaskListProps) {
               </Match>
 
               <Match when={true}>
-                <div
-                  ref={setViewport}
-                  class="min-h-0 flex-1 overflow-auto overscroll-none"
+                <ListViewport
+                  ref={registerVirtualizer}
+                  viewportRef={setViewport}
+                  items={visibleRows()}
+                  focusedIndex={list.focus.index()}
+                  onScroll={checkNearEnd}
                 >
-                  <Suspense>
-                    <Virtualizer
-                      ref={registerVirtualizer}
-                      data={visibleRows()}
-                      scrollRef={viewport()}
-                      bufferSize={240}
-                      itemSize={44}
-                      keepMounted={
-                        list.focus.index() >= 0
-                          ? [list.focus.index()]
-                          : undefined
-                      }
-                      onScroll={checkNearEnd}
-                    >
-                      {(row) => (
-                        <div>
-                          <Switch>
-                            <Match
-                              when={
-                                row.kind === 'group-header' ? row : undefined
-                              }
-                            >
-                              {(group) => (
-                                <TaskGroupHeader
-                                  row={group()}
-                                  groupBy={state.groupBy}
-                                  expanded={isGroupExpanded(group().groupId)}
-                                  focused={list.focus.key() === group().id}
-                                  onFocus={() =>
-                                    list.focus.set(group().id, {
-                                      reason: 'hover',
-                                    })
-                                  }
-                                  onToggle={() =>
-                                    list.activate.key(group().id, {
-                                      reason: 'pointer',
-                                    })
-                                  }
-                                />
-                              )}
-                            </Match>
-                            <Match when={row.kind === 'entity' && row}>
-                              {(entityRow) => (
-                                <SoupEntityContextMenu
-                                  entity={entityRow().entity}
-                                  list={actionState}
-                                  selectedEntities={selectedTasks}
-                                  viewContext={entityActionViewContext()}
-                                  onOpenChange={(open) => {
-                                    if (!open) return;
-                                    list.focus.set(entityRow().id, {
-                                      reason: 'pointer',
-                                      force: true,
-                                    });
-                                    list.selection.setAnchor(entityRow().id);
-                                  }}
-                                >
-                                  <TaskListEntity
-                                    rowId={entityRow().id}
-                                    entity={entityRow().entity}
-                                    highlighted={
-                                      list.focus.key() === entityRow().id
-                                    }
-                                    checked={list.selection.isSelected(
-                                      entityRow().id
-                                    )}
-                                    onMouseMove={() =>
-                                      list.focus.set(entityRow().id, {
-                                        reason: 'hover',
-                                      })
-                                    }
-                                    onClick={(event) => {
-                                      if (
-                                        event.metaKey ||
-                                        event.ctrlKey ||
-                                        (isTouchDevice() &&
-                                          list.selection.count() > 0)
-                                      ) {
-                                        listInteractions.selection.toggle(
-                                          entityRow().id
-                                        );
-
-                                        return;
-                                      }
-
-                                      list.activate.key(entityRow().id, {
-                                        reason: 'pointer',
-                                        metadata: { event },
-                                      });
-                                    }}
-                                    onProjectClick={(project, event) => {
-                                      const openInNewSplit = event.shiftKey;
-
-                                      openEntity(project, {
-                                        openInNewSplit,
-                                      });
-                                    }}
-                                    onChecked={(selected, shiftKey) =>
-                                      listInteractions.selection.set(
-                                        entityRow().id,
-                                        selected,
-                                        { range: shiftKey }
-                                      )
-                                    }
-                                    entityRowConfig={{
-                                      swipeLeftColor: 'bg-success',
-                                      swipeLeftRevealedComponent: (
-                                        <CheckIcon class="size-8 text-surface" />
-                                      ),
-                                    }}
+                  {(row) => (
+                    <Switch>
+                      <Match
+                        when={row.kind === 'group-header' ? row : undefined}
+                      >
+                        {(group) => (
+                          <TaskGroupHeader
+                            row={group()}
+                            columnCount={columnCount()}
+                            groupBy={state.groupBy}
+                            expanded={isGroupExpanded(group().groupId)}
+                            focused={list.focus.key() === group().id}
+                            onFocus={() =>
+                              list.focus.set(group().id, {
+                                reason: 'hover',
+                              })
+                            }
+                            onToggle={() =>
+                              list.activate.key(group().id, {
+                                reason: 'pointer',
+                              })
+                            }
+                          />
+                        )}
+                      </Match>
+                      <Match when={row.kind === 'entity' && row}>
+                        {(entityRow) => (
+                          <SoupEntityContextMenu
+                            entity={entityRow().entity}
+                            list={actionState}
+                            selectedEntities={selectedTasks}
+                            viewContext={entityActionViewContext()}
+                            onOpenChange={(open) => {
+                              if (!open) return;
+                              list.focus.set(entityRow().id, {
+                                reason: 'pointer',
+                                force: true,
+                              });
+                              list.selection.setAnchor(entityRow().id);
+                            }}
+                          >
+                            <TaskListEntity
+                              projectSlot={
+                                projectsEnabled() ? (
+                                  <ProjectPropertyCell
+                                    taskId={entityRow().entity.id}
+                                    reference={projectReferences
+                                      .references()
+                                      .get(entityRow().entity.id)}
                                   />
-                                </SoupEntityContextMenu>
-                              )}
-                            </Match>
-                            <Match
-                              when={
-                                row.kind === 'section-header' ? row : undefined
+                                ) : undefined
                               }
-                            >
-                              {(section) => (
-                                <div id={section().id} role="row">
-                                  <div
-                                    role="gridcell"
-                                    aria-colspan={7}
-                                    class="flex h-8 items-end px-3 pb-1 text-xs font-semibold text-ink-extra-muted"
-                                  >
-                                    {section().label}
-                                  </div>
-                                </div>
+                              rowId={entityRow().id}
+                              entity={entityRow().entity}
+                              highlighted={list.focus.key() === entityRow().id}
+                              checked={list.selection.isSelected(
+                                entityRow().id
                               )}
-                            </Match>
-                            <Match
-                              when={row.kind === 'load-more' ? row : undefined}
-                            >
-                              {(loadMore) => {
-                                const highlighted = () =>
-                                  list.focus.key() === loadMore().id;
-                                const buttonClass = () =>
-                                  cn({
-                                    'bg-surface': !highlighted(),
-                                    'border-transparent': highlighted(),
-                                  });
-                                const activate = () => {
-                                  if (loadMore().isLoading) return;
-                                  list.activate.key(loadMore().id, {
-                                    reason: 'pointer',
-                                  });
-                                };
+                              onMouseMove={() =>
+                                list.focus.set(entityRow().id, {
+                                  reason: 'hover',
+                                })
+                              }
+                              onClick={(event) => {
+                                if (
+                                  event.metaKey ||
+                                  event.ctrlKey ||
+                                  (isTouchDevice() &&
+                                    list.selection.count() > 0)
+                                ) {
+                                  listInteractions.selection.toggle(
+                                    entityRow().id
+                                  );
 
-                                return (
-                                  <div id={loadMore().id} role="row">
-                                    <div
-                                      role="gridcell"
-                                      aria-colspan={7}
-                                      aria-busy={loadMore().isLoading}
-                                      onMouseMove={() =>
-                                        list.focus.set(loadMore().id, {
-                                          reason: 'hover',
-                                        })
-                                      }
-                                      onClick={activate}
-                                      class={cn(
-                                        'my-1 flex min-h-9 items-center justify-center rounded',
-                                        highlighted()
-                                          ? 'mx-1 w-[calc(100%-0.5rem)] bg-active/60'
-                                          : 'mx-auto'
-                                      )}
-                                    >
-                                      <Show
-                                        when={!loadMore().isLoading}
-                                        fallback={
-                                          <Button
-                                            variant="outline"
-                                            size="sm"
-                                            depth={2}
-                                            class={buttonClass()}
-                                            disabled
-                                          >
-                                            <SpinnerIcon class="size-3 animate-spin" />
-                                            Loading...
-                                          </Button>
-                                        }
-                                      >
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          depth={2}
-                                          class={buttonClass()}
-                                        >
-                                          <CaretDownIcon class="size-2.5" />
-                                          Load More
-                                        </Button>
-                                      </Show>
-                                    </div>
-                                  </div>
-                                );
+                                  return;
+                                }
+
+                                list.activate.key(entityRow().id, {
+                                  reason: 'pointer',
+                                  metadata: { event },
+                                });
                               }}
-                            </Match>
-                          </Switch>
-                        </div>
-                      )}
-                    </Virtualizer>
-                  </Suspense>
-                </div>
+                              onProjectClick={(project, event) => {
+                                const openInNewSplit = event.shiftKey;
+
+                                openEntity(project, {
+                                  openInNewSplit,
+                                });
+                              }}
+                              onChecked={(selected, shiftKey) =>
+                                listInteractions.selection.set(
+                                  entityRow().id,
+                                  selected,
+                                  { range: shiftKey }
+                                )
+                              }
+                              entityRowConfig={{
+                                swipeLeftColor: 'bg-success',
+                                swipeLeftRevealedComponent: (
+                                  <CheckIcon class="size-8 text-surface" />
+                                ),
+                              }}
+                            />
+                          </SoupEntityContextMenu>
+                        )}
+                      </Match>
+                      <Match
+                        when={row.kind === 'section-header' ? row : undefined}
+                      >
+                        {(section) => (
+                          <div id={section().id} role="row">
+                            <div
+                              role="gridcell"
+                              aria-colspan={columnCount()}
+                              class="flex h-8 items-end px-3 pb-1 text-xs font-semibold text-ink-extra-muted"
+                            >
+                              {section().label}
+                            </div>
+                          </div>
+                        )}
+                      </Match>
+                      <Match when={row.kind === 'load-more' ? row : undefined}>
+                        {(loadMore) => {
+                          const highlighted = () =>
+                            list.focus.key() === loadMore().id;
+                          const buttonClass = () =>
+                            cn({
+                              'bg-surface': !highlighted(),
+                              'border-transparent': highlighted(),
+                            });
+                          const activate = () => {
+                            if (loadMore().isLoading) return;
+                            list.activate.key(loadMore().id, {
+                              reason: 'pointer',
+                            });
+                          };
+
+                          return (
+                            <div id={loadMore().id} role="row">
+                              <div
+                                role="gridcell"
+                                aria-colspan={columnCount()}
+                                aria-busy={loadMore().isLoading}
+                                onMouseMove={() =>
+                                  list.focus.set(loadMore().id, {
+                                    reason: 'hover',
+                                  })
+                                }
+                                onClick={activate}
+                                class={cn(
+                                  'my-1 flex min-h-9 items-center justify-center rounded',
+                                  highlighted()
+                                    ? 'mx-1 w-[calc(100%-0.5rem)] bg-active/60'
+                                    : 'mx-auto'
+                                )}
+                              >
+                                <Show
+                                  when={!loadMore().isLoading}
+                                  fallback={
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      depth={2}
+                                      class={buttonClass()}
+                                      disabled
+                                    >
+                                      <SpinnerIcon class="size-3 animate-spin" />
+                                      Loading...
+                                    </Button>
+                                  }
+                                >
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    depth={2}
+                                    class={buttonClass()}
+                                  >
+                                    <CaretDownIcon class="size-2.5" />
+                                    Load More
+                                  </Button>
+                                </Show>
+                              </div>
+                            </div>
+                          );
+                        }}
+                      </Match>
+                    </Switch>
+                  )}
+                </ListViewport>
               </Match>
             </Switch>
           </SwipableRowProvider>
@@ -659,7 +663,34 @@ export function TaskList(props: TaskListProps) {
               selected={selectedTasks()}
               onClear={listInteractions.selection.clear}
               analyticsSource="tasks_view_selection_toolbar"
-            />
+            >
+              <Show when={projectsEnabled()}>
+                <Button
+                  size="sm"
+                  class="whitespace-nowrap"
+                  onClick={(event) =>
+                    setAssigningProjectTasks({
+                      ids: selectedTasks().map((task) => task.id),
+                      anchor: event.currentTarget,
+                    })
+                  }
+                >
+                  Set project
+                </Button>
+              </Show>
+            </EntitySelectionToolbar>
+          </Show>
+          <Show when={projectsEnabled() && assigningProjectTasks()}>
+            {(assigning) => (
+              <ProjectPickerPopover
+                taskIds={assigning().ids}
+                open
+                onOpenChange={(open) => {
+                  if (!open) setAssigningProjectTasks(undefined);
+                }}
+                getAnchorRect={() => assigning().anchor.getBoundingClientRect()}
+              />
+            )}
           </Show>
         </ListLayoutProvider>
       </div>

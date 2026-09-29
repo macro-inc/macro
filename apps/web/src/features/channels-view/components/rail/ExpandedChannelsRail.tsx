@@ -4,6 +4,7 @@ import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { useFavoriteDisplayName } from '@app/util/favorites';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
+import { ChannelMutedIndicator } from '@channel/components/ChannelMutedIndicator';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
@@ -31,6 +32,7 @@ import {
 } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import { canLabelChannel } from '../../core/channel-label-eligibility';
+import { ChannelsLiveCallsSidebar } from '../../live-calls-sidebar';
 import type { ChannelListSort, ChannelsGroup } from '../../types';
 import { channelMentionsUser, formatDetailedTimestamp } from '../../utils';
 import { ChannelsEmptyState } from '../ChannelsEmptyState';
@@ -42,7 +44,6 @@ import {
 import {
   ChannelAvatar,
   ChannelCallIndicator,
-  ChannelMutedIndicator,
   ChannelRailItemContextMenu,
   CONVERSATION_CARD_HEIGHT,
   ConversationCard,
@@ -195,6 +196,7 @@ function FavoriteOption(props: { favorite: Favorite }) {
         <FavoriteIcon favorite={props.favorite} class="size-4" />
       </ViewSidebar.Icon>
       <span class="min-w-0 flex-1 truncate">{displayName()}</span>
+      <ChannelMutedIndicator muted={item().muted} />
     </ViewSidebar.Item>
   );
 }
@@ -1028,6 +1030,7 @@ export function ExpandedChannelsRail(props: { search: ChannelRailSearch }) {
   return (
     <>
       <ExpandedHeader search={props.search} />
+      <ChannelsLiveCallsSidebar />
       <div class="flex min-h-0 flex-1 flex-col">
         <div
           ref={rail.registerRootRef}

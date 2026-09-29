@@ -83,7 +83,7 @@ impl<E: EntityAccessService, Cgw: ConnectionGateway> ConnectionService
         Ok(())
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, message), err)]
     async fn send_channel_message<'a>(
         &self,
         users: &[MacroUserIdStr<'a>],

@@ -58,6 +58,8 @@ vi.mock('@channel/Input/message-payload', () => ({
 vi.mock('@core/messages/MessageThread', () => ({
   MessageThreadById: (props: {
     buildLink: (message: { id: string }) => string;
+    targetId?: string | null;
+    onClearTarget?: () => void;
   }) => {
     // Stands in for the message actions' delete confirmation, which the
     // thread renders into a portal outside the card.
@@ -65,6 +67,12 @@ vi.mock('@core/messages/MessageThread', () => ({
     return (
       <>
         <a href={props.buildLink({ id: 'comment-root' })}>Copy link</a>
+        <button
+          data-target={props.targetId ?? undefined}
+          onClick={() => props.onClearTarget?.()}
+        >
+          Linked comment
+        </button>
         <button onClick={() => setConfirming(true)}>Delete</button>
         <Dialog open={confirming()} onOpenChange={setConfirming}>
           <Dialog.Portal>
@@ -187,6 +195,38 @@ describe('anchored comment links', () => {
       expect(url.searchParams.has('commentId')).toBe(false);
     }
   );
+
+  it('releases the comment-link highlight when the highlighted comment is clicked', () => {
+    const [highlighted, setHighlighted] = createSignal<string | null>(
+      'comment-root'
+    );
+    const view = render(() => (
+      <CommentsContext.Provider
+        value={{
+          documentId: 'document',
+          documentType: 'md',
+          canComment: () => true,
+          isDocumentOwner: () => true,
+          highlightedCommentId: highlighted,
+          clearHighlightedComment: () => setHighlighted(null),
+          setActiveThread: () => {},
+          setThreadHeight: () => {},
+          getCommentById: () => undefined,
+          ownedComment: () => false,
+          inComment: true,
+          commentOperations: noopCommentOperations,
+          messageOperations: { createComment: async () => null },
+        }}
+      >
+        <ThreadBody comment={comment} isActive />
+      </CommentsContext.Provider>
+    ));
+    const linked = view.getByRole('button', { name: 'Linked comment' });
+    expect(linked.dataset.target).toBe('comment-root');
+    fireEvent.click(linked);
+    expect(highlighted()).toBeNull();
+    expect(linked.dataset.target).toBeUndefined();
+  });
 
   it('renders a PDF on the message API through the message thread', () => {
     const view = renderThreadBody('pdf');

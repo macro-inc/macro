@@ -3,6 +3,44 @@
  */
 import { z } from 'zod/v3';
 
+export const AssignTasksToInitiative = z.object({
+  initiativeId: z.string().uuid(),
+  taskIds: z.array(z.string()),
+});
+
+export const AssignTasksToInitiativeResponse = z.object({
+  initiativeId: z.string().uuid(),
+  results: z.array(
+    z.object({
+      taskId: z.string(),
+      status: z.any().superRefine((x, ctx) => {
+        const schemas = [
+          z.literal('assigned'),
+          z.literal('moved'),
+          z.literal('not_a_task'),
+          z.literal('not_found'),
+          z.literal('skipped_no_permission'),
+        ];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
+    })
+  ),
+});
+
 export const BashCodeExecution = z.object({ input: z.string() });
 
 export const BashCodeExecutionResponse = z.object({
@@ -76,6 +114,7 @@ export const BulkSetEntityPropertyOptions = z.object({
     z.object({
       entity_type: z.enum([
         'document',
+        'initiative',
         'project',
         'chat',
         'thread',
@@ -601,18 +640,19 @@ export const SpreadsheetResponse = z.any().superRefine((x, ctx) => {
   }
 });
 
-export const CommentOnDocumentText = z.object({
+export const CommentOnDocument = z.object({
   documentId: z.string().uuid(),
-  text: z.string(),
-  occurrence: z.union([z.number().int().gte(1), z.null()]).optional(),
   content: z.string(),
+  threadId: z.union([z.string().uuid(), z.null()]).optional(),
+  quote: z.union([z.string(), z.null()]).optional(),
+  occurrence: z.union([z.number().int().gte(1), z.null()]).optional(),
 });
 
-export const CommentOnDocumentTextResponse = z.object({
+export const CommentOnDocumentResponse = z.object({
   documentId: z.string().uuid(),
   threadId: z.string().uuid(),
   commentId: z.string().uuid(),
-  markedText: z.string(),
+  markedText: z.union([z.string(), z.null()]).optional(),
 });
 
 export const ConfigureBot = z.object({
@@ -1128,7 +1168,7 @@ export const SearchToolResponse = z.object({
                 name: z.union([z.string(), z.null()]).optional(),
                 owner_id: z.string(),
                 call_id: z.string().uuid(),
-                channel_id: z.string().uuid(),
+                channel_id: z.union([z.string().uuid(), z.null()]).optional(),
                 participant_ids: z.array(z.string()),
                 call_search_results: z.array(
                   z.object({
@@ -1779,6 +1819,31 @@ export const CreateImportEntityResponse = z.object({
   message: z.string(),
 });
 
+export const CreateInitiative = z.object({
+  name: z.string(),
+  description: z.union([z.string(), z.null()]).optional(),
+  memberIds: z.union([z.array(z.string()), z.null()]).optional(),
+  shareWithTeam: z.union([z.boolean(), z.null()]).optional(),
+});
+
+export const ProjectDetails = z.object({
+  initiativeId: z.string().uuid(),
+  name: z.string(),
+  descriptionDocumentId: z.string().uuid(),
+  ownerId: z.string(),
+  memberIds: z.array(z.string()),
+  taskIds: z.array(z.string()),
+  taskCount: z.number().int().gte(0),
+  tasksTruncated: z.boolean(),
+  access: z.string(),
+  teamAccess: z.union([z.string(), z.null()]).optional(),
+  linkScope: z.union([z.string(), z.null()]).optional(),
+  linkAccess: z.union([z.string(), z.null()]).optional(),
+  channelShares: z.array(
+    z.object({ channelId: z.string(), access: z.string() })
+  ),
+});
+
 export const CreateProject = z.object({
   projectName: z.string(),
   parentProjectId: z.union([z.string().uuid(), z.null()]).optional(),
@@ -2002,6 +2067,10 @@ export const DeleteImportEntityResponse = z.object({
   discarded: z.boolean(),
   message: z.string(),
 });
+
+export const DeleteInitiative = z.object({ initiativeId: z.string().uuid() });
+
+export const ProjectOperationComplete = z.object({ success: z.boolean() });
 
 export const DeleteReminder = z.object({ reminderId: z.string().uuid() });
 
@@ -2547,6 +2616,7 @@ export const GetEntityProperties = z.object({
   entity_id: z.string(),
   entity_type: z.enum([
     'document',
+    'initiative',
     'project',
     'chat',
     'thread',
@@ -3356,6 +3426,45 @@ export const ListInboxesResponse = z.object({
   summary: z.string(),
 });
 
+export const ListInitiatives = z.object({
+  query: z.union([z.string(), z.null()]).optional(),
+  status: z.union([z.string().uuid(), z.null()]).optional(),
+  priority: z.union([z.string().uuid(), z.null()]).optional(),
+  assignee: z.union([z.string(), z.null()]).optional(),
+  dueAfter: z
+    .union([z.string().datetime({ offset: true }), z.null()])
+    .optional(),
+  dueBefore: z
+    .union([z.string().datetime({ offset: true }), z.null()])
+    .optional(),
+  cursor: z.union([z.string(), z.null()]).optional(),
+  limit: z.union([z.number().int().gte(0).lte(65535), z.null()]).optional(),
+});
+
+export const ProjectListResult = z.object({
+  projects: z.array(
+    z.object({
+      initiativeId: z.string().uuid(),
+      name: z.string(),
+      descriptionDocumentId: z.string().uuid(),
+      access: z.string(),
+      properties: z.object({
+        status: z.union([z.string().uuid(), z.null()]).optional(),
+        priority: z.union([z.string().uuid(), z.null()]).optional(),
+        assignees: z.array(z.string()),
+        dueDate: z
+          .union([z.string().datetime({ offset: true }), z.null()])
+          .optional(),
+        completed: z.boolean(),
+      }),
+      taskCount: z.number().int().gte(0),
+      completedTaskCount: z.number().int().gte(0),
+    })
+  ),
+  truncated: z.boolean(),
+  nextCursor: z.union([z.string(), z.null()]).optional(),
+});
+
 export const ListLabels = z.object({
   thread_id: z.union([z.string().uuid(), z.null()]).optional(),
   inbox: z.union([z.string(), z.null()]).optional(),
@@ -3915,6 +4024,8 @@ export const ReadActivityResponse = z.object({
             type: z.literal('participantRemoved'),
           }),
           z.object({ callId: z.string(), type: z.literal('callStarted') }),
+          z.object({ type: z.literal('taskAdded') }),
+          z.object({ type: z.literal('taskRemoved') }),
           z.object({
             tag: z.string(),
             payload: z.any().optional(),
@@ -4870,6 +4981,12 @@ export const ReadContentResponse = z.object({
       resolved: z.boolean(),
       anchor: z.any().superRefine((x, ctx) => {
         const schemas = [
+          z.object({
+            sheetId: z.string(),
+            sheetName: z.string(),
+            range: z.string(),
+            type: z.literal('spreadsheet'),
+          }),
           z.object({ type: z.literal('document') }),
           z.object({
             markId: z.string().uuid(),
@@ -4915,6 +5032,81 @@ export const ReadContentResponse = z.object({
       ),
     })
   ),
+});
+
+export const ReadInitiative = z.object({
+  initiativeId: z.string().uuid(),
+  taskCursor: z.union([z.string(), z.null()]).optional(),
+  taskLimit: z.union([z.number().int().gte(0).lte(65535), z.null()]).optional(),
+});
+
+export const ProjectReadResult = z.object({
+  project: z.object({
+    initiativeId: z.string().uuid(),
+    name: z.string(),
+    descriptionDocumentId: z.string().uuid(),
+    ownerId: z.string(),
+    memberIds: z.array(z.string()),
+    taskIds: z.array(z.string()),
+    taskCount: z.number().int().gte(0),
+    tasksTruncated: z.boolean(),
+    access: z.string(),
+    teamAccess: z.union([z.string(), z.null()]).optional(),
+    linkScope: z.union([z.string(), z.null()]).optional(),
+    linkAccess: z.union([z.string(), z.null()]).optional(),
+    channelShares: z.array(
+      z.object({ channelId: z.string(), access: z.string() })
+    ),
+  }),
+  properties: z.object({
+    status: z.union([z.string().uuid(), z.null()]).optional(),
+    priority: z.union([z.string().uuid(), z.null()]).optional(),
+    assignees: z.array(z.string()),
+    dueDate: z
+      .union([z.string().datetime({ offset: true }), z.null()])
+      .optional(),
+    completed: z.boolean(),
+  }),
+  nextTaskCursor: z.union([z.string(), z.null()]).optional(),
+});
+
+export const ReadInitiativeActivity = z.object({
+  initiativeId: z.string().uuid(),
+  after: z.union([z.string().datetime({ offset: true }), z.null()]).optional(),
+  before: z.union([z.string().datetime({ offset: true }), z.null()]).optional(),
+  cursor: z
+    .union([
+      z.object({
+        occurredAt: z.string().datetime({ offset: true }),
+        id: z.string().uuid(),
+      }),
+      z.null(),
+    ])
+    .optional(),
+  limit: z.union([z.number().int().gte(0).lte(65535), z.null()]).optional(),
+});
+
+export const ProjectActivityResult = z.object({
+  records: z.array(
+    z.object({
+      id: z.string().uuid(),
+      actorId: z.string(),
+      subjectId: z.string(),
+      action: z.string(),
+      actionPayload: z.any().optional(),
+      occurredAt: z.string().datetime({ offset: true }),
+    })
+  ),
+  truncated: z.boolean(),
+  nextCursor: z
+    .union([
+      z.object({
+        occurredAt: z.string().datetime({ offset: true }),
+        id: z.string().uuid(),
+      }),
+      z.null(),
+    ])
+    .optional(),
 });
 
 export const ReadMetadata = z.object({ documentId: z.string().uuid() });
@@ -5072,11 +5264,53 @@ export const ReadProjectResponse = z.object({
   ),
 });
 
+export const ReadSkill = z.object({ documentId: z.string().uuid() });
+
+export const ReadSkillResponse = z.object({
+  documentId: z.string().uuid(),
+  name: z.string(),
+  content: z.string(),
+});
+
 export const ReadSpreadsheet = z.object({
   documentId: z.string(),
   sheetId: z.union([z.string(), z.null()]).optional(),
   ranges: z.union([z.array(z.string()), z.null()]).optional(),
   includeStyles: z.union([z.boolean(), z.null()]).optional(),
+});
+
+export const ReadTaskInitiatives = z.object({ taskIds: z.array(z.string()) });
+
+export const TaskProjectReferences = z.object({
+  references: z.array(
+    z.any().superRefine((x, ctx) => {
+      const schemas = [
+        z.object({ taskId: z.string(), state: z.literal('none') }),
+        z.object({ taskId: z.string(), state: z.literal('unavailable') }),
+        z.object({
+          taskId: z.string(),
+          initiativeId: z.string().uuid(),
+          name: z.string(),
+          state: z.literal('visible'),
+        }),
+      ];
+      const errors = schemas.reduce<z.ZodError[]>(
+        (errors, schema) =>
+          ((result) => (result.error ? [...errors, result.error] : errors))(
+            schema.safeParse(x)
+          ),
+        []
+      );
+      if (schemas.length - errors.length !== 1) {
+        ctx.addIssue({
+          path: ctx.path,
+          code: 'invalid_union',
+          unionErrors: errors,
+          message: 'Invalid input: Should pass single schema',
+        });
+      }
+    })
+  ),
 });
 
 export const RenameChannel = z.object({
@@ -5100,18 +5334,6 @@ export const RenameDocumentResponse = z.object({
   success: z.boolean(),
   documentId: z.string().uuid(),
   message: z.string(),
-});
-
-export const ReplyToDocumentComment = z.object({
-  documentId: z.string().uuid(),
-  content: z.string(),
-  threadId: z.union([z.string().uuid(), z.null()]).optional(),
-});
-
-export const ReplyToDocumentCommentResponse = z.object({
-  documentId: z.string().uuid(),
-  threadId: z.string().uuid(),
-  commentId: z.string().uuid(),
 });
 
 export const ResolveDocumentComment = z.object({
@@ -5344,6 +5566,7 @@ export const SetEntityProperty = z.object({
   entity_id: z.string(),
   entity_type: z.enum([
     'document',
+    'initiative',
     'project',
     'chat',
     'thread',
@@ -5369,6 +5592,7 @@ export const SetEntityProperty = z.object({
         entityType: z.enum([
           'document',
           'task',
+          'initiative',
           'project',
           'chat',
           'thread',
@@ -5389,6 +5613,7 @@ export const SetEntityProperty = z.object({
           entityType: z.enum([
             'document',
             'task',
+            'initiative',
             'project',
             'chat',
             'thread',
@@ -5466,6 +5691,15 @@ export const SetSenderPolicyResponse = z.object({
   }),
   inbox: z.string(),
   summary: z.string(),
+});
+
+export const SetTaskInitiative = z.object({
+  taskIds: z.array(z.string()),
+  initiativeId: z.union([z.string().uuid(), z.null()]).optional(),
+});
+
+export const TaskProjectOutcomes = z.object({
+  results: z.array(z.object({ taskId: z.string(), status: z.string() })),
 });
 
 export const Subagent = z.object({ task: z.string() });
@@ -5581,6 +5815,38 @@ export const TextEditorCodeExecutionResponse = z.object({
       });
     }
   }),
+});
+
+export const UnassignTasksFromInitiative = z.object({
+  initiativeId: z.string().uuid(),
+  taskIds: z.array(z.string()),
+});
+
+export const UnassignTasksFromInitiativeResponse = z.object({
+  initiativeId: z.string().uuid(),
+  results: z.array(
+    z.object({
+      taskId: z.string(),
+      status: z.any().superRefine((x, ctx) => {
+        const schemas = [z.literal('unassigned'), z.literal('not_assigned')];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
+    })
+  ),
 });
 
 export const UpdateCalendarEvent = z.object({
@@ -5778,6 +6044,133 @@ export const ToolCalendarEvent = z.object({
   conferenceUrl: z.union([z.string(), z.null()]).optional(),
   isReadOnly: z.boolean(),
   calendarId: z.union([z.string().uuid(), z.null()]).optional(),
+});
+
+export const UpdateInitiative = z.object({
+  initiativeId: z.string().uuid(),
+  name: z.union([z.string(), z.null()]).optional(),
+  memberIds: z.union([z.array(z.string()), z.null()]).optional(),
+});
+
+export const UpdateInitiativeSharing = z.object({
+  initiativeId: z.string().uuid(),
+  teamAccess: z
+    .union([
+      z.any().superRefine((x, ctx) => {
+        const schemas = [
+          z.literal('off'),
+          z.literal('view'),
+          z.literal('comment'),
+          z.literal('edit'),
+        ];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
+      z.null(),
+    ])
+    .optional(),
+  linkScope: z
+    .union([
+      z.any().superRefine((x, ctx) => {
+        const schemas = [
+          z.literal('off'),
+          z.literal('public'),
+          z.literal('team'),
+        ];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
+      z.null(),
+    ])
+    .optional(),
+  linkAccess: z
+    .union([
+      z.any().superRefine((x, ctx) => {
+        const schemas = [
+          z.literal('off'),
+          z.literal('view'),
+          z.literal('comment'),
+          z.literal('edit'),
+        ];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
+      z.null(),
+    ])
+    .optional(),
+  channels: z
+    .union([
+      z.array(
+        z.object({
+          channelId: z.string().uuid(),
+          access: z.any().superRefine((x, ctx) => {
+            const schemas = [
+              z.literal('off'),
+              z.literal('view'),
+              z.literal('comment'),
+              z.literal('edit'),
+            ];
+            const errors = schemas.reduce<z.ZodError[]>(
+              (errors, schema) =>
+                ((result) =>
+                  result.error ? [...errors, result.error] : errors)(
+                  schema.safeParse(x)
+                ),
+              []
+            );
+            if (schemas.length - errors.length !== 1) {
+              ctx.addIssue({
+                path: ctx.path,
+                code: 'invalid_union',
+                unionErrors: errors,
+                message: 'Invalid input: Should pass single schema',
+              });
+            }
+          }),
+        })
+      ),
+      z.null(),
+    ])
+    .optional(),
 });
 
 export const UpdateReminder = z.object({

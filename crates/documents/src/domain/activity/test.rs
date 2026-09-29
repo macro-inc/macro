@@ -188,11 +188,15 @@ fn unattributable_mutations_are_dropped() {
 
 #[test]
 fn copied_maps_to_a_created_activity_for_the_new_document() {
+    let copier = user("macro|copier@example.com");
+    let bot = Actor::new_from_bot(bot_id::MACRO_AI_BOT_ID);
     let event = envelope(DocumentTopicEvent::Copied(DocumentCopiedMetadata {
         document_id: "22222222-2222-2222-2222-222222222222".to_string(),
         source_document_id: DOCUMENT_ID.to_string(),
         source_version_id: None,
-        owner: Owner::from_principal_str("macro|copier@example.com").unwrap(),
+        owner: Owner::User(copier.clone()),
+        actor: Some(bot.clone()),
+        on_behalf_of: Some(copier.clone()),
         document_name: "copy".to_string(),
         file_type: None,
         project_id: None,
@@ -202,6 +206,8 @@ fn copied_maps_to_a_created_activity_for_the_new_document() {
     let activity = single_activity(event.event.ingest(event.event_id));
     assert_eq!(activity.action, Action::Created);
     assert_eq!(activity.entity_id, "22222222-2222-2222-2222-222222222222");
+    assert_eq!(activity.actor, bot);
+    assert_eq!(activity.subject_id, copier.as_ref());
 }
 
 #[test]
@@ -231,6 +237,8 @@ fn creation_and_copy_derive_user_bot_and_team_actors() {
                 source_document_id: "source-document".to_string(),
                 source_version_id: None,
                 owner,
+                actor: None,
+                on_behalf_of: None,
                 document_name: "copy".to_string(),
                 file_type: None,
                 project_id: None,

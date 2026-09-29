@@ -1,3 +1,4 @@
+import { PLAN_BY_TIER, PLANS } from '@app/features/paywall/plans';
 import { toast } from '@core/component/Toast/Toast';
 import {
   getLinkShareScope,
@@ -163,10 +164,31 @@ function RoleSelect(props: {
 
 type PlanOption = { value: PaidPlan; label: string; description: string };
 
-const planOptions: PlanOption[] = [
-  { value: 'premium', label: 'Premium', description: '$40 · $40 of AI' },
-  { value: 'max', label: 'Max', description: '$200 · $200 of AI' },
+const maxPlan = PLAN_BY_TIER.max;
+const MAX_PLAN_OPTION: PlanOption = {
+  value: 'max',
+  label: maxPlan.name,
+  description: `$${maxPlan.price} · $${maxPlan.aiIncluded} of AI`,
+};
+const purchasablePlanOptions: PlanOption[] = [
+  ...PLANS.flatMap((plan) =>
+    plan.tier === 'free'
+      ? []
+      : [
+          {
+            value: plan.tier,
+            label: plan.name,
+            description: `$${plan.price} · $${plan.aiIncluded} of AI`,
+          },
+        ]
+  ),
 ];
+
+function planOptionsFor(currentPlan: PaidPlan): PlanOption[] {
+  return currentPlan === 'max'
+    ? [...purchasablePlanOptions, MAX_PLAN_OPTION]
+    : purchasablePlanOptions;
+}
 
 /**
  * The plan a member's seat is billed at. Until the generated `TeamMember`
@@ -182,12 +204,13 @@ function PlanSelect(props: {
   onChange: (plan: PaidPlan) => void;
   disabled?: boolean;
 }) {
+  const options = () => planOptionsFor(props.value);
   const selectedOption = () =>
-    planOptions.find((o) => o.value === props.value) ?? planOptions[0];
+    options().find((option) => option.value === props.value) ?? options()[0];
 
   return (
     <Select<PlanOption>
-      options={planOptions}
+      options={options()}
       value={selectedOption()}
       onChange={(opt) => opt && props.onChange(opt.value)}
       optionValue="value"
@@ -263,7 +286,7 @@ function InviteEntryRow(props: {
             <Button
               variant="outline"
               size="icon-sm"
-              class="rounded-xs shrink-0 focus:border-accent"
+              class="shrink-0 focus:border-accent"
               tabIndex={0}
               onClick={props.onRemove}
             >
@@ -380,7 +403,7 @@ function InviteEmailsInput(props: {
       </Show>
       <Button
         variant="outline"
-        class="rounded-xs w-full justify-center focus:border-accent"
+        class="w-full justify-center focus:border-accent"
         tabIndex={0}
         disabled={!canAddRow()}
         onClick={addRow}
@@ -477,7 +500,7 @@ function MemberRow(props: {
                   variant="ghost"
                   size="sm"
                   disabled
-                  class="rounded-xs opacity-50 cursor-not-allowed"
+                  class="opacity-50 cursor-not-allowed"
                 >
                   <TrashIcon class="size-4" />
                 </Button>
@@ -596,7 +619,7 @@ function UserInviteRow(props: {
       <div class="flex items-center gap-2 shrink-0">
         <Button
           variant="outline"
-          class="px-2 py-1 rounded-xs"
+          class="px-2 py-1"
           disabled={props.isAccepting || props.isDeclining}
           onClick={props.onDecline}
         >
@@ -606,7 +629,7 @@ function UserInviteRow(props: {
         </Button>
         <Button
           variant="accent"
-          class="px-2 py-1 rounded-xs"
+          class="px-2 py-1"
           disabled={props.isAccepting || props.isDeclining}
           onClick={props.onAccept}
         >
@@ -793,15 +816,13 @@ function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
           <div class="flex justify-end gap-1 pt-2">
             <Button
               variant="ghost"
-              class="rounded-xs"
               disabled={createTeamMutation.isPending}
               onClick={props.onClose}
             >
               Cancel
             </Button>
             <Button
-              variant="accent"
-              class="rounded-xs"
+              variant="strong"
               disabled={
                 createTeamMutation.isPending ||
                 !!teamNameError() ||
@@ -836,11 +857,7 @@ function EmptyTeamState() {
               Create a team to collaborate with others and manage access
               together.
             </p>
-            <Button
-              variant="accent"
-              class="rounded-xs"
-              onClick={() => setShowCreateModal(true)}
-            >
+            <Button variant="accent" onClick={() => setShowCreateModal(true)}>
               <PlusIcon class="size-4" />
               Create Team
             </Button>
@@ -892,7 +909,6 @@ function SaveCancelButtons(props: {
         <Button
           variant="accent"
           size="icon-sm"
-          class="rounded-xs"
           disabled={props.saveDisabled}
           onClick={props.onSave}
         >
@@ -905,7 +921,6 @@ function SaveCancelButtons(props: {
         <Button
           variant="ghost"
           size="icon-sm"
-          class="rounded-xs"
           disabled={props.pending}
           onClick={props.onCancel}
         >
@@ -1283,7 +1298,6 @@ function TeamManagement(props: {
             <Button
               variant="danger"
               size="sm"
-              class="rounded-xs"
               onClick={() => setShowDeleteTeamModal(true)}
             >
               <TrashIcon class="size-4" />
@@ -1411,7 +1425,6 @@ function TeamManagement(props: {
               <Button
                 variant="outline"
                 size="sm"
-                class="rounded-xs"
                 onClick={handleCopyGithubAutolinkUrl}
               >
                 <CopyIcon class="size-4" />
@@ -1515,7 +1528,6 @@ function TeamManagement(props: {
               <Button
                 variant="outline"
                 size="sm"
-                class="rounded-xs"
                 onClick={() => setShowInviteModal(true)}
               >
                 <PlusIcon class="size-4" />
@@ -1671,15 +1683,13 @@ function TeamManagement(props: {
             <div class="flex justify-end gap-1 pt-2">
               <Button
                 variant="ghost"
-                class="rounded-xs"
                 disabled={deleteTeamMutation.isPending}
                 onClick={() => handleDeleteTeamModalClose(false)}
               >
                 Cancel
               </Button>
               <Button
-                variant="danger"
-                class="rounded-xs"
+                variant="strong"
                 disabled={!canDeleteTeam() || deleteTeamMutation.isPending}
                 onClick={handleDeleteTeam}
               >
@@ -1751,15 +1761,13 @@ function TeamManagement(props: {
             <div class="flex justify-end gap-1 pt-2">
               <Button
                 variant="ghost"
-                class="rounded-xs"
                 disabled={inviteToTeamMutation.isPending}
                 onClick={() => handleInviteModalClose(false)}
               >
                 Cancel
               </Button>
               <Button
-                variant={hasValidInvites() ? 'accent' : 'ghost'}
-                class="rounded-xs"
+                variant="strong"
                 disabled={!hasValidInvites() || inviteToTeamMutation.isPending}
                 onClick={handleInvite}
               >

@@ -25,6 +25,7 @@ import {
 } from '@core/component/LexicalMarkdown/plugins';
 import { emojisPlugin } from '@core/component/LexicalMarkdown/plugins/emojis/emojisPlugin';
 import { snippetsPlugin } from '@core/component/LexicalMarkdown/plugins/snippets';
+import type { MentionLinkResolver } from '@core/component/LexicalMarkdown/plugins/text-paste/textPastePlugin';
 import { useUserPromptPlugin } from '@core/component/LexicalMarkdown/plugins/userPrompt';
 import { createMenuOperations } from '@core/component/LexicalMarkdown/shared/inlineMenu';
 import {
@@ -68,6 +69,7 @@ export function InstructionsEditor(props: {
   loroManager: LoroManager;
   showLexicalStateDebugger?: boolean;
   onLexicalStateDebuggerClose?: () => void;
+  resolveAppLink?: MentionLinkResolver;
 }) {
   const {
     documentId,
@@ -188,7 +190,7 @@ export function InstructionsEditor(props: {
         sourceDocumentId: blockId,
       })
     )
-    .use(textPastePlugin())
+    .use(textPastePlugin(props.resolveAppLink))
     .use(markdownPastePlugin())
     .use(awaitPlugin())
     .use(

@@ -75,7 +75,7 @@ interface CoordinatorConnection {
 
 const DEFAULT_GRACEFUL_TIMEOUT_MS = 10_000;
 
-const withVersion = <T extends { coordinatorVersion: 4 }>(
+const withVersion = <T extends { coordinatorVersion: 5 }>(
   value: T extends unknown ? Omit<T, 'coordinatorVersion'> : never
 ): T =>
   ({

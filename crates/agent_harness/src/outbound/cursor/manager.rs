@@ -36,6 +36,7 @@ use cursor_cloud_agents::domain::ports::{
 use cursor_cloud_agents::domain::service::CursorSessionService;
 use cursor_cloud_agents::inbound::acp::{AcpNotifier, serve};
 use futures::Stream;
+use tracing::Instrument as _;
 
 use super::keys::CursorApiKeys;
 use super::pipe::PipeTransport;
@@ -92,6 +93,38 @@ const CURSOR_IDLE_CHECK_INTERVAL: std::time::Duration = std::time::Duration::fro
 
 fn should_reap_cursor_pipe(idle: std::time::Duration, active_turn: bool, pending: bool) -> bool {
     idle >= CURSOR_IDLE_TIMEOUT && !active_turn && !pending
+}
+
+/// How long a pipe may sit idle past its deadline, kept open only by a turn
+/// or an admitted command, before the idle check says so at `warn`.
+///
+/// The idle check logs its inputs every tick at `debug`, which production
+/// does not ship. A long Cursor run legitimately holds a pipe open for an
+/// hour with nothing moving through it, so the first half hour is nobody's
+/// business - but a pipe held open this long, and again every interval
+/// after, is either a very long run or a gate nobody will ever release, and
+/// the second was found only by noticing which sessions were *not* reaped.
+const HELD_OPEN_WARNING_INTERVAL: std::time::Duration = std::time::Duration::from_secs(30 * 60);
+
+/// Whether this tick should warn that the pipe is held open, and the
+/// threshold the next warning waits for.
+///
+/// `next` is the idle duration the next warning fires at; a pipe that saw
+/// activity again resets it, so a session that is simply busy every day
+/// warns once per long stretch rather than once per process.
+fn held_open_warning(
+    idle: std::time::Duration,
+    held: bool,
+    next: std::time::Duration,
+) -> (bool, std::time::Duration) {
+    if !held || idle < CURSOR_IDLE_TIMEOUT {
+        return (false, HELD_OPEN_WARNING_INTERVAL);
+    }
+    if idle >= next {
+        (true, next + HELD_OPEN_WARNING_INTERVAL)
+    } else {
+        (false, next)
+    }
 }
 
 /// The ref new agents start their work from.
@@ -471,9 +504,18 @@ where
         let observed = Arc::clone(&last_activity);
         let reaper_shutdown = shutdown.clone();
         let pending = self.pending.clone();
+        // The Macro session id on everything this task does. The mirror's
+        // own spans know only the ACP session id (`cursor-acp-1` for every
+        // hosted session), so without this a run it follows for an hour is
+        // unsearchable by the session it belongs to.
+        let background = tracing::info_span!(
+            "agent.session.background",
+            agent.session.id = %session_id,
+        );
         tokio::spawn(async move {
             let mut mirror = interval_from_now(FOREIGN_SYNC_INTERVAL);
             let mut reaper = interval_from_now(CURSOR_IDLE_CHECK_INTERVAL);
+            let mut next_held_open_warning = HELD_OPEN_WARNING_INTERVAL;
             loop {
                 tokio::select! {
                     () = pipe_closed.cancelled() => break,
@@ -530,11 +572,30 @@ where
                             reaper_shutdown.cancel();
                             break;
                         }
+                        let (warn, next) = held_open_warning(
+                            activity.elapsed(),
+                            active_turn || pending_command,
+                            next_held_open_warning,
+                        );
+                        next_held_open_warning = next;
+                        if warn {
+                            let in_flight = pending.turn(session_id);
+                            tracing::warn!(
+                                %session_id,
+                                agent.pipe.idle_ms = idle_ms as u64,
+                                agent.pipe.active_turn = active_turn,
+                                agent.pipe.pending_command = pending_command,
+                                in_flight_turn = in_flight.as_ref().map(|turn| turn.turn.0),
+                                in_flight_action_id = in_flight.as_ref().map(|turn| tracing::field::display(turn.action_id)),
+                                in_flight_age_secs = in_flight.as_ref().map(|turn| turn.age().num_seconds()),
+                                "cursor pipe idle past its deadline but held open by a turn or an admitted command"
+                            );
+                        }
                     }
                     _ = mirror.tick() => sync_service.sync_foreign_runs().await,
                 }
             }
-        });
+        }.instrument(background));
         let transport = PipeTransport::connect_recoverable(
             ours,
             move || {

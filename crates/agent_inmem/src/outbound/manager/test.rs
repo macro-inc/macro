@@ -121,6 +121,7 @@ fn facts_with_instructions(id: AgentSessionId, instructions: &str) -> SessionFac
 fn facts_with_identity(id: AgentSessionId, name: &str, handle: &str) -> SessionFacts {
     SessionFacts {
         identity: Some(AgentIdentity {
+            bot: BotId::TEST_A,
             name: name.to_owned(),
             handle: handle.to_owned(),
         }),

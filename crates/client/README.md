@@ -39,6 +39,49 @@ make retries incorrectly look unchanged. With no optimistic layers, the changed
 record keys also identify visible changes without duplicate before/after snapshots.
 Pending layers still use full effective-view comparison and rebasing.
 
+Soup hydration checkpoints carry the cache's durable storage-generation UUID.
+The engine stores this marker alongside normalized records, so clearing or
+replacing the database invalidates its cursors and update watermarks even when
+localStorage survives. Backfill waits for the current generation before resuming
+and checks it again after each hydrated page. A mismatch starts a full scan;
+ordinary engine handoff preserves the marker and continues the saved scan.
+Reset notifications restart active backfills promptly, but checkpoint validity
+does not depend on observing a notification.
+
+## Soup page retention
+
+Backfill hydration persists normalized descendants (including email message
+pages), identity, email links and filter/search projections, but not the viewer's
+`soup(...)` / `groupSoup(...)` page wrappers. `@cacheOnly` still controls the
+returned cursor projection; it is not an entity-eviction directive.
+
+Foreground Soup snapshots share a per-viewer budget of 64 pages and 512 KiB
+(encoded fields plus retention metadata). Most recently written pages win; reads
+do not persist recency or cause a COMMIT. Individually oversized snapshots are
+not retained. Evicted snapshots miss and require a network refetch; their entity
+records and pending offline mutations remain available.
+
+On the first compatible Turso open after this upgrade, a metadata-versioned
+transaction compacts only `GraphqlUser` records via the type/id index. It prefers
+initial pages when legacy data has no recency ordering. It preserves the storage
+generation, normalized entities, projection facts, queue and optimistic shadows.
+Subsequent opens only check the marker. There is no schema/namespace bump, reset,
+or VACUUM; freed pages can be reused without rewriting the whole database file.
+
+## Entity-rooted optimistic relations
+
+Link recipes may use an optional `recordRoot` (`fragmentName`, `entityKey`).
+The document is then a fragment-only, variable-free selection validated against
+normalized schema types. Traversal starts at that record, including in cold
+storage; it never enumerates query variants or loads the viewer's page lists.
+Existing query-rooted recipes keep their original wire format and replay behavior.
+
+Record-rooted recipes use the same atomic optimistic layer, rollback and
+response-derived `upsertByField` settlement as query recipes. Fragments are never
+sent as network revalidations. Callers should supply an explicit targeted query
+for recovery when the parent/field is missing; the exchange can then enqueue
+entity-only optimism and retain that recovery query for eventual commit/replay.
+
 ## Browser OPFS writes
 
 The OPFS adapter coalesces each Turso vectored write into batches of at most
@@ -53,6 +96,13 @@ Hydration folds authoritative index mutations in order and writes only final
 states that differ from stored state. An updated normalized record does not force
 unchanged index facts to be deleted and reinserted. Pending optimistic projections
 are still rebased for every affected key, even when authority is unchanged.
+
+Quick Access browse timestamps prefer `viewedAt`, then `updatedAt`, for Soup
+documents, chats, projects, channels, and CRM companies. This matches their
+frontend and server ordering before pagination. A versioned derived-search
+projection rebuild upgrades existing indexes once on open, preserving normalized
+records, storage generation, and queued mutations. Routine opens with the current
+projection version do not scan the corpus.
 
 ## Local filter execution
 

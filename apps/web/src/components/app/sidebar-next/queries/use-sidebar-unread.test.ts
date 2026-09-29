@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useSidebarUnread } from './use-sidebar-unread';
 
 const mocks = vi.hoisted(() => ({
-  inbox: vi.fn(),
+  home: vi.fn(),
   email: vi.fn(),
   notifications: vi.fn(),
   graphqlFlag: vi.fn(),
@@ -26,8 +26,8 @@ vi.mock('@queries/channel/unread-presence', () => ({
 vi.mock('@app/features/email-view/queries/email-query', () => ({
   buildEmailQuery: () => ({ params: {}, body: {} }),
 }));
-vi.mock('@app/features/inbox-view/queries/use-inbox-query', () => ({
-  useInboxEntitiesQuery: mocks.inbox,
+vi.mock('@app/features/home/queries/use-home-query', () => ({
+  useHomeEntitiesQuery: mocks.home,
 }));
 vi.mock('@queries/soup/items', () => ({
   useSoupAstItemsQuery: mocks.email,
@@ -124,7 +124,7 @@ function setup(graphql = false) {
     mocks.hasUnreadEntity.mockImplementation((items: EmailEntity[]) =>
       items.some((item) => !item.done && !item.isRead)
     );
-    mocks.inbox.mockReturnValue({
+    mocks.home.mockReturnValue({
       query,
       hasUnreadEntity: mocks.hasUnreadEntity,
       transformEntities: mocks.transformEntities,
@@ -146,12 +146,12 @@ function setup(graphql = false) {
 describe('sidebar unread presence', () => {
   it('does not read pending resources or badge unrelated navigation', () => {
     const { unread } = setup();
-    for (const id of ['inbox', 'mail', 'channels', 'documents', 'agents']) {
+    for (const id of ['home', 'mail', 'channels', 'documents', 'agents']) {
       expect(unread(id)).toBe(false);
     }
     expect(mocks.hasUnreadEntity).not.toHaveBeenCalled();
     expect(mocks.transformEntities).not.toHaveBeenCalled();
-    expect(mocks.inbox).toHaveBeenCalledWith({
+    expect(mocks.home).toHaveBeenCalledWith({
       tab: 'signal',
       facets: { read: ['unread'] },
     });
@@ -161,17 +161,17 @@ describe('sidebar unread presence', () => {
     const { unread, setLoading, setEmails } = setup();
     setLoading(false);
     setEmails([unreadEmail]);
-    expect(unread('inbox')).toBe(true);
+    expect(unread('home')).toBe(true);
     expect(unread('mail')).toBe(true);
     expect(mocks.hasUnreadEntity).toHaveBeenLastCalledWith([unreadEmail]);
     expect(mocks.transformEntities).not.toHaveBeenCalled();
     setEmails([{ ...unreadEmail, isRead: true }]);
-    expect(unread('inbox')).toBe(false);
+    expect(unread('home')).toBe(false);
     expect(unread('mail')).toBe(false);
     setEmails([unreadEmail]);
     expect(unread('mail')).toBe(true);
     setEmails([{ ...unreadEmail, done: true }]);
-    expect(unread('inbox')).toBe(false);
+    expect(unread('home')).toBe(false);
     expect(unread('mail')).toBe(false);
   });
 

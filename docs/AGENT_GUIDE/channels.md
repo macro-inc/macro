@@ -2,17 +2,27 @@
 
 ## Create a channel
 
-1. `Create` → `Channel G`. Dialog `Create a channel` opens with the `Name` textbox focused.
-2. `fill` the name.
-3. Invite (optional): click the combobox `To: Macro users or email addresses`, `type_text`
-   the email, wait for the live-region text `one option available` (or `N options`), press
-   **Enter** to tokenize — the email becomes a chip above the combobox. Skipping the Enter
-   leaves raw text that is not submitted.
-4. Click `Create Channel`. Navigates to the channel (as a split pane:
-   `.../channel/<uuid>`); a system row `Channel <name> created` appears.
+1. `Create` → `Channel G`. Dialog `Create a channel` opens on step 1 of 3 with the `Name` textbox focused.
+2. Fill the name and click `Next`. Step 2 of 3 shows `Visibility`, with `Team — anyone on your team` selected by default. Team channels are always discoverable to teammates.
+3. For a team channel, click `Create`. For a private channel, select `Private — only specific people` and click `Create`. Creation navigates to the channel (as a split pane: `.../channel/<uuid>`); a system row `Channel <name> created` appears.
+4. Step 3 of 3 is an optional invite dialog for either channel type. The recipient combobox searches people and saved agents by name; it also accepts complete email addresses. Select a suggestion or press **Enter** to tokenize it. An unknown complete email appears as **Invite** with a paper airplane icon. Raw text left in the input is not submitted. Click `Add` when recipients are selected, or `Skip for now` to finish without invitees. Selected agents are added through the channel's agent membership endpoint. For team channels, `Automatically add teammates` defaults on; turning it off leaves the channel discoverable without automatically adding current or future teammates. The switch choice is applied when the invite dialog is finished or closed.
 
-Channels are invite-only ("Only people you invite can see this channel"). A DM is just a
-channel between two users.
+Team channels are always discoverable to the team. Private channels can only be viewed or joined by invitation. A DM is a channel between two users.
+An external email can be selected as a channel participant. For an unregistered recipient, clicking `Add` sends an email invite.
+
+## Collapsed reply chains
+
+Collapsed threads show the first three complete message groups. Consecutive
+replies from the same sender within the five-minute avatar-grouping window count
+as one group, so a run of short messages stays together. A different sender or a
+longer gap starts another group; returning to an earlier sender also starts a new
+group. Deleted replies and agent replies triggered by different users keep the
+same group boundaries as their avatar display.
+
+The `N more replies` control counts individual hidden replies and expands the
+whole thread. Check a thread with more than three consecutive replies from one
+sender (all remain visible), then one with four groups (the first three groups
+remain visible in full). Standalone thread previews follow the same rule.
 
 ## Agent session entities
 
@@ -26,9 +36,9 @@ session-specific.
 
 A session transcript shows each tool call as a collapsible row (consecutive calls
 fold into a `Called N tools` group; click it to see the rows). A tool reached over
-an MCP server - Macro's own (`ReadContent · macro`) from a Cursor, Claude, or
-Codex session, or a third-party server (`ask_question · deepwiki`) - is titled by
-the tool's name with the server as its subtitle, never by the harness's dispatcher
+an MCP server - Macro's own (`ReadContent`) from a Cursor, Claude, or
+Codex session, or a third-party server (`ask_question`) - is titled by
+the tool's own name, without a server or workspace label, never by the harness's dispatcher
 (`mcp`). Clicking the row expands the exchange: a `Request` section with the
 tool's own arguments and a `Response` section with what it returned, both as
 syntax-lit, pretty-printed JSON (prose results show as text), each with a copy
@@ -142,17 +152,18 @@ A follow-up sent while that session is still working stops the current turn,
 posts a new Magic Chip on the follow-up message, and steers the agent with
 that text — the chip appears at the follow-up, not after the cancelled turn
 finishes.
-The reply renders a Magic Chip: a rounded card of constant height that is present
-from the moment the session boots. Its header names the persona (`Macro Agent`,
-`Cursor Agent`), the model, and what the turn is doing (`Booting agent`, `Running
-command · cargo test`, `Waiting for you`, `Done`); clicking the header or its arrow
-(`Open in session`) opens the agent session. The area under the header holds the agent's
-latest passage: a pulsing star while the agent is busy before it writes, the passage as it
-streams, and the final passage once the turn ends - the last text the agent wrote, not the
-whole turn, and a finished turn with nothing said leaves the area empty. The area is
-cropped at the chip's height with a fade at its foot; clicking it expands it in place, and
-clicking again collapses it. Before anything is there to expand, clicking the area also
-opens the session.
+The reply renders a Magic Chip: a fixed 88px two-row card on desktop and mobile,
+including lazy loading. The header shows a leading status icon, agent name, model
+(hidden below 600px), an xs status badge, and an outlined **Open session** button
+(icon-only and circular on narrow cards). Working and tool calls use a slow Morph;
+lazy loading and queued states use a gray pulsing dot. Done uses a filled check circle,
+errors a warning circle, input requests a yellow question circle, and stopped a square.
+The lower row shows either a full-width PR preview with available line diff counts or
+one truncated line of agent output. Failure explanations replace that preview; tool
+commands and other secondary details stay inside the session. There are no tooltips.
+Click the card or **Open session** to read the full response or answer a question;
+click the PR to open its Macro split (GitHub until its entity has synced). Expanded
+session mentions retain their collapse control. The card never expands in place.
 
 `@codex` and `@claude` are offered to every user before account setup. The built-in
 `@cursor` entry requires the `enable-cursor-agents` rollout flag (local override:
@@ -188,12 +199,9 @@ PR status in an open Magic Chip updates from connection-gateway events after
 webhook sync. Reconnecting refreshes active PR lookups to recover missed updates.
 A late webhook does not require reloading the page.
 
-When the agent requests permission, the Magic Chip replaces its loading state
-with the action and `Allow once`, `Deny`, and `More options` controls. Permission
-requests and questions share the chip's pending-interaction state and apply only
-to its anchored turn. Session editors and owners can answer directly in the chip;
-viewers and commenters see a waiting notice. Answering clears the request in both
-the chip and the open session, and the chip follows the agent's next activity.
+When the agent requests permission or input, the Magic Chip displays the waiting
+status for its anchored turn. Open the session to answer; editors and owners can
+respond there. The chip follows the agent's next activity after the answer.
 
 Coding agents use `macro_internal.set_pull_request` to register an existing or
 new GitHub PR with their session. Macro Internal MCP is hosted by the harness
@@ -323,6 +331,19 @@ records `path` (`catch_up` or `full`) and `reason`
 (`watermark`, `list_ahead`, `no_cache`, `cache_not_at_latest`, `load_around`,
 `delta_overflow`, or `catch_up_error`).
 
+## Message reaction notifications
+
+Message reaction notifications are enabled by default. The message author can
+turn them off with **Message reactions** in notification settings. Adding a
+reaction from another account notifies the author; self-reactions and removing a
+reaction do not notify.
+
+In Home, reactions belong to the message's thread row: a top-level message uses
+its own row, and a reply uses its parent thread. Verify that an incoming reaction
+brings that row back into the inbox, displays the reaction and channel name, and
+opens the reacted-to message. Marking the row done should clear its reaction
+notifications along with the other notifications for that thread.
+
 ## Chat navigation rail
 
 Following a channel mention or browser notification for the conversation already
@@ -334,12 +355,16 @@ Participants, and Calls tabs (when calls are enabled). A message target switches
 back to Messages; changing unread notifications does not restart navigation.
 
 The title bar's **Hide navigation** control hides the whole rail. Reopen it with
-**Show navigation** (the hamburger) immediately before the conversation title,
-or in the Chat header when no conversation is selected. Chat remembers this
-choice independently of other workspaces and restores it after reload. Chat uses
+**Show navigation** (the hamburger) immediately before the conversation title.
+Chat remembers this choice independently of other workspaces and restores it
+after reload. While no conversation is selected, the rail stays open regardless
+of that choice and offers no **Hide navigation** control (`Cmd+.` is inert);
+selecting a conversation applies the saved choice again. Chat uses
 the shared 256px default sidebar width and resize limits. In splits narrower than
 720px, navigation collapses; the hamburger or `Cmd+.` opens it as a slide-over
-with the same full sidebar contents. There is no separate skinny sidebar mode.
+with the same full sidebar contents. With no conversation selected, the
+slide-over opens on its own and closes once a conversation is picked; the
+backdrop or `Escape` still dismisses it. There is no separate skinny sidebar mode.
 
 On desktop, the Chat rail has `All` and `Recent` tabs. All contains an
 optional `Favorites` section and the
@@ -450,6 +475,20 @@ second channel when grouping by drop. Team channels still support these actions.
 Open the same matched channel from two labels and verify keyboard focus remains
 on the chosen row. Check rule edits and persistence after reload.
 
+When calls are enabled, `Live` appears below the rail's toolbar while an active
+quick call is available. It stays visible in both tabs and during conversation
+search, and disappears when no active quick calls remain. Entries are titled
+`Call with <creator's name>`. Clicking a call opens
+its camera/microphone setup at `/app/meet/join/<token>`; it does not join immediately.
+Live rows use the shaking incoming-phone icon, respecting reduced motion.
+The Channels navigation phone indicator appears for active channel calls or
+active quick calls visible to you.
+This list includes calls you own, joined, or were invited to during the current
+live session. Declining or letting the incoming popup expire stops ringing but
+keeps that active call available here. The invitation does not carry forward to
+a later session of the same reusable call link.
+Leaving and rejoining keeps the row available while another participant remains.
+When everyone leaves, the session ends; reopening its link starts a new session.
 If a restored Chat selection is already open in another view, its preview stays
 closed but the saved selection is retained. Close the other view, then select
 the conversation again or reopen Chat to restore its preview. Verify that an
@@ -466,7 +505,23 @@ conversation cards on `Recent`. Switching tabs preserves the active search and
 query, then scrolls the results to the selected channel when present or to the
 start. Closing search restores the active tab and applies the same scroll
 behavior to its lists. An empty result uses the standard search empty state
-artwork and wraps long queries.
+artwork and wraps long queries. Desktop and the mobile dock use the same channel
+name search: local fuzzy matches plus service results, deduplicated by channel
+ID. Desktop searches across channels and DMs; mobile retains its Recent,
+Channels, or DMs scope. An empty query shows the ordinary list. Scrolling search
+results loads the next search page; clearing the query restores ordinary list
+pagination. Check both surfaces with a matching query, a query with no matches,
+and a clear/reopen cycle.
+On mobile, a nonempty query with no matches shows **No results**, echoes the
+query, and offers **Clear search**. Clearing restores the selected tab's list
+and keeps the dock search session open. The tab's usual empty state and create
+actions appear only when no search text is entered; loading and request errors
+keep their own states.
+Recent search includes both channels and DMs, including service hits without
+message previews. It does not require message metadata or an importance filter.
+Loaded conversation metadata is preserved when a service hit has the same ID.
+Pending and placeholder service results never appear as current hits. Ordinary
+list errors do not affect an active search.
 Collapsing a section does not discard its loaded pages. Recent has its own
 pagination cursor. Each list is virtualized, so offscreen conversations may not
 exist in the DOM.
@@ -488,10 +543,41 @@ Channels, and DMs section headers.
 
 On touch layouts, the `Recent`, `Channels`, and `DMs` pill tabs each retain
 their own loaded pages and load more as their active list approaches the end.
+The mobile dock search filters the selected tab by conversation name as you type:
+`DMs` searches people, `Channels` searches non-DM channels, and `Recent` searches
+both. Loaded matches appear immediately; queries of at least three characters
+also search the server, including conversations beyond the loaded page. Changing
+tabs keeps the query and changes its scope. Closing search restores the ordinary
+list. Verify `Channels` → `DMs` → type a person's name with GraphQL enabled:
+unrelated rows disappear, no matches shows **No results**, and switching to
+Channels never keeps DM search hits. Changing the query resets list scroll
+without blurring the dock input. While a background browse-list refresh is still
+pending, scroll near the end of search results: the next search page should load
+without waiting for that refresh or requiring another scroll. Clearing search
+restores the browse list's own pagination and fetching state. A failed browse
+request must not show a load-error message over valid search hits or replace
+**No results**, including during debounce and short local-only queries. Search
+failures still show their own error; clearing search restores the browse error.
 With `enable-graphql-soup` enabled, open an unread conversation from each tab
-and return to the list: its top-level notifications should be read, including
-ones older than the global notification feed's loaded page. Notifications for
-separate thread stacks remain unread until that thread is opened.
+and return to the list: all its message notifications should be read, including
+mentions, replies, and ones older than the global notification feed's loaded page.
+Chat opens the whole conversation; opening a parent channel row in Inbox still
+leaves separate thread-stack notifications unread.
+
+On desktop, each click on a conversation in the Chat rail opens its most recent
+currently unread notification, including replies in threads. Read notifications
+are not retained as click targets: once a channel has no unread
+notifications, clicking it opens the latest message. Explicit search hits still
+open their matched message. Each accepted click marks the complete loaded channel
+edge read, even when the same conversation is already selected. Shift-clicks use
+the same channel-wide read behavior, but mark notifications only after the split
+opens or reuses an existing conversation. Route opens, reloads, and uncached
+favorites also target the newest unread notification across the channel,
+including thread replies; an explicit message target still wins. Verify repeated
+clicks after read-state updates, a failed read, and a new notification; previously
+read targets must not loop around. A rejected selection or unavailable split must
+not mark the conversation read. Hydrating an unread non-participant row must
+preserve its membership status and must not mark its notifications read.
 
 With GraphQL enabled, the app-shell Chat badge uses `ChannelUnreadPresence`: only
 channel IDs and at most one unread notification ID/state per channel, with a
@@ -513,7 +599,8 @@ per channel through an aliased, filtered `notifications` edge. An empty edge mea
 no unread messages; invites and call notifications do not light the dot. Recent
 cards still use the latest-message preview. Full notification edges load only for
 an opened unread conversation, so mark-read and message targeting retain their
-complete thread-scoped inputs. Reopening a conversation must refresh that full
+complete channel-wide inputs in Chat and thread-scoped inputs in Inbox. Reopening
+a conversation must refresh that full
 edge even within 30 seconds; mark-read waits for the refresh rather than using
 older cached notifications. Failed lookups and successful lookups with no matching
 channel show **Conversation unavailable** with **Retry**, never permanent loading.
@@ -521,7 +608,21 @@ Retry rather than marking just the one unread witness. Repeated mobile taps must
 open the last selected conversation, not a slower earlier request.
 
 Check cached Home → Chat navigation, All/Recent/search, and unread state after a
-read, a new notification, deletion, and reconnect. Cache reads remain asynchronous:
+read, a new notification, deletion, and reconnect, without reloading the page.
+With the mark-read response delayed, channel/DM dots, section counts, and new-activity
+targets should clear as soon as the local read is applied. A failed read restores
+them; a stale unread response for that same notification must not relight them.
+A different unread notification must still light the dot. With the normalized
+cache enabled, a new channel message notification writes its unread relationship
+and adds the channel to the cached Chat badge page locally. Delay the following
+HTTP refresh: the channel dot and Chat badge must appear before that response,
+without a reload. Also test an initially empty badge page, duplicate deliveries,
+multiple channels, and a notification arriving during a read. The local write
+must not replay other channels' read states. Invites, calls, and already-read
+notifications must not light message dots. Background refreshes still reconcile
+the bounded edges and recover missed updates on reconnect; an unavailable/cold
+cache falls back to the network path. These updates must not activate
+an otherwise-unused full notification feed. Cache reads remain asynchronous:
 a brief spinner can still appear, but cached rows must not wait for a background
 network refresh. Conversely, `cache-and-network` refreshes must start without
 waiting for a busy cache worker. Successful foreground query results display
@@ -546,10 +647,12 @@ that requests them.
 
 ## Call lifecycle
 
-The channel's call tab and floating call controls share one session. Repeated
-Join clicks while connecting should produce one connection; leaving from either
-control ends the same call. Navigate away and return while connected to check
-that the call and its controls remain usable.
+The active-call panel above the composer, the channel's call tab, and floating
+call controls share one session. Joining from the panel switches the current
+channel surface to the live call. Repeated Join clicks while connecting should
+produce one connection; leaving from either control ends the same call. Navigate
+away and return while connected to check that the call and its controls remain
+usable.
 
 For recovery checks, keep another participant connected and briefly interrupt
 the first participant's network. Recovery may rejoin that same live call. It
@@ -580,6 +683,22 @@ shows Connecting and waits for that request before registering again.
 
 ## Channel tabs
 
+Private and team channels show an `Invite` button on the right of both the
+split header and the inline conversation header for current participants. On
+mobile it renders as its own floating glass pill next to the `Call` pill (the
+split header is `pointer-events-none`, so the button must sit in a
+`HeaderIsland` to be tappable). Click it to open `Invite people to <channel>`
+using the standard dialog at the top of the viewport, matching the create menu
+and create-channel dialog (a drawer on mobile). Choose `Add all members of
+<team>` to add current teammates once, or `Add specific people` to search
+teammates and enter external email addresses using the same recipient picker as
+channel creation. Existing channel members are excluded. `Add` submits; Cancel,
+Close, or Escape dismisses without sending. Failed additions preserve the
+selection for retry. The team option is disabled when no team is available.
+This action does not enable team auto-join. Check opening and reopening,
+switching options, keyboard recipient selection, external email chips,
+cancellation, and focus restoration before sending invites.
+
 Radio group at the top of the channel pane: `Messages` / `Attachments` / `Calls` / `Participants`,
 plus `Ask Macro` and `Call` buttons. The `Calls` tab lists recordings for that channel
 (same rows as the Calls soup view, filtered to this channel). The live `Call` tab
@@ -600,6 +719,10 @@ row to open the call. The search field above the list matches call names and
 transcripts in this channel; queries shorter than 3 characters are not sent.
 Empty copy: `No calls in this channel`. No matches: `No results for "…"`.
 Shorter queries: `Keep typing to search`.
+
+Leaving from the channel's call controls switches to `Messages` immediately.
+Disconnect and server cleanup continue after that switch; slow or failed RTC
+teardown must not leave the channel showing the join screen.
 
 `Participants` tab:
 - `Copy invite link`, participant search box.

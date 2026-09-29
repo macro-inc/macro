@@ -63,7 +63,7 @@ export function DriveWorkspace(props: { guide?: JSX.Element }) {
             </ViewShell.Aside>
             <ViewShell.Main>
               <Show
-                when={navigation.active()}
+                when={navigation.active() || navigation.activeCallId()}
                 fallback={
                   <>
                     <DriveHeader />
@@ -78,7 +78,9 @@ export function DriveWorkspace(props: { guide?: JSX.Element }) {
                   </>
                 }
               >
-                <SplitRouter.Outlet />
+                <Suspense fallback={<DriveLoading />}>
+                  <SplitRouter.Outlet />
+                </Suspense>
               </Show>
             </ViewShell.Main>
           </ViewShell.Root>

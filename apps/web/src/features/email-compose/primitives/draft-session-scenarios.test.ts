@@ -418,6 +418,7 @@ describe.each(['reply', 'compose'] as const)(
         expect(context.delivery.schedule).toHaveBeenCalledExactlyOnceWith(
           {
             draftId: 'scheduled-server',
+            threadId: 'thread',
             sendTime: '2027-01-01T12:00:00.000Z',
             includeSignature: undefined,
           },

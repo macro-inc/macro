@@ -105,6 +105,11 @@ fn normalize_model_id_strips_provider_prefix() {
         "claude-opus-5"
     );
     assert_eq!(normalize_model_id("openai/gpt-5.6"), "gpt-5.6");
+    assert_eq!(normalize_model_id("fireworks/kimi-k3"), "kimi-k3");
+    assert_eq!(
+        normalize_model_id("google/gemini-3.8-flash"),
+        "gemini-3.8-flash"
+    );
     assert_eq!(normalize_model_id("claude-haiku-4-5"), "claude-haiku-4-5");
     // A trailing slash is not a provider prefix; leave the id alone.
     assert_eq!(normalize_model_id("weird/"), "weird/");

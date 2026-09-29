@@ -22,6 +22,7 @@ import {
   type SplitRouterMiddlewareResult,
 } from '@app/lib/split-router';
 import { replaceSplitSearchParams } from '@app/lib/split-router/search';
+import { URL_PARAMS as CALL_URL_PARAMS } from '@block-call/constants';
 import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import { URL_PARAMS as MD_URL_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_URL_PARAMS } from '@block-pdf/constants';
@@ -29,13 +30,7 @@ import { match } from 'ts-pattern';
 import { appSplitRoutes } from './app-routes';
 import { decodeLegacyPair } from './legacy-route';
 
-type NewAppViewsState = {
-  enabled: boolean;
-  loading: boolean;
-};
-
 type AppMiddlewareState = {
-  newAppViews: () => NewAppViewsState;
   isTouchDevice: () => boolean;
 };
 
@@ -58,6 +53,18 @@ function redirectLegacyRoutes(
     }
   }
 
+  if (route.matches[0].id === 'call-detail') {
+    const { callId } = routeParams(route);
+    if (typeof callId === 'string') {
+      return redirect(`/drive/call/${encodeURIComponent(callId)}`);
+    }
+  }
+  if (route.matches[0].id === 'pr-detail') {
+    const { foreignEntityId } = routeParams(route);
+    if (typeof foreignEntityId === 'string') {
+      return redirect(`/reviews/pr/${encodeURIComponent(foreignEntityId)}`);
+    }
+  }
   if (route.matches[0].id !== 'legacy-content') return;
 
   const { type, id } = routeParams(route);
@@ -79,11 +86,7 @@ function redirectLegacyRoutes(
         : undefined
     )
     .when(
-      () => {
-        if (isTouch) return true;
-        const flag = options.newAppViews();
-        return flag.loading || !flag.enabled;
-      },
+      () => isTouch,
       () => undefined
     )
     .with({ type: 'email' }, ({ id }) => `/mail/${encodeURIComponent(id)}`)
@@ -118,18 +121,18 @@ function migrateLegacySearch({
   if (!externalSearch) return;
 
   const leafId = to.location.route.matches.at(-1)?.id;
-  const inboxChannel =
-    leafId === 'inbox-channel' ||
-    (leafId === 'inbox-preview' &&
+  const homeChannel =
+    leafId === 'home-channel' ||
+    (leafId === 'home-preview' &&
       routeParams(to.location.route).blockType === 'channel');
-  const inboxDocumentType =
-    leafId === 'inbox-document'
+  const homeDocumentType =
+    leafId === 'home-document'
       ? routeParams(to.location.route).documentType
-      : leafId === 'inbox-preview'
+      : leafId === 'home-preview'
         ? routeParams(to.location.route).blockType
         : undefined;
   const commentKey = (() => {
-    switch (inboxDocumentType) {
+    switch (homeDocumentType) {
       case 'md':
       case 'task':
       case 'skill':
@@ -140,7 +143,7 @@ function migrateLegacySearch({
         return PDF_URL_PARAMS.annotationId;
     }
   })();
-  const inboxDocumentMapping = commentKey
+  const homeDocumentMapping = commentKey
     ? {
         namespace: driveSearch.namespace,
         fields: [[commentKey, 'commentId']] as const,
@@ -153,7 +156,7 @@ function migrateLegacySearch({
       fields: [[EMAIL_URL_PARAMS.messageId, 'messageId']] as const,
     }))
     .when(
-      (id) => id === 'channels-channel' || inboxChannel,
+      (id) => id === 'channels-channel' || homeChannel,
       () => ({
         namespace: channelsSearch.namespace,
         fields: [
@@ -163,12 +166,16 @@ function migrateLegacySearch({
       })
     )
     .when(
-      (id) => id === 'inbox-document' || id === 'inbox-preview',
-      () => inboxDocumentMapping
+      (id) => id === 'home-document' || id === 'home-preview',
+      () => homeDocumentMapping
     )
     .with(CALENDAR_ROUTE_ID, () => ({
       namespace: CALENDAR_SEARCH_NAMESPACE,
       fields: [['eventId', 'eventId']] as const,
+    }))
+    .with('call-detail', 'drive-call', () => ({
+      namespace: 'call-detail',
+      fields: [[CALL_URL_PARAMS.transcriptId, 'transcriptId']] as const,
     }))
     .otherwise(() => undefined);
 

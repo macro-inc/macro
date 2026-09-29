@@ -44,7 +44,7 @@ import {
   type AgentConversationEntity,
   type AgentConversationTarget,
   conversationMode,
-  groupConversations,
+  partitionArchived,
   selectRecentAgentConversations,
 } from '../core/recent-conversations';
 import { kindForBot } from '../core/roster';
@@ -117,7 +117,7 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
       search()
     )
   );
-  const groups = createMemo(() => groupConversations(conversations()));
+  const partitioned = createMemo(() => partitionArchived(conversations()));
   const modeForConversation = (conversation: AgentConversationEntity) =>
     conversationMode(conversation, (botId) =>
       kindForBot(botId, rosterSource.roster())
@@ -125,9 +125,16 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
 
   onMount(() => panel.handle.setDisplayName('Agents'));
 
+  let composerFocus: (() => void) | undefined;
   const showComposer = () => {
     if (panel.handle.content().id !== 'agents') {
       panel.handle.replace({ next: { type: 'component', id: 'agents' } });
+      return;
+    }
+    // Already showing the composer: nothing remounts to retrigger autofocus,
+    // so focus it imperatively instead.
+    if (!selected() && page() === 'new') {
+      composerFocus?.();
       return;
     }
     setSelected(undefined);
@@ -259,8 +266,6 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
                 max: 380,
                 preserveDuringResize: false,
               }}
-              breakpoints={{ collapsed: 0 }}
-              layoutBreakpoint="collapsed"
               main={{ min: 280, preferredWidth: 640 }}
             >
               <ViewShell.Aside>
@@ -272,7 +277,8 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
                   modeForConversation={modeForConversation}
                   activeConversationId={selected()?.activeConversationId}
                   search={search()}
-                  groups={groups()}
+                  conversations={partitioned().conversations}
+                  archived={partitioned().archived}
                   loading={query.isPending}
                   error={query.isLoadingError}
                   hasNextPage={Boolean(query.hasNextPage)}
@@ -324,6 +330,10 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
                                 <NewChatPage
                                   roster={rosterSource.roster()}
                                   rosterLoading={rosterSource.loading()}
+                                  availabilityLoading={rosterSource.availabilityLoading()}
+                                  registerFocus={(focus) => {
+                                    composerFocus = focus;
+                                  }}
                                   onStart={startConversation}
                                   onOpenRoster={openRoster}
                                 />

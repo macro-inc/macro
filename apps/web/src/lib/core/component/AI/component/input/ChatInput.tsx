@@ -10,8 +10,9 @@ import type { ChatSendInput } from '@core/component/AI/component/input/buildRequ
 import { ModelSelector } from '@core/component/AI/component/input/ModelSelector';
 import {
   defaultModelForPlan,
-  Model,
+  type Model,
   modelsForPlan,
+  PAID_MODELS,
   SUPPORTED_ATTACHMENT_EXTENSIONS,
 } from '@core/component/AI/constant';
 import { useChatInputContext } from '@core/component/AI/context';
@@ -83,7 +84,7 @@ export function ChatInput(props: ChatInputComponentProps) {
   // upsell at all.
   const modelOptions = createMemo(() => {
     const allowed = modelsForPlan(hasPaidAccess());
-    return Object.values(Model).map((id) => ({
+    return PAID_MODELS.map((id) => ({
       id,
       available: allowed.includes(id),
     }));
@@ -260,7 +261,7 @@ export function ChatInput(props: ChatInputComponentProps) {
     <Button
       variant="ghost"
       size="icon-composer"
-      class="rounded-full text-ink not-touch:text-composer-ink touch:size-6"
+      class="text-ink not-touch:text-composer-ink touch:size-6"
       label="Attach files"
       aria-label="Attach files"
       onClick={() => {
@@ -280,7 +281,7 @@ export function ChatInput(props: ChatInputComponentProps) {
       hotkey={TOKENS.chat.stop}
       onClick={() => props.onStop?.()}
       class={cn(
-        'rounded-full touch:size-7.5 [&_svg]:stroke-[4px]',
+        'touch:size-7.5 [&_svg]:stroke-[4px]',
         isTouchDevice() &&
           'text-ink-extra-muted not-disabled:bg-ink/5 not-disabled:hover:bg-ink/10',
         'data-disabled:opacity-100 data-disabled:text-ink-extra-muted data-disabled:bg-ink-muted/5'

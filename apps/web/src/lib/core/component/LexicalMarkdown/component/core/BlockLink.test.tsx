@@ -50,7 +50,7 @@ function setup() {
     onTestFinished(dispose);
     return createSplitLayout(orchestrator, [
       { type: 'component', id: 'channels' },
-      { type: 'component', id: 'inbox' },
+      { type: 'component', id: 'home' },
     ]);
   });
   const [chat, inbox] = manager.splits();

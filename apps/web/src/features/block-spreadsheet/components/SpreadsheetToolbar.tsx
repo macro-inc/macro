@@ -39,7 +39,7 @@ function ToolbarButton(props: ButtonProps) {
     <Button
       {...props}
       size="icon-sm"
-      class="h-7 w-7 min-h-7 min-w-7 rounded-[3px] p-1 font-normal touch:h-[44px] touch:w-[44px] touch:min-h-[44px] touch:min-w-[44px]"
+      class="h-7 w-7 min-h-7 min-w-7 p-1 font-normal touch:h-[44px] touch:w-[44px] touch:min-h-[44px] touch:min-w-[44px]"
     />
   );
 }

@@ -9,6 +9,7 @@ use axum::{
     response::Response,
     routing::{get, post},
 };
+use bots::outbound::pg_bots_repo::PgBotsRepo;
 use chat::domain::service::ChatServiceImpl;
 use chat::inbound::http::router::{
     ChatRouterState, chat_create_router, chat_id_router, chat_view_router,
@@ -16,6 +17,8 @@ use chat::inbound::http::router::{
 use chat::outbound::postgres::PgChatRepo;
 use entity_access::domain::service::EntityAccessServiceImpl;
 use entity_access::outbound::PgAccessRepository;
+use entity_registry::OwnerGrantPolicy;
+use entity_registry_db_utils::OwnedEntityRegistrar;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use tower::ServiceBuilder;
 
@@ -40,7 +43,10 @@ async fn require_authenticated_user(
 pub fn router(state: ApiContext) -> Router<ApiContext> {
     let access_repo = PgAccessRepository::new(state.db.clone());
     let access_service = EntityAccessServiceImpl::new(access_repo);
-    let chat_repo = PgChatRepo::new(state.db.clone());
+    let chat_repo = PgChatRepo::new(
+        state.db.clone(),
+        OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(state.db.clone()))),
+    );
 
     let chat_service = ChatServiceImpl::new(
         chat_repo,
@@ -56,6 +62,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         access_service,
         state.authorization_state.clone(),
         state.user_permissions_service.clone(),
+        state.non_user_owners,
     );
 
     let ensure_chat_exists = axum::middleware::from_fn_with_state(

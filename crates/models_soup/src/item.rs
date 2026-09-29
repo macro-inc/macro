@@ -5,6 +5,7 @@ use crate::crm_company::SoupCrmCompany;
 use crate::document::SoupDocument;
 use crate::email_thread::SoupEnrichedEmailThreadPreview;
 use crate::foreign_entity::SoupForeignEntity;
+use crate::initiative::SoupInitiative;
 use crate::project::SoupProject;
 use crate::reminder::SoupReminder;
 use crate::{
@@ -32,6 +33,8 @@ pub enum SoupItem<T = ()> {
     Chat(SoupChat<T>),
     /// Project item.
     Project(SoupProject<T>),
+    /// Initiative entity.
+    Initiative(SoupInitiative<T>),
     /// Email thread item.
     EmailThread(SoupEnrichedEmailThreadPreview<T>),
     /// Channel item.
@@ -61,6 +64,9 @@ impl<T> SoupItem<T> {
             }
             SoupItem::Chat(soup_chat) => {
                 EntityType::Chat.with_entity_string(soup_chat.id.to_string())
+            }
+            SoupItem::Initiative(initiative) => {
+                EntityType::Initiative.with_entity_string(initiative.id.to_string())
             }
             SoupItem::Project(soup_project) => {
                 EntityType::Project.with_entity_string(soup_project.id.to_string())
@@ -101,6 +107,7 @@ impl<T> SoupItem<T> {
             SoupItem::Document(soup_document) => soup_document.updated_at,
             SoupItem::Chat(soup_chat) => soup_chat.updated_at,
             SoupItem::Project(soup_project) => soup_project.updated_at,
+            SoupItem::Initiative(initiative) => initiative.updated_at,
             SoupItem::EmailThread(soup_thread) => soup_thread.thread.updated_at,
             SoupItem::Channel(soup_channel) => soup_channel.channel.channel.updated_at,
             SoupItem::ChannelThread(thread) => thread.effective_updated_at(),
@@ -139,6 +146,18 @@ impl<T> SoupItem<T> {
             (SoupItem::Chat(soup_chat), SimpleSortMethod::CreatedAt) => soup_chat.created_at,
             (SoupItem::Chat(soup_chat), SimpleSortMethod::ViewedUpdated) => {
                 soup_chat.viewed_at.unwrap_or(soup_chat.updated_at)
+            }
+            (SoupItem::Initiative(initiative), SimpleSortMethod::ViewedAt) => {
+                initiative.viewed_at.unwrap_or_default()
+            }
+            (SoupItem::Initiative(initiative), SimpleSortMethod::UpdatedAt) => {
+                initiative.updated_at
+            }
+            (SoupItem::Initiative(initiative), SimpleSortMethod::CreatedAt) => {
+                initiative.created_at
+            }
+            (SoupItem::Initiative(initiative), SimpleSortMethod::ViewedUpdated) => {
+                initiative.viewed_at.unwrap_or(initiative.updated_at)
             }
             (SoupItem::Project(soup_project), SimpleSortMethod::ViewedAt) => {
                 soup_project.viewed_at.unwrap_or_default()
@@ -221,6 +240,10 @@ impl<T> SoupItem<T> {
             SoupItem::Document(doc) => {
                 Some(EntityReference::new(doc.id.to_string(), doc.entity_type()))
             }
+            SoupItem::Initiative(initiative) => Some(EntityReference::new(
+                initiative.id.to_string(),
+                PropertiesEntityType::Initiative,
+            )),
             SoupItem::Project(p) => Some(EntityReference::new(
                 p.id.to_string(),
                 PropertiesEntityType::Project,
@@ -320,6 +343,25 @@ impl<T> SoupItem<T> {
                 deleted_at,
                 extra: f(extra),
             }),
+            SoupItem::Initiative(SoupInitiative {
+                id,
+                name,
+                owner_id,
+                description_document_id,
+                created_at,
+                updated_at,
+                viewed_at,
+                extra,
+            }) => SoupItem::Initiative(SoupInitiative {
+                id,
+                name,
+                owner_id,
+                description_document_id,
+                created_at,
+                updated_at,
+                viewed_at,
+                extra: f(extra),
+            }),
             SoupItem::Project(SoupProject {
                 id,
                 name,
@@ -372,6 +414,7 @@ impl<T> SoupItem<T> {
                 status,
                 attended,
                 participants,
+                guests,
                 extra,
             }) => SoupItem::Call(SoupCallRecord {
                 call_id,
@@ -387,6 +430,7 @@ impl<T> SoupItem<T> {
                 status,
                 attended,
                 participants,
+                guests,
                 extra: f(extra),
             }),
             SoupItem::CalendarEvent(SoupCalendarEvent {
@@ -484,6 +528,7 @@ impl<T> SoupItem<T> {
             SoupItem::AgentSession(SoupAgentSession {
                 id,
                 name,
+                is_archived,
                 owner_id,
                 bot_id,
                 harness,
@@ -503,6 +548,7 @@ impl<T> SoupItem<T> {
             }) => SoupItem::AgentSession(SoupAgentSession {
                 id,
                 name,
+                is_archived,
                 owner_id,
                 bot_id,
                 harness,
@@ -532,6 +578,7 @@ impl<T> Identify for SoupItem<T> {
             SoupItem::Document(soup_document) => soup_document.id,
             SoupItem::Chat(soup_chat) => soup_chat.id,
             SoupItem::Project(soup_project) => soup_project.id,
+            SoupItem::Initiative(initiative) => initiative.id,
             SoupItem::EmailThread(thread) => thread.thread.id,
             SoupItem::Channel(soup_channel) => soup_channel.channel.channel.id.0,
             SoupItem::ChannelThread(thread) => thread.id,

@@ -14,7 +14,13 @@ import { ChatComposer } from '../components/ChatComposer';
 import type { AgentKind } from '../core/agent-kind';
 import { defaultBranchFor } from '../core/repository';
 import { MACRO_PERSONA_ID, type RosterAgent } from '../core/roster';
+import {
+  createPersistedComposerDraft,
+  NEW_CONVERSATION_ATTACHMENTS_KEY,
+} from '../primitives/composer-draft';
+import { createPreferredInmemModel } from '../primitives/preferred-inmem-model';
 import { createRecentRepositories } from '../primitives/recent-repositories';
+import { createComposerModels } from '../queries/composer-models';
 import { createReachableRepositories } from '../queries/reachable-repositories';
 import { createRepositoryBranches } from '../queries/repository-branches';
 import { AgentPicker } from './AgentPicker';
@@ -39,6 +45,8 @@ export function NewChatPage(props: {
   registerFocus?: (focus: () => void) => void;
   roster: RosterAgent[];
   rosterLoading: boolean;
+  /** Agents are listed but whether they can start is still unknown. */
+  availabilityLoading?: boolean;
   onStart: (start: StartConversation) => void;
   /** Opens the roster page on the given kind's tab. */
   onOpenRoster: (kind: AgentKind) => void;
@@ -47,27 +55,55 @@ export function NewChatPage(props: {
   const { openSettings } = useSettingsState();
   const recentAgents = createRecentAgentSelections(userId());
   const repositories = createRecentRepositories(userId());
+  const preferredInmem = createPreferredInmemModel(userId());
   const options = () => props.roster;
   const [agentId, setAgentId] = createSignal<string>();
+  /** One-shot model from a coding agent's submenu; Macro uses {@link preferredInmem}. */
   const [modelOverride, setModelOverride] = createSignal<string>();
   // A new conversation starts on Automatic until the caller picks a repository.
   const [repoUrl, setRepoUrl] = createSignal<string | undefined>();
-  const [localDraft, setLocalDraft] = createSignal('');
-  const draft = () => props.draft ?? localDraft();
+  const persistedDraft = createPersistedComposerDraft();
+  const draft = () => props.draft ?? persistedDraft.draft();
   const setDraft = (text: string) =>
-    props.onDraftChange ? props.onDraftChange(text) : setLocalDraft(text);
+    props.onDraftChange
+      ? props.onDraftChange(text)
+      : persistedDraft.setDraft(text);
   const [branchOverride, setBranchOverride] = createSignal<string>();
+  const recentAgentId = () => {
+    const ids = recentAgents.ids();
+    // Falling back to Macro before availability is known would open the
+    // compact composer, then swap to the last agent's layout once it settles.
+    if (props.rosterLoading || props.availabilityLoading) return ids[0];
+    return ids.find((id) =>
+      options().some((agent) => agent.id === id && !agent.unavailableReason)
+    );
+  };
   const selected = createMemo(() => {
-    const wanted =
-      agentId() ??
-      recentAgents
-        .ids()
-        .find((id) =>
-          options().some((agent) => agent.id === id && !agent.unavailableReason)
-        ) ??
-      MACRO_PERSONA_ID;
+    const wanted = agentId() ?? recentAgentId() ?? MACRO_PERSONA_ID;
     return options().find((agent) => agent.id === wanted) ?? options()[0];
   });
+  const macro = () => options().find((agent) => agent.id === MACRO_PERSONA_ID);
+  const macroCatalog = createComposerModels(macro);
+  /** Preferred Macro model when it is still in the live in-memory catalog. */
+  const preferredInmemModel = () => {
+    const id = preferredInmem.model();
+    if (!id) return undefined;
+    const catalog = macroCatalog.models();
+    // Until discovery returns, keep the stored id so the trigger can label it.
+    if (catalog.length === 0) return id;
+    return catalog.some((option) => option.id === id) ? id : undefined;
+  };
+  /**
+   * Model shown on the agent control and sent with the next start. Coding
+   * agents use a one-shot override; Macro prefers an in-session pick, then
+   * the remembered Models choice.
+   */
+  const composerModelOverride = () => {
+    if (selected()?.id === MACRO_PERSONA_ID) {
+      return modelOverride() ?? preferredInmemModel();
+    }
+    return modelOverride();
+  };
   const coding = () => selected()?.kind === 'coder';
   // The create-session API accepts explicit repositories only for Cursor.
   const canSelectRepository = () => selected()?.harness === 'cursor';
@@ -95,7 +131,12 @@ export function NewChatPage(props: {
     if (agent.harness === 'cursor') openSettings('Harness');
   };
 
-  const attachmentTracker = createInputAttachmentTracker();
+  const attachmentTracker = createInputAttachmentTracker({
+    // Home supplies its own text draft; attachment persistence here is for Agents.
+    persistenceKey: props.onDraftChange
+      ? undefined
+      : NEW_CONVERSATION_ATTACHMENTS_KEY,
+  });
   const attachFiles = (files: File[]) =>
     void uploadInputAttachments({
       files,
@@ -116,6 +157,7 @@ export function NewChatPage(props: {
     recentAgents.remember(persona.id);
     const repo = canSelectRepository() ? repoUrl() : undefined;
     if (repo) repositories.remember(repo);
+    const model = composerModelOverride();
     props.onStart({
       prompt,
       ...(attachments.length > 0
@@ -124,9 +166,10 @@ export function NewChatPage(props: {
       botId: persona.botId,
       repoUrl: repo,
       ...(repo ? { repoBranch: repoBranch() } : {}),
-      ...(modelOverride() ? { modelOverride: modelOverride() } : {}),
+      ...(model ? { modelOverride: model } : {}),
     });
     attachmentTracker.clearAttachments();
+    // Macro's preferred model stays; coding-agent submenu picks are one-shot.
     setModelOverride(undefined);
   };
 
@@ -134,10 +177,17 @@ export function NewChatPage(props: {
     <AgentPicker
       agents={options()}
       selected={selected()}
-      modelOverride={modelOverride()}
+      modelOverride={composerModelOverride()}
       loading={props.rosterLoading}
       onSelect={(agent, model) => {
         setAgentId(agent.id);
+        if (agent.id === MACRO_PERSONA_ID) {
+          if (model) preferredInmem.remember(model);
+          // Still set the override so the trigger updates when Macro was
+          // already selected (agent id unchanged would otherwise skip a render).
+          setModelOverride(model);
+          return;
+        }
         setModelOverride(model);
       }}
       onConnect={connect}

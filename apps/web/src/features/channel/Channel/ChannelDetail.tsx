@@ -4,22 +4,36 @@ import { ChannelAttachmentsTab } from '@channel/Attachments/ChannelAttachmentsTa
 import { useChannelBotManagement } from '@channel/Bots/use-channel-bot-management';
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { CallEventSync } from '@channel/Call/CallEventSync';
+import { ChannelCallAutoJoin } from '@channel/Call/ChannelCallAutoJoin';
 import { ChannelCallButton } from '@channel/Call/ChannelCallButton';
 import { ChannelCallTab } from '@channel/Call/ChannelCallTab';
+import { getCallJoinTab } from '@channel/Call/call-tabs';
 import { useCall } from '@channel/Call/use-call';
 import { ChannelCallsTab } from '@channel/Calls/ChannelCallsTab';
+import { ChannelInviteButton } from '@channel/channel-invite-button';
 import { ChannelTopIcon } from '@channel/components/ChannelTopIcon';
+import { DebugSuspense } from '@channel/DebugSuspense';
 import { ChannelParticipantsTab } from '@channel/Participants/ChannelParticipantsTab';
-import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
+import {
+  createPriorityCollapseController,
+  PriorityCollapseOverflowSensor,
+} from '@components/app/split-layout/components/PriorityCollapseOverflowSensor';
+import {
+  useRegisterPriorityCollapseItem,
+  useSplitDisplayName,
+  useSplitPanelOrThrow,
+} from '@components/app/split-layout/layoutUtils';
+import type { PriorityCollapser } from '@components/app/split-layout/utils/createPriorityCollapser';
 import { TabsInset } from '@core/component/TabsInset';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import { useChannelName, useChannelType } from '@core/context/channels';
+import { createMethodRegistration } from '@core/orchestrator';
 import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
 import {
   type Accessor,
   children,
   createComputed,
-  createMemo,
   createSignal,
   type JSX,
   Match,
@@ -35,7 +49,14 @@ import {
 } from './ChannelSurface';
 import { ChannelTabProvider, useChannelTab } from './ChannelTabContext';
 import { ChannelLiveIndicators } from './ChannelTopBarLiveIndicators';
+import { toIconTabItems } from './channel-tab-icons';
 import { type ChannelTabId, DEFAULT_CHANNEL_TAB } from './channel-tabs';
+import {
+  isJoinCallRequested,
+  isOpenCallTabRequested,
+  toChannelTargetRequest,
+  URL_PARAMS,
+} from './link';
 import {
   canUseInlineCallTab,
   normalizeChannelTab,
@@ -57,7 +78,7 @@ export type ChannelDetailProps = {
    */
   target?: ChannelTargetRequest;
   /** Re-aim the current target without remounting the channel. */
-  navigationRequest?: number;
+  navigationRequest?: number | string;
   /** Name shown until the channel loads. */
   fallbackName?: string;
   /** Whether the composer grabs focus on mount. Defaults to false. */
@@ -92,13 +113,29 @@ export function ChannelDetailTitle(props: ChannelDetailHeaderProps) {
   );
 }
 
-export function ChannelDetailTabs(props: { channelId: string }) {
+/**
+ * The channel's tab strip. Given the top bar's `collapser`, the strip
+ * registers as its first item to give up space, dropping text labels for
+ * icons when the bar overflows and taking them back as room returns.
+ */
+export function ChannelDetailTabs(props: {
+  channelId: string;
+  collapser?: PriorityCollapser;
+}) {
   const { activeTab, setActiveTab } = useChannelTab();
   const tabs = useChannelTabItems(props.channelId);
+  // Read once by design: a registration lives for the component's lifetime.
+  const isCollapsed = props.collapser
+    ? useRegisterPriorityCollapseItem(props.collapser, {
+        id: 'channel-tabs',
+        priority: 1,
+      })
+    : () => false;
 
   return (
     <TabsInset
-      list={tabs()}
+      class="shrink-0"
+      list={isCollapsed() ? toIconTabItems(tabs()) : tabs()}
       value={activeTab()}
       onChange={(value) => setActiveTab(value as ChannelTabId)}
     />
@@ -123,26 +160,79 @@ export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
   };
 
   return (
-    <div class="ml-auto flex shrink-0 items-center gap-2">
-      <ChannelLiveIndicators channelId={props.channelId} />
+    <div class="header-actions ml-auto flex shrink-0 items-center gap-2">
+      <DebugSuspense name="ChannelDetail.live-indicators">
+        <ChannelLiveIndicators channelId={props.channelId} />
+      </DebugSuspense>
+      <DebugSuspense name="ChannelDetail.invite">
+        <ChannelInviteButton
+          channelId={props.channelId}
+          channelName={channelName() ?? 'New Channel'}
+          channelType={channelType()}
+        />
+      </DebugSuspense>
       <Show when={ENABLE_CALLS && !call.isInThisChannel()}>
-        <ChannelCallButton channelId={props.channelId} />
+        <DebugSuspense name="ChannelDetail.call-button">
+          <ChannelCallButton channelId={props.channelId} />
+        </DebugSuspense>
       </Show>
       <Show when={askMacroEntity()}>
         {(entity) => (
-          <ChatWithAgentButton entity={entity()} label="Ask Macro" />
+          <DebugSuspense name="ChannelDetail.ask-macro">
+            <ChatWithAgentButton entity={entity()} label="Ask Macro" />
+          </DebugSuspense>
         )}
       </Show>
     </div>
   );
 }
 
-export function ChannelDetailTopBar(props: ChannelDetailHeaderProps) {
+/**
+ * Channel top bar: leading content and tabs share one priority-collapse row
+ * so a narrow pane shrinks the tabs to icons before the title truncates.
+ * `leading` replaces the default title (a host's breadcrumbs, say).
+ */
+export function ChannelDetailTopBar(
+  props: ChannelDetailHeaderProps & { leading?: JSX.Element }
+) {
+  const collapse = createPriorityCollapseController();
+
   return (
-    <ViewShell.TopBar class="gap-3">
-      <ChannelDetailTitle {...props} />
-      <ChannelDetailTabs channelId={props.channelId} />
-      <ChannelDetailActions {...props} />
+    // py-0 gives the clipping sensor the bar's full height; the tab track is
+    // taller than the padded content box and would be cut off.
+    <ViewShell.TopBar ref={collapse.setRow} class="gap-3 py-0">
+      <PriorityCollapseOverflowSensor
+        controller={collapse}
+        truncateAsLastResort
+        class="relative h-full min-w-0 shrink overflow-hidden"
+        contentClass="flex h-full items-center gap-3"
+      >
+        <DebugSuspense name="ChannelDetail.title">
+          <Show
+            when={props.leading}
+            fallback={
+              <ChannelDetailTitle
+                channelId={props.channelId}
+                fallbackName={props.fallbackName}
+              />
+            }
+          >
+            {props.leading}
+          </Show>
+        </DebugSuspense>
+        <DebugSuspense name="ChannelDetail.tab-strip">
+          <ChannelDetailTabs
+            channelId={props.channelId}
+            collapser={collapse.collapser}
+          />
+        </DebugSuspense>
+      </PriorityCollapseOverflowSensor>
+      <DebugSuspense name="ChannelDetail.actions">
+        <ChannelDetailActions
+          channelId={props.channelId}
+          fallbackName={props.fallbackName}
+        />
+      </DebugSuspense>
     </ViewShell.TopBar>
   );
 }
@@ -157,26 +247,39 @@ function ChannelDetailHeader(props: {
 
 function ChannelDetailContent(props: ChannelDetailProps) {
   const panel = useSplitPanelOrThrow();
+  const orchestrator = useGlobalBlockOrchestrator();
   const channelId = props.channelId;
   const channelName = useChannelName(channelId, props.fallbackName);
+  useSplitDisplayName(() => channelName() ?? 'New Channel');
 
-  // Convert the value-semantic target prop into identity-stable surface
-  // requests: only a changed target or explicit re-open produces a new request.
-  let lastTargetKey: string | undefined;
-  const targetRequest = createMemo<ChannelTargetRequest | undefined>(
-    (previous) => {
-      const target = props.target;
-      const location = !target
-        ? ''
-        : target.kind === 'latest'
-          ? 'latest'
-          : `${target.messageId}:${target.threadId ?? ''}`;
-      const key = `${location}:${props.navigationRequest ?? 0}`;
-      if (lastTargetKey !== undefined && key === lastTargetKey) return previous;
-      lastTargetKey = key;
-      return target ? { ...target } : undefined;
-    }
-  );
+  const requestFromTarget = (
+    target: ChannelTargetRequest | undefined
+  ): ChannelTargetRequest | undefined => (target ? { ...target } : undefined);
+
+  const targetKey = () => {
+    const target = props.target;
+    const location = !target
+      ? ''
+      : target.kind === 'latest'
+        ? 'latest'
+        : `${target.messageId}:${target.threadId ?? ''}`;
+    return `${location}:${props.navigationRequest ?? 0}`;
+  };
+
+  // The surface navigates on a fresh request object. The host's `target` is
+  // value-semantic, so it only produces one when its value changes; a mention
+  // chip or notification arriving through the block handle always does.
+  let lastTargetKey = targetKey();
+  const [targetRequest, setTargetRequest] = createSignal<
+    ChannelTargetRequest | undefined
+  >(requestFromTarget(props.target));
+
+  createComputed(() => {
+    const key = targetKey();
+    if (key === lastTargetKey) return;
+    lastTargetKey = key;
+    setTargetRequest(requestFromTarget(props.target));
+  });
 
   const callCtx = useCallContextOptional();
   // A channel that owns this client's active call opens on the Call tab, so
@@ -190,6 +293,7 @@ function ChannelDetailContent(props: ChannelDetailProps) {
   const setActiveTab = (tab: ChannelTabId) => {
     setActiveTabInternal(normalizeChannelTab(tab));
   };
+  const [pendingJoinCall, setPendingJoinCall] = createSignal(false);
 
   // A new target within the already-mounted channel (a notification jump)
   // must land on the messages pane, whichever tab is open.
@@ -202,6 +306,33 @@ function ChannelDetailContent(props: ChannelDetailProps) {
       { defer: true }
     )
   );
+
+  // Mention chips, notifications, and call deep links aim an open channel
+  // through its block handle; without one the click only activates the view.
+  createComputed(() => {
+    const handle = orchestrator.registerBlockHandle('channel', channelId);
+    createMethodRegistration(() => handle, {
+      goToLocationFromParams: async (params: Record<string, unknown>) => {
+        // Store any message target first: a request that also opens the call
+        // tab leaves it waiting for whenever the user returns to Messages.
+        const request = toChannelTargetRequest(params);
+        if (request) setTargetRequest(request);
+
+        if (isOpenCallTabRequested(params[URL_PARAMS.openCallTab])) {
+          setActiveTab(getCallJoinTab());
+          return;
+        }
+
+        if (isJoinCallRequested(params[URL_PARAMS.joinCall])) {
+          setActiveTab(getCallJoinTab());
+          setPendingJoinCall(true);
+        }
+      },
+      goToLatest: async () => {
+        setTargetRequest({ kind: 'latest' });
+      },
+    });
+  });
 
   // CallContext: which channel has the Call tab selected (for isCallPage(), etc.).
   createComputed(() =>
@@ -217,41 +348,62 @@ function ChannelDetailContent(props: ChannelDetailProps) {
 
   return (
     <ChannelSurface channelId={channelId} targetRequest={targetRequest()}>
-      <CallEventSync />
+      <DebugSuspense name="ChannelDetail.call-event-sync">
+        <CallEventSync />
+      </DebugSuspense>
       <ChannelTabProvider activeTab={activeTab} setActiveTab={setActiveTab}>
-        <div class="flex size-full min-h-0 flex-col">
-          <ChannelDetailHeader
-            render={props.children}
-            context={{
-              channelId,
-              name: () => channelName() ?? 'New Channel',
-            }}
+        <DebugSuspense name="ChannelDetail.auto-join">
+          <ChannelCallAutoJoin
+            channelId={channelId}
+            pendingJoinCall={pendingJoinCall}
+            onHandled={() => setPendingJoinCall(false)}
           />
+        </DebugSuspense>
+        <div class="flex size-full min-h-0 flex-col">
+          <DebugSuspense name="ChannelDetail.header">
+            <ChannelDetailHeader
+              render={props.children}
+              context={{
+                channelId,
+                name: () => channelName() ?? 'New Channel',
+              }}
+            />
+          </DebugSuspense>
           <div class="flex min-h-0 flex-1 flex-col px-2">
             <Switch>
               <Match when={activeTab() === 'messages'}>
-                <ChannelMessages autofocus={props.autofocus ?? false} />
+                <DebugSuspense name="ChannelDetail.messages">
+                  <ChannelMessages autofocus={props.autofocus ?? false} />
+                </DebugSuspense>
               </Match>
               <Match when={activeTab() === 'attachments'}>
-                <ChannelAttachmentsTab channelId={channelId} />
+                <DebugSuspense name="ChannelDetail.attachments">
+                  <ChannelAttachmentsTab channelId={channelId} />
+                </DebugSuspense>
               </Match>
               <Match when={activeTab() === 'calls' && ENABLE_CALLS}>
-                <ChannelCallsTab channelId={channelId} />
+                <DebugSuspense name="ChannelDetail.calls">
+                  <ChannelCallsTab channelId={channelId} />
+                </DebugSuspense>
               </Match>
               <Match when={activeTab() === 'participants'}>
-                <ChannelParticipantsTab
-                  channelId={channelId}
-                  botManagementEnabled={botManagement.enabled()}
-                  onCreateBot={botManagement.openCreateBot}
-                  inviteBotFocusRequest={botManagement.inviteFocusRequest()}
-                  onOpenBot={botManagement.openBot}
-                />
+                <DebugSuspense name="ChannelDetail.participants">
+                  <ChannelParticipantsTab
+                    channelId={channelId}
+                    botManagementEnabled={botManagement.enabled()}
+                    onCreateBot={botManagement.openCreateBot}
+                    inviteBotFocusRequest={botManagement.inviteFocusRequest()}
+                    onOpenBot={botManagement.openBot}
+                  />
+                </DebugSuspense>
               </Match>
               <Match when={activeTab() === 'call' && canUseInlineCallTab()}>
-                <ChannelCallTab
-                  channelId={channelId}
-                  pendingJoin={() => false}
-                />
+                <DebugSuspense name="ChannelDetail.call">
+                  <ChannelCallTab
+                    channelId={channelId}
+                    pendingJoin={pendingJoinCall}
+                  />
+                </DebugSuspense>
               </Match>
             </Switch>
           </div>
@@ -271,7 +423,11 @@ function ChannelDetailContent(props: ChannelDetailProps) {
 export function ChannelDetail(props: ChannelDetailProps) {
   return (
     <Show when={props.channelId} keyed>
-      {(channelId) => <ChannelDetailContent {...props} channelId={channelId} />}
+      {(channelId) => (
+        <DebugSuspense name="ChannelDetail.root">
+          <ChannelDetailContent {...props} channelId={channelId} />
+        </DebugSuspense>
+      )}
     </Show>
   );
 }

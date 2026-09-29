@@ -114,6 +114,12 @@ pub enum Port {
     /// existing per-instance port offsets, which come from declaration order,
     /// stay stable.
     Calendar = 8088,
+    /// Live-preview control API. Appended after Calendar for the same reason.
+    PreviewControl = 8110,
+    /// Stock SSH reverse-tunnel listener.
+    PreviewSsh = 2222,
+    /// Local wildcard preview TLS listener.
+    PreviewHttps = 8443,
 }
 
 impl Port {

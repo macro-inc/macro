@@ -95,6 +95,8 @@ const useCommentsContext = (
     ...operations,
     inComment: true,
     highlightedCommentId: () => commentState.highlightedCommentId,
+    clearHighlightedComment: () =>
+      setCommentState('highlightedCommentId', null),
   };
   return commentsContext;
 };

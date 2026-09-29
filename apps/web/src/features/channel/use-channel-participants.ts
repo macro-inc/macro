@@ -1,6 +1,7 @@
 import type { IUser } from '@core/user/types';
 import { channelParticipantInfo } from '@core/user/util';
 import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
+import { queryReadyGate } from '@queries/gate';
 import { type Accessor, createMemo } from 'solid-js';
 
 export type ChannelParticipantsData = {
@@ -13,13 +14,13 @@ export function useChannelParticipants(
   const query = useChannelParticipantsQuery(channelId);
 
   const users = createMemo(() => {
-    if (query.isLoading) return [];
-    return (query.data ?? []).map(channelParticipantInfo);
+    if (!queryReadyGate(query)) return [];
+    return query.data.map(channelParticipantInfo);
   });
 
   const ids = createMemo(() => {
-    if (query.isLoading) return [];
-    return (query.data ?? []).map((p) => p.user_id);
+    if (!queryReadyGate(query)) return [];
+    return query.data.map((p) => p.user_id);
   });
 
   return { users, ids };

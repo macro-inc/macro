@@ -143,8 +143,8 @@ pub async fn update_thread_provider_id(
 }
 
 /// Recomputes the denormalized `email_threads.has_calendar_attachment` flag
-/// from the thread's current attachment set. Mirrors the CalendarOnly
-/// predicate in the email crate's dynamic query builder.
+/// from the thread's calendar attachments and saved invitations. Mirrors the
+/// CalendarOnly predicate in the email crate's dynamic query builder.
 #[tracing::instrument(skip(tx), err)]
 pub async fn sync_thread_calendar_flag(
     tx: &mut sqlx::PgConnection,
@@ -163,6 +163,10 @@ pub async fn sync_thread_calendar_flag(
                   AND (a.filename ILIKE '%.ics'
                        OR a.mime_type = 'text/calendar'
                        OR a.mime_type = 'application/ics')
+            ) OR EXISTS (
+                SELECT 1 FROM email_messages m
+                JOIN email_message_calendar_invites i ON i.message_id = m.id
+                WHERE m.thread_id = $1
             ) AS has_cal
         ) calc
         WHERE t.id = $1
@@ -179,6 +183,8 @@ pub async fn sync_thread_calendar_flag(
 /// Recomputes the denormalized `email_threads.is_signal` flag: true iff the
 /// thread has a non-TRASH message matching the importance heuristic. Mirrors
 /// the Importance(true) predicate in the email crate's dynamic query builder.
+/// Macro's own notification emails (`$2` domain) never count as signal,
+/// regardless of labels or sender overrides.
 #[tracing::instrument(skip(tx), err)]
 pub async fn sync_thread_signal_flag(
     tx: &mut sqlx::PgConnection,
@@ -197,6 +203,11 @@ pub async fn sync_thread_signal_flag(
                       SELECT 1 FROM email_message_labels ml
                       JOIN email_labels l ON ml.label_id = l.id
                       WHERE ml.message_id = m.id AND l.name = 'TRASH'
+                  )
+                  AND NOT EXISTS (
+                      SELECT 1 FROM email_contacts sender_c
+                      WHERE sender_c.id = m.from_contact_id
+                        AND LOWER(SPLIT_PART(sender_c.email_address, '@', 2)) = $2
                   )
                   AND (
                       (
@@ -280,7 +291,8 @@ pub async fn sync_thread_signal_flag(
         WHERE t.id = $1
           AND t.is_signal IS DISTINCT FROM calc.sig
         "#,
-        thread_db_id
+        thread_db_id,
+        email_utils::MACRO_NOTIFICATION_SENDER_DOMAIN,
     )
     .execute(tx)
     .await?;

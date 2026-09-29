@@ -85,6 +85,15 @@ describe('makeRenameAction.canExecute', () => {
     expect(canExecute(entity('document', { ownerId: OTHER }))).toBe(false);
   });
 
+  it('allows active agent sessions but refuses archived ones', () => {
+    expect(canExecute(entity('agent_session', { isArchived: false }))).toBe(
+      true
+    );
+    expect(canExecute(entity('agent_session', { isArchived: true }))).toBe(
+      false
+    );
+  });
+
   it('refuses channel messages, threads, email, and foreign rows', () => {
     expect(canExecute(entity('channel_message'))).toBe(false);
     expect(canExecute(entity('channel_thread'))).toBe(false);

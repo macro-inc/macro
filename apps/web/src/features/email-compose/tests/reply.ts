@@ -15,7 +15,8 @@ export function mountReplyComposer(
   callbacks: Pick<
     ReplyComposerOptions,
     'draft' | 'sideEffectOnSend' | 'onMarkDone'
-  > = {}
+  > = {},
+  thread: { inboxVisible?: boolean } = {}
 ) {
   return createRoot((dispose) => {
     const editor = createEmailEditor('Ready to send');
@@ -39,7 +40,7 @@ export function mountReplyComposer(
           thread: () => ({
             db_id: 'thread',
             link_id: 'inbox',
-            inbox_visible: false,
+            inbox_visible: thread.inboxVisible ?? false,
           }),
           recipientOptions: () => [],
           isPersonalReply: () => false,

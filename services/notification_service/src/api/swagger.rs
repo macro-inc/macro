@@ -6,13 +6,14 @@ use model::{
     version::NotificationServiceApiVersion,
 };
 use model_notifications::{
-    ChannelInviteMetadata, ChannelMentionMetadata, ChannelMessageSendMetadata,
-    ChannelReplyMetadata, CommentedOnDocumentMetadata, CommonChannelMetadata, DeviceType,
-    DocumentMentionMetadata, GithubPrCheckRun, GithubPrCheckRunState, GithubPrComment,
-    GithubPrCommentKind, GithubPrEventAction, GithubPrEventStatus, GithubPrMention,
-    GithubPrMentionLocation, GithubPrNotificationCommon, GithubPrReview, GithubPrReviewState,
-    GithubPrStatusChanged, GithubReviewRequested, InviteToTeamMetadata, ItemSharedMetadata,
-    NewEmailMetadata, RepliedToDocumentCommentThreadMetadata, UserUnsubscribe,
+    ChannelInviteMetadata, ChannelMentionMetadata, ChannelMessageReactionMetadata,
+    ChannelMessageSendMetadata, ChannelReplyMetadata, CommentedOnDocumentMetadata,
+    CommonChannelMetadata, DeviceType, DocumentMentionMetadata, GithubPrCheckRun,
+    GithubPrCheckRunState, GithubPrComment, GithubPrCommentKind, GithubPrEventAction,
+    GithubPrEventStatus, GithubPrMention, GithubPrMentionLocation, GithubPrNotificationCommon,
+    GithubPrReview, GithubPrReviewState, GithubPrStatusChanged, GithubReviewRequested,
+    InviteToTeamMetadata, ItemSharedMetadata, NewEmailMetadata,
+    RepliedToDocumentCommentThreadMetadata, UserUnsubscribe,
 };
 use utoipa::OpenApi;
 
@@ -80,6 +81,7 @@ use crate::{
                         ItemSharedMetadata,
                         InviteToTeamMetadata,
                         ChannelMentionMetadata,
+                        ChannelMessageReactionMetadata,
                         ChannelReplyMetadata,
                         DocumentMentionMetadata,
                         RepliedToDocumentCommentThreadMetadata,

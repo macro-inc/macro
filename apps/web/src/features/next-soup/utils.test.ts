@@ -6,16 +6,23 @@ import {
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  inboxCalendarNavigation,
-  inboxPreviewNavigation,
-} from '../inbox-view/inbox-preview-navigation';
-import { inboxPreviewTarget } from '../inbox-view/inbox-route';
+  homeCalendarNavigation,
+  homePreviewNavigation,
+} from '../home/home-preview-navigation';
+import { homePreviewTarget } from '../home/home-route';
 
 vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: vi.fn(() => false),
 }));
 
 const toastAlert = vi.hoisted(() => vi.fn());
+const fetchChannelNotifications = vi.hoisted(() => vi.fn());
+vi.mock('@service-storage/graphql-notifications', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('@service-storage/graphql-notifications')
+  >()),
+  fetchGraphqlEntityNotifications: fetchChannelNotifications,
+}));
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { alert: toastAlert },
 }));
@@ -119,12 +126,20 @@ vi.mock('@core/constant/featureFlags', async (importOriginal) => {
   };
 });
 
+import type { SerializedSearchParams } from '@app/lib/split-router';
 import { setGlobalSplitManager } from '@app/signal/splitLayout';
-import type { SplitManager } from '@components/app/split-layout/layoutManager';
+import type {
+  OpenWithSplitOptions,
+  SplitManager,
+} from '@components/app/split-layout/layoutManager';
 import { type ChannelEntityTarget, type EntityData, queryKeys } from '@entity';
 import type { NotificationSource, UnifiedNotification } from '@notifications';
+import { hydrateChannelNotificationSelection } from '@queries/channel/notification-selection';
 import {
   type CalendarPreviewSelection,
+  type ChannelPreviewSelection,
+  channelIdForPreviewNavigation,
+  channelPreviewSelection,
   executeMarkEntitiesDone,
   executeMarkEntitiesUndone,
   getChannelEntityTarget,
@@ -134,6 +149,16 @@ import {
   openEntityInSplitFromUnifiedList,
   resolveMarkEntitiesDoneVariables,
 } from './utils';
+
+function targetSearch(
+  open: ReturnType<typeof vi.fn>,
+  namespace: string,
+  current?: SerializedSearchParams
+) {
+  const options = open.mock.calls.at(-1)?.[1] as OpenWithSplitOptions;
+  const update = options.search?.[namespace];
+  return typeof update === 'function' ? update(current) : update;
+}
 
 afterEach(() => {
   setGlobalSplitManager(undefined);
@@ -209,7 +234,7 @@ describe('agent session search navigation', () => {
     }
   );
 
-  it('opens the agent block with durable params and retargets it on each snippet click', async () => {
+  it('carries agent targets through route search without waiting for block handles', async () => {
     const openWithSplit = vi.fn(() => ({ status: 'unavailable' }));
     const goToLocationFromParams = vi.fn();
     const getBlockHandle = vi.fn(async () => ({ goToLocationFromParams }));
@@ -225,18 +250,20 @@ describe('agent session search navigation', () => {
       {
         type: 'agent',
         id: 'session',
-        params: { agent_message_turn: '0', agent_message_author: 'user' },
+        params: undefined,
       },
       expect.any(Object)
     );
     await openEntityInSplitFromUnifiedList(entity, {
       location: { type: 'agent', messageTurn: 4, author: 'agent' },
     });
-    expect(getBlockHandle).toHaveBeenCalledWith('session');
-    expect(goToLocationFromParams).toHaveBeenLastCalledWith({
-      agent_message_turn: '4',
-      agent_message_author: 'agent',
+    expect(targetSearch(openWithSplit, 'agent-detail')).toMatchObject({
+      messageTurn: ['4'],
+      author: ['agent'],
+      seek: [expect.any(String)],
     });
+    expect(getBlockHandle).not.toHaveBeenCalled();
+    expect(goToLocationFromParams).not.toHaveBeenCalled();
   });
 });
 
@@ -278,7 +305,7 @@ const asRead = (notification: UnifiedNotification): UnifiedNotification =>
   }) as unknown as UnifiedNotification;
 
 const notificationSourceWithBulkMarkAsRead = (
-  bulkMarkAsRead = vi.fn(async () => {})
+  bulkMarkAsRead: NotificationSource['bulkMarkAsRead'] = vi.fn(async () => {})
 ) => ({ bulkMarkAsRead }) as unknown as NotificationSource;
 
 const channelMessageRow = (opts?: {
@@ -319,6 +346,235 @@ const channelThreadRow = (opts?: {
     ...(opts?.target ? { target: opts.target } : {}),
     ...(opts?.notifications ? { notifications: () => opts.notifications } : {}),
   }) as unknown as EntityData;
+
+describe('channel unread clicks', () => {
+  const newer = {
+    ...replyNotification('reply', 'newer', 'thread'),
+    created_at: '2026-09-24T12:00:00Z',
+  };
+  const older = {
+    ...sendNotification('send', 'older'),
+    created_at: '2026-09-23T12:00:00Z',
+  };
+
+  it('targets the newest unread reply even when the rail has an empty cached witness', async () => {
+    fetchChannelNotifications.mockResolvedValue([
+      older,
+      newer,
+      asRead({
+        ...newer,
+        id: 'already-read',
+        created_at: '2026-09-25T12:00:00Z',
+      }),
+    ]);
+    const channel = await hydrateChannelNotificationSelection({
+      type: 'channel',
+      id: 'channel-1',
+      name: 'Channel',
+      ownerId: 'owner',
+      channelType: 'private',
+      unreadNotifications: [],
+    });
+    const selection = channelPreviewSelection(channel.id, {
+      target: getChannelEntityTarget(channel, { scopeChannelThreads: false }),
+    });
+
+    expect(selection.target).toEqual({
+      messageId: 'newer',
+      threadId: 'thread',
+    });
+  });
+
+  it('honors local reads while refreshing a stale empty rail row on every click', async () => {
+    fetchChannelNotifications.mockResolvedValue([older, newer]);
+    const row = {
+      type: 'channel' as const,
+      id: 'channel-1',
+      name: 'Channel',
+      ownerId: 'owner',
+      channelType: 'private' as const,
+      unreadNotifications: [],
+    };
+    const readIds = new Set([newer.id]);
+    const click = async () => {
+      const channel = await hydrateChannelNotificationSelection(row, (n) =>
+        readIds.has(n.id) ? asRead(n) : n
+      );
+      return getChannelEntityTarget(channel, { scopeChannelThreads: false });
+    };
+
+    expect(await click()).toMatchObject({
+      kind: 'message',
+      messageId: 'older',
+    });
+    readIds.add(older.id);
+    expect(await click()).toEqual({ kind: 'latest' });
+
+    fetchChannelNotifications.mockResolvedValue([
+      older,
+      newer,
+      replyNotification('incoming', 'new-arrival', 'thread'),
+    ]);
+    expect(await click()).toMatchObject({
+      kind: 'message',
+      messageId: 'new-arrival',
+      threadId: 'thread',
+    });
+    expect(fetchChannelNotifications).toHaveBeenCalledTimes(3);
+  });
+
+  it('builds a route selection with a plain id and ChannelEntityTarget', () => {
+    expect(
+      channelPreviewSelection('channel-1', {
+        target: {
+          kind: 'message',
+          messageId: 'newer',
+          threadId: 'thread',
+        },
+      })
+    ).toEqual({
+      type: 'channel',
+      id: 'channel-1',
+      target: { messageId: 'newer', threadId: 'thread' },
+    });
+    expect(
+      channelPreviewSelection('channel-1', { target: { kind: 'latest' } })
+    ).toEqual({ type: 'channel', id: 'channel-1' });
+    expect(() => channelPreviewSelection('')).toThrow(/Missing channel id/);
+  });
+
+  it('resolves a path channelId and rejects empty selections', () => {
+    expect(
+      channelIdForPreviewNavigation({ type: 'channel', id: 'channel-1' })
+    ).toBe('channel-1');
+    expect(
+      channelIdForPreviewNavigation({
+        type: 'channel_message',
+        id: 'msg',
+        channelId: 'channel-1',
+        messageId: 'msg',
+      })
+    ).toBe('channel-1');
+    expect(() =>
+      channelIdForPreviewNavigation({
+        type: 'channel',
+        id: undefined as unknown as string,
+      })
+    ).toThrow(/Missing channel id for channel preview navigation/);
+    expect(() =>
+      channelIdForPreviewNavigation({
+        type: 'channel_thread',
+        id: 'root',
+        channelId: undefined as unknown as string,
+        messageId: 'root',
+        threadId: 'root',
+      })
+    ).toThrow(/Missing channel id for channel preview navigation/);
+  });
+
+  it('keeps a captured id when the entity proxy later loses its id', () => {
+    const entity = {
+      type: 'channel' as const,
+      id: undefined as unknown as string,
+      notifications: () => [newer],
+    };
+    const selection = channelPreviewSelection('channel-1', {
+      target: getChannelEntityTarget(entity, { scopeChannelThreads: false }),
+      notifications: entity.notifications,
+    });
+    expect(selection).toMatchObject({
+      type: 'channel',
+      id: 'channel-1',
+      target: { messageId: 'newer', threadId: 'thread' },
+    });
+    expect(selection).not.toHaveProperty('kind');
+    expect(selection.target).not.toHaveProperty('kind');
+  });
+
+  it('reads current unread state on every click without revisiting read targets', () => {
+    let notifications = [older, newer, { ...newer, id: 'mention' }];
+    const row: ChannelPreviewSelection = {
+      type: 'channel',
+      id: 'channel-1',
+      notifications: () => notifications,
+    };
+    const click = () =>
+      getChannelEntityTarget(row, { scopeChannelThreads: false });
+    expect(click()).toEqual({
+      kind: 'message',
+      messageId: 'newer',
+      threadId: 'thread',
+    });
+
+    notifications = [older, asRead(newer), asRead({ ...newer, id: 'mention' })];
+    expect(click()).toEqual({
+      kind: 'message',
+      messageId: 'older',
+      threadId: undefined,
+    });
+
+    notifications = notifications.map(asRead);
+    expect(click()).toEqual({ kind: 'latest' });
+    expect(click()).toEqual({ kind: 'latest' });
+
+    notifications.push({
+      ...older,
+      id: 'incoming',
+      created_at: '2026-09-25T12:00:00Z',
+      notification_metadata: {
+        ...older.notification_metadata,
+        content: {
+          ...older.notification_metadata.content,
+          messageId: 'incoming',
+        },
+      },
+    } as UnifiedNotification);
+    expect(click()).toMatchObject({ kind: 'message', messageId: 'incoming' });
+  });
+
+  it('uses new arrivals immediately while older notifications remain unread', () => {
+    let notifications = [older];
+    const row: ChannelPreviewSelection = {
+      type: 'channel',
+      id: 'channel-1',
+      notifications: () => notifications,
+    };
+    expect(
+      getChannelEntityTarget(row, { scopeChannelThreads: false })
+    ).toMatchObject({ messageId: 'older' });
+    notifications = [older, newer];
+    expect(
+      getChannelEntityTarget(row, { scopeChannelThreads: false })
+    ).toMatchObject({ messageId: 'newer' });
+  });
+
+  it('preserves Home row targets, including an already-read thread reply', () => {
+    const notifications = [
+      asRead({
+        ...replyNotification('read-reply', 'read-newest', 'thread'),
+        created_at: '2026-09-25T12:00:00Z',
+      }),
+      newer,
+      older,
+    ];
+    expect(getChannelEntityTarget(channelRow({ notifications }))).toMatchObject(
+      { messageId: 'older' }
+    );
+    const thread: ChannelPreviewSelection = {
+      type: 'channel_thread',
+      id: 'thread',
+      channelId: 'channel-1',
+      messageId: 'thread',
+      threadId: 'thread',
+      notifications: () => notifications,
+    };
+    expect(getChannelEntityTarget(thread)).toEqual({
+      kind: 'message',
+      messageId: 'read-newest',
+      threadId: 'thread',
+    });
+  });
+});
 
 describe('resolveMarkEntitiesDoneVariables', () => {
   it('uses notifications attached to a GraphQL Soup entity', () => {
@@ -498,7 +754,7 @@ describe('calendar view navigation', () => {
       }),
     });
     expect(
-      inboxCalendarNavigation(target, 'timeGridWeek')?.search.calendar
+      homeCalendarNavigation(target, 'timeGridWeek')?.search.calendar
     ).toEqual({
       eventId: ['event-1'],
       occurrenceKey: ['2026-09-23T22:00:00+00:00'],
@@ -508,7 +764,44 @@ describe('calendar view navigation', () => {
   });
 });
 
-describe('Drive document routing', () => {
+describe('Hosted details and Drive document routing', () => {
+  it('opens GitHub pull requests as Reviews-hosted content', async () => {
+    const openWithSplit = vi.fn(() => ({ status: 'unavailable' }));
+    setGlobalSplitManager({
+      activeSplit: vi.fn(),
+      openWithSplit,
+    } as unknown as SplitManager);
+
+    await openEntityInSplitFromUnifiedList(
+      {
+        type: 'foreign',
+        id: 'pr-1',
+        foreignSource: 'github_pull_request',
+        metadata: { url: 'https://github.com/example/repo/pull/1' },
+      } as EntityData,
+      { openInNewSplit: true }
+    );
+
+    expect(openWithSplit).toHaveBeenCalledWith(
+      {
+        type: 'component',
+        id: 'reviews',
+        entryMetadata: {
+          route: {
+            matches: [
+              { id: 'view-reviews', params: {} },
+              { id: 'reviews-pr', params: { foreignEntityId: 'pr-1' } },
+            ],
+          },
+        },
+      },
+      expect.objectContaining({
+        allowDuplicate: true,
+        preferNewSplit: true,
+      })
+    );
+  });
+
   it('keeps task documents as legacy task blocks on touch', async () => {
     vi.mocked(isTouchDevice).mockReturnValue(true);
     const openWithSplit = vi.fn(() => ({ status: 'unavailable' }));
@@ -617,7 +910,7 @@ describe('Inbox calendar preview navigation', () => {
       endDate: '2025-01-02',
     };
     expect(
-      inboxCalendarNavigation(
+      homeCalendarNavigation(
         { eventId: 'event-1', occurrenceKey: 'occurrence-1', range },
         'timeGridWeek'
       )
@@ -633,13 +926,13 @@ describe('Inbox calendar preview navigation', () => {
         },
       },
     });
-    expect(inboxCalendarNavigation({}, 'timeGridWeek')).toBeUndefined();
+    expect(homeCalendarNavigation({}, 'timeGridWeek')).toBeUndefined();
   });
 });
 
 describe('Inbox channel preview navigation', () => {
   it('preserves explicit message targets on whole-channel selections', () => {
-    const result = inboxPreviewNavigation({
+    const result = homePreviewNavigation({
       type: 'channel',
       id: 'channel-1',
       target: { messageId: 'message-1', threadId: 'thread-1' },
@@ -654,12 +947,12 @@ describe('Inbox channel preview navigation', () => {
   });
   it('keeps untargeted channels at latest', () => {
     expect(
-      inboxPreviewNavigation({ type: 'channel', id: 'channel-1' }).search
+      homePreviewNavigation({ type: 'channel', id: 'channel-1' }).search
     ).toEqual({ channels: undefined });
   });
   it('names markdown subtypes in the path', () => {
     expect(
-      inboxPreviewNavigation({
+      homePreviewNavigation({
         type: 'document',
         id: 'task-1',
         fileType: 'md',
@@ -744,9 +1037,83 @@ describe('getChannelEntityTarget', () => {
     ]);
   });
 
+  it.each(['channel_mention', 'channel_message_reply'] as const)(
+    'marks %s when Chat opens the whole channel without reading the global feed',
+    (tag) => {
+      const notification = {
+        ...sendNotification('thread-notification', 'message'),
+        notification_event_type: tag,
+        notification_metadata: {
+          tag,
+          content: { messageId: 'message', threadId: 'root' },
+        },
+      } as UnifiedNotification;
+      const bulkMarkAsRead = vi.fn(async () => {});
+      const notificationsByEntity = vi.fn(() => ({}));
+      markChannelNotificationsSeenOnOpen(
+        channelRow({ notifications: [notification] }),
+        {
+          ...notificationSourceWithBulkMarkAsRead(bulkMarkAsRead),
+          notificationsByEntity,
+        },
+        { scopeChannelThreads: false }
+      );
+      expect(bulkMarkAsRead).toHaveBeenCalledExactlyOnceWith([notification]);
+      expect(notificationsByEntity).not.toHaveBeenCalled();
+    }
+  );
+
+  it('marks mixed channel notifications on repeated Chat opens, skipping local reads', () => {
+    const send = sendNotification('send', 'root');
+    const reply = replyNotification('reply', 'reply-message', 'root');
+    const mention = {
+      ...sendNotification('mention', 'mentioned-message'),
+      notification_event_type: 'channel_mention',
+      notification_metadata: {
+        tag: 'channel_mention',
+        content: { messageId: 'mentioned-message' },
+      },
+    } as UnifiedNotification;
+    const read = asRead(sendNotification('seen', 'seen-message'));
+    const done = {
+      ...sendNotification('done', 'done-message'),
+      state: 'done' as const,
+    };
+    const readIds = new Set<string>();
+    const bulkMarkAsRead = vi.fn(
+      async (notifications: UnifiedNotification[]) => {
+        for (const notification of notifications) readIds.add(notification.id);
+      }
+    );
+    const source: NotificationSource = {
+      ...notificationSourceWithBulkMarkAsRead(bulkMarkAsRead),
+      withLocalOverrides: (notification) =>
+        readIds.has(notification.id) ? asRead(notification) : notification,
+    };
+    const notifications = [send, reply, mention, read, done];
+    const channel = channelRow({ notifications });
+    const open = () =>
+      markChannelNotificationsSeenOnOpen(channel, source, {
+        scopeChannelThreads: false,
+      });
+    open();
+    expect(bulkMarkAsRead).toHaveBeenCalledExactlyOnceWith([
+      send,
+      reply,
+      mention,
+    ]);
+    open();
+    expect(bulkMarkAsRead).toHaveBeenCalledTimes(1);
+    const incoming = replyNotification('incoming', 'new-reply', 'root');
+    notifications.push(incoming);
+    open();
+    expect(bulkMarkAsRead).toHaveBeenCalledTimes(2);
+    expect(bulkMarkAsRead).toHaveBeenLastCalledWith([incoming]);
+  });
+
   it('marks attached channel notifications through the shared split-open path', async () => {
     const notification = sendNotification('shared-open', 'message');
-    const openWithSplit = vi.fn(() => ({ status: 'unavailable' }));
+    const openWithSplit = vi.fn(() => ({ status: 'opened' }));
     setGlobalSplitManager({
       activeSplit: vi.fn(),
       getOrchestrator: vi.fn(() => ({
@@ -767,19 +1134,135 @@ describe('getChannelEntityTarget', () => {
     );
 
     expect(openWithSplit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        params: expect.objectContaining({ channel_message_id: 'message' }),
-      }),
+      expect.objectContaining({ type: 'channel', id: 'channel-1' }),
       expect.any(Object)
     );
+    expect(targetSearch(openWithSplit, 'channels')).toMatchObject({
+      messageId: ['message'],
+      seek: [expect.any(String)],
+    });
     expect(bulkMarkAsRead).toHaveBeenCalledWith([notification]);
   });
 
-  it('marks raw GraphQL notifications when opening a mobile channel', async () => {
-    const unread = sendNotification('mobile-unread', 'message');
-    const read = asRead(sendNotification('mobile-read', 'read-message'));
-    const reply = replyNotification('mobile-reply', 'reply', 'thread-root');
-    const openWithSplit = vi.fn(() => ({ status: 'unavailable' }));
+  it('keeps an explicit channel search target without navigating to latest', async () => {
+    const getBlockHandle = vi.fn(async () => undefined);
+    const openWithSplit = vi.fn(() => ({ status: 'navigating' }));
+    setGlobalSplitManager({
+      activeSplit: vi.fn(),
+      getOrchestrator: vi.fn(() => ({ getBlockHandle })),
+      getSplitByContent: vi.fn(),
+      findOpenView: vi.fn(),
+      openWithSplit,
+    } as unknown as SplitManager);
+    await openEntityInSplitFromUnifiedList(channelRow(), {
+      location: { type: 'channel', messageId: 'hit' },
+    });
+    expect(targetSearch(openWithSplit, 'channels')).toMatchObject({
+      messageId: ['hit'],
+    });
+    expect(openWithSplit).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({ reopen: undefined })
+    );
+    expect(getBlockHandle).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    'channels',
+    'email-detail',
+    'markdown-detail',
+    'pdf-detail',
+    'agent-detail',
+    'call-detail',
+  ])('clears stale %s targets on ordinary Home navigation', (namespace) => {
+    const navigation = homePreviewNavigation({ type: 'channel', id: 'other' });
+    expect(Object.hasOwn(navigation.search, namespace)).toBe(true);
+    expect(navigation.search[namespace]).toBeUndefined();
+  });
+
+  it.each(
+    [false, true].flatMap((openInNewSplit) =>
+      ['opened', 'reused', 'unavailable', 'navigating'].map((status) => ({
+        openInNewSplit,
+        status,
+      }))
+    )
+  )(
+    'only marks the whole GraphQL channel after a successful Chat open (new split=$openInNewSplit, status=$status)',
+    async ({ openInNewSplit, status }) => {
+      const unread = sendNotification('mobile-unread', 'message');
+      const read = asRead(sendNotification('mobile-read', 'read-message'));
+      const reply = replyNotification('mobile-reply', 'reply', 'thread-root');
+      const bulkMarkAsRead = vi.fn(async () => {});
+      const openWithSplit = vi.fn(() => {
+        expect(bulkMarkAsRead).not.toHaveBeenCalled();
+        return { status };
+      });
+      setGlobalSplitManager({
+        activeSplit: vi.fn(),
+        getOrchestrator: vi.fn(() => ({
+          getBlockHandle: vi.fn(async () => undefined),
+        })),
+        getSplitByContent: vi.fn(),
+        openWithSplit,
+      } as unknown as SplitManager);
+
+      const channel = { ...channelRow(), notifications: [unread, read, reply] };
+      await openEntityInSplitFromUnifiedList(channel, {
+        referredFrom: 'channels',
+        openInNewSplit,
+        notificationSource:
+          notificationSourceWithBulkMarkAsRead(bulkMarkAsRead),
+        scopeChannelThreads: false,
+      });
+
+      expect(openWithSplit).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'channel', id: 'channel-1' }),
+        expect.objectContaining({
+          referredFrom: 'channels',
+          preferNewSplit: openInNewSplit,
+        })
+      );
+      if (status === 'unavailable' || status === 'navigating') {
+        expect(bulkMarkAsRead).not.toHaveBeenCalled();
+      } else {
+        expect(bulkMarkAsRead).toHaveBeenCalledExactlyOnceWith([unread, reply]);
+      }
+    }
+  );
+
+  it('marks routed channel notifications only after the destination is applied', async () => {
+    const reply = replyNotification('deferred', 'reply-message', 'root');
+    const bulkMarkAsRead = vi.fn(async () => {});
+    let onApplied: (() => void) | undefined;
+    setGlobalSplitManager({
+      activeSplit: vi.fn(),
+      getOrchestrator: vi.fn(() => ({})),
+      openWithSplit: (
+        ...[_content, options]: Parameters<SplitManager['openWithSplit']>
+      ) => {
+        onApplied = options?.onApplied;
+        return { status: 'navigating' };
+      },
+    } as unknown as SplitManager);
+
+    await openEntityInSplitFromUnifiedList(
+      channelRow({ notifications: [reply] }),
+      {
+        notificationSource:
+          notificationSourceWithBulkMarkAsRead(bulkMarkAsRead),
+        scopeChannelThreads: false,
+      }
+    );
+    expect(bulkMarkAsRead).not.toHaveBeenCalled();
+    expect(onApplied).toBeDefined();
+    onApplied!();
+    expect(bulkMarkAsRead).toHaveBeenCalledExactlyOnceWith([reply]);
+  });
+
+  it('chooses the unread reply target before marking a Chat conversation read', async () => {
+    const reply = replyNotification('reply-target', 'reply-message', 'root');
+    const openWithSplit = vi.fn(() => ({ status: 'opened' }));
     setGlobalSplitManager({
       activeSplit: vi.fn(),
       getOrchestrator: vi.fn(() => ({
@@ -788,19 +1271,22 @@ describe('getChannelEntityTarget', () => {
       getSplitByContent: vi.fn(),
       openWithSplit,
     } as unknown as SplitManager);
-
-    const bulkMarkAsRead = vi.fn(async () => {});
-    const channel = { ...channelRow(), notifications: [unread, read, reply] };
-    await openEntityInSplitFromUnifiedList(channel, {
-      referredFrom: 'channels',
-      notificationSource: notificationSourceWithBulkMarkAsRead(bulkMarkAsRead),
+    const bulkMarkAsRead = vi.fn(async () => {
+      reply.state = 'seen';
     });
-
-    expect(openWithSplit).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'channel', id: 'channel-1' }),
-      expect.objectContaining({ referredFrom: 'channels' })
+    await openEntityInSplitFromUnifiedList(
+      channelRow({ notifications: [reply] }),
+      {
+        notificationSource:
+          notificationSourceWithBulkMarkAsRead(bulkMarkAsRead),
+        scopeChannelThreads: false,
+      }
     );
-    expect(bulkMarkAsRead).toHaveBeenCalledExactlyOnceWith([unread]);
+    expect(targetSearch(openWithSplit, 'channels')).toMatchObject({
+      messageId: ['reply-message'],
+      threadId: ['root'],
+    });
+    expect(bulkMarkAsRead).toHaveBeenCalledExactlyOnceWith([reply]);
   });
 
   it('uses the global source for channels without an attached notification edge', () => {
@@ -861,7 +1347,7 @@ describe('getChannelEntityTarget', () => {
       })),
       getSplitByContent: vi.fn(),
       findOpenView: vi.fn(),
-      openWithSplit: vi.fn(() => ({ status: 'unavailable' })),
+      openWithSplit: vi.fn(() => ({ status: 'opened' })),
     } as unknown as SplitManager);
 
     const bulkMarkAsRead = vi.fn(async () => {});
@@ -1080,14 +1566,14 @@ describe('getDocumentCommentTarget', () => {
   });
 
   it('carries the comment through the Inbox preview route', () => {
-    const result = inboxPreviewNavigation(
+    const result = homePreviewNavigation(
       documentRow([commentNotification('n1', 'comment-1')]) as never
     );
     expect(result.params).toEqual({ blockType: 'md', previewId: 'doc-1' });
     expect(result.search.drive).toEqual({
       commentId: ['comment-1'],
     });
-    const target = inboxPreviewTarget(result.params, {
+    const target = homePreviewTarget(result.params, {
       channel: { messageId: '', threadId: '' },
       document: { commentId: 'comment-1' },
     });
@@ -1169,5 +1655,68 @@ describe('getRowClickFallbackLocation', () => {
   it('returns no location for non-snippet entities', () => {
     const entity = { type: 'document', id: 'd1' } as unknown as EntityData;
     expect(getRowClickFallbackLocation(entity)).toBeUndefined();
+  });
+});
+
+describe('call navigation', () => {
+  it('opens calls in Drive without mounting a call block', async () => {
+    const openWithSplit = vi.fn(() => ({ status: 'unavailable' }));
+    setGlobalSplitManager({
+      activeSplit: () => undefined,
+      getOrchestrator: () => ({}),
+      openWithSplit,
+    } as unknown as SplitManager);
+
+    await openEntityInSplitFromUnifiedList(searchEntity('call', null), {});
+    expect(openWithSplit).toHaveBeenCalledWith(
+      {
+        type: 'component',
+        id: 'documents',
+        entryMetadata: {
+          route: {
+            matches: [
+              { id: 'drive', params: {} },
+              { id: 'drive-call', params: { callId: 'call-1' } },
+            ],
+          },
+        },
+      },
+      expect.objectContaining({ allowDuplicate: true })
+    );
+  });
+
+  it('carries a transcript target into the Drive call route', async () => {
+    const openWithSplit = vi.fn((..._args: unknown[]) => ({
+      status: 'unavailable',
+    }));
+    setGlobalSplitManager({
+      activeSplit: () => undefined,
+      getOrchestrator: () => ({}),
+      openWithSplit,
+    } as unknown as SplitManager);
+
+    await openEntityInSplitFromUnifiedList(searchEntity('call', null), {
+      location: {
+        type: 'call_record',
+        callId: 'call-1',
+        transcriptId: 'segment-1',
+      },
+    });
+    expect(openWithSplit.mock.calls[0]?.[0]).toMatchObject({
+      type: 'component',
+      id: 'documents',
+      entryMetadata: {
+        route: {
+          matches: [
+            { id: 'drive', params: {} },
+            { id: 'drive-call', params: { callId: 'call-1' } },
+          ],
+        },
+      },
+    });
+    expect(targetSearch(openWithSplit, 'call-detail')).toMatchObject({
+      transcriptId: ['segment-1'],
+      seek: [expect.any(String)],
+    });
   });
 });

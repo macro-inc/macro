@@ -1,38 +1,39 @@
+import { useHasActiveChannelsCall } from '@app/features/channels-view/use-has-active-call';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { navigateToSidebarView } from '@components/app/app-sidebar/sidebar';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { hotkeyScopeNeutralAttribute } from '@core/dom-selectors';
-import { useActiveCallsQuery } from '@queries/call/call';
-import { For } from 'solid-js';
+import { cn } from '@ui';
+import { For, Show, Suspense } from 'solid-js';
 import { SidebarRailCreateButton } from './create-button';
 import { FooterActions } from './footer-actions';
-import { ListNav } from './list-nav';
+import { ListNav, type ListNavProps } from './list-nav';
 import { visibleNavItems } from './nav-items';
 import { useSidebarUnread } from './queries/use-sidebar-unread';
 import { SearchRailButton } from './search-bar-button';
 import { useNavItemGates } from './use-nav-item-gates';
 
+function ChannelsListNav(props: Omit<ListNavProps, 'activeCall'>) {
+  const hasActiveCall = useHasActiveChannelsCall();
+  return <ListNav {...props} activeCall={hasActiveCall()} />;
+}
+
 /**
- * The rebuilt app sidebar, behind `enable-new-app-views`: a single always-narrow
- * column of 36px icon buttons, labels in tooltips.
+ * The app sidebar: a single always-narrow column of 40px icon buttons, labels
+ * in tooltips.
  *
  * Always narrow by design — there is no slim mode or hover-peek overlay.
  * `cmd+.` toggles navigation in the active workspace. The `g`-prefixed
- * nav shortcuts are unaffected: `GoToHotkeys` is mounted from `Layout` and does
- * not depend on which sidebar renders. There is no room for the leader-key
- * hints the old sidebar paints on its rows, so each button's tooltip carries
- * its shortcut instead.
+ * nav shortcuts are registered by `GoToHotkeys`, which `Layout` mounts
+ * separately. There is no room for leader-key hints on the buttons, so each
+ * button's tooltip carries its shortcut instead.
  */
 export const SidebarRail = () => {
   const gates = useNavItemGates();
   const analytics = useAnalytics();
   const layout = useSplitLayout();
   const hasUnread = useSidebarUnread();
-  const activeCallsQuery = useActiveCallsQuery();
-  // Keep the rail mounted while the shared call query loads.
-  const hasActiveCall = () =>
-    !activeCallsQuery.isPending && (activeCallsQuery.data?.length ?? 0) > 0;
 
   const _openHome = (event: MouseEvent) => {
     if (event.button !== 0) return;
@@ -41,7 +42,6 @@ export const SidebarRail = () => {
     navigateToSidebarView({
       viewId: 'home',
       shiftKey: event.shiftKey,
-      activeSplit: globalSplitManager()?.activeSplit(),
       openWithSplit: layout.openWithSplit,
       referredFrom: 'sidebar',
     });
@@ -52,24 +52,31 @@ export const SidebarRail = () => {
     <div
       {...hotkeyScopeNeutralAttribute}
       data-ui="sidebar-rail"
-      classList={{
-        'border-r': (globalSplitManager()?.splits().length ?? 1) <= 1,
-      }}
-      class="relative flex h-full w-14 shrink-0 flex-col items-center gap-2 overflow-hidden border-edge-muted bg-surface px-2.5 pb-3 pt-3"
+      class={cn(
+        'relative flex h-full w-14 shrink-0 flex-col items-center gap-1 overflow-hidden border-edge-frame bg-panel px-2 pb-3 pt-2',
+        (globalSplitManager()?.splits().length ?? 1) <= 1 && 'border-r'
+      )}
     >
       <SidebarRailCreateButton />
       <SearchRailButton />
 
-      <nav class="shrink-0 pt-5">
-        <ul class="flex flex-col items-center gap-2">
+      <nav class="shrink-0 pt-4">
+        <ul class="flex flex-col items-center gap-1">
           <For each={visibleNavItems(gates())}>
             {(item) => (
               <li class="flex">
-                <ListNav
-                  item={item}
-                  unread={hasUnread(item.id)}
-                  activeCall={item.id === 'channels' && hasActiveCall()}
-                />
+                <Show
+                  when={item.id === 'channels'}
+                  fallback={<ListNav item={item} unread={hasUnread(item.id)} />}
+                >
+                  <Suspense
+                    fallback={
+                      <ListNav item={item} unread={hasUnread(item.id)} />
+                    }
+                  >
+                    <ChannelsListNav item={item} unread={hasUnread(item.id)} />
+                  </Suspense>
+                </Show>
               </li>
             )}
           </For>

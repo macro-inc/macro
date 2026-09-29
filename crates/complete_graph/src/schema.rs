@@ -30,19 +30,27 @@ use graphql_favorite::{
     EntityFavoriteEdgeReader, FavoriteMutationRoot, FavoriteQueryReader, FavoritesFilterInput,
     GraphqlFavorite, NoOpEntityFavoriteEdgeReader, NoOpFavoriteMutationService, resolve_favorites,
 };
+use graphql_initiative::{
+    GraphqlInitiativeTasksPage, GraphqlTaskInitiativeReference, InitiativeMutationRoot,
+    InitiativeTasksInput, resolve_initiative, resolve_initiative_tasks,
+    resolve_task_initiative_references,
+};
 use graphql_notification::{
     NoOpNotificationMutationService, NoOpSoupNotificationEdgeReader, NotificationMutationRoot,
     NotificationMutationService, NotificationSubscriptionRoot, SoupNotificationEdgeReader,
 };
 use graphql_permission::{EntityPermissionEdgeReader, NoOpEntityPermissionEdgeReader};
 use graphql_properties::{
-    EntityPropertyReader, EntityPropertyWriter, NoOpEntityPropertyReader, NoOpEntityPropertyWriter,
-    PropertiesMutationRoot,
+    EntityPropertyReader, EntityPropertyWriter, GraphqlPropertyDefinition,
+    GraphqlPropertyDefinitionScope, GraphqlPropertyOption, NoOpEntityPropertyReader,
+    NoOpEntityPropertyWriter, PropertiesMutationRoot, load_property_definitions,
+    load_property_options,
 };
+use graphql_scheduled_action::{GraphqlScheduledAction, resolve_scheduled_actions};
 use graphql_soup::{
-    GraphqlSoupEmailThread, GroupedSoup, GroupedSoupInput, SoupEmailThreadMutationOutput,
-    SoupEntityEdges, SoupInput, SoupPage, SoupPatch, resolve_grouped_soup, resolve_soup,
-    resolve_soup_email_thread, resolve_soup_updates,
+    GraphqlSoupEmailThread, GraphqlSoupInitiative, GroupedSoup, GroupedSoupInput,
+    SoupEmailThreadMutationOutput, SoupEntityEdges, SoupInput, SoupPage, SoupPatch,
+    resolve_grouped_soup, resolve_soup, resolve_soup_email_thread, resolve_soup_updates,
 };
 use macro_authorization::{
     InternalAuthConfig, MacroAuthorizationService, MacroAuthorizationServiceImpl,
@@ -81,6 +89,7 @@ pub struct CompleteMutationRoot<
     ChannelMutationRoot<C, A>,
     NotificationMutationRoot<N>,
     GraphqlEmailMutation<ES, SoupEmailThreadMutationOutput<E>>,
+    InitiativeMutationRoot<E>,
 );
 
 impl<
@@ -103,6 +112,7 @@ impl<
             ChannelMutationRoot::<C, A>::new(),
             NotificationMutationRoot::<N>::new(),
             GraphqlEmailMutation::<ES, SoupEmailThreadMutationOutput<E>>::new(),
+            InitiativeMutationRoot::<E>::default(),
         )
     }
 }
@@ -620,6 +630,69 @@ where
     /// Stable id of the authenticated user.
     async fn id(&self) -> async_graphql::ID {
         async_graphql::ID(self.user_id.to_string())
+    }
+
+    /// One initiative accessible to the authenticated viewer.
+    async fn initiative(
+        &self,
+        ctx: &Context<'_>,
+        initiative_id: ID,
+    ) -> async_graphql::Result<GraphqlSoupInitiative<SoupEdges<NR, PR, ER, FR, AR, AcR>>> {
+        resolve_initiative(ctx, initiative_id).await
+    }
+
+    /// A permission-filtered page of task identifiers within an initiative.
+    async fn initiative_tasks(
+        &self,
+        ctx: &Context<'_>,
+        initiative_id: ID,
+        input: Option<InitiativeTasksInput>,
+    ) -> async_graphql::Result<GraphqlInitiativeTasksPage> {
+        resolve_initiative_tasks(
+            ctx,
+            self.user_id.clone(),
+            initiative_id,
+            input.unwrap_or_default(),
+        )
+        .await
+    }
+
+    /// Initiative chips for tasks, without inaccessible project metadata.
+    async fn task_initiative_references(
+        &self,
+        ctx: &Context<'_>,
+        task_ids: Vec<ID>,
+    ) -> async_graphql::Result<
+        Vec<GraphqlTaskInitiativeReference<SoupEdges<NR, PR, ER, FR, AR, AcR>>>,
+    > {
+        resolve_task_initiative_references(ctx, self.user_id.clone(), task_ids).await
+    }
+
+    /// AI routines owned by the authenticated user.
+    async fn scheduled_actions(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Vec<GraphqlScheduledAction>> {
+        resolve_scheduled_actions(ctx, self.user_id.clone()).await
+    }
+
+    /// Authorized property definitions available to this viewer.
+    async fn property_definitions(
+        &self,
+        ctx: &Context<'_>,
+        scope: GraphqlPropertyDefinitionScope,
+        for_entity_type: Option<graphql_common::GraphqlPropertyEntityType>,
+    ) -> async_graphql::Result<Vec<GraphqlPropertyDefinition<PR>>> {
+        load_property_definitions::<PR>(ctx, scope, for_entity_type).await
+    }
+
+    /// Select options available to the viewer for one property definition.
+    async fn property_options(
+        &self,
+        ctx: &Context<'_>,
+        property_definition_id: ID,
+    ) -> async_graphql::Result<Vec<GraphqlPropertyOption>> {
+        load_property_options::<PR>(ctx, property_definition_id).await
     }
 
     /// The authenticated user's favorites in manual order, optionally

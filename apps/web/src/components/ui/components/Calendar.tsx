@@ -450,7 +450,7 @@ export function CalendarMonthMenu(props: CalendarMonthMenuProps) {
             variant="ghost"
             size="sm"
             depth={3}
-            class="min-h-11 rounded-[20px] bg-ink/6 px-3 text-ink"
+            class="min-h-11 bg-ink/6 px-3 text-ink"
             label="Go To Today"
             onClick={() => {
               if (props.onToday) {

@@ -23,10 +23,11 @@ vi.mock('@core/cross-tab/cross-tab-bus', () => ({
 
 function composer(
   kind: 'standalone' | 'reply',
-  composeContext: EmailComposeContext
+  composeContext: EmailComposeContext,
+  thread: { inboxVisible?: boolean } = {}
 ) {
   if (kind === 'reply') {
-    const state = mountReplyComposer(composeContext);
+    const state = mountReplyComposer(composeContext, undefined, {}, thread);
     return {
       dispose: state.dispose,
       edit: state.edit,
@@ -114,8 +115,12 @@ describe('send and schedule ordering', () => {
           observedAt: Date.now(),
         });
         await vi.advanceTimersByTimeAsync(0);
-        expect(context.notices.feedback.success).toHaveBeenCalledWith(
+        // The time was never confirmed, so this was not the scheduled send.
+        expect(context.notices.feedback.success).not.toHaveBeenCalledWith(
           'Scheduled email sent'
+        );
+        expect(context.notices.feedback.alert).toHaveBeenCalledWith(
+          'This email was already sent'
         );
         pending.resolve({
           draftId: 'draft',
@@ -329,7 +334,7 @@ describe('send and schedule ordering', () => {
     '%s defers stale observations until schedule reconciliation completes',
     async (kind) => {
       const context = createComposeContext();
-      const state = composer(kind, context);
+      const state = composer(kind, context, { inboxVisible: true });
       const pending = Promise.withResolvers<void>();
       vi.mocked(context.delivery.archive).mockReturnValueOnce(pending.promise);
       const lifecycle = vi.mocked(context.draftLifecycle.observe).mock
@@ -599,9 +604,33 @@ describe('send and schedule ordering', () => {
     }
   });
 
-  it('undoes a scheduled reply with its saved body, envelope, and attachments', async () => {
+  it('leaves a done thread done when a reply is scheduled and undone', async () => {
     const composeContext = createComposeContext();
     const state = mountReplyComposer(composeContext);
+    try {
+      state.edit('Schedule from a done thread');
+      state.handleSendTimeChange(new Date('2026-12-01T12:00:00Z'));
+      await state.sendEmail();
+      const scheduledNotice = vi
+        .mocked(composeContext.notices.feedback.success)
+        .mock.calls.find(([text]) => text === 'Email scheduled');
+      scheduledNotice?.[1]?.actions?.[0].onClick();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(composeContext.delivery.unschedule).toHaveBeenCalledOnce();
+      expect(composeContext.delivery.archive).not.toHaveBeenCalled();
+    } finally {
+      state.dispose();
+    }
+  });
+
+  it('undoes a scheduled reply with its saved body, envelope, and attachments', async () => {
+    const composeContext = createComposeContext();
+    const state = mountReplyComposer(
+      composeContext,
+      undefined,
+      {},
+      { inboxVisible: true }
+    );
     try {
       state.form.setSubject('Scheduled reply subject');
       state.form.attachments.add({
@@ -623,8 +652,13 @@ describe('send and schedule ordering', () => {
 
       expect(composeContext.delivery.unschedule).toHaveBeenCalledWith({
         draftId: 'draft',
+        threadId: 'thread',
         inboxId: 'inbox',
       });
+      expect(composeContext.delivery.archive).toHaveBeenLastCalledWith(
+        { threadId: 'thread', value: false },
+        'inbox'
+      );
       expect(composeContext.drafts.restoreDraft).toHaveBeenCalledWith(
         expect.objectContaining({
           draftId: 'draft',
@@ -1173,7 +1207,12 @@ describe('send and schedule ordering', () => {
         threadId: 'thread-c',
         inboxId: 'c',
       });
-    const state = mountReplyComposer(composeContext);
+    const state = mountReplyComposer(
+      composeContext,
+      undefined,
+      {},
+      { inboxVisible: true }
+    );
     try {
       state.edit('Moving between inboxes');
       await vi.advanceTimersByTimeAsync(500);

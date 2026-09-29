@@ -20,7 +20,7 @@ impl RequiredPermission for MessageView {
     }
 }
 
-/// Minimum posting permission: channel member or document commenter.
+/// Minimum posting permission: channel member or entity commenter.
 #[derive(Debug, Clone, Copy)]
 pub struct MessageWrite;
 
@@ -191,6 +191,18 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             input.mentions = self.mentions.extract(&input.content).await?;
         }
         validate_post(&parent, &input)?;
+        if matches!(input.anchor, Some(NewThreadAnchor::Spreadsheet { .. }))
+            && self
+                .repo
+                .document_file_type(&parent.entity_id())
+                .await?
+                .as_deref()
+                != Some("spreadsheet")
+        {
+            return Err(MessageError::Invalid(
+                "spreadsheet anchors require a native spreadsheet",
+            ));
+        }
         self.validate_references(&access, &input.mentions, &input.attachments)
             .await?;
         if let Some(root) = input.thread_id {
@@ -376,16 +388,23 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         if emoji.is_empty() || emoji.chars().count() > 32 || emoji.chars().any(char::is_control) {
             return Err(MessageError::Invalid("invalid reaction"));
         }
-        let message = self
+        let ReactionResult { message, changed } = self
             .repo
             .react(&parent, id, actor.as_ref(), &emoji, add)
             .await?;
+        // Idempotent retries still return the current message to the caller,
+        // but must not publish another change or notify the author again.
+        if !changed {
+            return Ok(message);
+        }
         self.publish_message(
             actor,
             nonce,
             &message,
             MessageChange::ReactionChanged {
                 message: message.clone(),
+                emoji,
+                added: add,
             },
         )
         .await;
@@ -413,6 +432,11 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             return Err(MessageError::Invalid("thread update must change a field"));
         }
         if patch.detach_anchor {
+            if !matches!(parent, MessageParent::Document(_)) {
+                return Err(MessageError::Invalid(
+                    "only document discussions have anchors",
+                ));
+            }
             if !access.entity_permission().satisfies::<EditAccessLevel>() {
                 return Err(MessageError::Forbidden);
             }
@@ -482,6 +506,13 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         })
         .await;
         Ok(state)
+    }
+
+    /// The parent a live message belongs to, so an adapter addressed only by
+    /// message id can mint that parent's receipt. Grants nothing on its own.
+    #[tracing::instrument(err, skip(self))]
+    pub async fn parent_of(&self, id: Uuid) -> Result<Option<MessageParent>, MessageError> {
+        self.repo.parent_of(id).await
     }
 
     /// Resolve an old link through the sole message store under current parent access.
@@ -703,6 +734,9 @@ fn parent_from_receipt<P: RequiredPermission>(
     let kind = match entity.entity_type {
         EntityType::Channel => "channel",
         EntityType::Document => "document",
+        EntityType::Initiative => "initiative",
+        EntityType::CrmCompany => "crm_company",
+        EntityType::CrmContact => "crm_contact",
         _ => return Err(MessageError::Forbidden),
     };
     MessageParent::parse(kind, &entity.entity_id)
@@ -734,6 +768,13 @@ fn validate_post(parent: &MessageParent, input: &PostMessage) -> Result<(), Mess
             "only root document messages may have anchors",
         ));
     }
+    if let Some(NewThreadAnchor::Spreadsheet {
+        sheet_id, range, ..
+    }) = &input.anchor
+        && (sheet_id.trim().is_empty() || !valid_spreadsheet_range(range))
+    {
+        return Err(MessageError::Invalid("invalid spreadsheet comment range"));
+    }
     if let Some(NewThreadAnchor::PdfPlaceable {
         page,
         x_pct,
@@ -755,6 +796,27 @@ fn validate_post(parent: &MessageParent, input: &PostMessage) -> Result<(), Mess
         validate_client_id(id, chrono::Utc::now())?;
     }
     Ok(())
+}
+
+fn valid_spreadsheet_range(range: &str) -> bool {
+    let cells: Vec<_> = range.split(':').collect();
+    (1..=2).contains(&cells.len())
+        && cells.iter().all(|cell| {
+            let column_len = cell.bytes().take_while(u8::is_ascii_uppercase).count();
+            let (column, row) = cell.split_at(column_len);
+            !column.is_empty()
+                && !row.starts_with('0')
+                && row.bytes().all(|byte| byte.is_ascii_digit())
+                && row.parse::<u32>().is_ok_and(|value| value > 0)
+                && column
+                    .bytes()
+                    .try_fold(0_u32, |value, byte| {
+                        value
+                            .checked_mul(26)?
+                            .checked_add(u32::from(byte - b'A') + 1)
+                    })
+                    .is_some()
+        })
 }
 
 /// How far a client-minted id's timestamp may drift from the server clock.

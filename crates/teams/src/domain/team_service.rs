@@ -1671,6 +1671,9 @@ where
         if member.plan == plan {
             return Ok(member);
         }
+        if !SeatPlan::PURCHASABLE.contains(&plan) {
+            return Err(CustomerError::PlanUnavailable(plan).into());
+        }
 
         // Seat plans only mean something on a team that is billed per seat:
         // paying teams move the seat on Stripe, enterprise teams (billed out

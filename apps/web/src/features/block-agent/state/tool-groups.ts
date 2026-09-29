@@ -1,8 +1,10 @@
 /**
- * Where a message's parts fold for display: a run of two or more consecutive
- * tool calls and thinking blocks reads as one collapsed row (`ui/ToolGroup`),
- * everything else as itself. A lone call stays a card of its own — a group of
- * one would hide the call behind a count that says nothing the card did not.
+ * Where a message's parts fold for display: consecutive ordinary tool calls
+ * and their thinking blocks share a group, everything else stays visible.
+ * The group starts with the first call so receiving another call does not
+ * replace the first call's host in the middle of its animation.
+ * Subagents and user tools stay outside groups so delegated work and user
+ * interactions remain visible regardless of the surrounding tool traffic.
  * DisplayResults is inline answer content and always breaks the run, including
  * while its arguments are still arriving.
  *
@@ -58,8 +60,11 @@ export function rendersOwnView(part: MessagePart | undefined): boolean {
 /** Whether a part may be folded into a collapsed run with its neighbours. */
 function isGroupable(part: MessagePart | undefined): boolean {
   return (
-    (part?.kind === 'tool_use' || part?.kind === 'thought') &&
-    !rendersOwnView(part)
+    part?.kind === 'thought' ||
+    (part?.kind === 'tool_use' &&
+      part.detail.kind !== 'subagent' &&
+      part.detail.kind !== 'user_tool' &&
+      !rendersOwnView(part))
   );
 }
 
@@ -67,23 +72,29 @@ export function segmentParts(parts: readonly MessagePart[]): PartSegment[] {
   const segments: PartSegment[] = [];
   let start = 0;
   while (start < parts.length) {
-    let end = start + 1;
-    if (isGroupable(parts[start])) {
-      while (isGroupable(parts[end])) end += 1;
-      if (
-        end - start >= 2 &&
-        end === parts.length &&
-        parts[end - 1]?.kind === 'thought'
-      ) {
-        end -= 1;
-      }
+    if (!isGroupable(parts[start])) {
+      segments.push({ kind: 'part', start, end: start + 1 });
+      start += 1;
+      continue;
     }
-    segments.push({
-      kind: end - start >= 2 ? 'tools' : 'part',
-      start,
-      end,
-    });
-    start = end;
+
+    let end = start;
+    let lastCallEnd = start;
+    while (isGroupable(parts[end])) {
+      if (parts[end].kind === 'tool_use') lastCallEnd = end + 1;
+      end += 1;
+    }
+    if (lastCallEnd > start) {
+      const groupEnd = end === parts.length ? lastCallEnd : end;
+      segments.push({ kind: 'tools', start, end: groupEnd });
+      start = groupEnd;
+    }
+    // At the message tail, every thought after the last call remains visible.
+    // Thought-only runs never become groups: a group needs an actual call.
+    while (start < end) {
+      segments.push({ kind: 'part', start, end: start + 1 });
+      start += 1;
+    }
   }
   return segments;
 }

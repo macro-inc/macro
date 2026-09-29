@@ -33,7 +33,7 @@ function ToolbarMenu(
         variant="ghost"
         label={props.label}
         disabled={props.disabled}
-        class="h-7 min-h-7 gap-1 rounded-[3px] px-1.5 text-[13px] font-normal text-ink-muted touch:h-[44px] touch:min-h-[44px] touch:min-w-[44px] touch:px-2 touch:text-[max(14px,0.875rem)]"
+        class="h-7 min-h-7 gap-1 px-1.5 text-[13px] font-normal text-ink-muted touch:h-[44px] touch:min-h-[44px] touch:min-w-[44px] touch:px-2 touch:text-[max(14px,0.875rem)]"
       >
         {props.trigger}
         <span

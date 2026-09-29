@@ -45,6 +45,12 @@ pub enum MessageParent {
     Channel(Uuid),
     /// A document, including tasks and PDFs.
     Document(DocumentId),
+    /// An initiative, presented as a project in the application.
+    Initiative(Uuid),
+    /// A CRM company.
+    CrmCompany(Uuid),
+    /// A CRM contact.
+    CrmContact(Uuid),
 }
 
 impl MessageParent {
@@ -53,6 +59,15 @@ impl MessageParent {
         match entity_type {
             "channel" => Ok(Self::Channel(entity_id.parse().map_err(|_| InvalidParent)?)),
             "document" => Ok(Self::Document(entity_id.to_owned().try_into()?)),
+            "initiative" => Ok(Self::Initiative(
+                entity_id.parse().map_err(|_| InvalidParent)?,
+            )),
+            "crm_company" => Ok(Self::CrmCompany(
+                entity_id.parse().map_err(|_| InvalidParent)?,
+            )),
+            "crm_contact" => Ok(Self::CrmContact(
+                entity_id.parse().map_err(|_| InvalidParent)?,
+            )),
             _ => Err(InvalidParent),
         }
     }
@@ -62,13 +77,19 @@ impl MessageParent {
         match self {
             Self::Channel(_) => "channel",
             Self::Document(_) => "document",
+            Self::Initiative(_) => "initiative",
+            Self::CrmCompany(_) => "crm_company",
+            Self::CrmContact(_) => "crm_contact",
         }
     }
 
     /// Canonical parent identifier.
     pub fn entity_id(&self) -> String {
         match self {
-            Self::Channel(id) => id.to_string(),
+            Self::Channel(id)
+            | Self::Initiative(id)
+            | Self::CrmCompany(id)
+            | Self::CrmContact(id) => id.to_string(),
             Self::Document(id) => id.0.clone(),
         }
     }
@@ -84,11 +105,14 @@ impl MessageParent {
         match self {
             Self::Channel(_) => entity_access::domain::models::EntityType::Channel,
             Self::Document(_) => entity_access::domain::models::EntityType::Document,
+            Self::Initiative(_) => entity_access::domain::models::EntityType::Initiative,
+            Self::CrmCompany(_) => entity_access::domain::models::EntityType::CrmCompany,
+            Self::CrmContact(_) => entity_access::domain::models::EntityType::CrmContact,
         }
     }
 }
 
-/// A thread's location within its document. Geometry remains annotation-owned.
+/// A thread's location within its document. PDF geometry remains annotation-owned.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
@@ -121,6 +145,16 @@ pub enum ThreadAnchor {
     PdfPlaceable {
         /// Placeable annotation UUID.
         anchor_id: Uuid,
+    },
+    /// A cell or rectangular range in a native spreadsheet.
+    #[serde(rename_all = "camelCase")]
+    Spreadsheet {
+        /// Stable sheet identity within the workbook.
+        sheet_id: String,
+        /// Sheet name when the discussion was created.
+        sheet_name: String,
+        /// A1 cell or range, such as B4 or B4:C9.
+        range: String,
     },
 }
 
@@ -160,6 +194,16 @@ pub enum NewThreadAnchor {
         /// Height as a fraction of the page height.
         height_pct: f64,
     },
+    /// A cell or rectangular range in a native spreadsheet.
+    #[serde(rename_all = "camelCase")]
+    Spreadsheet {
+        /// Stable sheet identity within the workbook.
+        sheet_id: String,
+        /// Sheet name when the discussion was created.
+        sheet_name: String,
+        /// A1 cell or range, such as B4 or B4:C9.
+        range: String,
+    },
 }
 
 /// Longest marked-text snapshot kept with a discussion. A comment marks a
@@ -187,6 +231,15 @@ impl NewThreadAnchor {
     /// Thread-owned reference after annotation geometry has been persisted.
     pub fn reference(&self) -> ThreadAnchor {
         match self {
+            Self::Spreadsheet {
+                sheet_id,
+                sheet_name,
+                range,
+            } => ThreadAnchor::Spreadsheet {
+                sheet_id: sheet_id.clone(),
+                sheet_name: sheet_name.clone(),
+                range: range.clone(),
+            },
             Self::Markdown {
                 mark_id,
                 marked_text,
@@ -227,7 +280,7 @@ pub struct ThreadState {
     pub deleted_at: Option<DateTime<Utc>>,
 }
 
-/// Partial changes to the lifecycle and placement of a document discussion.
+/// Partial changes to discussion lifecycle or document anchor placement.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
