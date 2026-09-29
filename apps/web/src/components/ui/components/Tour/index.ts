@@ -10,6 +10,7 @@ export {
 } from './Tour';
 export {
   defineTourTargets,
+  matchTourTarget,
   resolveTourTarget,
   type TourTarget,
   type TourTargetScope,

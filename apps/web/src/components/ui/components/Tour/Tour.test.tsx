@@ -11,6 +11,7 @@ import {
   Tour,
   type TourStep,
   tourTarget,
+  useTour,
 } from '.';
 
 const T = defineTourTargets('test', [
@@ -271,6 +272,57 @@ describe('Tour', () => {
     expect(resolveTourTarget([T.row], undefined)).toBe(
       screen.getByTestId('high')
     );
+  });
+
+  it('reports when a step is anchored to a fallback target', async () => {
+    let tour!: ReturnType<typeof useTour>;
+    function Probe() {
+      tour = useTour();
+      return null;
+    }
+    render(() => (
+      <>
+        <span ref={tourTarget(T.second)} />
+        <Tour.Root
+          steps={[
+            {
+              target: [T.first, T.second],
+              title: 'Fallback',
+              description: 'Primary missing',
+            },
+          ]}
+        >
+          <Probe />
+        </Tour.Root>
+      </>
+    ));
+    await settle();
+    expect(tour.status()).toBe('anchored');
+    expect(tour.isFallback()).toBe(true);
+  });
+
+  it('skips the run of steps that wait on the same entry', () => {
+    let tour!: ReturnType<typeof useTour>;
+    function Probe() {
+      tour = useTour();
+      return null;
+    }
+    const shared = { entry: T.entry };
+    render(() => (
+      <Tour.Root
+        steps={[
+          { ...shared, target: T.first, title: '1', description: '' },
+          { ...shared, target: T.second, title: '2', description: '' },
+          { target: T.hidden, title: '3', description: '' },
+        ]}
+      >
+        <Probe />
+      </Tour.Root>
+    ));
+    expect(tour.pathEnd()).toBe(1);
+    tour.skipPath();
+    expect(tour.index()).toBe(2);
+    expect(tour.pathEnd()).toBe(2);
   });
 
   it('renders the same parts inline with Tour.Panel', () => {

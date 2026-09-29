@@ -30,7 +30,7 @@ import {
 import { Portal } from 'solid-js/web';
 import { cn } from '../../utils/classname';
 import { Button, type ButtonProps } from '../Button';
-import { resolveTourTarget, type TourTarget } from './targets';
+import { matchTourTarget, resolveTourTarget, type TourTarget } from './targets';
 
 type Targets = TourTarget | readonly TourTarget[];
 
@@ -74,6 +74,18 @@ export type TourContextValue<Step extends TourStep = TourStep> = {
   status: Accessor<TourStatus>;
   /** The element the current step points at, when anchored. */
   target: Accessor<HTMLElement | undefined>;
+  /**
+   * Whether the step is anchored to one of its later targets because the
+   * first isn't shown, e.g. a feature that isn't set up yet.
+   */
+  isFallback: Accessor<boolean>;
+  /**
+   * The last index of the run of steps, starting at the current one, that
+   * wait on the same entry. Equal to `index()` when the step has no entry.
+   */
+  pathEnd: Accessor<number>;
+  /** Skips the rest of the current path, completing if nothing follows. */
+  skipPath: () => void;
   /** The entry the current step is waiting on, when waiting. */
   entry: Accessor<HTMLElement | undefined>;
   boundary: Accessor<HTMLElement | undefined>;
@@ -127,9 +139,30 @@ function TourRoot<Step extends TourStep>(props: TourRootProps<Step>) {
     return element ? (props.boundary?.(element) ?? undefined) : undefined;
   });
 
-  const target = createMemo(() =>
-    resolveTourTarget(toList(current().target), boundary())
+  const match = createMemo(() =>
+    matchTourTarget(toList(current().target), boundary())
   );
+  const target = () => match()?.element;
+  const isFallback = () => {
+    const matched = match()?.target;
+    return !!matched && matched !== toList(current().target)[0];
+  };
+
+  const entryKey = (step: Step) =>
+    toList(step.entry)
+      .map((entry) => entry.id)
+      .join('|');
+  const pathEnd = () => {
+    const key = entryKey(current());
+    let end = index();
+    if (!key) return end;
+    while (
+      end + 1 < props.steps.length &&
+      entryKey(props.steps[end + 1]) === key
+    )
+      end++;
+    return end;
+  };
   const entry = createMemo(() =>
     target()
       ? undefined
@@ -177,6 +210,10 @@ function TourRoot<Step extends TourStep>(props: TourRootProps<Step>) {
     complete,
     status,
     target,
+    isFallback,
+    pathEnd,
+    skipPath: () =>
+      pathEnd() >= props.steps.length - 1 ? complete() : goTo(pathEnd() + 1),
     entry,
     boundary,
     titleId,

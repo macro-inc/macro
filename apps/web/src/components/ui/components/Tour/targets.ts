@@ -103,6 +103,14 @@ export function resolveTourTarget(
   targets: readonly TourTarget[],
   boundary: HTMLElement | undefined
 ): HTMLElement | undefined {
+  return matchTourTarget(targets, boundary)?.element;
+}
+
+/** Like `resolveTourTarget`, but also says which of `targets` matched. */
+export function matchTourTarget(
+  targets: readonly TourTarget[],
+  boundary: HTMLElement | undefined
+): { target: TourTarget; element: HTMLElement } | undefined {
   version();
   for (const target of targets) {
     // Several elements can share a target (every row of a list); point at
@@ -120,7 +128,7 @@ export function resolveTourTarget(
       )
         best = { element, rect };
     }
-    if (best) return best.element;
+    if (best) return { target, element: best.element };
   }
   return undefined;
 }
