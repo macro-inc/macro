@@ -326,6 +326,16 @@ pub struct AgentContext<'a> {
     rename_all_fields = "camelCase"
 )]
 pub enum AgentContextAnchor<'a> {
+    /// A cell or rectangular range in a native spreadsheet.
+    Spreadsheet {
+        /// Stable sheet identity within the workbook.
+        sheet_id: &'a str,
+        /// Sheet name when the discussion was created.
+        sheet_name: &'a str,
+        /// A1 cell or range, such as B4 or B4:C9.
+        range: &'a str,
+    },
+
     /// A comment mark in a markdown document.
     Markdown {
         /// Lexical mark the comment is attached to.

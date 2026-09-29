@@ -204,9 +204,8 @@ export function CreateContactModal() {
             <div class="flex shrink-0 items-end justify-end gap-2">
               <Button
                 type="submit"
-                variant={canSubmit() ? 'accent' : 'ghost'}
+                variant="strong"
                 depth={3}
-                class="rounded-lg border-0"
                 disabled={!canSubmit()}
               >
                 {createContactMutation.isPending ? 'Adding…' : 'Add Contact'}

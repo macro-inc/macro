@@ -162,7 +162,7 @@ export function FromInboxSelector(props: {
               <Dropdown.Trigger
                 disabled={props.disabled}
                 class={cn(
-                  'inline-flex h-auto min-w-0 max-w-full rounded-full border-none bg-transparent p-0 not-disabled:hover:bg-transparent active:bg-transparent',
+                  'inline-flex h-auto min-w-0 max-w-full border-none bg-transparent p-0 not-disabled:hover:bg-transparent active:bg-transparent',
                   props.class
                 )}
               >

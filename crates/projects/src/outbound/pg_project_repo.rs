@@ -15,13 +15,14 @@ mod tests;
 use std::collections::HashMap;
 
 use entity_registry::BotFacts;
-use entity_registry_db_utils::OwnedEntityRegistrar;
+use entity_registry_db_utils::{NewEntityRecord, OwnedEntityRegistrar, RegisteredEntityType};
 use model::project::{
     BasicProject, Project, ProjectPreviewData, ProjectPreviewV2, ProjectWithUploadRequest,
     WithProjectId,
 };
 use model_owner::Owner;
-use sqlx::PgPool;
+use models_permissions::share_permission::{LinkShare, TeamLinkShareDefault};
+use sqlx::{PgPool, Postgres, Transaction};
 
 use crate::domain::models::{
     CreateProjectArgs, EditProjectArgs, MarkedUploadedTree, ProjectError, PurgedProjectTree,
@@ -37,8 +38,8 @@ pub struct PgProjectRepo<B> {
 }
 
 impl<B: BotFacts> PgProjectRepo<B> {
-    /// Create a repository backed by `pool` that registers uploaded folder
-    /// trees through `registrar`.
+    /// Create a repository backed by `pool` that registers the owners of
+    /// created projects and uploaded folder trees through `registrar`.
     pub fn new(pool: PgPool, registrar: OwnedEntityRegistrar<B>) -> Self {
         Self { pool, registrar }
     }
@@ -46,6 +47,23 @@ impl<B: BotFacts> PgProjectRepo<B> {
 
 fn decode_owner(value: &str) -> Result<Owner, sqlx::Error> {
     Owner::from_principal_str(value).map_err(|error| sqlx::Error::Decode(Box::new(error)))
+}
+
+async fn register_owned<B: BotFacts>(
+    transaction: &mut Transaction<'_, Postgres>,
+    registrar: &OwnedEntityRegistrar<B>,
+    id: &str,
+    entity_type: RegisteredEntityType,
+    owner: Owner,
+) -> Result<(), sqlx::Error> {
+    let id = id
+        .parse()
+        .map_err(|error| sqlx::Error::Decode(Box::new(error)))?;
+    registrar
+        .register_owned_entity(transaction, NewEntityRecord::new(id, entity_type, owner))
+        .await
+        .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
+    Ok(())
 }
 
 fn map_project(
@@ -74,9 +92,21 @@ impl<B: BotFacts + 'static> ProjectRepo for PgProjectRepo<B> {
     #[tracing::instrument(err, skip(self))]
     async fn get_team_default_link_share(
         &self,
-        user_id: &str,
-    ) -> Result<Option<models_permissions::share_permission::TeamLinkShareDefault>, Self::Err> {
-        share_permission_db_utils::get_team_default_link_share(&self.pool, user_id).await
+        owner: &Owner,
+    ) -> Result<Option<TeamLinkShareDefault>, Self::Err> {
+        let row = sqlx::query!(
+            r#"
+            SELECT t.default_link_share AS "default_link_share?: LinkShare"
+            FROM owner_team($1) ot
+            JOIN team t ON t.id = ot.team_id
+            LIMIT 1
+            "#,
+            owner.principal_id(),
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.map(|row| TeamLinkShareDefault(row.default_link_share)))
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -313,7 +343,7 @@ impl<B: BotFacts + 'static> ProjectRepo for PgProjectRepo<B> {
     #[tracing::instrument(err, skip(self, args))]
     async fn create_project(&self, args: CreateProjectArgs) -> Result<Project, Self::Err> {
         let mut transaction = self.pool.begin().await?;
-        let project = create::create_project(&mut transaction, &args).await?;
+        let project = create::create_project(&mut transaction, &self.registrar, &args).await?;
         transaction.commit().await?;
         Ok(project)
     }

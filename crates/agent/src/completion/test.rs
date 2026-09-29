@@ -146,3 +146,41 @@ fn image_user_message_rejects_bytes_that_are_not_an_image() {
     image_user_message("Describe this image.", b"not an image".to_vec())
         .expect_err("non-image bytes");
 }
+
+#[tokio::test]
+async fn activated_one_shots_fail_before_routing_without_financial_capability() {
+    use ai_usage::financial::{FinancialCapability, FinancialMode};
+    use ai_usage::{AiFeature, NoOpUsageRecorder};
+
+    let usage = UsageContext::system(AiFeature::DynamicCompletionsApi);
+    let metering = MeteringContext::new(
+        FinancialMode::Activated,
+        FinancialCapability::Unavailable,
+        usage.clone(),
+        vec![],
+    );
+    metering
+        .scope(async {
+            let error = complete(
+                "unknown/model",
+                "system",
+                "hello",
+                &NoOpUsageRecorder,
+                usage.clone(),
+            )
+            .await
+            .unwrap_err();
+            assert_eq!(error.to_string(), "financial capability unavailable");
+            let error = complete_with_history(
+                "unknown/model",
+                "system",
+                vec![Message::user("hello")],
+                &NoOpUsageRecorder,
+                usage,
+            )
+            .await
+            .unwrap_err();
+            assert_eq!(error.to_string(), "financial capability unavailable");
+        })
+        .await;
+}

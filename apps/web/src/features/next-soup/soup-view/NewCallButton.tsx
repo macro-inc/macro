@@ -114,7 +114,7 @@ export function NewCallButton() {
                 />
                 <div class="flex justify-end">
                   <Button
-                    variant="outline"
+                    variant="strong"
                     size="sm"
                     disabled={isSubmitting()}
                     onClick={handleStartCall}

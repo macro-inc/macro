@@ -186,8 +186,8 @@ export function CalendarInviteCard(props: {
             {props.actions?.notice}
             <Show when={props.actions?.retryCalendar}>
               <Button
-                variant="plain"
-                class="h-auto p-0 text-xs font-medium text-accent"
+                variant="ghost"
+                class="h-auto border-0 p-0 text-xs font-medium text-accent"
                 onClick={() => props.actions?.retryCalendar?.()}
               >
                 Retry calendar
@@ -221,8 +221,8 @@ export function CalendarInviteCard(props: {
               <Show when={invite().attendees.length > 3}>
                 {' '}
                 <Button
-                  variant="plain"
-                  class="h-auto p-0 align-baseline text-sm font-medium text-accent"
+                  variant="ghost"
+                  class="h-auto border-0 p-0 align-baseline text-sm font-medium text-accent"
                   aria-expanded={attendeesExpanded()}
                   onClick={() => setAttendeesExpanded((value) => !value)}
                 >
@@ -243,8 +243,8 @@ export function CalendarInviteCard(props: {
               {invite().description}
             </p>
             <Button
-              variant="plain"
-              class="h-auto p-0 text-xs font-medium text-accent"
+              variant="ghost"
+              class="h-auto border-0 p-0 text-xs font-medium text-accent"
               aria-expanded={descriptionExpanded()}
               onClick={() => setDescriptionExpanded((value) => !value)}
             >
@@ -286,7 +286,7 @@ export function CalendarInviteCard(props: {
                   <For each={RESPONSES}>
                     {(option, index) => (
                       <Button
-                        variant="plain"
+                        variant="ghost"
                         class={`h-10 gap-1 rounded-none px-3.5 text-sm text-ink aria-pressed:bg-accent-bg aria-pressed:font-semibold aria-pressed:text-accent ${index() > 0 ? 'border-l border-edge' : ''}`}
                         aria-pressed={resolved()?.response === option.value}
                         onClick={() => props.actions?.respond?.(option.value)}
@@ -308,8 +308,8 @@ export function CalendarInviteCard(props: {
                   }
                 >
                   <Button
-                    variant="plain"
-                    class="h-10 rounded-lg border border-edge px-3.5 text-sm font-semibold text-ink"
+                    variant="ghost"
+                    class="h-10 border border-edge px-3.5 text-sm font-semibold text-ink"
                     onClick={() => props.actions?.connectCalendar?.()}
                   >
                     Connect calendar
@@ -317,8 +317,8 @@ export function CalendarInviteCard(props: {
                 </Show>
                 <Show when={conference() && props.actions?.openExternal}>
                   <Button
-                    variant="plain"
-                    class="h-10 gap-1.5 rounded-lg bg-accent px-3.5 text-sm font-semibold text-accent-contrast"
+                    variant="ghost"
+                    class="h-10 gap-1.5 bg-accent px-3.5 text-sm font-semibold text-accent-contrast"
                     aria-label="Join meeting"
                     onClick={() => props.actions?.openExternal?.(conference()!)}
                   >
@@ -328,8 +328,8 @@ export function CalendarInviteCard(props: {
                 </Show>
                 <Show when={props.actions?.openCalendar}>
                   <Button
-                    variant="plain"
-                    class="size-10 rounded-lg border border-edge p-0 text-ink-muted"
+                    variant="ghost"
+                    class="size-10 border border-edge p-0 text-ink-muted"
                     aria-label="Open in calendar"
                     onClick={() => props.actions?.openCalendar?.()}
                   >
@@ -350,8 +350,8 @@ export function CalendarInviteCard(props: {
                 </Show>
                 <Show when={props.actions?.showDay}>
                   <Button
-                    variant="plain"
-                    class="h-auto p-0 text-xs font-medium text-accent"
+                    variant="ghost"
+                    class="h-auto border-0 p-0 text-xs font-medium text-accent"
                     aria-expanded={props.actions?.dayExpanded}
                     onClick={() => props.actions?.showDay?.()}
                   >
@@ -439,8 +439,8 @@ function SchedulingNotification(props: {
         </Show>
         <Show when={props.actions?.showDay}>
           <Button
-            variant="plain"
-            class="h-auto p-0 text-xs font-medium text-accent"
+            variant="ghost"
+            class="h-auto border-0 p-0 text-xs font-medium text-accent"
             aria-expanded={props.actions?.dayExpanded}
             onClick={() => props.actions?.showDay?.()}
           >

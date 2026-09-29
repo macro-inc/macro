@@ -7488,6 +7488,20 @@ export type NewThreadAnchor = {
      * Vertical position as a fraction of the page height.
      */
     y_pct: number;
+} | {
+    /**
+     * A1 cell or range, such as B4 or B4:C9.
+     */
+    range: string;
+    /**
+     * Stable sheet identity within the workbook.
+     */
+    sheetId: string;
+    /**
+     * Sheet name when the discussion was created.
+     */
+    sheetName: string;
+    type: 'spreadsheet';
 };
 
 /**
@@ -8911,6 +8925,10 @@ export type SoupAgentSessionSoupPropertiesField = {
      * The agent session uuid
      */
     id: string;
+    /**
+     * Whether the session is archived and read-only.
+     */
+    isArchived: boolean;
     /**
      * The user-facing name of the session
      */
@@ -10343,7 +10361,7 @@ export type Thread = {
 };
 
 /**
- * A thread's location within its document. Geometry remains annotation-owned.
+ * A thread's location within its document. PDF geometry remains annotation-owned.
  */
 export type ThreadAnchor = {
     /**
@@ -10377,6 +10395,20 @@ export type ThreadAnchor = {
      */
     anchor_id: string;
     type: 'pdf_placeable';
+} | {
+    /**
+     * A1 cell or range, such as B4 or B4:C9.
+     */
+    range: string;
+    /**
+     * Stable sheet identity within the workbook.
+     */
+    sheetId: string;
+    /**
+     * Sheet name when the discussion was created.
+     */
+    sheetName: string;
+    type: 'spreadsheet';
 };
 
 /**

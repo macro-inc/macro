@@ -151,7 +151,7 @@ export function Header(props: { presentation: 'workspace' | 'preview' }) {
     <Button
       variant="ghost"
       size="icon-lg"
-      class="rounded-full border-transparent bg-transparent"
+      class="border-transparent bg-transparent"
       label={`Previous ${periodLabel()}`}
       hotkey={TOKENS.calendar.period.previous}
       onClick={() => void pager.previous()}
@@ -163,7 +163,7 @@ export function Header(props: { presentation: 'workspace' | 'preview' }) {
     <Button
       variant="ghost"
       size="icon-lg"
-      class="rounded-full border-transparent bg-transparent"
+      class="border-transparent bg-transparent"
       label={`Next ${periodLabel()}`}
       hotkey={TOKENS.calendar.period.next}
       onClick={() => void pager.next()}
@@ -176,7 +176,6 @@ export function Header(props: { presentation: 'workspace' | 'preview' }) {
       variant={mobile ? 'ghost' : 'outline'}
       size={mobile ? 'icon-lg' : 'lg'}
       class={cn(
-        'rounded-full',
         mobile && 'relative',
         !mobile && 'border-edge-button bg-transparent px-3 text-sm'
       )}
@@ -205,7 +204,7 @@ export function Header(props: { presentation: 'workspace' | 'preview' }) {
               <Button
                 variant="ghost"
                 size="icon-sm"
-                class="shrink-0 rounded-full"
+                class="shrink-0"
                 label="Show calendar navigation"
                 aria-expanded={shell?.aside.isOverlay() ?? false}
                 onClick={() => shell?.aside.expand()}

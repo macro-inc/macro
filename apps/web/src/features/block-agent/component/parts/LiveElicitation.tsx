@@ -371,7 +371,7 @@ export function UserToolComposer(props: {
           <Show when={props.cancel}>
             <div class="flex items-center gap-2">
               <Button
-                variant="outline"
+                variant="ghost"
                 size="xs"
                 disabled={locked()}
                 onClick={() => void props.review.respond({ action: 'decline' })}

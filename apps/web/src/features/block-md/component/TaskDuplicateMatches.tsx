@@ -32,7 +32,7 @@ export function TaskDuplicateMatchPill() {
             <Dropdown.Trigger
               depth={2}
               class={cn(
-                'h-auto min-w-0 gap-1.5 rounded-full border-failure/40 px-2 py-1 leading-tight',
+                'h-auto min-w-0 gap-1.5 border-failure/40 px-2 py-1 leading-tight',
                 'bg-failure/10 text-failure-ink shadow-none',
                 'hover:bg-failure/15 focus-visible:bg-failure/15 focus-visible:ring-failure/60',
                 open() && 'bg-failure/15'

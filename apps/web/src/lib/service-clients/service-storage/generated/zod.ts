@@ -14392,6 +14392,11 @@ export const getItemsSoupResponse = zod
                         'The runtime snapshotted when the session was created.'
                       ),
                     id: zod.uuid().describe('The agent session uuid'),
+                    isArchived: zod
+                      .boolean()
+                      .describe(
+                        'Whether the session is archived and read-only.'
+                      ),
                     name: zod
                       .string()
                       .describe('The user-facing name of the session'),
@@ -18773,6 +18778,11 @@ export const postItemsSoupResponse = zod
                         'The runtime snapshotted when the session was created.'
                       ),
                     id: zod.uuid().describe('The agent session uuid'),
+                    isArchived: zod
+                      .boolean()
+                      .describe(
+                        'Whether the session is archived and read-only.'
+                      ),
                     name: zod
                       .string()
                       .describe('The user-facing name of the session'),
@@ -22562,6 +22572,11 @@ export const postItemsSoupAstResponse = zod
                         'The runtime snapshotted when the session was created.'
                       ),
                     id: zod.uuid().describe('The agent session uuid'),
+                    isArchived: zod
+                      .boolean()
+                      .describe(
+                        'Whether the session is archived and read-only.'
+                      ),
                     name: zod
                       .string()
                       .describe('The user-facing name of the session'),
@@ -26727,6 +26742,11 @@ export const postItemsSoupAstGroupedResponse = zod
                               'The runtime snapshotted when the session was created.'
                             ),
                           id: zod.uuid().describe('The agent session uuid'),
+                          isArchived: zod
+                            .boolean()
+                            .describe(
+                              'Whether the session is archived and read-only.'
+                            ),
                           name: zod
                             .string()
                             .describe('The user-facing name of the session'),
@@ -30518,6 +30538,11 @@ export const postItemsSoupAstGroupedResponse = zod
                               'The runtime snapshotted when the session was created.'
                             ),
                           id: zod.uuid().describe('The agent session uuid'),
+                          isArchived: zod
+                            .boolean()
+                            .describe(
+                              'Whether the session is archived and read-only.'
+                            ),
                           name: zod
                             .string()
                             .describe('The user-facing name of the session'),
@@ -30875,9 +30900,31 @@ export const messageTimelineResponse = zod
                             .describe(
                               'A comment-only placeable PDF annotation. It marks a point on a page,\nnot a span of text, so it has no marked text.'
                             ),
+                          zod
+                            .object({
+                              range: zod
+                                .string()
+                                .describe(
+                                  'A1 cell or range, such as B4 or B4:C9.'
+                                ),
+                              sheetId: zod
+                                .string()
+                                .describe(
+                                  'Stable sheet identity within the workbook.'
+                                ),
+                              sheetName: zod
+                                .string()
+                                .describe(
+                                  'Sheet name when the discussion was created.'
+                                ),
+                              type: zod.enum(['spreadsheet']),
+                            })
+                            .describe(
+                              'A cell or rectangular range in a native spreadsheet.'
+                            ),
                         ])
                         .describe(
-                          "A thread's location within its document. Geometry remains annotation-owned."
+                          "A thread's location within its document. PDF geometry remains annotation-owned."
                         ),
                     ])
                     .optional(),
@@ -31222,6 +31269,20 @@ export const entityMessageCreateBody = zod
               .describe(
                 'Atomically create a placeable annotation with the root message.'
               ),
+            zod
+              .object({
+                range: zod
+                  .string()
+                  .describe('A1 cell or range, such as B4 or B4:C9.'),
+                sheetId: zod
+                  .string()
+                  .describe('Stable sheet identity within the workbook.'),
+                sheetName: zod
+                  .string()
+                  .describe('Sheet name when the discussion was created.'),
+                type: zod.enum(['spreadsheet']),
+              })
+              .describe('A cell or rectangular range in a native spreadsheet.'),
           ])
           .describe('Location supplied when creating a document discussion.'),
       ])
@@ -32640,9 +32701,25 @@ export const entityMessageGetThreadResponse = zod
                   .describe(
                     'A comment-only placeable PDF annotation. It marks a point on a page,\nnot a span of text, so it has no marked text.'
                   ),
+                zod
+                  .object({
+                    range: zod
+                      .string()
+                      .describe('A1 cell or range, such as B4 or B4:C9.'),
+                    sheetId: zod
+                      .string()
+                      .describe('Stable sheet identity within the workbook.'),
+                    sheetName: zod
+                      .string()
+                      .describe('Sheet name when the discussion was created.'),
+                    type: zod.enum(['spreadsheet']),
+                  })
+                  .describe(
+                    'A cell or rectangular range in a native spreadsheet.'
+                  ),
               ])
               .describe(
-                "A thread's location within its document. Geometry remains annotation-owned."
+                "A thread's location within its document. PDF geometry remains annotation-owned."
               ),
           ])
           .optional(),
@@ -32732,9 +32809,23 @@ export const entityMessageDeleteThreadResponse = zod
               .describe(
                 'A comment-only placeable PDF annotation. It marks a point on a page,\nnot a span of text, so it has no marked text.'
               ),
+            zod
+              .object({
+                range: zod
+                  .string()
+                  .describe('A1 cell or range, such as B4 or B4:C9.'),
+                sheetId: zod
+                  .string()
+                  .describe('Stable sheet identity within the workbook.'),
+                sheetName: zod
+                  .string()
+                  .describe('Sheet name when the discussion was created.'),
+                type: zod.enum(['spreadsheet']),
+              })
+              .describe('A cell or rectangular range in a native spreadsheet.'),
           ])
           .describe(
-            "A thread's location within its document. Geometry remains annotation-owned."
+            "A thread's location within its document. PDF geometry remains annotation-owned."
           ),
       ])
       .optional(),
@@ -32837,9 +32928,23 @@ export const entityMessagePatchThreadResponse = zod
               .describe(
                 'A comment-only placeable PDF annotation. It marks a point on a page,\nnot a span of text, so it has no marked text.'
               ),
+            zod
+              .object({
+                range: zod
+                  .string()
+                  .describe('A1 cell or range, such as B4 or B4:C9.'),
+                sheetId: zod
+                  .string()
+                  .describe('Stable sheet identity within the workbook.'),
+                sheetName: zod
+                  .string()
+                  .describe('Sheet name when the discussion was created.'),
+                type: zod.enum(['spreadsheet']),
+              })
+              .describe('A cell or rectangular range in a native spreadsheet.'),
           ])
           .describe(
-            "A thread's location within its document. Geometry remains annotation-owned."
+            "A thread's location within its document. PDF geometry remains annotation-owned."
           ),
       ])
       .optional(),

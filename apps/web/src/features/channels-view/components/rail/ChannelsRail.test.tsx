@@ -208,27 +208,18 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-describe('explicit channel activation read marking', () => {
-  it('marks the full channel on every accepted click, including the already-selected route', async () => {
+describe('explicit channel activation', () => {
+  it('navigates on repeated clicks without marking notifications in the rail', async () => {
     mocks.selected = { type: 'channel', id: channel.id };
     mount();
     fireEvent.click(screen.getByRole('button'));
-    await waitFor(() =>
-      expect(mocks.markRead).toHaveBeenCalledExactlyOnceWith(
-        hydrated,
-        mocks.source,
-        { scopeChannelThreads: false }
-      )
-    );
-    expect(mocks.navigate).toHaveBeenCalledOnce();
+    await waitFor(() => expect(mocks.navigate).toHaveBeenCalledOnce());
     const refreshed = { ...hydrated, notifications: () => [] };
     mocks.hydrate.mockReturnValue(refreshed);
     fireEvent.click(screen.getByRole('button'));
-    await waitFor(() => expect(mocks.markRead).toHaveBeenCalledTimes(2));
-    expect(mocks.markRead).toHaveBeenLastCalledWith(refreshed, mocks.source, {
-      scopeChannelThreads: false,
-    });
-    expect(mocks.navigate).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(mocks.navigate).toHaveBeenCalledTimes(2));
+    expect(mocks.select).toHaveBeenCalledTimes(2);
+    expect(mocks.markRead).not.toHaveBeenCalled();
   });
 
   it('awaits native async hydration when telemetry replaces the global Promise constructor', async () => {
@@ -249,11 +240,10 @@ describe('explicit channel activation read marking', () => {
       expect(mocks.markRead).not.toHaveBeenCalled();
       resolve(hydrated);
       await waitFor(() =>
-        expect(mocks.markRead).toHaveBeenCalledExactlyOnceWith(
-          hydrated,
-          mocks.source,
-          { scopeChannelThreads: false }
-        )
+        expect(mocks.select).toHaveBeenCalledExactlyOnceWith({
+          type: 'channel',
+          id: channel.id,
+        })
       );
     } finally {
       resolve(hydrated);
@@ -273,27 +263,40 @@ describe('explicit channel activation read marking', () => {
     expect(mocks.markRead).not.toHaveBeenCalled();
   });
 
-  it('does not mark a superseded hydration; only the latest click is accepted', async () => {
+  it.each([false, true])(
+    'ignores superseded hydration (shift-click: %s)',
+    async (shiftKey) => {
+      let resolve!: (channel: WithNotification<ChannelEntity>) => void;
+      mocks.hydrate.mockReturnValueOnce(
+        new Promise((value) => {
+          resolve = value;
+        })
+      );
+      mount();
+      fireEvent.click(screen.getByRole('button'), { shiftKey });
+      expect(mocks.select).not.toHaveBeenCalled();
+      expect(mocks.openSplit).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole('button'));
+      await waitFor(() => expect(mocks.select).toHaveBeenCalledOnce());
+      resolve(hydrated);
+      await Promise.resolve();
+      expect(mocks.select).toHaveBeenCalledOnce();
+      expect(mocks.openSplit).not.toHaveBeenCalled();
+      expect(mocks.markRead).not.toHaveBeenCalled();
+    }
+  );
+
+  it('hydrates shift-clicks and includes unread replies in split navigation targets', async () => {
     let resolve!: (channel: WithNotification<ChannelEntity>) => void;
     mocks.hydrate.mockReturnValueOnce(
-      new Promise((value) => {
-        resolve = value;
+      new Promise((done) => {
+        resolve = done;
       })
     );
     mount();
-    fireEvent.click(screen.getByRole('button'));
-    expect(mocks.markRead).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button'));
-    await waitFor(() => expect(mocks.markRead).toHaveBeenCalledOnce());
-    resolve(hydrated);
-    await Promise.resolve();
-    expect(mocks.select).toHaveBeenCalledOnce();
-    expect(mocks.markRead).toHaveBeenCalledOnce();
-  });
-
-  it('hydrates shift-clicks and requests channel-wide marking in the split-open path', async () => {
-    mount();
     fireEvent.click(screen.getByRole('button'), { shiftKey: true });
+    expect(mocks.openSplit).not.toHaveBeenCalled();
+    resolve(hydrated);
     await waitFor(() =>
       expect(mocks.openSplit).toHaveBeenCalledExactlyOnceWith(hydrated, {
         openInNewSplit: true,
@@ -305,17 +308,21 @@ describe('explicit channel activation read marking', () => {
     expect(mocks.select).not.toHaveBeenCalled();
   });
 
-  it('reports hydration failures without marking or selecting a partial edge', async () => {
-    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
-    mocks.hydrate.mockRejectedValueOnce(new Error('failed'));
-    try {
-      mount();
-      fireEvent.click(screen.getByRole('button'));
-      await waitFor(() => expect(mocks.failure).toHaveBeenCalledOnce());
-      expect(mocks.markRead).not.toHaveBeenCalled();
-      expect(mocks.select).not.toHaveBeenCalled();
-    } finally {
-      log.mockRestore();
+  it.each([false, true])(
+    'reports hydration failures without opening a partial edge (shift-click: %s)',
+    async (shiftKey) => {
+      const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+      mocks.hydrate.mockRejectedValueOnce(new Error('failed'));
+      try {
+        mount();
+        fireEvent.click(screen.getByRole('button'), { shiftKey });
+        await waitFor(() => expect(mocks.failure).toHaveBeenCalledOnce());
+        expect(mocks.markRead).not.toHaveBeenCalled();
+        expect(mocks.select).not.toHaveBeenCalled();
+        expect(mocks.openSplit).not.toHaveBeenCalled();
+      } finally {
+        log.mockRestore();
+      }
     }
-  });
+  );
 });

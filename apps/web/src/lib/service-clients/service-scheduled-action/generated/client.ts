@@ -12,6 +12,7 @@ import type {
   InProgressExecution,
   ListScheduledActionsParams,
   ScheduledActionResponse,
+  SetScheduledActionEnabled,
   UpdateScheduledAction,
 } from './schemas';
 
@@ -325,6 +326,82 @@ export const deleteScheduledAction = async (
     status: res.status,
     headers: res.headers,
   } as deleteScheduledActionResponse;
+};
+
+export type setScheduledActionEnabledResponse200 = {
+  data: ScheduledActionResponse;
+  status: 200;
+};
+
+export type setScheduledActionEnabledResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type setScheduledActionEnabledResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type setScheduledActionEnabledResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type setScheduledActionEnabledResponse409 = {
+  data: string;
+  status: 409;
+};
+
+export type setScheduledActionEnabledResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type setScheduledActionEnabledResponseSuccess =
+  setScheduledActionEnabledResponse200 & {
+    headers: Headers;
+  };
+export type setScheduledActionEnabledResponseError = (
+  | setScheduledActionEnabledResponse400
+  | setScheduledActionEnabledResponse401
+  | setScheduledActionEnabledResponse404
+  | setScheduledActionEnabledResponse409
+  | setScheduledActionEnabledResponse500
+) & {
+  headers: Headers;
+};
+
+export type setScheduledActionEnabledResponse =
+  | setScheduledActionEnabledResponseSuccess
+  | setScheduledActionEnabledResponseError;
+
+export const getSetScheduledActionEnabledUrl = (id: string) => {
+  return `/scheduled-actions/${id}/enabled`;
+};
+
+export const setScheduledActionEnabled = async (
+  id: string,
+  setScheduledActionEnabled: SetScheduledActionEnabled,
+  options?: RequestInit
+): Promise<setScheduledActionEnabledResponse> => {
+  const res = await fetch(getSetScheduledActionEnabledUrl(id), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(setScheduledActionEnabled),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: setScheduledActionEnabledResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as setScheduledActionEnabledResponse;
 };
 
 export type executeScheduledActionNowResponse200 = {

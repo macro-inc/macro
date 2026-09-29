@@ -4302,6 +4302,158 @@ type GraphqlRepliedToDocumentCommentThreadMetadata {
 }
 
 """
+An AI routine owned by the authenticated user.
+"""
+type GraphqlScheduledAction {
+	"""
+	Stable identifier of the routine.
+	"""
+	id: ID!
+	"""
+	Name shown for the routine.
+	"""
+	name: String!
+	"""
+	Whether automatic dispatch runs this routine.
+	"""
+	enabled: Boolean!
+	"""
+	What starts a run of this routine.
+	"""
+	trigger: GraphqlScheduledActionTrigger!
+	"""
+	Agent task for this routine. Null when the stored task is not an agent task.
+	"""
+	agentTask: GraphqlScheduledActionAgentTask
+	"""
+	When the current execution claim stops blocking configuration changes.
+	The timestamp stays present after that instant so clients can compare it themselves.
+	"""
+	claimExpiresAt: String
+	"""
+	When the routine was created, as RFC 3339.
+	"""
+	createdAt: String!
+	"""
+	When the routine row last changed, including execution bookkeeping, as RFC 3339.
+	"""
+	updatedAt: String!
+}
+
+"""
+An agent selected to run a routine.
+"""
+type GraphqlScheduledActionAgent {
+	"""
+	Stable identifier of the selected agent.
+	"""
+	botId: ID!
+}
+
+"""
+The agent task a routine runs.
+"""
+type GraphqlScheduledActionAgentTask {
+	"""
+	Model the task runs. Null when the selected agent uses its default model.
+	"""
+	model: String
+	"""
+	Selected agent. Null for model-only tasks.
+	"""
+	agent: GraphqlScheduledActionAgent
+	"""
+	System prompt for the agent.
+	"""
+	prompt: String!
+	"""
+	User prompt for the agent.
+	"""
+	userPrompt: String!
+}
+
+"""
+A routine that runs on a cron schedule.
+"""
+type GraphqlScheduledActionCronTrigger {
+	"""
+	Cron expression in the six- or seven-field format the scheduler accepts.
+	"""
+	schedule: String!
+	"""
+	Time zone name the cron expression is evaluated in.
+	"""
+	timezone: String!
+	"""
+	Next cron firing, as RFC 3339. Null when the routine is disabled.
+	"""
+	nextRunAt: String
+}
+
+"""
+One event filter. The event name and entity id must both match.
+"""
+type GraphqlScheduledActionEventFilter {
+	"""
+	Event names that can satisfy this filter.
+	"""
+	events: [GraphqlScheduledActionEventName!]!
+	"""
+	Entity ids that can satisfy this filter. Null matches every id; an empty list matches nothing.
+	"""
+	entityIds: [ID!]
+}
+
+"""
+Events a routine filter can name.
+"""
+enum GraphqlScheduledActionEventName {
+	"""
+	A document was created.
+	"""
+	DOCUMENT_CREATED
+	"""
+	A document was updated.
+	"""
+	DOCUMENT_UPDATED
+	"""
+	A channel was created.
+	"""
+	CHANNEL_CREATED
+	"""
+	A channel message was posted.
+	"""
+	CHANNEL_MESSAGE_POSTED
+	"""
+	A user was mentioned in a channel.
+	"""
+	CHANNEL_MENTIONED
+	"""
+	A channel message was patched.
+	"""
+	CHANNEL_MESSAGE_PATCHED
+	"""
+	A channel message attachment was created.
+	"""
+	CHANNEL_MESSAGE_ATTACHMENT_CREATED
+}
+
+"""
+A routine that runs when matching events are published.
+"""
+type GraphqlScheduledActionEventsTrigger {
+	"""
+	Event filters. A run starts when any filter matches.
+	"""
+	filters: [GraphqlScheduledActionEventFilter!]!
+}
+
+"""
+The way a routine starts.
+"""
+union GraphqlScheduledActionTrigger = GraphqlScheduledActionCronTrigger | GraphqlScheduledActionEventsTrigger
+
+"""
 A select-option property value.
 """
 type GraphqlSelectOptionPropertyValue {
@@ -4499,6 +4651,10 @@ type GraphqlSoupAgentSession implements GraphqlSoupEntity {
 	The name.
 	"""
 	name: String!
+	"""
+	Whether the session is archived and read-only.
+	"""
+	isArchived: Boolean!
 	"""
 	The principal identifier of the owner.
 	"""
@@ -6541,6 +6697,10 @@ type GraphqlUser {
 	Initiative chips for tasks, without inaccessible project metadata.
 	"""
 	taskInitiativeReferences(taskIds: [ID!]!): [TaskInitiativeReference!]!
+	"""
+	AI routines owned by the authenticated user.
+	"""
+	scheduledActions: [GraphqlScheduledAction!]!
 	"""
 	Authorized property definitions available to this viewer.
 	"""

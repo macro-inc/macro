@@ -8,7 +8,10 @@ import {
 import { useNavigate } from '@app/lib/split-router';
 import type { ComposeTaskProps } from '@block-md/component/ComposeTask';
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import {
+  useSplitDisplayName,
+  useSplitPanelOrThrow,
+} from '@components/app/split-layout/layoutUtils';
 import { getPermissions } from '@core/component/SharePermissions';
 import { TabsInset } from '@core/component/TabsInset';
 import { toast } from '@core/component/Toast/Toast';
@@ -137,6 +140,7 @@ function ProjectShareTrigger(props: {
 function ProjectDetailHost(props: ProjectDetailProps) {
   const context = useProjectsContext();
   const source = context.createProjectSource(() => props.route.id);
+  useSplitDisplayName(() => source.project()?.name ?? 'Project');
   const commands = context.createCommands();
   const layout = useSplitLayout();
   const navigate = useNavigate();

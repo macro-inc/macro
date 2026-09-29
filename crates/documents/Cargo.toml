@@ -45,6 +45,7 @@ axum = [
   "dep:task_dedup",
   "dep:utoipa",
   "entity_access/axum",
+  "entity_registry/axum",
   "schema",
 ]
 backfill_binary = [

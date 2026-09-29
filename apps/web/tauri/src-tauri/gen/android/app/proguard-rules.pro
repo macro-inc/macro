@@ -1,4 +1,5 @@
 # Add project specific ProGuard rules here.
+-keep,includedescriptorclasses class org.rustls.platformverifier.** { *; }
 # You can control the set of applied configuration files using the
 # proguardFiles setting in build.gradle.
 #

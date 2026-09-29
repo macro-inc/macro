@@ -22,6 +22,10 @@ vi.mock('@core/signal/permissions', () => ({
 vi.mock('@core/component/ParamsProvider', () => ({
   useUrlParams: () => ({ commentId: () => null }),
 }));
+vi.mock('@queries/messages/document-messages', () => ({
+  useMessageLink: vi.fn(),
+  useMessageRootsQuery: vi.fn(),
+}));
 vi.mock('../comments/documentDiscussionSource', () => ({
   createDocumentDiscussionSource: () => ({
     canEdit: () => true,

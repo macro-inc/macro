@@ -79,7 +79,8 @@ export type PdfPinCommentAnchor = {
 export type AgentContextAnchor =
   | MarkdownCommentAnchor
   | PdfHighlightCommentAnchor
-  | PdfPinCommentAnchor;
+  | PdfPinCommentAnchor
+  | { type: 'spreadsheet'; sheetId: string; sheetName: string; range: string };
 
 /** Input used to compose an agent prompt with private conversation context. */
 export type AgentContextPrompt = {
@@ -251,6 +252,13 @@ function markChildren(mark: MarkdownCommentAnchor): FxpNode[] {
  */
 function anchorNode(anchor: AgentContextAnchor): FxpNode {
   return match(anchor)
+    .with({ type: 'spreadsheet' }, ({ sheetId, sheetName, range }) =>
+      el(
+        'anchor',
+        [note('Use ReadSpreadsheet to read the live cells in this range.')],
+        { type: 'spreadsheet', sheetId, sheetName, range }
+      )
+    )
     .with({ type: 'pdfPin' }, ({ anchorId }) =>
       el(
         'anchor',

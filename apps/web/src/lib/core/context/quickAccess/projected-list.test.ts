@@ -55,6 +55,105 @@ function deferred<T>() {
 }
 
 describe('Quick Access local projection', () => {
+  it('retains matching rows until the next query commits, without retaining its cursor', async () => {
+    const [query, setQuery] = createSignal('sea');
+    const pending = deferred<SearchCachePage>();
+    const search = vi
+      .fn<(args: SearchCacheArgs) => Promise<SearchCachePage>>()
+      .mockResolvedValueOnce(page(['seamus', 'sean'], true))
+      .mockReturnValueOnce(pending.promise);
+    const list = root(() =>
+      createProjectedList({
+        host: { search },
+        buckets: ['note'],
+        revision: () => 0,
+        searchTerm: query,
+        filterPreviousItems: (items, term) =>
+          items.filter((item) => item.id.includes(term)),
+        materialize,
+      })
+    );
+    await vi.waitFor(() => expect(list.items()).toHaveLength(2));
+    const retained = list.items()[0];
+    setQuery('seam');
+    expect(list.items()).toEqual([retained]);
+    expect(list.items()[0]).toBe(retained);
+    expect(list.isLoading()).toBe(true);
+    expect(list.hasMore()).toBe(false);
+    await list.loadMore();
+    expect(search).toHaveBeenCalledTimes(2);
+    expect(search.mock.calls[1][0].cursor).toBeUndefined();
+    pending.resolve(page(['seamus', 'seamless']));
+    await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+    expect(list.items()).toEqual([
+      { id: 'GraphqlSoupDocument:seamus' },
+      { id: 'GraphqlSoupDocument:seamless' },
+    ]);
+  });
+
+  it.each(['buckets', 'disable'] as const)(
+    'does not retain matches when %s changes',
+    async (change) => {
+      const [buckets, setBuckets] = createSignal<Bucket[]>(['note']);
+      const [enabled, setEnabled] = createSignal(true);
+      const pending = deferred<SearchCachePage>();
+      const search = vi
+        .fn<(args: SearchCacheArgs) => Promise<SearchCachePage>>()
+        .mockResolvedValueOnce(page(['seamus']))
+        .mockReturnValueOnce(pending.promise);
+      const list = root(() =>
+        createProjectedList({
+          host: { search },
+          get buckets() {
+            return buckets();
+          },
+          revision: () => 0,
+          enabled,
+          filterPreviousItems: (items) => items,
+          materialize,
+        })
+      );
+      await vi.waitFor(() => expect(list.items()).toHaveLength(1));
+      if (change === 'buckets') setBuckets(['task']);
+      else setEnabled(false);
+      expect(list.items()).toEqual([]);
+    }
+  );
+
+  it('removes nonmatches immediately and ignores an obsolete query completion', async () => {
+    const [query, setQuery] = createSignal('sea');
+    const obsolete = deferred<SearchCachePage>();
+    const latest = deferred<SearchCachePage>();
+    const search = vi
+      .fn<(args: SearchCacheArgs) => Promise<SearchCachePage>>()
+      .mockResolvedValueOnce(page(['seamus']))
+      .mockReturnValueOnce(obsolete.promise)
+      .mockReturnValueOnce(latest.promise);
+    const list = root(() =>
+      createProjectedList({
+        host: { search },
+        buckets: ['note'],
+        revision: () => 0,
+        searchTerm: query,
+        filterPreviousItems: (items, term) =>
+          items.filter((item) => item.id.includes(term)),
+        materialize,
+      })
+    );
+    await vi.waitFor(() => expect(list.items()).toHaveLength(1));
+    setQuery('seam');
+    expect(list.items()).toHaveLength(1);
+    setQuery('xyz');
+    expect(list.items()).toEqual([]);
+    obsolete.resolve(page(['seamus']));
+    await obsolete.promise;
+    expect(list.items()).toEqual([]);
+    expect(list.isLoading()).toBe(true);
+    latest.resolve(page([]));
+    await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+    expect(list.items()).toEqual([]);
+  });
+
   it('follows the local browse cursor, deduplicates hits, and stops at the last page', async () => {
     const search = vi
       .fn<(args: SearchCacheArgs) => Promise<SearchCachePage>>()

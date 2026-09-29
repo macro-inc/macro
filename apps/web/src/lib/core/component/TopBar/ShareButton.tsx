@@ -380,7 +380,7 @@ function TeamAccessSection(props: { teamShare: TeamShareControls }) {
         <Dropdown.Trigger
           variant="outline"
           aria-label="Team access"
-          class="min-w-16.75 py-1 pl-2 pr-1 rounded-md flex items-center gap-1"
+          class="min-w-16.75 py-1 pl-2 pr-1 flex items-center gap-1"
         >
           {getTeamShareScopeCopy(teamShareScope())}
           <ChevronDownIcon class="size-4 text-ink-extra-muted" />
@@ -1657,9 +1657,8 @@ export function ShareTrigger(props: {
         }
       >
         <Button
-          variant="plain"
+          variant="ghost"
           size="md"
-          class="rounded-xl"
           onClick={() => {
             if (!isAuthenticated()) {
               openLoginModal();
@@ -1675,10 +1674,9 @@ export function ShareTrigger(props: {
       </Tooltip>
 
       <Button
-        variant="plain"
+        variant="ghost"
         tooltip="Copy Share Link"
         size="icon-md"
-        class="rounded-xl"
         onClick={ShareLinkAction().action}
       >
         <Dynamic component={ShareLinkAction().icon} class="size-3.5!" />
@@ -1775,7 +1773,7 @@ export function ShareOptions(props: {
       <Dropdown.Trigger
         variant="outline"
         disabled={props.disabled}
-        class={`min-w-16.75 py-1 pl-2 pr-1 rounded-md flex items-center gap-1 ${props.noBorder ? 'border-0 sm:border' : ''}`}
+        class={`min-w-16.75 py-1 pl-2 pr-1 flex items-center gap-1 ${props.noBorder ? 'border-0 sm:border' : ''}`}
         on:keydown={(e: KeyboardEvent) => {
           if (e.key === 'Enter' || e.key === ' ') {
             e.stopPropagation();

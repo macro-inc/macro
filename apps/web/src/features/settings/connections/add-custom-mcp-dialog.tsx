@@ -89,11 +89,11 @@ export function AddCustomMcpDialog(props: {
           </div>
 
           <div class="flex justify-end gap-2 pt-1">
-            <Button variant="outline" size="sm" depth={3} onClick={close}>
+            <Button variant="ghost" size="sm" depth={3} onClick={close}>
               Cancel
             </Button>
             <Button
-              variant="accent"
+              variant="strong"
               size="sm"
               depth={3}
               disabled={

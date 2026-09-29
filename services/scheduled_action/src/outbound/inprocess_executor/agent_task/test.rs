@@ -72,9 +72,41 @@ async fn completed_stream_retains_assistant_text() {
 }
 
 #[test]
+fn model_runner_requires_a_model_target() {
+    let task: AgentTask = serde_json::from_value(json!({
+        "model": "custom-model", "prompt": "system", "user_prompt": "user",
+    }))
+    .unwrap();
+    assert_eq!(required_model(&task).unwrap().as_str(), "custom-model");
+
+    let task: AgentTask = serde_json::from_value(json!({
+        "prompt": "not a model", "user_prompt": "user",
+    }))
+    .unwrap();
+    assert!(required_model(&task).is_err());
+}
+
+#[test]
+fn model_runner_rejects_agent_targets_including_explicit_overrides() {
+    for model in [None, Some("custom-model")] {
+        let task: AgentTask = serde_json::from_value(json!({
+            "agent": { "bot_id": generate_uuid_v7() }, "model": model,
+            "prompt": "system", "user_prompt": "user",
+        }))
+        .unwrap();
+        let error = required_model(&task).unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "agent targets are not supported by the model runner"
+        );
+    }
+}
+
+#[test]
 fn event_is_separate_user_data_not_a_prompt_rewrite() {
     let task = AgentTask {
-        model: "test".into(),
+        model: Some("test".to_string().try_into().unwrap()),
+        agent: None,
         prompt: "original system".into(),
         user_prompt: "original user".into(),
     };

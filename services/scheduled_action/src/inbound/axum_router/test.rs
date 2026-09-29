@@ -79,7 +79,7 @@ async fn request(
 }
 
 fn legacy() -> Value {
-    json!({"name":"legacy", "kind":"Agent", "schedule":"0 0 9 * * *", "timezone":"UTC", "task":{}, "enabled":true})
+    json!({"name":"legacy", "kind":"Agent", "schedule":"0 0 9 * * *", "timezone":"UTC", "task":{"model":"model", "prompt":"instructions", "user_prompt":"task"}, "enabled":true})
 }
 
 #[tokio::test]
@@ -198,6 +198,7 @@ async fn foreign_owner_operations_return_not_found_and_list_is_empty() {
     let url = format!("/scheduled-actions/{}", action["id"].as_str().unwrap());
     for (method, path, body) in [
         ("PUT", url.clone(), legacy()),
+        ("PUT", format!("{url}/enabled"), json!({"enabled": false})),
         ("DELETE", url.clone(), Value::Null),
         ("POST", format!("{url}/execute"), Value::Null),
         ("GET", format!("{url}/history"), Value::Null),
@@ -219,6 +220,38 @@ async fn foreign_owner_operations_return_not_found_and_list_is_empty() {
         .1,
         json!([])
     );
+}
+
+#[tokio::test]
+async fn activation_endpoint_is_idempotent_and_accepts_only_enabled() {
+    let app = router(false);
+    let (_, created) = request(&app, "POST", "/scheduled-actions", "owner", legacy()).await;
+    let url = format!(
+        "/scheduled-actions/{}/enabled",
+        created["id"].as_str().unwrap()
+    );
+    for _ in 0..2 {
+        let (status, paused) = request(&app, "PUT", &url, "owner", json!({"enabled": false})).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(paused["enabled"], false);
+        assert_eq!(paused["configuration_revision"], 2);
+        assert_eq!(paused["name"], "legacy");
+        assert_eq!(paused["schedule"], "0 0 9 * * *");
+    }
+    for invalid in [
+        json!({}),
+        json!({"enabled": "false"}),
+        json!({"enabled": true, "name": "renamed"}),
+    ] {
+        assert_eq!(
+            request(&app, "PUT", &url, "owner", invalid).await.0,
+            StatusCode::BAD_REQUEST
+        );
+    }
+    let (status, resumed) = request(&app, "PUT", &url, "owner", json!({"enabled": true})).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(resumed["enabled"], true);
+    assert_eq!(resumed["configuration_revision"], 3);
 }
 
 #[tokio::test]
@@ -307,12 +340,156 @@ async fn maps_typed_errors_and_sanitizes_internal_failures() {
     }
 }
 
+#[tokio::test]
+async fn target_errors_have_deliberate_sanitized_status_codes() {
+    for (error, expected) in [
+        (
+            TargetValidationError::InvalidTask.into(),
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            TargetValidationError::AgentsDisabled.into(),
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            TargetValidationError::ExplicitAgentRequired.into(),
+            StatusCode::CONFLICT,
+        ),
+        (
+            RoutineSessionError::InvalidCommand.into(),
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            RoutineSessionError::ModelMismatch.into(),
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            RoutineSessionError::PersonaUnavailable.into(),
+            StatusCode::NOT_FOUND,
+        ),
+        (RoutineSessionError::Forbidden.into(), StatusCode::FORBIDDEN),
+        (RoutineSessionError::Conflict.into(), StatusCode::CONFLICT),
+        (
+            RoutineSessionError::RuntimeUnavailable.into(),
+            StatusCode::SERVICE_UNAVAILABLE,
+        ),
+        (
+            RoutineSessionError::OperationFailed.into(),
+            StatusCode::SERVICE_UNAVAILABLE,
+        ),
+        (
+            RoutineSessionError::PromptDeliveryUnknown.into(),
+            StatusCode::SERVICE_UNAVAILABLE,
+        ),
+        (
+            RoutineSessionError::SessionMismatch.into(),
+            StatusCode::INTERNAL_SERVER_ERROR,
+        ),
+    ] {
+        let error: anyhow::Error = error;
+        let response = ScheduledActionApiError::from(error.context("secret upstream diagnostics"))
+            .into_response();
+        assert_eq!(response.status(), expected);
+        let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        assert!(!String::from_utf8_lossy(&bytes).contains("secret"));
+    }
+}
+
+#[tokio::test]
+async fn target_configuration_is_validated_through_http_and_gate_defaults_off() {
+    use crate::domain::target_validation::test::agent_task;
+    let app = router(false);
+    let mut input = legacy();
+    for task in [json!({}), agent_task()] {
+        input["task"] = task;
+        assert_eq!(
+            request(&app, "POST", "/scheduled-actions", "owner", input.clone())
+                .await
+                .0,
+            StatusCode::BAD_REQUEST
+        );
+    }
+    assert_eq!(
+        request(&app, "POST", "/scheduled-actions", "owner", legacy())
+            .await
+            .0,
+        StatusCode::CREATED
+    );
+}
+
+#[tokio::test]
+async fn agent_replacement_requires_explicit_null_and_unavailable_agent_remains_manageable() {
+    use crate::domain::{
+        service::test::{FakeExecutor, FakeRepo, TestService},
+        target_validation::{
+            TargetValidation,
+            test::{Sessions, agent_task},
+        },
+    };
+    let sessions = Arc::new(Sessions::default());
+    let (tx, mut rx) = tokio::sync::mpsc::channel(32);
+    tokio::spawn(async move { while rx.recv().await.is_some() {} });
+    let svc = TestService::new(
+        Arc::new(FakeRepo::default()),
+        Arc::new(FakeExecutor::default()),
+        tx,
+    )
+    .with_target_validation(TargetValidation::new(sessions.clone(), true));
+    let app: Router = scheduled_action_router(ScheduledActionRouterState {
+        service: Arc::new(svc),
+        authorization_state: MacroAuthorizationState::new(Arc::new(FakeAuth)),
+    });
+    let mut input = legacy();
+    input["task"] = agent_task();
+    assert_eq!(
+        request(&app, "POST", "/scheduled-actions", "other", input.clone())
+            .await
+            .0,
+        StatusCode::FORBIDDEN
+    );
+    let (status, created) =
+        request(&app, "POST", "/scheduled-actions", "owner", input.clone()).await;
+    assert_eq!(status, StatusCode::CREATED);
+    let url = format!("/scheduled-actions/{}", created["id"].as_str().unwrap());
+    let (status, message) = request(&app, "PUT", &url, "owner", legacy()).await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert!(message.as_str().unwrap().contains("reload or upgrade"));
+
+    *sessions.error.lock().unwrap() = Some(RoutineSessionError::RuntimeUnavailable);
+    assert_eq!(
+        request(&app, "PUT", &url, "owner", input.clone()).await.0,
+        StatusCode::SERVICE_UNAVAILABLE
+    );
+    input["enabled"] = json!(false);
+    assert_eq!(
+        request(&app, "PUT", &url, "owner", input).await.0,
+        StatusCode::OK
+    );
+    assert_eq!(
+        request(&app, "GET", &format!("{url}/history"), "owner", Value::Null)
+            .await
+            .0,
+        StatusCode::OK
+    );
+    let mut model = legacy();
+    model["task"]["agent"] = Value::Null;
+    assert_eq!(
+        request(&app, "PUT", &url, "owner", model).await.0,
+        StatusCode::OK
+    );
+    assert_eq!(
+        request(&app, "DELETE", &url, "owner", Value::Null).await.0,
+        StatusCode::NO_CONTENT
+    );
+}
+
 #[test]
 fn openapi_documents_canonical_legacy_and_event_opt_in_contracts() {
     let spec = serde_json::to_value(crate::swagger::ApiDoc::openapi()).unwrap();
     let schemas = &spec["components"]["schemas"];
     for name in [
         "ActionConfiguration",
+        "ActionConfigurationUpdate",
         "LegacyActionConfiguration",
         "ActionTrigger",
         "EventFilters",
@@ -320,9 +497,24 @@ fn openapi_documents_canonical_legacy_and_event_opt_in_contracts() {
         "ScheduledActionResponse",
         "CreateScheduledAction",
         "UpdateScheduledAction",
+        "SetScheduledActionEnabled",
     ] {
         assert!(!schemas[name].is_null(), "missing {name}");
     }
+    let update = &schemas["ActionConfigurationUpdate"];
+    assert_eq!(
+        update["required"],
+        json!(["name", "trigger", "kind", "task"])
+    );
+    assert_eq!(update["properties"]["enabled"]["deprecated"], true);
+    assert_eq!(
+        schemas["SetScheduledActionEnabled"]["additionalProperties"],
+        false
+    );
+    assert_eq!(
+        spec["paths"]["/scheduled-actions/{id}/enabled"]["put"]["operationId"],
+        "set_scheduled_action_enabled"
+    );
     let legacy_properties = &schemas["ScheduledActionResponse"]["allOf"][1]["properties"];
     assert_eq!(legacy_properties["schedule"]["deprecated"], true);
     assert_eq!(legacy_properties["timezone"]["deprecated"], true);

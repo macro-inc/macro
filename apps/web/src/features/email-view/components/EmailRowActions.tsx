@@ -45,7 +45,7 @@ export function EmailStarAction(props: {
       )}
     >
       <Button
-        variant="plain"
+        variant="ghost"
         size="icon-sm"
         label={props.starred ? 'Unstar email' : 'Star email'}
         class={props.starred ? 'text-ink-muted' : 'text-ink-extra-muted'}
@@ -73,7 +73,7 @@ export function EmailRowActions(props: {
   return (
     <EmailActionGroup onFocus={props.onFocus}>
       <Button
-        variant="plain"
+        variant="ghost"
         size="icon-sm"
         label={props.archived ? 'Unarchive email' : 'Archive email'}
         class="text-ink-extra-muted"
@@ -85,7 +85,7 @@ export function EmailRowActions(props: {
         </Show>
       </Button>
       <Button
-        variant="plain"
+        variant="ghost"
         size="icon-sm"
         label="Open command menu"
         class="text-ink-extra-muted"

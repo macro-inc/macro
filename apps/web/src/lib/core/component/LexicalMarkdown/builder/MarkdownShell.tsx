@@ -21,7 +21,6 @@ import {
 import { DecoratorRenderer } from '../component/core/DecoratorRenderer';
 import { NodeAccessoryRenderer } from '../component/core/NodeAccessoryRenderer';
 import { ActionMenu } from '../component/menu/ActionsMenu';
-import { AgentCommandsMenu } from '../component/menu/AgentCommandsMenu';
 import { EmojiMenu } from '../component/menu/EmojiMenu';
 import { FloatingFormatMenu } from '../component/menu/FloatingFormatMenu';
 import { FloatingLinkMenu } from '../component/menu/FloatingLinkMenu';
@@ -353,10 +352,12 @@ export const MarkdownShell: Component<MarkdownShellProps> = (props) => {
         {/* Agent Commands Menu */}
         <Show when={state.agentCommandsMenuOps}>
           {(menu) => (
-            <AgentCommandsMenu
+            <SkillsMenu
               editor={editor}
               menu={menu()}
-              commands={builderConfig.agentCommands?.commands ?? (() => [])}
+              agentCommands={
+                builderConfig.agentCommands?.commands ?? (() => [])
+              }
               useBlockBoundary={false}
               portalScope={props.portalScope}
             />
