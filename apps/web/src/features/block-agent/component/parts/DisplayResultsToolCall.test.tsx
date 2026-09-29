@@ -18,10 +18,16 @@ vi.mock('@app/features/dynamic-ui/DashboardToolView.lazy', async () => ({
 
 vi.mock('@app/features/dynamic-ui/widget', () => ({
   Widget: {
-    Compose: (props: { view: View }) => (
-      <div data-testid="dashboard">{JSON.stringify(props.view)}</div>
-    ),
+    Compose: (props: { view: View }) => {
+      if (props.view.title === 'throws') throw new TypeError('render failed');
+      return <div data-testid="dashboard">{JSON.stringify(props.view)}</div>;
+    },
   },
+}));
+
+const telemetryError = vi.hoisted(() => vi.fn());
+vi.mock('@macro-inc/observability', () => ({
+  Telemetry: { error: telemetryError },
 }));
 
 vi.mock(
@@ -144,5 +150,21 @@ describe('DisplayResultsToolCall', () => {
       'private-error-details'
     );
     expect(rendered.container.querySelector('.magic-chip-shimmer')).toBeNull();
+  });
+
+  it('reports a render error before showing the fallback', () => {
+    const rendered = render(() => (
+      <DisplayResultsToolCall
+        input={{ view: { title: 'throws', widgets: [] } }}
+        common={common()}
+      />
+    ));
+
+    expect(rendered.container.textContent).toContain(
+      'Unable to display these results.'
+    );
+    expect(telemetryError).toHaveBeenCalledWith(expect.any(TypeError), {
+      surface: 'display-results',
+    });
   });
 });

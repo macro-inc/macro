@@ -24,6 +24,7 @@ cd infra/stacks/monitoring
 export DD_API_KEY=... DD_APP_KEY=... DD_HOST=https://api.us5.datadoghq.com/
 pulumi stack select macro-inc/prod --create
 pulumi import --file import.json --out imported.generated.ts --protect --yes
+pulumi refresh --yes
 pulumi preview --diff
 ```
 
@@ -32,6 +33,9 @@ pulumi preview --diff
 ground truth to reconcile against if the preview shows drift. Delete it after;
 it must not be committed (index.ts does not import it, and a second copy of
 every monitor would double-declare them).
+
+The refresh reads the live resources back into state without changing Datadog
+and records options omitted during import.
 
 The gate is that preview:
 
@@ -81,6 +85,18 @@ provider models differently from the API are the risk, and these are the spots:
   *text*, not alert behavior.
 - `onMissingData` values are the API's snake_case (`show_no_data`). Pulumi's
   generated docs camelCase them; the provider forwards the string as-is.
+- All adopted monitors have `requireFullWindow: false`; `adopted()` preserves
+  that setting instead of the provider's default of `true`.
+- Datadog omits `newHostDelay` on monitors using `newGroupDelay`, but provider
+  4.68 defaults it to 300. Imported nulls can cause perpetual updates. After
+  backing up state and verifying that each affected monitor is not grouped by
+  `host`, normalize only its input/output `newHostDelay` to 300 in Pulumi state.
+  The helper declares that same default. Host delay is ignored for these
+  monitors; group delay stays unchanged. Verify again with `preview --refresh`
+  and compare the live Datadog definitions before deploying.
+- The existing APM latency monitor is a draft. Keep its `draftStatus` explicit
+  so adoption does not publish it. RUM monitors omit the log-only
+  `enableLogsSample` and `groupbySimpleMonitor` options.
 
 ## Drift
 

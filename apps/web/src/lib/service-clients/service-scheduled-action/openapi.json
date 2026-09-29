@@ -286,6 +286,95 @@
         }
       }
     },
+    "/scheduled-actions/{id}/enabled": {
+      "put": {
+        "tags": ["scheduled actions"],
+        "operationId": "set_scheduled_action_enabled",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the scheduled action",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetScheduledActionEnabled"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledActionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Configuration changed or execution is active",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/scheduled-actions/{id}/execute": {
       "post": {
         "tags": ["scheduled actions"],
@@ -437,6 +526,31 @@
         "properties": {
           "enabled": {
             "type": "boolean"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ActionKind"
+          },
+          "name": {
+            "type": "string"
+          },
+          "task": {
+            "type": "object"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/ActionTrigger"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ActionConfigurationUpdate": {
+        "type": "object",
+        "description": "Canonical configuration replacement. Activation has its own endpoint, so\nomitting `enabled` keeps the stored value.",
+        "required": ["name", "trigger", "kind", "task"],
+        "properties": {
+          "enabled": {
+            "type": ["boolean", "null"],
+            "description": "Still sent by clients deployed before the activation endpoint.",
+            "deprecated": true
           },
           "kind": {
             "$ref": "#/components/schemas/ActionKind"
@@ -891,10 +1005,20 @@
         ],
         "description": "Live status update for a scheduled-action run, broadcast via the connection\ngateway to the owner. Clients use the typed resource to navigate to the run\ntranscript and the variant tag to toggle the running indicator. `chat_id`\nremains populated only for chat runs, for older clients.\n\nSerialized with a `type` tag (`started`/`stopped`) and delivered over the\nsingle `scheduled_action_update` message type on the gateway."
       },
+      "SetScheduledActionEnabled": {
+        "type": "object",
+        "required": ["enabled"],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
       "UpdateScheduledAction": {
         "oneOf": [
           {
-            "$ref": "#/components/schemas/ActionConfiguration"
+            "$ref": "#/components/schemas/ActionConfigurationUpdate"
           },
           {
             "$ref": "#/components/schemas/LegacyActionConfiguration"

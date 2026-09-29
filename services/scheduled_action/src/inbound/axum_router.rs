@@ -60,6 +60,12 @@ impl From<ScheduledAction> for ScheduledActionResponse {
     }
 }
 
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SetScheduledActionEnabled {
+    pub enabled: bool,
+}
+
 #[derive(Debug, Default, Deserialize, IntoParams)]
 pub struct ListActionsQuery {
     /// Backend clients must opt in to event actions; defaults to false (cron-only).
@@ -107,6 +113,10 @@ where
         .route(
             "/scheduled-actions/{id}",
             put(update_action::<S, Auth>).delete(delete_action::<S, Auth>),
+        )
+        .route(
+            "/scheduled-actions/{id}/enabled",
+            put(set_action_enabled::<S, Auth>),
         )
         .route(
             "/scheduled-actions/{id}/execute",
@@ -240,6 +250,43 @@ pub async fn update_action<
         .update_action(&id, req, user.authorization.user.macro_user_id.clone())
         .await?;
     Ok(Json(ScheduledActionResponse::from(updated)))
+}
+
+#[utoipa::path(
+    put,
+    path = "/scheduled-actions/{id}/enabled",
+    tag = "scheduled actions",
+    operation_id = "set_scheduled_action_enabled",
+    params(("id" = String, Path, description = "ID of the scheduled action")),
+    request_body = SetScheduledActionEnabled,
+    responses(
+        (status = 200, body = ScheduledActionResponse),
+        (status = 400, body = String),
+        (status = 409, body = String, description = "Configuration changed or execution is active"),
+        (status = 401, body = String),
+        (status = 404, body = String),
+        (status = 500, body = String),
+    )
+)]
+pub async fn set_action_enabled<
+    S: ScheduledActionService + Send + Sync + 'static,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<ScheduledActionRouterState<S, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Path(id): Path<Uuid>,
+    body: Result<Json<SetScheduledActionEnabled>, JsonRejection>,
+) -> Result<impl IntoResponse, ScheduledActionApiError> {
+    let Json(req) = body.map_err(ScheduledActionApiError::InvalidRequest)?;
+    let action = state
+        .service
+        .set_enabled(
+            &id,
+            req.enabled,
+            user.authorization.user.macro_user_id.clone(),
+        )
+        .await?;
+    Ok(Json(ScheduledActionResponse::from(action)))
 }
 
 #[utoipa::path(

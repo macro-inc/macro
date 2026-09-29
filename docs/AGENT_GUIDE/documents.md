@@ -519,6 +519,12 @@ keeps at least 16px of
 bottom clearance above the drawer's curve, including while the keyboard is open,
 and accounts for the home-indicator safe area when the keyboard is closed.
 
+When checking desktop margin placement, scroll a long document while an embed
+or image above the highlighted text changes height. Scroll anchoring may keep
+the text at the same screen position; its comment card should stay aligned
+through the resize, without briefly jumping upward or downward. Repeat with
+several rapid height changes, including while scrolling has paused.
+
 Also verify anchored comments in Drive's detail pane: open a document with
 existing text anchors, then click a numbered comment badge to expand it. The
 document should stay visible and the thread should open; loading the document
@@ -587,7 +593,14 @@ Right side of a doc (toggle with `Hide/Show Side Panel`):
 
 - `Actions` → `Ask Macro` (opens a doc-scoped AI chat, see ai-chat.md).
 - `Details` → Owner, Created, Last updated.
-- `Tags` → `Add tags` (dialog). `Properties` → `Add property`.
+- `Tags` → `Add tags` (dialog). Click a tag's label to toggle and save; Shift-click
+  keeps the picker open for multiple selections. Reopen it to remove a tag.
+  With GraphQL Soup enabled, applying the first tag refetches only that entity's
+  properties; later edits update the existing assignment optimistically. Verify
+  both the side panel and list-row chip, then reload to confirm persistence.
+  This must also work after background backfills populate more than 128 cached
+  Soup variants—tag saves must not scan all cached pages.
+  `Properties` → `Add property`.
 - Collapsed sections: `Stats`, `History` (version time-travel), `Activity`.
 - `Activity` lists the same glyph-rail lines as `/app/component/activity` (plain glyphs on a
   thin connector, one line each with long names truncated, compact `17h` / `8d` / `1mo`

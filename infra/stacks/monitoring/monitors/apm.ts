@@ -6,6 +6,7 @@ import { adopted } from '../adopted';
 
 // https://us5.datadoghq.com/monitors/19271629
 adopted('apm-get-channel-messages-p95', {
+  draftStatus: 'draft',
   name: 'High p95 Latency – get_channel_messages (cloud-storage-service prod)',
   type: 'query alert',
   query:

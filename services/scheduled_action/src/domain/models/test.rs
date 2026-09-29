@@ -21,10 +21,21 @@ fn both_request_representations_normalize_to_the_same_configuration() {
         let create: CreateScheduledAction = serde_json::from_value(input.clone()).unwrap();
         let update: UpdateScheduledAction = serde_json::from_value(input).unwrap();
         let create = serde_json::to_value(ActionConfiguration::from(create)).unwrap();
-        let update = serde_json::to_value(ActionConfiguration::from(update)).unwrap();
+        let update = serde_json::to_value(update.into_configuration(false)).unwrap();
         assert_eq!(create, update);
         assert_eq!(create["trigger"]["type"], "cron");
     }
+}
+
+#[test]
+fn updates_may_omit_activation_but_creates_may_not() {
+    let input = json!({"name":"routine", "kind":"Agent", "task":{},
+        "trigger":{"type":"cron", "schedule":"0 0 9 * * *", "timezone":"UTC"}});
+    for stored in [false, true] {
+        let update: UpdateScheduledAction = serde_json::from_value(input.clone()).unwrap();
+        assert_eq!(update.into_configuration(stored).enabled, stored);
+    }
+    assert!(serde_json::from_value::<CreateScheduledAction>(input).is_err());
 }
 
 #[test]

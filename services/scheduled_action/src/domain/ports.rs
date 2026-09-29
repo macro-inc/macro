@@ -1,4 +1,4 @@
-use super::event_runs::ClaimToken;
+use super::event_runs::{ClaimToken, ConfigurationRevision};
 use super::event_trigger::EventReference;
 use super::execution::ExecutionHandle;
 use super::models::{
@@ -62,7 +62,13 @@ pub trait ScheduledActionRepo: Send + Sync + 'static {
         macro_user_id: MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<()>> + Send;
 
-    fn claim_action(&self, id: &Uuid) -> impl Future<Output = Result<ClaimToken>> + Send;
+    /// Claim only while the stored configuration is still `revision`, so a
+    /// snapshot read before a pause or update can never start a run.
+    fn claim_action(
+        &self,
+        id: &Uuid,
+        revision: ConfigurationRevision,
+    ) -> impl Future<Output = Result<ClaimToken>> + Send;
 
     /// Release only this execution's claim; stale tokens must not mutate a newer run.
     fn release_action(
@@ -129,6 +135,15 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         &self,
         id: &Uuid,
         input: UpdateScheduledAction,
+        macro_user_id: MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<ScheduledAction>> + Send;
+
+    /// Change activation without touching configuration. Requesting the
+    /// current state returns the stored action unchanged.
+    fn set_enabled(
+        &self,
+        id: &Uuid,
+        enabled: bool,
         macro_user_id: MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 

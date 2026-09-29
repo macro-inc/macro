@@ -1672,36 +1672,40 @@ export interface SpreadsheetChange {
   range?: string | null;
 }
 /**
- * Start a new inline comment on a passage of a Macro markdown document, on behalf of the user: the passage is highlighted in the document and the comment floats beside it, as when a person selects text and comments. Only use this when explicitly asked to comment on part of a document. Quote the passage exactly as the document reads, within a single paragraph, heading, list item or table cell. If the passage appears more than once the tool refuses and lists each occurrence so you can choose one; if the text is not found, read the document again rather than guessing. Use ReplyToDocumentComment to reply in an existing thread or to comment on the document as a whole.
+ * Comment on a document on behalf of the user. Pass threadId to reply in an existing inline or Discussion thread; pass quote to start a new inline comment on a passage of a Macro markdown document; omit both to start a new Discussion comment on the document as a whole. Replies and Discussion comments support any document type. Only use this when explicitly asked to reply to or comment on a document. Thread ids come from the comments ReadContent returns. For an inline comment, quote the passage exactly as the document reads, as plain text without markdown syntax, within a single paragraph, heading, list item or table cell. If the passage appears more than once the tool refuses and lists each occurrence so you can choose one with occurrence, counting from 1; if the text is not found, read the document again rather than guessing. Do not combine threadId with quote. occurrence only applies with quote.
  */
-export interface CommentOnDocumentText {
+export interface CommentOnDocument {
   /**
-   * The id of the markdown document to comment on.
+   * The id of the document to comment on.
    */
   documentId: string;
-  /**
-   * The passage to comment on, quoted exactly as the document reads: plain text without markdown syntax such as ** or link brackets. Keep it to the words the comment is about; a longer quote is more likely to be unique.
-   */
-  text: string;
-  /**
-   * Which appearance of the passage to comment on, counting from 1 in document order. Only needed when the passage appears more than once.
-   */
-  occurrence?: number | null;
   /**
    * Comment content in macro markdown format. This uses the same syntax as markdown documents.
    */
   content: string;
+  /**
+   * The id of the inline or Discussion thread to reply in, from ReadContent. Cannot be combined with quote. Omit both threadId and quote to post a new Discussion comment on the document as a whole.
+   */
+  threadId?: string | null;
+  /**
+   * The passage to comment on, quoted exactly as the document reads: plain text without markdown syntax such as ** or link brackets. Keep it to the words the comment is about; a longer quote is more likely to be unique. Starts a new inline comment on a markdown document only. Cannot be combined with threadId.
+   */
+  quote?: string | null;
+  /**
+   * Which appearance of the quoted passage to comment on, counting from 1 in document order. Only applies with quote; only needed when the passage appears more than once.
+   */
+  occurrence?: number | null;
 }
 /**
- * The inline comment that was started.
+ * The posted comment.
  */
-export interface CommentOnDocumentTextResponse {
+export interface CommentOnDocumentResponse {
   /**
    * The document the comment was posted on.
    */
   documentId: string;
   /**
-   * The new thread; replies and resolution address it by this id.
+   * The thread the comment is in; a new comment starts its own.
    */
   threadId: string;
   /**
@@ -1709,9 +1713,9 @@ export interface CommentOnDocumentTextResponse {
    */
   commentId: string;
   /**
-   * The text the comment is anchored to, as the document reads.
+   * The text the new inline comment is anchored to, as the document reads.
    */
-  markedText: string;
+  markedText?: string | null;
 }
 /**
  * Configure a manageable bot's profile. Provide only fields that should change. Use avatarUrl to set a profile picture from an image already uploaded to Macro static files or another reachable image URL; pass an empty string to clear the current picture. Passing an empty string for description clears it. Confirm handle changes because integrations and mentions may rely on the stable handle.
@@ -6053,40 +6057,6 @@ export interface RenameDocumentResponse {
    * A human-readable result message.
    */
   message: string;
-}
-/**
- * Reply in a comment thread on a document, or post a new comment in the document's Discussion panel, on behalf of the user. Only use this when explicitly asked to reply to or comment on a document. Thread ids come from the comments ReadContent returns. To start a new inline comment on a passage of the document, use CommentOnDocumentText.
- */
-export interface ReplyToDocumentComment {
-  /**
-   * The id of the document the comment is on.
-   */
-  documentId: string;
-  /**
-   * Comment content in macro markdown format. This uses the same syntax as markdown documents.
-   */
-  content: string;
-  /**
-   * The id of the inline or Discussion thread to reply in, from ReadContent. Omit to post a new Discussion comment on the document as a whole.
-   */
-  threadId?: string | null;
-}
-/**
- * The posted comment.
- */
-export interface ReplyToDocumentCommentResponse {
-  /**
-   * The document the comment was posted on.
-   */
-  documentId: string;
-  /**
-   * The thread the comment is in; a new Discussion comment starts its own.
-   */
-  threadId: string;
-  /**
-   * The posted comment.
-   */
-  commentId: string;
 }
 /**
  * Resolve or reopen a comment thread on a document on behalf of the user. Only use this when explicitly asked to resolve or reopen a comment. Thread ids come from the comments ReadContent returns.

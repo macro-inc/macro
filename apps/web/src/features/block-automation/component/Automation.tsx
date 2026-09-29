@@ -23,12 +23,13 @@ import {
   useRunScheduleNowMutation,
   useScheduleHistoryQuery,
   useSchedulesQuery,
+  useSetScheduleEnabledMutation,
   useUpdateScheduleMutation,
 } from '@queries/agent-schedule/schedules';
 import { getCronTrigger } from '@queries/agent-schedule/triggers';
 import { useAgentSessionQuery } from '@queries/agent-session/session';
 import { useChatQuery } from '@queries/chat';
-import { Button, cn } from '@ui';
+import { Button, cn, ToggleSwitch } from '@ui';
 import {
   type Accessor,
   createEffect,
@@ -41,6 +42,7 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { match } from 'ts-pattern';
 import { createRoutineAutosave } from '../primitives/routine-autosave';
 import { RoutineExecutionPicker } from '../routine-execution-picker';
 import { type HistoryMetadata, RoutineHistory } from '../views/routine-history';
@@ -60,10 +62,6 @@ import {
   WEEKDAY_OPTIONS,
 } from './automationUtils';
 import type { ScheduleDraft } from './types';
-
-type SaveIntent =
-  | { type: 'edit'; draft: ScheduleDraft }
-  | { type: 'pause'; draft: ScheduleDraft };
 
 function createChatHistoryMetadata(id: string): Accessor<HistoryMetadata> {
   const query = useChatQuery(() => id);
@@ -108,6 +106,9 @@ export function Automation() {
     const current = schedule();
     return current ? scheduleToEntity(current) : undefined;
   };
+  const status = () => scheduleEntity()?.status;
+  const isRunning = () => status()?.kind === 'running';
+  const isActive = () => schedule()?.enabled ?? false;
 
   const [state, setRawState] = createSignal<ScheduleDraft | undefined>();
 
@@ -135,26 +136,13 @@ export function Automation() {
   });
 
   const updateMutation = useUpdateScheduleMutation();
-  const autosave = createRoutineAutosave<SaveIntent>(async (intent) => {
+  const autosave = createRoutineAutosave<ScheduleDraft>(async (draft) => {
     const previous = schedule();
     if (!previous || !getCronTrigger(previous)) {
       throw new Error('This routine is no longer editable.');
     }
-    const body =
-      intent.type === 'pause'
-        ? {
-            name: previous.name,
-            trigger: previous.trigger,
-            kind: previous.kind,
-            task: previous.task,
-            enabled: false,
-          }
-        : draftToUpdateBody(intent.draft, previous);
+    const body = draftToUpdateBody(draft, previous);
     if (!body) throw new Error('Choose a valid execution target.');
-    if (intent.type === 'pause' && state() === intent.draft) {
-      // A preceding write may have changed the saved configuration while queued.
-      setRawState(draftFromSchedule({ ...previous, enabled: false }));
-    }
     await updateMutation.mutateAsync({ scheduleId, body });
   });
 
@@ -166,22 +154,7 @@ export function Automation() {
     if (next.name !== current.name) {
       panel.handle.setDisplayName(next.name);
     }
-    autosave.queue(formError() ? undefined : { type: 'edit', draft: next });
-  }
-
-  function toggleEnabled(): void {
-    const previous = schedule();
-    if (!previous || !cronTrigger()) return;
-    if (!isRunning()) {
-      setState((current) => ({ ...current, enabled: !current.enabled }));
-      return;
-    }
-    // A running action only accepts disabling with its exact saved configuration.
-    const saved = draftFromSchedule(previous);
-    if (!saved || !previous.enabled) return;
-    const paused = { ...saved, enabled: false };
-    setRawState(paused);
-    autosave.queue({ type: 'pause', draft: paused });
+    autosave.queue(formError() ? undefined : next);
   }
 
   function runNow(): void {
@@ -230,6 +203,13 @@ export function Automation() {
       toast.alert('Failed to start run', { subtext: getErrorMessage(error) }),
   });
 
+  const setEnabledMutation = useSetScheduleEnabledMutation({
+    onError: (error) =>
+      toast.alert('Failed to update routine', {
+        subtext: getErrorMessage(error),
+      }),
+  });
+
   const duplicateMutation = useCreateScheduleMutation({
     onSuccess: (created) => {
       toast.success('Duplicated');
@@ -269,18 +249,6 @@ export function Automation() {
       onError: () => toast.failure('Failed to delete'),
     });
   };
-
-  // Treat an action as "running" when the server has a fresh claim on it.
-  // The backend's MAX_ACTION_TIME is 20 minutes — after that a claim is
-  // considered stale (e.g. executor crashed) and we stop showing the
-  // running indicator. The websocket sync patches `claimed` live; GETs seed
-  // it on page load.
-  const MAX_CLAIMED_MS = 20 * 60 * 1000;
-  const isRunning = createMemo(() => {
-    const claimed = schedule()?.claimed;
-    if (!claimed) return false;
-    return Date.now() - Date.parse(claimed) < MAX_CLAIMED_MS;
-  });
 
   onMount(() => {
     void invalidateSchedules();
@@ -393,36 +361,38 @@ export function Automation() {
                 >
                   Run Now
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  class="cursor-default"
-                  disabled={isRunning() && !d().enabled}
-                  onClick={toggleEnabled}
-                >
-                  {d().enabled ? 'Pause' : 'Resume'}
-                </Button>
+                <ToggleSwitch
+                  label="Active"
+                  labelClass="text-xs text-ink-muted"
+                  checked={isActive()}
+                  // Resuming conflicts with the claim until the run finishes.
+                  disabled={
+                    setEnabledMutation.isPending || (isRunning() && !isActive())
+                  }
+                  onChange={(active) =>
+                    setEnabledMutation.mutate({ scheduleId, enabled: active })
+                  }
+                />
                 <div class="ml-auto text-xs font-mono text-right uppercase font-light">
-                  <Show
-                    when={isRunning()}
-                    fallback={
-                      <span class="text-ink-extra-muted">
-                        <Show
-                          when={d().enabled && schedule()?.next_run_at}
-                          fallback={<>Paused</>}
-                        >
-                          {(nextRunAt) => (
-                            <>Next run {formatDateAndTime(nextRunAt())}</>
-                          )}
-                        </Show>
+                  {match(status())
+                    .with({ kind: 'running' }, () => (
+                      <span class="flex items-center justify-end gap-1.5 text-accent">
+                        <span class="size-1.5 animate-pulse rounded-full bg-accent" />
+                        Running
                       </span>
-                    }
-                  >
-                    <span class="flex items-center justify-end gap-1.5 text-accent">
-                      <span class="size-1.5 animate-pulse rounded-full bg-accent" />
-                      Running
-                    </span>
-                  </Show>
+                    ))
+                    .with({ kind: 'scheduled' }, ({ nextRunAt }) => (
+                      <span class="text-ink-extra-muted">
+                        Next run {formatDateAndTime(nextRunAt)}
+                      </span>
+                    ))
+                    .with(
+                      { kind: 'paused' },
+                      { kind: 'unscheduled' },
+                      undefined,
+                      () => undefined
+                    )
+                    .exhaustive()}
                 </div>
               </div>
 

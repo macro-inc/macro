@@ -97,6 +97,9 @@ export function createMeetingMedia(
   const generations = { microphone: 0, camera: 0 };
   let disposed = false;
   let preparation = 0;
+  // A second getUserMedia while the first permission prompt is open makes the
+  // browser queue that prompt. Hold capture to one device at a time.
+  let mediaAccess: Promise<void> = Promise.resolve();
   const enabled = (device: Device) =>
     device === 'microphone' ? microphoneEnabled() : cameraEnabled();
   const setEnabled = (device: Device, value: boolean) =>
@@ -200,8 +203,21 @@ export function createMeetingMedia(
         ? selection
         : true;
   };
+  async function runExclusive<T>(task: () => Promise<T>): Promise<T> {
+    const previous = mediaAccess;
+    let release = () => {};
+    mediaAccess = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    try {
+      await previous;
+      return await task();
+    } finally {
+      release();
+    }
+  }
   /** A camera that can't meet the preferred capture falls back to any mode. */
-  async function open(device: Device) {
+  async function capture(device: Device, isCurrent: () => boolean) {
     if (!access) throw new Error('Media access is unavailable');
     if (device === 'microphone')
       return access.request({
@@ -214,7 +230,8 @@ export function createMeetingMedia(
         video: captureConstraints(device),
       });
     } catch (error) {
-      if (errorName(error) !== 'OverconstrainedError') throw error;
+      if (!isCurrent() || errorName(error) !== 'OverconstrainedError')
+        throw error;
       const deviceId = selectedDevices().camera;
       return access.request({
         audio: false,
@@ -222,22 +239,32 @@ export function createMeetingMedia(
       });
     }
   }
-  async function request(device: Device) {
+  function hasCurrentTrack(device: Device) {
+    const track = streams[device]
+      ?.getTracks()
+      .find((candidate) => candidate.readyState === 'live');
+    if (!track) return false;
+    const selected = selectedDevices()[device];
+    return !selected || track.getSettings?.().deviceId === selected;
+  }
+  async function acquire(device: Device, requireEnabled = false) {
     if (!access || disposed) return;
+    if (requireEnabled && (!enabled(device) || hasCurrentTrack(device))) return;
     stop(device);
     const generation = generations[device];
+    const isCurrent = () => !disposed && generations[device] === generation;
     setDevicePending(device, true);
     setErrors((current) => ({ ...current, [device]: undefined }));
     try {
-      const stream = await open(device);
-      if (disposed || generations[device] !== generation || !enabled(device)) {
+      const stream = await capture(device, isCurrent);
+      if (!isCurrent() || !enabled(device)) {
         stream.getTracks().forEach((track) => track.stop());
         return;
       }
       accept(device, stream);
       void refreshDevices();
     } catch (error) {
-      if (disposed || generations[device] !== generation) return;
+      if (!isCurrent()) return;
       console.warn(`[meeting] ${device} request failed`, error);
       const message = mediaErrorMessage(device, error);
       // Permission is requested for both devices up front, but a hardware
@@ -246,49 +273,11 @@ export function createMeetingMedia(
       setEnabled(device, false);
       setErrors((current) => ({ ...current, [device]: message.text }));
     } finally {
-      if (!disposed && generations[device] === generation)
-        setDevicePending(device, false);
+      if (isCurrent()) setDevicePending(device, false);
     }
   }
-  /** Request both permissions once; retry missing devices for individual errors. */
-  async function requestTogether(current: number): Promise<Device[]> {
-    if (!access || disposed) return [];
-    devices.forEach(stop);
-    const started = { ...generations };
-    const isCurrent = (device: Device) =>
-      !disposed &&
-      current === preparation &&
-      generations[device] === started[device];
-    setPending({ microphone: true, camera: true });
-    setErrors({});
-    let stream: MediaStream;
-    try {
-      stream = await access.request({
-        audio: captureConstraints('microphone'),
-        video: captureConstraints('camera'),
-      });
-    } catch {
-      return devices.filter(isCurrent);
-    } finally {
-      devices.forEach((device) => {
-        if (isCurrent(device)) setDevicePending(device, false);
-      });
-    }
-    const missing: Device[] = [];
-    for (const device of devices) {
-      const tracks =
-        device === 'microphone'
-          ? stream.getAudioTracks()
-          : stream.getVideoTracks();
-      if (!isCurrent(device) || !enabled(device)) {
-        tracks.forEach((track) => track.stop());
-      } else if (tracks.length === 0) {
-        missing.push(device);
-      } else {
-        accept(device, new MediaStream(tracks));
-      }
-    }
-    return missing;
+  function request(device: Device) {
+    return runExclusive(() => acquire(device, true));
   }
   const toggle = (device: Device, value: boolean) => {
     setEnabled(device, value);
@@ -338,10 +327,13 @@ export function createMeetingMedia(
       const current = ++preparation;
       watchingDevices ??= access?.onDeviceChange?.(() => void refreshDevices());
       void refreshDevices();
-      for (const device of await requestTogether(current)) {
-        if (disposed || current !== preparation) return;
-        await request(device);
-      }
+      setErrors({});
+      await runExclusive(async () => {
+        for (const device of devices) {
+          if (disposed || current !== preparation) return;
+          await acquire(device);
+        }
+      });
       if (!disposed && current === preparation) void refreshDevices();
     },
     setMicrophoneEnabled: (value: boolean) => toggle('microphone', value),

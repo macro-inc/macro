@@ -452,7 +452,10 @@ The agent has workspace tools (it can list your documents, read channels, create
 render `displayResults` views). Requests go to `POST /cognition/stream/chat/message`; results
 stream over the app's websocket, not the HTTP response.
 
-When asked, the agent also answers document comments in place. A reply row reads
+When explicitly asked, the agent uses `CommentOnDocument` to reply with `threadId`,
+start an inline markdown comment with `quote`, or start a Discussion comment with
+neither. `threadId` and `quote` cannot be combined; `occurrence` only applies with
+`quote`. Thread ids come from the comments returned by `ReadContent`. A reply row reads
 **Replied to a comment on** (or **Commented on** for a new Discussion comment) followed
 by the document, and expands to the posted text; a resolve row reads **Resolved** or
 **Reopened a comment on** the document. Asked to comment on part of a markdown

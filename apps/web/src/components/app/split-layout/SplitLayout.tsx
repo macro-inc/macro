@@ -5,6 +5,8 @@ import {
   SplitRouter,
   type SplitRouterMiddleware,
   type SplitRoutes,
+  type SplitRoutesManifest,
+  useSplitRouter,
 } from '@app/lib/split-router';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { Resize } from '@core/component/Resize';
@@ -35,6 +37,7 @@ import {
   type MobileSwipeLayout,
 } from './mobile/createMobileSwipeLayout';
 import { MobileSplitContainer } from './mobile/MobileSplitContainer';
+import { createContentNavigator } from './split-router/content-navigation';
 import { splitContentFromLocation } from './split-router/legacy-route';
 import { DEFAULT_SPLIT_MIN_WIDTH } from './splitContentSizing';
 import { createSplitFocusTracker } from './splitFocusTracker';
@@ -46,6 +49,18 @@ type SplitLayoutContainerProps = {
   middleware?: readonly SplitRouterMiddleware[];
   setManager: Setter<SplitManager | undefined>;
 };
+
+function ContentNavigationBinding(props: {
+  manager: SplitManager;
+  routes: SplitRoutesManifest;
+}) {
+  const router = useSplitRouter<SplitId>();
+  props.manager.setContentNavigator(
+    createContentNavigator(props.manager, router, props.routes)
+  );
+  onCleanup(() => props.manager.setContentNavigator(undefined));
+  return null;
+}
 
 export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
   const location = useLocation();
@@ -110,6 +125,7 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
       middleware={props.middleware}
     >
       <SplitLayoutContext.Provider value={{ manager: splitManager }}>
+        <ContentNavigationBinding manager={splitManager} routes={routes} />
         <div
           class="size-full"
           classList={{ 'py-1.5 pr-1.5': useBentoLayout() }}
