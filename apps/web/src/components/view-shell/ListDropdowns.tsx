@@ -168,6 +168,7 @@ export function ListFilterDropdown<
   TGroupId extends string,
   TOptionId extends string,
 >(props: ListFilterDropdownProps<TGroupId, TOptionId>) {
+  let aiFilterInput: HTMLInputElement | undefined;
   // Uncontrolled menus track their own state so the AI box can close them.
   const [internalOpen, setInternalOpen] = createSignal(false);
   const isOpen = () => props.open ?? internalOpen();
@@ -203,7 +204,21 @@ export function ListFilterDropdown<
       >
         {(trigger) => trigger()}
       </Show>
-      <Dropdown.Content class={cn('min-w-32', props.contentClass)}>
+      <Dropdown.Content
+        class={cn('min-w-32', props.contentClass)}
+        onOpenAutoFocus={(event) => {
+          if (!props.aiFilter) return;
+          event.preventDefault();
+          // Kobalte focuses the menu itself on a deferred tick; land after it.
+          setTimeout(() => {
+            requestAnimationFrame(() => {
+              if (aiFilterInput?.isConnected) {
+                aiFilterInput.focus({ preventScroll: true });
+              }
+            });
+          }, 0);
+        }}
+      >
         <Show when={props.aiFilter}>
           {(aiFilter) => (
             <Dropdown.Group>
@@ -211,6 +226,9 @@ export function ListFilterDropdown<
                 placeholder={aiFilter().placeholder}
                 onSubmit={aiFilter().onSubmit}
                 onApplied={() => setOpen(false)}
+                inputRef={(element) => {
+                  aiFilterInput = element;
+                }}
               />
             </Dropdown.Group>
           )}

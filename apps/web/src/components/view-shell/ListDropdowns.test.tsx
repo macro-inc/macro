@@ -172,6 +172,22 @@ function setupAiFilter(onSubmit: (query: string) => Promise<AiFilterOutcome>) {
   return { open };
 }
 
+it('focuses the AI input when the menu opens, with ArrowDown reaching the first row', async () => {
+  setupAiFilter(async () => ({ status: 'applied' }) as const);
+  const input = await screen.findByPlaceholderText('Filter with AI…');
+  await waitFor(() => expect(document.activeElement).toBe(input));
+  // Kobalte's deferred menu focus must not win afterwards.
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  expect(document.activeElement).toBe(input);
+
+  fireEvent.keyDown(input, { key: 'ArrowDown' });
+  await waitFor(() =>
+    expect(document.activeElement).toBe(
+      screen.getByRole('menuitem', { name: 'Assignee' })
+    )
+  );
+});
+
 it('submits the AI filter description on Enter and closes once it applies', async () => {
   const onSubmit = vi.fn(async () => ({ status: 'applied' }) as const);
   const { open } = setupAiFilter(onSubmit);
@@ -216,10 +232,7 @@ it('hands focus back to the AI input when a hovered row steals it mid-descriptio
   setupAiFilter(async () => ({ status: 'applied' }) as const);
   const input = await screen.findByPlaceholderText('Filter with AI…');
   const row = screen.getByRole('menuitem', { name: 'Assignee' });
-  // Opening highlights the first row; the user then clicks into the box.
-  await waitFor(() => expect(document.activeElement).toBe(row));
-  fireEvent.pointerDown(input);
-  input.focus();
+  await waitFor(() => expect(document.activeElement).toBe(input));
   fireEvent.input(input, { target: { value: 'urgent' } });
   expect(document.activeElement).toBe(input);
 

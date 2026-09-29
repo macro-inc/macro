@@ -6,7 +6,7 @@
 The desktop toolbar contains search (`Ctrl+F`), `Sort`, `Group`, and `Filter`;
 the filter uses the legacy compact option rows and searchable Assignee, Created by,
 and Tags submenus. Multi-select choices keep the menu open; Escape dismisses it.
-The top of the `Filter` menu is a `Filter with AI…` textbox: type a plain-English
+The top of the `Filter` menu is a `Filter with AI…` textbox, focused when the menu opens: type a plain-English
 description such as `urgent and high priority tasks that are not completed` and press
 Enter. It replaces the current selection with the matching Status, Priority, Assignee,
 Created by, and Tags options (exclusions on Status/Priority become the complementary
