@@ -1,3 +1,5 @@
+import { openReminderDetail } from '@app/features/reminders/reminder-navigation';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { toast } from '@core/component/Toast/Toast';
 import type { EntityData } from '@entity';
 import { EntitySelectionBadge } from '@entity/components/EntitySelectionBadge';
@@ -11,7 +13,6 @@ import type { Reminder } from '@service-storage/generated/schemas/reminder';
 import type { ReminderSchedule } from '@service-storage/generated/schemas/reminderSchedule';
 import { ActionDialogShell, Dialog } from '@ui';
 import { createSignal, Show } from 'solid-js';
-import { globalSplitManager } from '../../lib/signals/splitLayout';
 import { ReminderForm } from './ReminderForm';
 import {
   closeReminderComposer,
@@ -79,14 +80,10 @@ export function ReminderComposerModal() {
         actions: [
           {
             label: 'View',
-            onClick: () =>
-              globalSplitManager()?.openWithSplit(
-                {
-                  type: 'component',
-                  id: `reminder-view~${reminder.id}`,
-                },
-                { activate: true }
-              ),
+            onClick: () => {
+              const manager = globalSplitManager();
+              if (manager) openReminderDetail(reminder.id, { manager });
+            },
           },
         ],
       }
