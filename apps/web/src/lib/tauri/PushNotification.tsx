@@ -19,6 +19,7 @@ import {
 } from '@queries/notification/device-registration';
 import { makePersisted } from '@solid-primitives/storage';
 import { removeAllActive } from '@tauri-apps/plugin-notification';
+import { Mutex } from 'async-mutex';
 import {
   createContext,
   createEffect,
@@ -43,6 +44,10 @@ function usePushNotifications(
   // Bumped by every registration-changing action so an in-flight one can
   // detect it was superseded (logout, opt-out, a newer sync) and stop.
   let registrationEpoch = 0;
+  // Keep token writes ordered across logout/account switching. Native writes
+  // have their own queue so logout can disarm without waiting for the network.
+  const registrationMutex = new Mutex();
+  const recipientMutex = new Mutex();
   let disposed = false;
   let requestingPermission = false;
   let notificationWatchStarted = false;
@@ -71,29 +76,52 @@ function usePushNotifications(
     token: string,
     epoch: number
   ): Promise<'granted' | 'denied'> {
-    const recipient = await fetchRecipient();
-    if (recipient === undefined) return 'denied';
-    if (isStale(epoch) || !hasLoginCookie()) return 'denied';
-    const res = await registerPushDevice({
-      deviceType,
-      token,
+    return registrationMutex.runExclusive(async () => {
+      if (isStale(epoch) || !hasLoginCookie()) return 'denied';
+      const recipient = await fetchRecipient();
+      if (recipient === undefined) return 'denied';
+      if (isStale(epoch) || !hasLoginCookie()) return 'denied';
+      const res = await registerPushDevice({ deviceType, token });
+      if (res.isErr()) {
+        // Transient failures must not erase a previously granted permission.
+        console.error('failed to register device for push', res.error);
+        return 'denied';
+      }
+      try {
+        if (isStale(epoch) || !hasLoginCookie()) return 'denied';
+        await configureRecipient(recipient, epoch);
+        if (isStale(epoch) || !hasLoginCookie()) return 'denied';
+        setPermission('granted');
+        setPushDisabledByUser(false);
+        await startWatch();
+        if (isStale(epoch) || !hasLoginCookie()) return 'denied';
+        return 'granted';
+      } finally {
+        // A successful backend write may finish after logout/opt-out. Roll it
+        // back before a newer registration can acquire the lock and bind it.
+        if (isStale(epoch) || !hasLoginCookie()) await unregisterDevice(token);
+      }
     });
-    if (res.isErr()) {
-      // A failed registration is always a transient condition (network blip,
-      // auth still settling, backend error) — the endpoint has no "rejected"
-      // semantics. Only success may write the persisted state: flipping it to
-      // 'denied' here would disable remote-push dedupe and report push as off
-      // in Settings until the next successful sync.
-      console.error('failed to register device for push', res.error);
-      return 'denied';
-    }
-    if (isStale(epoch) || !hasLoginCookie()) return 'denied';
-    await api.configureRecipient(recipient);
-    if (isStale(epoch)) return 'denied';
-    setPermission('granted');
-    setPushDisabledByUser(false);
-    await startWatch();
-    return 'granted';
+  }
+
+  async function configureRecipient(recipient: string | null, epoch: number) {
+    await recipientMutex.runExclusive(async () => {
+      if (isStale(epoch)) return;
+      try {
+        await api.configureRecipient(recipient);
+      } finally {
+        // The bridge may finish an old configure after logout has started.
+        // Disarm before releasing the lock to any newer account's configure.
+        if (recipient !== null && (isStale(epoch) || !hasLoginCookie())) {
+          await api.configureRecipient(null);
+        }
+      }
+    });
+  }
+
+  async function unregisterDevice(token: string) {
+    const res = await unregisterPushDevice({ deviceType, token });
+    if (res.isErr()) throw new Error('failed to unregister device for push');
   }
 
   // The native receiver only displays pushes addressed to this account, so
@@ -126,7 +154,7 @@ function usePushNotifications(
     if (perm.status !== 'granted') {
       setPermission(undefined);
       setRegistrationResult(undefined);
-      await api.configureRecipient(null);
+      await configureRecipient(null, epoch);
       return 'denied';
     }
     const reg = await api.register();
@@ -142,24 +170,24 @@ function usePushNotifications(
   }
 
   async function unregisterPushNotifications(disabledByUser = true) {
-    ++registrationEpoch;
+    const epoch = ++registrationEpoch;
     const token = registrationResult()?.token;
     setPermission(undefined);
     setPushDisabledByUser(disabledByUser);
     setRegistrationResult(undefined);
-    await api.configureRecipient(null);
-
-    if (token) {
-      const res = await unregisterPushDevice({
-        deviceType,
-        token,
-      });
-      if (res.isErr()) {
-        console.error('failed to unregister device for push', res.error);
-      }
-    } else {
-      console.warn('Cannot unregister device with no token set');
-    }
+    // Queue removal immediately, before another login can enqueue a token
+    // registration. Disarming the receiver is independent of backend latency.
+    await Promise.all([
+      configureRecipient(null, epoch),
+      registrationMutex.runExclusive(async () => {
+        if (!token) return;
+        try {
+          await unregisterDevice(token);
+        } catch (error) {
+          console.error('failed to unregister device for push', error);
+        }
+      }),
+    ]);
   }
 
   // (Re-)register this device under whoever is currently logged in. The
@@ -179,12 +207,12 @@ function usePushNotifications(
     if (isStale(epoch)) return;
     if (sysPerm.status !== 'granted') {
       setPermission(undefined);
-      await api.configureRecipient(null);
+      await configureRecipient(null, epoch);
       const token = registrationResult()?.token;
       if (deviceType === 'android' && token) {
-        const result = await unregisterPushDevice({ deviceType, token });
-        if (result.isErr())
-          throw new Error('push permission revocation sync failed');
+        await registrationMutex.runExclusive(async () => {
+          if (!isStale(epoch)) await unregisterDevice(token);
+        });
       }
       return;
     }
@@ -198,7 +226,9 @@ function usePushNotifications(
     if (storedToken && storedToken !== freshResult.token) {
       // Best-effort: unregister the old token
       try {
-        await unregisterPushDevice({ deviceType, token: storedToken });
+        await registrationMutex.runExclusive(async () => {
+          if (!isStale(epoch)) await unregisterDevice(storedToken);
+        });
       } catch (error) {
         console.error('failed to unregister rotated push token', error);
       }
@@ -258,10 +288,11 @@ function usePushNotifications(
   void reconcileOnLaunch();
 
   async function reconcileOnLaunch() {
+    const epoch = registrationEpoch;
     try {
       if (!hasLoginCookie() || pushDisabledByUser()) {
         setPermission(undefined);
-        await api.configureRecipient(null);
+        await configureRecipient(null, epoch);
         return;
       }
       await syncPushRegistrations('resume');
@@ -279,9 +310,10 @@ function usePushNotifications(
   async function startWatch() {
     if (disposed || notificationWatchStarted || !onPushNotification) return;
     notificationWatchStarted = true;
+    const epoch = registrationEpoch;
     try {
       if (deviceType === 'android' && !hasLoginCookie())
-        await api.configureRecipient(null);
+        await configureRecipient(null, epoch);
       await api.watch((event) => {
         void handlePushEvent(event);
       });

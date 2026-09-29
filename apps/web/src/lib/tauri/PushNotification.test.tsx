@@ -153,12 +153,106 @@ describe('Android push lifecycle', () => {
       'push device registration did not complete'
     );
     await vi.waitFor(() => expect(mock.registerDevice).toHaveBeenCalled());
-    await mock.lifecycle!.unregisterForLogout();
+    const logout = mock.lifecycle!.unregisterForLogout();
+    await vi.waitFor(() => expect(mock.configure).toHaveBeenCalledWith(null));
     mock.loggedIn = false;
     complete({ isErr: () => false });
-    await syncing;
+    await Promise.all([syncing, logout]);
     expect(mock.configure.mock.calls).toEqual([[null]]);
+    expect(mock.unregisterDevice).toHaveBeenCalledWith({
+      deviceType: 'android',
+      token: 'test-token',
+    });
+    expect(mock.unregisterDevice.mock.invocationCallOrder[0]).toBeGreaterThan(
+      mock.registerDevice.mock.invocationCallOrder[0]
+    );
   });
+
+  it.each(['logout', 'opt-out'])(
+    'disarms a native configure that completes during %s',
+    async (action) => {
+      await mount();
+      mock.check.mockResolvedValue({ status: 'granted' });
+      let complete!: () => void;
+      let nativeRecipient: string | null = null;
+      mock.configure.mockImplementation(async (recipient: string | null) => {
+        if (recipient !== null) {
+          await new Promise<void>((resolve) => {
+            complete = resolve;
+          });
+        }
+        nativeRecipient = recipient;
+      });
+      const syncing = expect(
+        mock.lifecycle!.syncRegistration()
+      ).rejects.toThrow('push device registration did not complete');
+      await vi.waitFor(() => expect(complete).toBeDefined());
+      const disabling =
+        action === 'logout'
+          ? mock.lifecycle!.unregisterForLogout()
+          : mock.notifications!.unregisterNotifications();
+      if (action === 'logout') mock.loggedIn = false;
+      complete();
+      await Promise.all([syncing, disabling]);
+      expect(nativeRecipient).toBeNull();
+      expect(mock.configure).toHaveBeenLastCalledWith(null);
+      expect(mock.unregisterDevice).toHaveBeenCalledWith({
+        deviceType: 'android',
+        token: 'test-token',
+      });
+    }
+  );
+
+  it.each(['backend', 'native'])(
+    'keeps the new account registered after stale %s completion',
+    async (pendingStep) => {
+      await mount();
+      mock.check.mockResolvedValue({ status: 'granted' });
+      let complete!: () => void;
+      let nativeRecipient: string | null = null;
+      let backendRegistered = false;
+      const delayed = async () => {
+        await new Promise<void>((resolve) => {
+          complete = resolve;
+        });
+      };
+      mock.registerDevice.mockImplementation(async () => {
+        if (
+          pendingStep === 'backend' &&
+          mock.registerDevice.mock.calls.length === 1
+        )
+          await delayed();
+        backendRegistered = true;
+        return { isErr: () => false };
+      });
+      mock.unregisterDevice.mockImplementation(async () => {
+        backendRegistered = false;
+        return { isErr: () => false };
+      });
+      mock.configure.mockImplementation(async (recipient: string | null) => {
+        if (pendingStep === 'native' && recipient === 'macro|alice@example.com')
+          await delayed();
+        nativeRecipient = recipient;
+      });
+      const oldSync = expect(
+        mock.lifecycle!.syncRegistration()
+      ).rejects.toThrow('push device registration did not complete');
+      await vi.waitFor(() => expect(complete).toBeDefined());
+      const logout = mock.lifecycle!.unregisterForLogout();
+      // Model a new login after logout's network timeout. The token is shared.
+      mock.recipient.mockResolvedValue('macro|bob@example.com');
+      const newSync = mock.lifecycle!.syncRegistration();
+      complete();
+      await Promise.all([oldSync, logout, newSync]);
+      expect(backendRegistered).toBe(true);
+      expect(nativeRecipient).toBe('macro|bob@example.com');
+      expect(mock.configure).toHaveBeenLastCalledWith('macro|bob@example.com');
+      expect(mock.registerDevice).toHaveBeenCalledTimes(2);
+      expect(mock.registerDevice.mock.invocationCallOrder[1]).toBeGreaterThan(
+        Math.max(...mock.unregisterDevice.mock.invocationCallOrder)
+      );
+    }
+  );
 
   it('disables native display when permission is revoked', async () => {
     await mount();
