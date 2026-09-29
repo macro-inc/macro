@@ -549,6 +549,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             macro_env::Environment::Local,
         )),
         user_permissions_service,
+        non_user_owners: NonUserOwners::Disabled,
         config: Arc::new(Config::new_empty_for_test()),
         internal_api_key: InternalApiKey::Comptime("testing"),
         notification_ingress_service,

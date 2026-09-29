@@ -18,6 +18,7 @@ use document_storage_service_client::DocumentStorageServiceClient;
 use documents::inbound::attachment::DocumentAttachmentService;
 use email::inbound::attachment::EmailAttachmentService;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
+use entity_registry::NonUserOwners;
 use macro_auth::InternalApiKey;
 use macro_authorization::{
     MacroAuthJwtValidator, MacroAuthorizationServiceImpl, MacroAuthorizationState,
@@ -147,6 +148,8 @@ pub struct ApiContext {
     pub email_service_client_external: Arc<email_service_client::EmailServiceClientExternal>,
     pub authorization_state: MacroAuthorizationState<DcsAuthorizationService>,
     pub user_permissions_service: Arc<DcsUserPermissionsService>,
+    /// Whether a team bot with no acting user may own what it creates.
+    pub non_user_owners: NonUserOwners,
     /// Plan allowance gate for AI requests.
     pub ai_billing: Arc<DcsAiBillingService>,
     pub config: Arc<Config>,

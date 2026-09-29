@@ -77,6 +77,7 @@ async fn main() -> anyhow::Result<()> {
         .resolve_remote_secrets(Environment::new_or_prod(), &secretsmanager_client)
         .await
         .context("expected to be able to resolve config secrets")?;
+    let non_user_owners = config.non_user_owners()?;
 
     tracing::info!("initialized config");
 
@@ -842,6 +843,7 @@ async fn main() -> anyhow::Result<()> {
         search_service_client,
         authorization_state,
         user_permissions_service,
+        non_user_owners,
         ai_billing,
         internal_api_key: config.internal_api_key.clone(),
         config: Arc::new(config),
