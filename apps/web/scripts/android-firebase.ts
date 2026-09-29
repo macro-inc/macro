@@ -1,16 +1,21 @@
-import { copyFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { copyFile, mkdir } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
 import { z } from 'zod';
 
 // These projects match the dev/prod FCM credentials used by notification-service.
 const projects = { dev: 'macro-app-dev-12ae0', build: 'macro-app-955f1' };
 const configSchema = z.object({
-  project_info: z.object({ project_id: z.string() }),
+  project_info: z.object({
+    project_id: z.string(),
+    project_number: z.string().min(1),
+  }),
   client: z.array(
     z.object({
       client_info: z.object({
+        mobilesdk_app_id: z.string().min(1),
         android_client_info: z.object({ package_name: z.string() }),
       }),
+      api_key: z.array(z.object({ current_key: z.string().min(1) })).min(1),
     })
   ),
 });
@@ -43,6 +48,8 @@ if (import.meta.main) {
       'Usage: android-firebase.ts {dev|build} source destination'
     );
   validateAndroidFirebase(await Bun.file(source).json(), action);
-  if (resolve(source) !== resolve(destination))
+  if (resolve(source) !== resolve(destination)) {
+    await mkdir(dirname(destination), { recursive: true });
     await copyFile(source, destination);
+  }
 }
