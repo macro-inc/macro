@@ -100,6 +100,7 @@ pub trait CollabSurfaceService: Send + Sync + 'static {
     ///   row (an earlier ensure died or failed mid-init) has its
     ///   initialization retried.
     /// - soft-deleted → [`CollabSurfaceError::Gone`]; ids are never reused.
+    /// - not a random (v4 or v7) UUID → [`CollabSurfaceError::BadRequest`].
     /// - the id names a document, or a new id already has a sync-service
     ///   session → [`CollabSurfaceError::IdReserved`], before any row is
     ///   written: a new surface only ever creates its own session.
