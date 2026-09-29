@@ -3888,6 +3888,39 @@ async fn a_prompt_waiting_behind_a_mirror_holds_the_rest_of_the_run_for_a_reload
     assert_eq!(agent_texts(&loaded), ["answered over there"]);
 }
 
+/// A prompt that stops waiting (a stop, or the gate budget running out) does
+/// not let the mirror resume streaming: the client is already missing what
+/// was held back, and the rest of the run would render without it.
+#[tokio::test]
+async fn a_mirror_that_held_frames_back_keeps_the_rest_of_the_run_for_the_reload() {
+    let (service, cursor, notifier) = service(None);
+    let id = service.new_session(Path::new(""), vec![]);
+    let (mirror, foreign) = mirror_following_a_live_run(&service, &cursor, &id).await;
+    notifier.wait_for_updates(1).await;
+
+    let session = service.session(&id).unwrap();
+    drop(WaitingPrompt::new(&session));
+    foreign
+        .send(CursorEvent::Assistant {
+            text: "answered over there".into(),
+        })
+        .unwrap();
+    foreign.send(finished("R1")).unwrap();
+    foreign.send(CursorEvent::Done).unwrap();
+    tokio::time::timeout(std::time::Duration::from_secs(5), mirror)
+        .await
+        .expect("the mirror ends with the run")
+        .unwrap();
+
+    assert!(
+        agent_texts(&notifier.updates()).is_empty(),
+        "the rest of the run waits for the reload"
+    );
+    assert_eq!(notifier.reloads(), vec![id.clone()]);
+    let loaded = load(&service, &id, &notifier).await;
+    assert_eq!(agent_texts(&loaded), ["answered over there"]);
+}
+
 /// A stop reaches the mirror itself, not only the prompt behind it.
 ///
 /// Cursor was observed to keep a run at `RUNNING` after a cancel, with a

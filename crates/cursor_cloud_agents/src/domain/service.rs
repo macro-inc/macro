@@ -421,7 +421,7 @@ struct SessionState {
     reload_pending: bool,
     /// Prompts parked behind a mirror's hold on the turn gate. Each one's
     /// turn is already open on the client, so the mirror stops publishing
-    /// while any is waiting.
+    /// once one arrives.
     prompts_waiting: usize,
     /// Something journaled since the last load projected updates the client
     /// was never sent. Until a load shows them, the mirror cannot deliver a
@@ -475,12 +475,15 @@ struct SessionState {
 struct WaitingPrompt<'session>(&'session Session);
 
 impl<'session> WaitingPrompt<'session> {
+    /// The client opened this prompt's turn when it sent the prompt, before
+    /// it got here, so whatever the mirror streamed in between may already
+    /// sit inside that turn. Nothing can tell those frames apart, so the
+    /// mirror's run is left for a reload to put in its place.
     fn new(session: &'session Session) -> Self {
-        session
-            .state
-            .lock()
-            .expect("session state poisoned")
-            .prompts_waiting += 1;
+        let mut state = session.state.lock().expect("session state poisoned");
+        state.prompts_waiting += 1;
+        state.unshown = true;
+        drop(state);
         Self(session)
     }
 }
@@ -2542,7 +2545,9 @@ where
             let emit = match emit {
                 Emit::Live => true,
                 Emit::Silent => false,
-                Emit::Mirror => state.prompts_waiting == 0,
+                // Once anything is held back, the rest of the run is too:
+                // later frames make no sense to a client missing earlier ones.
+                Emit::Mirror => state.prompts_waiting == 0 && !state.unshown,
             };
             // A prompt's own blocks are on the client already: it sent them.
             let visible = !updates.is_empty()
