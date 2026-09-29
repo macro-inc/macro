@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE scheduled_action\n            SET name = $1,\n                schedule = $2,\n                kind = $3,\n                timezone = $4,\n                task = $5,\n                next_run_at = $6,\n                enabled = $7,\n                trigger_type = $8,\n                event_filters = $9,\n                configuration_revision = $10,\n                event_activated_at = $11,\n                updated_at = now()\n            WHERE id = $12 AND owner = $13\n              AND configuration_revision = $10::bigint - 1\n              AND (\n                  claimed IS NULL OR claimed < $14\n                  OR (\n                      NOT $7 AND name = $1 AND kind = $3 AND task = $5\n                      AND trigger_type = $8\n                      AND schedule IS NOT DISTINCT FROM $2\n                      AND timezone IS NOT DISTINCT FROM $4\n                      AND event_filters IS NOT DISTINCT FROM $9\n                  )\n              )\n            RETURNING id, owner, name, schedule, kind, timezone, task, claimed, created_at,\n                      updated_at, next_run_at, enabled, trigger_type, event_filters,\n                      configuration_revision, event_activated_at\n            ",
+  "query": "\n            UPDATE scheduled_action\n            SET name = $1,\n                schedule = $2,\n                kind = $3,\n                timezone = $4,\n                task = $5,\n                next_run_at = $6,\n                enabled = $7,\n                trigger_type = $8,\n                event_filters = $9,\n                configuration_revision = $10,\n                event_activated_at = $11,\n                updated_at = now()\n            WHERE id = $12\n              AND configuration_revision = $10::bigint - 1\n              AND (\n                  claimed IS NULL OR claimed < $13\n                  OR (\n                      NOT $7 AND name = $1 AND kind = $3 AND task = $5\n                      AND trigger_type = $8\n                      AND schedule IS NOT DISTINCT FROM $2\n                      AND timezone IS NOT DISTINCT FROM $4\n                      AND event_filters IS NOT DISTINCT FROM $9\n                  )\n              )\n            RETURNING id, owner, name, schedule, kind, timezone, task, claimed, created_at,\n                      updated_at, next_run_at, enabled, trigger_type, event_filters,\n                      configuration_revision, event_activated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -98,7 +98,6 @@
         "Int8",
         "Timestamptz",
         "Uuid",
-        "Text",
         "Timestamptz"
       ]
     },
@@ -121,5 +120,5 @@
       true
     ]
   },
-  "hash": "4889cf7b6100a28da3f99b43b9264f7607636456460db845b8abfe3814b7b7f7"
+  "hash": "ede240f34972b67da0876150e37e382f7b1c28ea0ad00f2ba330dfe8a3441934"
 }
