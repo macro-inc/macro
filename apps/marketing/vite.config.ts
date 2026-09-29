@@ -20,7 +20,7 @@ export default defineConfig({
   ],
   worker: { format: 'es' },
   build: {
-    outDir: '../dist-site',
+    outDir: 'dist',
     emptyOutDir: true,
     target: 'esnext',
     manifest: true,

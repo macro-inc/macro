@@ -8,7 +8,8 @@
     "check:standalone": "bun scripts/verify-standalone.ts",
     "type-check": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run -c vitest.config.ts",
-    "check:seo": "bun scripts/verify-seo.ts"
+    "check:seo": "bun scripts/verify-seo.ts",
+    "check:seo:live": "bun scripts/verify-seo-live.ts"
   },
   "dependencies": {
     "@floating-ui/dom": "^1.7.4",

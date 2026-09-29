@@ -3,7 +3,7 @@
  *
  * Runs after `vite build` and `vite build -c vite.prerender.config.ts`:
  * renders feature/blog routes with Solid's renderToStringAsync and
- * writes them to `dist-site/<route>/index.html` (plus sitemap.xml and robots.txt).
+ * writes them to `dist/<route>/index.html` (plus sitemap.xml and robots.txt).
  * The deployed S3 bucket then serves real, content-complete HTML to crawlers
  * and agents that do not execute JavaScript. The homepage hydrates the same
  * DOM in browsers; legacy feature routes retain their existing client boot.
@@ -35,10 +35,10 @@ const {
   postRoutes,
 } = (await import(
   // @ts-expect-error -- untyped build artifact; the cast restores the types
-  '../../dist-site-prerender/prerenderEntry.js'
+  '../dist-prerender/prerenderEntry.js'
 )) as typeof import('./prerenderEntry');
 
-const DIST_DIR = path.resolve(import.meta.dirname, '../../dist-site');
+const DIST_DIR = path.resolve(import.meta.dirname, '../dist');
 const BASE_URL = (process.env.VITE_APP_BASE_URL || 'https://macro.com').replace(
   /\/$/,
   ''

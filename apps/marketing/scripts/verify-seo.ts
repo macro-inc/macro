@@ -5,7 +5,7 @@ import { gzipSync } from 'node:zlib';
 import { Window } from 'happy-dom';
 import baseline from '../seo/migration-baseline.json';
 
-const directory = path.resolve(import.meta.dirname, '../../dist-site');
+const directory = path.resolve(import.meta.dirname, '../dist');
 const origin = (process.env.VITE_APP_BASE_URL || 'https://macro.com').replace(
   /\/$/,
   ''
@@ -107,7 +107,7 @@ for (const [route, doc] of documentsByRoute) {
   for (const link of doc.querySelectorAll('a[href]')) {
     const url = new URL(link.getAttribute('href')!, `${origin}${route}`);
     if (url.origin !== origin) continue;
-    // These paths belong to existing app/Ghost/OIDC CDN origins, not dist-site.
+    // These paths belong to existing app/Ghost/OIDC CDN origins, not the site build.
     if (
       /^\/(?:app(?:\/|$)|resources(?:\/|$)|\.well-known\/)/.test(url.pathname)
     )

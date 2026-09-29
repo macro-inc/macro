@@ -62,7 +62,7 @@ a development review entry. It does not host the authenticated `/app/*` routes.
 Before the first prerender build, install Chromium with
 `bunx playwright install chromium --only-shell` (add `--with-deps` on Linux CI).
 Run `git lfs pull` when migrated video files have not been fetched. The build
-writes the public artifact to `apps/web/dist-site/`, verifies the standalone
+writes the public artifact to `apps/marketing/dist/`, verifies the standalone
 boundary, prerenders public pages, and finishes with the SEO migration gate.
 The homepage uses Solid SSR and hydration. Build verification checks that its
 first-painted heading retains its DOM node and geometry on desktop and mobile,
@@ -86,10 +86,10 @@ signup noindex, and initial JavaScript budget. The deployment probe is
 `bun scripts/verify-seo-live.ts https://candidate-host`.
 `VITE_APP_BASE_URL` sets the expected canonical origin (default `macro.com`).
 
-Publish `apps/web/dist-site/` at the public origin, resolving extensionless
+Publish `apps/marketing/dist/` at the public origin, resolving extensionless
 public paths to `<path>/index.html`. Preserve the existing authenticated
 `/app/*` application, Ghost resources, and OIDC routing at the edge. The existing
-app deployment does not automatically publish `dist-site`; the public artifact
+app deployment does not automatically publish `apps/marketing/dist/`; the public artifact
 needs its own deployment step. Website development and builds do not require
 changes to application routes, components, or providers.
 

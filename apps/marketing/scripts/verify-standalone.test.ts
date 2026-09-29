@@ -11,7 +11,7 @@ function fixture() {
     path.join(os.tmpdir(), 'website-boundary-')
   );
   temporaryDirectories.push(repository);
-  const website = path.join(repository, 'apps/web/marketing');
+  const website = path.join(repository, 'apps/marketing');
   const write = (name: string, text = '') => {
     const file = path.resolve(website, name);
     fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -28,7 +28,7 @@ function fixture() {
     'export interface Local { name: string }; export const name = "local";'
   );
   write('public/icon.svg', '<svg />');
-  write('../src/private.ts', 'export const secret = 1;');
+  write('../web/src/private.ts', 'export const secret = 1;');
   return { website, write, inspect: () => auditStandalone(website) };
 }
 
@@ -75,15 +75,15 @@ describe('standalone website boundary', () => {
   });
 
   it.each([
-    "import { secret } from '../../src/private';",
-    "import type { Secret } from '../../src/private';",
-    "export type { Secret } from '../../src/private';",
-    "type Secret = import('../../src/private').Secret;",
-    "const load = () => import('../../src/private');",
-    "const load = require('../../src/private');",
-    "import secret = require('../../src/private');",
-    "const files = import.meta.glob('../../src/**/*.tsx');",
-    '/// <reference path="../../src/private.ts" />',
+    "import { secret } from '../../web/src/private';",
+    "import type { Secret } from '../../web/src/private';",
+    "export type { Secret } from '../../web/src/private';",
+    "type Secret = import('../../web/src/private').Secret;",
+    "const load = () => import('../../web/src/private');",
+    "const load = require('../../web/src/private');",
+    "import secret = require('../../web/src/private');",
+    "const files = import.meta.glob('../../web/src/**/*.tsx');",
+    '/// <reference path="../../web/src/private.ts" />',
   ])(
     'rejects app dependencies even in unreachable/type-only modules: %s',
     (source) => {
@@ -114,10 +114,10 @@ describe('standalone website boundary', () => {
 
   it('rejects aliases and TypeScript configuration that reach outside the website', () => {
     const { write, inspect } = fixture();
-    write('../tsconfig.json', '{}');
+    write('../web/tsconfig.json', '{}');
     write(
       'tsconfig.json',
-      '{"extends":"../tsconfig.json","compilerOptions":{"paths":{"@app/*":["../src/*"]}}}'
+      '{"extends":"../web/tsconfig.json","compilerOptions":{"paths":{"@app/*":["../web/src/*"]}}}'
     );
     const reasons = inspect().violations.map((item) => item.reason);
     expect(reasons).toContain('TypeScript configuration must be website-owned');
@@ -128,8 +128,8 @@ describe('standalone website boundary', () => {
 
   it('rejects undeclared dependencies inherited accidentally from the app install', () => {
     const { write, inspect } = fixture();
-    write('../node_modules/app-only/package.json', '{"main":"index.js"}');
-    write('../node_modules/app-only/index.js');
+    write('../../node_modules/app-only/package.json', '{"main":"index.js"}');
+    write('../../node_modules/app-only/index.js');
     write('src/main.ts', "import 'app-only';");
     expect(inspect().violations[0].reason).toContain(
       'declared in the website package.json'
@@ -140,7 +140,7 @@ describe('standalone website boundary', () => {
     const { write, inspect } = fixture();
     write(
       'package.json',
-      '{"dependencies":{"@macro-inc/ui":"*","shared":"workspace:*","app":"file:../src"}}'
+      '{"dependencies":{"@macro-inc/ui":"*","shared":"workspace:*","app":"file:../web/src"}}'
     );
     expect(inspect().violations).toHaveLength(3);
     expect(
@@ -152,9 +152,9 @@ describe('standalone website boundary', () => {
     const { website, write, inspect } = fixture();
     write('package.json', '{"dependencies":{"local-ui":"1.0.0"}}');
     const workspace = path.dirname(
-      write('../../../packages/local-ui/package.json', '{"main":"index.js"}')
+      write('../../packages/local-ui/package.json', '{"main":"index.js"}')
     );
-    write('../../../packages/local-ui/index.js', 'module.exports = {};');
+    write('../../packages/local-ui/index.js', 'module.exports = {};');
     fs.mkdirSync(path.join(website, 'node_modules'));
     fs.symlinkSync(workspace, path.join(website, 'node_modules/local-ui'));
     write('src/main.ts', "import 'local-ui';");
@@ -162,16 +162,16 @@ describe('standalone website boundary', () => {
   });
 
   it.each([
-    '@import "../../src/private.css";',
-    '@source "../../src/**/*.tsx";',
-    '@import "./base.css" source("../../src");',
-    '.icon { background: url("../../src/icon.svg"); }',
+    '@import "../../web/src/private.css";',
+    '@source "../../web/src/**/*.tsx";',
+    '@import "./base.css" source("../../web/src");',
+    '.icon { background: url("../../web/src/icon.svg"); }',
     '.icon { background: url("/live-editor/assets/editor.js"); }',
   ])('rejects CSS dependencies on the application: %s', (css) => {
     const { write, inspect } = fixture();
     write('src/base.css');
-    write('../src/private.css');
-    write('../src/icon.svg');
+    write('../web/src/private.css');
+    write('../web/src/icon.svg');
     write('src/site.css', css);
     expect(inspect().violations.length).toBeGreaterThan(0);
     expect(
@@ -204,7 +204,7 @@ describe('standalone website boundary', () => {
 
   it('rejects escaped public symlinks even when no source refers to the asset', () => {
     const { website, write, inspect } = fixture();
-    const external = write('../src/icon.svg', '<svg/>');
+    const external = write('../web/src/icon.svg', '<svg/>');
     fs.symlinkSync(external, path.join(website, 'public/borrowed.svg'));
     expect(inspect().violations[0]).toMatchObject({
       file: 'public/borrowed.svg',

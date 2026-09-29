@@ -28,7 +28,7 @@ export default defineConfig({
   },
   build: {
     ssr: path.resolve(__dirname, 'scripts/prerenderEntry.tsx'),
-    outDir: '../dist-site-prerender',
+    outDir: 'dist-prerender',
     emptyOutDir: true,
     target: 'esnext',
   },

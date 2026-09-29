@@ -50,8 +50,9 @@ site origin available until the candidate passes the checks below.
 
 1. Install Chromium (`bunx playwright install chromium --only-shell --with-deps`
    on Linux CI), fetch LFS assets, build with `VITE_APP_BASE_URL=https://macro.com`
-   and run `bun run build:site`. Publish **dist-site/** to the website origin;
-   keep the app's **dist/** on the existing app origin.
+   and run `bun run build` in `apps/marketing`. Publish **apps/marketing/dist/**
+   to the website origin; keep the app's **apps/web/dist/** on the existing app
+   origin.
 2. Retain direct 200 directory-index rewrites: `/email` → `/email/index.html`,
    `/posts/linear-alternative` → `/posts/linear-alternative/index.html`, etc.
    Do not send all public URLs to the homepage SPA fallback. Unknown URLs must

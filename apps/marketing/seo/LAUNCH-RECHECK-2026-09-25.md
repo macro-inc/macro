@@ -1,7 +1,7 @@
 # Standalone website verification — September 25, 2026
 
 The public website now owns its presentation components, fixtures, styles,
-fonts, icons, and build configuration under `apps/web/marketing`. It imports no
+fonts, icons, and build configuration under `apps/marketing`. It imports no
 application source or Macro workspace packages. The PR contains no changes to
 `apps/web/src`, backend crates, or shared application packages relative to its
 merge base. Root workspace registration and public build scripts remain.
@@ -66,7 +66,7 @@ baseline is the earlier launch audit. Repeat on the deployed website origin.
 
 ## Deployment follow-through
 
-The website is not deployed by this verification. Publish `apps/web/dist-site`
+The website is not deployed by this verification. Publish `apps/marketing/dist/`
 through the public website deployment, preserve `/app/*` and existing edge
 routes, then run `verify-seo-live.ts` against that candidate. The existing app
 preview deployment does not automatically publish the website artifact.
