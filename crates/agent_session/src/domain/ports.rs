@@ -12,7 +12,7 @@ use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessa
 use bots::domain::models::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
-use model_owner::Owner;
+use model_owner::{Owner, OwnerType};
 use std::num::NonZeroUsize;
 
 /// A bidirectional connection to an agent runtime.
@@ -149,9 +149,10 @@ pub enum ManagedPersonaError {
     /// operator to ask and no owner to authorize against, so it is nobody's
     /// to start - a misconfiguration rather than a policy answer.
     UnmanagedSystemBot,
-    /// The owner does not own or belong to the persona's owner, or is not
-    /// a user at all.
+    /// The owner does not own or belong to the persona's owner.
     Forbidden,
+    /// The owner is not a user, so no persona rule applies.
+    OwnerNotUser(OwnerType),
     /// Looking up the persona or its owner failed.
     Lookup(AgentSessionError),
 }
@@ -174,7 +175,12 @@ pub async fn persona_for_owner<Bots: BotDirectory>(
     bot_id: BotId,
     owner: &Owner,
 ) -> std::result::Result<SelectedPersona, ManagedPersonaError> {
-    let user = owner.as_user().ok_or(ManagedPersonaError::Forbidden)?;
+    let user = session_owner_user(owner).map_err(|error| match error {
+        AgentSessionError::OwnerNotUser(owner_type) => {
+            ManagedPersonaError::OwnerNotUser(owner_type)
+        }
+        other => ManagedPersonaError::Lookup(other),
+    })?;
     let facts = bots
         .bot_facts(bot_id)
         .await

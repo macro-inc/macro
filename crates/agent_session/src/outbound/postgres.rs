@@ -21,7 +21,7 @@ use crate::domain::model::{
     ClaimOutcome, CreateAgentSessionParams, ExternalSession, LeaseView, ManagerFence, Message,
     ReplicaAddress, ReplicaId, SandboxSize, SessionBot, SessionClaim, SessionManager,
     SessionPreviewCandidate, SessionStatus, StoredAgentSessionLog, StoredQueuedAction,
-    ThreadSession, cursor_run_checkpoint,
+    ThreadSession, cursor_run_checkpoint, session_owner_user,
 };
 use crate::domain::ports::{
     AgentSessionLogRepo, AgentSessionRepo, ExternalSessionRepo, REPLICA_STALE_AFTER,
@@ -313,10 +313,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
         // The owner's grant is a user access row, and the session lands in
         // the owner's history: this store still holds user-owned sessions,
         // even though the denormalized owner_id no longer references "User".
-        // TODO(ownership-v2): T5.4 admits bot owners once the runtime can run as one.
-        let owner_user = owner_id
-            .as_user()
-            .ok_or_else(|| AgentSessionError::OwnerNotUser(owner_id.owner_type()))?;
+        let owner_user = session_owner_user(&owner_id)?;
 
         // The session row and its access grants land together: a crash between
         // the two would leave a session nobody - not even its owner -

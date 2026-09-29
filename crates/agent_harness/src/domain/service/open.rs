@@ -2,6 +2,7 @@
 //! external runtime that dials in. Each creates the row, provisions egress
 //! where there is a sandbox to give it to, and attaches the runtime.
 
+use agent_session::domain::model::session_owner_user;
 use agent_session::domain::ports::SelectedManagedPersona;
 use agent_session::domain::repository_branch::RepositoryBranch;
 use model_owner::Owner;
@@ -56,16 +57,9 @@ where
         &self,
         request: agent_session::domain::ports::OpenExternalAgentSession,
     ) -> agent_session::domain::error::Result<AgentSession> {
-        // An external session is opened as a person: the thread it claims is
-        // checked against what they may post in, and the announcement is
-        // made in their name. Any other kind of owner is refused before a
-        // row exists for it.
-        // TODO(ownership-v2): T5.4 admits bot owners once the runtime has a bot execution context.
-        let owner_user = request
-            .owner
-            .as_user()
-            .cloned()
-            .ok_or_else(|| AgentSessionError::OwnerNotUser(request.owner.owner_type()))?;
+        // The thread it claims is checked against what they may post in, and
+        // the announcement is made in their name, before a row exists.
+        let owner_user = session_owner_user(&request.owner)?;
         // The thread linkage is the caller's claim: it is honoured only when
         // the owner can write to that parent and the message sits in it.
         if let Some(thread) = &request.thread {
@@ -210,17 +204,9 @@ where
                 servers: Vec::new(),
             };
         }
-        // A managed session runs as its owner: its egress spends their
-        // connected apps, the repositories it may pick are the ones they
-        // reach, and its sandbox size is their preference. Only a person has
-        // those, so any other kind of owner is refused before anything is
-        // provisioned.
-        // TODO(ownership-v2): T5.4 admits bot owners once the runtime has a bot execution context.
-        let owner_user = request
-            .owner
-            .as_user()
-            .cloned()
-            .ok_or_else(|| AgentSessionError::OwnerNotUser(request.owner.owner_type()))?;
+        // Repositories and sandbox size belong to this person. Refusal happens
+        // before anything is provisioned.
+        let owner_user = session_owner_user(&request.owner)?;
         // Explicit source choices are a domain decision, before any session or egress grant exists.
         let selected_repo = if let Some(url) = request.repo_url.as_deref() {
             if kind != AgentKind::Cursor {

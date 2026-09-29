@@ -285,10 +285,24 @@ impl AgentSession {
     /// so; asking here fails typed for any other kind instead of treating a
     /// bot or team as a person.
     pub fn owner_user(&self) -> Result<&MacroUserIdStr<'static>, AgentSessionError> {
-        self.owner_id
+        session_owner_user(&self.owner_id)?;
+        Ok(self
+            .owner_id
             .as_user()
-            .ok_or_else(|| AgentSessionError::OwnerNotUser(self.owner_id.owner_type()))
+            .expect("session_owner_user accepted this owner"))
     }
+}
+
+/// The user a session runs as.
+///
+/// Sessions run as a user: egress spends their credentials, work is
+/// attributed to them, and grants are theirs.
+// TODO(ownership-v2): T5.4 admits bot owners once the runtime has a bot execution context.
+pub fn session_owner_user(owner: &Owner) -> Result<MacroUserIdStr<'static>, AgentSessionError> {
+    owner
+        .as_user()
+        .cloned()
+        .ok_or_else(|| AgentSessionError::OwnerNotUser(owner.owner_type()))
 }
 
 /// A persisted agent-session name changed and should be shown to live viewers.

@@ -1713,10 +1713,9 @@ impl IntoResponse for CreateSessionApiError {
                 StatusCode::CONFLICT,
                 "this bot already has a session for this thread".to_owned(),
             ),
-            Self::Domain(AgentSessionError::SessionIdTaken(_)) => (
-                StatusCode::CONFLICT,
-                "a session with this id already exists".to_owned(),
-            ),
+            Self::Domain(AgentSessionError::SessionIdTaken(_)) => {
+                (StatusCode::CONFLICT, "this id is already taken".to_owned())
+            }
             Self::Domain(AgentSessionError::InvalidRepositorySelection(reason)) => {
                 (StatusCode::UNPROCESSABLE_ENTITY, reason.to_owned())
             }
@@ -1836,7 +1835,9 @@ fn resolve_owner(
     }
 }
 
-/// A user or a bot acting for a user cannot miss the shared resolver.
+/// The shared resolver accepts every user and every bot with a verified
+/// acting user, so an error here is a programming error and surfaces as the
+/// existing 500.
 fn principal_owner(
     authorization: &MacroAuthorization,
     non_user_owners: NonUserOwners,
@@ -1905,6 +1906,11 @@ pub async fn create_agent_session_handler<
                             CreateSessionApiError::UnmanagedSystemBot
                         }
                         ManagedPersonaError::Forbidden => CreateSessionApiError::NotYourBot,
+                        ManagedPersonaError::OwnerNotUser(owner_type) => {
+                            CreateSessionApiError::Domain(AgentSessionError::OwnerNotUser(
+                                owner_type,
+                            ))
+                        }
                         ManagedPersonaError::Lookup(error) => CreateSessionApiError::Domain(error),
                     })?;
             match selected {

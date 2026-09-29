@@ -1,5 +1,5 @@
 use super::*;
-use crate::domain::model::SessionStatus;
+use crate::domain::model::{SessionStatus, session_owner_user};
 use axum::body::Body;
 use axum::http::{Request, header};
 use chrono::Utc;
@@ -123,10 +123,7 @@ impl SessionOpener for RecordingOpener {
         &self,
         request: OpenExternalAgentSession,
     ) -> crate::domain::error::Result<AgentSession> {
-        request
-            .owner
-            .as_user()
-            .ok_or_else(|| AgentSessionError::OwnerNotUser(request.owner.owner_type()))?;
+        session_owner_user(&request.owner)?;
         let session = AgentSession {
             repo_branch: None,
             pull_request_url: None,
@@ -158,10 +155,7 @@ impl SessionOpener for RecordingOpener {
         &self,
         request: OpenManagedSession,
     ) -> crate::domain::error::Result<AgentSession> {
-        request
-            .owner
-            .as_user()
-            .ok_or_else(|| AgentSessionError::OwnerNotUser(request.owner.owner_type()))?;
+        session_owner_user(&request.owner)?;
         let bot_id = request
             .profile
             .as_ref()
@@ -796,6 +790,39 @@ async fn a_team_bot_without_a_claim_resolves_to_a_bot_owner_when_the_gate_is_on(
 }
 
 #[tokio::test]
+async fn a_team_bot_selecting_a_persona_is_refused_as_a_bot_owner() {
+    let opener = Arc::new(RecordingOpener::default());
+    let requests = Arc::new(RecordingRequester::default());
+    let request = as_bot_for(
+        "team",
+        None,
+        serde_json::json!({ "botId": BotId::TEST_A.as_uuid() }).to_string(),
+    );
+
+    let response = router_with_gate(
+        opener.clone(),
+        OneBotDirectory::managed_agent(),
+        requests.clone(),
+        NonUserOwners::Enabled,
+    )
+    .oneshot(request)
+    .await
+    .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(
+        bytes.as_ref(),
+        b"a session cannot be owned by a bot; sessions run as a user"
+    );
+    assert!(opener.opened.lock().unwrap().is_empty());
+    assert!(opener.managed.lock().unwrap().is_empty());
+    assert!(requests.requested.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn a_bot_owner_is_refused_with_an_explicit_message() {
     let response =
         CreateSessionApiError::Domain(AgentSessionError::OwnerNotUser(model_owner::OwnerType::Bot))
@@ -809,6 +836,19 @@ async fn a_bot_owner_is_refused_with_an_explicit_message() {
         bytes.as_ref(),
         b"a session cannot be owned by a bot; sessions run as a user"
     );
+}
+
+#[tokio::test]
+async fn a_taken_id_says_the_id_is_taken() {
+    let response =
+        CreateSessionApiError::Domain(AgentSessionError::SessionIdTaken(AgentSessionId::TEST_A))
+            .into_response();
+
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(bytes.as_ref(), b"this id is already taken");
 }
 
 #[tokio::test]
