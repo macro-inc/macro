@@ -1,5 +1,6 @@
 import { type FacetSelection, TAG_FACET_ID } from '@app/features/soup';
 import type OpenAI from 'openai';
+import { z } from 'zod';
 import { TASK_PRIORITY_OPTIONS, TASK_STATUS_OPTIONS } from './task-facets';
 
 type AiTaskFilterChoice = { id: string; label: string };
@@ -68,40 +69,30 @@ export function buildAiTaskFilterSystemPrompt(
   ].join('\n');
 }
 
-export function buildAiTaskFilterResponseFormat(): OpenAI.ResponseFormatJSONSchema {
-  const idList = (ids?: string[]) => ({
-    type: 'array',
-    items: ids ? { type: 'string', enum: ids } : { type: 'string' },
-  });
+/**
+ * The model's reply, shared by the strict JSON schema sent with the request
+ * and the parser. Status and priority are enums, so strict mode rejects any
+ * other value at decode time; people and tags stay free strings so one
+ * unknown id drops alone instead of failing the whole reply.
+ */
+const AiTaskFilterReply = z.strictObject({
+  status: z.array(z.enum(optionIds(TASK_STATUS_OPTIONS))),
+  priority: z.array(z.enum(optionIds(TASK_PRIORITY_OPTIONS))),
+  assignees: z.array(z.string()),
+  createdBy: z.array(z.string()),
+  tags: z.array(z.string()),
+  search: z.string(),
+  unresolved: z.string(),
+});
 
+export function buildAiTaskFilterResponseFormat(): OpenAI.ResponseFormatJSONSchema {
+  const { $schema: _, ...schema } = z.toJSONSchema(AiTaskFilterReply, {
+    target: 'draft-07',
+    unrepresentable: 'throw',
+  });
   return {
     type: 'json_schema',
-    json_schema: {
-      name: RESPONSE_SCHEMA_NAME,
-      strict: true,
-      schema: {
-        type: 'object',
-        properties: {
-          status: idList(optionIds(TASK_STATUS_OPTIONS)),
-          priority: idList(optionIds(TASK_PRIORITY_OPTIONS)),
-          assignees: idList(),
-          createdBy: idList(),
-          tags: idList(),
-          search: { type: 'string' },
-          unresolved: { type: 'string' },
-        },
-        required: [
-          'status',
-          'priority',
-          'assignees',
-          'createdBy',
-          'tags',
-          'search',
-          'unresolved',
-        ],
-        additionalProperties: false,
-      },
-    },
+    json_schema: { name: RESPONSE_SCHEMA_NAME, strict: true, schema },
   };
 }
 
@@ -121,16 +112,8 @@ export function buildAiTaskFilterRequest(
   };
 }
 
-const stringList = (value: unknown): string[] =>
-  Array.isArray(value)
-    ? value.filter((item): item is string => typeof item === 'string')
-    : [];
-
-const trimmedString = (value: unknown): string | undefined => {
-  if (typeof value !== 'string') return undefined;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
-};
+const trimmedString = (value: string): string | undefined =>
+  value.trim() || undefined;
 
 /**
  * Resolves model output against the known choices. Ids are preferred, but a
@@ -170,30 +153,26 @@ export function parseAiTaskFilterResponse(
 ): AiTaskFilterParseResult {
   if (!content) return { ok: false, error: 'INVALID_JSON' };
 
-  let raw: unknown;
+  let json: unknown;
   try {
-    raw = JSON.parse(content);
+    json = JSON.parse(content);
   } catch {
     return { ok: false, error: 'INVALID_JSON' };
   }
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    return { ok: false, error: 'INVALID_JSON' };
-  }
-  const data = raw as Record<string, unknown>;
+  const reply = AiTaskFilterReply.safeParse(json);
+  if (!reply.success) return { ok: false, error: 'INVALID_JSON' };
+  const data = reply.data;
 
   const facets: FacetSelection = {};
-  const status = resolveChoices(stringList(data.status), TASK_STATUS_OPTIONS);
+  const status = [...new Set(data.status)];
   if (status.length > 0) facets.status = status;
-  const priority = resolveChoices(
-    stringList(data.priority),
-    TASK_PRIORITY_OPTIONS
-  );
+  const priority = [...new Set(data.priority)];
   if (priority.length > 0) facets.priority = priority;
-  const assignees = resolveChoices(stringList(data.assignees), catalog.people);
+  const assignees = resolveChoices(data.assignees, catalog.people);
   if (assignees.length > 0) facets.assignees = assignees;
-  const createdBy = resolveChoices(stringList(data.createdBy), catalog.people);
+  const createdBy = resolveChoices(data.createdBy, catalog.people);
   if (createdBy.length > 0) facets['created-by'] = createdBy;
-  const tags = resolveChoices(stringList(data.tags), catalog.tags);
+  const tags = resolveChoices(data.tags, catalog.tags);
   if (tags.length > 0) facets[TAG_FACET_ID] = tags;
 
   const search = trimmedString(data.search);

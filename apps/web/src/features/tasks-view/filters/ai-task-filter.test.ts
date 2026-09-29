@@ -150,7 +150,7 @@ describe('parseAiTaskFilterResponse', () => {
   it('drops unknown ids and deduplicates while keeping the rest of the plan', () => {
     const result = parseAiTaskFilterResponse(
       reply({
-        status: ['completed', 'archived', 'completed'],
+        status: ['completed', 'completed'],
         priority: [],
         assignees: ['user-nobody'],
         createdBy: [],
@@ -171,11 +171,11 @@ describe('parseAiTaskFilterResponse', () => {
     });
   });
 
-  it('accepts labels in place of ids, ignoring case and whitespace', () => {
+  it('accepts person and tag labels in place of ids, ignoring case and whitespace', () => {
     const result = parseAiTaskFilterResponse(
       reply({
-        status: ['Not started'],
-        priority: ['URGENT'],
+        status: [],
+        priority: [],
         assignees: [' teo '],
         createdBy: [],
         tags: ['design'],
@@ -186,8 +186,6 @@ describe('parseAiTaskFilterResponse', () => {
     );
 
     expect(result.ok && result.plan.facets).toEqual({
-      status: ['not-started'],
-      priority: ['urgent'],
       assignees: ['user-teo'],
       tags: ['tag-design'],
     });
@@ -247,5 +245,25 @@ describe('parseAiTaskFilterResponse', () => {
       ok: false,
       error: 'INVALID_JSON',
     });
+    expect(
+      parseAiTaskFilterResponse('{"status":["completed"]}', CATALOG)
+    ).toEqual({ ok: false, error: 'INVALID_JSON' });
+  });
+
+  it('rejects status or priority values outside the schema enums', () => {
+    expect(
+      parseAiTaskFilterResponse(
+        reply({
+          status: ['archived'],
+          priority: [],
+          assignees: [],
+          createdBy: [],
+          tags: [],
+          search: '',
+          unresolved: '',
+        }),
+        CATALOG
+      )
+    ).toEqual({ ok: false, error: 'INVALID_JSON' });
   });
 });
