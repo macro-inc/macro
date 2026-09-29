@@ -21,6 +21,26 @@ export function emailDomain(address: string | undefined): string | undefined {
   return address.slice(at + 1).toLowerCase();
 }
 
+const MACRO_STAFF_DOMAIN = 'macro.com';
+
+/** Whether the address belongs to a Macro staff account (`@macro.com`). */
+export function isMacroStaffEmail(address: string | undefined): boolean {
+  return emailDomain(address) === MACRO_STAFF_DOMAIN;
+}
+
+/**
+ * Staff accounts that must not see the onboarding Bypass button.
+ * Hardcoded: gab@macro.com goes through onboarding like everyone else.
+ */
+const ONBOARDING_BYPASS_EXCLUDED_EMAILS = ['gab@macro.com'];
+
+/** Whether this account gets the staff Bypass button on the onboarding flow. */
+export function canBypassOnboarding(address: string | undefined): boolean {
+  const normalized = address?.trim().toLowerCase();
+  if (!normalized || !isMacroStaffEmail(normalized)) return false;
+  return !ONBOARDING_BYPASS_EXCLUDED_EMAILS.includes(normalized);
+}
+
 /** "macro.com" → "Macro": the domain root, capitalized. Whether a domain
  * deserves a team suggestion at all is judged server-side
  * (`OnboardingState.suggested_team_domain`) — no domain list lives here. */
