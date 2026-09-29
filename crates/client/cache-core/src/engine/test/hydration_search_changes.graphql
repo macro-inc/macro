@@ -1,0 +1,18 @@
+query HydrationChanges {
+  user {
+    id
+    soup(input: { initial: { limit: 10 } }) {
+      items @cacheOnly {
+        __typename
+        id
+        ... on GraphqlSoupDocument {
+          name
+          fileType
+          ownerId
+          properties { id }
+        }
+        ... on GraphqlSoupEmailThread { name }
+      }
+    }
+  }
+}

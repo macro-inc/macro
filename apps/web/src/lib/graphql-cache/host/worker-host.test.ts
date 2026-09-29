@@ -1136,6 +1136,29 @@ describe('createWorkerCacheHost', () => {
     }
   );
 
+  it.each(
+    [[], ['note'], ['channel', 'dm']].map((searchChangedBuckets) => ({
+      searchChangedBuckets,
+    }))
+  )(
+    'forwards hydration search metadata $searchChangedBuckets',
+    async ({ searchChangedBuckets }) => {
+      const host = createWorkerCacheHost({ scope: 'scope-1' });
+      const listener = vi.fn();
+      host.onCacheChanged(listener, { includeHydration: true });
+      await host.currentRevision();
+      requireAdapter().push({
+        kind: 'cache-hydrated',
+        revision: INITIAL_CACHE_REVISION,
+        searchChangedBuckets,
+      });
+      expect(listener).toHaveBeenCalledWith(INITIAL_CACHE_REVISION, {
+        searchChangedBuckets,
+      });
+      host.dispose();
+    }
+  );
+
   it('delivers hydration only to opted-in subscribers and cleans them up', async () => {
     const host = createWorkerCacheHost({ scope: 'scope-1' });
     const foreground = vi.fn();

@@ -47,7 +47,8 @@ use crate::record_selection::{
 use crate::revision::{CacheRevision, Revisioned};
 use crate::search::{
     SearchCursor, SearchDocument, SearchError, SearchPage, SearchProfile, SearchRequest,
-    compare_recent, fuzzy_freshness_score, project_search_documents, validate_search_request,
+    collect_search_changes, compare_recent, fuzzy_freshness_score, project_search_documents,
+    snapshot_search_fields, validate_search_request,
 };
 use crate::store::{QueueDiagnostics, Storage};
 use crate::value::{EntityKey, Record, canonical_json};
@@ -158,6 +159,9 @@ pub struct WriteResult {
 /// Result of hydrating a query while returning only non-`@cacheOnly` fields.
 #[derive(Debug)]
 pub struct HydrationWriteResult {
+    /// Quick Access buckets whose searchable or materialized fields changed.
+    /// An empty set proves that search-backed consumers need no refresh.
+    pub search_changed_buckets: BTreeSet<String>,
     /// Cache changes used by hosts for invalidation fan-out.
     pub write_result: WriteResult,
     /// Small caller-visible projection, or `None` when every field is cache-only.
@@ -1099,6 +1103,7 @@ impl<S: Storage> Engine<S> {
     ) -> Result<WriteResult, EngineError<S::Error>> {
         self.write_network(origin_op, registration, input, projections, true)
             .await
+            .map(|(result, _)| result)
     }
 
     async fn write_network(
@@ -1108,7 +1113,7 @@ impl<S: Storage> Engine<S> {
         input: NetworkWrite<'_>,
         projections: Vec<ProjectionMutation>,
         retain_pages: bool,
-    ) -> Result<WriteResult, EngineError<S::Error>> {
+    ) -> Result<(WriteResult, BTreeSet<String>), EngineError<S::Error>> {
         self.ensure_revision_can_advance()?;
         let NetworkWrite {
             query,
@@ -1169,7 +1174,7 @@ impl<S: Storage> Engine<S> {
             let before = effective_records(&bases, &self.optimistic, &candidates);
             Some((candidates, before))
         };
-        let (changed, mut revision, mut revision_advanced) =
+        let (changed, mut revision, mut revision_advanced, mut search_changed_buckets) =
             self.persist_updates(updates, projections).await?;
         if reset && !revision_advanced {
             revision = self.advance_revision()?;
@@ -1186,6 +1191,17 @@ impl<S: Storage> Engine<S> {
             candidates.extend(layer_keys(&self.optimistic));
             let bases_after = self.load_bases(&candidates).await?;
             let after = effective_records(&bases_after, &self.optimistic, &candidates);
+            // Compare the composed view: a hydration hidden beneath a pending
+            // edit must not invalidate the search projection it did not change.
+            search_changed_buckets.clear();
+            for key in &candidates {
+                collect_search_changes(
+                    key,
+                    before.get(key).and_then(Option::as_ref),
+                    after.get(key).and_then(Option::as_ref),
+                    &mut search_changed_buckets,
+                );
+            }
             candidates
                 .into_iter()
                 .filter(|key| before.get(key) != after.get(key))
@@ -1213,14 +1229,17 @@ impl<S: Storage> Engine<S> {
                 self.deps.set_op_broad(registration.op_id);
             }
         }
-        Ok(WriteResult {
-            revision,
-            revision_advanced,
-            changed,
-            affected_ops,
-            reset,
-            revalidations: Vec::new(),
-        })
+        Ok((
+            WriteResult {
+                revision,
+                revision_advanced,
+                changed,
+                affected_ops,
+                reset,
+                revalidations: Vec::new(),
+            },
+            search_changed_buckets,
+        ))
     }
 
     /// Stores a network response and returns only fields not marked
@@ -1270,7 +1289,7 @@ impl<S: Storage> Engine<S> {
             }
             project_hydration_response(op, data)?
         };
-        let write_result = self
+        let (write_result, search_changed_buckets) = self
             .write_network(
                 None,
                 None,
@@ -1287,6 +1306,7 @@ impl<S: Storage> Engine<S> {
             .await?;
         Ok(HydrationWriteResult {
             write_result,
+            search_changed_buckets,
             data: projected,
         })
     }
@@ -1297,7 +1317,15 @@ impl<S: Storage> Engine<S> {
         &mut self,
         updates: RecordUpdates,
         projections: Vec<ProjectionMutation>,
-    ) -> Result<(BTreeSet<EntityKey<'static>>, CacheRevision, bool), EngineError<S::Error>> {
+    ) -> Result<
+        (
+            BTreeSet<EntityKey<'static>>,
+            CacheRevision,
+            bool,
+            BTreeSet<String>,
+        ),
+        EngineError<S::Error>,
+    > {
         // Load current values (hot tier, then storage) so merges detect real
         // changes. Merges are staged in a plain map, NOT the LRU: a batch
         // larger than the hot capacity would otherwise evict its own
@@ -1326,15 +1354,30 @@ impl<S: Storage> Engine<S> {
         }
 
         let mut changed = BTreeSet::new();
+        let mut search_changed_buckets = BTreeSet::new();
         let mut to_persist: Vec<(EntityKey<'static>, Record)> = Vec::new();
         let mut touched = Vec::with_capacity(updates.len());
         for (key, update) in updates {
             let (merged, did_change) = match staging.remove(&key) {
                 Some(mut existing) => {
+                    // Compare only fields supplied by this partial response,
+                    // overlaid onto the existing row, without cloning its body.
+                    let before = snapshot_search_fields(&key, &existing);
                     let did_change = existing.merge(update);
+                    if did_change {
+                        collect_search_changes(
+                            &key,
+                            before.as_ref(),
+                            Some(&existing),
+                            &mut search_changed_buckets,
+                        );
+                    }
                     (existing, did_change)
                 }
-                None => (update, true),
+                None => {
+                    collect_search_changes(&key, None, Some(&update), &mut search_changed_buckets);
+                    (update, true)
+                }
             };
             if did_change {
                 changed.insert(key.clone());
@@ -1366,7 +1409,7 @@ impl<S: Storage> Engine<S> {
         for (key, record) in touched {
             self.hot.put(key, record);
         }
-        Ok((changed, revision, revision_advanced))
+        Ok((changed, revision, revision_advanced, search_changed_buckets))
     }
 
     async fn projection_mutations_change(
@@ -2440,7 +2483,7 @@ impl<S: PredicateIndexStorage> Engine<S> {
         for (key, record) in entries {
             updates.entry(key).or_default().merge(record);
         }
-        let (changed, revision, revision_advanced) =
+        let (changed, revision, revision_advanced, _) =
             self.persist_updates(updates, projections).await?;
         let mut affected_ops = self.deps.ops_for_keys(changed.iter());
         if let Some(origin_op) = origin_op {
