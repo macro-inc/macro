@@ -28,7 +28,10 @@ bot_id = { path = "../../crates/bot_id" }
 channel_sender = { path = "../../crates/channel_sender" }
 channels = { path = "../../crates/channels", default-features = false }
 documents = { path = "../../crates/documents", default-features = false }
-entity_access = { path = "../../crates/entity_access", default-features = false, features = ["ports"] }
+entity_access = { path = "../../crates/entity_access", default-features = false, features = ["inbound", "outbound"] }
+entity_access_db_utils = { path = "../../crates/entity_access_db_utils" }
+entity_registry = { path = "../../crates/entity_registry/entity_registry", features = ["axum"] }
+bots = { path = "../../crates/bots", default-features = false, features = ["outbound"] }
 kafka_util = { path = "../../crates/kafka_util" }
 macro_event_broker = { path = "../../crates/macro_event_broker", features = ["outbound"] }
 macro_event_topics = { path = "../../crates/macro_event_topics" }
@@ -91,4 +94,5 @@ macro_service_urls = { path = "../../crates/macro_service_urls" }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 [dev-dependencies]
+bot_id = { path = "../../crates/bot_id", features = ["test-utils"] }
 macro_db_migrator = { path = "../../crates/macro_db_migrator" }

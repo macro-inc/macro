@@ -521,7 +521,7 @@ async fn run() -> anyhow::Result<()> {
         ));
 
     let project_service = Arc::new(ProjectServiceImpl::new(
-        PgProjectRepo::new(db.clone(), owned_entity_registrar),
+        PgProjectRepo::new(db.clone(), owned_entity_registrar.clone()),
         S3ProjectUploadAdapter::new(
             macro_aws_config::s3_client().await,
             config.document_storage_bucket.as_ref(),
@@ -1593,7 +1593,7 @@ async fn run() -> anyhow::Result<()> {
     // primary pool here so the GraphQL list cannot restore stale state after
     // a REST write.
     let scheduled_action_read_service = Arc::new(ScheduledActionReadServiceImpl::new(Arc::new(
-        PgScheduledActionRepo::new(db.clone()),
+        PgScheduledActionRepo::new(db.clone(), owned_entity_registrar.clone()),
     )));
 
     let api_context = ApiContext {

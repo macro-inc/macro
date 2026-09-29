@@ -10,17 +10,23 @@ struct FakeRepo {
 }
 
 impl ScheduledActionRepo for FakeRepo {
-    async fn get_actions(&self, user: MacroUserIdStr<'static>) -> Result<Vec<ScheduledAction>> {
+    async fn get_owned_actions(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+    ) -> Result<Vec<ScheduledAction>> {
         Ok(self
             .actions
             .lock()
             .unwrap()
             .iter()
-            .filter(|a| a.owner.is_user(&user))
+            .filter(|a| a.owner.is_user(owner))
             .cloned()
             .collect())
     }
-    async fn delete_action(&self, id: &Uuid, _: MacroUserIdStr<'static>) -> Result<()> {
+    async fn get_actions_by_ids(&self, _: &[Uuid]) -> Result<Vec<ScheduledAction>> {
+        unreachable!()
+    }
+    async fn delete_action(&self, id: &Uuid) -> Result<()> {
         if *self.fail_delete.lock().unwrap() {
             bail!("injected deletion failure");
         }
@@ -30,11 +36,7 @@ impl ScheduledActionRepo for FakeRepo {
     async fn create_action(&self, _: ScheduledAction) -> Result<ScheduledAction> {
         unreachable!()
     }
-    async fn get_action(
-        &self,
-        _: &Uuid,
-        _: MacroUserIdStr<'static>,
-    ) -> Result<Option<ScheduledAction>> {
+    async fn get_action(&self, _: &Uuid) -> Result<Option<ScheduledAction>> {
         unreachable!()
     }
     async fn get_next_unclaimed_actions(&self, _: i64) -> Result<Vec<ScheduledAction>> {

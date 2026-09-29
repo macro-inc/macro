@@ -4,9 +4,12 @@ use std::{future::Future, sync::Arc, time::Duration};
 use ai_tools::{AiHost, build_tool_service_context_from_env, tools_for};
 use anyhow::{Context, Result};
 use axum::Router;
+use bots::outbound::pg_bots_repo::PgBotsRepo;
 use chat::outbound::postgres::PgChatRepo;
 use connection_gateway_client::client::ConnectionGatewayClient;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
+use entity_registry::OwnerGrantPolicy;
+use entity_registry_db_utils::OwnedEntityRegistrar;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{
     InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationServiceImpl,
@@ -100,7 +103,8 @@ async fn main() -> Result<()> {
         &conn_gateway_client,
     )));
 
-    let repo = Arc::new(PgScheduledActionRepo::new(db.clone()));
+    let registrar = OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(db.clone())));
+    let repo = Arc::new(PgScheduledActionRepo::new(db.clone(), registrar));
 
     let event_repo = Arc::new(PgEventRunRepo::new(db.clone()));
     let event_access = Arc::new(EventAccessAdapter::new(EntityAccessServiceImpl::new(

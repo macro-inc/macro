@@ -16,7 +16,7 @@ impl ScheduledActionExecutor for NeverExecutor {
 async fn deletes_user_actions_without_cascade_and_preserves_other_users(pool: PgPool) {
     insert_user(&pool, USER_A).await;
     insert_user(&pool, USER_B).await;
-    let repo = Arc::new(PgScheduledActionRepo::new(pool.clone()));
+    let repo = Arc::new(super::test_repo(pool.clone()));
     let enabled = repo
         .create_action(sample_action(user_owner(USER_A), "enabled"))
         .await
@@ -41,7 +41,12 @@ async fn deletes_user_actions_without_cascade_and_preserves_other_users(pool: Pg
 
     service.delete_user_actions(user(USER_A)).await.unwrap();
     service.delete_user_actions(user(USER_A)).await.unwrap();
-    assert!(repo.get_actions(user(USER_A)).await.unwrap().is_empty());
+    assert!(
+        repo.get_owned_actions(&user(USER_A))
+            .await
+            .unwrap()
+            .is_empty()
+    );
     for id in [enabled.id.unwrap(), disabled.id.unwrap(), event.id.unwrap()] {
         assert_eq!(scheduled_action_row_count(&pool, id).await, 0);
         assert_eq!(entity_row_count(&pool, id).await, 0);

@@ -37,16 +37,26 @@ impl ScheduledActionRepo for FakeRepo {
         Ok(action)
     }
 
-    async fn get_actions(&self, _user: MacroUserIdStr<'static>) -> Result<Vec<ScheduledAction>> {
+    async fn get_owned_actions(
+        &self,
+        _owner: &MacroUserIdStr<'static>,
+    ) -> Result<Vec<ScheduledAction>> {
         // Deliberately return all owners to exercise the service's owner check.
         Ok(self.actions.lock().unwrap().clone())
     }
 
-    async fn get_action(
-        &self,
-        id: &Uuid,
-        _user: MacroUserIdStr<'static>,
-    ) -> Result<Option<ScheduledAction>> {
+    async fn get_actions_by_ids(&self, ids: &[Uuid]) -> Result<Vec<ScheduledAction>> {
+        Ok(self
+            .actions
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|action| action.id.is_some_and(|id| ids.contains(&id)))
+            .cloned()
+            .collect())
+    }
+
+    async fn get_action(&self, id: &Uuid) -> Result<Option<ScheduledAction>> {
         Ok(self
             .actions
             .lock()
@@ -66,7 +76,7 @@ impl ScheduledActionRepo for FakeRepo {
         Ok(action)
     }
 
-    async fn delete_action(&self, id: &Uuid, _user: MacroUserIdStr<'static>) -> Result<()> {
+    async fn delete_action(&self, id: &Uuid) -> Result<()> {
         self.actions.lock().unwrap().retain(|a| a.id != Some(*id));
         Ok(())
     }

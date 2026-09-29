@@ -27,17 +27,21 @@ pub trait ScheduledActionRepo: Send + Sync + 'static {
         action: ScheduledAction,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
-    fn get_actions(
+    /// Account cleanup only: `WHERE owner = $1`. Never the HTTP list.
+    fn get_owned_actions(
         &self,
-        user_id: MacroUserIdStr<'static>,
+        owner: &MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<Vec<ScheduledAction>>> + Send;
 
-    /// Look up one action owned by the caller, independently of list filtering.
-    fn get_action(
+    /// Rows for ids the grants port already allowed. No owner predicate. Missing ids omitted.
+    fn get_actions_by_ids(
         &self,
-        id: &Uuid,
-        user_id: MacroUserIdStr<'static>,
-    ) -> impl Future<Output = Result<Option<ScheduledAction>>> + Send;
+        ids: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<ScheduledAction>>> + Send;
+
+    /// By primary key, no owner predicate.
+    fn get_action(&self, id: &Uuid)
+    -> impl Future<Output = Result<Option<ScheduledAction>>> + Send;
 
     /// Return the next `limit` enabled cron actions ordered by `next_run_at` ASC,
     /// filtering out those currently claimed by another worker (i.e. claimed
@@ -47,20 +51,20 @@ pub trait ScheduledActionRepo: Send + Sync + 'static {
         limit: i64,
     ) -> impl Future<Output = Result<Vec<ScheduledAction>>> + Send;
 
-    /// Atomically replace configuration only when the stored revision is the
-    /// predecessor of the supplied revision. While claimed, only disabling with
-    /// otherwise identical configuration is allowed. Return UpdateConflict on
-    /// stale revisions or a concurrent claim; never overwrite execution state.
+    /// Replace configuration when `id` matches and the stored revision is the
+    /// predecessor, plus the claim fence. No owner predicate. While claimed,
+    /// only disabling with otherwise identical configuration is allowed.
+    /// `UpdateConflict` on a stale revision or a concurrent claim; never
+    /// overwrite execution state.
     fn update_action(
         &self,
         action: ScheduledAction,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
-    fn delete_action(
-        &self,
-        id: &Uuid,
-        macro_user_id: MacroUserIdStr<'static>,
-    ) -> impl Future<Output = Result<()>> + Send;
+    /// Deletes the action row, its `entity_access` rows (`entity_type =
+    /// 'scheduled_action'`) and the `entity` row in one transaction. A missing
+    /// row is `Ok(())`.
+    fn delete_action(&self, id: &Uuid) -> impl Future<Output = Result<()>> + Send;
 
     /// Claim only while the stored configuration is still `revision`, so a
     /// snapshot read before a pause or update can never start a run.

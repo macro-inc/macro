@@ -13,10 +13,13 @@ use axum::{
     body::{Body, to_bytes},
     http::{Request, StatusCode, header},
 };
+use bots::outbound::pg_bots_repo::PgBotsRepo;
 use chrono::Utc;
 use entity_access::domain::models::{
     AccessLevel, Entity, EntityAccessReceipt, EntityPermission, EntityType,
 };
+use entity_registry::OwnerGrantPolicy;
+use entity_registry_db_utils::OwnedEntityRegistrar;
 use macro_authorization::{
     InternalIdentityClaims, MacroAuthorizationError, MacroAuthorizationService,
     MacroAuthorizationState,
@@ -185,14 +188,15 @@ impl ScheduledActionLiveUpdate for NoLiveUpdates {
     async fn publish_update(&self, _: ScheduledActionUpdate) {}
 }
 
-type Executor = InProcessExecutor<PgScheduledActionRepo, NoLiveUpdates, FakeRunner>;
+type ActionRepo = PgScheduledActionRepo<PgBotsRepo>;
+type Executor = InProcessExecutor<ActionRepo, NoLiveUpdates, FakeRunner>;
 type Admission = EventAdmissionService<PgEventRunRepo, FakeAccess>;
 type Dispatch = EventDispatchService<PgEventRunRepo, FakeAccess, Executor>;
 
 struct Harness {
     pool: PgPool,
     app: Router,
-    actions: Arc<PgScheduledActionRepo>,
+    actions: Arc<ActionRepo>,
     runs: Arc<PgEventRunRepo>,
     runner: Arc<FakeRunner>,
     executor: Arc<Executor>,
@@ -215,7 +219,10 @@ impl Harness {
         .execute(&pool)
         .await
         .unwrap();
-        let actions = Arc::new(PgScheduledActionRepo::new(pool.clone()));
+        let actions = Arc::new(PgScheduledActionRepo::new(
+            pool.clone(),
+            OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(pool.clone()))),
+        ));
         let runs = Arc::new(PgEventRunRepo::new(pool.clone()));
         let runner = Arc::new(runner);
         let tracker = TaskTracker::new();
@@ -451,7 +458,7 @@ async fn legacy_cron_and_canonical_events_share_crud_and_manual_execution(pool: 
         );
         assert!(
             h.actions
-                .get_action(&id, MacroUserIdStr::parse_from_str(USER).unwrap())
+                .get_action(&id)
                 .await
                 .unwrap()
                 .is_none()

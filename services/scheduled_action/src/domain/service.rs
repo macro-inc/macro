@@ -66,7 +66,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Targets> ScheduledActionServiceImpl<Rpo, Exe
         id: &Uuid,
         caller: &MacroUserIdStr<'static>,
     ) -> Result<ScheduledAction> {
-        match self.repo.get_action(id, caller.clone()).await? {
+        match self.repo.get_action(id).await? {
             Some(action) if action.owner.is_user(caller) => Ok(action),
             _ => Err(ActionPolicyError::NotFound.into()),
         }
@@ -152,7 +152,7 @@ pub(crate) async fn list_owned_actions<R: ScheduledActionRepo>(
     user_id: &MacroUserIdStr<'static>,
 ) -> Result<Vec<ScheduledAction>> {
     let mut actions = repo
-        .get_actions(user_id.clone())
+        .get_owned_actions(user_id)
         .await?
         .into_iter()
         .filter(|action| action.owner.is_user(user_id))
@@ -197,7 +197,7 @@ where
     async fn delete_user_actions(&self, user_id: MacroUserIdStr<'static>) -> Result<()> {
         // Use the repository list, not the legacy cron-only service list, so
         // event-triggered actions are also removed regardless of rollout gates.
-        for action in self.repo.get_actions(user_id.clone()).await? {
+        for action in self.repo.get_owned_actions(&user_id).await? {
             if !action.owner.is_user(&user_id) {
                 bail!("account cleanup returned an action owned by another principal");
             }
@@ -207,7 +207,7 @@ where
             // Reserve before deleting: a stopped dispatcher must not leave us
             // reporting failure after losing the row needed to retry its event.
             let permit = self.dispatcher_tx.reserve().await?;
-            self.repo.delete_action(&id, user_id.clone()).await?;
+            self.repo.delete_action(&id).await?;
             permit.send(DispatchEvent::Delete(action));
         }
         Ok(())
@@ -299,7 +299,7 @@ where
 
     async fn delete_action(&self, id: &Uuid, macro_user_id: MacroUserIdStr<'static>) -> Result<()> {
         let action = self.owned_action(id, &macro_user_id).await?;
-        self.repo.delete_action(id, macro_user_id).await?;
+        self.repo.delete_action(id).await?;
         self.dispatcher_tx
             .send(DispatchEvent::Delete(action))
             .await
