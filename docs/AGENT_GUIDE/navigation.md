@@ -478,7 +478,11 @@ category, Esc closes. The category strip and footer have transparent backgrounds
 
 With the local GraphQL cache enabled, Cmd+K and document/channel `@` mentions
 search cached entities without waiting for a server search. Background hydration
-updates an already-open menu. For an empty search, scroll toward the end (or use
+updates an already-open menu only when a bucket it uses changes. Email/body/tag-only
+hydration must not reread History or the cached channel list; a newly hydrated note
+refreshes History and matching menus, and a channel/DM refreshes channel consumers.
+Renames, ownership/recency changes, and moves between buckets must still appear
+without retyping. Older cache runtimes without bucket metadata refresh conservatively. For an empty search, scroll toward the end (or use
 Down); mentions offer **View all** for a category and then load more local pages.
 Counts describe loaded results, not the full server corpus. Scans through
 incomplete or already-visible cache hits are bounded per action; continue
