@@ -19,8 +19,6 @@ adopted('web-app-errors-staging', {
   notifyAudit: false,
   includeTags: false,
   newHostDelay: 300,
-  enableLogsSample: false,
-  groupbySimpleMonitor: false,
 });
 
 // https://us5.datadoghq.com/monitors/1189349
@@ -45,8 +43,6 @@ adopted('web-app-source-errors-prod', {
   renotifyInterval: 60,
   renotifyStatuses: ['alert'],
   notificationPresetName: 'hide_all',
-  enableLogsSample: false,
-  groupbySimpleMonitor: false,
   variables: {
     eventQueries: [
       {

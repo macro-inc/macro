@@ -450,7 +450,8 @@ impl PgMessageRepository {
                     anchor_id, command.parent.entity_id(), command.actor.as_ref(), root_id, page,
                     x_pct, y_pct, width_pct, height_pct).execute(&mut **tx).await.map_err(database_error)?;
             }
-            Some(NewThreadAnchor::Markdown { .. }) | None => {}
+            Some(NewThreadAnchor::Markdown { .. } | NewThreadAnchor::Spreadsheet { .. }) | None => {
+            }
         }
         Ok(())
     }
@@ -549,6 +550,17 @@ impl MessageRepository for PgMessageRepository {
         .await
         .map_err(database_error)?;
         self.hydrate(rows).await
+    }
+
+    async fn document_file_type(&self, document_id: &str) -> Result<Option<String>, MessageError> {
+        sqlx::query_scalar!(
+            r#"SELECT "fileType" FROM "Document" WHERE id = $1 AND "deletedAt" IS NULL"#,
+            document_id
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map(Option::flatten)
+        .map_err(database_error)
     }
 
     async fn parent_exists(&self, parent: &MessageParent) -> Result<bool, MessageError> {
@@ -751,12 +763,12 @@ impl MessageRepository for PgMessageRepository {
         user: &str,
         emoji: &str,
         add: bool,
-    ) -> Result<Message, MessageError> {
+    ) -> Result<ReactionResult, MessageError> {
         let mut tx = self.pool.begin().await.map_err(database_error)?;
         Self::lock_message(&mut tx, parent, id).await?;
-        if add {
+        let result = if add {
             sqlx::query!("INSERT INTO comms_reactions(message_id, user_id, emoji) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING", id, user, emoji)
-                .execute(&mut *tx).await.map_err(database_error)?;
+                .execute(&mut *tx).await.map_err(database_error)?
         } else {
             sqlx::query!(
                 "DELETE FROM comms_reactions WHERE message_id = $1 AND user_id = $2 AND emoji = $3",
@@ -766,11 +778,14 @@ impl MessageRepository for PgMessageRepository {
             )
             .execute(&mut *tx)
             .await
-            .map_err(database_error)?;
-        }
+            .map_err(database_error)?
+        };
         let message = Self::require_message_in(&mut tx, parent, id).await?;
         tx.commit().await.map_err(database_error)?;
-        Ok(message)
+        Ok(ReactionResult {
+            message,
+            changed: result.rows_affected() > 0,
+        })
     }
 
     async fn patch_thread(

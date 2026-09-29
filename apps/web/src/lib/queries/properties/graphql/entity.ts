@@ -247,12 +247,24 @@ async function prepareMutationArgs(
         optimisticProperty &&
         isTemporaryGraphqlProperty(optimisticProperty.id)
       ) {
-        optimisticCache.updates = await buildPropertyAssignmentLinks(
-          host,
+        optimisticCache.updates = buildPropertyAssignmentLinks(
+          entityType,
           input.entityId,
           optimisticProperty.id,
           propertyDefinitionId
         );
+        // Recover a missing/evicted parent after commit (including offline replay)
+        // without ever discovering or refetching unrelated cached pages.
+        const targetInput = buildEntityPropertiesInput(
+          entityType,
+          input.entityId
+        );
+        if (targetInput) {
+          optimisticCache.revalidations.push({
+            document: EntityPropertiesDocument,
+            variables: { input: targetInput },
+          });
+        }
       }
       const oldGroupKeys = groupedPropertyKeys(input.property);
       const newGroupKeys = groupedPropertyKeys(input.apiValues);

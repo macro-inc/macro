@@ -115,16 +115,12 @@ pub struct OpenSession {
 /// derive it from their persisted harness slug, which is also copied onto each
 /// session so resume and teardown keep routing correctly after a restart.
 ///
-/// A session's instructions are stored on its row whichever kind serves it,
-/// but only [`Self::InMemory`] and [`Self::ClaudeCloud`] read them today -
-/// the first builds its system prompt in this process, the second passes
-/// them to Claude at create. The rest need a transport, and
-/// ACP supplies none: `session/new` carries a working directory, MCP servers
-/// and `_meta`, and nothing else. [`Self::SandboxedCoder`] will get a
-/// per-session file listed alongside `SYSTEM.md` in `container/opencode.json`,
-/// [`Self::External`] `_meta` on `session/new` for macrod to translate, and
-/// [`Self::Cursor`] - whose API takes a prompt and nothing more - has to fold
-/// them into the prompt body's hidden agent-context node.
+/// A session's instructions are stored on its row whichever kind serves it.
+/// [`Self::InMemory`] builds its system prompt from them in this process and
+/// [`Self::ClaudeCloud`] passes them to Claude at create; every other kind
+/// talks ACP or a prompt-only API, neither of which has a system prompt, so
+/// they ride in the first prompt's hidden agent-context node instead. See
+/// [`Self::folds_instructions`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum AgentKind {
     /// A sandbox this deployment provisions (Daytona, or local Docker when
@@ -203,6 +199,13 @@ impl AgentKind {
             Self::ClaudeCloud => Some("claude-cloud"),
             Self::SandboxedCoder | Self::InMemory | Self::External => None,
         }
+    }
+
+    /// Whether a session's instructions travel in its first prompt, for kinds
+    /// whose runtime has no system prompt to put them in.
+    #[must_use]
+    pub const fn folds_instructions(self) -> bool {
+        !matches!(self, Self::InMemory | Self::ClaudeCloud)
     }
 
     /// Whether a deployment provisions this kind's runtimes itself.
@@ -412,6 +415,16 @@ pub enum ReplyTarget {
 /// with the id.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CommentAnchor {
+    /// A cell or rectangular range in a native spreadsheet.
+    Spreadsheet {
+        /// Stable sheet identity within the workbook.
+        sheet_id: String,
+        /// Sheet name when the discussion was created.
+        sheet_name: String,
+        /// A1 cell or range, such as B4 or B4:C9.
+        range: String,
+    },
+
     /// A comment mark in a markdown document.
     Mark {
         /// Lexical mark the thread is attached to.

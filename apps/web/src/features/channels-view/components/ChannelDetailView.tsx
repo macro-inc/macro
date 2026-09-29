@@ -1,5 +1,6 @@
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { getChannelEntityTarget } from '@app/features/next-soup/utils';
+import { createSearchParams } from '@app/lib/split-router';
 import {
   ChannelDetail,
   ChannelDetailTopBar,
@@ -8,6 +9,7 @@ import type { ChannelTargetRequest } from '@channel/Channel/ChannelSurface';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import type { ChannelEntity } from '@entity';
 import { createMemo } from 'solid-js';
+import { channelsSearch } from '../channels-route';
 
 /**
  * Rail-selection adapter for the shared ChannelDetail. Fresh metadata and
@@ -18,6 +20,7 @@ import { createMemo } from 'solid-js';
  */
 export function ChannelDetailView(props: { channel: ChannelEntity }) {
   const panel = useSplitPanelOrThrow();
+  const [search] = createSearchParams(channelsSearch);
   useBlockEntityCommands({
     id: props.channel.id,
     scopeId: panel.splitHotkeyScope,
@@ -48,6 +51,7 @@ export function ChannelDetailView(props: { channel: ChannelEntity }) {
     <ChannelDetail
       channelId={props.channel.id}
       target={target()}
+      navigationRequest={search.seek}
       fallbackName={props.channel.name}
       autofocus={false}
     >

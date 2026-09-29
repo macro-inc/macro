@@ -6,6 +6,8 @@
 #[cfg(test)]
 mod test;
 
+use std::str::ParseBoolError;
+
 use bot_id::NonSystemBotId;
 use macro_authorization::{BotAuthentication, BotScope, MacroAuthorization};
 use model_owner::CreationPrincipal;
@@ -17,6 +19,21 @@ pub enum NonUserOwners {
     Disabled,
     /// A team-scoped bot with no acting user owns what it creates.
     Enabled,
+}
+
+impl NonUserOwners {
+    /// Parse the gate from a config value the caller already loaded.
+    ///
+    /// `"true"` enables non-user owners. `"false"` or a missing value disables
+    /// them. Any other value is an error. This never reads the environment.
+    pub fn from_config_value(value: Option<&str>) -> Result<Self, ParseBoolError> {
+        let enabled = value.unwrap_or("false").parse::<bool>()?;
+        Ok(if enabled {
+            Self::Enabled
+        } else {
+            Self::Disabled
+        })
+    }
 }
 
 /// Why a caller cannot create entities.

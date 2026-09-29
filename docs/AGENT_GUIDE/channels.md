@@ -331,6 +331,19 @@ records `path` (`catch_up` or `full`) and `reason`
 (`watermark`, `list_ahead`, `no_cache`, `cache_not_at_latest`, `load_around`,
 `delta_overflow`, or `catch_up_error`).
 
+## Message reaction notifications
+
+Message reaction notifications are enabled by default. The message author can
+turn them off with **Message reactions** in notification settings. Adding a
+reaction from another account notifies the author; self-reactions and removing a
+reaction do not notify.
+
+In Home, reactions belong to the message's thread row: a top-level message uses
+its own row, and a reply uses its parent thread. Verify that an incoming reaction
+brings that row back into the inbox, displays the reaction and channel name, and
+opens the reacted-to message. Marking the row done should clear its reaction
+notifications along with the other notifications for that thread.
+
 ## Chat navigation rail
 
 Following a channel mention or browser notification for the conversation already
@@ -671,17 +684,20 @@ shows Connecting and waits for that request before registering again.
 ## Channel tabs
 
 Private and team channels show an `Invite` button on the right of both the
-split header and the inline conversation header for current participants.
-Click it to open `Invite people to <channel>` using the standard dialog at the
-top of the viewport, matching the create menu and create-channel dialog (a
-drawer on mobile). Choose `Add all members of <team>` to add current teammates
-once, or `Add specific people` to search teammates and enter external email
-addresses using the same recipient picker as channel creation. Existing channel
-members are excluded. `Add` submits; Cancel, Close, or Escape dismisses without
-sending. Failed additions preserve the selection for retry. The team option is
-disabled when no team is available. This action does not enable team auto-join.
-Check opening and reopening, switching options, keyboard recipient selection,
-external email chips, cancellation, and focus restoration before sending invites.
+split header and the inline conversation header for current participants. On
+mobile it renders as its own floating glass pill next to the `Call` pill (the
+split header is `pointer-events-none`, so the button must sit in a
+`HeaderIsland` to be tappable). Click it to open `Invite people to <channel>`
+using the standard dialog at the top of the viewport, matching the create menu
+and create-channel dialog (a drawer on mobile). Choose `Add all members of
+<team>` to add current teammates once, or `Add specific people` to search
+teammates and enter external email addresses using the same recipient picker as
+channel creation. Existing channel members are excluded. `Add` submits; Cancel,
+Close, or Escape dismisses without sending. Failed additions preserve the
+selection for retry. The team option is disabled when no team is available.
+This action does not enable team auto-join. Check opening and reopening,
+switching options, keyboard recipient selection, external email chips,
+cancellation, and focus restoration before sending invites.
 
 Radio group at the top of the channel pane: `Messages` / `Attachments` / `Calls` / `Participants`,
 plus `Ask Macro` and `Call` buttons. The `Calls` tab lists recordings for that channel

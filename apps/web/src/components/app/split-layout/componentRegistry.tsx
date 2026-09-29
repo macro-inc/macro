@@ -38,7 +38,6 @@ import { LoadingBlock } from '@core/component/LoadingBlock';
 import {
   DEV_MODE_ENV,
   enableChatV3Agents,
-  enableNewAppViews,
   enableProjects,
   isFeatureEnabled,
   LOCAL_ONLY,
@@ -84,10 +83,8 @@ type ComponentRegistration = {
 
 const REGISTRY = new Map<string, ComponentRegistration>();
 
-/** Shell for views that draw their own top bar. New app views are on by default,
- * so this is fixed when the mount is created instead of written after paint. */
+/** Shell for views that draw their own top bar. */
 function composableLayout(onTouch = false): ComponentMeta | undefined {
-  if (!isFeatureEnabled(enableNewAppViews)) return;
   if (isTouchDevice() && !onTouch) return;
   return { splitPanelLayout: 'composable' };
 }

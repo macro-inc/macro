@@ -18,6 +18,8 @@ export type BulkUpdateEntityPropertyOptionsParams = {
   entityType: EntityType;
   properties: Array<{
     property: Property | PropertyDefinitionDomain;
+    /** Preserve assignment identity without losing the definition's TAG data type. */
+    assignmentId?: string;
     currentOptionIds: string[];
     nextOptionIds: string[];
   }>;

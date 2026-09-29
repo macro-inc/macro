@@ -37,6 +37,9 @@ impl<Repo: AgentSessionRepo, Access: EntityAccessService> Authority
         let session =
             agent_session::domain::credentials::authenticate_session(&self.sessions, &token.hash())
                 .await
+                .inspect_err(|error| {
+                    tracing::warn!(error = %error, "preview mcp session lookup failed");
+                })
                 .map_err(|_| PreviewError::Denied)?;
         Ok(AgentIdentity {
             session: session.id,
@@ -44,6 +47,9 @@ impl<Repo: AgentSessionRepo, Access: EntityAccessService> Authority
             // non-user owner is refused rather than quietly given a quota.
             owner: session
                 .owner_user()
+                .inspect_err(|error| {
+                    tracing::warn!(error = %error, "preview mcp session has no user owner");
+                })
                 .map_err(|_| PreviewError::Denied)?
                 .clone(),
         })

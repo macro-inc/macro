@@ -5,11 +5,14 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
+import type { ScheduledActionUpdateOneOfChatId } from './scheduledActionUpdateOneOfChatId';
+import type { ScheduledActionUpdateOneOfResource } from './scheduledActionUpdateOneOfResource';
 import type { ScheduledActionUpdateOneOfType } from './scheduledActionUpdateOneOfType';
 
 export type ScheduledActionUpdateOneOf = {
   action_id: string;
-  chat_id: string;
+  chat_id?: ScheduledActionUpdateOneOfChatId;
   owner: string;
+  resource?: ScheduledActionUpdateOneOfResource;
   type: ScheduledActionUpdateOneOfType;
 };

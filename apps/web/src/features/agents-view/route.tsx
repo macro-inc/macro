@@ -1,4 +1,5 @@
 import { changesSearch } from '@app/features/agent-changes/changes-search';
+import { agentDetailSearch } from '@app/features/block-agent/agent-route';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { defineRoute } from '@app/lib/split-router';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -113,7 +114,7 @@ export const agentsRoute = defineRoute({
   component: AgentsRouteView,
   remountKey: ({ id }) => id,
   claim: ({ id }) => ({ namespace: 'agent', id }),
-  search: [changesSearch.namespace],
+  search: [changesSearch.namespace, agentDetailSearch.namespace],
   toReference: ({ id }) => uuidRouteReference(id, 'agent'),
 });
 
@@ -124,7 +125,7 @@ export const codersRoute = defineRoute({
   component: AgentsRouteView,
   remountKey: ({ id }) => id,
   claim: ({ id }) => ({ namespace: 'agent', id }),
-  search: [changesSearch.namespace],
+  search: [changesSearch.namespace, agentDetailSearch.namespace],
   toReference: ({ id }) => uuidRouteReference(id, 'agent'),
 });
 

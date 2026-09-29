@@ -188,7 +188,7 @@ export class EditorConfigBuilder implements EditorBuilder {
 
   /**
    * Enable the agent commands (`/`) typeahead menu — for agent composers.
-   * Lists the slash commands a connected coding agent advertises over ACP;
+   * Lists skills, pull requests, and commands advertised over ACP;
    * selecting one inserts `/name` as plain text, which is sent to the agent
    * as ordinary prompt text. Shares the `/` trigger with the actions and
    * skills menus, so it only takes effect when both are disabled.

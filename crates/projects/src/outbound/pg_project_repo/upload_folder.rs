@@ -1,11 +1,8 @@
 use std::collections::HashMap;
 
 use async_recursion::async_recursion;
-use entity_access_db_utils::{
-    AccessLevel, EntityAccessSourceType, EntityType, insert_entity_access_row,
-};
 use entity_registry::BotFacts;
-use entity_registry_db_utils::{NewEntityRecord, OwnedEntityRegistrar, RegisteredEntityType};
+use entity_registry_db_utils::{OwnedEntityRegistrar, RegisteredEntityType};
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::{DocumentMetadata, FileType, FileTypeExt};
 use model::folder::{FileSystemNode, FileSystemNodeWithIds, UploadFolderWithIdsResponse};
@@ -25,6 +22,7 @@ pub(super) async fn upload_folder<B: BotFacts>(
 ) -> Result<UploadFolderWithIdsResponse, sqlx::Error> {
     let root_project = create_pending_project(
         transaction,
+        registrar,
         args.user_id.clone(),
         &args.share_permission,
         &args.root_folder_name,
@@ -109,6 +107,7 @@ where
         FileSystemNode::Folder(content) => {
             let project = create_pending_project(
                 transaction,
+                registrar,
                 user_id.clone(),
                 share_permission,
                 name,
@@ -143,8 +142,9 @@ where
     }
 }
 
-async fn create_pending_project(
+async fn create_pending_project<B: BotFacts>(
     transaction: &mut Transaction<'_, Postgres>,
+    registrar: &OwnedEntityRegistrar<B>,
     user_id: MacroUserIdStr<'static>,
     share_permission: &SharePermissionV2,
     name: &str,
@@ -183,49 +183,15 @@ async fn create_pending_project(
     )?;
 
     share::create_project_share_permission(transaction, &project.id, share_permission).await?;
-    let entity_id = project
-        .id
-        .parse()
-        .map_err(|error| sqlx::Error::Decode(Box::new(error)))?;
-    insert_entity_access_row(
+    super::register_owned(
         transaction,
-        &entity_id,
-        EntityType::Project,
-        user_id.as_ref(),
-        EntityAccessSourceType::User,
-        AccessLevel::Owner,
+        registrar,
+        &project.id,
+        RegisteredEntityType::Project,
+        Owner::User(user_id),
     )
     .await?;
-    entity_registry_db_utils::insert_entity(
-        transaction,
-        NewEntityRecord::new(
-            entity_id,
-            RegisteredEntityType::Project,
-            Owner::User(user_id),
-        ),
-    )
-    .await
-    .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
     Ok(project)
-}
-
-async fn register_user_owned_document<B: BotFacts>(
-    transaction: &mut Transaction<'_, Postgres>,
-    registrar: &OwnedEntityRegistrar<B>,
-    id: &str,
-    user_id: MacroUserIdStr<'static>,
-) -> Result<(), sqlx::Error> {
-    let id = id
-        .parse()
-        .map_err(|error| sqlx::Error::Decode(Box::new(error)))?;
-    registrar
-        .register_owned_entity(
-            transaction,
-            NewEntityRecord::new(id, RegisteredEntityType::Document, Owner::User(user_id)),
-        )
-        .await
-        .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
-    Ok(())
 }
 
 async fn create_empty_document<B: BotFacts>(
@@ -281,7 +247,14 @@ async fn create_empty_document<B: BotFacts>(
     };
 
     create_document_share_permission(transaction, &document.id, share_permission).await?;
-    register_user_owned_document(transaction, registrar, &document.id, user_id.clone()).await?;
+    super::register_owned(
+        transaction,
+        registrar,
+        &document.id,
+        RegisteredEntityType::Document,
+        Owner::User(user_id.clone()),
+    )
+    .await?;
 
     Ok(DocumentMetadata::new_document(
         &document.id,

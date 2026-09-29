@@ -189,15 +189,30 @@ async fn stopping_a_preview_does_not_bypass_the_creation_interval() {
     service.share(identity(), 3000).await.unwrap();
 }
 #[test]
-fn only_local_stack_accepts_loopback_http_handoff_and_docker_ssh_fallback() {
+fn local_stack_accepts_https_handoff_and_loopback_http_with_docker_ssh_fallback() {
     let (service, _, _) = fixture(2222);
     let mut settings = service.settings().clone();
     settings.domain = "preview.localhost".into();
-    settings.app_origin = "http://localhost:3000".into();
     settings.local_ssh_fallback = true;
-    assert!(settings.validate().is_ok());
-    settings.app_origin = "http://macro.test".into();
-    assert!(settings.validate().is_err());
-    settings.app_origin = "https://macro.test".into();
+    for origin in [
+        "http://localhost:3000",
+        "https://localhost:8090",
+        "https://coworker-dev:23109",
+        "https://coworker-dev.local:23109",
+    ] {
+        settings.app_origin = origin.into();
+        assert!(settings.validate().is_ok(), "{origin}");
+    }
+    for origin in [
+        "http://coworker-dev:3000",
+        "https://Coworker-Dev:23109",
+        "https://preview.localhost:8090",
+        "https://app.preview.localhost:8090",
+    ] {
+        settings.app_origin = origin.into();
+        assert!(settings.validate().is_err(), "{origin}");
+    }
+    settings.app_origin = "https://coworker-dev:23109".into();
+    settings.domain = "preview.example.test".into();
     assert!(settings.validate().is_err());
 }

@@ -730,6 +730,8 @@ type GraphqlNotification =
   | SoupNotificationFieldsFragment
   | ChannelListNotificationFieldsFragment;
 
+// Convert the GraphQL union and aliased fields into the shared tag/content
+// payload used to render, stack, and navigate REST, realtime, and GraphQL notifications.
 function mapGraphqlNotificationMetadata(
   metadata: GraphqlNotificationMetadata
 ): NotifEvent {
@@ -920,6 +922,24 @@ function mapGraphqlNotificationMetadata(
               metadata.channelMessageSendSenderProfilePictureUrl,
           },
         }) satisfies NotifEventMember<'channel_message_send'>
+    )
+    .with(
+      { __typename: 'GraphqlChannelMessageReactionMetadata' },
+      (metadata) =>
+        ({
+          tag: 'channel_message_reaction',
+          content: {
+            messageId: metadata.channelMessageReactionMessageId,
+            threadId: metadata.channelMessageReactionThreadId,
+            messageContent: metadata.channelMessageReactionMessageContent,
+            emoji: metadata.channelMessageReactionEmoji,
+            channelType:
+              metadata.channelMessageReactionChannelType.toLowerCase() as ChannelType,
+            channelName: metadata.channelMessageReactionChannelName,
+            senderProfilePictureUrl:
+              metadata.channelMessageReactionSenderProfilePictureUrl,
+          },
+        }) satisfies NotifEventMember<'channel_message_reaction'>
     )
     .with(
       { __typename: 'GraphqlChannelReplyMetadata' },

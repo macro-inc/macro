@@ -72,7 +72,7 @@ export interface AgentInputProps {
   autofocus?: boolean;
   /**
    * Slash commands the harness advertises (ACP `available_commands_update`);
-   * typing `/` opens a typeahead over them. `/` stays plain text while empty.
+   * shown alongside skills and pull requests in the `/` menu.
    */
   commands?: () => AgentCommandItem[];
   /**

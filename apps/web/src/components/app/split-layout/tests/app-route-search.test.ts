@@ -36,6 +36,16 @@ function roundTrip(pathname: string, search: string, committed: boolean) {
 
 describe('application route search ownership', () => {
   it.each([
+    '/drive/spreadsheet/sheet-1',
+    '/drive/folder/folder-1/spreadsheet/sheet-1',
+    '/drive/recent/spreadsheet/sheet-1',
+  ])('preserves spreadsheet comment targets on %s', (pathname) => {
+    expect(roundTrip(pathname, 'comment_id=message-1', false)).toContain(
+      'comment_id=message-1'
+    );
+  });
+
+  it.each([
     ['/agents/session-1', 'the agents workspace'],
     ['/coders/session-1', 'a coding session'],
     ['/agent/session-1', 'the agent block'],
@@ -66,6 +76,18 @@ const projectId = '019507e8-14a3-7bc1-8610-419f16bd03a9';
 const resolveMention = createMacroMentionLinkResolver(routes);
 
 describe('application route mentions', () => {
+  it('preserves spreadsheet comment targets in Drive links', () => {
+    expect(
+      resolveMention(
+        `https://dev.macro.com/app/drive/spreadsheet/${mentionId}?comment_id=message-1`
+      )
+    ).toEqual({
+      id: mentionId,
+      block: 'spreadsheet',
+      params: { comment_id: 'message-1' },
+    });
+  });
+
   it('preserves task comment targets in both task contexts', () => {
     for (const path of [
       `tasks/${mentionId}`,

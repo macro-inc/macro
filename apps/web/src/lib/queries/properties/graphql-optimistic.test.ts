@@ -6,6 +6,7 @@ import type {
 import { describe, expect, it } from 'vitest';
 import {
   apiValuesToGraphqlPropertyValue,
+  buildOptimisticEntityPropertyOptions,
   buildOptimisticSetEntityProperty,
 } from './graphql-optimistic';
 
@@ -116,6 +117,46 @@ describe('apiValuesToGraphqlPropertyValue', () => {
     expect(
       apiValuesToGraphqlPropertyValue({ valueType: 'LINK', values: null })
     ).toBeNull();
+  });
+});
+
+describe('buildOptimisticEntityPropertyOptions', () => {
+  const definition: PropertyDefinitionDomain = {
+    id: 'tag-def',
+    displayName: 'Tags',
+    valueType: 'TAG',
+    isMultiSelect: true,
+    isMetadata: false,
+    isSystem: false,
+    owner: { scope: 'system' },
+    createdAt: '',
+    updatedAt: '',
+  };
+
+  it('uses a known assignment with the original tag definition metadata', () => {
+    expect(
+      buildOptimisticEntityPropertyOptions(definition, ['cool'], 'assignment-1')
+    ).toMatchObject({
+      id: 'assignment-1',
+      propertyDefinitionId: 'tag-def',
+      dataType: 'TAG',
+      value: {
+        __typename: 'GraphqlSelectOptionPropertyValue',
+        optionIds: ['cool'],
+      },
+    });
+  });
+
+  it.each([
+    undefined,
+    '',
+    'tag-def',
+    'pending:tag-def',
+    'optimistic-property:DOCUMENT:doc:tag-def',
+  ])('does not treat %s as a persisted assignment', (assignmentId) => {
+    expect(
+      buildOptimisticEntityPropertyOptions(definition, ['cool'], assignmentId)
+    ).toBeUndefined();
   });
 });
 

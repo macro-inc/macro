@@ -9,9 +9,9 @@ use crate::domain::models::{
     EntityMention, GetOrCreateChannelResponse, GetOrCreateDmRequest, GetOrCreatePrivateRequest,
     MessageAttachment, MessagePageDirection, MutatedAttachment, MutatedMessage,
     NewChannelAttachment, PatchChannelRequest, PatchMessageRequest, PostMessageRequest,
-    PostMessageResponse, PostReactionRequest, PostTypingRequest, ReferencedShareItem,
-    RemoveParticipantsRequest, ResolvedChannelMessage, Sender, ThreadData, ThreadReply,
-    ThreadReplyRow, TopLevelMessageRow,
+    PostMessageResponse, PostReactionRequest, PostTypingRequest, ReactionMessageContext,
+    ReferencedShareItem, RemoveParticipantsRequest, ResolvedChannelMessage, Sender, ThreadData,
+    ThreadReply, ThreadReplyRow, TopLevelMessageRow,
 };
 #[cfg(feature = "list")]
 use crate::domain::models::{
@@ -471,6 +471,13 @@ pub trait ChannelRepo: Send + Sync + 'static {
         channel_id: Uuid,
         message_id: Uuid,
     ) -> impl Future<Output = Result<Option<ChannelSender<'static>>, Self::Err>> + Send;
+
+    /// Fetch the active message details needed for a reaction notification.
+    fn get_reaction_message_context(
+        &self,
+        channel_id: Uuid,
+        message_id: Uuid,
+    ) -> impl Future<Output = Result<Option<ReactionMessageContext>, Self::Err>> + Send;
 
     /// Fetch active participants.
     fn get_participants(

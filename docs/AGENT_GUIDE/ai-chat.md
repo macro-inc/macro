@@ -110,14 +110,24 @@ the shimmer.
   Hover an agent (or use the right arrow key) to open its model submenu, with
   the searchable Settings catalog, provider icons, and scrollable **More models**.
   The submenu focuses the `Search models` field so you can type immediately.
-  Clicking an agent directly uses its default; choosing a submenu model selects
-  both the agent and that model. A checkmark identifies the selected model,
+  Clicking an agent directly, or pressing Enter/Space on its focused row, uses
+  its default and clears any previous model override. Right Arrow still opens
+  the model submenu; choosing a submenu model selects both the agent and that
+  model. Escape dismisses the picker and restores focus to its trigger.
+  A checkmark identifies the selected model,
   including when it is the agent’s configured default; there is no separate default row.
   Disconnected Cursor offers **Connect Cursor**, opening Settings → Agents → Runtimes.
   The built-in sandbox and paired macrod runtimes are not offered here.
 - Selecting an agent changes the heading: **What should we work on?** for chat
   agents and **What should we build?** for coding agents. The draft stays intact
-  when changing agents. **Create agent** stays pinned at the bottom of the dropdown
+  when changing agents. Unsent New conversation text and attachments also come
+  back after opening a session and returning, the same way channel replies persist
+  when switching channels. Home's agent input also restores unsent text, under a
+  separate key from Agents → New conversation. Check the Home path explicitly:
+  type a prompt on Home, visit an agent session, then return using the Home sidebar
+  button or Back. The Home prompt should remain after returning and after a reload.
+  Sending or clearing the input removes only that surface's saved text draft.
+  **Create agent** stays pinned at the bottom of the dropdown
   while the agent and model lists scroll. It opens the roster on the selected kind's
   tab, where either kind can be created.
 - On Home and New conversation, selecting a coding agent expands the input even
@@ -143,7 +153,11 @@ the shimmer.
   confirm button. Someone who reaches no repository sees a hint with **Connect
   GitHub**, which opens Settings → Connected. Listed recents are remembered
   per user in local storage and offered first, without changing the Automatic
-  default. Once selected, **Branch** shows the repository's default branch (`main` when it
+  default. Automatic selection always chooses an accessible repository, using
+  the most recent accessible session repository when the prompt is ambiguous,
+  or the first available repository for users without repository history. Questions
+  and investigations also get a repository. With no accessible GitHub repositories,
+  starting a coding session fails with a prompt to connect GitHub. Once selected, **Branch** shows the repository's default branch (`main` when it
   has none) and opens a searchable list of that repository's branches
   (`GET /agent-repositories/branches?repoUrl=…` on the agent harness),
   default first. Typing filters the list; an unlisted valid name adds a
@@ -210,6 +224,16 @@ the shimmer.
   Automations / Skills list. On touch devices, conversation links open standalone
   agent sessions or legacy chats instead of the desktop Agents workspace. A standalone legacy chat is `/app/chat/<uuid>`; doc-scoped chat
   is `/app/md/<doc>/chat/<chat>` (split view).
+
+## Routine run history
+
+A routine's **History** can contain both legacy chats and agent sessions. Each
+row opens the surface created by that run; changing the routine's execution
+target does not change older links. Shift-click opens the run in a new split.
+Loading metadata affects only its row. Deleted, inaccessible, or missing resources
+show **Run unavailable** without a link, including failed preparation that created
+no resource. Live pending rows remain neutral; persisted unsuccessful runs keep
+the failure-colored timestamp even when their transcript is still available.
 
 ## Start a standalone chat
 
@@ -429,10 +453,14 @@ After completion, each assistant message gets `Edit assistant response in Notes`
 The chat auto-titles itself after the first exchange (route stays stable, title changes).
 
 The agent has workspace tools (it can list your documents, read channels, create tasks,
+list, create, and update projects (initiatives in the API) and move tasks in or out of them,
 render `displayResults` views). Requests go to `POST /cognition/stream/chat/message`; results
 stream over the app's websocket, not the HTTP response.
 
-When asked, the agent also answers document comments in place. A reply row reads
+When explicitly asked, the agent uses `CommentOnDocument` to reply with `threadId`,
+start an inline markdown comment with `quote`, or start a Discussion comment with
+neither. `threadId` and `quote` cannot be combined; `occurrence` only applies with
+`quote`. Thread ids come from the comments returned by `ReadContent`. A reply row reads
 **Replied to a comment on** (or **Commented on** for a new Discussion comment) followed
 by the document, and expands to the posted text; a resolve row reads **Resolved** or
 **Reopened a comment on** the document. Asked to comment on part of a markdown
@@ -442,6 +470,16 @@ and the passage is highlighted in the document with the comment floating beside 
 A passage that is missing, spans blocks, or repeats with no occurrence chosen is
 refused with no highlight left behind. The comment is posted as the agent with a
 **from <user>** pill, and needs the user's comment access to the document.
+
+Project rows include **Find projects**, **Read project**, **Create project <name>**,
+**Update project**, **Add N tasks to project**, and **Remove N tasks from project**.
+The assignment and removal rows show a task count; the caret expands each task id
+and its outcome, with the full response available under **Result data**. Assignment
+outcomes are **assigned**, **moved**, **not a task**, **not found**, or
+**skipped no permission**. Removal outcomes are **unassigned** or **not assigned**;
+a task in a different project is left unchanged. Both actions require edit access
+to the project and each task. Removal stops on access or service failures, so
+previous tasks in the same batch may already have been removed.
 
 ## Agent sessions asking a question
 
@@ -481,8 +519,14 @@ An agent session is `/app/agent/<uuid>`. The composer placeholder is
 **`Message the agent, @mention anything`**. Creating one (`c` then `a`, or
 `Create` → `Agent`) leaves that composer focused — on mobile that is the same
 Create-menu `triggerFocusInput` as chat, so the keyboard opens. Type `/` to
-open slash commands the connected agent advertised (Claude, OpenCode, and
-Cursor). `/` stays ordinary text until that list arrives. Type `@` to insert the same mention chips
+open sections for **Skills**, **Pull requests**, and **Commands**. Skills are
+available even before the connected agent advertises commands. Select a skill
+to insert its mention, a pull request to reference it, or a harness command
+to insert `/name` as text. Search filters all sections; arrow keys move across
+sections and Enter selects the highlighted item. Saved skills have an **Edit**
+button that opens their document editor; skills you own also have **Delete**,
+which opens the usual deletion confirmation. Built-in skills have no edit or
+delete controls. **New skill** creates a skill and inserts its mention. Type `@` to insert the same mention chips
 used in chat and channels; they serialize as mention-chip tags in the prompt
 the agent sees (`<m-document-mention>` for docs/channels/chats/tasks/emails/calendar
 events/skills, `<m-date-mention>` for a day or time, `<m-agent-session-mention>`

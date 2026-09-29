@@ -293,9 +293,11 @@ export type EmbeddedLinkPathSegment =
     };
 
 export type OptimisticLinkPatchWire = {
-  /** Generated GraphQL operation used as the typed graph entrypoint. */
+  /** Generated query, or fragment document when recordRoot is present. */
   query: string;
   operationName?: string;
+  /** Explicit normalized parent; absent for legacy query-rooted recipes. */
+  recordRoot?: { fragmentName: string; entityKey: string };
   /** Variables for the entrypoint operation. */
   variablesJson: string;
   /** Response-key path beginning at the query root. */
