@@ -226,6 +226,23 @@ export function ChannelsRail(props: ChannelsRailProps) {
       reportActivationError(new Error('Missing channel id'));
       return;
     }
+    // A different channel owns its loading UI and notification hydration.
+    // Select it before fetching so the rail and destination respond to the
+    // click immediately. Re-clicks still refresh and re-aim the open channel.
+    if (
+      !openInNewSplit &&
+      selectedChannel()?.id !== channelId &&
+      channel.unreadNotifications !== undefined
+    ) {
+      setSelectedChannel(
+        channelPreviewSelection(channelId, {
+          target: channel.target
+            ? { kind: 'message', ...channel.target }
+            : undefined,
+        })
+      );
+      return;
+    }
     const selection = hydrateChannelNotificationSelection(
       channel,
       notificationSource.withLocalOverrides

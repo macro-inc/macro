@@ -221,7 +221,7 @@ beforeEach(() => {
     isLoading: false,
     isFetching: false,
     error: null,
-    data: { entities: [] },
+    data: { entities: [full('two', [])] },
   });
   setQuery = update;
   mocks.selectedQuery.mockImplementation((_id, enabled: () => boolean) => ({
@@ -281,6 +281,47 @@ describe('mobile dock search wiring', () => {
 });
 
 describe('channel selection loading and recovery', () => {
+  it('shows the selected channel while its notification data is still loading', () => {
+    setSelectedId('two');
+    render(() => <ChannelsView />);
+    expect(screen.getByTestId('channel-detail').textContent).toBe('two');
+    mocks.markRead.mockClear();
+
+    batch(() => {
+      setQuery('isFetching', true);
+      setSelectedId('one');
+    });
+    expect(screen.queryByTestId('channel-detail')).toBeNull();
+    expect(screen.getByText('one')).toBeTruthy();
+    expect(screen.getByRole('status').textContent).toBe('Loading conversation');
+    expect(mocks.markRead).not.toHaveBeenCalled();
+
+    batch(() => {
+      setQuery('data', { entities: [full('one', ['new'])] });
+      setQuery('isFetching', false);
+    });
+    expect(screen.getByTestId('channel-detail').textContent).toBe('one');
+    expect(mocks.markRead).toHaveBeenCalledOnce();
+  });
+
+  it('refreshes even an empty unread projection before choosing the message target', () => {
+    setSelectedId('two');
+    setQuery('isFetching', true);
+    render(() => <ChannelsView />);
+    expect(screen.getByText('Loading conversation')).toBeTruthy();
+    expect(mocks.markRead).not.toHaveBeenCalled();
+    batch(() => {
+      setQuery('data', { entities: [full('two', ['arrived-after-list'])] });
+      setQuery('isFetching', false);
+    });
+    expect(screen.getByTestId('channel-detail').textContent).toBe('two');
+    expect(mocks.markRead).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ id: 'two' }),
+      expect.anything(),
+      { scopeChannelThreads: false }
+    );
+  });
+
   it('offers recovery for a successful empty selection and retries normally', async () => {
     render(() => <ChannelsView />);
     expect(screen.getByText('Conversation unavailable')).toBeTruthy();
@@ -304,7 +345,7 @@ describe('channel selection loading and recovery', () => {
   });
 
   it('never marks cached data while a reopened selection is refreshing', async () => {
-    setQuery('data', { entities: [full('one', ['old'])] });
+    setQuery('data', { entities: [full('one', ['old']), full('two', [])] });
     render(() => <ChannelsView />);
     await waitFor(() => expect(mocks.markRead).toHaveBeenCalledOnce());
     setSelectedId('two');

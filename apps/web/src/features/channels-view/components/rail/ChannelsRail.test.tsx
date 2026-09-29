@@ -59,7 +59,23 @@ vi.mock('@app/components/view-shell', () => ({
   useViewTabHotkeys: vi.fn(),
 }));
 vi.mock('@app/features/next-soup/utils', () => ({
-  channelPreviewSelection: (id: string) => ({ type: 'channel', id }),
+  channelPreviewSelection: (
+    id: string,
+    options?: {
+      target?: { kind: string; messageId?: string; threadId?: string };
+    }
+  ) => ({
+    type: 'channel',
+    id,
+    ...(options?.target?.kind === 'message'
+      ? {
+          target: {
+            messageId: options.target.messageId,
+            threadId: options.target.threadId,
+          },
+        }
+      : {}),
+  }),
   getChannelEntityTarget: () => ({ kind: 'latest' }),
   markChannelNotificationsSeenOnOpen: mocks.markRead,
   navigateChannelEntityToTarget: mocks.navigate,
@@ -202,13 +218,71 @@ const mount = () =>
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.row = channel;
-  mocks.selected = undefined;
+  mocks.selected = { type: 'channel', id: channel.id };
   mocks.select.mockReturnValue(true);
   mocks.hydrate.mockReturnValue(hydrated);
 });
 afterEach(cleanup);
 
 describe('explicit channel activation read marking', () => {
+  it('selects a different channel immediately and leaves hydration to the destination', () => {
+    mocks.selected = { type: 'channel', id: 'previous' };
+    mount();
+    fireEvent.click(screen.getByRole('button'));
+    expect(mocks.select).toHaveBeenCalledExactlyOnceWith({
+      type: 'channel',
+      id: channel.id,
+    });
+    expect(mocks.hydrate).not.toHaveBeenCalled();
+    expect(mocks.markRead).not.toHaveBeenCalled();
+  });
+
+  it('does not fetch or mark notifications when a channel switch is rejected', () => {
+    mocks.selected = undefined;
+    mocks.select.mockReturnValue(false);
+    mount();
+    fireEvent.click(screen.getByRole('button'));
+    expect(mocks.hydrate).not.toHaveBeenCalled();
+    expect(mocks.markRead).not.toHaveBeenCalled();
+  });
+
+  it('preserves an explicit search target when selecting before hydration', () => {
+    mocks.selected = undefined;
+    mocks.row = {
+      ...channel,
+      target: { messageId: 'reply', threadId: 'thread' },
+    };
+    mount();
+    fireEvent.click(screen.getByRole('button'));
+    expect(mocks.select).toHaveBeenCalledExactlyOnceWith({
+      type: 'channel',
+      id: channel.id,
+      target: { messageId: 'reply', threadId: 'thread' },
+    });
+    expect(mocks.hydrate).not.toHaveBeenCalled();
+  });
+
+  it('discards a pending re-click when another channel is selected', async () => {
+    let resolve!: (channel: WithNotification<ChannelEntity>) => void;
+    mocks.hydrate.mockReturnValueOnce(
+      new Promise((done) => {
+        resolve = done;
+      })
+    );
+    mount();
+    fireEvent.click(screen.getByRole('button'));
+    mocks.row = { ...channel, id: 'two' };
+    fireEvent.click(screen.getByRole('button'));
+    expect(mocks.select).toHaveBeenCalledExactlyOnceWith({
+      type: 'channel',
+      id: 'two',
+    });
+    resolve(hydrated);
+    await Promise.resolve();
+    expect(mocks.select).toHaveBeenCalledOnce();
+    expect(mocks.markRead).not.toHaveBeenCalled();
+  });
+
   it('marks the full channel on every accepted click, including the already-selected route', async () => {
     mocks.selected = { type: 'channel', id: channel.id };
     mount();

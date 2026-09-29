@@ -221,9 +221,10 @@ function ChannelDetailRouteContent() {
   const needsFullEdge = createMemo(
     on(
       channelId,
+      // The rail selects immediately. Even an empty bounded unread edge can
+      // be stale, so refresh here before choosing the initial message target.
       () =>
-        loaded() === undefined ||
-        (loaded()?.unreadNotifications?.length ?? 0) > 0
+        loaded() === undefined || loaded()?.unreadNotifications !== undefined
     )
   );
   const query = useChannelByIdQuery(
@@ -278,18 +279,28 @@ function ChannelDetailRouteContent() {
       <Show
         when={hydrated()}
         fallback={
-          <div class="flex size-full flex-col items-center justify-center gap-2 text-ink-muted">
-            <h2>
-              {unavailable()
-                ? 'Conversation unavailable'
-                : 'Loading conversation'}
-            </h2>
-            <Show when={unavailable()}>
-              <button type="button" onClick={retry}>
-                Retry
-              </button>
-            </Show>
-          </div>
+          <>
+            <ViewShell.TopBar>
+              <span class="truncate text-sm font-semibold">
+                {loaded()?.name ?? 'Conversation'}
+              </span>
+            </ViewShell.TopBar>
+            <div
+              class="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 text-ink-muted"
+              role="status"
+            >
+              <h2>
+                {unavailable()
+                  ? 'Conversation unavailable'
+                  : 'Loading conversation'}
+              </h2>
+              <Show when={unavailable()}>
+                <button type="button" onClick={retry}>
+                  Retry
+                </button>
+              </Show>
+            </div>
+          </>
         }
       >
         {(channel) => <ChannelDetailView channel={channel()} />}
