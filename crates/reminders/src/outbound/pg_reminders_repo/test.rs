@@ -7,7 +7,8 @@ use sqlx::PgPool;
 
 use super::*;
 use crate::domain::models::{
-    Advance, ReminderCursor, ScheduleUpdate, SoupOrder, SoupReminderQuery, entity_token,
+    Advance, OccurrenceWindow, ReminderCursor, ScheduleUpdate, SoupOrder, SoupReminderQuery,
+    entity_token,
 };
 
 const USER_A: &str = "macro|reminders-a@macro.com";
@@ -46,6 +47,7 @@ fn soup_query(limit: i64) -> SoupReminderQuery<'static> {
         entities: &[],
         completed: None,
         fired: None,
+        attached: None,
         order: SoupOrder::LatestFirst,
         limit,
     }
@@ -236,6 +238,77 @@ async fn an_unfiltered_list_includes_standalone_reminders(pool: PgPool) {
     let listed = listed_descriptions(&repo, &ReminderFilter::default()).await;
     assert_eq!(listed.len(), 4);
     assert!(listed.contains(&"standalone".to_string()));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_list_filters_on_whether_a_reminder_is_attached(pool: PgPool) {
+    let repo = seed_filterable_reminders(&pool).await;
+    let listed = |attached| {
+        let repo = &repo;
+        async move {
+            let mut listed = listed_descriptions(
+                repo,
+                &ReminderFilter {
+                    attached,
+                    ..Default::default()
+                },
+            )
+            .await;
+            listed.sort();
+            listed
+        }
+    };
+
+    assert_eq!(listed(Some(false)).await, vec!["standalone"]);
+    assert_eq!(
+        listed(Some(true)).await,
+        vec!["on channel doc-2", "on doc-1", "on doc-2"]
+    );
+    // Standalone and attached to a document at once cannot both hold.
+    assert!(
+        listed_descriptions(
+            &repo,
+            &ReminderFilter {
+                entity_types: vec![EntityType::Document],
+                attached: Some(false),
+                ..Default::default()
+            },
+        )
+        .await
+        .is_empty()
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_soup_read_filters_on_whether_a_reminder_is_attached(pool: PgPool) {
+    let repo = seed_filterable_reminders(&pool).await;
+    let described = |attached| {
+        let repo = &repo;
+        async move {
+            let mut described: Vec<String> = repo
+                .list_reminders_for_soup(
+                    &user(USER_A),
+                    SoupReminderQuery {
+                        attached,
+                        ..soup_query(100)
+                    },
+                )
+                .await
+                .expect("soup list should succeed")
+                .into_iter()
+                .map(|found| found.reminder.description)
+                .collect();
+            described.sort();
+            described
+        }
+    };
+
+    assert_eq!(described(Some(false)).await, vec!["standalone"]);
+    assert_eq!(
+        described(Some(true)).await,
+        vec!["on channel doc-2", "on doc-1", "on doc-2"]
+    );
+    assert_eq!(described(None).await.len(), 4);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -2730,4 +2803,151 @@ async fn soup_list_has_no_reference_for_a_standalone_reminder(pool: PgPool) {
 
     assert_eq!(found.len(), 1);
     assert!(found[0].reference.is_none());
+}
+
+/// Descriptions of what the firing-within read returned, sorted, since the
+/// domain orders firings and the read's own order is not part of its contract.
+async fn descriptions_firing_within(
+    repo: &PgRemindersRepo,
+    window: OccurrenceWindow,
+    attached: Option<bool>,
+) -> Vec<String> {
+    let mut descriptions: Vec<String> = repo
+        .list_reminders_firing_within(&user(USER_A), &ReminderOccurrenceQuery { window, attached })
+        .await
+        .expect("firing-within read should succeed")
+        .into_iter()
+        .map(|reminder| reminder.description)
+        .collect();
+    descriptions.sort();
+    descriptions
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn firing_within_reads_the_callers_live_reminders_that_can_fire(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    insert_user(&pool, USER_B).await;
+    let repo = PgRemindersRepo::new(pool);
+    let window = OccurrenceWindow::new(at(2099, 1, 1, 0), at(2099, 1, 8, 0)).expect("valid window");
+
+    let mut ids = std::collections::HashMap::new();
+    for (description, schedule) in [
+        ("series", recurring()),
+        ("done series", recurring()),
+        ("off series", recurring()),
+        ("inside", once_at(at(2099, 1, 3, 14))),
+        ("done inside", once_at(at(2099, 1, 4, 14))),
+        ("at the end", once_at(at(2099, 1, 8, 0))),
+        ("outside", once_at(at(2099, 2, 1, 14))),
+    ] {
+        let created = repo
+            .create_reminder(&user(USER_A), &new_reminder(description, schedule))
+            .await
+            .expect("insert");
+        ids.insert(description, created.id);
+    }
+    repo.create_reminder(
+        &user(USER_B),
+        &new_reminder("theirs", once_at(at(2099, 1, 3, 14))),
+    )
+    .await
+    .expect("insert");
+
+    for (description, update) in [
+        (
+            "done series",
+            ReminderUpdate {
+                completed: Some(true),
+                ..Default::default()
+            },
+        ),
+        (
+            "done inside",
+            ReminderUpdate {
+                completed: Some(true),
+                ..Default::default()
+            },
+        ),
+        (
+            "off series",
+            ReminderUpdate {
+                enabled: Some(false),
+                ..Default::default()
+            },
+        ),
+    ] {
+        repo.update_reminder(&user(USER_A), ids[description], &update)
+            .await
+            .expect("update")
+            .expect("reminder exists");
+    }
+
+    assert_eq!(
+        descriptions_firing_within(&repo, window, None).await,
+        vec!["done series", "inside", "series"],
+        "completion retires a one-shot but not a series; disabled, other users', \
+         and out-of-window rows are not read"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn firing_within_skips_a_series_created_after_the_window(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    let repo = PgRemindersRepo::new(pool);
+    let past = OccurrenceWindow::new(at(2020, 1, 1, 0), at(2020, 1, 8, 0)).expect("valid window");
+
+    repo.create_reminder(&user(USER_A), &new_reminder("series", recurring()))
+        .await
+        .expect("insert");
+    repo.create_reminder(
+        &user(USER_A),
+        &NewReminder {
+            description: "one-shot".to_string(),
+            entity: None,
+            schedule: once_at(at(2020, 1, 3, 14)),
+            next_run_at: at(2020, 1, 3, 14),
+        },
+    )
+    .await
+    .expect("insert");
+
+    // A one-shot is read on its instant alone: flooring can put it before
+    // its own row.
+    assert_eq!(
+        descriptions_firing_within(&repo, past, None).await,
+        vec!["one-shot"]
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn firing_within_filters_on_whether_a_reminder_is_attached(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    let repo = PgRemindersRepo::new(pool);
+    let window = OccurrenceWindow::new(at(2099, 1, 1, 0), at(2099, 1, 8, 0)).expect("valid window");
+
+    repo.create_reminder(&user(USER_A), &new_reminder("standalone", recurring()))
+        .await
+        .expect("insert");
+    repo.create_reminder(
+        &user(USER_A),
+        &NewReminder {
+            entity: Some(EntityType::Document.with_entity_string(DOC_1.to_string())),
+            ..new_reminder("attached", once_at(at(2099, 1, 3, 14)))
+        },
+    )
+    .await
+    .expect("insert");
+
+    assert_eq!(
+        descriptions_firing_within(&repo, window, Some(false)).await,
+        vec!["standalone"]
+    );
+    assert_eq!(
+        descriptions_firing_within(&repo, window, Some(true)).await,
+        vec!["attached"]
+    );
+    assert_eq!(
+        descriptions_firing_within(&repo, window, None).await,
+        vec!["attached", "standalone"]
+    );
 }

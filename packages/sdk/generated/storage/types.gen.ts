@@ -8361,6 +8361,47 @@ export type ReminderFilters = {
 };
 
 /**
+ * One firing of a reminder, as a calendar lays it out.
+ */
+export type ReminderOccurrence = {
+    /**
+     * What to remind the user about.
+     */
+    description: string;
+    /**
+     * Id of the associated entity, when the reminder is attached to one.
+     */
+    entityId?: string | null;
+    /**
+     * Type of the associated entity, when the reminder is attached to one.
+     */
+    entityType?: null | 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative';
+    /**
+     * The reminder this is a firing of.
+     */
+    reminderId: string;
+    /**
+     * The reminder's schedule, which says whether moving this firing moves
+     * one instant or the whole series.
+     */
+    schedule: ReminderSchedule;
+    /**
+     * When this firing happens. Together with `reminderId`, identifies it.
+     */
+    scheduledFor: string;
+};
+
+/**
+ * The caller's reminder firings inside a window, soonest first.
+ */
+export type ReminderOccurrencesList = {
+    /**
+     * The firings.
+     */
+    occurrences: Array<ReminderOccurrence>;
+};
+
+/**
  * When a reminder fires.
  */
 export type ReminderSchedule = {
@@ -16820,6 +16861,12 @@ export type ListRemindersData = {
          */
         includeCompleted?: boolean;
         /**
+         * `true` for only reminders attached to an entity, `false` for only
+         * standalone ones. Omit for both. `false` alongside `entityType` or
+         * `entityId` matches nothing.
+         */
+        attached?: boolean;
+        /**
          * Page size. Defaults to 100; larger values are capped at 500. A value
          * that is not a non-negative integer is rejected by the query extractor.
          */
@@ -16884,6 +16931,44 @@ export type CreateReminderResponses = {
 };
 
 export type CreateReminderResponse = CreateReminderResponses[keyof CreateReminderResponses];
+
+export type ListReminderOccurrencesData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Inclusive UTC start of the window.
+         */
+        start: string;
+        /**
+         * Exclusive UTC end of the window, at most 62 days after `start`.
+         */
+        end: string;
+        /**
+         * `true` for only reminders attached to an entity, `false` for only
+         * standalone ones. Omit for both.
+         */
+        attached?: boolean;
+    };
+    url: '/reminders/occurrences';
+};
+
+export type ListReminderOccurrencesErrors = {
+    400: ErrorResponse;
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListReminderOccurrencesError = ListReminderOccurrencesErrors[keyof ListReminderOccurrencesErrors];
+
+export type ListReminderOccurrencesResponses = {
+    200: ReminderOccurrencesList;
+};
+
+export type ListReminderOccurrencesResponse = ListReminderOccurrencesResponses[keyof ListReminderOccurrencesResponses];
 
 export type DeleteReminderData = {
     body?: never;

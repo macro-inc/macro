@@ -137,7 +137,9 @@ use models_soup::project::SoupProject;
 use projects_hex::inbound::axum_router::delete_project::{
     ProjectDeleteResponse, ProjectDeleteResponseData,
 };
-use reminders::domain::models::{Reminder, ReminderSchedule, RemindersList};
+use reminders::domain::models::{
+    Reminder, ReminderOccurrence, ReminderOccurrencesList, ReminderSchedule, RemindersList,
+};
 use reminders::inbound::axum_router::{CreateReminderRequest, UpdateReminderRequest};
 use soup::domain::models::{SoupItemWithProperties, SoupPropertiesField};
 use soup::inbound::axum_router::{
@@ -384,6 +386,7 @@ use utoipa::OpenApi;
         // reminders
         reminders::inbound::axum_router::list_reminders_handler,
         reminders::inbound::axum_router::create_reminder_handler,
+        reminders::inbound::axum_router::list_reminder_occurrences_handler,
         reminders::inbound::axum_router::get_reminder_handler,
         reminders::inbound::axum_router::update_reminder_handler,
         reminders::inbound::axum_router::delete_reminder_handler,
@@ -557,6 +560,8 @@ use utoipa::OpenApi;
             SetChannelLabelRequest,
             Reminder,
             RemindersList,
+            ReminderOccurrence,
+            ReminderOccurrencesList,
             ReminderSchedule,
             CreateReminderRequest,
             UpdateReminderRequest,

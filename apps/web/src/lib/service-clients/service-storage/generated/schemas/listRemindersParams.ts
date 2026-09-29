@@ -20,6 +20,12 @@ export type ListRemindersParams = {
    */
   includeCompleted?: boolean;
   /**
+ * `true` for only reminders attached to an entity, `false` for only
+standalone ones. Omit for both. `false` alongside `entityType` or
+`entityId` matches nothing.
+ */
+  attached?: boolean;
+  /**
  * Page size. Defaults to 100; larger values are capped at 500. A value
 that is not a non-negative integer is rejected by the query extractor.
  * @minimum 0

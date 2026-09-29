@@ -559,3 +559,145 @@ fn day_of_week_two_is_monday() {
         "Monday"
     );
 }
+
+#[test]
+fn an_occurrence_window_must_end_after_it_starts() {
+    let start = utc(2026, 7, 2, 0, 0);
+    assert!(matches!(
+        OccurrenceWindow::new(start, start),
+        Err(InvalidOccurrenceWindow::Empty)
+    ));
+    assert!(matches!(
+        OccurrenceWindow::new(start, utc(2026, 7, 1, 0, 0)),
+        Err(InvalidOccurrenceWindow::Empty)
+    ));
+}
+
+#[test]
+fn an_occurrence_window_may_span_its_maximum_and_no_further() {
+    let start = utc(2026, 7, 1, 0, 0);
+    let longest = start + MAX_OCCURRENCE_WINDOW;
+
+    let window = OccurrenceWindow::new(start, longest).expect("the maximum span is allowed");
+    assert_eq!(window.starts_at(), start);
+    assert_eq!(window.ends_at(), longest);
+    assert!(matches!(
+        OccurrenceWindow::new(start, longest + chrono::Duration::seconds(1)),
+        Err(InvalidOccurrenceWindow::TooLong)
+    ));
+}
+
+#[test]
+fn cron_firings_include_the_window_start_and_exclude_its_end() {
+    let cron = ReminderCron::parse(DAILY_9AM).expect("valid cron");
+
+    // 09:00 New York in July is 13:00Z.
+    let firings: Vec<_> = cron
+        .firings_within(utc(2026, 7, 2, 13, 0), utc(2026, 7, 4, 13, 0), New_York)
+        .collect();
+
+    assert_eq!(
+        firings,
+        vec![utc(2026, 7, 2, 13, 0), utc(2026, 7, 3, 13, 0)]
+    );
+}
+
+#[test]
+fn cron_firings_skip_a_firing_just_before_a_sub_second_start() {
+    let cron = ReminderCron::parse(DAILY_9AM).expect("valid cron");
+    let from = utc(2026, 7, 2, 13, 0) + chrono::Duration::milliseconds(500);
+
+    let first = cron
+        .firings_within(from, utc(2026, 7, 5, 0, 0), New_York)
+        .next();
+
+    assert_eq!(first, Some(utc(2026, 7, 3, 13, 0)));
+}
+
+#[test]
+fn cron_firings_hold_their_local_time_across_a_dst_boundary() {
+    // New York falls back on Sunday 2026-11-01, so 09:00 local moves from
+    // 13:00Z to 14:00Z.
+    let firings: Vec<_> = ReminderCron::parse(DAILY_9AM)
+        .expect("valid cron")
+        .firings_within(utc(2026, 10, 31, 0, 0), utc(2026, 11, 3, 0, 0), New_York)
+        .collect();
+
+    assert_eq!(
+        firings,
+        vec![
+            utc(2026, 10, 31, 13, 0),
+            utc(2026, 11, 1, 14, 0),
+            utc(2026, 11, 2, 14, 0),
+        ]
+    );
+}
+
+#[test]
+fn cron_firings_list_a_local_time_repeated_by_fall_back_once() {
+    // 01:30 happens twice on 2026-11-01 (05:30Z EDT, then 06:30Z EST). Only
+    // the first is delivered, so only the first is listed.
+    let firings: Vec<_> = ReminderCron::parse(DAILY_130AM)
+        .expect("valid cron")
+        .firings_within(utc(2026, 10, 31, 0, 0), utc(2026, 11, 3, 0, 0), New_York)
+        .collect();
+
+    assert_eq!(
+        firings,
+        vec![
+            utc(2026, 10, 31, 5, 30),
+            utc(2026, 11, 1, 5, 30),
+            utc(2026, 11, 2, 6, 30),
+        ]
+    );
+}
+
+#[test]
+fn a_one_shot_fires_in_a_window_only_when_its_instant_is_inside() {
+    let schedule = ReminderSchedule::Once {
+        remind_at: utc(2026, 7, 2, 13, 0),
+    };
+    let firings = |from, until| schedule.firings_within(from, until).collect::<Vec<_>>();
+
+    assert_eq!(
+        firings(utc(2026, 7, 2, 13, 0), utc(2026, 7, 3, 0, 0)),
+        vec![utc(2026, 7, 2, 13, 0)]
+    );
+    assert!(firings(utc(2026, 7, 1, 0, 0), utc(2026, 7, 2, 13, 0)).is_empty());
+    assert!(firings(utc(2026, 7, 3, 0, 0), utc(2026, 7, 4, 0, 0)).is_empty());
+}
+
+#[test]
+fn a_series_is_walked_from_its_creation_but_a_one_shot_is_not() {
+    let created_at = utc(2026, 7, 2, 12, 0);
+    let reminder = |schedule| Reminder {
+        id: Uuid::nil(),
+        description: "ping".to_string(),
+        entity_type: None,
+        entity_id: None,
+        schedule,
+        next_run_at: utc(2026, 7, 2, 13, 0),
+        enabled: true,
+        completed_at: None,
+        created_at,
+        updated_at: created_at,
+    };
+    let window =
+        OccurrenceWindow::new(utc(2026, 6, 29, 0, 0), utc(2026, 7, 4, 0, 0)).expect("valid window");
+
+    let series: Vec<_> = reminder(ny_recurring(DAILY_9AM))
+        .firings_within(&window)
+        .collect();
+    assert_eq!(
+        series,
+        vec![utc(2026, 7, 2, 13, 0), utc(2026, 7, 3, 13, 0)],
+        "a daily reminder created on the 2nd did not fire on the 29th"
+    );
+
+    // Floored to the minute, a one-shot can sit seconds before its own row.
+    let floored = utc(2026, 7, 2, 11, 59);
+    let one_shot: Vec<_> = reminder(ReminderSchedule::Once { remind_at: floored })
+        .firings_within(&window)
+        .collect();
+    assert_eq!(one_shot, vec![floored]);
+}

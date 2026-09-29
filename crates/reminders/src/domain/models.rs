@@ -45,6 +45,18 @@ pub const DEFAULT_PAGE_SIZE: u32 = 100;
 /// Largest page a client may ask for.
 pub const MAX_PAGE_SIZE: u32 = 500;
 
+/// Longest span one occurrence read may cover.
+///
+/// Firings are expanded from each schedule on read rather than stored, so the
+/// span is what bounds the work. A month grid shows at most six weeks.
+pub const MAX_OCCURRENCE_WINDOW: chrono::Duration = chrono::Duration::days(62);
+
+/// Most firings one occurrence read may return.
+///
+/// Exceeding it is an error rather than a truncation: a calendar silently
+/// missing chips reads as reminders that do not exist.
+pub const MAX_OCCURRENCES: usize = 2_000;
+
 /// A cron expression the `cron` crate could not parse.
 #[derive(Debug, thiserror::Error)]
 #[error(
@@ -85,6 +97,31 @@ impl ReminderCron {
             .after(&after.with_timezone(&timezone))
             .next()
             .map(|dt| dt.with_timezone(&Utc))
+    }
+
+    /// Every firing in `[from, until)`, soonest first, evaluated in `timezone`.
+    pub fn firings_within(
+        &self,
+        from: DateTime<Utc>,
+        until: DateTime<Utc>,
+        timezone: Tz,
+    ) -> impl Iterator<Item = DateTime<Utc>> + use<> {
+        let schedule = CronSchedule::from_str(&self.0).expect("cron validated on construction");
+        // Stepped one firing at a time, as dispatch advances a series. A
+        // continuous walk would also yield the repeat of a local time that
+        // falling back makes happen twice, which dispatch never delivers.
+        let next_after = move |after: &DateTime<Utc>| {
+            schedule
+                .after(&after.with_timezone(&timezone))
+                .next()
+                .map(|dt| dt.with_timezone(&Utc))
+        };
+        // The cron crate resumes at the next whole second after the instant it
+        // is given, so start a second early and drop anything before `from`.
+        let first = next_after(&(from - chrono::Duration::seconds(1)));
+        std::iter::successors(first, next_after)
+            .skip_while(move |firing| *firing < from)
+            .take_while(move |firing| *firing < until)
     }
 }
 
@@ -154,6 +191,24 @@ impl ReminderSchedule {
             Self::Once { remind_at } => (*remind_at > now).then_some(*remind_at),
             Self::Recurring { cron, timezone } => cron.next_run_after(now, *timezone),
         }
+    }
+
+    /// Every firing in `[from, until)`, soonest first.
+    pub fn firings_within(
+        &self,
+        from: DateTime<Utc>,
+        until: DateTime<Utc>,
+    ) -> impl Iterator<Item = DateTime<Utc>> + use<> {
+        let (once, recurring) = match self {
+            Self::Once { remind_at } => (
+                Some(*remind_at).filter(|at| (from..until).contains(at)),
+                None,
+            ),
+            Self::Recurring { cron, timezone } => {
+                (None, Some(cron.firings_within(from, until, *timezone)))
+            }
+        };
+        once.into_iter().chain(recurring.into_iter().flatten())
     }
 
     /// Whether this schedule fires more than once.
@@ -235,6 +290,127 @@ impl Reminder {
             _ => None,
         }
     }
+
+    /// Every firing inside `window`, soonest first.
+    ///
+    /// A series is walked from its creation at the earliest: a daily reminder
+    /// set up today did not fire last week, however its cron reads. A one-shot
+    /// is not clamped, because its instant is floored to the minute and can
+    /// sit seconds before the row was created.
+    pub fn firings_within(
+        &self,
+        window: &OccurrenceWindow,
+    ) -> impl Iterator<Item = DateTime<Utc>> + use<> {
+        let from = match self.schedule {
+            ReminderSchedule::Once { .. } => window.starts_at,
+            ReminderSchedule::Recurring { .. } => window.starts_at.max(self.created_at),
+        };
+        self.schedule.firings_within(from, window.ends_at)
+    }
+}
+
+/// A span to list reminder firings in: `[starts_at, ends_at)`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OccurrenceWindow {
+    starts_at: DateTime<Utc>,
+    ends_at: DateTime<Utc>,
+}
+
+/// A span that cannot be listed.
+#[derive(Debug, thiserror::Error)]
+pub enum InvalidOccurrenceWindow {
+    /// The end is not after the start.
+    #[error("end must be after start")]
+    Empty,
+    /// The span is longer than [`MAX_OCCURRENCE_WINDOW`].
+    #[error(
+        "an occurrence window may span at most {days} days",
+        days = MAX_OCCURRENCE_WINDOW.num_days()
+    )]
+    TooLong,
+}
+
+impl OccurrenceWindow {
+    /// Validate `[starts_at, ends_at)`.
+    pub fn new(
+        starts_at: DateTime<Utc>,
+        ends_at: DateTime<Utc>,
+    ) -> Result<Self, InvalidOccurrenceWindow> {
+        if ends_at <= starts_at {
+            return Err(InvalidOccurrenceWindow::Empty);
+        }
+        if ends_at - starts_at > MAX_OCCURRENCE_WINDOW {
+            return Err(InvalidOccurrenceWindow::TooLong);
+        }
+        Ok(Self { starts_at, ends_at })
+    }
+
+    /// Inclusive start.
+    pub fn starts_at(&self) -> DateTime<Utc> {
+        self.starts_at
+    }
+
+    /// Exclusive end.
+    pub fn ends_at(&self) -> DateTime<Utc> {
+        self.ends_at
+    }
+}
+
+/// One occurrence read of a user's reminders.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ReminderOccurrenceQuery {
+    /// The span to list firings in.
+    pub window: OccurrenceWindow,
+    /// Filter on whether the reminder is attached to an entity. `None` returns
+    /// both.
+    pub attached: Option<bool>,
+}
+
+/// One firing of a reminder, as a calendar lays it out.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct ReminderOccurrence {
+    /// The reminder this is a firing of.
+    pub reminder_id: Uuid,
+    /// When this firing happens. Together with `reminderId`, identifies it.
+    pub scheduled_for: DateTime<Utc>,
+    /// What to remind the user about.
+    pub description: String,
+    /// The reminder's schedule, which says whether moving this firing moves
+    /// one instant or the whole series.
+    pub schedule: ReminderSchedule,
+    /// Type of the associated entity, when the reminder is attached to one.
+    // Inlined for the same reason as `Reminder::entity_type`.
+    #[cfg_attr(feature = "inbound", schema(inline))]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub entity_type: Option<EntityType>,
+    /// Id of the associated entity, when the reminder is attached to one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub entity_id: Option<String>,
+}
+
+impl ReminderOccurrence {
+    /// The firing of `reminder` at `scheduled_for`.
+    pub fn of(reminder: &Reminder, scheduled_for: DateTime<Utc>) -> Self {
+        Self {
+            reminder_id: reminder.id,
+            scheduled_for,
+            description: reminder.description.clone(),
+            schedule: reminder.schedule.clone(),
+            entity_type: reminder.entity_type,
+            entity_id: reminder.entity_id.clone(),
+        }
+    }
+}
+
+/// The caller's reminder firings inside a window, soonest first.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct ReminderOccurrencesList {
+    /// The firings.
+    pub occurrences: Vec<ReminderOccurrence>,
 }
 
 /// Display details of the entity a reminder is about, resolved alongside the
@@ -296,6 +472,8 @@ pub struct SoupReminderQuery<'a> {
     pub completed: Option<bool>,
     /// Filter on whether it has come due. `None` returns both.
     pub fired: Option<bool>,
+    /// Filter on whether it is attached to an entity. `None` returns both.
+    pub attached: Option<bool>,
     /// Which end of the `next_run_at` ordering `limit` rows come from.
     pub order: SoupOrder,
     /// Upper bound on rows returned.
@@ -480,6 +658,9 @@ pub struct ReminderFilter {
     pub entity_ids: Vec<Uuid>,
     /// Include reminders that have already fired.
     pub include_completed: bool,
+    /// Filter on whether the reminder is attached to an entity. `None` returns
+    /// both. `Some(false)` alongside an entity constraint matches nothing.
+    pub attached: Option<bool>,
     /// Resume after this position in the ordering.
     pub cursor: Option<ReminderCursor>,
     /// Page size requested by the caller. `None` uses [`DEFAULT_PAGE_SIZE`];
@@ -715,6 +896,12 @@ impl From<InvalidCron> for ReminderError {
 
 impl From<InvalidCursor> for ReminderError {
     fn from(err: InvalidCursor) -> Self {
+        ReminderError::BadRequest(err.to_string())
+    }
+}
+
+impl From<InvalidOccurrenceWindow> for ReminderError {
+    fn from(err: InvalidOccurrenceWindow) -> Self {
         ReminderError::BadRequest(err.to_string())
     }
 }

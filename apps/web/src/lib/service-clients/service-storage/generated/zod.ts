@@ -34826,6 +34826,12 @@ export const listRemindersQueryParams = zod.object({
     .boolean()
     .optional()
     .describe('Include reminders that have already fired.'),
+  attached: zod
+    .boolean()
+    .optional()
+    .describe(
+      '`true` for only reminders attached to an entity, `false` for only\nstandalone ones. Omit for both. `false` alongside `entityType` or\n`entityId` matches nothing.'
+    ),
   limit: zod
     .number()
     .min(listRemindersQueryLimitMin)
@@ -35018,6 +35024,114 @@ export const createReminderBody = zod
       .describe('When a reminder fires.'),
   })
   .describe('Request body for creating a reminder.');
+
+/**
+ * @summary List every firing of the caller's reminders inside a window, soonest first.
+ */
+export const listReminderOccurrencesQueryParams = zod.object({
+  start: zod.iso.datetime({}).describe('Inclusive UTC start of the window.'),
+  end: zod.iso
+    .datetime({})
+    .describe(
+      'Exclusive UTC end of the window, at most 62 days after `start`.'
+    ),
+  attached: zod
+    .boolean()
+    .optional()
+    .describe(
+      '`true` for only reminders attached to an entity, `false` for only\nstandalone ones. Omit for both.'
+    ),
+});
+
+export const listReminderOccurrencesResponse = zod
+  .object({
+    occurrences: zod
+      .array(
+        zod
+          .object({
+            description: zod
+              .string()
+              .describe('What to remind the user about.'),
+            entityId: zod
+              .string()
+              .nullish()
+              .describe(
+                'Id of the associated entity, when the reminder is attached to one.'
+              ),
+            entityType: zod
+              .union([
+                zod.null(),
+                zod
+                  .enum([
+                    'user',
+                    'chat',
+                    'channel',
+                    'channel_message',
+                    'document',
+                    'project',
+                    'email_thread',
+                    'calendar_event',
+                    'team',
+                    'call',
+                    'foreign_entity',
+                    'static_file',
+                    'crm_company',
+                    'crm_contact',
+                    'reminder',
+                    'skill',
+                    'agent_session',
+                    'scheduled_action',
+                    'initiative',
+                  ])
+                  .describe('The type of an entity in Macro'),
+              ])
+              .optional()
+              .describe(
+                'Type of the associated entity, when the reminder is attached to one.'
+              ),
+            reminderId: zod
+              .uuid()
+              .describe('The reminder this is a firing of.'),
+            schedule: zod
+              .union([
+                zod
+                  .object({
+                    remindAt: zod.iso
+                      .datetime({})
+                      .describe('The instant to fire at.'),
+                    type: zod.enum(['once']),
+                  })
+                  .describe('Fires once, at a fixed instant.'),
+                zod
+                  .object({
+                    cron: zod
+                      .string()
+                      .describe(
+                        'Cron expression, either the conventional 5-field\n`min hour dom mon dow` or the 6-\/7-field\n`sec min hour dom mon dow [year]`. A 5-field expression is stored\nnormalized to 6 fields with a zero seconds field, so `0 9 \* \* \*` and\n`0 0 9 \* \* \*` are the same schedule and both read back as the latter.'
+                      ),
+                    timezone: zod
+                      .string()
+                      .describe(
+                        'The timezone the cron expression is evaluated in.'
+                      ),
+                    type: zod.enum(['recurring']),
+                  })
+                  .describe(
+                    'Fires repeatedly, on a cron schedule evaluated in `timezone`.'
+                  ),
+              ])
+              .describe('When a reminder fires.'),
+            scheduledFor: zod.iso
+              .datetime({})
+              .describe(
+                'When this firing happens. Together with `reminderId`, identifies it.'
+              ),
+          })
+          .describe('One firing of a reminder, as a calendar lays it out.')
+      )
+      .describe('The firings.'),
+  })
+  .describe("The caller's reminder firings inside a window, soonest first.");
 
 /**
  * @summary Fetch one of the caller's reminders.

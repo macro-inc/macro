@@ -4574,6 +4574,7 @@ export interface NotificationItem {
  * Filters:
  * - `overdue: true` / `false` — already fired and waiting on the user, or still upcoming
  * - `completed: true` / `false` — dealt with, or still outstanding
+ * - `attached: true` / `false` — reminders about some item, or standalone reminders about nothing in particular
  * - `entityType` + `entityId` — reminders about one specific thing. `entityType` takes the same values CreateReminder accepts: document, ai_chat, project, email, channel, call, calendar_event
  *
  * The two flags are independent and compose: firing does not complete a reminder, so overdue and not completed is the needs-attention case, and a completed reminder never fires whether or not its time has passed.
@@ -4603,6 +4604,10 @@ export interface ListReminders {
    * Filter on whether the reminder has already fired. True returns only reminders past their time, false only ones still upcoming. Omit for both.
    */
   overdue?: boolean | null;
+  /**
+   * Filter on whether the reminder is about something. True returns only reminders attached to an item, false only standalone ones. Omit for both. False together with entityType and entityId matches nothing.
+   */
+  attached?: boolean | null;
   /**
    * Maximum number of reminders to return. Defaults to 20, capped at 100.
    */

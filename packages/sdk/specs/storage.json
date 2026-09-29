@@ -13923,6 +13923,15 @@
             }
           },
           {
+            "name": "attached",
+            "in": "query",
+            "description": "`true` for only reminders attached to an entity, `false` for only\nstandalone ones. Omit for both. `false` alongside `entityType` or\n`entityId` matches nothing.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "description": "Page size. Defaults to 100; larger values are capped at 500. A value\nthat is not a non-negative integer is rejected by the query extractor.",
@@ -14053,6 +14062,86 @@
           },
           "422": {
             "description": "Malformed request body (plain text)"
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/reminders/occurrences": {
+      "get": {
+        "tags": ["reminders"],
+        "summary": "List every firing of the caller's reminders inside a window, soonest first.",
+        "operationId": "list_reminder_occurrences",
+        "parameters": [
+          {
+            "name": "start",
+            "in": "query",
+            "description": "Inclusive UTC start of the window.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "description": "Exclusive UTC end of the window, at most 62 days after `start`.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "attached",
+            "in": "query",
+            "description": "`true` for only reminders attached to an entity, `false` for only\nstandalone ones. Omit for both.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReminderOccurrencesList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
@@ -28669,6 +28758,82 @@
           "include": {
             "type": "boolean",
             "description": "Opt this query into reminders at all. Reminders are off by default —\nsee [`crate::ast::reminder::ReminderLiteral::Include`]. Asking for\nspecific `ids` or `entities` also opts in."
+          }
+        }
+      },
+      "ReminderOccurrence": {
+        "type": "object",
+        "description": "One firing of a reminder, as a calendar lays it out.",
+        "required": ["reminderId", "scheduledFor", "description", "schedule"],
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "What to remind the user about."
+          },
+          "entityId": {
+            "type": ["string", "null"],
+            "description": "Id of the associated entity, when the reminder is attached to one."
+          },
+          "entityType": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string",
+                "description": "The type of an entity in Macro",
+                "enum": [
+                  "user",
+                  "chat",
+                  "channel",
+                  "channel_message",
+                  "document",
+                  "project",
+                  "email_thread",
+                  "calendar_event",
+                  "team",
+                  "call",
+                  "foreign_entity",
+                  "static_file",
+                  "crm_company",
+                  "crm_contact",
+                  "reminder",
+                  "skill",
+                  "agent_session",
+                  "scheduled_action",
+                  "initiative"
+                ]
+              }
+            ],
+            "description": "Type of the associated entity, when the reminder is attached to one."
+          },
+          "reminderId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The reminder this is a firing of."
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/ReminderSchedule",
+            "description": "The reminder's schedule, which says whether moving this firing moves\none instant or the whole series."
+          },
+          "scheduledFor": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When this firing happens. Together with `reminderId`, identifies it."
+          }
+        }
+      },
+      "ReminderOccurrencesList": {
+        "type": "object",
+        "description": "The caller's reminder firings inside a window, soonest first.",
+        "required": ["occurrences"],
+        "properties": {
+          "occurrences": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReminderOccurrence"
+            },
+            "description": "The firings."
           }
         }
       },

@@ -3594,6 +3594,7 @@ export const ListReminders = z.object({
   entityId: z.union([z.string().uuid(), z.null()]).optional(),
   completed: z.union([z.boolean(), z.null()]).optional(),
   overdue: z.union([z.boolean(), z.null()]).optional(),
+  attached: z.union([z.boolean(), z.null()]).optional(),
   limit: z.union([z.number().int().gte(0), z.null()]).optional(),
 });
 

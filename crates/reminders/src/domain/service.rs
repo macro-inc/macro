@@ -13,9 +13,10 @@ use model_entity::Entity;
 use uuid::Uuid;
 
 use crate::domain::models::{
-    CreateReminder, MAX_DESCRIPTION_LEN, MAX_RECURRING_LATENESS, MIN_RECURRING_INTERVAL,
-    NewReminder, Reminder, ReminderBatch, ReminderCron, ReminderCursor, ReminderError,
-    ReminderFilter, ReminderForSoup, ReminderPage, ReminderPatch, ReminderSchedule, ReminderUpdate,
+    CreateReminder, MAX_DESCRIPTION_LEN, MAX_OCCURRENCES, MAX_RECURRING_LATENESS,
+    MIN_RECURRING_INTERVAL, NewReminder, OccurrenceWindow, Reminder, ReminderBatch, ReminderCron,
+    ReminderCursor, ReminderError, ReminderFilter, ReminderForSoup, ReminderOccurrence,
+    ReminderOccurrenceQuery, ReminderPage, ReminderPatch, ReminderSchedule, ReminderUpdate,
     ScheduleUpdate, SoupReminderQuery,
 };
 use crate::domain::ports::{Clock, RemindersRepo, RemindersService, SystemClock};
@@ -159,6 +160,32 @@ fn normalize_schedule(
         }
     };
     Ok((schedule, next_run_at))
+}
+
+/// Every firing of `reminders` inside `window`, soonest first.
+fn expand_occurrences(
+    reminders: &[Reminder],
+    window: &OccurrenceWindow,
+) -> Result<Vec<ReminderOccurrence>, ReminderError> {
+    let mut occurrences = Vec::new();
+    for reminder in reminders {
+        // One past the cap, so overflow is detectable without walking a dense
+        // series to the end of the window.
+        let room = MAX_OCCURRENCES + 1 - occurrences.len();
+        occurrences.extend(
+            reminder
+                .firings_within(window)
+                .take(room)
+                .map(|scheduled_for| ReminderOccurrence::of(reminder, scheduled_for)),
+        );
+        if occurrences.len() > MAX_OCCURRENCES {
+            return Err(ReminderError::BadRequest(format!(
+                "more than {MAX_OCCURRENCES} reminder firings fall in this window; request a shorter one"
+            )));
+        }
+    }
+    occurrences.sort_by_key(|occurrence| (occurrence.scheduled_for, occurrence.reminder_id));
+    Ok(occurrences)
 }
 
 /// The entity a reminder attaches to, taken from the access receipt.
@@ -423,6 +450,20 @@ where
             .map_err(ReminderError::from)
     }
 
+    #[tracing::instrument(err, skip(self, user_id))]
+    async fn list_reminder_occurrences(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        query: ReminderOccurrenceQuery,
+    ) -> Result<Vec<ReminderOccurrence>, ReminderError> {
+        let reminders = self
+            .repo
+            .list_reminders_firing_within(user_id, &query)
+            .await
+            .map_err(|e| rootcause::Report::new(e).into_dynamic())?;
+        expand_occurrences(&reminders, &query.window)
+    }
+
     #[tracing::instrument(err, skip(self, receipt, patch))]
     async fn update_reminder(
         &self,
@@ -538,6 +579,14 @@ impl RemindersService for NoOpRemindersService {
         _query: SoupReminderQuery<'_>,
     ) -> Result<Vec<ReminderForSoup>, ReminderError> {
         Ok(Vec::new())
+    }
+
+    async fn list_reminder_occurrences(
+        &self,
+        _user_id: &MacroUserIdStr<'_>,
+        _query: ReminderOccurrenceQuery,
+    ) -> Result<Vec<ReminderOccurrence>, ReminderError> {
+        unimplemented!("NoOpRemindersService.list_reminder_occurrences")
     }
 
     async fn update_reminder(
