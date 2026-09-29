@@ -65,12 +65,21 @@ pub(crate) struct GraphqlScheduledActionEventFilter {
 /// The agent task a routine runs.
 #[derive(SimpleObject)]
 pub(crate) struct GraphqlScheduledActionAgentTask {
-    /// Model the agent runs.
-    model: String,
+    /// Model the task runs. Null when the selected agent uses its default model.
+    model: Option<String>,
+    /// Selected agent. Null for model-only tasks.
+    agent: Option<GraphqlScheduledActionAgent>,
     /// System prompt for the agent.
     prompt: String,
     /// User prompt for the agent.
     user_prompt: String,
+}
+
+/// An agent selected to run a routine.
+#[derive(SimpleObject)]
+pub(crate) struct GraphqlScheduledActionAgent {
+    /// Stable identifier of the selected agent.
+    bot_id: ID,
 }
 
 /// Events a routine filter can name.
@@ -162,12 +171,17 @@ fn trigger(action: &ScheduledAction) -> GraphqlScheduledActionTrigger {
 
 fn agent_task(kind: &ActionKind, task: &Value) -> Option<GraphqlScheduledActionAgentTask> {
     match kind {
-        ActionKind::Agent => serde_json::from_value::<AgentTask>(task.clone())
-            .ok()
-            .map(|task| GraphqlScheduledActionAgentTask {
-                model: task.model,
+        ActionKind::Agent => {
+            let task = serde_json::from_value::<AgentTask>(task.clone()).ok()?;
+            task.resolve_target().ok()?;
+            Some(GraphqlScheduledActionAgentTask {
+                model: task.model.map(|model| model.as_str().to_owned()),
+                agent: task.agent.map(|agent| GraphqlScheduledActionAgent {
+                    bot_id: ID(agent.bot_id.to_string()),
+                }),
                 prompt: task.prompt,
                 user_prompt: task.user_prompt,
-            }),
+            })
+        }
     }
 }

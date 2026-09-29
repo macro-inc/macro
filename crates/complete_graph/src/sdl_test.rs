@@ -601,10 +601,24 @@ fn scheduled_actions_hang_off_the_authenticated_user() {
             .contains("disabled")
     );
 
+    let ExtendedType::Object(task) = schema
+        .types
+        .get("GraphqlScheduledActionAgentTask")
+        .expect("agent task")
+    else {
+        panic!("agent task must be an object");
+    };
+    assert_eq!(task.fields["model"].ty.to_string(), "String");
+    assert_eq!(
+        task.fields["agent"].ty.to_string(),
+        "GraphqlScheduledActionAgent"
+    );
+
     for embedded in [
         "GraphqlScheduledActionEventsTrigger",
         "GraphqlScheduledActionEventFilter",
         "GraphqlScheduledActionAgentTask",
+        "GraphqlScheduledActionAgent",
     ] {
         let ExtendedType::Object(value) = schema.types.get(embedded).expect(embedded) else {
             panic!("{embedded} must be an object");
@@ -614,6 +628,15 @@ fn scheduled_actions_hang_off_the_authenticated_user() {
             "{embedded} must stay embedded"
         );
     }
+
+    let ExtendedType::Object(agent) = schema
+        .types
+        .get("GraphqlScheduledActionAgent")
+        .expect("scheduled action agent")
+    else {
+        panic!("scheduled action agent must be an object");
+    };
+    assert_eq!(agent.fields["botId"].ty.to_string(), "ID!");
 
     let ExtendedType::Object(filter) = schema
         .types

@@ -37,7 +37,7 @@ const QUERY: &str = r#"
           filters { events entityIds }
         }
       }
-      agentTask { model prompt userPrompt }
+      agentTask { model agent { botId } prompt userPrompt }
       claimExpiresAt
       createdAt
       updatedAt
@@ -161,6 +161,7 @@ async fn lists_cron_and_event_routines_for_the_authenticated_user() {
     assert_eq!(sample.to_rfc3339(), "2026-02-01T00:00:00+00:00");
     let claimed = utc("2020-01-01T00:00:00Z");
     let entity_id = "11111111-1111-4111-8111-111111111111";
+    let agent_id = "22222222-2222-4222-8222-222222222222";
     let filters = EventFilters::try_from(vec![
         EventFilter::new(vec![EventName::DocumentCreated], None).unwrap(),
         EventFilter::new(vec![EventName::DocumentUpdated], Some(vec![])).unwrap(),
@@ -203,7 +204,7 @@ async fn lists_cron_and_event_routines_for_the_authenticated_user() {
                 false,
                 cron("0 0 10 * * *", "UTC"),
                 json!({
-                    "model": "good",
+                    "agent": {"bot_id": agent_id},
                     "prompt": "paused prompt",
                     "user_prompt": "paused user"
                 }),
@@ -240,6 +241,7 @@ async fn lists_cron_and_event_routines_for_the_authenticated_user() {
                         },
                         "agentTask": {
                             "model": "good",
+                            "agent": null,
                             "prompt": "summarize the inbox",
                             "userPrompt": "please summarize"
                         },
@@ -275,7 +277,8 @@ async fn lists_cron_and_event_routines_for_the_authenticated_user() {
                             "nextRunAt": null
                         },
                         "agentTask": {
-                            "model": "good",
+                            "model": null,
+                            "agent": {"botId": agent_id},
                             "prompt": "paused prompt",
                             "userPrompt": "paused user"
                         },

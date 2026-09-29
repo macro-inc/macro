@@ -4334,13 +4334,27 @@ type GraphqlScheduledAction {
 }
 
 """
+An agent selected to run a routine.
+"""
+type GraphqlScheduledActionAgent {
+	"""
+	Stable identifier of the selected agent.
+	"""
+	botId: ID!
+}
+
+"""
 The agent task a routine runs.
 """
 type GraphqlScheduledActionAgentTask {
 	"""
-	Model the agent runs.
+	Model the task runs. Null when the selected agent uses its default model.
 	"""
-	model: String!
+	model: String
+	"""
+	Selected agent. Null for model-only tasks.
+	"""
+	agent: GraphqlScheduledActionAgent
 	"""
 	System prompt for the agent.
 	"""
