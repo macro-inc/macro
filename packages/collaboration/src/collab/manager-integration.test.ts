@@ -1,4 +1,5 @@
 import { Mirror, schema } from '@loro-mirror/core';
+import { InMemoryWALStore } from '@macro-inc/browser-store/wal-store';
 import { LoroDoc, type VersionVector } from 'loro-crdt';
 import { createRoot } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
@@ -6,7 +7,7 @@ import { noopChatter } from './chatter';
 import { createSyncEngine } from './engine';
 import { createLoroManager, type LoroManager } from './manager';
 import { TestServer } from './test-utils/test-server';
-import { InMemoryWALStore, WALSyncer } from './wal';
+import { WALSyncer } from './wal';
 
 // mostly dummy schema that's flat so it's easy for tests
 const TEST_SCHEMA = schema({

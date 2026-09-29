@@ -701,6 +701,16 @@ export const enableRecentView = defineFlag({
   default: onInDev,
 });
 
+// Agent sessions: fold the raw log cached in IndexedDB from the last open
+// before the fetched one lands, so a reopened session renders at once. Off
+// leaves the load network-only. PostHog-gated with a dev-mode default;
+// override with VITE_ENABLE_AGENT_SESSION_LOG_CACHE.
+export const enableAgentSessionLogCache = defineFlag({
+  key: 'enable-agent-session-log-cache',
+  env: 'ENABLE_AGENT_SESSION_LOG_CACHE',
+  default: onInDev,
+});
+
 // Settings › Notifications: the dedicated preferences tab (delivery, per-type
 // opt-outs, muted items). When off, the tab is hidden and Account keeps the
 // existing desktop/mobile toggle. PostHog-gated with a dev-mode default;

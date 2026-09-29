@@ -1,0 +1,27 @@
+{
+  "name": "@macro-inc/browser-store",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./logger": "./src/logger.ts",
+    "./snapshot-store": "./src/snapshot-store.ts",
+    "./wal-store": "./src/wal-store.ts"
+  },
+  "scripts": {
+    "lint": "biome check .",
+    "test": "vitest run --config vitest.config.ts",
+    "type-check": "tsc --noEmit --project tsconfig.json"
+  },
+  "dependencies": {
+    "idb": "^8.0.3"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.4.12",
+    "@types/node": "^24.8.0",
+    "fake-indexeddb": "^6.2.5",
+    "typescript": "^5.9.3",
+    "vitest": "5.0.1"
+  }
+}

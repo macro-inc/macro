@@ -62,6 +62,22 @@ export class SessionLoadTrace {
     );
   }
 
+  /**
+   * The cached log was looked up: folded, with how many rows and when the
+   * fold began, or absent. Either way the surface's first paint is
+   * explained: `warm_ms` is how long it waited for a cached transcript.
+   */
+  warmed(hit: { rows: number; foldStartedAt: number } | undefined): void {
+    this.#set('agent.session.load.cache_hit', hit !== undefined);
+    if (!hit) return;
+    this.#set('agent.session.load.cache_rows', hit.rows);
+    this.#set(
+      'agent.session.load.cache_fold_ms',
+      performance.now() - hit.foldStartedAt
+    );
+    this.#set('agent.session.load.warm_ms', this.#since());
+  }
+
   /** The log arrived; `rows` is what the fold is about to be given. */
   fetched(rows: number): void {
     this.#set('agent.session.log.rows', rows);
@@ -99,7 +115,7 @@ export class SessionLoadTrace {
     return performance.now() - this.#startedAt;
   }
 
-  #set(name: string, value: string | number): void {
+  #set(name: string, value: string | number | boolean): void {
     try {
       this.#span?.setAttr(name, value);
     } catch {
