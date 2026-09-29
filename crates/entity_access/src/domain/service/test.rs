@@ -8,6 +8,7 @@ use crate::domain::models::{
     MemberParticipantRole, MemberTeamRole, OwnerParticipantRole, ParticipantRole, UserTeamInfo,
     ViewAccessLevel, ViewOnly,
 };
+use crate::domain::ports::ScheduledActionGrants;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_permissions::share_permission::access_level::OwnerAccessLevel;
 use std::sync::{
@@ -29,6 +30,8 @@ struct MockRepo {
     call_access: Arc<Mutex<Option<AccessLevel>>>,
     agent_session_access: Arc<Mutex<Option<AccessLevel>>>,
     initiative_access: Arc<Mutex<Option<AccessLevel>>>,
+    scheduled_action_access: Arc<Mutex<Option<AccessLevel>>>,
+    accessible_scheduled_action_ids: Arc<Mutex<Vec<Uuid>>>,
     agent_session_document: Arc<Mutex<Option<String>>>,
     reminder_access: Arc<Mutex<Option<AccessLevel>>>,
     team_entity_access: Arc<Mutex<Option<AccessLevel>>>,
@@ -68,6 +71,8 @@ impl MockRepo {
             call_access: Arc::new(Mutex::new(None)),
             agent_session_access: Arc::new(Mutex::new(None)),
             initiative_access: Arc::new(Mutex::new(None)),
+            scheduled_action_access: Arc::new(Mutex::new(None)),
+            accessible_scheduled_action_ids: Arc::new(Mutex::new(Vec::new())),
             agent_session_document: Arc::default(),
             reminder_access: Arc::new(Mutex::new(None)),
             team_entity_access: Arc::new(Mutex::new(None)),
@@ -133,6 +138,16 @@ impl MockRepo {
 
     fn with_agent_session_access(mut self, level: AccessLevel) -> Self {
         self.agent_session_access = Arc::new(Mutex::new(Some(level)));
+        self
+    }
+
+    fn with_scheduled_action_access(mut self, level: AccessLevel) -> Self {
+        self.scheduled_action_access = Arc::new(Mutex::new(Some(level)));
+        self
+    }
+
+    fn with_accessible_scheduled_action_ids(mut self, ids: Vec<Uuid>) -> Self {
+        self.accessible_scheduled_action_ids = Arc::new(Mutex::new(ids));
         self
     }
 
@@ -326,6 +341,21 @@ impl AccessRepository for MockRepo {
         _user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> Result<Option<AccessLevel>, AccessError> {
         Ok(*self.initiative_access.lock().await)
+    }
+
+    async fn get_scheduled_action_access(
+        &self,
+        _scheduled_action_id: &str,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        Ok(*self.scheduled_action_access.lock().await)
+    }
+
+    async fn accessible_scheduled_action_ids(
+        &self,
+        _user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<Vec<Uuid>, AccessError> {
+        Ok(self.accessible_scheduled_action_ids.lock().await.clone())
     }
 
     async fn get_reminder_access(
@@ -777,6 +807,79 @@ async fn test_get_entity_permission_agent_session_no_access_returns_unauthorized
         .await;
 
     assert!(matches!(result, Err(AccessError::Unauthorized)));
+}
+
+#[tokio::test]
+async fn test_get_access_level_scheduled_action_returns_scripted_level() {
+    let repo = MockRepo::new().with_scheduled_action_access(AccessLevel::Edit);
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let result = service
+        .get_access_level(
+            Some(&user_id),
+            "11111111-1111-1111-1111-111111111111",
+            EntityType::ScheduledAction,
+        )
+        .await;
+
+    assert_eq!(result.unwrap(), Some(AccessLevel::Edit));
+}
+
+#[tokio::test]
+async fn test_get_entity_permission_scheduled_action_returns_scripted_level() {
+    let repo = MockRepo::new().with_scheduled_action_access(AccessLevel::Edit);
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let result = service
+        .get_entity_permission(
+            Some(&user_id),
+            "11111111-1111-1111-1111-111111111111",
+            EntityType::ScheduledAction,
+            None,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        result,
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Edit
+        }
+    );
+}
+
+#[tokio::test]
+async fn test_get_entity_permission_scheduled_action_without_grant_is_unauthorized() {
+    let service = EntityAccessServiceImpl::new(MockRepo::new());
+    let user_id = test_user_id();
+
+    let result = service
+        .get_entity_permission(
+            Some(&user_id),
+            "11111111-1111-1111-1111-111111111111",
+            EntityType::ScheduledAction,
+            None,
+        )
+        .await;
+
+    assert!(matches!(result, Err(AccessError::Unauthorized)));
+}
+
+#[tokio::test]
+async fn test_accessible_scheduled_action_ids_passes_through() {
+    let id = Uuid::from_u128(0x0000_0000_0000_0000_0000_0000_0000_5a01);
+    let repo = MockRepo::new().with_accessible_scheduled_action_ids(vec![id]);
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let ids = service
+        .accessible_scheduled_action_ids(&user_id)
+        .await
+        .unwrap();
+
+    assert_eq!(ids, vec![id]);
 }
 
 #[tokio::test]
