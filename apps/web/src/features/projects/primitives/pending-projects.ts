@@ -15,7 +15,7 @@ function pendingProjectRow(project: PendingProject): ProjectRow {
     properties: project.properties.map(({ property, value }) =>
       withProjectPropertyValue(property, value)
     ),
-    pending: project.phase === 'creating',
+    pending: project.phase === 'creating' ? 'creating' : 'created',
   };
 }
 

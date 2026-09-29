@@ -133,11 +133,13 @@ Submitting closes the composer at once; a full composer returns its split to
 Projects, and Back skips the submitted composer. The Projects list shows the
 new project immediately at the top, in the group of its selected Status and
 only under filters that match it. Until the server creates it, the row is
-dimmed and cannot be opened, selected, or edited; once created it is a normal
-row showing the selected values while they save, and the refreshed server row
-replaces it in place without a duplicate. If the list cannot refresh, the row
-stays for up to a minute. When everything is saved, a `Project created` toast
-offers `Open` and `Open (New Split)`; nothing navigates on its own.
+dimmed and cannot be opened, selected, or edited. Once created it can be opened
+and selected and shows the selected values while they save, but its property
+cells stay read-only until the refreshed server row replaces it in place,
+without a duplicate. If the list cannot refresh, the row stays for up to a
+minute. When everything is saved, a `Project created` toast offers `Open` and
+`Open (New Split)` (on touch devices both open in place); nothing navigates on
+its own.
 If creation fails, the dimmed row disappears and the composer reopens as a
 popover with the draft and the error. If creation succeeds but a property write
 fails, the project stays listed without those values and the composer reopens

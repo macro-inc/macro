@@ -209,14 +209,14 @@ it('reconciles the pending list row with the refreshed server row without a dupl
   const result = create(input);
   await vi.waitFor(() =>
     expect(shown()).toEqual([
-      { name: 'Launch', pending: true },
+      { name: 'Launch', pending: 'creating' },
       { name: 'older', pending: false },
     ])
   );
   creation.resolve({ id: 'project' });
   await vi.waitFor(() =>
     expect(shown()).toEqual([
-      { name: 'Launch', pending: false },
+      { name: 'Launch', pending: 'created' },
       { name: 'older', pending: false },
     ])
   );

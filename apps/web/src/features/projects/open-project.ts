@@ -5,7 +5,7 @@ import { projectRouteId } from './core/route';
 
 /** A host action, deliberately outside the reusable feature layers. */
 export function openProject(
-  layout: Pick<ReturnType<typeof useSplitLayout>, 'openWithSplit'>,
+  layout: ReturnType<typeof useSplitLayout>,
   id: string,
   options: {
     section?: ProjectSection;

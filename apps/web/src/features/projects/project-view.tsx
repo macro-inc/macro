@@ -3,7 +3,6 @@ import {
   tasksProjectsRoute,
 } from '@app/features/tasks-view/route';
 import { useNavigate, useSplitHistory } from '@app/lib/split-router';
-import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
@@ -11,8 +10,7 @@ import { toast } from '@core/component/Toast/Toast';
 import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
 import SplitIcon from '@phosphor/square-half.svg';
 import { createEffect, onMount } from 'solid-js';
-import type { ProjectRoute } from './core/route';
-import { openProject } from './open-project';
+import { type ProjectRoute, projectRouteId } from './core/route';
 import {
   failedProjectDraft,
   type ProjectComposerDraft,
@@ -67,39 +65,42 @@ export function ProjectView(props: { route: ProjectRoute }) {
 }
 
 /**
- * The composer is gone before the server answers, so the outcome uses only
- * the app's split manager, never the closed composer's panel. Like task
- * creation, success offers to open the project rather than navigating away
+ * The composer is gone before the server answers, so the outcome touches
+ * none of its panel state. Like task creation, success offers to open the
+ * project through the layout's guarded open rather than navigating away
  * from wherever the user has gone since.
  */
-async function settleProjectSubmission({
-  draft,
-  result,
-}: ProjectComposerSubmission) {
+async function settleProjectSubmission(
+  { draft, result }: ProjectComposerSubmission,
+  layout: Pick<
+    ReturnType<typeof useSplitLayout>,
+    'openWithSplit' | 'popoverSplit'
+  >
+) {
   const outcome = await result;
-  const manager = globalSplitManager();
-  if (!manager) return;
   if (outcome.status !== 'created') {
-    manager.createPopoverSplit({
-      content: {
-        type: 'component',
-        id: 'project-compose',
-        params: { initialDraft: failedProjectDraft(draft, outcome) },
-      },
+    layout.popoverSplit({
+      type: 'component',
+      id: 'project-compose',
+      params: { initialDraft: failedProjectDraft(draft, outcome) },
     });
     return;
   }
+  const open = (preferNewSplit: boolean) =>
+    layout.openWithSplit(
+      {
+        type: 'component',
+        id: projectRouteId({ id: outcome.id, section: 'overview' }),
+      },
+      { referredFrom: null, preferNewSplit }
+    );
   toast.success('Project created', {
     actions: [
-      {
-        label: 'Open',
-        icon: ArrowSquareOutIcon,
-        onClick: () => openProject(manager, outcome.id),
-      },
+      { label: 'Open', icon: ArrowSquareOutIcon, onClick: () => open(false) },
       {
         label: 'Open (New Split)',
         icon: SplitIcon,
-        onClick: () => openProject(manager, outcome.id, { newSplit: true }),
+        onClick: () => open(true),
       },
     ],
   });
@@ -147,7 +148,7 @@ export function CreateProjectView(props: {
             onClose={() => close()}
             onSubmit={(submission) => {
               close(true);
-              void settleProjectSubmission(submission);
+              void settleProjectSubmission(submission, layout);
             }}
           />
         </SplitPanel.Body>

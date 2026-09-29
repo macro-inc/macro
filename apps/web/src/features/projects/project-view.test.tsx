@@ -9,24 +9,26 @@ import {
 
 const fixtures = vi.hoisted(() => ({
   popover: false,
+  touch: false,
   close: vi.fn(),
-  open: vi.fn(),
-  replace: vi.fn(),
   navigate: vi.fn(),
   routed: (() => true) as Accessor<boolean>,
   submission: undefined as ProjectComposerSubmission | undefined,
-  manager: { openWithSplit: vi.fn(), createPopoverSplit: vi.fn() },
+  manager: {
+    openWithSplit: vi.fn(() => ({ status: 'unavailable' })),
+    createPopoverSplit: vi.fn(),
+  },
   toast: vi.fn(),
 }));
+// The real useSplitLayout runs, so its touch-device rule is exercised.
 vi.mock('@app/signal/splitLayout', () => ({
   globalSplitManager: () => fixtures.manager,
 }));
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => fixtures.touch,
+}));
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { success: fixtures.toast },
-}));
-vi.mock('@core/constant/featureFlags', () => ({
-  enableProjects: {},
-  isFeatureEnabled: () => true,
 }));
 vi.mock('@app/features/tasks-view/route', () => ({
   projectDetailRoute: {},
@@ -35,12 +37,6 @@ vi.mock('@app/features/tasks-view/route', () => ({
 vi.mock('@app/lib/split-router', () => ({
   useNavigate: () => fixtures.navigate,
   useSplitHistory: () => () => (fixtures.routed() ? { index: 0 } : undefined),
-}));
-vi.mock('@components/app/split-layout/layout', () => ({
-  useSplitLayout: () => ({
-    openWithSplit: fixtures.open,
-    replaceSplit: fixtures.replace,
-  }),
 }));
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanelOrThrow: () => ({
@@ -73,6 +69,7 @@ import { CreateProjectView, ProjectView } from './project-view';
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  fixtures.touch = false;
 });
 const projectId = '01992d2f-8444-7000-8000-000000000001';
 const draft = { name: 'Launch', shareWithTeam: true, properties: [] };
@@ -85,35 +82,62 @@ function submit(popover: boolean) {
   return { ...view, settle: result.resolve };
 }
 
+const projectContent = {
+  type: 'component',
+  id: `initiative-view~${projectId}~overview`,
+};
+async function toastActions() {
+  await vi.waitFor(() => expect(fixtures.toast).toHaveBeenCalledOnce());
+  const [message, { actions }] = fixtures.toast.mock.calls[0];
+  expect(message).toBe('Project created');
+  return actions as { label: string; onClick(): void }[];
+}
+
 it.each([true, false])(
   'closes on submit and offers the created project without navigating, popover=%s',
   async (popover) => {
     const { settle, unmount } = submit(popover);
     if (popover) {
       expect(fixtures.close).toHaveBeenCalledOnce();
-      expect(fixtures.replace).not.toHaveBeenCalled();
+      expect(fixtures.manager.openWithSplit).not.toHaveBeenCalled();
     } else {
       // Back must not return to the submitted composer.
-      expect(fixtures.replace).toHaveBeenCalledWith({
-        content: { type: 'component', id: 'tasks-projects' },
-        mergeHistory: true,
-      });
+      expect(fixtures.manager.openWithSplit).toHaveBeenCalledWith(
+        { type: 'component', id: 'tasks-projects' },
+        expect.objectContaining({ mergeHistory: true, preferNewSplit: false })
+      );
     }
+    fixtures.manager.openWithSplit.mockClear();
     // The server answers after the composer, and its panel, are gone.
     unmount();
     settle({ status: 'created', id: projectId });
-    await vi.waitFor(() => expect(fixtures.toast).toHaveBeenCalledOnce());
+    const [open, openInNewSplit] = await toastActions();
     expect(fixtures.manager.openWithSplit).not.toHaveBeenCalled();
-    const [message, { actions }] = fixtures.toast.mock.calls[0];
-    expect(message).toBe('Project created');
-    actions[1].onClick();
-    expect(fixtures.manager.openWithSplit).toHaveBeenCalledWith(
-      { type: 'component', id: `initiative-view~${projectId}~overview` },
-      { preferNewSplit: true }
+    open.onClick();
+    expect(fixtures.manager.openWithSplit).toHaveBeenLastCalledWith(
+      projectContent,
+      expect.objectContaining({ referredFrom: null, preferNewSplit: false })
     );
-    expect(fixtures.open).not.toHaveBeenCalled();
+    openInNewSplit.onClick();
+    expect(fixtures.manager.openWithSplit).toHaveBeenLastCalledWith(
+      projectContent,
+      expect.objectContaining({ referredFrom: null, preferNewSplit: true })
+    );
   }
 );
+
+it('never opens a new split from the toast on a touch device', async () => {
+  fixtures.touch = true;
+  const { settle, unmount } = submit(true);
+  unmount();
+  settle({ status: 'created', id: projectId });
+  const [, openInNewSplit] = await toastActions();
+  openInNewSplit.onClick();
+  expect(fixtures.manager.openWithSplit).toHaveBeenLastCalledWith(
+    projectContent,
+    expect.objectContaining({ preferNewSplit: false })
+  );
+});
 
 it.each([
   { status: 'failed', error: new Error('offline') },

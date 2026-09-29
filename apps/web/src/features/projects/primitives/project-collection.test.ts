@@ -194,7 +194,7 @@ describe('project collection', () => {
       ]);
       collection.setGroupBy('none');
       expect(shown()).toEqual([
-        { id: 'pending-project-1', pending: true, drafted: true },
+        { id: 'pending-project-1', pending: 'creating', drafted: true },
         { id: 'older', pending: false, drafted: false },
       ]);
       // It may not exist yet, so it can be neither opened nor batch-selected.
@@ -207,7 +207,7 @@ describe('project collection', () => {
       setPending([pendingProject('created', 'saving', 'in-progress')]);
       setRows([row('created'), row('older')]);
       expect(shown()).toEqual([
-        { id: 'created', pending: false, drafted: true },
+        { id: 'created', pending: 'created', drafted: true },
         { id: 'older', pending: false, drafted: false },
       ]);
       collection.list.activate.key(entityKey('created'));

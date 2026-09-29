@@ -193,12 +193,13 @@ export function createProjectCollection(capabilities: {
       getKey: (row) => (row.kind === 'entity' ? row.entity.id : row.id),
     },
     isNavigable: (row) => row.kind !== 'section-header',
-    // A pending project may not exist yet, so it cannot be opened or batched.
-    isSelectable: (row) => row.kind === 'entity' && !row.entity.pending,
+    // A project still being created cannot be opened or batched yet.
+    isSelectable: (row) =>
+      row.kind === 'entity' && row.entity.pending !== 'creating',
     onActivate: ({ item, metadata }) => {
       if (item.kind === 'group-header') disclosure.toggle(item.groupId);
       else if (item.kind === 'load-more') void source.loadMore();
-      else if (item.kind === 'entity' && !item.entity.pending)
+      else if (item.kind === 'entity' && item.entity.pending !== 'creating')
         capabilities.onOpen?.(item.entity.id, metadata);
     },
   });

@@ -13,8 +13,12 @@ import type {
 export type ProjectRow = {
   project: Project;
   properties: readonly Property[];
-  /** Stands in for a project the server has not assigned an id yet. */
-  pending?: boolean;
+  /**
+   * Stands in for a submission the list does not include yet: `creating` has
+   * no server id; `created` exists but shows its submitted values. Either is
+   * read-only, so an edit can never appear to revert to the submitted value.
+   */
+  pending?: 'creating' | 'created';
 };
 
 export type ProjectPropertyDraft = {

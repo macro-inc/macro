@@ -66,7 +66,9 @@ export function ProjectRow(props: {
   onChecked(selected: boolean, shiftKey: boolean): void;
   onSave(property: Property, value: PropertyApiValues): Promise<void>;
 }) {
+  // Stand-in rows show submitted values; edits go to the server row.
   const canEdit = () => !props.row.pending && canEditProject(props.row.project);
+  const creating = () => props.row.pending === 'creating';
   const properties = () => [...props.row.properties];
   const propertyFor = (id: string) =>
     props.row.properties.find(
@@ -97,7 +99,7 @@ export function ProjectRow(props: {
         id={props.rowId}
         role="row"
         aria-selected={props.checked}
-        aria-busy={props.row.pending || undefined}
+        aria-busy={creating() || undefined}
         tabIndex={-1}
         onClick={props.onOpen}
         onMouseMove={props.onFocus}
@@ -109,7 +111,7 @@ export function ProjectRow(props: {
             'bg-list-highlighted': props.highlighted && !props.checked,
             'hover:bg-list-hover': !props.highlighted && !props.checked,
             // Being created: no server id yet.
-            'opacity-60': props.row.pending,
+            'opacity-60': creating(),
           }
         )}
       >
@@ -118,7 +120,7 @@ export function ProjectRow(props: {
           style={gridStyle}
         >
           <Entity.Slot placement="indicator" class="size-full">
-            <Show when={!props.row.pending}>
+            <Show when={!creating()}>
               <MultiSelectCheckbox
                 checked={props.checked}
                 onChecked={props.onChecked}
