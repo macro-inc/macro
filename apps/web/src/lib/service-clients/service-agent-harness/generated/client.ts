@@ -26,6 +26,7 @@ import type {
   PreviewAgentSessionsResponse,
   RenameAgentSessionRequest,
   SandboxSizeBody,
+  SetAgentSessionArchivedRequest,
   SharePermissionV2,
   StartResponse,
   StatusResponse,
@@ -649,6 +650,73 @@ export const deleteAgentSession = async (
 };
 
 /**
+ * @summary Archive or unarchive an agent session.
+ */
+export type setAgentSessionArchivedResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type setAgentSessionArchivedResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type setAgentSessionArchivedResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type setAgentSessionArchivedResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type setAgentSessionArchivedResponseSuccess =
+  setAgentSessionArchivedResponse204 & {
+    headers: Headers;
+  };
+export type setAgentSessionArchivedResponseError = (
+  | setAgentSessionArchivedResponse401
+  | setAgentSessionArchivedResponse403
+  | setAgentSessionArchivedResponse500
+) & {
+  headers: Headers;
+};
+
+export type setAgentSessionArchivedResponse =
+  | setAgentSessionArchivedResponseSuccess
+  | setAgentSessionArchivedResponseError;
+
+export const getSetAgentSessionArchivedUrl = (sessionId: string) => {
+  return `/agent-sessions/${sessionId}/archived`;
+};
+
+export const setAgentSessionArchived = async (
+  sessionId: string,
+  setAgentSessionArchivedRequest: SetAgentSessionArchivedRequest,
+  options?: RequestInit
+): Promise<setAgentSessionArchivedResponse> => {
+  const res = await fetch(getSetAgentSessionArchivedUrl(sessionId), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(setAgentSessionArchivedRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: setAgentSessionArchivedResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as setAgentSessionArchivedResponse;
+};
+
+/**
  * @summary The latest captured changes of an agent session: the changed files with
 statuses and line counts, and how the latest capture attempt went.
  */
@@ -1018,6 +1086,11 @@ export type renameAgentSessionResponse403 = {
   status: 403;
 };
 
+export type renameAgentSessionResponse409 = {
+  data: string;
+  status: 409;
+};
+
 export type renameAgentSessionResponse500 = {
   data: string;
   status: 500;
@@ -1031,6 +1104,7 @@ export type renameAgentSessionResponseError = (
   | renameAgentSessionResponse400
   | renameAgentSessionResponse401
   | renameAgentSessionResponse403
+  | renameAgentSessionResponse409
   | renameAgentSessionResponse500
 ) & {
   headers: Headers;

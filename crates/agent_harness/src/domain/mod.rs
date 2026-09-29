@@ -22,3 +22,6 @@ pub mod codex;
 
 /// Owner-bound Claude conversation lifecycle.
 pub mod claude;
+
+/// Repository selection and fallback policy for hosted coding sessions.
+pub(crate) mod repository_selection;

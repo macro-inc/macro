@@ -18,6 +18,12 @@ const messageParent = z.object({
 
 const commentAnchor = z.union([
   z.object({
+    type: z.literal('spreadsheet'),
+    sheetId: z.string().min(1),
+    sheetName: z.string(),
+    range: z.string().min(1),
+  }),
+  z.object({
     type: z.literal('markdown').optional(),
     markId: z.string().min(1),
     markedText: z.string().optional(),

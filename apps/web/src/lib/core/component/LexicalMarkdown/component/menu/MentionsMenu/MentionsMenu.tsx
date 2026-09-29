@@ -14,6 +14,7 @@ import { debouncedDependent } from '@core/util/debounce';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import type { EmailEntity } from '@entity';
 import type { HistoryItem as Item } from '@queries/history/history';
+import { Key } from '@solid-primitives/keyed';
 import { createLazyMemo } from '@solid-primitives/memo';
 import { createVirtualizer } from '@tanstack/solid-virtual';
 import { Surface } from '@ui';
@@ -55,7 +56,7 @@ import { useMentionsMenuController } from './MentionsMenuController';
 import { createItemHandler } from './utils/mentionHandlers';
 import { sortMobileMentions } from './utils/mobileSort';
 
-const MAX_ITEMS = 8;
+const TARGET_ITEMS = 8;
 const VIRTUAL_ITEM_HEIGHT = 36;
 // Height consumed by Surface's p-px border (2px) + py-2 padding (16px)
 const PANEL_DECORATION_HEIGHT = 18;
@@ -382,7 +383,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
 
   const controller = useMentionsMenuController(bucketConfigs, {
     ignoredIds: () => (blockId ? [blockId] : []),
-    maxItems: MAX_ITEMS,
+    targetItems: TARGET_ITEMS,
   });
 
   const [escapeSpaceState, setEscapeSpaceState] = createSignal<
@@ -634,29 +635,33 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                   }
                 >
                   <div>
-                    <For each={visibleBuckets()}>
+                    <Key
+                      each={visibleBuckets()}
+                      by={(bucket) => bucket.config.id}
+                    >
                       {(bucket, idx) => (
                         <>
                           <Show when={idx() > 0}>
                             <div class="w-full mt-4 border-b border-edge-muted mb-2" />
                           </Show>
                           <ItemBin
-                            label={bucket.config.label}
-                            binType={bucket.config.id}
-                            totalCount={bucket.config.getFullCount()}
-                            showingCount={bucket.bucketItems.length}
+                            label={bucket().config.label}
+                            binType={bucket().config.id}
+                            totalCount={bucket().config.getFullCount()}
+                            showingCount={bucket().bucketItems.length}
                             onViewAll={handleViewAll}
                             isSelected={
-                              controller.selectedCategory() === bucket.config.id
+                              controller.selectedCategory() ===
+                              bucket().config.id
                             }
                           >
-                            <For each={bucket.bucketItems}>
+                            <Key each={bucket().bucketItems} by="id">
                               {(item, i) => (
                                 <MentionsMenuItem
-                                  item={item}
-                                  index={bucket.startIndex + i()}
+                                  item={item()}
+                                  index={bucket().startIndex + i()}
                                   selected={
-                                    bucket.startIndex + i() ===
+                                    bucket().startIndex + i() ===
                                     controller.selectedIndex()
                                   }
                                   itemAction={itemAction}
@@ -664,11 +669,11 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                                   setOpen={setMenuOpen}
                                 />
                               )}
-                            </For>
+                            </Key>
                           </ItemBin>
                         </>
                       )}
-                    </For>
+                    </Key>
                   </div>
                 </Show>
               }

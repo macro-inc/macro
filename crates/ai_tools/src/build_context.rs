@@ -240,10 +240,9 @@ pub async fn build_tool_service_context_from_env(
         env.document_storage_bucket.to_string(),
         env.docx_document_upload_bucket.to_string(),
     );
-    let document_repo = PgDocumentRepo::new(
-        pool.clone(),
-        OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(pool.clone()))),
-    );
+    let owned_entity_registrar =
+        OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(pool.clone())));
+    let document_repo = PgDocumentRepo::new(pool.clone(), owned_entity_registrar.clone());
     let cloudfront_config = CloudFrontConfig {
         distribution_url: env
             .document_storage_service_cloudfront_distribution_url
@@ -383,7 +382,7 @@ pub async fn build_tool_service_context_from_env(
     let notification_tool_context =
         notification::inbound::ai_tool::NotificationToolContext::new(notification_reader_service);
 
-    let chat_repo = chat::outbound::postgres::PgChatRepo::new(pool.clone());
+    let chat_repo = chat::outbound::postgres::PgChatRepo::new(pool.clone(), owned_entity_registrar);
     let chat_service = chat::domain::service::ChatServiceImpl::new(
         chat_repo,
         Arc::new(ai_toolset::AsyncToolCollection::new()),

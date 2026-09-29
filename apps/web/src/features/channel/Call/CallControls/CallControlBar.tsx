@@ -160,7 +160,7 @@ export function CallControlBar(props: {
         <Button
           size="icon-md"
           tooltipDisabled
-          variant="plain"
+          variant="ghost"
           aria-label={settingsLabels[group.kind]}
           aria-expanded={expanded()}
           aria-controls={expanded() ? id : undefined}
@@ -224,7 +224,7 @@ export function CallControlBar(props: {
           cancelIntent();
         }}
       >
-        <div class="rounded-xl border border-edge-muted bg-panel shadow-md">
+        <div class="rounded-xl bg-menu-glass text-ink glass">
           <div
             aria-hidden={displayedSection() !== 'audio'}
             inert={displayedSection() !== 'audio'}
@@ -270,7 +270,7 @@ export function CallControlBar(props: {
           </div>
         </div>
       </div>
-      <div class="mx-auto flex w-fit max-w-full flex-wrap items-center justify-center gap-1 rounded-xl border border-edge-muted bg-panel p-1.5 shadow-sm @sm:gap-2">
+      <div class="mx-auto flex w-fit max-w-full flex-wrap items-center justify-center gap-1 rounded-xl bg-menu-glass p-1.5 text-ink glass @sm:gap-2">
         <MediaGroup
           kind="audio"
           active={!props.audioMuted}

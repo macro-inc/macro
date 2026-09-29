@@ -253,7 +253,7 @@ export function EmailInboxMenu(props: { class?: string }) {
           depth={2}
           aria-label={`Inbox: ${selection.label()}`}
           tooltip={selection.label()}
-          class={cn('size-8 shrink-0 rounded-full', props.class)}
+          class={cn('size-8 shrink-0', props.class)}
         >
           <Show
             when={selection.selectedOption()}

@@ -27,7 +27,7 @@ export function PillButton(props: PillButtonProps) {
       variant={subtle() ? 'outline' : 'cta'}
       size="md"
       class={cn(
-        'rounded-full py-1',
+        'py-1',
         subtle() ? 'px-2.5' : props.icon ? 'pl-3 pr-4' : 'px-4',
         props.class
       )}

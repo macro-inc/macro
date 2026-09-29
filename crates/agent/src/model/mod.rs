@@ -6,5 +6,7 @@ pub(crate) mod types;
 pub use predefined_model::*;
 mod anthropic;
 mod gemini;
+pub mod metering;
+pub mod metering_http;
 mod openai;
 pub mod router;

@@ -346,6 +346,60 @@ function renderRetainedList(
 }
 
 describe('Quick Access source integration', () => {
+  it('keeps cached document order and fuzzy matches stable across typing and backspacing', async () => {
+    const names = [
+      'Seamus snip',
+      'seamus todo',
+      'seamus@macro.com taskium',
+      'Some early afternoon music',
+    ];
+    mocks.history = names.map((name, index) => ({
+      id: `mention-${index}`,
+      name,
+      type: 'document',
+      fileType: 'md',
+      ownerId: 'owner',
+    }));
+    const results: SearchCachePage = {
+      documents: names.map((name, index) => ({
+        profile: 'quick-access-v1',
+        recordKey: `GraphqlSoupDocument:mention-${index}`,
+        bucket: 'note',
+        searchText: name.toLowerCase(),
+        timestampMs: 1,
+        sourceHash: 'hash',
+      })),
+      nextCursor: null,
+    };
+    mocks.search.mockResolvedValue(results);
+    const [query, setQuery] = createSignal('seam');
+    const snapshots: string[][] = [];
+    const list = setup((source) => {
+      const list = source.useList({ buckets: ['note'], searchTerm: query });
+      createRenderEffect(() => {
+        snapshots.push(list.items().map((item) => item.id));
+      });
+      return list;
+    });
+    await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+    const expected = mocks.history.map((item) => item.id);
+    expect(list.items().map((item) => item.id)).toEqual(expected);
+    snapshots.length = 0;
+
+    for (const term of ['seamu', 'seam', 'seamu']) {
+      const pending = Promise.withResolvers<SearchCachePage>();
+      mocks.search.mockReturnValueOnce(pending.promise);
+      setQuery(term);
+      expect(list.isLoading()).toBe(true);
+      expect(list.items().map((item) => item.id)).toEqual(expected);
+      pending.resolve(results);
+      await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+      expect(list.items().map((item) => item.id)).toEqual(expected);
+    }
+    expect(snapshots.length).toBeGreaterThan(0);
+    expect(snapshots.every((ids) => ids.join() === expected.join())).toBe(true);
+  });
+
   it('lets initially empty cached channels populate during hydration and replays the last change', async () => {
     const first = retainedQueryData.channels;
     const latest = [{ ...first[0], name: 'Updated channel' }];

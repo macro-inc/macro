@@ -3,6 +3,7 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
+use model_owner::Owner;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::team_share::{
     AuthorizedTeamShareCommand, TeamShareFacts, TeamShareLevel, TeamShareRequest,
@@ -16,7 +17,7 @@ use uuid::Uuid;
 
 use crate::domain::models::{ChatErr, CreateChatArgs, PatchChatRepoArgs};
 use crate::domain::ports::ChatRepo;
-use crate::outbound::postgres::PgChatRepo;
+use crate::outbound::postgres::test::{TestRepo, test_repo};
 
 const OWNER: &str = "macro|test@example.com";
 const TEAM_ID: Uuid = Uuid::from_u128(0xb2222222_2222_2222_2222_222222222222);
@@ -25,9 +26,9 @@ fn owner() -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str(OWNER).unwrap().into_owned()
 }
 
-async fn create_chat(repo: &PgChatRepo, name: &str) -> String {
+async fn create_chat(repo: &TestRepo, name: &str) -> String {
     repo.create(
-        owner(),
+        Owner::User(owner()),
         CreateChatArgs {
             name: name.to_string(),
             project_id: None,
@@ -63,7 +64,7 @@ fn command(facts: &TeamShareFacts, level: Option<AccessLevel>) -> AuthorizedTeam
 }
 
 async fn patch_team_share(
-    repo: &PgChatRepo,
+    repo: &TestRepo,
     chat_id: &str,
     level: Option<AccessLevel>,
 ) -> Result<(), ChatErr> {
@@ -140,7 +141,7 @@ fn unshared() -> StoredTeamShare {
     fixtures(path = "../fixtures", scripts("users", "team"))
 )]
 async fn get_team_share_facts_reads_owner_team_and_null_state(pool: PgPool) {
-    let repo = PgChatRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let chat_id = create_chat(&repo, "Facts").await;
 
     let facts = repo.get_team_share_facts(&chat_id).await.unwrap();
@@ -158,7 +159,7 @@ async fn get_team_share_facts_reads_owner_team_and_null_state(pool: PgPool) {
     fixtures(path = "../fixtures", scripts("users"))
 )]
 async fn get_team_share_facts_without_team_has_no_owner_team(pool: PgPool) {
-    let repo = PgChatRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let chat_id = create_chat(&repo, "No team").await;
 
     let facts = repo.get_team_share_facts(&chat_id).await.unwrap();
@@ -172,7 +173,7 @@ async fn get_team_share_facts_without_team_has_no_owner_team(pool: PgPool) {
     fixtures(path = "../fixtures", scripts("users", "team"))
 )]
 async fn patch_applies_team_share_command_and_inserts_direct_team_entity_access(pool: PgPool) {
-    let repo = PgChatRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let chat_id = create_chat(&repo, "Shared").await;
 
     patch_team_share(&repo, &chat_id, Some(AccessLevel::Edit))
@@ -214,7 +215,7 @@ async fn patch_applies_team_share_command_and_inserts_direct_team_entity_access(
     fixtures(path = "../fixtures", scripts("users", "team"))
 )]
 async fn patch_clear_command_removes_managed_team_entity_access_and_bumps_revision(pool: PgPool) {
-    let repo = PgChatRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let chat_id = create_chat(&repo, "Cleared").await;
     patch_team_share(&repo, &chat_id, Some(AccessLevel::Comment))
         .await
@@ -238,7 +239,7 @@ async fn patch_clear_command_removes_managed_team_entity_access_and_bumps_revisi
     fixtures(path = "../fixtures", scripts("users", "team"))
 )]
 async fn patch_with_team_level_but_no_command_returns_unauthorized(pool: PgPool) {
-    let repo = PgChatRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let chat_id = create_chat(&repo, "Original").await;
 
     let result = repo
@@ -269,7 +270,7 @@ async fn patch_with_team_level_but_no_command_returns_unauthorized(pool: PgPool)
     fixtures(path = "../fixtures", scripts("users", "team"))
 )]
 async fn patch_rejects_command_for_other_chat_or_mismatched_level(pool: PgPool) {
-    let repo = PgChatRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let chat_id = create_chat(&repo, "Target").await;
     let other_chat_id = create_chat(&repo, "Other").await;
     let facts = repo.get_team_share_facts(&chat_id).await.unwrap();
@@ -312,7 +313,7 @@ async fn patch_rejects_command_for_other_chat_or_mismatched_level(pool: PgPool) 
     fixtures(path = "../fixtures", scripts("users", "team"))
 )]
 async fn patch_stale_command_returns_conflict(pool: PgPool) {
-    let repo = PgChatRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let chat_id = create_chat(&repo, "Stale").await;
     let facts = repo.get_team_share_facts(&chat_id).await.unwrap();
     let stale = command(&facts, Some(AccessLevel::Edit));
@@ -343,7 +344,7 @@ async fn patch_stale_command_returns_conflict(pool: PgPool) {
     fixtures(path = "../fixtures", scripts("users", "team"))
 )]
 async fn patch_team_share_and_link_share_in_one_call_persists_both(pool: PgPool) {
-    let repo = PgChatRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let chat_id = create_chat(&repo, "Both").await;
     let facts = repo.get_team_share_facts(&chat_id).await.unwrap();
 
@@ -380,7 +381,7 @@ async fn patch_team_share_and_link_share_in_one_call_persists_both(pool: PgPool)
     fixtures(path = "../fixtures", scripts("users", "team"))
 )]
 async fn get_permissions_reads_team_share_access_level(pool: PgPool) {
-    let repo = PgChatRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let chat_id = create_chat(&repo, "Read").await;
     assert_eq!(
         repo.get_permissions(&chat_id)

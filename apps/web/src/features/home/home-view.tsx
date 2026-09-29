@@ -92,7 +92,7 @@ function HomeViewRoot() {
     else closePreview();
   };
 
-  // The touch nav item and legacy touch view both call this "Notifications".
+  // The touch nav item calls this "Notifications".
   onMount(() =>
     panel.handle.setDisplayName(isTouchDevice() ? 'Notifications' : 'Home')
   );

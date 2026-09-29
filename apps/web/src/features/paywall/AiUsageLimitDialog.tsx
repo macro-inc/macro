@@ -83,7 +83,7 @@ export function AiUsageLimitDialog() {
             <Button
               variant="ghost"
               depth={3}
-              class="rounded-full px-3 py-1.5"
+              class="px-3 py-1.5"
               onClick={() => {
                 hideUsageLimit();
                 navigate('/app/settings/billing');
@@ -95,7 +95,7 @@ export function AiUsageLimitDialog() {
               <Button
                 variant="ghost"
                 depth={3}
-                class="rounded-full px-3 py-1.5"
+                class="px-3 py-1.5"
                 onClick={hideUsageLimit}
               >
                 Dismiss
@@ -110,7 +110,7 @@ export function AiUsageLimitDialog() {
                   }
                 >
                   <Button
-                    variant="cta"
+                    variant="strong"
                     class="rounded-full px-3 py-1.5"
                     disabled={changePlan.isPending}
                     onClick={() => void upgradeToMax()}

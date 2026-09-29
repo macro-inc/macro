@@ -20,7 +20,8 @@ use agent_session::inbound::axum_router::{
     ControlResponse, ControlStatusDto, CreateAgentSessionRequest, CreateAgentSessionResponse,
     CreateSessionThread, EditQueuedActionRequest, LogDirectionDto, LogFrameDto,
     PreviewAgentSessionsRequest, PreviewAgentSessionsResponse, QueuedActionDto,
-    RenameAgentSessionRequest, SandboxSizeBody, SessionStatusDto, WithAgentSessionId,
+    RenameAgentSessionRequest, SandboxSizeBody, SessionStatusDto, SetAgentSessionArchivedRequest,
+    WithAgentSessionId,
 };
 use claude_cloud_agents::inbound::auth as claude_auth;
 use utoipa::{
@@ -54,6 +55,7 @@ impl Modify for SecurityAddon {
         axum_router::get_agent_session_handler,
         axum_router::preview_agent_sessions_handler,
         axum_router::rename_agent_session_handler,
+        axum_router::set_agent_session_archived_handler,
         axum_router::sharing::get_agent_session_permissions,
         axum_router::sharing::update_agent_session_permissions,
         axum_router::get_agent_session_log_handler,
@@ -96,6 +98,7 @@ impl Modify for SecurityAddon {
         AgentSessionPreviewData,
         WithAgentSessionId,
         RenameAgentSessionRequest,
+        SetAgentSessionArchivedRequest,
         SessionStatusDto,
         AgentSessionLogResponse,
         AgentSessionLogEntryDto,

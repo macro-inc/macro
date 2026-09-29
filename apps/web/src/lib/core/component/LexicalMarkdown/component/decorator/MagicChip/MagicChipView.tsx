@@ -198,7 +198,7 @@ export const MagicChipView: Component<{
           <div class="min-w-0 flex-1" />
           <Show when={props.onCollapse}>
             <Button
-              variant="plain"
+              variant="ghost"
               size="icon-sm"
               noTouchResize
               aria-label="Collapse to mention"
@@ -215,7 +215,7 @@ export const MagicChipView: Component<{
             variant="outline"
             size="sm"
             noTouchResize
-            class="aspect-square rounded-full bg-transparent p-0 font-normal @[600px]:aspect-auto @[600px]:px-2"
+            class="aspect-square bg-transparent p-0 font-normal @[600px]:aspect-auto @[600px]:px-2"
             aria-label="Open session"
             disabled={props.loading || !props.onOpen}
             on:click={(event) => {

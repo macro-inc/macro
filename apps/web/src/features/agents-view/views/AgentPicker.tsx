@@ -49,7 +49,7 @@ export function AgentPicker(props: {
   return (
     <Dropdown open={open()} onOpenChange={setOpen} placement="top-end">
       <Dropdown.Trigger
-        variant="plain"
+        variant="ghost"
         aria-label="Agent"
         title={
           rawModel()
@@ -214,6 +214,12 @@ function AgentPickerRow(props: {
             class="min-w-0 flex-1 gap-2"
             textValue={props.agent.name}
             onClick={() => props.onSelect()}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter' && event.key !== ' ') return;
+              event.preventDefault();
+              event.stopPropagation();
+              props.onSelect();
+            }}
           >
             {identity()}
             <CaretRightIcon class="size-3 shrink-0 text-ink-muted" />

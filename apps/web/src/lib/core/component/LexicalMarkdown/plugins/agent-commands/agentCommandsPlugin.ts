@@ -60,8 +60,6 @@ export const INSERT_AGENT_COMMAND_COMMAND: LexicalCommand<AgentCommandItem> =
 
 type AgentCommandsPluginProps = {
   menu: MenuOperations;
-  /** Reactive source of the commands the connected agent advertises. */
-  commands: () => AgentCommandItem[];
   peerIdValidator?: PeerIdValidator;
 };
 
@@ -92,10 +90,9 @@ function $getActiveCommandSearchNode(): InlineSearchNode | null {
 /**
  * Registers the `/` trigger for the agent commands menu. Typing `/` at a
  * valid trigger position (start of line or after whitespace) opens a
- * typeahead listing the slash commands the connected agent advertised over
- * ACP; selecting one inserts `/name` as plain text at the cursor (see
- * AgentCommandsMenu). The `/` falls through as regular text while the agent
- * has not advertised any commands.
+ * combined skills, pull requests, and harness commands menu. Skills remain
+ * available before the agent advertises any commands. Selecting a command
+ * inserts `/name` as plain text at the cursor.
  *
  * Shares the `/` symbol with the actions and skills menus, so this plugin
  * must only be enabled in editors where both of those are disabled — the
@@ -125,7 +122,6 @@ function registerAgentCommandsPlugin(
   const { menu } = props;
 
   function typeSymbolCommand() {
-    if (props.commands().length === 0) return false;
     const shouldTrigger = validTriggerPosition(editor, beforeRegex, afterRegex);
     if (shouldTrigger) {
       editor.update(() => {

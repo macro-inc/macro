@@ -71,11 +71,10 @@ export function CalendarSearchFilters(props: {
     <Dropdown placement="bottom-end" onOpenChange={setOpen}>
       <Dropdown.Trigger
         type="button"
-        variant="plain"
+        variant="ghost"
         size="icon-sm"
         square
         label={hasFilters() ? 'Filter events (active)' : 'Filter events'}
-        class="rounded-full"
         classList={{ 'text-accent': hasFilters() }}
       >
         <FilterIcon class="size-4" />

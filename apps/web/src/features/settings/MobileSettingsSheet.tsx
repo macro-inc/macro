@@ -75,7 +75,7 @@ export function MobileSettingsSheet(props: MobileSettingsSheetProps) {
                 variant="ghost"
                 size="icon-sm"
                 aria-label="Back to settings"
-                class="size-11 rounded-full bg-ink/6"
+                class="size-11 bg-ink/6"
                 onClick={() => navigate()}
               >
                 <CaretLeftIcon class="size-5" />
