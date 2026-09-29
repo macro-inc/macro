@@ -810,6 +810,10 @@ export type CreateSessionThread = {
     messageId: string;
     parent?: null | MessageParent;
     /**
+     * Update the existing bot response reserved by a task assignment.
+     */
+    reuseOriginMessage?: boolean;
+    /**
      * Thread the session belongs to; defaults to the message itself, which
      * is how a top-level mention roots its own thread.
      */

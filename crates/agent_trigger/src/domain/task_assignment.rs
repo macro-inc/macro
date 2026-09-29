@@ -232,7 +232,7 @@ async fn assignment_discussion(
             acting_user: assignment.actor.clone(),
         },
         access.entity().clone(),
-        access.entity_permission().clone(),
+        *access.entity_permission(),
     )
     .map_err(|_| {
         ProcessMessageEventError::Discussion(messages::domain::ports::MessageError::Forbidden)
