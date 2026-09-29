@@ -1,4 +1,4 @@
-import { VIEW_SHELL_TOUR } from '@app/components/view-shell';
+import { VIEW_SHELL_TOUR } from '@app/components/view-shell/tour';
 import { CHANNEL_TOUR } from '@app/features/channel/tour';
 import { defineViewTour } from '@app/features/tours/core/view-tour';
 import { defineTourTargets } from '@ui/components/Tour';

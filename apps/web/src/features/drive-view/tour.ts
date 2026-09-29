@@ -1,4 +1,4 @@
-import { VIEW_SHELL_TOUR } from '@app/components/view-shell';
+import { VIEW_SHELL_TOUR } from '@app/components/view-shell/tour';
 import { defineViewTour } from '@app/features/tours/core/view-tour';
 
 export const documentsTour = defineViewTour({

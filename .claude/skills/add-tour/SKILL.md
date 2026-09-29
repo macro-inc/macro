@@ -30,7 +30,7 @@ export const REPORTS_TOUR = defineTourTargets('reports', ['filters', 'chart']);
   `{ scope: 'app' }` only for shared chrome outside any split (see
   `command/sidebar/tour.ts`).
 - Reuse shared targets before adding new ones:
-  - `VIEW_SHELL_TOUR` (`@app/components/view-shell`): `aside`, `main`, `topBar`, `sidebarToggle`. Every `ViewShell` registers these.
+  - `VIEW_SHELL_TOUR` (`@app/components/view-shell/tour`): `aside`, `main`, `topBar`, `sidebarToggle`. Every `ViewShell` registers these.
   - `SOUP_TOUR` (`features/next-soup/tour.ts`): `list`.
   - `CHANNEL_TOUR` (`features/channel/tour.ts`): `messages`, `composer`, `call`.
   - `APP_TOUR` (`features/command/sidebar/tour.ts`): `createMenu`.
