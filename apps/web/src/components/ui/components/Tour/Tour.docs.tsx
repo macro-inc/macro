@@ -117,6 +117,14 @@ function EntryDemo() {
         <Tour.Root steps={ENTRY_STEPS} onDismiss={() => setOpen(false)}>
           <Tour.Highlight />
           <Tour.Beacon />
+          <Tour.Hint class="w-56 rounded-xl border border-edge bg-dialog p-3 text-sm text-ink shadow-lg">
+            <p>Show settings to continue.</p>
+            <div class="mt-2">
+              <Tour.Next variant="outline" size="sm">
+                Skip
+              </Tour.Next>
+            </div>
+          </Tour.Hint>
           <CardPopover />
         </Tour.Root>
       </Show>

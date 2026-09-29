@@ -489,28 +489,41 @@ function TourHighlight(props: { class?: string; inset?: number }) {
 }
 
 /**
- * A pulsing marker on the entry the current step is waiting on. It doesn't
- * intercept input: pressing the entry itself clears it and resumes the step.
+ * A pulsing ring and dot on the entry the current step is waiting on. It
+ * doesn't intercept input: pressing the entry itself clears it and resumes
+ * the step.
  */
-function TourBeacon(props: { class?: string }) {
+function TourBeacon(props: { class?: string; inset?: number }) {
   const tour = useTour();
-  const [dot, setDot] = createSignal<HTMLElement>();
-  const rect = createTrackedRect(tour.entry, dot, tour.boundary);
+  const [frame, setFrame] = createSignal<HTMLElement>();
+  const rect = createTrackedRect(tour.entry, frame, tour.boundary);
+  const inset = () => props.inset ?? 3;
   return (
     <Show when={tour.status() === 'waiting'}>
       <Portal>
+        {/* A pulsing ring around the whole entry, with a dot on its corner,
+            so even a small icon button reads as "press this". */}
         <span
-          ref={setDot}
+          ref={setFrame}
+          aria-hidden="true"
           data-tour-beacon
-          class={cn('pointer-events-none fixed z-[70] size-2.5', props.class)}
+          class={cn(
+            'pointer-events-none fixed z-[70] rounded-[10px] border-2 border-accent',
+            props.class
+          )}
           style={{
             visibility: rect() ? 'visible' : 'hidden',
-            left: `${(rect()?.right ?? 0) - 16}px`,
-            top: `${(rect()?.top ?? 0) + (rect()?.height ?? 0) / 2 - 5}px`,
+            left: `${(rect()?.left ?? 0) - inset()}px`,
+            top: `${(rect()?.top ?? 0) - inset()}px`,
+            width: `${(rect()?.width ?? 0) + inset() * 2}px`,
+            height: `${(rect()?.height ?? 0) + inset() * 2}px`,
           }}
         >
-          <span class="absolute inset-0 animate-ping rounded-full bg-accent opacity-60" />
-          <span class="absolute inset-0 rounded-full bg-accent" />
+          <span class="absolute inset-[-2px] animate-ping rounded-[10px] border-2 border-accent opacity-50" />
+          <span class="absolute -top-1.5 -right-1.5 size-3">
+            <span class="absolute inset-0 animate-ping rounded-full bg-accent opacity-60" />
+            <span class="absolute inset-0 rounded-full border-2 border-dialog bg-accent" />
+          </span>
         </span>
         <span role="status" class="sr-only">
           {tour.current().entryLabel ??
