@@ -192,6 +192,8 @@ const mount = () =>
   render(() => (
     <ChannelsRail
       sources={sources}
+      searchQuery=""
+      onSearchQueryChange={() => {}}
       searchOpen={false}
       onSearchOpenChange={() => {}}
     />

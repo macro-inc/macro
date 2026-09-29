@@ -14,6 +14,7 @@ import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.
 import type { ChannelEntity } from '@entity';
 import { isMutedItem } from '@entity/utils/notification';
 import SpinnerIcon from '@phosphor/spinner.svg';
+import XIcon from '@phosphor/x.svg';
 import { hydrateChannelNotificationSelection } from '@queries/channel/notification-selection';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, EmptyStatePanel } from '@ui';
@@ -54,9 +55,10 @@ const LOAD_MORE_THRESHOLD = 300;
 
 export function ChannelsMobileView(props: {
   source: ChannelsDataSource;
+  searchQuery: string;
+  onClearSearch: () => void;
   tab: ChannelsQueryScope;
   onTabChange: (tab: ChannelsQueryScope) => void;
-  searchText?: string;
 }) {
   const panel = useSplitPanelOrThrow();
   const notificationSource = useGlobalNotificationSource();
@@ -89,7 +91,7 @@ export function ChannelsMobileView(props: {
 
   createEffect(
     on(
-      () => props.searchText,
+      () => props.searchQuery,
       () => viewport()?.scrollTo({ top: 0 })
     )
   );
@@ -207,22 +209,30 @@ export function ChannelsMobileView(props: {
             </Match>
             <Match when={forceEmptyState() || visibleChannels().length === 0}>
               <Show
-                when={props.searchText}
+                when={props.searchQuery.trim()}
                 fallback={<ChannelsEmptyState scope={props.tab} />}
               >
-                <EmptyStatePanel
-                  centered
-                  graphic={EmptyStateNoSearchMatchGraphic}
-                  title="No results"
-                  description={
-                    <span>
-                      No conversations match{' '}
-                      <span class="[overflow-wrap:anywhere]">
-                        “{props.searchText}”
+                {(query) => (
+                  <EmptyStatePanel
+                    centered
+                    graphic={EmptyStateNoSearchMatchGraphic}
+                    title="No results"
+                    description={
+                      <span>
+                        No conversations match{' '}
+                        <span class="[overflow-wrap:anywhere]">
+                          “{query()}”
+                        </span>
                       </span>
-                    </span>
-                  }
-                />
+                    }
+                    primaryAction={{
+                      label: 'Clear search',
+                      icon: XIcon,
+                      onClick: props.onClearSearch,
+                    }}
+                    class="h-auto touch:pt-0 touch:pb-(--mobile-content-inset-bottom)"
+                  />
+                )}
               </Show>
             </Match>
             <Match when={true}>

@@ -110,14 +110,24 @@ the shimmer.
   Hover an agent (or use the right arrow key) to open its model submenu, with
   the searchable Settings catalog, provider icons, and scrollable **More models**.
   The submenu focuses the `Search models` field so you can type immediately.
-  Clicking an agent directly uses its default; choosing a submenu model selects
-  both the agent and that model. A checkmark identifies the selected model,
+  Clicking an agent directly, or pressing Enter/Space on its focused row, uses
+  its default and clears any previous model override. Right Arrow still opens
+  the model submenu; choosing a submenu model selects both the agent and that
+  model. Escape dismisses the picker and restores focus to its trigger.
+  A checkmark identifies the selected model,
   including when it is the agent’s configured default; there is no separate default row.
   Disconnected Cursor offers **Connect Cursor**, opening Settings → Agents → Runtimes.
   The built-in sandbox and paired macrod runtimes are not offered here.
 - Selecting an agent changes the heading: **What should we work on?** for chat
   agents and **What should we build?** for coding agents. The draft stays intact
-  when changing agents. **Create agent** stays pinned at the bottom of the dropdown
+  when changing agents. Unsent New conversation text and attachments also come
+  back after opening a session and returning, the same way channel replies persist
+  when switching channels. Home's agent input also restores unsent text, under a
+  separate key from Agents → New conversation. Check the Home path explicitly:
+  type a prompt on Home, visit an agent session, then return using the Home sidebar
+  button or Back. The Home prompt should remain after returning and after a reload.
+  Sending or clearing the input removes only that surface's saved text draft.
+  **Create agent** stays pinned at the bottom of the dropdown
   while the agent and model lists scroll. It opens the roster on the selected kind's
   tab, where either kind can be created.
 - On Home and New conversation, selecting a coding agent expands the input even
@@ -210,6 +220,16 @@ the shimmer.
   Automations / Skills list. On touch devices, conversation links open standalone
   agent sessions or legacy chats instead of the desktop Agents workspace. A standalone legacy chat is `/app/chat/<uuid>`; doc-scoped chat
   is `/app/md/<doc>/chat/<chat>` (split view).
+
+## Routine run history
+
+A routine's **History** can contain both legacy chats and agent sessions. Each
+row opens the surface created by that run; changing the routine's execution
+target does not change older links. Shift-click opens the run in a new split.
+Loading metadata affects only its row. Deleted, inaccessible, or missing resources
+show **Run unavailable** without a link, including failed preparation that created
+no resource. Live pending rows remain neutral; persisted unsuccessful runs keep
+the failure-colored timestamp even when their transcript is still available.
 
 ## Start a standalone chat
 
@@ -432,7 +452,10 @@ The agent has workspace tools (it can list your documents, read channels, create
 render `displayResults` views). Requests go to `POST /cognition/stream/chat/message`; results
 stream over the app's websocket, not the HTTP response.
 
-When asked, the agent also answers document comments in place. A reply row reads
+When explicitly asked, the agent uses `CommentOnDocument` to reply with `threadId`,
+start an inline markdown comment with `quote`, or start a Discussion comment with
+neither. `threadId` and `quote` cannot be combined; `occurrence` only applies with
+`quote`. Thread ids come from the comments returned by `ReadContent`. A reply row reads
 **Replied to a comment on** (or **Commented on** for a new Discussion comment) followed
 by the document, and expands to the posted text; a resolve row reads **Resolved** or
 **Reopened a comment on** the document. Asked to comment on part of a markdown
@@ -909,3 +932,18 @@ webhook sync completes; its chip should then appear without a page refresh.
 Verify status changes (open/merged/closed) while the chip stays mounted, and
 verify that reconnecting the gateway catches up changes missed while disconnected.
 There is no periodic PR lookup polling.
+
+
+## Reading skills
+
+Agents in Macro and connected MCP harnesses can discover saved skill documents
+and built-in skills with `ListSkills`, then load the full instructions with
+`ReadSkill` using the returned `documentId`. `ListSkills` returns the 100 most
+recently updated visible skill documents plus built-ins; `SearchSkills` finds a
+skill by name, including older skills outside that list. A skill mention's id can
+also be passed directly to `ReadSkill`.
+
+The chat's **Read skill** tool row expands to show the full instructions. When
+verifying this flow, invoke a saved skill by name, confirm the agent reads it,
+and expand the row to inspect the returned content. Document access permissions
+apply; ordinary documents and deleted skills cannot be read as skills.

@@ -1,9 +1,12 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { useSplitRouter } from '@app/lib/split-router';
+import { parseSearchState } from '@app/lib/split-router/search';
+import { isRecord } from '@app/lib/split-router/utils';
 import { useIsAuthenticated } from '@core/auth';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { type Component, type JSX, onMount, Show } from 'solid-js';
-import type { SplitContent } from '../layoutManager';
+import type { SplitContent, SplitId } from '../layoutManager';
 import { useSplitPanelOrThrow } from '../layoutUtils';
 
 export function usePageViewTracking(pageTitle: string) {
@@ -27,7 +30,24 @@ export function withAuth<P extends object>(View: Component<P>): Component<P> {
 
 export function RedirectSplit(props: { to: SplitContent }) {
   const panel = useSplitPanelOrThrow();
-  onMount(() => panel.handle.replace({ next: props.to }));
+  const router = useSplitRouter<SplitId>();
+  onMount(() => {
+    const metadata = isRecord(props.to.entryMetadata)
+      ? props.to.entryMetadata
+      : {};
+    panel.handle.replace({
+      next: {
+        ...props.to,
+        entryMetadata: {
+          ...metadata,
+          search: {
+            ...router.location(panel.handle.id)?.search,
+            ...parseSearchState(metadata.search),
+          },
+        },
+      },
+    });
+  });
   return null;
 }
 

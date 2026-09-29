@@ -11,6 +11,7 @@ import type {
   CreateScheduledAction,
   InProgressExecution,
   ScheduledAction,
+  SetScheduledActionEnabled,
   UpdateScheduledAction,
 } from './generated/schemas';
 
@@ -59,6 +60,17 @@ export const scheduledActionClient = {
       {
         method: 'PUT',
         body: JSON.stringify(args.body),
+      }
+    ),
+
+  setEnabled: async (args: { scheduleId: string; enabled: boolean }) =>
+    scheduledActionFetch<ScheduledAction>(
+      `/scheduled-actions/${args.scheduleId}/enabled`,
+      {
+        method: 'PUT',
+        body: JSON.stringify({
+          enabled: args.enabled,
+        } satisfies SetScheduledActionEnabled),
       }
     ),
 

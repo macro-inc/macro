@@ -21,7 +21,10 @@ async fn composition_preserves_lexical_output_without_tool_instructions() {
     ));
 
     for context in [None, Some(&ConversationContext::default())] {
-        let prompt = composer.compose("Raw prompt", None, context).await.unwrap();
+        let prompt = composer
+            .compose("Raw prompt", None, None, context)
+            .await
+            .unwrap();
         assert_eq!(prompt, "Sanitized prompt and context");
         assert!(!prompt.contains("set_pull_request"));
     }
@@ -55,6 +58,7 @@ async fn the_comment_anchor_reaches_the_lexical_service_beside_the_history() {
     composer
         .compose(
             "Raw prompt",
+            Some("Never force-push."),
             None,
             Some(&ConversationContext {
                 anchor: Some(CommentAnchor::Mark {
@@ -79,11 +83,13 @@ async fn the_comment_anchor_reaches_the_lexical_service_beside_the_history() {
         body["anchor"]["surroundingText"],
         "Around the edited phrase."
     );
+    assert_eq!(body["instructions"], "Never force-push.");
 
     // A thread anchored before snapshots existed still names its mark.
     composer
         .compose(
             "Raw prompt",
+            None,
             None,
             Some(&ConversationContext {
                 anchor: Some(CommentAnchor::Mark {
@@ -108,6 +114,7 @@ async fn the_comment_anchor_reaches_the_lexical_service_beside_the_history() {
             composer
                 .compose(
                     "Raw prompt",
+                    None,
                     None,
                     Some(&ConversationContext {
                         anchor: Some(anchor),
@@ -204,7 +211,7 @@ async fn the_thread_channel_and_reply_target_reach_the_lexical_service() {
         let context = context(target);
         async move {
             composer
-                .compose("Raw prompt", None, Some(&context))
+                .compose("Raw prompt", None, None, Some(&context))
                 .await
                 .unwrap();
             received.lock().unwrap().clone().unwrap()

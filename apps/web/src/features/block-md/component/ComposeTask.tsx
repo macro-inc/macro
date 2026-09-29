@@ -1,3 +1,4 @@
+import { makePersistedState } from '@app/lib/persistence';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
@@ -40,7 +41,7 @@ import type { PropertyApiValues } from '@property/types';
 import { useUpsertToHistoryMutation } from '@queries/history/history';
 import { onElementConnect } from '@solid-primitives/lifecycle';
 import { debounce } from '@solid-primitives/scheduled';
-import { Button, EntityComposer, Scroll, ToggleSwitch } from '@ui';
+import { Button, EntityComposer, Scroll, ToggleSwitch, Tooltip } from '@ui';
 import {
   $getRoot,
   $getSelection,
@@ -415,7 +416,28 @@ export function ComposeTask(props: ComposeTaskProps) {
     initialState.isDraftLoaded
   );
   const [createMore, setCreateMore] = createSignal(false);
+  const [shareWithTeam, setShareWithTeam] = makePersistedState(
+    createSignal(true),
+    {
+      storages: {
+        restore: () => {
+          const stored = localStorage.getItem('task-composer-share-with-team');
+          return stored === 'true'
+            ? true
+            : stored === 'false'
+              ? false
+              : undefined;
+        },
+        write: (value) =>
+          localStorage.setItem('task-composer-share-with-team', String(value)),
+      },
+    }
+  );
   const [errorMessage, setErrorMessage] = createSignal<string>('');
+  const sharingHint = () =>
+    shareWithTeam()
+      ? 'Visible to your whole team'
+      : 'Only you and people you share with';
   const [isCreating, setIsCreating] = createSignal(false);
   const [tagLayoutMode, setTagLayoutMode] =
     createSignal<ComposerTagLayoutMode>('bottom');
@@ -586,6 +608,7 @@ export function ComposeTask(props: ComposeTaskProps) {
         createDefinitions(),
         (params) => upsertToHistoryMutation.mutate(params),
         {
+          shareWithTeam: shareWithTeam(),
           onMutate: () => {
             splitPanel.handle.close();
             props.onClose?.();
@@ -621,6 +644,7 @@ export function ComposeTask(props: ComposeTaskProps) {
       createDefinitions(),
       (params) => upsertToHistoryMutation.mutate(params),
       {
+        shareWithTeam: shareWithTeam(),
         onMutate: () => {
           resetTitleAndBody();
           setIsCreating(false);
@@ -669,6 +693,7 @@ export function ComposeTask(props: ComposeTaskProps) {
       createDefinitions(),
       (params) => upsertToHistoryMutation.mutate(params),
       {
+        shareWithTeam: shareWithTeam(),
         onMutate: () => {
           splitPanel.handle.close();
           props.onClose?.();
@@ -1008,6 +1033,7 @@ export function ComposeTask(props: ComposeTaskProps) {
             label="Create More"
           />
           <EntityComposer.Submit
+            variant="outline"
             onClick={handleCreateTask}
             disabled={title().trim().length === 0 || isCreating()}
             hasContent={title().trim().length > 0}
@@ -1016,6 +1042,20 @@ export function ComposeTask(props: ComposeTaskProps) {
           </EntityComposer.Submit>
         </div>
       </EntityComposer.Footer>
+
+      <div class="-mx-4 flex shrink-0 items-center gap-3 border-t border-edge-muted px-6 pt-4">
+        <ToggleSwitch
+          class="shrink-0"
+          checked={shareWithTeam()}
+          onChange={setShareWithTeam}
+          disabled={isCreating()}
+          label="Shared with Team"
+          labelClass="text-xs text-ink-muted font-normal whitespace-nowrap"
+        />
+        <Tooltip label={sharingHint()} class="min-w-0" tabIndex={0}>
+          <p class="truncate text-xs text-ink-muted">{sharingHint()}</p>
+        </Tooltip>
+      </div>
 
       <SimilarTasksSection
         title={title}

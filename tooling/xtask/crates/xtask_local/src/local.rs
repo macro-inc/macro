@@ -45,6 +45,7 @@ pub mod stack;
 pub mod stage;
 pub mod status;
 pub mod summary;
+pub mod tls;
 pub mod validate;
 
 #[cfg(test)]
@@ -442,7 +443,7 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
         mode,
         &instance,
         &env,
-        &frontend::url(&instance),
+        &frontend::https_url(&instance)?,
         &mailpit_url,
         shared_app_url.as_deref(),
     );
@@ -1225,8 +1226,14 @@ fn ensure_external_resources(stage: &Stage, instance: &Instance) -> Result<()> {
 }
 
 fn wait_http(stage: &Stage, label: &str, url: &str) -> Result<()> {
+    let ca = proxy::curl_ca_args(url);
+    let ca_flags = ca
+        .iter()
+        .map(|arg| format!("'{arg}'"))
+        .collect::<Vec<_>>()
+        .join(" ");
     let script = format!(
-        "for i in $(seq 1 600); do curl -fsS --max-time 3 {url} >/dev/null 2>&1 && exit 0; sleep 0.2; done; echo 'not ready: {url}'; exit 1"
+        "for i in $(seq 1 600); do curl -fsS {ca_flags} --max-time 3 {url} >/dev/null 2>&1 && exit 0; sleep 0.2; done; echo 'not ready: {url}'; exit 1"
     );
     let mut cmd = Command::new("bash");
     cmd.arg("-lc").arg(script);

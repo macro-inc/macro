@@ -81,21 +81,30 @@ function Footer(props: SlotProps) {
   );
 }
 
-function Submit(props: Omit<ButtonProps, 'variant'> & { hasContent: boolean }) {
-  const [local, rest] = splitProps(props, ['class', 'children', 'hasContent']);
+function Submit(props: ButtonProps & { hasContent: boolean }) {
+  const [local, rest] = splitProps(props, [
+    'class',
+    'children',
+    'hasContent',
+    'variant',
+  ]);
   return (
     <Button
       {...rest}
-      variant={local.hasContent ? 'accent' : 'ghost'}
+      variant={local.variant ?? (local.hasContent ? 'accent' : 'ghost')}
       depth={3}
       class={cn(
-        'gap-3 rounded-lg border-0',
+        'gap-3 rounded-lg',
+        local.variant !== 'outline' && 'border-0',
         !isTouchDevice() && 'rounded-full h-[33.75px] px-[15px]',
         local.class
       )}
     >
       {local.children}
-      <Hotkey shortcut="cmd+enter" theme="current" />
+      <Hotkey
+        shortcut="cmd+enter"
+        theme={local.variant === 'outline' ? 'subtle' : 'current'}
+      />
     </Button>
   );
 }

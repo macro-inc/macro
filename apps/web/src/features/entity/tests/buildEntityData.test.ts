@@ -180,7 +180,7 @@ describe('buildEntityData', () => {
         ...base,
         type: 'automation',
         cron: '* * * * *',
-        enabled: true,
+        status: { kind: 'unscheduled' },
       });
     });
   });

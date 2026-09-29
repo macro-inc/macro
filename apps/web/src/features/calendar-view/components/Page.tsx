@@ -24,6 +24,7 @@ import {
   calendarEventTimeFromFullCalendar,
   canEditCalendarEventTime,
 } from '@app/features/calendar/utils/event-interaction';
+import { consumeSuppressedCalendarDateSelection } from '@app/features/calendar/utils/open-event-outside-press';
 import {
   scrollEventChipIntoView,
   timeGridScroller,
@@ -265,6 +266,13 @@ export function Page(props: {
   const updateEventTime = useUpdateCalendarEventMutation();
   const handleSelect = (selection: DateSelectArg) => {
     if (!isActive()) return;
+    // The press that closes open event details also hits the grid. FullCalendar
+    // selects on mouseup, after the details have already closed, so that
+    // gesture must not open a new event.
+    if (consumeSuppressedCalendarDateSelection()) {
+      selection.view.calendar.unselect();
+      return;
+    }
     const calendar = firstWritableCalendar();
     setSelectionColor(calendar?.color ?? DEFAULT_CALENDAR_SOURCE.color);
     openEventComposer({

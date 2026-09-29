@@ -96,14 +96,18 @@ async fn run() -> Result<(), rootcause::Report> {
         access,
         MacroAuthorizationState::new(Arc::new(auth)),
     ));
-    let mcp = toolset::router(
-        service.clone(),
-        config
-            .preview_control_hosts
-            .split(',')
-            .map(|s| s.trim().to_owned())
-            .collect(),
+    let allowed_hosts: Vec<String> = config
+        .preview_control_hosts
+        .split(',')
+        .map(|s| s.trim().to_owned())
+        .filter(|host| !host.is_empty())
+        .collect();
+    tracing::info!(
+        hosts = ?allowed_hosts,
+        port = config.port,
+        "preview control listener ready"
     );
+    let mcp = toolset::router(service.clone(), allowed_hosts);
     let app = control
         .merge(mcp)
         .route("/health", get(|| async { "ok" }))
@@ -165,17 +169,24 @@ async fn admit_control(
     request: Request,
     next: Next,
 ) -> Response {
+    let method = request.method().clone();
+    let path = request.uri().path().to_owned();
     let Ok(_permit) = slots.try_acquire_owned() else {
+        tracing::warn!(%method, %path, "preview control overloaded");
         return StatusCode::TOO_MANY_REQUESTS.into_response();
     };
     let work = async {
         let (parts, body) = request.into_parts();
         let Ok(body) = axum::body::to_bytes(body, 64 * 1024).await else {
+            tracing::warn!(%method, %path, "preview control request too large");
             return StatusCode::PAYLOAD_TOO_LARGE.into_response();
         };
         next.run(Request::from_parts(parts, Body::from(body))).await
     };
     tokio::time::timeout(Duration::from_secs(15), work)
         .await
-        .unwrap_or_else(|_| StatusCode::REQUEST_TIMEOUT.into_response())
+        .unwrap_or_else(|_| {
+            tracing::warn!(%method, %path, "preview control timed out");
+            StatusCode::REQUEST_TIMEOUT.into_response()
+        })
 }

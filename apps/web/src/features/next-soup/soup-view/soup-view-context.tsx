@@ -5,7 +5,7 @@ import {
   soupItemMatchesListView,
   soupItemMatchesTagFilter,
 } from '@app/constants/list-views';
-import { SearchState } from '@app/features/command/mobile/mobileSearchState';
+import { useMobileSearchText } from '@app/features/command/mobile/use-mobile-search-text';
 import {
   createSoupState,
   type GroupMeta,
@@ -859,10 +859,9 @@ export const SoupViewContextProvider: FlowComponent<
   // per-split state: nothing to clear on close, nothing to reapply on pill
   // navigation). Otherwise it is the split's own persisted text, which only
   // the desktop search bar writes.
-  const effectiveSearchText = createMemo(() =>
-    isTouchDevice() && SearchState.isOpen() && panel.handle.isActive()
-      ? SearchState.query()
-      : searchText()
+  const effectiveSearchText = useMobileSearchText(
+    searchText,
+    panel.handle.isActive
   );
 
   const search = createSearchState({

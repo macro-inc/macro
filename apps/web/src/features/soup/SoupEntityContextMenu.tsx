@@ -3,7 +3,7 @@ import {
   type EntityActionViewContext,
   makeAddTagAction,
 } from '@app/features/next-soup/actions';
-import { ProjectAssignmentDialog } from '@app/features/projects/projects';
+import { ProjectPickerPopover } from '@app/features/projects/project-property';
 import { ContextMenuContent, MenuSeparator } from '@core/component/ContextMenu';
 import { touchHandler } from '@core/directive/touchHandler';
 import { isMobile } from '@core/mobile/isMobile';
@@ -156,9 +156,13 @@ export const SoupEntityContextMenu: FlowComponent<
         </ContextMenu>
         <Show when={projectTasks()}>
           {(ids) => (
-            <ProjectAssignmentDialog
+            <ProjectPickerPopover
               taskIds={ids()}
-              onClose={() => setProjectTasks(undefined)}
+              open
+              onOpenChange={(open) => {
+                if (!open) setProjectTasks(undefined);
+              }}
+              getAnchorRect={() => menuPosition()}
             />
           )}
         </Show>

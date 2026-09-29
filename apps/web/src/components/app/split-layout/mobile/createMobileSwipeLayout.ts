@@ -61,6 +61,9 @@ export function createMobileSwipeLayout(
 
   let animatedTrigger: (() => void) | undefined;
   let forwardNavigationTrigger: (() => void) | undefined;
+  let pendingForwardApplied:
+    | { splitId: SplitId; notify: () => void }
+    | undefined;
 
   const fgSplitId = () => (fgIsSlotA() ? slotASplitId() : slotBSplitId());
   const bgSplitId = () => (fgIsSlotA() ? slotBSplitId() : slotASplitId());
@@ -78,6 +81,7 @@ export function createMobileSwipeLayout(
     return navigateForward(content, options);
   });
   onCleanup(() => {
+    pendingForwardApplied = undefined;
     splitManager.setExclusionFilter(undefined);
     splitManager.setSplitNavigationInterceptor(undefined);
   });
@@ -89,8 +93,9 @@ export function createMobileSwipeLayout(
 
   function navigateForward(
     content: SplitContent,
-    options?: Pick<OpenWithSplitOptions, 'referredFrom'>
+    options?: Pick<OpenWithSplitOptions, 'referredFrom' | 'onApplied'>
   ): OpenSplitResult {
+    pendingForwardApplied = undefined;
     const isFgA = fgIsSlotA();
     const currentFgId = fgSplitId();
     const currentBgId = bgSplitId();
@@ -122,11 +127,7 @@ export function createMobileSwipeLayout(
         referredFrom,
         mergeHistory: true,
       });
-      if (forwardNavigationTrigger) {
-        forwardNavigationTrigger();
-      } else {
-        completeNavigateForward();
-      }
+      startForwardNavigation(bgHandle.id, options?.onApplied);
       return { status: 'reused', owner: bgHandle.id, split: bgHandle };
     }
 
@@ -150,17 +151,24 @@ export function createMobileSwipeLayout(
     });
     if (!prepared) return { status: 'unavailable' };
 
+    startForwardNavigation(prepared.id, options?.onApplied);
+    return { status: 'opened', split: prepared };
+  }
+
+  function startForwardNavigation(splitId: SplitId, onApplied?: () => void) {
     if (forwardNavigationTrigger) {
+      if (onApplied) pendingForwardApplied = { splitId, notify: onApplied };
       forwardNavigationTrigger();
     } else {
       completeNavigateForward();
     }
-    return { status: 'opened', split: prepared };
   }
 
   function completeNavigateForward() {
     const preparedFgId = bgSplitId();
-    if (!preparedFgId) return;
+    const pending = pendingForwardApplied;
+    pendingForwardApplied = undefined;
+    if (!preparedFgId || !splitManager.getSplit(preparedFgId)) return;
 
     batch(() => {
       // Flip roles before activating: activateSplit refuses excluded
@@ -169,6 +177,12 @@ export function createMobileSwipeLayout(
       toggleFgSlot();
       splitManager.activateSplit(preparedFgId);
     });
+    if (
+      pending?.splitId === preparedFgId &&
+      splitManager.activeSplitId() === preparedFgId
+    ) {
+      pending.notify();
+    }
   }
 
   function completeSwipeBack() {

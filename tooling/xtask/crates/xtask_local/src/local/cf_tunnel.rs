@@ -85,7 +85,8 @@ fn pid_path(instance: &Instance, name: &str) -> PathBuf {
 /// Reaps a same-named tunnel leaked by a previous run first, so at most one
 /// per (instance, name) exists.
 pub fn open(instance: &Instance, name: &str, port: u16) -> Result<QuickTunnel> {
-    open_origin(instance, name, &format!("http://localhost:{port}"))
+    let scheme = if name == "app" { "https" } else { "http" };
+    open_origin(instance, name, &format!("{scheme}://localhost:{port}"))
 }
 
 /// Open a quick tunnel whose origin is a raw TCP service rather than a web
@@ -102,8 +103,14 @@ pub fn open_tcp(instance: &Instance, name: &str, port: u16) -> Result<QuickTunne
 
 fn open_origin(instance: &Instance, name: &str, origin: &str) -> Result<QuickTunnel> {
     reap_stale(instance, name);
-    let mut child = Command::new("cloudflared")
-        .args(["tunnel", "--no-autoupdate", "--url", origin])
+    let mut cmd = Command::new("cloudflared");
+    cmd.args(["tunnel", "--no-autoupdate"]);
+    if origin.starts_with("https://") {
+        // Trust only the checked-in CA for the tunnel's local HTTPS origin.
+        cmd.arg("--origin-ca-pool").arg(super::proxy::ca_pem());
+    }
+    cmd.args(["--url", origin]);
+    let mut child = cmd
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
         .spawn()

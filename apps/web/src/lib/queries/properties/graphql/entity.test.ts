@@ -563,16 +563,13 @@ describe('createGraphqlBulkSaveEntityPropertiesMutation', () => {
     }
   );
 
-  it('links a task-grid placeholder when saving unset priority', async () => {
+  it('links an unset task property even when global Soup inspection exceeds its budget', async () => {
     makeSettlementHost();
     graphqlClientState.host = {
       ...graphqlClientState.host,
-      inspectQuery: vi.fn(async () => [
-        {
-          variables: { input: { initial: { limit: 20 } } },
-          value: { items: [{ id: 'task-1' }] },
-        },
-      ]),
+      inspectQuery: vi.fn(async () => {
+        throw new Error('query inspection variant count 129 exceeds limit 128');
+      }),
       inspectQueryVariants: vi.fn(async () => []),
     } as unknown as CacheHost;
     const mutation = vi.fn(
@@ -626,8 +623,21 @@ describe('createGraphqlBulkSaveEntityPropertiesMutation', () => {
                 },
               }),
             },
+            revalidations: [
+              expect.objectContaining({
+                operationName: 'EntityProperties',
+                variablesJson: JSON.stringify({
+                  input: buildEntityPropertiesInput('TASK', 'task-1'),
+                }),
+              }),
+            ],
             linkPatches: [
               expect.objectContaining({
+                recordRoot: {
+                  fragmentName: 'PropertyAssignmentParent',
+                  entityKey: 'GraphqlSoupDocument:task-1',
+                },
+                path: [{ field: 'properties' }],
                 operation: {
                   kind: 'upsertByField',
                   entityKey:
@@ -640,6 +650,7 @@ describe('createGraphqlBulkSaveEntityPropertiesMutation', () => {
           }),
         })
       );
+      expect(graphqlClientState.host.inspectQuery).not.toHaveBeenCalled();
     } finally {
       graphqlClientState.host = undefined;
     }

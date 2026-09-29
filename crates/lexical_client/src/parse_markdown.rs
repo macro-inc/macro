@@ -360,6 +360,8 @@ pub enum AgentContextAnchor<'a> {
 struct AgentContextRequest<'a> {
     prompt_markdown: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
+    instructions: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     parent: Option<&'a MessageParent>,
     #[serde(flatten, skip_serializing_if = "Option::is_none")]
     context: Option<&'a AgentContext<'a>>,
@@ -673,6 +675,7 @@ impl LexicalClient {
     pub async fn compose_agent_context(
         &self,
         prompt_markdown: &str,
+        instructions: Option<&str>,
         parent: Option<&MessageParent>,
         context: Option<&AgentContext<'_>>,
     ) -> Result<String> {
@@ -682,6 +685,7 @@ impl LexicalClient {
                 .post(&url)
                 .json(&AgentContextRequest {
                     prompt_markdown,
+                    instructions,
                     parent,
                     context,
                 })

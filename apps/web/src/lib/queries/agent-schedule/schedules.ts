@@ -42,6 +42,16 @@ function removeSchedule(scheduleId: string) {
   );
 }
 
+function patchScheduleEnabled(scheduleId: string, enabled: boolean) {
+  queryClient.setQueryData(
+    scheduledActionKeys.list.queryKey,
+    (current: ScheduledAction[] | undefined) =>
+      current?.map((item) =>
+        item.id === scheduleId ? { ...item, enabled } : item
+      )
+  );
+}
+
 export function useSchedulesQuery(enabled: Accessor<boolean>) {
   return useQuery(() => ({
     queryKey: scheduledActionKeys.list.queryKey,
@@ -130,6 +140,54 @@ export function useUpdateScheduleMutation(
           upsertSchedule(schedule);
           await invalidateSchedules();
         },
+      },
+      callbacks
+    ),
+  }));
+}
+
+type ScheduleActivation = { scheduleId: string; enabled: boolean };
+type ScheduleActivationContext = { previousEnabled: boolean | undefined };
+
+/**
+ * Patches and rolls back only the row's `enabled` flag, so a failed toggle
+ * cannot undo an autosave or claim update that reached the same row meanwhile.
+ */
+export function useSetScheduleEnabledMutation(
+  callbacks?: MutationCallbacks<
+    ScheduledAction,
+    Error,
+    ScheduleActivation,
+    ScheduleActivationContext
+  >
+) {
+  return useMutation(() => ({
+    mutationFn: async (args: ScheduleActivation) =>
+      throwOnErr(async () => await scheduledActionClient.setEnabled(args)),
+    ...withCallbacks<
+      ScheduledAction,
+      Error,
+      ScheduleActivation,
+      ScheduleActivationContext
+    >(
+      {
+        onMutate: async ({ scheduleId, enabled }) => {
+          await queryClient.cancelQueries({
+            queryKey: scheduledActionKeys.list.queryKey,
+          });
+          const previousEnabled = queryClient
+            .getQueryData<ScheduledAction[]>(scheduledActionKeys.list.queryKey)
+            ?.find((item) => item.id === scheduleId)?.enabled;
+          patchScheduleEnabled(scheduleId, enabled);
+          return { previousEnabled };
+        },
+        onError: (_error, { scheduleId }, context) => {
+          if (context?.previousEnabled !== undefined) {
+            patchScheduleEnabled(scheduleId, context.previousEnabled);
+          }
+        },
+        onSuccess: (schedule) => upsertSchedule(schedule),
+        onSettled: () => invalidateSchedules(),
       },
       callbacks
     ),

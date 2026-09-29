@@ -56,6 +56,17 @@ Switching tabs or navigating an in-app route is not a back/forward-cache restore
 | `/app/debug/ui?ui=invert-util` | UI gallery, including the inverted Markdown demo on the InvertUtil page |
 | `/app/debug/<component>` | Registered debug views (for example `icon-gallery`, `md`, or `agent-ui`); existing environment gates apply. `/app/component/<component>` remains a compatibility alias for these views |
 
+Search-result locations use pane-local namespaces: `channels` (message/thread),
+`email-detail` (message), `markdown-detail` (node), `pdf-detail` (page and highlight
+context), `agent-detail` (turn/author), and `call-detail` (transcript segment).
+A `seek` value identifies each click so selecting the same hit again scrolls again.
+Markdown and PDF targets also name their document so navigation to another file in
+the same workspace cannot apply the previous file's target.
+Channel-message @mentions and AI-generated channel mentions also preserve their
+message/thread target when opening a channel or reusing its existing pane.
+Returning to Home's list clears the prior target, so reopening an item without
+a specific location does not replay the previous search hit.
+
 When an event opens inline from Home, changing the Calendar period stays under
 `/app/home/calendar/`, updates the period segment, and re-focuses that event.
 Back/Forward restores the period and its event locator from `sN.calendar.*`.
@@ -422,9 +433,19 @@ the static highlight.
 
 ## Routines (automations)
 
-Create → Automation creates a cron-scheduled routine. Cron routines support
-editing instructions and schedule, Rename, Pause/Resume, Duplicate, Run Now,
-and History links to run chats. Edits autosave; Run Now also works while paused.
+Create → Automation creates an active cron-scheduled routine. Cron routines support
+editing instructions, schedule, and the **Execution target** model/agent picker,
+Rename, the **Active** switch, Duplicate, Run Now, and History links to run chats.
+The **Active** switch next to **Run Now** pauses or resumes the routine at once,
+separately from autosave and even while the draft is invalid. A paused routine
+shows no next run in its editor; routine lists mute its title and label it
+**Paused**. Edits autosave in order and never change whether the routine is
+active. **Run Now** stays disabled until the latest valid edit saves successfully;
+it also works while paused. A failed save keeps the selection visible with
+**Changes not saved** and **Retry save**. While running, configuration cannot be
+changed, and the switch can pause the routine but cannot resume it until the run
+ends. Duplicate retains the saved execution configuration and active state, not
+unsaved edits.
 If a background refresh fails, cached cron routines stay listed and their editor
 and queued autosave remain available. An initial load failure without cached data
 shows **Unable to load automation** instead. Cached event routines remain

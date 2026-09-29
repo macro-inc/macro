@@ -5,6 +5,7 @@
 import type { MessageData } from '@core/messages/types';
 import { render, screen } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
+import { createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import { formatReactorNames } from '../ReactionChip';
 import { Reactions } from '../Reactions';
@@ -48,15 +49,16 @@ describe('Reactions', () => {
     expect(screen.queryByRole('button', { name: 'Add reaction' })).toBeNull();
   });
 
-  it('dims a reaction the current user already added', () => {
+  it('marks only the current user’s reactions as pressed and updates with membership', () => {
+    const [reactions, setReactions] = createSignal([
+      { emoji: '❤️', users: ['user-1', 'user-2'] },
+      { emoji: '👍', users: ['user-3'] },
+    ]);
     render(() => (
       <Root
         message={{
           ...baseMessage,
-          reactions: [
-            { emoji: '❤️', users: ['user-1', 'user-2'] },
-            { emoji: '👍', users: ['user-3'] },
-          ],
+          reactions: reactions(),
         }}
         actions={{
           onReact: () => undefined,
@@ -66,21 +68,27 @@ describe('Reactions', () => {
       </Root>
     ));
 
-    const chips = () =>
-      screen
-        .getAllByRole('button')
-        .filter((el) => el.hasAttribute('data-message-reaction-chip'));
-    const heart = chips().find((el) => el.dataset.emoji === '❤️');
-    const thumb = chips().find((el) => el.dataset.emoji === '👍');
+    const heart = screen.getByRole('button', { name: /❤️/u, pressed: true });
+    const thumb = screen.getByRole('button', { name: /👍/u, pressed: false });
 
-    expect(heart?.hasAttribute('data-user-reacted')).toBe(true);
-    expect(heart?.className).toContain(
-      'bg-[color-mix(in_oklch,oklch(0_0_0)_16%,var(--color-control))]'
-    );
-    expect(thumb?.hasAttribute('data-user-reacted')).toBe(false);
-    expect(thumb?.className).not.toContain(
-      'bg-[color-mix(in_oklch,oklch(0_0_0)_16%,var(--color-control))]'
-    );
+    expect(heart.hasAttribute('data-user-reacted')).toBe(true);
+    expect(thumb.hasAttribute('data-user-reacted')).toBe(false);
+
+    setReactions([
+      { emoji: '❤️', users: ['user-2'] },
+      { emoji: '👍', users: ['user-3', 'user-1'] },
+    ]);
+
+    expect(
+      screen
+        .getByRole('button', { name: /❤️/u, pressed: false })
+        .hasAttribute('data-user-reacted')
+    ).toBe(false);
+    expect(
+      screen
+        .getByRole('button', { name: /👍/u, pressed: true })
+        .hasAttribute('data-user-reacted')
+    ).toBe(true);
   });
 
   it('calls onReact with chip emoji when a reaction chip is clicked', async () => {

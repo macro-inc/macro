@@ -1,5 +1,6 @@
-use super::event_runs::ClaimToken;
+use super::event_runs::{ClaimToken, ConfigurationRevision};
 use super::event_trigger::EventReference;
+use super::execution::ExecutionHandle;
 use super::models::{
     ActionExecutionRecord, CreateScheduledAction, DispatchEvent, InProgressExecution,
     ScheduledAction, ScheduledActionUpdate, UpdateScheduledAction,
@@ -9,6 +10,15 @@ use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use tokio::sync::mpsc::{Receiver, Sender};
+
+/// Validate configuration syntax and authorize its target before persistence.
+pub trait TaskTargetValidator: Send + Sync + 'static {
+    fn validate_task(
+        &self,
+        task: &serde_json::Value,
+        owner: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<()>> + Send;
+}
 
 pub trait ScheduledActionRepo: Send + Sync + 'static {
     fn create_action(
@@ -51,7 +61,13 @@ pub trait ScheduledActionRepo: Send + Sync + 'static {
         macro_user_id: MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<()>> + Send;
 
-    fn claim_action(&self, id: &Uuid) -> impl Future<Output = Result<ClaimToken>> + Send;
+    /// Claim only while the stored configuration is still `revision`, so a
+    /// snapshot read before a pause or update can never start a run.
+    fn claim_action(
+        &self,
+        id: &Uuid,
+        revision: ConfigurationRevision,
+    ) -> impl Future<Output = Result<ClaimToken>> + Send;
 
     /// Release only this execution's claim; stale tokens must not mutate a newer run.
     fn release_action(
@@ -109,6 +125,15 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         macro_user_id: MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
+    /// Change activation without touching configuration. Requesting the
+    /// current state returns the stored action unchanged.
+    fn set_enabled(
+        &self,
+        id: &Uuid,
+        enabled: bool,
+        macro_user_id: MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<ScheduledAction>> + Send;
+
     fn delete_action(
         &self,
         id: &Uuid,
@@ -139,16 +164,33 @@ pub trait ScheduledActionExecutor {
     ) -> impl Future<Output = Result<InProgressExecution>> + Send;
 }
 
-/// Agent execution dependencies, separate from claim/history orchestration.
-/// Dropping `run` must cancel its agent session and tool request context.
+/// Execution dependencies, separate from claim/history orchestration.
 pub trait ScheduledAgentRunner: Send + Sync + 'static {
-    fn create_chat(&self, action: &ScheduledAction) -> impl Future<Output = Result<String>> + Send;
+    /// Prepare without starting the task. Remote runners must use the handle's
+    /// preallocated IDs and retain established resources before any further await.
+    /// The handle survives errors and cancellation of this future.
+    fn prepare(
+        &self,
+        action: &ScheduledAction,
+        handle: &mut ExecutionHandle,
+    ) -> impl Future<Output = Result<()>> + Send;
 
+    /// Run to terminal completion, not merely submission. Dropping this future
+    /// must signal local session/tool guards; remote cleanup uses `cancel`.
     fn run(
         &self,
         action: &ScheduledAction,
-        chat_id: &str,
+        handle: &ExecutionHandle,
         event: Option<&EventReference>,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Best-effort cleanup, including partially prepared sessions. Must be safe
+    /// when no resource was established. The executor bounds this operation and
+    /// finalizes history/releases its claim regardless of cleanup failure.
+    fn cancel(
+        &self,
+        action: &ScheduledAction,
+        handle: &ExecutionHandle,
     ) -> impl Future<Output = Result<()>> + Send;
 }
 

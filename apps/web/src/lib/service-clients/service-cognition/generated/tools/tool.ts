@@ -20,9 +20,9 @@ type ToolParserMap = {
     call: types.CalculateSpreadsheet;
     response: types.SpreadsheetResponse;
   };
-  CommentOnDocumentText: {
-    call: types.CommentOnDocumentText;
-    response: types.CommentOnDocumentTextResponse;
+  CommentOnDocument: {
+    call: types.CommentOnDocument;
+    response: types.CommentOnDocumentResponse;
   };
   ConfigureBot: {
     call: types.ConfigureBot;
@@ -206,6 +206,7 @@ type ToolParserMap = {
     response: types.ReadMetadataResponse;
   };
   ReadProject: { call: types.ReadProject; response: types.ReadProjectResponse };
+  ReadSkill: { call: types.ReadSkill; response: types.ReadSkillResponse };
   ReadSpreadsheet: {
     call: types.ReadSpreadsheet;
     response: types.SpreadsheetResponse;
@@ -222,10 +223,6 @@ type ToolParserMap = {
   RenameDocument: {
     call: types.RenameDocument;
     response: types.RenameDocumentResponse;
-  };
-  ReplyToDocumentComment: {
-    call: types.ReplyToDocumentComment;
-    response: types.ReplyToDocumentCommentResponse;
   };
   ResolveDocumentComment: {
     call: types.ResolveDocumentComment;
@@ -304,9 +301,9 @@ const toolParserMap = {
     call: schemas.CalculateSpreadsheet,
     response: schemas.SpreadsheetResponse,
   },
-  CommentOnDocumentText: {
-    call: schemas.CommentOnDocumentText,
-    response: schemas.CommentOnDocumentTextResponse,
+  CommentOnDocument: {
+    call: schemas.CommentOnDocument,
+    response: schemas.CommentOnDocumentResponse,
   },
   ConfigureBot: {
     call: schemas.ConfigureBot,
@@ -514,6 +511,7 @@ const toolParserMap = {
     call: schemas.ReadProject,
     response: schemas.ReadProjectResponse,
   },
+  ReadSkill: { call: schemas.ReadSkill, response: schemas.ReadSkillResponse },
   ReadSpreadsheet: {
     call: schemas.ReadSpreadsheet,
     response: schemas.SpreadsheetResponse,
@@ -530,10 +528,6 @@ const toolParserMap = {
   RenameDocument: {
     call: schemas.RenameDocument,
     response: schemas.RenameDocumentResponse,
-  },
-  ReplyToDocumentComment: {
-    call: schemas.ReplyToDocumentComment,
-    response: schemas.ReplyToDocumentCommentResponse,
   },
   ResolveDocumentComment: {
     call: schemas.ResolveDocumentComment,
@@ -629,9 +623,9 @@ type ToolDataMap = {
     call: types.CalculateSpreadsheet;
     response: types.SpreadsheetResponse;
   };
-  CommentOnDocumentText: {
-    call: types.CommentOnDocumentText;
-    response: types.CommentOnDocumentTextResponse;
+  CommentOnDocument: {
+    call: types.CommentOnDocument;
+    response: types.CommentOnDocumentResponse;
   };
   ConfigureBot: {
     call: types.ConfigureBot;
@@ -815,6 +809,7 @@ type ToolDataMap = {
     response: types.ReadMetadataResponse;
   };
   ReadProject: { call: types.ReadProject; response: types.ReadProjectResponse };
+  ReadSkill: { call: types.ReadSkill; response: types.ReadSkillResponse };
   ReadSpreadsheet: {
     call: types.ReadSpreadsheet;
     response: types.SpreadsheetResponse;
@@ -831,10 +826,6 @@ type ToolDataMap = {
   RenameDocument: {
     call: types.RenameDocument;
     response: types.RenameDocumentResponse;
-  };
-  ReplyToDocumentComment: {
-    call: types.ReplyToDocumentComment;
-    response: types.ReplyToDocumentCommentResponse;
   };
   ResolveDocumentComment: {
     call: types.ResolveDocumentComment;

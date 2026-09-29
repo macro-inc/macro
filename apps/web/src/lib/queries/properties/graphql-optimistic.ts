@@ -127,9 +127,15 @@ function hasPersistedAssignment(
 ): property is Property {
   return (
     isInstantiatedProperty(property) &&
-    property.propertyId !== property.propertyDefinitionId &&
-    !property.propertyId.startsWith('pending:') &&
-    !isTemporaryGraphqlProperty(property.propertyId)
+    isPersistedAssignmentId(property.propertyId, property.propertyDefinitionId)
+  );
+}
+
+function isPersistedAssignmentId(id: string, definitionId: string): boolean {
+  return (
+    id !== definitionId &&
+    !id.startsWith('pending:') &&
+    !isTemporaryGraphqlProperty(id)
   );
 }
 
@@ -167,9 +173,16 @@ export function buildOptimisticSetEntityProperty(
  */
 export function buildOptimisticEntityPropertyOptions(
   property: Property | PropertyDefinitionDomain,
-  optionIds: readonly string[]
+  optionIds: readonly string[],
+  assignmentId?: string
 ): SoupPropertyFieldsFragment | undefined {
-  if (!hasPersistedAssignment(property)) return undefined;
+  const definitionId = isInstantiatedProperty(property)
+    ? property.propertyDefinitionId
+    : property.id;
+  const id =
+    assignmentId ??
+    (isInstantiatedProperty(property) ? property.propertyId : undefined);
+  if (!id || !isPersistedAssignmentId(id, definitionId)) return undefined;
   return optimisticPropertyRecord(
     property,
     optionIds.length > 0
@@ -178,6 +191,6 @@ export function buildOptimisticEntityPropertyOptions(
           optionIds: [...optionIds],
         }
       : null,
-    property.propertyId
+    id
   );
 }
