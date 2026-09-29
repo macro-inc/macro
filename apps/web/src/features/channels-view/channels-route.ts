@@ -9,12 +9,14 @@ export const channelsSearch = {
     mobileTab: z.enum(['channels', 'direct_messages', 'recents']),
     messageId: z.string(),
     threadId: z.string(),
+    seek: z.string(),
   }),
   defaults: {
     tab: 'browse' as ChannelsTab,
     mobileTab: 'channels' as ChannelsQueryScope,
     messageId: '',
     threadId: '',
+    seek: '',
   },
 };
 

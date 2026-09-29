@@ -1,4 +1,5 @@
 import { queryClient } from '@queries/client';
+import { invalidateCalendarInvitations } from './invitations';
 import { calendarKeys, RSVP_MUTATION_KEY } from './keys';
 import { invalidateCalendarEventPreviews } from './mention-preview';
 import { invalidateCalendarOccurrences } from './occurrences';
@@ -11,6 +12,7 @@ import { invalidateTeamOutOfOffice } from './team-ooo';
  * calendar mention chips.
  */
 export function invalidateCalendarViews(): void {
+  void invalidateCalendarInvitations();
   invalidateCalendarOccurrences();
   invalidateCalendarEventPreviews();
   invalidateTeamOutOfOffice();
@@ -38,6 +40,7 @@ export function handleRefreshCalendar(payload: unknown): void {
   // clobber; the last RSVP to settle re-invalidates occurrences itself, so
   // only the caches without optimistic writes refresh meanwhile.
   if (queryClient.isMutating({ mutationKey: RSVP_MUTATION_KEY }) === 0) {
+    void invalidateCalendarInvitations();
     invalidateCalendarOccurrences();
   }
   invalidateCalendarEventPreviews();

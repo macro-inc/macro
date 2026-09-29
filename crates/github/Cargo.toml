@@ -99,6 +99,7 @@ http-body-util = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
 mockall = { workspace = true }
 model = { path = "../model" }
+model_owner = { path = "../model_owner" }
 model_user = { path = "../model_user" }
 models_permissions = { path = "../models_permissions" }
 rootcause = { workspace = true }

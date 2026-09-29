@@ -81,7 +81,7 @@ function setup(location: 'preview' | 'split' | 'closed') {
       location === 'split'
         ? { type: 'channel', id: 'channel' }
         : { type: 'component', id: 'channels' },
-      { type: 'component', id: 'inbox' },
+      { type: 'component', id: 'home' },
     ]);
   });
   const [first, other] = layout.splits();

@@ -80,6 +80,7 @@ import {
 } from './entity-resolvers';
 import {
   normalizedEntityKey,
+  notifyOptimisticMutationEnqueued,
   optimisticContextOf,
   withOptimisticMutationDisposition,
 } from './optimistic';
@@ -1041,6 +1042,7 @@ export function normalizedCacheExchange(
         op: Operation
       ): Promise<OperationResult | undefined> {
         if (host.disabled) {
+          notifyOptimisticMutationEnqueued(op);
           enqueueForward(op);
           return undefined;
         }
@@ -1106,11 +1108,15 @@ export function normalizedCacheExchange(
                 linkPatches: [],
                 revalidations: [
                   ...args.revalidations,
-                  ...args.linkPatches.map((patch) => ({
-                    query: patch.query,
-                    operationName: patch.operationName,
-                    variablesJson: patch.variablesJson,
-                  })),
+                  // Fragment recipes are not executable queries. Their callers
+                  // provide targeted recovery queries in args.revalidations.
+                  ...args.linkPatches
+                    .filter((patch) => !patch.recordRoot)
+                    .map((patch) => ({
+                      query: patch.query,
+                      operationName: patch.operationName,
+                      variablesJson: patch.variablesJson,
+                    })),
                 ],
               },
               claim
@@ -1144,6 +1150,7 @@ export function normalizedCacheExchange(
             resolveRoute: resolve,
           });
         });
+        notifyOptimisticMutationEnqueued(op);
         try {
           await match(enqueue.initialClaim)
             .with({ kind: 'claimed' }, ({ mutation }) =>

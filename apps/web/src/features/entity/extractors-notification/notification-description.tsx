@@ -2,6 +2,10 @@ import type { NotificationType } from '@core/types';
 import { getDisplayNameParts, tryMacroId } from '@core/user';
 import type { NotificationStack } from '@notifications';
 import {
+  entityDiscussionVerb,
+  isEntityDiscussionEvent,
+} from '@notifications/entity-discussion';
+import {
   getNotificationAgentSender,
   getUniqueAgentSenders,
 } from '@notifications/notification-sender';
@@ -68,7 +72,13 @@ export function NotificationDescription(props: NotificationDescriptionProps) {
   // change rather than on every call from the description() formatters.
   const senderLabels = createMemo((): string[] => {
     if (props.notification) {
-      const tag = props.notification.notification_metadata.tag;
+      const metadata = props.notification.notification_metadata;
+      if (
+        isEntityDiscussionEvent(metadata) &&
+        metadata.content.senderDisplayName
+      )
+        return [metadata.content.senderDisplayName];
+      const tag = metadata.tag;
       if (isGithubNotificationType(tag)) {
         const login = getGithubSenderLogin(props.notification);
         return login ? [login] : [];
@@ -80,6 +90,26 @@ export function NotificationDescription(props: NotificationDescriptionProps) {
       return agent ? [agent.name] : [];
     }
     if (props.stack) {
+      if (
+        props.stack.type === 'initiative_discussion' ||
+        props.stack.type === 'crm_discussion'
+      ) {
+        return [
+          ...new Set(
+            props.stack.notifications.flatMap((notification) => {
+              const meta = notification.notification_metadata;
+              if (
+                isEntityDiscussionEvent(meta) &&
+                meta.content.senderDisplayName
+              )
+                return [meta.content.senderDisplayName];
+              return notification.sender_id
+                ? [macroFirstName(notification.sender_id)]
+                : [];
+            })
+          ),
+        ];
+      }
       if (isGithubNotificationType(props.stack.type)) {
         return getUniqueGithubLogins(props.stack.notifications);
       }
@@ -106,10 +136,15 @@ export function NotificationDescription(props: NotificationDescriptionProps) {
 
     // Single notification: "Peter mentioned you"
     if (isSingleNotification()) {
+      const metadata = (props.notification ?? props.stack?.notifications[0])
+        ?.notification_metadata;
+      const action = isEntityDiscussionEvent(metadata)
+        ? entityDiscussionVerb(metadata)
+        : getActionVerb(type);
       if (sender && type !== 'ai_response') {
-        return `${sender} ${getActionVerb(type)}`;
+        return `${sender} ${action}`;
       }
-      return getActionVerb(type);
+      return action;
     }
 
     // Stack with multiple senders

@@ -1,0 +1,14 @@
+---
+title: ReadTaskInitiatives
+description: "Find the project associated with each requested task. Returns project id/name only when both task and project are visible. Distinguishes no project from unavailable. Accepts up to 100 unique task ids."
+---
+
+# ReadTaskInitiatives
+
+Find the project associated with each requested task. Returns project id/name only when both task and project are visible. Distinguishes no project from unavailable. Accepts up to 100 unique task ids.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `taskIds` | string[] | Yes | Task ids to look up, deduplicated in input order. |

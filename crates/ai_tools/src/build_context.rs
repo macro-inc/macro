@@ -10,6 +10,7 @@ use crate::tool_context::{
 };
 use anthropic::toolset::AnthropicToolContext;
 use anyhow::Context;
+use bots::outbound::pg_bots_repo::PgBotsRepo;
 use channels::domain::list_service::ChannelListServiceImpl;
 use channels::outbound::pg_channels_repo::PgChannelsRepo;
 use connection_gateway_client::ConnectionGatewayClient;
@@ -24,6 +25,8 @@ use email::outbound::EmailPgRepo;
 use email_service_client::EmailServiceClientExternal;
 use entity_access::domain::service::EntityAccessServiceImpl;
 use entity_access::outbound::PgAccessRepository;
+use entity_registry::OwnerGrantPolicy;
+use entity_registry_db_utils::OwnedEntityRegistrar;
 use foreign_entity::{
     domain::service::ForeignEntityServiceImpl,
     outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
@@ -237,7 +240,9 @@ pub async fn build_tool_service_context_from_env(
         env.document_storage_bucket.to_string(),
         env.docx_document_upload_bucket.to_string(),
     );
-    let document_repo = PgDocumentRepo::new(pool.clone());
+    let owned_entity_registrar =
+        OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(pool.clone())));
+    let document_repo = PgDocumentRepo::new(pool.clone(), owned_entity_registrar.clone());
     let cloudfront_config = CloudFrontConfig {
         distribution_url: env
             .document_storage_service_cloudfront_distribution_url
@@ -252,17 +257,20 @@ pub async fn build_tool_service_context_from_env(
     let entity_access_service = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
         pool.clone(),
     )));
-    let properties_service =
-        crate::tool_context::build_properties_service(pool.clone(), entity_access_service.clone());
-    let task_properties_service = crate::tool_context::build_task_properties_adapter(
-        pool.clone(),
-        properties_service.clone(),
-        entity_access_service.clone(),
-    );
     let macro_event_broker = macro_event_broker::MacroEventBrokerService::new(
         macro_event_broker::KafkaEventPublisher::new(env.kafka_brokers.as_ref())
             .context("failed to create kafka event publisher")?,
         event_task_tracker,
+    );
+    let properties_service = crate::tool_context::build_properties_service_with_broker(
+        pool.clone(),
+        entity_access_service.clone(),
+        macro_event_broker.clone(),
+    );
+    let task_properties_service = crate::tool_context::build_task_properties_adapter(
+        pool.clone(),
+        properties_service.clone(),
+        entity_access_service.clone(),
     );
     // Channel messages sent by AI tools dispatch the same side effects as the
     // document-storage channel API (realtime, notifications, contact sync, and
@@ -374,7 +382,7 @@ pub async fn build_tool_service_context_from_env(
     let notification_tool_context =
         notification::inbound::ai_tool::NotificationToolContext::new(notification_reader_service);
 
-    let chat_repo = chat::outbound::postgres::PgChatRepo::new(pool.clone());
+    let chat_repo = chat::outbound::postgres::PgChatRepo::new(pool.clone(), owned_entity_registrar);
     let chat_service = chat::domain::service::ChatServiceImpl::new(
         chat_repo,
         Arc::new(ai_toolset::AsyncToolCollection::new()),
@@ -399,8 +407,20 @@ pub async fn build_tool_service_context_from_env(
 
     let anthropic_tool_context = build_anthropic_tool_context();
 
-    let skill_tool_context =
-        crate::tool_context::build_skill_tool_context(search_client.clone(), soup_service.clone());
+    let skill_tool_context = crate::tool_context::build_skill_tool_context(
+        search_client.clone(),
+        soup_service.clone(),
+        &document_tool_context,
+    );
+
+    let initiative_tool_context = crate::tool_context::build_initiative_tool_context(
+        pool.clone(),
+        &document_tool_context,
+        properties_service.clone(),
+        entity_access_service.clone(),
+        side_effect_clients.sqs,
+        side_effect_clients.macro_event_broker,
+    );
 
     Ok(ToolServiceContext {
         search_service_client: search_client.clone(),
@@ -432,6 +452,7 @@ pub async fn build_tool_service_context_from_env(
             document_storage_service_url,
         ),
         project_tool_context,
+        initiative_tool_context,
         team_tool_context: crate::tool_context::build_team_tool_context(pool.clone()),
         crm_tool_context: crate::tool_context::build_crm_tool_context(pool.clone()),
         skill_tool_context,

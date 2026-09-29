@@ -17,6 +17,8 @@ export type EntityBase = {
   name: string;
   ownerId: string;
   frecencyScore?: number;
+  /** Viewer-owned favorite state from Soup; absent on search-only results. */
+  isFavorited?: boolean;
   /**
    * The viewer's latest own mutation of this entity, present only on rows
    * from `touched_by_me` pages. The Recent feed sorts on it, so mutation
@@ -297,34 +299,58 @@ export type ProjectEntity = EntityBase & {
 
 export type CallStatus = StorageCallStatus;
 
+/** Session-scoped guest identity on a call; not a Macro account. */
+export type CallGuest = {
+  id: string;
+  displayName: string;
+};
+
 export type CallEntity = EntityBase & {
   type: 'call';
-  channelId: string;
+  channelId?: string | null;
   channelName?: string;
   isActive: boolean;
   status: CallStatus;
   /** Compatibility flag derived from status. */
   attended: boolean;
   durationMs?: number;
+  /** Macro users only; guests are listed separately in `guests`. */
   participantIds: string[];
+  guests?: CallGuest[];
   summary?: string;
   properties?: SoupProperty[];
 };
+
+/**
+ * What a routine is doing now. A run in progress outranks activation, and a
+ * paused routine keeps its stale `next_run_at`, so pause outranks the schedule.
+ */
+export type RoutineStatus =
+  | { kind: 'running' }
+  | { kind: 'paused' }
+  | { kind: 'scheduled'; nextRunAt: string }
+  | { kind: 'unscheduled' };
+
+export function routineStatus(facts: {
+  enabled: boolean;
+  isRunning: boolean;
+  nextRunAt?: string | null;
+}): RoutineStatus {
+  if (facts.isRunning) return { kind: 'running' };
+  if (!facts.enabled) return { kind: 'paused' };
+  if (facts.nextRunAt) return { kind: 'scheduled', nextRunAt: facts.nextRunAt };
+  return { kind: 'unscheduled' };
+}
 
 export type AutomationEntity = EntityBase & {
   type: 'automation';
   /** Cron expression controlling when the automation runs. */
   cron: string;
-  /** Whether the automation is currently enabled. */
-  enabled: boolean;
-  /** ISO timestamp of the next scheduled run, or null when paused / unscheduled. */
-  nextRunAt?: string | null;
+  /** Running is derived from the server claim and the backend's stale-claim
+   *  window; claims update live via the connection-gateway websocket. */
+  status: RoutineStatus;
   /** ISO timestamp of the last completed run. */
   lastRunAt?: string | null;
-  /** True when a run is actively claimed on the server. Derived from the
-   *  scheduled action's `claimed` timestamp + the backend's stale-claim
-   *  window; updated live via the connection-gateway websocket. */
-  isRunning?: boolean;
 };
 
 export type CrmCompanyDomain = {
@@ -385,7 +411,7 @@ export type ReminderEntity = EntityBase & {
     id: string;
     // Calendar events are excluded alongside reminders: neither has a
     // previewable block, and the mapper yields `undefined` for both.
-    type: Exclude<EntityType, 'reminder' | 'calendar_event'>;
+    type: Exclude<EntityType, 'reminder' | 'calendar_event' | 'initiative'>;
     fileType?: string;
     subType?: string;
   };
@@ -436,6 +462,13 @@ export type CalendarEventEntity = EntityBase & {
   properties?: SoupProperty[];
 };
 
+/** A native project, distinct from folder entities. */
+export type InitiativeEntity = EntityBase & {
+  type: 'initiative';
+  descriptionDocumentId: string;
+  properties?: SoupProperty[];
+};
+
 export type EntityData =
   | AgentSessionEntity
   | ChannelEntity
@@ -447,6 +480,7 @@ export type EntityData =
   | SnippetEntity
   | EmailEntity
   | ProjectEntity
+  | InitiativeEntity
   | CallEntity
   | CrmCompanyEntity
   | CrmContactEntity
@@ -464,6 +498,7 @@ const ENTITY_TYPE_VALUES = new Set<EntityData['type']>([
   'document',
   'email',
   'project',
+  'initiative',
   'call',
   'crm_company',
   'crm_contact',

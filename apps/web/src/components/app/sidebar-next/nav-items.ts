@@ -34,25 +34,23 @@ export type SidebarNextNavItem = SidebarItem & {
 /**
  * SidebarRail's nav buttons, in render order.
  *
- * Phosphor icons rather than the animated `wide-*` set the old sidebar uses:
- * they are plain `fill="currentColor"` SVGs, so the active button's
- * `text-ink-muted` colours the glyph.
+ * Phosphor icons rather than the animated `wide-*` set: they are plain
+ * `fill="currentColor"` SVGs, so the active button's `text-ink-muted` colours
+ * the glyph.
  *
- * The labels are new but every destination is an existing view id, so the
- * `hotkeyToken`s are the ones `GoToHotkeys` already registers — `g h`
- * reaches Home, `g f` still reaches Drive. `GoToHotkeys` is mounted from
- * `Layout` off `buildSidebarLinks` and is independent of which sidebar renders,
- * so the shortcuts work unchanged; these tokens only label the tooltips.
+ * Every destination is an existing view id, so the `hotkeyToken`s are the ones
+ * `GoToHotkeys` registers off `buildSidebarLinks` — `g h` reaches Home, `g f`
+ * reaches Drive. These tokens only label the tooltips.
  */
 const SIDEBAR_NEXT_NAV_ITEMS = [
   {
-    id: 'inbox',
+    id: 'home',
     label: 'Home',
-    href: LIST_VIEW_PATHS.inbox,
+    href: LIST_VIEW_PATHS.home,
     icon: HouseIcon,
     iconActive: HouseFillIcon,
     hotkey: 'h',
-    hotkeyToken: TOKENS.sidebar.goTo.inbox,
+    hotkeyToken: TOKENS.sidebar.goTo.home,
   },
   {
     id: 'documents',
@@ -119,7 +117,7 @@ const SIDEBAR_NEXT_NAV_ITEMS = [
   },
 ] satisfies SidebarNextNavItem[];
 
-/** The flag gates Calendar and Customers keep from `AppSidebar`. */
+/** Feature flag gates for the Calendar and Customers buttons. */
 export type NavItemGates = {
   showCalendar: boolean;
   showCustomers: boolean;

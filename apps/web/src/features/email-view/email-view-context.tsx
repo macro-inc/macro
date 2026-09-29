@@ -1,4 +1,4 @@
-import type { EntityDetailNavigationOptions } from '@app/components/entity-detail/EntityDetailNavigationStack';
+import type { EntityDetailNavigationOptions } from '@app/components/entity-detail/entity-detail-target';
 import {
   createListController,
   type ListActivation,
@@ -6,7 +6,7 @@ import {
   listOwnedSlotName,
 } from '@app/components/list';
 import { setSidebarSectionCollapsed } from '@app/components/view-shell';
-import { registerInboxFilterSplit } from '@app/features/next-soup/soup-view/inbox-filter-controllers';
+import { useMobileSearchText } from '@app/features/command/mobile/use-mobile-search-text';
 import { normalizeFacetSelection } from '@app/features/soup';
 import { registerListNavigationSource } from '@app/features/soup/collection/list-navigation-source';
 import { makePersistedState } from '@app/lib/persistence';
@@ -24,11 +24,13 @@ import { createAssertedContextProvider } from '@core/context/createContext';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTagSets, useTagSetsReady } from '@property/tags/tag-sets-context';
+import { useEmailLinksQuery } from '@queries/email/link';
 import type { ContextProviderProps } from '@solid-primitives/context';
 import {
   type Accessor,
   createEffect,
   createMemo,
+  mergeProps,
   on,
   onCleanup,
 } from 'solid-js';
@@ -45,7 +47,9 @@ import {
   emailTabSearch,
   emailTabSearchCodec,
 } from './email-route';
+import { normalizeInboxSelection } from './inbox-selection';
 import { createEmailViewPersistence } from './persistence';
+import { createInboxSelectionReconciliation } from './primitives/inbox-selection-reconciliation';
 import {
   type EmailDataSource,
   type EmailDataSourceItem,
@@ -119,12 +123,11 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
   const tagSetsReady = useTagSetsReady();
   const initial = props.initialState ?? {};
 
-  const [state, setState] = makePersistedState(
+  const [persistedState, setState] = makePersistedState(
     createStore<EmailViewState>({
       tab: initial.tab ?? DEFAULT_EMAIL_TAB,
       search: initial.search ?? '',
-      inboxIds:
-        initial.inboxIds === undefined ? undefined : [...initial.inboxIds],
+      inboxIds: normalizeInboxSelection(initial.inboxIds),
       facets: normalizeFacetSelection(initial.facets),
       collapsedSidebarSectionIds: [
         ...(initial.collapsedSidebarSectionIds ?? []),
@@ -138,6 +141,15 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
       restorePreferences: initial.collapsedSidebarSectionIds === undefined,
     })
   );
+  const searchText = useMobileSearchText(
+    () => persistedState.search,
+    panel.handle.isActive
+  );
+  const state = mergeProps(persistedState, {
+    get search() {
+      return searchText();
+    },
+  });
 
   createEffect(
     on(
@@ -311,8 +323,18 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
 
   const setInboxIds = (ids: string[] | undefined) => {
     closeThread();
-    setState('inboxIds', ids === undefined ? undefined : [...ids]);
+    setState('inboxIds', normalizeInboxSelection(ids));
   };
+
+  // This belongs to the view lifecycle, even while every inbox picker is unmounted.
+  const linksQuery = useEmailLinksQuery();
+  createInboxSelectionReconciliation({
+    selectedIds: () => state.inboxIds,
+    loadedLinks: () =>
+      linksQuery.isSuccess ? linksQuery.data.links : undefined,
+    // Widening stale scope to all inboxes should preserve the current thread.
+    clearSelection: () => setState('inboxIds', undefined),
+  });
 
   const setFacets = (facets: EmailViewState['facets']) => {
     closeThread();
@@ -343,17 +365,6 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
       'collapsedSidebarSectionIds',
       setSidebarSectionCollapsed(id, open)
     );
-
-  // The classic sidebar's nested account rows scope the mail list by split id
-  // (see `SidebarMailLink`); registering keeps them driving this view too, and
-  // flushes a selection queued while navigating here.
-  onCleanup(
-    registerInboxFilterSplit(panel.handle.id, {
-      inboxFilter: () => state.inboxIds,
-      setInboxFilter: setInboxIds,
-    })
-  );
-
   return {
     state,
     setState,

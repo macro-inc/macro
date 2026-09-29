@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT c.id\n            FROM crm_comment c\n            JOIN crm_thread t ON t.id = c.thread_id\n            WHERE t.id = $1\n              AND (t.company_id = $2 OR t.contact_id = $2)\n            ORDER BY c.created_at ASC, c.id ASC\n            LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "5129cecb18a6c6df1164cd462b24b27d8edef4a122d47c5e014494cd32853cae"
+}

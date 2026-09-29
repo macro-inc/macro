@@ -30,6 +30,7 @@ use item_filters::{
         document::DocumentLiteral,
         email::{Email, EmailLiteral},
         foreign_entity::ForeignEntityLiteral,
+        initiative::InitiativeLiteral,
         project::ProjectLiteral,
         properties::{EntityRefId, PropertiesLiteral, PropertyEntityType, PropertyMatchValue},
         reminder::ReminderLiteral,
@@ -300,6 +301,8 @@ enum GraphqlPropertyEntityType {
     Company,
     /// Document entity.
     Document,
+    /// Initiative entity.
+    Initiative,
     /// Project entity.
     Project,
     /// Task entity.
@@ -325,6 +328,7 @@ impl TryFrom<GraphqlPropertyEntityType> for PropertyEntityType {
             GraphqlPropertyEntityType::Task => Self::Task,
             GraphqlPropertyEntityType::Thread => Self::Thread,
             GraphqlPropertyEntityType::User => Self::User,
+            GraphqlPropertyEntityType::Initiative => Self::Initiative,
             other @ GraphqlPropertyEntityType::CallRecord => return Err(other),
         })
     }
@@ -335,6 +339,8 @@ impl TryFrom<GraphqlPropertyEntityType> for PropertyEntityType {
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GraphqlEntityFilterAst {
+    /// Restrict results to the authenticated viewer's favorites when true.
+    favorites_only: Option<bool>,
     /// The calendar event filter to apply.
     calendar_event_filter: Option<GraphqlCalendarEventExpr>,
     /// The document filter to apply.
@@ -359,6 +365,8 @@ pub struct GraphqlEntityFilterAst {
     reminder_filter: Option<GraphqlReminderExpr>,
     /// The agent session filter to apply.
     agent_session_filter: Option<GraphqlAgentSessionExpr>,
+    /// The initiative filter to apply. Initiatives are opt-in.
+    initiative_filter: Option<GraphqlInitiativeExpr>,
     /// The properties filter to apply.
     properties_filter: Option<GraphqlFilterPropertiesExpr>,
 }
@@ -376,6 +384,7 @@ impl GraphqlEntityFilterAst {
     /// Convert an input whose serialized representation already passed ingress bounds.
     fn into_ast_unchecked(self) -> InputResult<EntityFilterAst> {
         Ok(EntityFilterAst {
+            favorites_only: self.favorites_only,
             calendar_event_filter: optional_tree(self.calendar_event_filter)?,
             document_filter: optional_tree(self.document_filter)?,
             project_filter: optional_tree(self.project_filter)?,
@@ -393,6 +402,7 @@ impl GraphqlEntityFilterAst {
             reminder_filter: optional_tree(self.reminder_filter)?,
             agent_session_filter: optional_tree(self.agent_session_filter)?,
             properties_filter: optional_tree(self.properties_filter)?,
+            initiative_filter: optional_tree(self.initiative_filter)?,
         })
     }
 }
@@ -1219,6 +1229,52 @@ impl IntoFilterExpr<ForeignEntityLiteral> for GraphqlForeignEntityLiteral {
                 ));
             }
             Self::NotificationState(state) => ForeignEntityLiteral::NotificationState(state.into()),
+        };
+        Ok(Expr::val(literal))
+    }
+}
+
+filter_expr_input!(
+    GraphqlInitiativeExpr,
+    GraphqlInitiativeBinaryExpr,
+    GraphqlInitiativeLiteral,
+    InitiativeLiteral,
+    "InitiativeFilterExpr"
+);
+
+/// GraphQL input for selecting initiatives through Soup.
+#[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum GraphqlInitiativeLiteral {
+    /// Opt into initiatives; must be true. Omit the filter to exclude them.
+    Include(bool),
+    /// Match an initiative identifier.
+    Id(ID),
+    /// Match the owning principal.
+    Owner(String),
+    /// Match a case-insensitive substring of the name.
+    NameContains(String),
+    /// Match projects due before this RFC 3339 timestamp.
+    DueBefore(String),
+    /// Match projects due after this RFC 3339 timestamp.
+    DueAfter(String),
+}
+
+impl IntoFilterExpr<InitiativeLiteral> for GraphqlInitiativeLiteral {
+    fn into_expr(self) -> InputResult<Expr<InitiativeLiteral>> {
+        let literal = match self {
+            Self::Include(false) => {
+                return Err(InputError::new(
+                    "initiative `include` must be true; omit the filter to exclude initiatives",
+                ));
+            }
+            Self::Include(true) => InitiativeLiteral::Include,
+            Self::Id(id) => InitiativeLiteral::Id(parse_id(id, "id")?),
+            Self::Owner(owner) => InitiativeLiteral::Owner(parse_owner(owner, "owner")?),
+            Self::NameContains(name) => InitiativeLiteral::NameContains(name),
+            Self::DueBefore(date) => InitiativeLiteral::DueBefore(GraphqlDateLiteral::parse(date)?),
+            Self::DueAfter(date) => InitiativeLiteral::DueAfter(GraphqlDateLiteral::parse(date)?),
         };
         Ok(Expr::val(literal))
     }

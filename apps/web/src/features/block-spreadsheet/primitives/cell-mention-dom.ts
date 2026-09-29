@@ -1,7 +1,16 @@
+import { formatRelativeDay } from '@core/util/dateParser';
 import {
+  type CellMention,
   cellMentionLabel,
   cellTextParts,
 } from '@macro-inc/spreadsheet/cell-mentions';
+
+/** Match the grid, where date chips relabel themselves as days pass. */
+function pillLabel(mention: CellMention) {
+  return mention.type === 'date'
+    ? formatRelativeDay(new Date(mention.date))
+    : cellMentionLabel(mention);
+}
 
 export function readCellText(node: Node): string {
   if (node instanceof HTMLElement && node.dataset.cellMention)
@@ -19,7 +28,7 @@ export function writeCellText(root: HTMLElement, value: string) {
       pill.dataset.cellMention = part.text;
       pill.className =
         'inline-block max-w-full align-bottom truncate rounded border border-edge-muted bg-accent/8 px-1 text-accent';
-      pill.textContent = cellMentionLabel(part.mention);
+      pill.textContent = pillLabel(part.mention);
       return pill;
     })
   );

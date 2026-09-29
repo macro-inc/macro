@@ -17,7 +17,7 @@ export function AgentChangesSplit(props: ParentProps) {
   const { available, layout } = useAgentChanges();
   let zone: ResizeZoneCtx | undefined;
   // A host that can never have changes keeps the session alone on screen,
-  // whatever a stale URL or persisted layout asks for.
+  // whatever a stale URL asks for.
   const sessionVisible = () => !available() || layout.sessionVisible();
   const changesVisible = () => available() && layout.changesVisible();
 

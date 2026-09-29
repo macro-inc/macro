@@ -1,9 +1,7 @@
 //! Handler for assigning tasks to an initiative.
 
 use axum::{Json, extract::State};
-use entity_access::domain::models::{
-    AccessError, EditAccessLevel, EntityAccessReceipt, EntityType,
-};
+use entity_access::domain::models::{EditAccessLevel, EntityType};
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::InitiativeAccessExtractor;
 use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService, UserOrInternal};
@@ -11,7 +9,10 @@ use model_error_response::ErrorResponse;
 
 use super::{InitiativeIdParams, InitiativeRouterState};
 use crate::domain::{
-    models::{AssignTasksRequest, AssignTasksResponse, InitiativeError, TaskAssignment},
+    models::{
+        AssignTasksRequest, AssignTasksResponse, InitiativeError, TaskAssignment,
+        TaskAssignmentBatch,
+    },
     ports::InitiativeService,
 };
 
@@ -51,8 +52,9 @@ where
         .organization_id
         .map(i64::from);
 
-    let mut assignments = Vec::with_capacity(request.task_ids.len());
-    for task_id in request.task_ids {
+    let task_ids = TaskAssignmentBatch::try_new(request.task_ids)?.into_task_ids();
+    let mut assignments = Vec::with_capacity(task_ids.len());
+    for task_id in task_ids {
         let result = state
             .entity_access_service
             .generate_entity_access_receipt::<EditAccessLevel>(
@@ -62,7 +64,7 @@ where
                 EntityType::Document,
             )
             .await;
-        assignments.push(task_assignment_from_access(task_id, result)?);
+        assignments.push(TaskAssignment::from_access(task_id, result)?);
     }
 
     let response = state
@@ -70,22 +72,4 @@ where
         .assign_tasks(access.entity_access_receipt, assignments)
         .await?;
     Ok(Json(response))
-}
-
-fn task_assignment_from_access(
-    task_id: String,
-    result: Result<EntityAccessReceipt<EditAccessLevel>, AccessError>,
-) -> Result<TaskAssignment, InitiativeError> {
-    match result {
-        Ok(_) => Ok(TaskAssignment::Candidate { task_id }),
-        Err(AccessError::Unauthorized | AccessError::UnauthorizedWithMessage(_)) => {
-            Ok(TaskAssignment::SkippedNoPermission { task_id })
-        }
-        Err(AccessError::NotFound(_) | AccessError::BadRequest(_)) => {
-            Ok(TaskAssignment::NotFound { task_id })
-        }
-        Err(other) => Err(InitiativeError::Internal(
-            rootcause::Report::new(other).into_dynamic(),
-        )),
-    }
 }

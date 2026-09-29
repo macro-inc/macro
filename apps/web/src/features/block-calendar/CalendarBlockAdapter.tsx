@@ -21,7 +21,7 @@ import type { CalendarBlockProps } from './types';
 function CalendarBlockDisabledRedirect() {
   const panel = useSplitPanelOrThrow();
   onMount(() => {
-    panel.handle.replace({ next: { type: 'component', id: 'inbox' } });
+    panel.handle.replace({ next: { type: 'component', id: 'home' } });
   });
   return null;
 }

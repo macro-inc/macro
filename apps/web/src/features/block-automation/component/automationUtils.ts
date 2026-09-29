@@ -1,5 +1,4 @@
 import { DEFAULT_MODEL } from '@core/component/AI/constant';
-import type { Model } from '@core/component/AI/types';
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import {
   buildCron as buildCronExpression,
@@ -13,11 +12,18 @@ import {
 import { ThrownResultError } from '@core/util/result';
 import { getCronTrigger } from '@queries/agent-schedule/triggers';
 import type {
-  AgentTask,
   CreateScheduledAction,
   ScheduledAction,
   UpdateScheduledAction,
 } from '@service-scheduled-action/generated/schemas';
+import { z } from 'zod';
+import {
+  type RoutineTarget,
+  routineAgentIdSchema,
+  routineModelSchema,
+  routineTargetSchema,
+  routineTargetsEqual,
+} from '../core/routine-target';
 import type { ScheduleDraft, ScheduleFrequency } from './types';
 
 export {
@@ -94,15 +100,40 @@ export function createEmptyDraft(): ScheduleDraft {
     time: DEFAULT_TIME,
     daysOfWeek: [...DEFAULT_WEEKDAYS],
     dayOfMonth: '1',
-    model: DEFAULT_MODEL,
-    enabled: true,
+    target: { kind: 'model', model: DEFAULT_MODEL },
   };
 }
 
-function getAgentTask(schedule: ScheduledAction): AgentTask {
-  // Backend stores task as a JSON object; for kind === "Agent" it is shaped
-  // like AgentTask. Cast through unknown to satisfy the open-ended type.
-  return schedule.task as unknown as AgentTask;
+const agentTaskSchema = z
+  .looseObject({
+    agent: z.looseObject({ bot_id: routineAgentIdSchema }).nullish(),
+    model: routineModelSchema.nullish(),
+    prompt: z.string(),
+    user_prompt: z.string(),
+  })
+  .refine((task) => task.agent != null || task.model != null);
+
+type RoutineTask = z.infer<typeof agentTaskSchema>;
+
+function getAgentTask(schedule: ScheduledAction): RoutineTask | undefined {
+  if (schedule.kind !== 'Agent') return undefined;
+  const result = agentTaskSchema.safeParse(schedule.task);
+  return result.success ? result.data : undefined;
+}
+
+function targetFromTask(task: RoutineTask): RoutineTarget {
+  if (task.agent) {
+    if (task.model != null) {
+      return {
+        kind: 'agent',
+        agentId: task.agent.bot_id,
+        modelOverride: task.model,
+      };
+    }
+    return { kind: 'agent', agentId: task.agent.bot_id };
+  }
+  // The task schema guarantees a model when there is no agent.
+  return { kind: 'model', model: routineModelSchema.parse(task.model) };
 }
 
 export function draftFromSchedule(
@@ -112,26 +143,41 @@ export function draftFromSchedule(
   if (!trigger) return undefined;
   const parsed = parseCron(trigger.schedule);
   const task = getAgentTask(schedule);
+  if (!task) return undefined;
 
   return {
     id: schedule.id ?? undefined,
     name: schedule.name,
-    prompt: task.user_prompt ?? '',
+    prompt: task.user_prompt,
     frequency: parsed.frequency,
     time: parsed.time,
     daysOfWeek: parsed.daysOfWeek,
     dayOfMonth: parsed.dayOfMonth,
-    model: (task.model as Model) ?? undefined,
-    enabled: schedule.enabled,
+    target: targetFromTask(task),
   };
 }
 
-function buildAgentTask(draft: ScheduleDraft): AgentTask {
-  return {
-    model: draft.model,
-    prompt: '',
-    user_prompt: draft.prompt.trim(),
-  };
+function applyTarget(task: RoutineTask, target: RoutineTarget): void {
+  if (target.kind === 'model') {
+    if (task.agent != null) task.agent = null;
+    task.model = target.model;
+    return;
+  }
+  if (task.agent?.bot_id !== target.agentId) {
+    task.agent = { bot_id: target.agentId };
+  }
+  if (target.modelOverride === undefined) {
+    delete task.model;
+  } else {
+    task.model = target.modelOverride;
+  }
+}
+
+function buildAgentTask(draft: ScheduleDraft): RoutineTask {
+  const target = routineTargetSchema.parse(draft.target);
+  const task: RoutineTask = { prompt: '', user_prompt: draft.prompt.trim() };
+  applyTarget(task, target);
+  return task;
 }
 
 export function draftToCreateBody(draft: ScheduleDraft): CreateScheduledAction {
@@ -143,8 +189,8 @@ export function draftToCreateBody(draft: ScheduleDraft): CreateScheduledAction {
       timezone: getDefaultTimezone(),
     },
     kind: 'Agent',
-    task: buildAgentTask(draft) as unknown as CreateScheduledAction['task'],
-    enabled: draft.enabled,
+    task: buildAgentTask(draft),
+    enabled: true,
   };
 }
 
@@ -153,13 +199,40 @@ export function draftToUpdateBody(
   previous: ScheduledAction
 ): UpdateScheduledAction | undefined {
   const trigger = getCronTrigger(previous);
-  if (!trigger) return undefined;
+  const previousTask = getAgentTask(previous);
+  const target = routineTargetSchema.safeParse(draft.target);
+  if (!trigger || !previousTask || !target.success) return undefined;
+
+  const targetChanged = !routineTargetsEqual(
+    target.data,
+    targetFromTask(previousTask)
+  );
+  const promptChanged = draft.prompt !== previousTask.user_prompt;
+  let task = previous.task;
+  if (targetChanged || promptChanged) {
+    const editedTask = { ...previousTask };
+    if (targetChanged) applyTarget(editedTask, target.data);
+    if (promptChanged) editedTask.user_prompt = draft.prompt.trim();
+    task = editedTask;
+  }
+
+  // Preserve API-written cron expressions and raw task data when not edited.
+  const parsed = parseCron(trigger.schedule);
+  const scheduleChanged =
+    draft.frequency !== parsed.frequency ||
+    draft.time !== parsed.time ||
+    draft.dayOfMonth !== parsed.dayOfMonth ||
+    draft.daysOfWeek.join(',') !== parsed.daysOfWeek.join(',');
   return {
-    name: draft.name.trim() || deriveScheduleName(draft.prompt),
-    trigger: { ...trigger, schedule: buildCron(draft) },
-    kind: 'Agent',
-    task: buildAgentTask(draft) as unknown as UpdateScheduledAction['task'],
-    enabled: draft.enabled,
+    name:
+      draft.name === previous.name
+        ? previous.name
+        : draft.name.trim() || deriveScheduleName(draft.prompt),
+    trigger: scheduleChanged
+      ? { ...trigger, schedule: buildCron(draft) }
+      : trigger,
+    kind: previous.kind,
+    task,
   };
 }
 

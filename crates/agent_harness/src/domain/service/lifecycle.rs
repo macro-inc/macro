@@ -103,14 +103,20 @@ where
         })
     }
 
-    /// A local read on purpose: the queue lives beside the session's live
-    /// actor, and this replica answers for what it holds. A reader landing on
-    /// a non-managing replica sees an empty queue rather than an error.
+    /// The durable queue, so any replica can answer. Waiting actions live in
+    /// the session store; the managing replica's in-memory copy is a cache.
     async fn queued_controls(
         &self,
         id: AgentSessionId,
     ) -> agent_session::domain::error::Result<Vec<QueuedControl>> {
-        Ok(self.inner.queues.list(id))
+        Ok(self
+            .inner
+            .sessions
+            .list_queued_actions(id)
+            .await?
+            .iter()
+            .map(QueuedControl::from)
+            .collect())
     }
 
     async fn edit_queued_control(
@@ -350,6 +356,7 @@ where
                             .permission_policy(permission_policy),
                     )
                     .await?;
+                self.restore_queue(session_id).await?;
             }
         }
         self.sessions.set_sandbox_size(session_id, size).await?;

@@ -647,6 +647,10 @@ pub struct CalendarEvent {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CalendarEventOverride {
+    /// Occurrence scheduling revision, independent of the master.
+    pub sequence: Option<u32>,
+    /// Provider last-modified time for this exception.
+    pub source_updated_at: Option<DateTime<Utc>>,
     /// Stable recurrence identifier from the source.
     pub recurrence_id: String,
     /// Original occurrence start.

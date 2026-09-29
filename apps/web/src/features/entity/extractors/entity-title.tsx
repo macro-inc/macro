@@ -15,6 +15,7 @@ function extractRawTitle(entity: EntityData): JSX.Element {
           fullyQualifiedBlockName: true,
         })
       )
+      .with({ type: 'initiative' }, (e) => e.name || 'Untitled project')
       .with({ type: 'project' }, (e) => e.name)
       .with({ type: 'channel' }, (e) => e.name)
       .with({ type: 'channel_message' }, (e) => e.channelName)

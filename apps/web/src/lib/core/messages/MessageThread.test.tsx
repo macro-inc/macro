@@ -63,6 +63,12 @@ vi.mock('@channel/Thread/ChannelThread', () => ({
         <p>
           thread of {props.parent().type} {props.parent().id}
         </p>
+        <Show when={props.isReplying()}>
+          <textarea aria-label="Reply composer" />
+        </Show>
+        <Show when={props.messageEditor}>
+          <p>Editor enabled</p>
+        </Show>
         <button
           onClick={() =>
             drawer?.open(props.data(), props.getMessageActions?.(props.data()))
@@ -236,4 +242,23 @@ describe('threadListItem', () => {
     expect(item.thread.preview.map((r) => r.id)).toEqual(['r3', 'r4', 'r5']);
     expect(item.thread.latest_reply_at).toBe('2026-01-05T00:00:00Z');
   });
+});
+
+it('closes an active project reply composer and editor when comment access is lost', () => {
+  const [canWrite, setCanWrite] = createSignal(true);
+  const view = render(() => (
+    <MessageThread
+      data={{ ...message, parent: { type: 'initiative', id: 'project' } }}
+      canWrite={canWrite()}
+    />
+  ));
+  openActions(view);
+  fireEvent.click(view.getByRole('button', { name: 'Reply' }));
+  expect(view.getByRole('textbox', { name: 'Reply composer' })).toBeTruthy();
+  expect(view.getByText('Editor enabled')).toBeTruthy();
+
+  setCanWrite(false);
+
+  expect(view.queryByRole('textbox', { name: 'Reply composer' })).toBeNull();
+  expect(view.queryByText('Editor enabled')).toBeNull();
 });

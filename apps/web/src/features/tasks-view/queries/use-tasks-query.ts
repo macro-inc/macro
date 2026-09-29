@@ -21,6 +21,7 @@ import {
 } from '@entity';
 import { createGroupedSoupQueries } from '@queries/soup/grouped/create-grouped-soup-queries';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
+import { mapApiSoupItemToEntity } from '@queries/soup/transform-utils';
 import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
 import { type Accessor, createMemo } from 'solid-js';
 import { TASK_SORT_DEFINITIONS } from '../constants';
@@ -43,6 +44,9 @@ export type UseTasksDataSourceOptions = {
   tagSets: Accessor<readonly TagSetResponse[]>;
   tagSetsReady: Accessor<boolean>;
   isGroupExpanded: (groupId: string) => boolean;
+  taskIds?: Accessor<readonly string[]>;
+  enabled?: Accessor<boolean>;
+  networkPaused?: Accessor<boolean>;
 };
 
 export type TasksDataSourceItem = SoupRow<TaskEntityWithProperties>;
@@ -70,8 +74,9 @@ export function useTasksDataSource(
   const facetContext = createMemo(
     (): TaskFacetContext => createTagFacetContext(options.tagSets())
   );
-
   const facetOptionsReady = () =>
+    (options.enabled?.() ?? true) &&
+    state.tab !== 'projects' &&
     tagFacetReady(state.facets, options.tagSetsReady());
 
   const queryArgs = () =>
@@ -82,10 +87,24 @@ export function useTasksDataSource(
       facetContext: facetContext(),
       groupBy: state.groupBy,
       sort: state.sort,
+      taskIds: options.taskIds?.(),
     });
 
   const query = useSoupAstItemsQuery(queryArgs, () => ({
     enabled: facetOptionsReady(),
+    networkPaused: options.networkPaused?.(),
+    keepPreviousData: Boolean(options.taskIds),
+    // Project lists admit optimistic rows only where this view shows them.
+    meta: options.taskIds
+      ? {
+          insertFilter: (item) => {
+            const entity = mapApiSoupItemToEntity(item);
+            return (
+              isTaskEntity(entity) && taskMatchesView(entity, viewContext())
+            );
+          },
+        }
+      : undefined,
   }));
 
   const viewContext = (): TaskViewContext => ({
@@ -98,8 +117,10 @@ export function useTasksDataSource(
   const transformEntities = (entities: EntityData[]) => {
     const selected: TaskEntityWithProperties[] = [];
     const context = viewContext();
+    const memberIds = options.taskIds ? new Set(options.taskIds()) : undefined;
     for (const entity of entities) {
       if (!isTaskEntity(entity)) continue;
+      if (memberIds && !memberIds.has(entity.id)) continue;
       if (!taskMatchesView(entity, context)) continue;
 
       selected.push(attachNotifications(entity));
@@ -109,7 +130,8 @@ export function useTasksDataSource(
 
   const baseTasks = createMemo<TaskEntityWithProperties[]>((previous) => {
     if (query.isLoading) return previous;
-    if (query.isPlaceholderData && previous.length > 0) return previous;
+    if (!options.taskIds && query.isPlaceholderData && previous.length > 0)
+      return previous;
 
     return sortItems(
       transformEntities(query.data?.entities ?? []),
@@ -142,6 +164,7 @@ export function useTasksDataSource(
         userId: options.userId(),
         facets: state.facets,
         facetContext: facetContext(),
+        taskIds: options.taskIds?.(),
       }),
   });
 
@@ -198,7 +221,8 @@ export function useTasksDataSource(
   const rows = createMemo<SoupRow<TaskEntityWithProperties>[]>((previous) => {
     if (
       !search.isSearching() &&
-      (query.isLoading || (query.isPlaceholderData && previous.length > 0))
+      (query.isLoading ||
+        (!options.taskIds && query.isPlaceholderData && previous.length > 0))
     ) {
       return previous;
     }
@@ -219,7 +243,11 @@ export function useTasksDataSource(
       });
       const continuationTasks = continuations
         .entities(group.key)
-        .filter((task) => taskMatchesView(task, viewContext()));
+        .filter(
+          (task) =>
+            (!options.taskIds || options.taskIds().includes(task.id)) &&
+            taskMatchesView(task, viewContext())
+        );
       const entities = sortItems(
         deduplicateSoupEntities([...initialTasks, ...continuationTasks]),
         state.sort,
@@ -245,13 +273,23 @@ export function useTasksDataSource(
     return buildGroupedSoupRows(taskGroups);
   }, []);
 
-  const items = createMemo(() =>
-    rows().filter((row) => isSoupRowVisible(row, options.isGroupExpanded))
-  );
+  const items = createMemo(() => {
+    if (options.enabled?.() === false) return [];
+    // Retained cache rows are still filtered by the current authorized membership.
+    if (options.taskIds && query.isLoading) return [];
+    const members = options.taskIds ? new Set(options.taskIds()) : undefined;
+    return rows().filter(
+      (row) =>
+        isSoupRowVisible(row, options.isGroupExpanded) &&
+        (row.kind !== 'entity' || !members || members.has(row.entity.id))
+    );
+  });
 
   const usesServiceSearch = search.usesServiceSearch;
 
   const isLoading = () => {
+    if (options.enabled?.() === false) return false;
+    if (options.taskIds && query.isLoading) return true;
     if (!search.isSearching()) {
       // A query held back for the tag sets is loading, not empty.
       return (query.isLoading || !facetOptionsReady()) && rows().length === 0;

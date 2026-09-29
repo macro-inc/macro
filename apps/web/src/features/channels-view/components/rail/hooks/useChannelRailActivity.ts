@@ -60,7 +60,12 @@ export function useChannelRailActivity(
         continue;
       }
       for (const notification of channel.unreadNotifications) {
-        if (notification.state !== 'unseen') continue;
+        // Mark-seen intentionally leaves the normalized state unchanged until
+        // commit. Honor the same local intent as the app-shell Chat badge.
+        const state =
+          notificationSource.withLocalState?.(notification) ??
+          notification.state;
+        if (state !== 'unseen') continue;
         notifications.push({
           id: notification.id,
           entity_id: channel.id,

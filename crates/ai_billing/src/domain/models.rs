@@ -1,5 +1,6 @@
 //! Plans, the margin math, billing periods, and the API-facing snapshot.
 
+use ai_usage::AiFeature;
 use chrono::{DateTime, Datelike, Months, TimeZone, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -14,6 +15,15 @@ use utoipa::ToSchema;
 pub const TARGET_GROSS_MARGIN_BPS: i64 = 6_000;
 
 const BPS_PER_UNIT: i64 = 10_000;
+
+/// Features whose provider costs are recorded but never consume allowances,
+/// prepaid credits, or overage. Dictation is the Whispr transcription feature.
+pub const NON_BILLABLE_AI_FEATURES: [AiFeature; 4] = [
+    AiFeature::Memory,
+    AiFeature::AiProjection,
+    AiFeature::CallSummary,
+    AiFeature::Dictation,
+];
 
 /// Convert a provider cost in USD to Macro's list rate in whole cents,
 /// rounding up so fractional cents never accrue in the customer's favour.
@@ -232,6 +242,32 @@ pub enum AllowanceStore {
     Conflict,
 }
 
+/// Which of the payer's subscriptions funds an overage charge.
+///
+/// A payer may hold a personal subscription and a team subscription at the
+/// same time. Team owners and team members both use the team subscription.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SubscriptionScope {
+    /// The subscription that is not tied to a team.
+    Personal,
+    /// The subscription for this team.
+    Team {
+        /// The team.
+        team_id: Uuid,
+    },
+}
+
+impl From<&PayerScope> for SubscriptionScope {
+    fn from(scope: &PayerScope) -> Self {
+        match scope {
+            PayerScope::Personal => Self::Personal,
+            PayerScope::TeamOwner { team_id } | PayerScope::TeamMember { team_id } => {
+                Self::Team { team_id: *team_id }
+            }
+        }
+    }
+}
+
 /// Who pays for a user's AI, and through what.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PayerScope {
@@ -419,7 +455,7 @@ impl DenyReason {
     pub fn message(self) -> &'static str {
         match self {
             DenyReason::AllowanceExhausted => {
-                "You've used this period's included AI. Add credits, turn on usage billing, or upgrade to keep going."
+                "You've used this period's included AI. Add credits or turn on usage billing to keep going."
             }
             DenyReason::OverageLimitReached => {
                 "You've reached your AI spending limit for this period. Raise the limit or add credits to keep going."

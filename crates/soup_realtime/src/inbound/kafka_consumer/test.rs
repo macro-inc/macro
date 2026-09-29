@@ -121,6 +121,7 @@ fn subscribes_to_all_existing_soup_source_topics() {
             "macro.email",
             "macro.channels",
             "macro.properties",
+            "macro.initiatives",
         ]
     );
 }
@@ -380,6 +381,74 @@ fn deleting_or_clearing_properties_updates_the_soup_entity() {
         EntityType::CrmCompany
     );
     assert_eq!(patch_entity(&cleared[0]).entity_id, company_id);
+}
+
+#[test]
+fn initiative_purge_cleanup_cannot_replace_the_deletion_in_either_event_order() {
+    let id = Uuid::now_v7();
+    let purged = InitiativeTopicEvent::Purged {
+        initiative_id: initiative::domain::models::InitiativeId::from_uuid(id),
+    };
+    let cleanup = PropertyTopicEvent::EntityPropertiesCleared(EntityPropertiesClearedMetadata {
+        entity_id: id.to_string(),
+        entity_type: PropertyEntityType::Initiative,
+        actor_user_id: None,
+        actor: None,
+        on_behalf_of: None,
+    });
+
+    for cleanup_first in [false, true] {
+        let deletion = patches_from_initiative_event(&purged);
+        let cleanup = patches_from_property_event(&cleanup);
+        let patches = if cleanup_first {
+            [cleanup, deletion].concat()
+        } else {
+            [deletion, cleanup].concat()
+        };
+        assert_eq!(patches.len(), 1);
+        assert!(matches!(patches[0].patch, Patch::Deleted(_)));
+        assert_eq!(
+            patch_entity(&patches[0]).entity_type,
+            EntityType::Initiative
+        );
+        assert_eq!(patch_entity(&patches[0]).entity_id, id.to_string());
+    }
+}
+
+#[test]
+fn attributed_initiative_clears_and_other_system_clears_still_refresh_soup() {
+    let metadata = EntityPropertiesClearedMetadata {
+        entity_id: Uuid::now_v7().to_string(),
+        entity_type: PropertyEntityType::Initiative,
+        actor_user_id: None,
+        actor: None,
+        on_behalf_of: None,
+    };
+    for metadata in [
+        EntityPropertiesClearedMetadata {
+            actor_user_id: Some(user()),
+            ..metadata.clone()
+        },
+        EntityPropertiesClearedMetadata {
+            actor: Some(ChannelSender::new_from_user(user())),
+            ..metadata.clone()
+        },
+        EntityPropertiesClearedMetadata {
+            on_behalf_of: Some(user()),
+            ..metadata.clone()
+        },
+        EntityPropertiesClearedMetadata {
+            entity_type: PropertyEntityType::Company,
+            ..metadata
+        },
+    ] {
+        let entity_id = metadata.entity_id.clone();
+        let patches =
+            patches_from_property_event(&PropertyTopicEvent::EntityPropertiesCleared(metadata));
+        assert_eq!(patches.len(), 1);
+        assert!(matches!(patches[0].patch, Patch::Updated(_)));
+        assert_eq!(patch_entity(&patches[0]).entity_id, entity_id);
+    }
 }
 
 #[test]
@@ -868,4 +937,68 @@ async fn cancellation_during_retry_backoff_leaves_the_event_uncommitted() {
     tokio::time::advance(Duration::from_secs(15)).await;
     assert_eq!(service.attempts.load(Ordering::SeqCst), 1);
     assert_eq!(commits.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+fn initiative_lifecycle_and_properties_refresh_the_soup_entity() {
+    use initiative::domain::{events::InitiativeChange, models::InitiativeId};
+
+    let id = InitiativeId::from_uuid(Uuid::from_u128(42));
+    for event in [
+        InitiativeTopicEvent::Created(InitiativeChange {
+            initiative_id: id,
+            attribution: None,
+            occurred_at: Utc::now(),
+        }),
+        InitiativeTopicEvent::Updated(InitiativeChange {
+            initiative_id: id,
+            attribution: None,
+            occurred_at: Utc::now(),
+        }),
+    ] {
+        assert_eq!(
+            patches_from_initiative_event(&event),
+            vec![update(EntityType::Initiative, id)]
+        );
+    }
+    assert_eq!(
+        property_update(PropertyEntityType::Initiative, &id.to_string()),
+        vec![update(EntityType::Initiative, id)]
+    );
+    assert_eq!(
+        patches_from_initiative_event(&InitiativeTopicEvent::Purged { initiative_id: id }),
+        vec![delete(EntityType::Initiative, id)]
+    );
+}
+
+#[test]
+fn moving_tasks_refreshes_both_initiatives_once_and_each_task() {
+    use initiative::domain::{
+        events::{InitiativeTasksChanged, TaskMembershipChange},
+        models::InitiativeId,
+    };
+
+    let from = InitiativeId::from_uuid(Uuid::from_u128(42));
+    let to = InitiativeId::from_uuid(Uuid::from_u128(43));
+    let event = InitiativeTopicEvent::TasksChanged(InitiativeTasksChanged {
+        attribution: None,
+        occurred_at: Utc::now(),
+        changes: ["task-1", "task-2"]
+            .into_iter()
+            .map(|task_id| TaskMembershipChange {
+                task_id: task_id.to_owned(),
+                from: Some(from),
+                to: Some(to),
+            })
+            .collect(),
+    });
+    assert_eq!(
+        patches_from_initiative_event(&event),
+        vec![
+            update(EntityType::Document, "task-1"),
+            update(EntityType::Initiative, from),
+            update(EntityType::Initiative, to),
+            update(EntityType::Document, "task-2"),
+        ]
+    );
 }

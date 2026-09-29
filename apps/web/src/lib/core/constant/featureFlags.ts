@@ -106,18 +106,6 @@ export function isFeatureEnabled(flag: Flag): boolean {
 }
 
 /**
- * Switches Inbox, Tasks, and Channels from the current SoupView implementations
- * to the new composable view implementations. On everywhere without waiting
- * for PostHog: a late PostHog answer swaps the app shell after first paint.
- * Override locally with VITE_ENABLE_NEW_APP_VIEWS=false.
- */
-export const enableNewAppViews = defineFlag({
-  key: 'enable-new-app-views',
-  env: 'ENABLE_NEW_APP_VIEWS',
-  default: true,
-});
-
-/**
  * This constant reflects whether the app is running in production mode with prod backend environment
  *
  * @returns true in macro.com, false otherwise
@@ -125,6 +113,13 @@ export const enableNewAppViews = defineFlag({
 export const PROD_MODE_ENV = import.meta.env.MODE === 'production';
 
 const onInDev = DEV_MODE_ENV || undefined;
+
+/** Shows the Reviews shortcut in Tasks; copied Reviews links remain accessible. */
+export const enableTasksReviews = defineFlag({
+  key: 'enable-tasks-reviews',
+  env: 'ENABLE_TASKS_REVIEWS',
+  default: onInDev,
+});
 
 // Claude Cloud demo onboarding and harness/model discovery. Off until PostHog
 // enables it, including in dev; override locally with VITE_CLAUDE_CLOUD.
@@ -390,6 +385,12 @@ export const ENABLE_GRAPHQL_BACKFILL = defineFlag({
 
 export const ENABLE_CALLS = true;
 
+export const enableQuickCalls = defineFlag({
+  key: 'enable-quick-calls',
+  env: 'ENABLE_QUICK_CALLS',
+  default: true,
+});
+
 // Email signatures: the settings editor, the compose / reply / AI-chat signature
 // previews, and the per-message include toggle. PostHog-gated with a dev-mode
 // default; override with VITE_ENABLE_EMAIL_SIGNATURES.
@@ -414,6 +415,15 @@ export const enableCrmLists = defineFlag({
   key: 'enable-crm-lists',
   env: 'ENABLE_CRM_LISTS',
   default: false,
+});
+
+// Native Projects frontend: navigation, creation, task assignment and project
+// views. Enabled in development; PostHog controls production rollout. Override
+// with VITE_ENABLE_PROJECTS; legacy Files folders are unaffected.
+export const enableProjects = defineFlag({
+  key: 'enable-projects',
+  env: 'ENABLE_PROJECTS',
+  default: onInDev,
 });
 
 // Reminders: the "Remind me" entry in the command menu, the soup
@@ -514,26 +524,6 @@ export function isAutoUpdateUiEnabled(): boolean {
   }
   return !isFeatureEnabled(disableAutoUpdateUi);
 }
-
-export const enableHomeView = defineFlag({
-  key: 'enable-home-view',
-  default: onInDev,
-});
-
-// AI-generated recommendations on Home. Keep the whole data-owning component
-// behind this gate so disabled users do not fetch notifications or start AI
-// projections. Override locally with VITE_ENABLE_HOME_RECOMMENDATIONS.
-export const enableHomeRecommendations = defineFlag({
-  key: 'enable-home-recommendations',
-  env: 'ENABLE_HOME_RECOMMENDATIONS',
-  default: onInDev,
-});
-
-export const enableNewPricing = defineFlag({
-  key: 'enable-new-pricing',
-  env: 'ENABLE_NEW_PRICING',
-  default: onInDev,
-});
 
 // Bot management in Settings, channels, and the command menu. Override locally
 // with VITE_BOT_MANAGEMENT.

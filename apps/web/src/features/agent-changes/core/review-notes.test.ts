@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   describeNoteLines,
   formatNotesForAgent,
-  notesForFile,
   queuedNotes,
   type ReviewNote,
   sendableNotes,
@@ -51,16 +50,13 @@ describe('describeNoteLines', () => {
       )
     ).toBe('lines 3–6 (old)');
   });
-});
 
-describe('notesForFile', () => {
-  it('filters by path and sorts by line', () => {
-    const list = [
-      note({ id: 'a', lineNumber: 20, endLineNumber: 20 }),
-      note({ id: 'b', path: 'b.ts' }),
-      note({ id: 'c', lineNumber: 5, endLineNumber: 5 }),
-    ];
-    expect(notesForFile(list, 'a.ts').map((n) => n.id)).toEqual(['c', 'a']);
+  it('names both sides of a range dragged from deleted lines into added ones', () => {
+    expect(
+      describeNoteLines(
+        note({ startSide: 'deletions', lineNumber: 87, endLineNumber: 91 })
+      )
+    ).toBe('line 87 (old) to line 91 (new)');
   });
 });
 

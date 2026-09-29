@@ -1,5 +1,6 @@
 import { formatCallDuration } from '@block-call/utils';
 import { UserIcon } from '@core/component/UserIcon';
+import { isMacroId } from '@core/user/macroId';
 import { matches } from '@core/util/match';
 import UserCircleIcon from '@phosphor/user-circle.svg';
 import { UserGroup } from '@property/component/propertyValue/UserGroup';
@@ -13,7 +14,7 @@ import { CallRecordName } from '../../components/CallRecordName';
 import { Entity } from '../../entity';
 import { HitSnippet } from '../../extractors-search/HitSnippet';
 import { SearchSender } from '../../extractors-search/search-sender';
-import type { CallEntity } from '../../types/entity';
+import type { CallEntity, CallGuest } from '../../types/entity';
 import { isCallRecordHit } from '../../types/search';
 import { firstContentHit } from './shared';
 
@@ -33,7 +34,10 @@ function ParticipantItem(props: { userId: string }) {
   );
 }
 
-function ParticipantsTooltip(props: { participantIds: string[] }) {
+function ParticipantsTooltip(props: {
+  participantIds: string[];
+  guests: CallGuest[];
+}) {
   return (
     <div class="min-w-48 max-w-72">
       <div class="flex items-center gap-2 text-ink-muted border-b border-edge-muted/50 pb-1.5 mb-1.5">
@@ -44,23 +48,52 @@ function ParticipantsTooltip(props: { participantIds: string[] }) {
         <For each={props.participantIds}>
           {(userId) => <ParticipantItem userId={userId} />}
         </For>
+        <For each={props.guests}>
+          {(guest) => (
+            <div class="inline-flex items-center gap-1.5 px-2 py-1 text-xs text-ink-muted">
+              <UserCircleIcon class="size-4" />
+              <span>{guest.displayName.trim() || 'Guest'}</span>
+              <span class="text-ink-extra-muted">Guest</span>
+            </div>
+          )}
+        </For>
       </div>
     </div>
   );
 }
 
-export function CallParticipants(props: { participantIds: string[] }) {
+export function CallParticipants(props: {
+  participantIds: string[];
+  guests?: CallGuest[];
+}) {
+  const guests = () => props.guests ?? [];
   const entities = (): EntityReference[] =>
     props.participantIds.map((id) => ({
       entity_id: id,
       entity_type: EntityType.USER,
     }));
   return (
-    <Show when={props.participantIds.length > 0}>
+    <Show when={props.participantIds.length + guests().length > 0}>
       <HoverCard
-        content={<ParticipantsTooltip participantIds={props.participantIds} />}
+        content={
+          <ParticipantsTooltip
+            participantIds={props.participantIds}
+            guests={guests()}
+          />
+        }
       >
-        <UserGroup entities={entities()} maxUsers={2} />
+        <div class="flex items-center gap-1.5">
+          <Show when={entities().length > 0}>
+            <UserGroup entities={entities()} maxUsers={2} />
+          </Show>
+          <Show when={guests().length}>
+            {(count) => (
+              <span class="text-xs text-ink-muted">
+                {count()} {count() === 1 ? 'guest' : 'guests'}
+              </span>
+            )}
+          </Show>
+        </div>
       </HoverCard>
     </Show>
   );
@@ -88,7 +121,16 @@ export function CallNarrowBody(props: {
             <Show when={matches(h(), isCallRecordHit)}>
               {(callHit) => (
                 <Show when={callHit().senderId}>
-                  {(id) => <UserIcon id={id()} size="sm" />}
+                  {(id) => (
+                    <Show
+                      when={isMacroId(id())}
+                      fallback={
+                        <UserCircleIcon class="size-4 text-ink-muted" />
+                      }
+                    >
+                      <UserIcon id={id()} size="sm" />
+                    </Show>
+                  )}
                 </Show>
               )}
             </Show>
@@ -159,7 +201,16 @@ export function CallWideContent(props: {
               <Show when={matches(h(), isCallRecordHit)}>
                 {(callHit) => (
                   <Show when={callHit().senderId}>
-                    {(id) => <UserIcon id={id()} size="sm" />}
+                    {(id) => (
+                      <Show
+                        when={isMacroId(id())}
+                        fallback={
+                          <UserCircleIcon class="size-4 text-ink-muted" />
+                        }
+                      >
+                        <UserIcon id={id()} size="sm" />
+                      </Show>
+                    )}
                   </Show>
                 )}
               </Show>

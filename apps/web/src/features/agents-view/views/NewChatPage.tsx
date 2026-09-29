@@ -14,6 +14,10 @@ import { ChatComposer } from '../components/ChatComposer';
 import type { AgentKind } from '../core/agent-kind';
 import { defaultBranchFor } from '../core/repository';
 import { MACRO_PERSONA_ID, type RosterAgent } from '../core/roster';
+import {
+  createPersistedComposerDraft,
+  NEW_CONVERSATION_ATTACHMENTS_KEY,
+} from '../primitives/composer-draft';
 import { createPreferredInmemModel } from '../primitives/preferred-inmem-model';
 import { createRecentRepositories } from '../primitives/recent-repositories';
 import { createComposerModels } from '../queries/composer-models';
@@ -41,6 +45,8 @@ export function NewChatPage(props: {
   registerFocus?: (focus: () => void) => void;
   roster: RosterAgent[];
   rosterLoading: boolean;
+  /** Agents are listed but whether they can start is still unknown. */
+  availabilityLoading?: boolean;
   onStart: (start: StartConversation) => void;
   /** Opens the roster page on the given kind's tab. */
   onOpenRoster: (kind: AgentKind) => void;
@@ -56,20 +62,24 @@ export function NewChatPage(props: {
   const [modelOverride, setModelOverride] = createSignal<string>();
   // A new conversation starts on Automatic until the caller picks a repository.
   const [repoUrl, setRepoUrl] = createSignal<string | undefined>();
-  const [localDraft, setLocalDraft] = createSignal('');
-  const draft = () => props.draft ?? localDraft();
+  const persistedDraft = createPersistedComposerDraft();
+  const draft = () => props.draft ?? persistedDraft.draft();
   const setDraft = (text: string) =>
-    props.onDraftChange ? props.onDraftChange(text) : setLocalDraft(text);
+    props.onDraftChange
+      ? props.onDraftChange(text)
+      : persistedDraft.setDraft(text);
   const [branchOverride, setBranchOverride] = createSignal<string>();
+  const recentAgentId = () => {
+    const ids = recentAgents.ids();
+    // Falling back to Macro before availability is known would open the
+    // compact composer, then swap to the last agent's layout once it settles.
+    if (props.rosterLoading || props.availabilityLoading) return ids[0];
+    return ids.find((id) =>
+      options().some((agent) => agent.id === id && !agent.unavailableReason)
+    );
+  };
   const selected = createMemo(() => {
-    const wanted =
-      agentId() ??
-      recentAgents
-        .ids()
-        .find((id) =>
-          options().some((agent) => agent.id === id && !agent.unavailableReason)
-        ) ??
-      MACRO_PERSONA_ID;
+    const wanted = agentId() ?? recentAgentId() ?? MACRO_PERSONA_ID;
     return options().find((agent) => agent.id === wanted) ?? options()[0];
   });
   const macro = () => options().find((agent) => agent.id === MACRO_PERSONA_ID);
@@ -121,7 +131,12 @@ export function NewChatPage(props: {
     if (agent.harness === 'cursor') openSettings('Harness');
   };
 
-  const attachmentTracker = createInputAttachmentTracker();
+  const attachmentTracker = createInputAttachmentTracker({
+    // Home supplies its own text draft; attachment persistence here is for Agents.
+    persistenceKey: props.onDraftChange
+      ? undefined
+      : NEW_CONVERSATION_ATTACHMENTS_KEY,
+  });
   const attachFiles = (files: File[]) =>
     void uploadInputAttachments({
       files,

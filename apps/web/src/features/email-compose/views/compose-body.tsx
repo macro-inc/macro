@@ -1,4 +1,5 @@
 import { EmailAttachmentPill } from '@app/features/email-message/components/attachment-pill';
+import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
 import { isInlineMediaFileName } from '@core/component/LexicalMarkdown/utils/fileUploadUtils';
@@ -33,6 +34,7 @@ export function ComposeBody(props: {
 }) {
   const ctx = useCompose();
   const attachmentViewer = createAttachmentViewer();
+  const resolveAppLink = useMacroMentionLinkResolver();
 
   const [editor, setEditor] = createSignal<LexicalEditor>();
   const [isDragging, setIsDragging] = createSignal<boolean>();
@@ -128,6 +130,7 @@ export function ComposeBody(props: {
 
           <Scroll>
             <MarkdownTextarea
+              resolveAppLink={resolveAppLink}
               autoLinkMatchMode="common-tlds"
               floatingFormatMenu
               domRef={props.inputRef}

@@ -82,16 +82,18 @@ vi.mock('../ui', () => ({
       {props.notice.title}
     </div>
   ),
-  ToolGroup: (props: {
+}));
+vi.mock('../views/LiveToolGroup', () => ({
+  LiveToolGroup: (props: {
     count: number;
     active: boolean;
-    live: boolean;
+    activeIndex?: number;
     children: JSX.Element;
   }) => (
     <div
       data-active={String(props.active)}
       data-count={props.count}
-      data-live={String(props.live)}
+      data-active-index={props.activeIndex}
       data-testid="group"
     >
       {props.children}
@@ -161,7 +163,7 @@ describe('Message tool grouping', () => {
     const group = view.getByTestId('group');
     expect(group.dataset.count).toBe('3');
     expect(group.dataset.active).toBe('false');
-    expect(group.dataset.live).toBe('false');
+    expect(group.dataset.activeIndex).toBeUndefined();
     expect(view.getAllByTestId('tool').map((el) => el.dataset.index)).toEqual([
       '1',
       '2',
@@ -173,14 +175,14 @@ describe('Message tool grouping', () => {
     ]);
   });
 
-  it('leaves a lone tool call as its own card', () => {
+  it('starts a stable group with the first tool call', () => {
     const view = render(() => (
       <Message
         message={message([text('Looking.'), tool('read')])}
         inFlight={false}
       />
     ));
-    expect(view.queryByTestId('group')).toBeNull();
+    expect(view.getByTestId('group').dataset.count).toBe('1');
     expect(view.getByTestId('tool').dataset.index).toBe('1');
   });
 
@@ -253,6 +255,53 @@ describe('Message tool grouping', () => {
     expect(view.getByTestId('group').dataset.active).toBe('true');
   });
 
+  it('follows unfinished work even when later calls have completed', () => {
+    const view = render(() => (
+      <Message
+        message={message(
+          [tool('slow', { status: 'running' }), tool('fast')],
+          null
+        )}
+        inFlight
+      />
+    ));
+    expect(view.getByTestId('group').dataset.activeIndex).toBe('0');
+  });
+
+  it('keeps delegated agents visible between tool bursts', () => {
+    const view = render(() => (
+      <Message
+        message={message(
+          [
+            tool('before'),
+            tool('agent', {
+              status: 'running',
+              detail: {
+                kind: 'subagent',
+                title: 'Investigate',
+                agentType: null,
+                description: null,
+                background: false,
+                prompt: null,
+                children: [],
+                result: null,
+              },
+            }),
+            tool('after'),
+          ],
+          null
+        )}
+        inFlight
+      />
+    ));
+    const agent = view
+      .getAllByTestId('tool')
+      .find((el) => el.textContent === 'agent');
+    expect(agent?.closest('[data-testid="group"]')).toBeNull();
+    expect(agent?.dataset.index).toBe('1');
+    expect(view.getAllByTestId('group')).toHaveLength(2);
+  });
+
   it('settles a run the log left running once the turn is no longer live', () => {
     // A superseded turn keeps `stop: null` and its last call `running`
     // forever; a dead runtime leaves the tail the same way.
@@ -282,7 +331,7 @@ describe('Message tool grouping', () => {
     );
     expect(view.getByTestId('group')).toBe(group);
     expect(group.dataset.count).toBe('3');
-    expect(group.dataset.live).toBe('true');
+    expect(group.dataset.activeIndex).toBeUndefined();
     expect(view.getAllByTestId('tool').map((el) => el.dataset.index)).toEqual([
       '1',
       '2',
@@ -290,12 +339,13 @@ describe('Message tool grouping', () => {
     ]);
   });
 
-  it('promotes a lone call to a group when a second follows it', () => {
+  it('keeps the first tool and its group mounted when a second follows it', () => {
     const [store, setStore] = createStore({
       message: message([text('Looking.'), tool('a')], null),
     });
     const view = render(() => <Message message={store.message} inFlight />);
-    expect(view.queryByTestId('group')).toBeNull();
+    const group = view.getByTestId('group');
+    const firstTool = view.getByTestId('tool');
     const prose = view.getByTestId('text');
 
     setStore(
@@ -303,6 +353,8 @@ describe('Message tool grouping', () => {
       reconcile(message([text('Looking.'), tool('a'), tool('b')], null))
     );
     expect(view.getByTestId('group').dataset.count).toBe('2');
+    expect(view.getByTestId('group')).toBe(group);
+    expect(view.getAllByTestId('tool')[0]).toBe(firstTool);
     expect(view.getByTestId('text')).toBe(prose);
   });
 
@@ -324,11 +376,11 @@ describe('Message tool grouping', () => {
     expect(view.getAllByTestId('tool')[2].dataset.status).toBe('running');
   });
 
-  it('marks a completed batch as live so its arrivals remain visible briefly', () => {
+  it('keeps completed batches inactive even at the live tail', () => {
     const view = render(() => (
       <Message message={message([tool('a'), tool('b')], null)} inFlight />
     ));
-    expect(view.getByTestId('group').dataset.live).toBe('true');
+    expect(view.getByTestId('group').dataset.activeIndex).toBeUndefined();
     expect(view.getByTestId('group').dataset.active).toBe('false');
   });
 
@@ -343,7 +395,7 @@ describe('Message tool grouping', () => {
       />
     ));
     expect(view.getByTestId('group').dataset.active).toBe('true');
-    expect(view.getByTestId('group').dataset.live).toBe('false');
+    expect(view.getByTestId('group').dataset.activeIndex).toBe('1');
     expect(view.getAllByTestId('tool').map((row) => row.dataset.live)).toEqual([
       'true',
       'true',

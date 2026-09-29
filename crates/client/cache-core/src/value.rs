@@ -139,8 +139,13 @@ impl Record {
     /// lists and embedded objects are replaced wholesale, graphcache
     /// semantics). Returns true when anything changed.
     pub fn merge(&mut self, other: Record) -> bool {
+        let recent_pages = crate::page_retention::updated_pages(self, &other);
         let mut changed = false;
         for (k, v) in other.fields {
+            // Incoming snapshots must not replace the base's recency history.
+            if k == crate::page_retention::PAGE_ORDER_FIELD {
+                continue;
+            }
             match self.fields.get(&k) {
                 Some(existing) if *existing == v => {}
                 _ => {
@@ -149,7 +154,7 @@ impl Record {
                 }
             }
         }
-        changed
+        crate::page_retention::retain_soup_pages(self, &recent_pages) || changed
     }
 
     pub fn typename(&self) -> Option<&str> {

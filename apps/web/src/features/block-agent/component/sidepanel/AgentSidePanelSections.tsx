@@ -9,7 +9,7 @@
  * use the shared PR changes controller.
  */
 
-import { DiffCounts } from '@app/features/agent-changes/components/DiffCounts';
+import { DiffCounts } from '@app/components/diff-view';
 import { useOptionalAgentChanges } from '@app/features/agent-changes/context/agent-changes-controller';
 import { SidePanel } from '@components/app/side-panel';
 import { ModelIcon } from '@core/component/AI/component/ProviderIcon';

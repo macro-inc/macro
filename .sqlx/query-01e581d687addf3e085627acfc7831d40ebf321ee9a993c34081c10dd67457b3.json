@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            'item' as unsubscribe_type,\n            unsubscribe_item.item_id  as \"item_id!\",\n            unsubscribe_item.item_type as \"item_type!\",\n            unsubscribe_item.snoozed_until\n        FROM\n            user_notification_item_unsubscribe unsubscribe_item\n        WHERE\n            unsubscribe_item.user_id = $1\n            AND (snoozed_until IS NULL OR snoozed_until > NOW())\n    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "unsubscribe_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "item_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "item_type!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "snoozed_until",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "01e581d687addf3e085627acfc7831d40ebf321ee9a993c34081c10dd67457b3"
+}

@@ -11,17 +11,20 @@ pub async fn get_user_unsubscribes(
         SELECT
             'item' as unsubscribe_type,
             unsubscribe_item.item_id  as "item_id!",
-            unsubscribe_item.item_type as "item_type!"
+            unsubscribe_item.item_type as "item_type!",
+            unsubscribe_item.snoozed_until
         FROM
             user_notification_item_unsubscribe unsubscribe_item
         WHERE
             unsubscribe_item.user_id = $1
+            AND (snoozed_until IS NULL OR snoozed_until > NOW())
     "#,
         user_id
     )
     .map(|row| UserUnsubscribe {
         item_id: row.item_id,
         item_type: row.item_type,
+        snoozed_until: row.snoozed_until,
     })
     .fetch_all(db)
     .await?;

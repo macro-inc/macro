@@ -18,7 +18,10 @@ use cache_core::queue::{
     MutationRequest, MutationUpsertKind, MutationUpsertResult, NewQueuedMutation,
     PersistedOptimisticLayer, QueuedMutation, StoredMutation,
 };
-use cache_core::search::{SearchCursor, SearchDocument, SearchProfile, project_search_documents};
+use cache_core::search::{
+    QUICK_ACCESS_PROJECTION_VERSION, QUICK_ACCESS_TYPENAMES, SearchCursor, SearchDocument,
+    SearchProfile, project_search_documents,
+};
 use cache_core::store::{QueueDiagnostics, QueueDiagnosticsAvailability, Storage};
 use cache_core::value::{EntityKey, Record};
 use predicate_index::{
@@ -52,6 +55,13 @@ use turso_opfs::{
 
 /// Frozen storage schema version, independent of cache postcard versions.
 pub const STORAGE_SCHEMA_VERSION: u32 = 11;
+
+const QUICK_ACCESS_PROJECTION_VERSION_KEY: &str = "quick_access_projection_version";
+const SEARCH_REBUILD_BATCH_SIZE: i64 = 256;
+const SEARCH_REBUILD_RECORDS: &str =
+    "SELECT id, value FROM records WHERE __typename = ?1 ORDER BY id LIMIT ?2";
+const SEARCH_REBUILD_RECORDS_AFTER: &str =
+    "SELECT id, value FROM records WHERE __typename = ?1 AND id > ?2 ORDER BY id LIMIT ?3";
 
 /// Coarse outcome of validating a Turso database.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -2863,6 +2873,8 @@ fn initialize(
                 "INSERT INTO meta (key, value) VALUES ('storage_schema_version', ?1)",
                 vec![text(&STORAGE_SCHEMA_VERSION.to_string())],
             )?;
+            save_search_projection_version(connection)?;
+            page_retention::save_version(connection)?;
             Ok(())
         })
         .map_err(TursoStorageError::initialization)?;
@@ -2871,8 +2883,8 @@ fn initialize(
         return Ok(());
     }
 
-    // Reopening must not scan every cached record/page. Keep compatibility and
-    // pending-write validation here; full scans belong to explicit diagnostics.
+    // Ordinary reopen only validates compatibility and pending writes. A changed
+    // derived projection performs one bounded rebuild before serving queries.
     validate_frozen_schema(connection)?;
     let metadata = driver::query(
         connection,
@@ -2934,7 +2946,86 @@ fn initialize(
         driver::validate(connection, sql).map_err(TursoStorageError::initialization)?;
     }
     validate_queue_consistency(connection)?;
-    validate_optimistic_shadow_consistency(connection)
+    validate_optimistic_shadow_consistency(connection)?;
+    page_retention::compact_legacy_pages(connection)?;
+    ensure_search_projection_version(connection)
+}
+
+fn save_search_projection_version(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
+    driver::execute(
+        connection,
+        "INSERT INTO meta (key, value) VALUES (?1, ?2) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+        vec![
+            text(QUICK_ACCESS_PROJECTION_VERSION_KEY),
+            text(&QUICK_ACCESS_PROJECTION_VERSION.to_string()),
+        ],
+    )?;
+    Ok(())
+}
+
+fn ensure_search_projection_version(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
+    let versions = driver::query(
+        connection,
+        "SELECT value FROM meta WHERE key = ?1",
+        vec![text(QUICK_ACCESS_PROJECTION_VERSION_KEY)],
+    )?;
+    if let [row] = versions.as_slice()
+        && required_text(row, 0)? == QUICK_ACCESS_PROJECTION_VERSION.to_string()
+    {
+        return Ok(());
+    }
+
+    // Regenerate disposable search rows atomically without replacing normalized
+    // records, the data generation marker, or pending optimistic mutations.
+    driver::write_transaction(connection, || {
+        driver::execute(
+            connection,
+            "DELETE FROM search_documents WHERE profile = ?1",
+            vec![text(SearchProfile::QuickAccessV1.as_str())],
+        )?;
+        for typename in QUICK_ACCESS_TYPENAMES {
+            let mut last_id: Option<String> = None;
+            loop {
+                let (sql, parameters) = match last_id.as_ref() {
+                    Some(id) => (
+                        SEARCH_REBUILD_RECORDS_AFTER,
+                        vec![
+                            text(typename),
+                            text(id),
+                            Value::from_i64(SEARCH_REBUILD_BATCH_SIZE),
+                        ],
+                    ),
+                    None => (
+                        SEARCH_REBUILD_RECORDS,
+                        vec![text(typename), Value::from_i64(SEARCH_REBUILD_BATCH_SIZE)],
+                    ),
+                };
+                let rows = driver::query(connection, sql, parameters)?;
+                if rows.is_empty() {
+                    break;
+                }
+                let mut projected = Vec::new();
+                for row in rows {
+                    let key = RecordKey {
+                        typename: (*typename).to_owned(),
+                        id: required_text(&row, 0)?,
+                    };
+                    let record = decode_record(&required_blob(&row, 1)?)
+                        .map_err(|_| TursoStorageError::reset(PhysicalResetReason::Codec))?;
+                    for document in project_search_documents(&key.clone().into_entity()?, &record) {
+                        projected.push((key.clone(), document));
+                    }
+                    last_id = Some(key.id);
+                }
+                let documents = projected
+                    .iter()
+                    .map(|(key, document)| (key, document))
+                    .collect::<Vec<_>>();
+                upsert_search_documents_batch(connection, &documents)?;
+            }
+        }
+        save_search_projection_version(connection)
+    })
 }
 
 fn enable_foreign_keys(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
@@ -4835,6 +4926,7 @@ impl TursoStorage {
 mod alternatives;
 mod conjunction;
 mod integrity;
+mod page_retention;
 
 #[cfg(all(test, target_arch = "wasm32"))]
 mod browser_test;

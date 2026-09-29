@@ -14,7 +14,8 @@ use std::str::FromStr;
 use crate::domain::models::{TouchedEntity, TouchedSoupRequest};
 use crate::outbound::pg_soup_repo::candidate_gates::{
     channel_gate, chat_gate, document_gate, email_gate, includes_channels, includes_chats,
-    includes_documents, includes_email_threads, includes_projects, project_gate,
+    includes_documents, includes_email_threads, includes_initiatives, includes_projects,
+    initiative_gate, project_gate,
 };
 use crate::outbound::pg_soup_repo::type_err;
 
@@ -45,6 +46,9 @@ fn included_types(req: &TouchedSoupRequest<'_>) -> Vec<&'static str> {
     }
     if includes_chats(req.filter) {
         types.push(EntityType::Chat.into());
+    }
+    if includes_initiatives(req.filter) {
+        types.push(EntityType::Initiative.into());
     }
     if includes_projects(req.filter) {
         types.push(EntityType::Project.into());
@@ -104,6 +108,7 @@ pub(super) async fn touched_soup_page(
             WHEN 'document' THEN {document_gate}
             WHEN 'chat' THEN {chat_gate}
             WHEN 'project' THEN {project_gate}
+            WHEN 'initiative' THEN {initiative_gate}
             WHEN 'channel' THEN {channel_gate}
             WHEN 'email_thread' THEN {email_gate}
             ELSE FALSE
@@ -114,6 +119,7 @@ pub(super) async fn touched_soup_page(
         document_gate = document_gate(ID_SQL, req.filter),
         chat_gate = chat_gate(ID_SQL, req.filter),
         project_gate = project_gate(ID_SQL, req.filter),
+        initiative_gate = initiative_gate(ID_SQL, req.filter),
         channel_gate = channel_gate(ID_SQL, req.filter),
         email_gate = email_gate(ID_SQL, req.filter),
     );

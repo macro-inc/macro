@@ -13,7 +13,7 @@ use crate::domain::ports::SkillService;
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "ListSkills",
-    description = "List the skills the user can access, most recently updated first. Skills are markdown documents containing instructions for AI to read and follow; after finding a relevant skill, read its instructions with ReadContent using the returned document id. Use this to discover what skills exist; when looking for a specific skill by name, prefer SearchSkills."
+    description = "List up to 100 of the most recently updated skills the user can access, plus built-in skills. Skills are markdown documents containing instructions for AI to read and follow; after finding a relevant skill, read its instructions with ReadSkill using the returned document id. Use this to discover what skills exist; when looking for a specific skill by name or an older skill not in this list, use SearchSkills."
 )]
 pub struct ListSkills {}
 

@@ -11,6 +11,7 @@ import {
 import { iosCursorScrollPlugin } from '@core/component/LexicalMarkdown/plugins/ios-cursor-scroll';
 import { tableCellResizerPlugin } from '@core/component/LexicalMarkdown/plugins/tables/tableCellResizerPlugin';
 import { tablePlugin } from '@core/component/LexicalMarkdown/plugins/tables/tablePlugin';
+import type { MentionLinkResolver } from '@core/component/LexicalMarkdown/plugins/text-paste/textPastePlugin';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import type { IUser } from '@core/user/types';
 import ImageIcon from '@phosphor/image.svg';
@@ -24,6 +25,7 @@ export type MessageEditorOptions = {
   floatingFormatMenu?: boolean;
   disableMentionTracking?: boolean;
   namespace: string;
+  resolveAppLink?: MentionLinkResolver;
   enableMentions?: boolean;
   onMentionCreate?: (mention: ItemMention) => void;
   onMentionRemove?: (mention: ItemMention) => void;
@@ -43,6 +45,8 @@ export function createConfiguredMessageEditor(options: MessageEditorOptions) {
   const editor = buildConfig(options.type ?? 'chat').namespace(
     options.namespace
   );
+  if (options.resolveAppLink)
+    editor.withAppLinkResolver(options.resolveAppLink);
 
   if (options.enableMentions !== false) {
     editor.withMentions({
