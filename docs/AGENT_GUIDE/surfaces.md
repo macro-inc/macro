@@ -826,6 +826,14 @@ session were not exercised by that UI check.
 
 ## Notifications
 
+On native Android, enable notifications in Settings while signed in. Android 13+
+also asks for system permission; the system's **Activity** notification channel
+must be enabled. Remote push owns system notification display after registration,
+so the same WebSocket event should not create a second local notification. Tapping
+a notification opens its target; simply receiving one does not navigate. Check
+this with the app foregrounded, backgrounded, and after ordinary process death.
+Logout clears delivered notifications and disables receipt for the old account.
+
 Toast regions are labeled `Notifications (alt+T)`; five empty live regions always exist in
 the a11y tree (ignore them when parsing snapshots).
 

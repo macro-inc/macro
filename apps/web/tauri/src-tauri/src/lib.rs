@@ -165,6 +165,7 @@ pub fn run() {
     {
         builder = builder
             .plugin(tauri_plugin_auth::init())
+            .plugin(tauri_plugin_notifications::init())
             .plugin(tauri_plugin_virtual_keyboard::init())
             .plugin(tauri_plugin_edit_menu::init())
             .plugin(tauri_plugin_input_accessory::init())
@@ -176,7 +177,9 @@ pub fn run() {
 
     #[cfg(target_os = "android")]
     {
-        builder = builder.plugin(tauri_plugin_android_auth::init());
+        builder = builder
+            .plugin(tauri_plugin_android_auth::init())
+            .plugin(tauri_plugin_android_push::init());
     }
 
     // register the rest of the common plugins
@@ -225,8 +228,7 @@ pub fn run() {
         // register mobile specific plugins
         builder = builder
             .plugin(tauri_plugin_haptics::init())
-            .plugin(tauri_plugin_safe_area_insets::init())
-            .plugin(tauri_plugin_notifications::init());
+            .plugin(tauri_plugin_safe_area_insets::init());
     }
 
     // Window origin differs by platform:

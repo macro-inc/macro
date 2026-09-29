@@ -7,9 +7,9 @@ use rootcause::Report;
 use serde::Serialize;
 
 use crate::domain::models::apple::VoipPushPayload;
-use crate::domain::models::mobile::{DeviceEndpoint, SnsTarget};
+use crate::domain::models::mobile::DeviceEndpoint;
 use crate::domain::ports::{NotificationRepository, VoipPushSender};
-use crate::outbound::mobile::{MobilePushAdapter, MobilePushOps};
+use crate::outbound::mobile::{MobilePushAdapter, MobilePushOps, SnsTarget};
 
 use super::VoipPushServiceImpl;
 
