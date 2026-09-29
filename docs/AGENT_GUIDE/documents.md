@@ -634,3 +634,9 @@ An edit uses the revision from a fresh read and atomically applies a CRDT delta
 that is broadcast to connected collaborators. A stale revision is rejected:
 reread and reconsider the change instead of blindly retrying. Unsynced edits
 still follow normal CRDT collaboration semantics when they reconnect.
+
+## Large-document undo checks
+
+In a disposable Markdown document, change several paragraphs in one edit, then
+undo and redo. Verify the text, paragraph count, and a second peer agree after
+each operation; wait for saving to finish and reload to check persistence.
