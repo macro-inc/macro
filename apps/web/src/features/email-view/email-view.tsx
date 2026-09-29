@@ -1,5 +1,5 @@
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
-import { ViewGettingStarted } from '@app/features/setup/ViewGettingStarted';
+import { ViewTour } from '@app/features/tours/ViewTour';
 import { SplitRouter } from '@app/lib/split-router';
 import { type PillTabItem, PillTabs } from '@components/app/mobile/PillTabs';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
@@ -27,6 +27,7 @@ import { EmailSidebar } from './components/EmailSidebar';
 import { EMAIL_TABS } from './constants';
 import { EmailViewProvider, useEmailView } from './email-view-context';
 import type { EmailTab, EmailViewStateOptions } from './types';
+import { emailTour } from './tour';
 
 export type EmailViewProps = {
   /** Explicit navigation state. When present, it wins over entry restoration. */
@@ -70,7 +71,7 @@ function EmailDesktopLayout(
       <ViewShell.Header>
         <EmailHeader onSearchEscape={props.onSearchEscape} />
       </ViewShell.Header>
-      <ViewGettingStarted view="mail" />
+      <ViewTour tour={emailTour} />
       <ViewShell.Content>{props.children}</ViewShell.Content>
     </>
   );

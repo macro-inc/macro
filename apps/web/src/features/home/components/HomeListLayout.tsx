@@ -3,6 +3,8 @@ import { MobileTopEdgeFade } from '@components/app/mobile/MobileEdgeFade';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { type JSX, type ParentProps, Show } from 'solid-js';
 import { HomeFilterDropdown } from './HomeFilters';
+import { tourTarget } from '@ui';
+import { HOME_TOUR } from '../tour';
 
 function MobileHomeHeader(props: ParentProps) {
   return (
@@ -20,7 +22,7 @@ export function HomeListLayout(
 ) {
   return (
     <div
-      data-tour="home-list"
+      ref={tourTarget(HOME_TOUR.list)}
       class="relative flex size-full min-h-0 min-w-0 flex-col"
       style={{
         '--mobile-content-inset-top': 'calc(var(--safe-top, 0px) + 3.75rem)',

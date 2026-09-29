@@ -1,7 +1,7 @@
 import { listOwnedSlotName } from '@app/components/list';
 import { useMobileSearchText } from '@app/features/command/mobile/use-mobile-search-text';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
-import { ViewGettingStarted } from '@app/features/setup/ViewGettingStarted';
+import { ViewTour } from '@app/features/tours/ViewTour';
 import {
   type FacetSelection,
   useSoupListNavigationHotkeys,
@@ -36,6 +36,7 @@ import { createDriveState } from './primitives/drive-state';
 import { createDriveDataSource } from './queries/drive-data-source';
 import { createDriveSidebarSource } from './queries/drive-sidebar-source';
 import { DriveLoading, DriveWorkspace } from './views/drive-workspace';
+import { documentsTour } from './tour';
 
 export type DriveViewProps = { initialFacets?: FacetSelection };
 
@@ -162,7 +163,7 @@ function DriveComposition(props: { route: DriveRouteState }) {
         actions,
       }}
     >
-      <DriveWorkspace guide={<ViewGettingStarted view="documents" />} />
+      <DriveWorkspace tour={<ViewTour tour={documentsTour} />} />
     </DriveProvider>
   );
 }

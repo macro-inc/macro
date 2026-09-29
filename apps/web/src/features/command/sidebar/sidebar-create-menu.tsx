@@ -7,7 +7,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { activateClosestDOMScope } from '@core/hotkey/utils';
 import CreateIcon from '@phosphor/note-pencil.svg';
 import PlusIcon from '@phosphor/plus.svg';
-import { Button, Dropdown, Hotkey, NavRow } from '@ui';
+import { Button, Dropdown, Hotkey, NavRow, tourTarget } from '@ui';
 import {
   createSignal,
   For,
@@ -16,6 +16,7 @@ import {
   type ValidComponent,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { APP_TOUR } from './tour';
 
 export type SidebarCreateMenuProps = {
   /** Only read by the built-in `row` variant, for its tooltip. */
@@ -91,6 +92,7 @@ export const SidebarCreateMenu = (props: SidebarCreateMenuProps) => {
     return true;
   });
 
+  const createMenuTarget = tourTarget(APP_TOUR.createMenu);
   return (
     <Dropdown
       open={open()}
@@ -105,7 +107,7 @@ export const SidebarCreateMenu = (props: SidebarCreateMenuProps) => {
             when={props.variant === 'icon'}
             fallback={
               <Dropdown.Trigger
-                data-tour="create-menu"
+                ref={createMenuTarget}
                 as={NavRow}
                 class="center h-8 bg-ink/4 text-[13px]"
                 fullWidth
@@ -136,7 +138,7 @@ export const SidebarCreateMenu = (props: SidebarCreateMenuProps) => {
             }
           >
             <Dropdown.Trigger
-              data-tour="create-menu"
+              ref={createMenuTarget}
               as={Button}
               variant="outline"
               size="icon-sm"
@@ -156,7 +158,7 @@ export const SidebarCreateMenu = (props: SidebarCreateMenuProps) => {
       >
         {(trigger) => (
           <Dropdown.Trigger
-            data-tour="create-menu"
+            ref={createMenuTarget}
             as={trigger()}
             // `Dropdown.Trigger` hardcodes `variant`/`size` for its default
             // `as={Button}` and spreads props after them, so both leak into a

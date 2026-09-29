@@ -2,7 +2,7 @@ import { ViewShell } from '@app/components/view-shell';
 import { SearchState } from '@app/features/command/mobile/mobileSearchState';
 import { useMobileSearchText } from '@app/features/command/mobile/use-mobile-search-text';
 import { markChannelNotificationsSeenOnOpen } from '@app/features/next-soup/utils';
-import { ViewGettingStarted } from '@app/features/setup/ViewGettingStarted';
+import { ViewTour } from '@app/features/tours/ViewTour';
 import { MaybeSoupEntityActionDrawerManager } from '@app/features/soup';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { SplitRouter } from '@app/lib/split-router';
@@ -35,6 +35,7 @@ import {
   useChannelsSources,
 } from './queries';
 import { createChannelSearchSource } from './queries/channel-search-source';
+import { channelsTour } from './tour';
 
 const ChannelSourcesContext =
   createContext<ReturnType<typeof useChannelsSources>>();
@@ -147,7 +148,7 @@ function ChannelsViewRoot() {
                       </DebugSuspense>
                     </ViewShell.Aside>
                     <ViewShell.Main class="overflow-hidden">
-                      <ViewGettingStarted view="channels" />
+                      <ViewTour tour={channelsTour} />
                       <ChannelSourcesContext.Provider value={sources}>
                         <DebugSuspense name="ChannelsView.outlet">
                           <SplitRouter.Outlet

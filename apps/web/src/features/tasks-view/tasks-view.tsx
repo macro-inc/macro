@@ -1,7 +1,7 @@
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
 import { openProject } from '@app/features/projects/open-project';
 import { ProjectsTab } from '@app/features/projects/projects';
-import { ViewGettingStarted } from '@app/features/setup/ViewGettingStarted';
+import { ViewTour, ViewTourAction } from '@app/features/tours/ViewTour';
 import { SplitRouter, useNavigate, useParams } from '@app/lib/split-router';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -26,6 +26,7 @@ import { TaskList } from './components/task-list/TaskList';
 import { projectDetailRoute } from './route';
 import { TasksViewProvider, useTasksView } from './tasks-view-context';
 import type { TasksViewStateOptions } from './types';
+import { tasksTour } from './tour';
 
 export type TasksViewProps = {
   /** Explicit navigation state. When present, it wins over entry restoration. */
@@ -77,6 +78,18 @@ function TasksViewBreadcrumbs(props: ParentProps) {
   );
 }
 
+/** The tasks tour's shortcut for bringing existing issues over. */
+function ImportLinearAction() {
+  const { openWithSplit } = useSplitLayout();
+  return (
+    <ViewTourAction
+      onClick={() => openWithSplit({ type: 'component', id: 'import-linear' })}
+    >
+      Import from Linear
+    </ViewTourAction>
+  );
+}
+
 function TasksViewRoot() {
   const panel = useSplitPanelOrThrow();
   const { state, projectsEnabled } = useTasksView();
@@ -92,7 +105,7 @@ function TasksViewRoot() {
       <ViewShell.Header>
         <TasksHeader onSearchEscape={() => listElement()?.focus()} />
       </ViewShell.Header>
-      <ViewGettingStarted view="tasks" />
+      <ViewTour tour={tasksTour} actions={<ImportLinearAction />} />
       <ViewShell.Content>
         <Suspense fallback={<TasksListFallback />}>
           <TaskList ref={setListElement} />

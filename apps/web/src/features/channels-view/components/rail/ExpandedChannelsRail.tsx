@@ -20,7 +20,7 @@ import {
   createDroppable,
   useDragDropContext,
 } from '@thisbeyond/solid-dnd';
-import { cn, Dropdown, EmptyStatePanel, Hotkey, Tabs, Tooltip } from '@ui';
+import { cn, Dropdown, EmptyStatePanel, Hotkey, Tabs, Tooltip, tourTarget } from '@ui';
 import {
   type Accessor,
   createSignal,
@@ -75,6 +75,7 @@ import {
   useChannelRailSectionState,
   useChannelRailVirtualizer,
 } from './hooks/useChannelRailState';
+import { CHANNELS_TOUR } from '../../tour';
 
 const CHANNEL_TABS = [
   { value: 'browse', label: 'All' },
@@ -775,8 +776,10 @@ function ExpandedGroupSection(props: { config: GroupConfig }) {
           </Show>
         </button>
         <div
-          data-tour={
-            props.config.group === 'channels' ? 'channels-create' : undefined
+          ref={
+            props.config.group === 'channels'
+              ? tourTarget(CHANNELS_TOUR.create)
+              : undefined
           }
           data-section-action=""
           class="flex items-center gap-0.5"
@@ -1021,6 +1024,7 @@ function ExpandedRecents() {
 }
 
 export function ExpandedChannelsRail(props: { search: ChannelRailSearch }) {
+  const listTarget = tourTarget(CHANNELS_TOUR.list);
   const rail = useChannelsRail();
   const activeDescendant = () => {
     const rowId = rail.list.focus.key();
@@ -1033,7 +1037,10 @@ export function ExpandedChannelsRail(props: { search: ChannelRailSearch }) {
       <ChannelsLiveCallsSidebar />
       <div class="flex min-h-0 flex-1 flex-col">
         <div
-          ref={rail.registerRootRef}
+          ref={(element) => {
+            rail.registerRootRef(element);
+            listTarget(element);
+          }}
           role="tree"
           tabIndex={-1}
           aria-activedescendant={activeDescendant()}

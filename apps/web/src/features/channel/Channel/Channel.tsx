@@ -127,6 +127,8 @@ import {
   createUnifiedInputManager,
   type UnifiedReplyTargetSnapshot,
 } from './unified-input-manager';
+import { tourTarget } from '@ui';
+import { CHANNEL_TOUR } from '../tour';
 
 export type ChannelProps = {
   channelId: string;
@@ -198,6 +200,8 @@ export function Channel(props: ChannelProps) {
     isReady: () => !!threadListNavigation(),
   });
 
+  const messagesTarget = tourTarget(CHANNEL_TOUR.messages);
+  const composerTarget = tourTarget(CHANNEL_TOUR.composer);
   const [channelInputSnapshot, setChannelInputSnapshot] =
     createSignal<InputSnapshot>();
   const [channelInputHandle, setChannelInputHandle] =
@@ -688,6 +692,7 @@ export function Channel(props: ChannelProps) {
                   class="ph-no-capture relative flex-1 min-h-0 outline-none flex flex-col"
                   ref={(element) => {
                     attachMessageListRef(element);
+                    messagesTarget(element);
                   }}
                   tabIndex={-1}
                   data-channel-message-list
@@ -842,6 +847,7 @@ export function Channel(props: ChannelProps) {
                     <ChannelInputContainer
                       ref={(el) => {
                         attachInputRef(el);
+                        composerTarget(el);
                       }}
                     >
                       <Switch>

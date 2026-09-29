@@ -25,6 +25,8 @@ import { createReachableRepositories } from '../queries/reachable-repositories';
 import { createRepositoryBranches } from '../queries/repository-branches';
 import { AgentPicker } from './AgentPicker';
 import { RepositoryPicker } from './RepositoryPicker';
+import { tourTarget } from '@ui';
+import { AGENTS_TOUR } from '../tour';
 
 /** What the composer hands the workspace to start a session with. */
 export type StartConversation = {
@@ -197,7 +199,7 @@ export function NewChatPage(props: {
 
   return (
     <section class="page newchat" data-active aria-label="New conversation">
-      <div data-tour="agent-composer" class="col">
+      <div ref={tourTarget(AGENTS_TOUR.composer)} class="col">
         <div class="greeting">
           <h2>
             {coding() ? 'What should we build?' : 'What should we work on?'}

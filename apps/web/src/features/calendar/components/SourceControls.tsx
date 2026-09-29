@@ -2,10 +2,11 @@ import { ViewSidebar } from '@app/components/view-shell';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import RssIcon from '@phosphor/rss.svg';
 import WarningIcon from '@phosphor/warning.svg';
-import { Checkbox } from '@ui';
+import { Checkbox, tourTarget } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import type { CalendarSource } from '../types';
 import { groupCalendarSourcesByAccount } from '../utils/calendar-source-groups';
+import { CALENDAR_TOUR } from '@app/features/calendar-view/tour';
 
 interface SourceControlsProps {
   sources: CalendarSource[];
@@ -36,7 +37,7 @@ export function SourceControls(props: SourceControlsProps) {
 
   return (
     <ul
-      data-tour="calendar-sources"
+      ref={tourTarget(CALENDAR_TOUR.sources)}
       class="flex min-w-0 flex-col gap-(--sidebar-row-gap)"
     >
       <For each={groups()}>

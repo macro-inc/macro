@@ -1,7 +1,7 @@
 import { useViewShell, ViewShell } from '@app/components/view-shell';
 import { calendarSearch } from '@app/features/calendar-view/calendar-url';
 import { CalendarView } from '@app/features/calendar-view/calendar-view';
-import { ViewGettingStarted } from '@app/features/setup/ViewGettingStarted';
+import { ViewTour } from '@app/features/tours/ViewTour';
 import { createSearchParams, SplitRouter } from '@app/lib/split-router';
 import { DebugSuspense } from '@channel/DebugSuspense';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
@@ -22,6 +22,7 @@ import { HomeTabs } from './components/HomeTabs';
 import { HomeViewProvider, useHomeView } from './home-view-context';
 import { homeCalendarRoute } from './route';
 import type { HomeViewStateOptions } from './types';
+import { homeTour } from './tour';
 
 export type HomeViewProps = {
   /** Explicit navigation state. When present, it wins over entry restoration. */
@@ -61,9 +62,7 @@ function HomeListPane(props: {
         showContent();
       }}
     >
-      <Show when={!isTouchDevice()}>
-        <ViewGettingStarted view="home" />
-      </Show>
+      <ViewTour tour={homeTour} />
       <DebugSuspense name="HomeView.list" fallback={<HomeFallback />}>
         <HomeList
           hasPreview={props.hasPreview}
@@ -127,10 +126,7 @@ function HomeViewRoot() {
                         />
                       </DebugSuspense>
                     </ViewShell.Aside>
-                    <ViewShell.Main
-                      data-tour="home-composer"
-                      class="overflow-hidden"
-                    >
+                    <ViewShell.Main class="overflow-hidden">
                       {/* Detail routes load lazily. Suspend only this area, so
                           the list stays mounted and a pending detail's effects
                           wait until it resolves. */}

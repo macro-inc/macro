@@ -1,4 +1,4 @@
-import { useViewShell, ViewShell } from '@app/components/view-shell';
+import { ViewShell } from '@app/components/view-shell';
 import {
   CALENDAR_PAGE_IDS,
   CalendarPagerContextProvider,
@@ -6,7 +6,7 @@ import {
 } from '@app/features/calendar/components/CalendarPagerContext';
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
 import { RangeUnavailableBanner } from '@app/features/calendar/components/RangeUnavailableBanner';
-import { ViewGettingStarted } from '@app/features/setup/ViewGettingStarted';
+import { ViewTour } from '@app/features/tours/ViewTour';
 import { createSizeBreakpoints } from '@app/util/create-size-breakpoints';
 import {
   useSplitDisplayName,
@@ -15,7 +15,7 @@ import {
 import { SplitPanel } from '@components/app/split-panel';
 import { isMobile } from '@core/mobile/isMobile';
 import { createElementSize } from '@solid-primitives/resize-observer';
-import { Layer } from '@ui';
+import { Layer, tourTarget } from '@ui';
 import { Pager, PagerSwipeGestures } from '@ui/components/Pager';
 import {
   createEffect,
@@ -33,6 +33,7 @@ import { Header } from './Header';
 import { Page } from './Page';
 import { SelectedEventDetails } from './SelectedEventDetails';
 import { SetupStatus } from './SetupStatus';
+import { CALENDAR_TOUR, calendarTour } from '../tour';
 
 const CALENDAR_SWIPE_EDGE_INSET = 40;
 
@@ -119,26 +120,11 @@ function CalendarPages() {
 function CalendarPageContent() {
   return (
     <div
-      data-tour="calendar-grid"
+      ref={tourTarget(CALENDAR_TOUR.grid)}
       class="calendar-view-content flex min-w-0 min-h-0 flex-1 flex-col"
     >
       <CalendarPages />
     </div>
-  );
-}
-
-/** The calendar tour opens the collapsed sidebar for its calendar-sources step. */
-function CalendarGettingStarted() {
-  const shell = useViewShell();
-
-  return (
-    <ViewGettingStarted
-      view="calendar"
-      onStepChange={(step) => {
-        if (step.revealCalendars && shell.aside.isCollapsed())
-          shell.aside.expand();
-      }}
-    />
   );
 }
 
@@ -183,7 +169,7 @@ function WorkspaceContent() {
               </Show>
               <ViewShell.Main>
                 <Header presentation="workspace" />
-                <CalendarGettingStarted />
+                <ViewTour tour={calendarTour} />
                 <ViewShell.Content class="flex min-h-0 flex-1">
                   <CalendarPageContent />
                 </ViewShell.Content>

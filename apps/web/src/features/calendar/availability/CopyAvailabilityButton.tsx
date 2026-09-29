@@ -1,8 +1,9 @@
 import CalendarCheckIcon from '@phosphor/calendar-check.svg';
-import { Button, type ButtonSize, useImperativeDialog } from '@ui';
+import { Button, type ButtonSize, useImperativeDialog, tourTarget } from '@ui';
 import { Show } from 'solid-js';
 import { useCalendarConnectedInboxes } from '../hooks/use-calendar-connected-inboxes';
 import { CopyAvailabilityDialog } from './CopyAvailabilityDialog';
+import { CALENDAR_TOUR } from '@app/features/calendar-view/tour';
 
 /** Opens the shared availability dialog when a calendar account is connected. */
 export function CopyAvailabilityButton(props: {
@@ -18,7 +19,7 @@ export function CopyAvailabilityButton(props: {
   return (
     <Show when={connectedInboxes().length > 0}>
       <Button
-        data-tour="calendar-availability"
+        ref={tourTarget(CALENDAR_TOUR.availability)}
         variant="ghost"
         size={props.size ?? 'icon-sm'}
         class={props.class}

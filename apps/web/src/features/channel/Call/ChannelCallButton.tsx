@@ -6,10 +6,11 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import PhoneIcon from '@phosphor/phone-call.svg';
 import { useActiveCallQuery } from '@queries/call/call';
 import { ChannelTypeEnum } from '@service-storage/client';
-import { Button, cn, confirmDialog } from '@ui';
+import { Button, cn, confirmDialog, tourTarget } from '@ui';
 import { getOwner, Show } from 'solid-js';
 import { getCallJoinTab, getCallLeaveTab } from './call-tabs';
 import { useCall } from './use-call';
+import { CHANNEL_TOUR } from '../tour';
 
 export function ChannelCallButton(props: { channelId: string }) {
   const { setActiveTab } = useChannelTab();
@@ -100,7 +101,7 @@ export function ChannelCallButton(props: { channelId: string }) {
   return (
     <Show when={!call.isInThisChannel()}>
       <Button
-        data-tour="channel-call"
+        ref={tourTarget(CHANNEL_TOUR.call)}
         onClick={handleClick}
         tooltip={tooltip()}
         variant={variant()}

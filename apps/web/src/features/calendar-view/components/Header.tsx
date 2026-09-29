@@ -27,7 +27,7 @@ import CaretRightIcon from '@phosphor/caret-right.svg';
 import ListIcon from '@phosphor/list.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
-import { Button, cn } from '@ui';
+import { Button, cn, tourTarget } from '@ui';
 import { usePager } from '@ui/components/Pager';
 import {
   createMemo,
@@ -44,6 +44,7 @@ import {
 } from './CalendarCreateItems';
 import { CalendarCreateMenu } from './CalendarCreateMenu';
 import { CalendarSearch } from './CalendarSearch';
+import { CALENDAR_TOUR } from '../tour';
 
 const formatMonthTitle = new Intl.DateTimeFormat(undefined, {
   month: 'long',
@@ -206,6 +207,7 @@ export function Header(props: { presentation: 'workspace' | 'preview' }) {
                 size="icon-sm"
                 class="shrink-0"
                 label="Show calendar navigation"
+                ref={tourTarget(CALENDAR_TOUR.sidebarToggle)}
                 aria-expanded={shell?.aside.isOverlay() ?? false}
                 onClick={() => shell?.aside.expand()}
               >
@@ -229,7 +231,10 @@ export function Header(props: { presentation: 'workspace' | 'preview' }) {
 
         <SplitHeaderRight>
           <HeaderIsland class="px-1">
-            <div data-tour="calendar-period" class="flex items-center gap-1">
+            <div
+              ref={tourTarget(CALENDAR_TOUR.period)}
+              class="flex items-center gap-1"
+            >
               <Show when={!isMobile()}>
                 <PeriodSelector isNarrow={isNarrow()} />
                 <div class="flex shrink-0 items-center gap-1">

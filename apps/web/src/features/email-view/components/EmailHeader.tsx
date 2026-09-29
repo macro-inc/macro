@@ -13,6 +13,8 @@ import { EMAIL_TABS } from '../constants';
 import { useEmailView } from '../email-view-context';
 import { EmailControls } from './EmailControls';
 import { EmailInboxFilter, EmailInboxMenu } from './EmailInboxSelector';
+import { tourTarget } from '@ui';
+import { EMAIL_TOUR } from '../tour';
 
 export type EmailHeaderProps = {
   /** Restores list focus when Escape leaves the search field. */
@@ -63,6 +65,7 @@ export function EmailHeader(props: EmailHeaderProps) {
   const { state, setState } = useEmailView();
   const [filterOpen, setFilterOpen] = createSignal(false);
   let searchInput: HTMLInputElement | undefined;
+  const searchTarget = tourTarget(EMAIL_TOUR.search);
   const selectedTabLabel = () =>
     EMAIL_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Email';
 
@@ -110,7 +113,10 @@ export function EmailHeader(props: EmailHeaderProps) {
       <Show when={state.tab !== 'scheduled'}>
         <div class="flex min-w-0 items-center justify-between gap-3">
           <SearchBar
-            ref={(element) => (searchInput = element)}
+            ref={(element) => {
+              searchInput = element;
+              searchTarget(element);
+            }}
             label="Search email"
             value={state.search}
             hotkey="cmd+f"

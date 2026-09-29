@@ -29,7 +29,7 @@ import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
-import { Button, cn } from '@ui';
+import { Button, cn, tourTarget } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -61,6 +61,7 @@ import { useEmailListHotkeys } from '../use-email-list-hotkeys';
 import { EmailDateGroupHeader } from './EmailDateGroupHeader';
 import { EmailEmptyState } from './EmailEmptyState';
 import { EmailRowActions, EmailStarAction } from './EmailRowActions';
+import { EMAIL_TOUR } from '../tour';
 
 type EmailActionRow = {
   entity: WithNotification<EntityData>;
@@ -413,11 +414,13 @@ export function EmailList(props: EmailListProps) {
     }
   }
 
+  const listTarget = tourTarget(EMAIL_TOUR.list);
   return (
     <MaybeSoupEntityActionDrawerManager>
       <div
         ref={(element: HTMLDivElement) => {
           setGrid(element);
+          listTarget(element);
           props.ref?.(element);
         }}
         role="grid"

@@ -22,7 +22,7 @@ export function DriveLoading() {
   );
 }
 
-export function DriveWorkspace(props: { guide?: JSX.Element }) {
+export function DriveWorkspace(props: { tour?: JSX.Element }) {
   const { state, sidebar, actions } = useDriveView();
 
   const breadcrumbs = createMemo(() =>
@@ -67,7 +67,7 @@ export function DriveWorkspace(props: { guide?: JSX.Element }) {
                 fallback={
                   <>
                     <DriveHeader />
-                    {props.guide}
+                    {props.tour}
                     <ViewShell.Content>
                       <Suspense fallback={<DriveLoading />}>
                         <DriveFileDropzone onDrop={actions.dropFiles}>

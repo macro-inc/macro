@@ -12,6 +12,8 @@ import type { SetPredicatesInput } from './filters/filter-store/predicates-store
 import type { Query } from './filters/filter-store/types';
 import { getViewPreset } from './sidebar/soup-filter-presets';
 import { useRecentViewFlag } from './use-recent-view-flag';
+import { ViewTour } from '@app/features/tours/ViewTour';
+import { callsTour, foldersTour } from './tour';
 
 const SoupView = lazy(async () => ({
   default: (await import('./soup-view/soup-view')).SoupView,
@@ -57,6 +59,7 @@ export const CallsRouteView = withAuth(() => {
       initialFilters={preset?.filters}
       initialClientFilters={preset?.clientFilters}
       initialGroupBy={preset?.groupBy}
+      tour={<ViewTour tour={callsTour} />}
     />
   );
 });
@@ -74,6 +77,7 @@ export const FoldersRouteView = withAuth(() => {
       initialFilters={preset?.filters}
       initialClientFilters={preset?.clientFilters}
       initialGroupBy={preset?.groupBy}
+      tour={<ViewTour tour={foldersTour} />}
     />
   );
 });

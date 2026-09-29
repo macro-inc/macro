@@ -13,7 +13,7 @@ import UsersThreeIcon from '@phosphor/users-three.svg';
 import SignalIcon from '@phosphor/wave-sine.svg';
 import NoiseIcon from '@phosphor/waveform.svg';
 import { SidebarTagsSection } from '@property/tags/SidebarTagsSection';
-import { pressHandlers } from '@ui';
+import { pressHandlers, tourTarget } from '@ui';
 import { type Component, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { composeEmail } from '../compose-email';
@@ -21,6 +21,7 @@ import { EMAIL_TAB_IDS, EMAIL_TABS, type EmailTabItem } from '../constants';
 import { useEmailView } from '../email-view-context';
 import type { EmailTab } from '../types';
 import { EmailInboxList } from './EmailInboxSelector';
+import { EMAIL_TOUR } from '../tour';
 
 const TAB_ICONS: Record<EmailTab, Component<{ class?: string }>> = {
   important: SignalIcon,
@@ -57,7 +58,7 @@ export function EmailNavigation(props: { onNavigate?: () => void }) {
   return (
     <ViewSidebar.Nav aria-label="Email tabs">
       <div
-        data-tour="email-signal-noise"
+        ref={tourTarget(EMAIL_TOUR.signalNoise)}
         class="flex flex-col gap-(--sidebar-row-gap)"
       >
         <For each={EMAIL_TABS.slice(0, 2)}>
@@ -111,7 +112,7 @@ export function EmailSidebar() {
 
         <EmailNavigation />
 
-        <div data-tour="email-tags">
+        <div ref={tourTarget(EMAIL_TOUR.tags)}>
           <SidebarTagsSection
             activeIds={state.facets.tags ?? []}
             onActiveIdsChange={showTags}

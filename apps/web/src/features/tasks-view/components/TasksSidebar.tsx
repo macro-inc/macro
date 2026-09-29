@@ -29,6 +29,8 @@ import { createMemo, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { useTasksView } from '../tasks-view-context';
 import type { TasksTab } from '../types';
+import { tourTarget } from '@ui';
+import { TASKS_TOUR } from '../tour';
 
 const TASK_NAV_ITEMS = [
   { id: 'my-tasks', label: 'My Tasks', icon: CheckSquareIcon },
@@ -212,7 +214,7 @@ export function TasksSidebar() {
           open={isSidebarSectionOpen('favorites')}
           onOpenChange={(open) => setSidebarSectionOpen('favorites', open)}
         />
-        <div data-tour="tasks-tags">
+        <div ref={tourTarget(TASKS_TOUR.tags)}>
           <SidebarTagsSection
             activeIds={state.facets.tags ?? []}
             onActiveIdsChange={(ids) =>

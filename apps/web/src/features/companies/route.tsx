@@ -11,6 +11,8 @@ import {
 import { enableCrm, isFeatureEnabled } from '@core/constant/featureFlags';
 import { lazy } from 'solid-js';
 import { getViewPreset } from '../next-soup/sidebar/soup-filter-presets';
+import { ViewTour } from '@app/features/tours/ViewTour';
+import { companiesTour } from './tour';
 
 const SoupView = lazy(async () => ({
   default: (await import('../next-soup/soup-view/soup-view')).SoupView,
@@ -31,6 +33,7 @@ export const CompaniesRouteView = withAuth(() => {
       initialClientFilters={preset?.clientFilters}
       initialGroupBy={preset?.groupBy}
       initialCrmView={crmView ? decodeCrmViewParam(crmView) : undefined}
+      tour={<ViewTour tour={companiesTour} />}
     />
   );
 });
