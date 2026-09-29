@@ -322,6 +322,7 @@ use utoipa::OpenApi;
         call::inbound::axum_router::check_active_call_handler,
         call::inbound::axum_router::get_active_calls_handler,
         call::inbound::axum_router::leave_or_end_call_handler,
+        call::inbound::axum_router::decline_call_handler,
         call::inbound::axum_router::get_call_record_handler,
         call::inbound::axum_router::edit_call_record_handler,
         call::inbound::axum_router::edit_call_transcript_handler,
@@ -337,6 +338,7 @@ use utoipa::OpenApi;
         webhook::inbound::axum_router::validate_webhook,
         webhook::inbound::stream_router::stream_events,
         call::inbound::axum_router::ring_status_handler,
+        call::inbound::axum_router::decline_ring_handler,
         call::inbound::axum_router::transcript_handler,
 
         // pins

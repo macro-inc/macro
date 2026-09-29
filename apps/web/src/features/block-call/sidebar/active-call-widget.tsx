@@ -175,7 +175,7 @@ export function SidebarActiveCallWidget(props: {
                     <IncomingCallContextMenu
                       onJoin={() => void joinChannelCall(call.channelId)}
                       onDismiss={() =>
-                        dismissIncomingCallEverywhere(call.callId)
+                        dismissIncomingCallEverywhere(call.callId, userId())
                       }
                     >
                       <Button
@@ -232,7 +232,7 @@ export function SidebarActiveCallWidget(props: {
                     <IncomingCallContextMenu
                       onJoin={() => void joinChannelCall(call.channelId)}
                       onDismiss={() =>
-                        dismissIncomingCallEverywhere(call.callId)
+                        dismissIncomingCallEverywhere(call.callId, userId())
                       }
                     >
                       <div class="flex items-center gap-1.5 w-full rounded-lg p-2 text-ink-extra-muted hover:bg-ink/3">
@@ -293,7 +293,10 @@ export function SidebarActiveCallWidget(props: {
                             onClick={(e) => {
                               e.preventDefault();
                               e.stopPropagation();
-                              dismissIncomingCallEverywhere(call.callId);
+                              dismissIncomingCallEverywhere(
+                                call.callId,
+                                userId()
+                              );
                             }}
                           >
                             <XIcon class="size-3" />

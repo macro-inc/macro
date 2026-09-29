@@ -2,7 +2,8 @@ import Foundation
 
 /// Polls the backend ring-status endpoint while a CallKit incoming call is
 /// ringing, so the ring can be ended when the user answers on another device
-/// (answered elsewhere) or the call ends before anyone answers (remote ended).
+/// (answered elsewhere), declines on another device (declined elsewhere), or
+/// the call ends before anyone answers (remote ended).
 ///
 /// All mutable state is main-thread only, matching the coordinator's
 /// threading convention; URLSession completion handlers hop to main before
@@ -10,6 +11,7 @@ import Foundation
 final class RingStatePoller {
     enum ResolvedStatus {
         case answered
+        case declined
         case ended
     }
 
@@ -131,6 +133,8 @@ final class RingStatePoller {
         switch decoded.status {
         case "answered":
             resolve(.answered)
+        case "declined":
+            resolve(.declined)
         case "ended":
             resolve(.ended)
         case "ringing":

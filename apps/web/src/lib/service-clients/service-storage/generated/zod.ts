@@ -2479,6 +2479,12 @@ export const getCallRecordResponse = zod
           .describe('Ordered from least to most access top -> bottom'),
       ])
       .optional(),
+    viewerHasDeclined: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether the authenticated viewer has declined this call on any device.\nSet on the single-record read so clients that missed `call_declined`\ncan still stop ringing via reconciliation; `false` in list contexts.'
+      ),
   })
   .describe(
     'Full record of a call, unifying rows from `calls` (active) and\n`call_records` (archived) into a single response shape.'
@@ -2575,6 +2581,17 @@ export const editCallRecordBody = zod
       ),
   })
   .describe('Edit call request, as supplied by inbound callers.');
+
+/**
+ * Declines the identified active call for the caller without joining it.
+Bound to `call_id` so a stale incoming-call UI cannot decline a newer call
+that replaced it in the same channel. The caller's other devices are told
+to stop ringing (`call_declined`); the call continues for everyone else.
+ * @summary Handler for `POST /call/record/{call_id}/decline`.
+ */
+export const declineCallParams = zod.object({
+  call_id: zod.uuid().describe('Call ID'),
+});
 
 /**
  * @summary Handle `POST /call/record/{call_id}/link` through the call domain service.
@@ -2682,12 +2699,24 @@ export const getRingStatusParams = zod.object({
 export const getRingStatusResponse = zod
   .object({
     status: zod
-      .enum(['ringing', 'answered', 'ended'])
+      .enum(['ringing', 'answered', 'declined', 'ended'])
       .describe(
         'Per-user status of an incoming-call ring, as reported by the\nring-status endpoint while a native client is ringing.'
       ),
   })
   .describe('Response body for `GET \/call\/ring-status\/{call_id}`.');
+
+/**
+ * Declines a ringing call from a native client, e.g. the iPhone lock-screen
+decline button, so the user's other devices stop ringing. Authorized like
+[`ring_status_handler`]: the bearer credential is the recipient's LiveKit
+JWT from the VoIP push payload, which identifies both the room and the
+declining user.
+ * @summary Handler for `POST /call/ring-status/{call_id}/decline`.
+ */
+export const declineRingParams = zod.object({
+  call_id: zod.uuid().describe('Call ID'),
+});
 
 /**
  * Gets or creates a call for the channel. If a call already exists, joins it;

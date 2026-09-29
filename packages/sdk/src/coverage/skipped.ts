@@ -292,6 +292,9 @@ export const storageExcluded = [
   'createCollabSurfaceToken',
   'createInstructionsHandler',
   'createViewHandler',
+  // Declining a ringing call is a live-device session flow, like leaving.
+  'declineCall',
+  'declineRing',
   'deleteCollabSurface',
   'ensureCollabSurface',
   'deleteHistoryHandler',
