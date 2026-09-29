@@ -62,6 +62,15 @@ fn resolve_parent(
         .with_entity_string(entity.entity_id.to_string()))
 }
 
+/// Surface ids are chosen by the caller, so the public API only takes random
+/// ones (UUID v4 or v7).
+fn is_random_id(id: Uuid) -> bool {
+    matches!(
+        id.get_version(),
+        Some(uuid::Version::Random | uuid::Version::SortRand)
+    )
+}
+
 /// Verify a receipt (already minted against the surface's parent by the
 /// inbound layer) actually names that parent. Defense in depth: the inbound
 /// layer resolves the parent via [`CollabSurfaceService::get_parent`], so a
@@ -93,6 +102,11 @@ where
         id: Uuid,
         initial_markdown: String,
     ) -> Result<CollabSurface, CollabSurfaceError> {
+        if !is_random_id(id) {
+            return Err(CollabSurfaceError::BadRequest(
+                "surface ids must be random UUIDs".to_string(),
+            ));
+        }
         if initial_markdown.len() > MAX_INITIAL_MARKDOWN_LEN {
             return Err(CollabSurfaceError::BadRequest(format!(
                 "initial markdown exceeds {MAX_INITIAL_MARKDOWN_LEN} bytes"

@@ -805,3 +805,42 @@ async fn ensure_on_a_deleted_id_is_gone_even_though_its_session_remains() {
 
     assert!(matches!(err, CollabSurfaceError::Gone));
 }
+
+#[tokio::test]
+async fn ensure_accepts_random_ids() {
+    let repo = Arc::new(MemRepo::default());
+    let mut init = no_sessions();
+    init.expect_initialize()
+        .times(2)
+        .returning(|_, _| Box::pin(async { Ok(()) }));
+    let svc = service_with(repo.clone(), init);
+
+    // v4, as a browser's crypto.randomUUID() makes, and v7.
+    for id in [uuid::Uuid::new_v4(), surface_id()] {
+        let surface = svc
+            .ensure_surface(&user("macro|a@b.c"), channel_receipt(), id, String::new())
+            .await
+            .unwrap();
+        assert_eq!(surface.state, SurfaceState::Ready);
+        *repo.surface.lock().unwrap() = None;
+    }
+}
+
+#[tokio::test]
+async fn ensure_refuses_ids_that_are_not_random() {
+    let repo = Arc::new(MemRepo::default());
+    let svc = service_with(repo.clone(), MockSurfaceInitializer::new());
+
+    for id in [
+        uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, b"surface"),
+        uuid::Uuid::nil(),
+    ] {
+        let err = svc
+            .ensure_surface(&user("macro|a@b.c"), channel_receipt(), id, String::new())
+            .await
+            .unwrap_err();
+        assert!(matches!(err, CollabSurfaceError::BadRequest(_)));
+    }
+    assert!(repo.stored().is_none());
+    assert_eq!(repo.document_lookups.load(Ordering::SeqCst), 0);
+}
