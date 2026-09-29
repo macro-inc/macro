@@ -3,7 +3,15 @@ import type {
   SplitId,
   SplitManager,
 } from '@components/app/split-layout/layoutManager';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const flags = vi.hoisted(() => ({ reminders: true }));
+
+vi.mock('@core/constant/featureFlags', () => ({
+  enableReminders: { key: 'enable-reminders' },
+  isFeatureEnabled: () => flags.reminders,
+}));
+
 import {
   HOME_REMINDER_DETAIL_ROUTE_ID,
   LEGACY_REMINDER_DETAIL_COMPONENT_PREFIX,
@@ -111,6 +119,10 @@ describe('reminder detail destination', () => {
 });
 
 describe('openReminderDetail', () => {
+  beforeEach(() => {
+    flags.reminders = true;
+  });
+
   it.each([
     [false, 'current'],
     [true, 'new-split'],
@@ -172,6 +184,20 @@ describe('openReminderDetail', () => {
     openReminderDetail('reminder-1', { manager });
 
     expect(activate).toHaveBeenCalledOnce();
+    expect(openWithSplit).not.toHaveBeenCalled();
+  });
+
+  it('does not mount fallback content while reminders are disabled', () => {
+    flags.reminders = false;
+    const openWithSplit = vi.fn();
+    const manager = {
+      activeSplitId: () => undefined,
+      splits: () => [],
+      openWithSplit,
+    } as unknown as SplitManager;
+
+    openReminderDetail('reminder-1', { manager });
+
     expect(openWithSplit).not.toHaveBeenCalled();
   });
 });

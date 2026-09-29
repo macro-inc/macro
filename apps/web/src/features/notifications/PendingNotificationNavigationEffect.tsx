@@ -1,4 +1,4 @@
-import { globalSplitManager } from '@app/signal/splitLayout';
+import { globalSplitManager, globalSplitRouter } from '@app/signal/splitLayout';
 import { toast } from '@core/component/Toast/Toast';
 import {
   type NotificationSource,
@@ -13,10 +13,14 @@ export function usePendingNotificationNavigationEffect(
 ) {
   createEffect(
     on(
-      [pendingNotificationNavigationId, globalSplitManager],
-      ([notificationId, layoutManager]) => {
+      [pendingNotificationNavigationId, globalSplitManager, globalSplitRouter],
+      ([notificationId, layoutManager, router]) => {
         if (!notificationId) return;
         if (!layoutManager) return;
+        // Reminder intents need the route host so feature-flag loading is
+        // handled reactively instead of falling through to an ungated legacy
+        // component mount. Waiting is harmless for every other destination.
+        if (!router) return;
 
         setPendingNotificationNavigationId(undefined);
 

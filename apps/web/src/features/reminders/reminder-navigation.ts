@@ -7,6 +7,7 @@ import type {
   SplitId,
   SplitManager,
 } from '@components/app/split-layout/layoutManager';
+import { enableReminders, isFeatureEnabled } from '@core/constant/featureFlags';
 import { buildSimpleEntityUrl } from '@core/util/url';
 
 export const REMINDER_DETAIL_ROUTE_ID = 'reminder-detail';
@@ -145,6 +146,12 @@ export function openReminderDetail(
     });
     return;
   }
+
+  // Route-backed opens wait reactively for flag hydration. This fallback has
+  // no route component to enforce the flag, so it may only mount content from
+  // an already-enabled snapshot. Startup notification intents wait for the
+  // router separately instead of reaching this branch while flags load.
+  if (!isFeatureEnabled(enableReminders)) return;
 
   const existingState = manager
     .splits()
