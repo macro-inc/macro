@@ -42,6 +42,9 @@ export function useSsoLogin(opts?: { signupMode?: boolean }) {
       authUrl.pathname.startsWith(`${DEVELOPMENT_PROXY_PREFIX}/`)
     ) {
       authUrl.searchParams.set('is_mobile', 'true');
+    }
+
+    if (isNativeMobilePlatform()) {
       const session = createNativeAuthSession('login');
       authUrl.searchParams.set('original_url', session.callbackUrl);
       const result = await session.authenticate(authUrl.toString());

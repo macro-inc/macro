@@ -18,6 +18,17 @@
    failure does not block the remaining content; signup retries repair tags
    without resetting task priorities. The guide waits until its tag IDs resolve.
 
+## Hosted-dev proxy SSO
+
+On an allowed OAuth origin such as `https://localhost:<port>`, Google/SSO
+sign-in navigates the browser to `/__macro_dev/gateway/auth/login/sso` with
+`is_mobile=true` to request the session-code handoff. The `original_url`
+remains the browser destination (including its query and hash). Returning
+from the provider redeems the session code to establish cookies locally.
+This browser flow must not open a native authentication session. Verify the
+redirect separately from provider completion; arbitrary development hostnames
+are not on the hosted OAuth redirect allowlist.
+
 ## Native iOS 27
 
 The native welcome screen offers `Create new account` and `Log into existing
