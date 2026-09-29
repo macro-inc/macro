@@ -9,31 +9,44 @@ import {
   createReminderAlertFeed,
 } from './queries/create-reminder-alert-feed';
 import { createReminderAlertDismissals } from './reminder-alert-dismissals';
-import { reminderDetailDestination } from './reminder-navigation';
+import { openReminderDetail } from './reminder-navigation';
 import { showReminderAlert } from './views/reminder-alert-toast';
 
 /** App composition: delivered occurrences, browser focus, and native Macro toasts. */
-export function useReminderAlerts(source: AlertNotificationSource): void {
+export function useReminderAlerts(
+  source: Omit<AlertNotificationSource, 'isStarted'> & {
+    readonly _notificationsQuery: { readonly isStarted: boolean };
+  }
+): void {
   const userId = useUserId();
   const isAuthenticated = useIsAuthenticated();
-  const account = () => (isAuthenticated() ? userId() : undefined);
   const remindersFlag = useFeatureFlag(enableReminders);
+  const account = () =>
+    isAuthenticated() && remindersFlag().enabled ? userId() : undefined;
   const dismissals = createReminderAlertDismissals(account);
 
   createReminderAlerts({
-    items: createReminderAlertFeed(source, account),
-    active: () => !!account() && remindersFlag().enabled && isTabFocused(),
+    items: createReminderAlertFeed(
+      {
+        notifications: source.notifications,
+        isLoading: source.isLoading,
+        isStarted: () => source._notificationsQuery.isStarted,
+        mutedEntities: source.mutedEntities,
+        subscribe: source.subscribe,
+        withLocalOverrides: (notification) =>
+          source.withLocalOverrides?.(notification) ?? notification,
+      },
+      account
+    ),
+    active: () => !!account() && isTabFocused(),
     acknowledgedKeys: dismissals.keys,
     acknowledge: dismissals.acknowledge,
     show: (items, acknowledge) =>
       showReminderAlert(items, acknowledge, (reminderId) => {
         const manager = globalSplitManager();
         if (!manager) return false;
-        manager.openWithSplit(
-          reminderId
-            ? reminderDetailDestination(reminderId).content
-            : { type: 'component', id: 'reminders' }
-        );
+        if (reminderId) openReminderDetail(reminderId, { manager });
+        else manager.openWithSplit({ type: 'component', id: 'reminders' });
         return true;
       }),
   });

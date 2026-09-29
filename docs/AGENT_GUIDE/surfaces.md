@@ -126,8 +126,10 @@ it does not imply deletion. Only explicit `GraphqlCacheDeletion` events remove r
 With reminders enabled, an unseen reminder notification produces a persistent
 alert while the Macro tab has focus. Browser notification permission is not
 required. Returning to the tab also surfaces unseen reminders from the loaded
-notification feed. Multiple occurrences share one alert, with up to three
-descriptions and a count of the rest; normal save/copy toasts do not replace it.
+notification feed. Alerts do not activate the full notification history query:
+live arrivals are buffered independently, including while the tab is blurred.
+Multiple occurrences share one alert, with up to three descriptions and a count
+of the rest; normal save/copy toasts do not replace it.
 
 **Open reminder** opens the reminder details, including standalone reminders.
 For a group, **View reminders** opens the reminders list. Opening or closing this
@@ -136,10 +138,15 @@ or snooze a reminder. Acknowledgements survive reloads and synchronize between
 tabs on the same origin. A later occurrence of a recurring reminder alerts again.
 Seeing or completing its notification elsewhere also removes it from the alert.
 
+Existing item-level notification mutes and snoozes also hide matching reminder
+alerts. Snoozing does not acknowledge the occurrence: an unseen alert can return
+when the snooze expires, without requiring another network event. The alert does
+not add a new per-occurrence Snooze control.
+
 When verifying, intercept notification responses in an owned browser tab and
 inject unseen reminder fixtures instead of scheduling real hosted reminders.
-Check permission denied, a burst of reminders, blur/focus, reload after dismissal,
-and both desktop and mobile widths. This foreground path does not deliver browser
+Check permission denied, a burst of reminders before history loads, blur/focus,
+reload after dismissal, mute/unmute, snooze expiry, and desktop/mobile widths. This foreground path does not deliver browser
 push when Macro is closed.
 
 ## Home (desktop) / Notifications (mobile) — `/app/home`

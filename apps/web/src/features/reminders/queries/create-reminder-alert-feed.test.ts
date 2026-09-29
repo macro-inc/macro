@@ -1,7 +1,10 @@
 import type { UnifiedNotification } from '@notifications/types';
 import { createRoot, createSignal } from 'solid-js';
-import { describe, expect, it, vi } from 'vitest';
-import { createReminderAlertFeed } from './create-reminder-alert-feed';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  type AlertNotificationSource,
+  createReminderAlertFeed,
+} from './create-reminder-alert-feed';
 
 const notification: UnifiedNotification = {
   id: 'delivery-1',
@@ -28,14 +31,22 @@ function mount() {
       UnifiedNotification[]
     >([]);
     const [isLoading, setLoading] = createSignal(true);
+    const [isStarted, setStarted] = createSignal(true);
+    const [mutedEntities, setMutedEntities] = createSignal<
+      ReturnType<AlertNotificationSource['mutedEntities']>
+    >([]);
+    const readLoading = vi.fn(isLoading);
+    const readNotifications = vi.fn(notifications);
     const [done, setDone] = createSignal(false);
     const [account, setAccount] = createSignal<string | undefined>('alice');
     let deliver!: (n: UnifiedNotification) => void;
     const unsubscribe = vi.fn();
     const alerts = createReminderAlertFeed(
       {
-        notifications,
-        isLoading,
+        notifications: readNotifications,
+        isLoading: readLoading,
+        isStarted,
+        mutedEntities,
         subscribe: (callback) => {
           deliver = callback;
           return unsubscribe;
@@ -51,6 +62,10 @@ function mount() {
       alerts,
       setNotifications,
       setLoading,
+      setStarted,
+      setMutedEntities,
+      readLoading,
+      readNotifications,
       setDone,
       setAccount,
       get deliver() {
@@ -63,6 +78,110 @@ function mount() {
 }
 
 describe('reminder alert feed', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it('buffers live deliveries without activating an unused notification query', () => {
+    const h = mount();
+    h.setStarted(false);
+    h.readLoading.mockClear();
+    h.readNotifications.mockClear();
+    h.setNotifications([notification]);
+    h.setLoading(false);
+    h.deliver(notification);
+    expect(h.alerts()).toHaveLength(1);
+    expect(h.readLoading).not.toHaveBeenCalled();
+    expect(h.readNotifications).not.toHaveBeenCalled();
+    h.setStarted(true);
+    expect(h.alerts()).toHaveLength(1);
+    h.setNotifications([]);
+    expect(h.alerts()).toEqual([]);
+    h.dispose();
+  });
+
+  it('retains a live burst while no foreground consumer reads alerts', () => {
+    const h = mount();
+    h.setStarted(false);
+    for (let i = 0; i < 4; i++) {
+      h.deliver({
+        ...notification,
+        id: `delivery-${i}`,
+        notification_metadata: {
+          tag: 'reminder',
+          content: {
+            reminderId: `reminder-${i}`,
+            description: `Follow up ${i}`,
+            scheduledFor: '2026-09-21T10:00:00Z',
+          },
+        },
+      });
+    }
+    expect(h.alerts()).toHaveLength(4);
+    h.dispose();
+  });
+
+  it('matches mute preferences to the primary notification entity', () => {
+    const h = mount();
+    h.deliver({ ...notification, entity_id: 'primary-reminder' });
+    h.setMutedEntities([{ item_id: 'reminder-1', item_type: 'reminder' }]);
+    expect(h.alerts()).toHaveLength(1);
+    h.setMutedEntities([
+      { item_id: 'primary-reminder', item_type: 'reminder' },
+    ]);
+    expect(h.alerts()).toEqual([]);
+    h.dispose();
+  });
+
+  it.each(['live', 'loaded'] as const)(
+    'hides a %s occurrence while snoozed and restores it at expiry',
+    (delivery) => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-09-29T10:00:00Z'));
+      const h = mount();
+      if (delivery === 'live') h.deliver(notification);
+      else {
+        h.setNotifications([notification]);
+        h.setLoading(false);
+      }
+      expect(h.alerts()).toHaveLength(1);
+      h.setMutedEntities([
+        {
+          item_id: 'reminder-1',
+          item_type: 'reminder',
+          snoozed_until: '2026-09-29T10:01:00Z',
+        },
+      ]);
+      expect(h.alerts()).toEqual([]);
+      vi.advanceTimersByTime(59_999);
+      expect(h.alerts()).toEqual([]);
+      vi.advanceTimersByTime(1);
+      expect(h.alerts()).toHaveLength(1);
+      h.dispose();
+      expect(vi.getTimerCount()).toBe(0);
+    }
+  );
+
+  it('honors permanent mutes, expiry extensions, and explicit unmute without acknowledging', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-29T10:00:00Z'));
+    const h = mount();
+    h.deliver(notification);
+    const item = { item_id: 'reminder-1', item_type: 'reminder' };
+    h.setMutedEntities([{ ...item, snoozed_until: '2026-09-29T10:01:00Z' }]);
+    vi.advanceTimersByTime(30_000);
+    h.setMutedEntities([{ ...item, snoozed_until: '2026-09-29T10:02:00Z' }]);
+    vi.advanceTimersByTime(30_000);
+    expect(h.alerts()).toEqual([]);
+    h.setMutedEntities([item]);
+    expect(vi.getTimerCount()).toBe(0);
+    vi.advanceTimersByTime(120_000);
+    expect(h.alerts()).toEqual([]);
+    h.setMutedEntities([]);
+    expect(h.alerts()).toHaveLength(1);
+    h.setMutedEntities([{ ...item, item_type: 'document' }]);
+    expect(h.alerts()).toHaveLength(1);
+    h.dispose();
+  });
+
   it('rejects deliveries from a disposed account subscription', () => {
     const h = mount();
     const aliceDelivery = h.deliver;

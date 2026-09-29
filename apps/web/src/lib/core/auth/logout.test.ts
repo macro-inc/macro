@@ -22,7 +22,10 @@ vi.mock('@graphql-cache/lifecycle', () => ({
   clearRegisteredCaches: vi.fn(async () => {}),
 }));
 vi.mock('@queries/auth/user-info', () => ({
-  authKeys: { userInfo: { queryKey: ['auth', 'user-info'] } },
+  authKeys: {
+    userInfo: { queryKey: ['auth', 'user-info'] },
+    aiBillingSummary: { queryKey: ['auth', 'ai-billing-summary'] },
+  },
 }));
 vi.mock('@queries/storage/document-cache', () => ({
   clearDocumentQueryCache: vi.fn(),

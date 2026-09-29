@@ -1,3 +1,4 @@
+import { isMutedItem } from '@entity/utils/notification';
 import type { NotificationSource } from '@notifications/notification-source';
 import type { UnifiedNotification } from '@notifications/types';
 import {
@@ -14,8 +15,15 @@ import {
 
 export type AlertNotificationSource = Pick<
   NotificationSource,
-  'notifications' | 'isLoading' | 'subscribe' | 'withLocalOverrides'
->;
+  | 'notifications'
+  | 'isLoading'
+  | 'subscribe'
+  | 'withLocalOverrides'
+  | 'mutedEntities'
+> & {
+  /** Observing alerts must not activate the lazy full notification query. */
+  isStarted: Accessor<boolean>;
+};
 
 /** New deliveries must alert even if their entity is outside loaded Soup pages. */
 export function createReminderAlertFeed(
@@ -45,7 +53,38 @@ export function createReminderAlertFeed(
   });
 
   const snapshot = () =>
-    !account() || source.isLoading() ? [] : source.notifications();
+    !account() || !source.isStarted() || source.isLoading()
+      ? []
+      : source.notifications();
+
+  const [clock, setClock] = createSignal(Date.now());
+  const activeMutes = createMemo(() => {
+    clock();
+    const now = Date.now();
+    return !account()
+      ? []
+      : source
+          .mutedEntities()
+          .filter(
+            (item) =>
+              !item.snoozed_until || Date.parse(item.snoozed_until) > now
+          );
+  });
+  // Snooze expiry must restore an unseen card even when no query/live update
+  // arrives. Keep its occurrence buffered rather than acknowledging it.
+  createEffect(() => {
+    const nextExpiry = Math.min(
+      ...activeMutes().flatMap((item) =>
+        item.snoozed_until ? [Date.parse(item.snoozed_until)] : []
+      )
+    );
+    if (!Number.isFinite(nextExpiry)) return;
+    const timer = setTimeout(
+      () => setClock(Date.now()),
+      Math.min(Math.max(0, nextExpiry - Date.now()), 2_147_483_647)
+    );
+    onCleanup(() => clearTimeout(timer));
+  });
   const buffered = createMemo<{
     account: string | undefined;
     latest: ReturnType<typeof latest>;
@@ -100,12 +139,20 @@ export function createReminderAlertFeed(
   });
 
   return createMemo(() =>
-    reminderAlertsFromNotifications([
-      ...snapshot(),
-      ...[...buffered().pending.values()].map(
+    reminderAlertsFromNotifications(
+      [
+        ...snapshot(),
+        ...[...buffered().pending.values()].map(
+          (notification) =>
+            source.withLocalOverrides?.(notification) ?? notification
+        ),
+      ].filter(
         (notification) =>
-          source.withLocalOverrides?.(notification) ?? notification
-      ),
-    ]).filter((item) => !buffered().acknowledged.has(item.key))
+          !isMutedItem(activeMutes(), {
+            item_id: notification.entity_id,
+            item_type: notification.entity_type,
+          })
+      )
+    ).filter((item) => !buffered().acknowledged.has(item.key))
   );
 }

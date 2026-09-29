@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   custom: vi.fn((_config: unknown, _options: unknown) => 1),
   dismiss: vi.fn(),
   open: vi.fn(),
+  openReminder: vi.fn(),
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => mocks.flag(),
@@ -24,6 +25,9 @@ vi.mock('@core/context/user', () => ({
   useIsAuthenticated: () => () => true,
 }));
 vi.mock('@core/signal/tabFocus', () => ({ isTabFocused: () => true }));
+vi.mock('./reminder-navigation', () => ({
+  openReminderDetail: mocks.openReminder,
+}));
 vi.mock('@macro-inc/lexical-core', () => ({
   markdownToPlainText: (text: string) => text,
 }));
@@ -60,24 +64,66 @@ describe('reminder alert app wiring', () => {
       const [enabled, setEnabled] = createSignal(false);
       mocks.flag = () => ({ enabled: enabled() });
       const source = {
-        notifications: () => [notification],
-        isLoading: () => false,
-        subscribe: () => () => {},
+        notifications: vi.fn(() => [notification]),
+        isLoading: vi.fn(() => false),
+        subscribe: vi.fn(() => () => {}),
+        mutedEntities: () => [],
+        _notificationsQuery: { isStarted: true },
       };
       useReminderAlerts(source);
-      return { setEnabled, dispose };
+      return { setEnabled, source, dispose };
     });
     expect(mocks.custom).not.toHaveBeenCalled();
+    expect(h.source.notifications).not.toHaveBeenCalled();
+    expect(h.source.isLoading).not.toHaveBeenCalled();
+    expect(h.source.subscribe).not.toHaveBeenCalled();
     h.setEnabled(true);
     expect(mocks.custom).toHaveBeenCalledOnce();
     const config = mocks.custom.mock.calls[0][0] as CustomToastConfig;
     expect(config.actions?.[0].label).toBe('Open reminder');
     config.actions?.[0].onClick();
-    expect(mocks.open).toHaveBeenCalledWith({
-      type: 'component',
-      id: 'reminder-view~reminder-1',
+    expect(mocks.openReminder).toHaveBeenCalledWith('reminder-1', {
+      manager: expect.objectContaining({ openWithSplit: mocks.open }),
     });
     expect(mocks.dismiss).toHaveBeenCalledWith(1);
+    h.dispose();
+  });
+
+  it('adopts notification state overrides when their transport flag hydrates', () => {
+    const h = createRoot((dispose) => {
+      mocks.flag = () => ({ enabled: true });
+      const [useOverrides, setUseOverrides] = createSignal(false);
+      let receive: ((item: UnifiedNotification) => void) | undefined;
+      useReminderAlerts({
+        notifications: () => [],
+        isLoading: () => false,
+        _notificationsQuery: { isStarted: false },
+        mutedEntities: () => [],
+        subscribe: (callback) => {
+          receive = callback;
+          return () => {};
+        },
+        get withLocalOverrides() {
+          return useOverrides()
+            ? (item: UnifiedNotification): UnifiedNotification => ({
+                ...item,
+                state: 'done',
+              })
+            : undefined;
+        },
+      });
+      return {
+        dispose,
+        setUseOverrides,
+        deliver: () => receive?.(notification),
+      };
+    });
+    h.deliver();
+    expect(mocks.custom).toHaveBeenCalledOnce();
+    h.setUseOverrides(true);
+    expect(mocks.dismiss).toHaveBeenCalledWith(1);
+    h.setUseOverrides(false);
+    expect(mocks.custom).toHaveBeenCalledTimes(2);
     h.dispose();
   });
 });
