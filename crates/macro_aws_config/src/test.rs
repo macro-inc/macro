@@ -4,7 +4,7 @@ use super::*;
 fn public_storage_roundtrip_preserves_encoded_paths_and_signature_query() {
     let base = parse_public_base("https://forge.tail66c63e.ts.net:3000/s3").unwrap();
     let raw = "http://localstack:4566/doc-storage/a%2Fb%20c%25%7C%40/file?X-Amz-Credential=test%2Fregion&X-Amz-SignedHeaders=host&x=1&x=2";
-    let public = transform_local_url_with_public_base(raw, Some(&base));
+    let public = transform_local_url(raw, Some(base.as_str()));
     assert_eq!(
         public,
         raw.replacen("http://localstack:4566", base.as_str(), 1)

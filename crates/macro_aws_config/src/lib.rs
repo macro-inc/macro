@@ -99,10 +99,6 @@ fn transform_local_url(url: &str, public_url: Option<&str>) -> String {
     format!("{origin}/{asset}{path}{query}")
 }
 
-fn transform_local_url_with_public_base(url: &str, public_base: Option<&url::Url>) -> String {
-    transform_local_url(url, public_base.map(url::Url::as_str))
-}
-
 /// Transforms a localstack url into one that will work within the app
 /// For example, presigned urls for localstack come out as `http://{BUCKET_NAME}.localstack:{PORT}`
 /// but we need them to be formulated as `http://localhost:{PORT}/bucket-name`.
