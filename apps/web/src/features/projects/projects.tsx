@@ -146,8 +146,7 @@ function ProjectsCollectionHost(props: {
   );
   const copyLink = makeCopyLinkAction();
   const copyId = makeCopyEntityIdAction();
-  // A fresh request per Share, so the same project can be shared again.
-  const [sharing, setSharing] = createSignal<{ projectId: string }>();
+  const [sharing, setSharing] = createSignal<string>();
   return (
     <>
       <ProjectsCollection
@@ -168,17 +167,13 @@ function ProjectsCollectionHost(props: {
           )
         }
         onCopyId={(id) => void copyId.executeById(id)}
-        onShare={(projectId) => setSharing({ projectId })}
+        onShare={(projectId) => setSharing(projectId)}
       />
       <Show when={sharing()} keyed>
-        {(request) => (
+        {(projectId) => (
           <ProjectShareLauncher
-            projectId={request.projectId}
-            onClose={() =>
-              setSharing((current) =>
-                current === request ? undefined : current
-              )
-            }
+            projectId={projectId}
+            onClose={() => setSharing(undefined)}
           />
         )}
       </Show>

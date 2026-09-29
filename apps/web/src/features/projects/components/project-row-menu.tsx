@@ -4,6 +4,7 @@ import {
 } from '@app/features/soup/SoupEntityActionDrawer';
 import {
   ContextMenuContent,
+  ContextMenuTrigger,
   MenuItem,
   MenuSeparator,
   SubTrigger,
@@ -13,8 +14,8 @@ import { isMobile } from '@core/mobile/isMobile';
 import type { InitiativeEntity } from '@entity';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { PropertyValueIcon } from '@property/component/propertyValue';
-import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { Property } from '@property/types';
+import { formatOptionValue } from '@property/utils/formatting';
 import {
   createSignal,
   For,
@@ -25,41 +26,34 @@ import {
 } from 'solid-js';
 import { match } from 'ts-pattern';
 import type { ProjectRow } from '../context/projects-context';
-import { projectMenuGroups } from '../core/project-menu';
-
-type SingleProjectCommand =
-  | 'open-in-split'
-  | 'rename'
-  | 'copy-link'
-  | 'copy-id'
-  | 'share';
-
-/** What a chosen entry asks the list to do. */
-export type ProjectRowMenuCommand =
-  | { kind: SingleProjectCommand; row: ProjectRow }
-  | {
-      kind: 'set-option';
-      rows: readonly ProjectRow[];
-      property: Property;
-      optionId: string;
-    }
-  | { kind: 'delete'; rows: readonly ProjectRow[] };
+import { type ProjectMenuItem, projectMenuGroups } from '../core/project-menu';
 
 type ProjectRowMenuProps = {
   /** The projects the menu acts on, read each time it opens. */
   targets(): readonly ProjectRow[];
-  /** Definitions that supply the Status and Priority choices. */
-  properties: readonly Property[];
+  /** Definitions offering the choices; their entries wait until they load. */
+  status?: Property;
+  priority?: Property;
   canOpenInNewSplit: boolean;
-  canShare: boolean;
-  onCommand(command: ProjectRowMenuCommand): void;
+  onOpenInNewSplit(row: ProjectRow): void;
+  onRename(row: ProjectRow): void;
+  onSetOption(
+    rows: readonly ProjectRow[],
+    property: Property,
+    optionId: string
+  ): void;
+  onCopyLink(row: ProjectRow): void;
+  onCopyId(row: ProjectRow): void;
+  /** Omit where the host cannot show the Share menu. */
+  onShare?(row: ProjectRow): void;
+  onDelete(rows: readonly ProjectRow[]): void;
 };
 
 /** One entry, shown as a menu item on desktop and a drawer row on mobile. */
 type ProjectMenuEntry =
   | {
       kind: 'action';
-      id: string;
+      id: ProjectMenuItem;
       label: string;
       shortcut?: string;
       disabled?: boolean;
@@ -68,7 +62,7 @@ type ProjectMenuEntry =
     }
   | {
       kind: 'options';
-      id: string;
+      id: ProjectMenuItem;
       label: string;
       property: Property;
       options: { id: string; label: string }[];
@@ -79,28 +73,18 @@ function projectMenuEntries(
   props: ProjectRowMenuProps,
   rows: readonly ProjectRow[]
 ): ProjectMenuEntry[][] {
-  const definition = (id: string) =>
-    props.properties.find((property) => property.propertyDefinitionId === id);
-  const status = definition(SYSTEM_PROPERTY_IDS.STATUS);
-  const priority = definition(SYSTEM_PROPERTY_IDS.PRIORITY);
+  const single = (callback?: (row: ProjectRow) => void) => () => {
+    const row = rows[0];
+    if (row) callback?.(row);
+  };
   const action = (
-    kind: SingleProjectCommand,
+    id: ProjectMenuItem,
     label: string,
-    extra: { shortcut?: string; disabled?: boolean } = {}
-  ): ProjectMenuEntry[] => [
-    {
-      kind: 'action',
-      id: kind,
-      label,
-      ...extra,
-      run: () => {
-        const row = rows[0];
-        if (row) props.onCommand({ kind, row });
-      },
-    },
-  ];
-  // Only offered once the definition loads (see `projectMenuGroups`).
+    run: () => void,
+    extra: { shortcut?: string; disabled?: boolean; destructive?: boolean } = {}
+  ): ProjectMenuEntry[] => [{ kind: 'action', id, label, run, ...extra }];
   const options = (
+    id: ProjectMenuItem,
     label: string,
     property: Property | undefined
   ): ProjectMenuEntry[] =>
@@ -108,16 +92,14 @@ function projectMenuEntries(
       ? [
           {
             kind: 'options',
-            id: property.propertyDefinitionId,
+            id,
             label,
             property,
-            options: (property.options ?? []).flatMap((option) =>
-              option.value.type === 'string'
-                ? [{ id: option.id, label: option.value.value }]
-                : []
-            ),
-            choose: (optionId) =>
-              props.onCommand({ kind: 'set-option', rows, property, optionId }),
+            options: (property.options ?? []).map((option) => ({
+              id: option.id,
+              label: formatOptionValue(option),
+            })),
+            choose: (optionId) => props.onSetOption(rows, property, optionId),
           },
         ]
       : [];
@@ -125,35 +107,33 @@ function projectMenuEntries(
     rows.map((row) => row.project),
     {
       splits: !isMobile(),
-      share: props.canShare,
-      status: Boolean(status),
-      priority: Boolean(priority),
+      share: Boolean(props.onShare),
+      status: Boolean(props.status),
+      priority: Boolean(props.priority),
     }
   ).map((group) =>
     group.flatMap((item) =>
       match(item)
-        .with('open-in-split', () =>
-          action('open-in-split', 'Open in new split', {
+        .with('open-in-split', (id) =>
+          action(id, 'Open in new split', single(props.onOpenInNewSplit), {
             shortcut: 'shift+enter',
             // Without room for another split the open would replace this one.
             disabled: !props.canOpenInNewSplit,
           })
         )
-        .with('rename', () => action('rename', 'Rename'))
-        .with('status', () => options('Set status', status))
-        .with('priority', () => options('Set priority', priority))
-        .with('copy-link', () => action('copy-link', 'Copy Link'))
-        .with('copy-id', () => action('copy-id', 'Copy ID'))
-        .with('share', () => action('share', 'Share'))
-        .with('delete', (): ProjectMenuEntry[] => [
-          {
-            kind: 'action',
-            id: 'delete',
-            label: 'Delete',
+        .with('rename', (id) => action(id, 'Rename', single(props.onRename)))
+        .with('status', (id) => options(id, 'Set status', props.status))
+        .with('priority', (id) => options(id, 'Set priority', props.priority))
+        .with('copy-link', (id) =>
+          action(id, 'Copy Link', single(props.onCopyLink))
+        )
+        .with('copy-id', (id) => action(id, 'Copy ID', single(props.onCopyId)))
+        .with('share', (id) => action(id, 'Share', single(props.onShare)))
+        .with('delete', (id) =>
+          action(id, 'Delete', () => props.onDelete(rows), {
             destructive: true,
-            run: () => props.onCommand({ kind: 'delete', rows }),
-          },
-        ])
+          })
+        )
         .exhaustive()
     )
   );
@@ -204,21 +184,6 @@ const initiativeEntity = (row: ProjectRow): InitiativeEntity => ({
 });
 
 /**
- * Solid delegates events from a portal to where it sits in the component
- * tree, so the row's portaled property editors would open this menu and lose
- * their native one.
- */
-const ignorePortaledEvents = (
-  event: Event & { currentTarget: HTMLElement }
-) => {
-  if (
-    !(event.target instanceof Node) ||
-    !event.currentTarget.contains(event.target)
-  )
-    event.stopPropagation();
-};
-
-/**
  * A project row's actions: a right-click menu on desktop and, as for task
  * rows, a long-press drawer on mobile.
  */
@@ -267,27 +232,15 @@ export function ProjectRowMenu(
       </Match>
       <Match when={true}>
         <ContextMenu onOpenChange={props.onOpenChange}>
-          <ContextMenu.Trigger class="w-full">
-            <div
-              class="contents"
-              onContextMenu={ignorePortaledEvents}
-              onPointerDown={ignorePortaledEvents}
-            >
-              {props.children}
-            </div>
-          </ContextMenu.Trigger>
+          <ContextMenuTrigger class="w-full">
+            {props.children}
+          </ContextMenuTrigger>
           <ContextMenu.Portal>
             <ContextMenuContent
               class="w-56 text-xs text-ink-muted"
               onCloseAutoFocus={props.onCloseAutoFocus}
             >
-              <ProjectMenuItems
-                targets={props.targets}
-                properties={props.properties}
-                canOpenInNewSplit={props.canOpenInNewSplit}
-                canShare={props.canShare}
-                onCommand={props.onCommand}
-              />
+              <ProjectMenuItems {...props} />
             </ContextMenuContent>
           </ContextMenu.Portal>
         </ContextMenu>

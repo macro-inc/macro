@@ -23,15 +23,19 @@ import SpinnerIcon from '@phosphor/spinner.svg';
 import { PropertyValueIcon } from '@property/component/propertyValue';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { Property, PropertyApiValues } from '@property/types';
-import { Button, DeleteDialog, Dropdown, Input } from '@ui';
-import { type Accessor, createSignal, Match, Show, Switch } from 'solid-js';
-import { match } from 'ts-pattern';
-import type { VirtualizerHandle } from 'virtua/solid';
-import { ProjectListHeader, ProjectRow } from '../components/project-row';
+import { Button, Dropdown, Input } from '@ui';
 import {
-  ProjectRowMenu,
-  type ProjectRowMenuCommand,
-} from '../components/project-row-menu';
+  type Accessor,
+  batch,
+  createSignal,
+  Match,
+  Show,
+  Switch,
+} from 'solid-js';
+import type { VirtualizerHandle } from 'virtua/solid';
+import { DeleteProjectsDialog } from '../components/delete-projects-dialog';
+import { ProjectListHeader, ProjectRow } from '../components/project-row';
+import { ProjectRowMenu } from '../components/project-row-menu';
 import { RenameProjectDialog } from '../components/rename-project-dialog';
 import {
   type ProjectRow as ProjectRowData,
@@ -66,37 +70,33 @@ export function ProjectsCollection(props: {
   let grid: HTMLDivElement | undefined;
   let searchInput: HTMLInputElement | undefined;
   const [openMenu, setOpenMenu] = createSignal<'filters' | 'sort'>();
+  const definition = (id: string) =>
+    definitions
+      .properties()
+      .find((property) => property.propertyDefinitionId === id);
   const filters = (): ListFilterGroup<FilterGroup, string>[] => [
     ...(['status', 'priority'] as const).map((id) => ({
       id,
       label: id === 'status' ? 'Status' : 'Priority',
       selectionMode: 'single' as const,
       options:
-        definitions
-          .properties()
-          .find(
-            (property) =>
-              property.propertyDefinitionId ===
-              (id === 'status'
-                ? SYSTEM_PROPERTY_IDS.STATUS
-                : SYSTEM_PROPERTY_IDS.PRIORITY)
-          )
-          ?.options?.flatMap((option) =>
-            option.value.type === 'string'
-              ? [
-                  {
-                    id: option.id,
-                    label: option.value.value,
-                    icon: () => (
-                      <PropertyValueIcon
-                        optionId={option.id}
-                        class="size-3.5"
-                      />
-                    ),
-                  },
-                ]
-              : []
-          ) ?? [],
+        definition(
+          id === 'status'
+            ? SYSTEM_PROPERTY_IDS.STATUS
+            : SYSTEM_PROPERTY_IDS.PRIORITY
+        )?.options?.flatMap((option) =>
+          option.value.type === 'string'
+            ? [
+                {
+                  id: option.id,
+                  label: option.value.value,
+                  icon: () => (
+                    <PropertyValueIcon optionId={option.id} class="size-3.5" />
+                  ),
+                },
+              ]
+            : []
+        ) ?? [],
     })),
     {
       id: 'assignee',
@@ -153,9 +153,11 @@ export function ProjectsCollection(props: {
     },
   });
   const [renaming, setRenaming] = createSignal<ProjectRowData>();
-  const [deleting, setDeleting] = createSignal<readonly ProjectRowData[]>();
+  const [deleting, setDeleting] = createSignal<{
+    rows: readonly ProjectRowData[];
+    error?: string;
+  }>();
   const [deletePending, setDeletePending] = createSignal(false);
-  const [deleteError, setDeleteError] = createSignal<string>();
   // The menu entry that opened a dialog no longer exists when it closes.
   const returnFocusToList = (event: Event) => {
     event.preventDefault();
@@ -197,7 +199,6 @@ export function ProjectsCollection(props: {
   };
   const deleteProjects = async (rows: readonly ProjectRowData[]) => {
     setDeletePending(true);
-    setDeleteError(undefined);
     let failedIds: readonly string[];
     try {
       failedIds = await commands.deleteMany(rows.map((row) => row.project.id));
@@ -208,8 +209,10 @@ export function ProjectsCollection(props: {
       setDeletePending(false);
     }
     const failed = rows.filter((row) => failedIds.includes(row.project.id));
-    for (const row of rows)
-      if (!failed.includes(row)) list.selection.deselectKey(row.project.id);
+    batch(() => {
+      for (const row of rows)
+        if (!failed.includes(row)) list.selection.deselectKey(row.project.id);
+    });
     if (failed.length === 0) {
       setDeleting(undefined);
       toast.success(
@@ -218,32 +221,14 @@ export function ProjectsCollection(props: {
       return;
     }
     // Only the failures remain for a retry.
-    setDeleting(failed);
-    setDeleteError(
-      failed.length === rows.length
-        ? 'Could not delete. Please try again.'
-        : `Deleted ${rows.length - failed.length} of ${rows.length}. The rest could not be deleted.`
-    );
+    setDeleting({
+      rows: failed,
+      error:
+        failed.length === rows.length
+          ? 'Could not delete. Please try again.'
+          : `Deleted ${rows.length - failed.length} of ${rows.length}. The rest could not be deleted.`,
+    });
   };
-  const runMenuCommand = (command: ProjectRowMenuCommand) =>
-    match(command)
-      .with({ kind: 'open-in-split' }, ({ row }) =>
-        props.onOpen(row.project.id, { newSplit: true })
-      )
-      .with({ kind: 'rename' }, ({ row }) => setRenaming(row))
-      .with({ kind: 'set-option' }, ({ rows, property, optionId }) => {
-        void setOption(rows, property, optionId);
-      })
-      .with({ kind: 'copy-link' }, ({ row }) =>
-        props.onCopyLink(row.project.id)
-      )
-      .with({ kind: 'copy-id' }, ({ row }) => props.onCopyId(row.project.id))
-      .with({ kind: 'share' }, ({ row }) => props.onShare?.(row.project.id))
-      .with({ kind: 'delete' }, ({ rows }) => {
-        setDeleteError(undefined);
-        setDeleting(rows);
-      })
-      .exhaustive();
   useViewControlHotkeys({
     scopeId: props.scopeId,
     enabled: props.isActive,
@@ -497,10 +482,23 @@ export function ProjectsCollection(props: {
                       {(item) => (
                         <ProjectRowMenu
                           targets={() => menuTargets(item().entity)}
-                          properties={definitions.properties()}
+                          status={definition(SYSTEM_PROPERTY_IDS.STATUS)}
+                          priority={definition(SYSTEM_PROPERTY_IDS.PRIORITY)}
                           canOpenInNewSplit={props.canOpenInNewSplit()}
-                          canShare={Boolean(props.onShare)}
-                          onCommand={runMenuCommand}
+                          onOpenInNewSplit={(row) =>
+                            props.onOpen(row.project.id, { newSplit: true })
+                          }
+                          onRename={(row) => setRenaming(row)}
+                          onSetOption={(rows, property, optionId) =>
+                            void setOption(rows, property, optionId)
+                          }
+                          onCopyLink={(row) => props.onCopyLink(row.project.id)}
+                          onCopyId={(row) => props.onCopyId(row.project.id)}
+                          onShare={
+                            props.onShare &&
+                            ((row) => props.onShare?.(row.project.id))
+                          }
+                          onDelete={(rows) => setDeleting({ rows })}
                           onOpenChange={(open) => {
                             if (!open) return;
                             list.focus.set(item().id, {
@@ -596,40 +594,15 @@ export function ProjectsCollection(props: {
             )}
           </Show>
           <Show when={deleting()}>
-            {(rows) => (
-              <DeleteDialog
-                open
+            {(request) => (
+              <DeleteProjectsDialog
+                count={request().rows.length}
+                pending={deletePending()}
+                error={request().error}
                 onOpenChange={(open) => {
                   if (!open) setDeleting(undefined);
                 }}
-                title={
-                  rows().length > 1
-                    ? `Delete ${rows().length} projects?`
-                    : 'Delete project?'
-                }
-                body={
-                  <>
-                    <p>
-                      {rows().length > 1
-                        ? 'These projects and their activity will be deleted. Their tasks will remain in your workspace.'
-                        : 'The project and its activity will be deleted. Its tasks will remain in your workspace.'}
-                    </p>
-                    <Show when={deleteError()}>
-                      {(message) => (
-                        <p role="alert" class="mt-2 text-failure">
-                          {message()}
-                        </p>
-                      )}
-                    </Show>
-                  </>
-                }
-                deleteLabel={
-                  rows().length > 1
-                    ? `Delete ${rows().length} projects`
-                    : 'Delete project'
-                }
-                pending={deletePending()}
-                onDelete={() => void deleteProjects(rows())}
+                onDelete={() => void deleteProjects(request().rows)}
                 onCloseAutoFocus={returnFocusToList}
               />
             )}

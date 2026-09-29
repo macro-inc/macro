@@ -125,7 +125,10 @@ name dialog, and the `Set status` and `Set priority` submenus; owners also get
 Right-clicking one of several checked rows acts on the whole selection and
 offers only `Set status`, `Set priority`, and, when you own every project,
 `Delete`. A partially failed delete keeps only the failed projects in the
-dialog for retry. Use disposable projects: these actions change hosted data.
+dialog for retry. On phones, long-press a row for the same actions in the
+bottom action drawer, without `Open in new split` and with each Status and
+Priority choice as its own row. Use disposable projects: these actions change
+hosted data.
 
 `New project` and the global Create menu's `Project` action (C, then P) open
 the same native composer host and layout as task creation,

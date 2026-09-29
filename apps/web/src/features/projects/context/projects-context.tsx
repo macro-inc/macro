@@ -80,7 +80,7 @@ export type ProjectsContext = {
       property: Property,
       value: PropertyApiValues
     ): Promise<void>;
-    /** Saves every value in one request; rejects when any of them fails. */
+    /** Saves every value as one batch; rejects when any of them fails. */
     saveProperties(
       updates: readonly (ProjectPropertyDraft & { id: string })[]
     ): Promise<void>;

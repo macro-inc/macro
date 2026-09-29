@@ -238,7 +238,9 @@ export function createProjectSources(
             );
             return failures;
           },
-          onSuccess: refresh,
+          onSuccess: async (failures, ids) => {
+            if (failures.length < ids.length) await refresh();
+          },
         }),
         () => cache
       );

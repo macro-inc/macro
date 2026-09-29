@@ -1,6 +1,6 @@
 import { render, screen } from '@solidjs/testing-library';
 import { ImperativeDialogHost } from '@ui';
-import { createSignal } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import { Permissions } from '../SharePermissions';
 import { useShareModal } from './shareModal';
@@ -50,10 +50,11 @@ describe('useShareModal', () => {
     expect((await screen.findByTestId('share-modal')).textContent).toBe('Plan');
   });
 
-  it('reports when an opened modal closes', async () => {
+  it('reports when the person closes an opened modal', async () => {
     const onClose = vi.fn();
+    const [owned, setOwned] = createSignal(true);
     let openShare!: () => void;
-    render(() => {
+    function Opener() {
       openShare = useShareModal(
         () => ({
           id: 'doc-1',
@@ -64,12 +65,30 @@ describe('useShareModal', () => {
         }),
         { onClose }
       );
-      return <ImperativeDialogHost />;
-    });
+      return null;
+    }
+    render(() => (
+      <>
+        <Show when={owned()}>
+          <Opener />
+        </Show>
+        <ImperativeDialogHost />
+      </>
+    ));
 
     openShare();
     (await screen.findByTestId('share-modal')).click();
     await vi.waitFor(() => expect(onClose).toHaveBeenCalledOnce());
     expect(screen.queryByTestId('share-modal')).toBeNull();
+
+    // Unmounting the owner closes the modal without reporting it.
+    openShare();
+    await screen.findByTestId('share-modal');
+    setOwned(false);
+    await vi.waitFor(() =>
+      expect(screen.queryByTestId('share-modal')).toBeNull()
+    );
+    await Promise.resolve();
+    expect(onClose).toHaveBeenCalledOnce();
   });
 });
