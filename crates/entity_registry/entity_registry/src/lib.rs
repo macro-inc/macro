@@ -32,7 +32,7 @@ pub mod inbound;
 pub mod outbound;
 
 pub use domain::creation_principal::{
-    CreationPrincipalError, NonUserOwners, resolve_creation_principal,
+    CreationPrincipalError, NonUserOwners, NonUserOwnersParseError, resolve_creation_principal,
 };
 pub use domain::models::{EntityRecord, EntityTypeCount};
 pub use domain::owner_grant_policy::OwnerGrantPolicy;

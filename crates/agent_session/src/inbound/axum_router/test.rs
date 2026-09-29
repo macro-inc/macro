@@ -4,11 +4,11 @@ use axum::body::Body;
 use axum::http::{Request, header};
 use chrono::Utc;
 use macro_authorization::{
-    BOT_SCOPE_HEADER, BOT_TOKEN_HEADER, BotActingUserClaims, BotAuthentication, BotAuthorizer,
-    BotScope, HARNESS_FOR_MACRO_USER_ID_HEADER, HARNESS_TOKEN_HEADER, HarnessAuthentication,
-    HarnessAuthorizationOwner, HarnessAuthorizer, InternalAuthConfig, JwtValidator,
-    MacroAuthorizationError, MacroAuthorizationServiceImpl, MacroUserAuthentication,
-    NoUserApiKeyAuthorizer, ValidatedIdentity,
+    BOT_FOR_MACRO_USER_ID_HEADER, BOT_SCOPE_HEADER, BOT_TOKEN_HEADER, BotActingUserClaims,
+    BotAuthentication, BotAuthorizer, BotScope, HARNESS_FOR_MACRO_USER_ID_HEADER,
+    HARNESS_TOKEN_HEADER, HarnessAuthentication, HarnessAuthorizationOwner, HarnessAuthorizer,
+    InternalAuthConfig, JwtValidator, MacroAuthorizationError, MacroAuthorizationServiceImpl,
+    MacroUserAuthentication, NoUserApiKeyAuthorizer, ValidatedIdentity,
 };
 use rootcause::Report;
 use std::sync::{Arc, Mutex};
@@ -18,6 +18,7 @@ const BOT_TOKEN: &str = "mbot_self_test";
 const HARNESS_TOKEN: &str = "mhns_self_test";
 const OWNER: &str = "macro|owner@example.com";
 const STRANGER: &str = "macro|stranger@example.com";
+const TEAM_ID: Uuid = Uuid::from_u128(0x7EA3);
 
 #[derive(Clone, Default)]
 struct FakeJwtValidator;
@@ -42,17 +43,33 @@ impl BotAuthorizer for SelfBotAuthorizer {
         &self,
         bot_token: &str,
         bot_scope: BotScope,
-        _acting_user: Option<BotActingUserClaims>,
+        acting_user: Option<BotActingUserClaims>,
     ) -> Result<BotAuthentication, Report<MacroAuthorizationError>> {
         if bot_token != BOT_TOKEN {
             return Err(Report::new(MacroAuthorizationError::InvalidCredentials));
         }
+        let acting_user = match acting_user.and_then(|claims| claims.user_id) {
+            Some(user_id) => {
+                let macro_user_id = MacroUserIdStr::try_from(user_id.clone())
+                    .map_err(|_| Report::new(MacroAuthorizationError::ActingUserNotAuthorized))?;
+                Some(MacroUserAuthentication {
+                    macro_user_id,
+                    user_context: model_user::UserContext {
+                        user_id,
+                        fusion_user_id: "fusion-owner".to_owned(),
+                        permissions: None,
+                        organization_id: None,
+                    },
+                })
+            }
+            None => None,
+        };
         Ok(BotAuthentication {
             bot_id: BotId::TEST_A,
             token_id: Uuid::new_v4(),
             bot_scope,
-            team_id: None,
-            acting_user: None,
+            team_id: Some(TEAM_ID),
+            acting_user,
         })
     }
 }
@@ -106,6 +123,10 @@ impl SessionOpener for RecordingOpener {
         &self,
         request: OpenExternalAgentSession,
     ) -> crate::domain::error::Result<AgentSession> {
+        request
+            .owner
+            .as_user()
+            .ok_or_else(|| AgentSessionError::OwnerNotUser(request.owner.owner_type()))?;
         let session = AgentSession {
             repo_branch: None,
             pull_request_url: None,
@@ -137,6 +158,10 @@ impl SessionOpener for RecordingOpener {
         &self,
         request: OpenManagedSession,
     ) -> crate::domain::error::Result<AgentSession> {
+        request
+            .owner
+            .as_user()
+            .ok_or_else(|| AgentSessionError::OwnerNotUser(request.owner.owner_type()))?;
         let bot_id = request
             .profile
             .as_ref()
@@ -396,6 +421,15 @@ fn router_with_requests(
     bots: OneBotDirectory,
     requests: Arc<RecordingRequester>,
 ) -> Router {
+    router_with_gate(opener, bots, requests, NonUserOwners::Disabled)
+}
+
+fn router_with_gate(
+    opener: Arc<RecordingOpener>,
+    bots: OneBotDirectory,
+    requests: Arc<RecordingRequester>,
+    non_user_owners: NonUserOwners,
+) -> Router {
     let service = MacroAuthorizationServiceImpl::new(
         FakeJwtValidator,
         InternalAuthConfig {
@@ -411,6 +445,7 @@ fn router_with_requests(
         Arc::new(bots),
         requests,
         MacroAuthorizationState::new(Arc::new(service)),
+        non_user_owners,
     ))
 }
 
@@ -433,12 +468,18 @@ fn body(bot_id: Option<Uuid>, workspace: &str, owner: Option<&str>) -> String {
 }
 
 fn as_bot(request_body: String) -> Request<Body> {
-    Request::post("/")
+    as_bot_for("user", None, request_body)
+}
+
+fn as_bot_for(scope: &str, acting_user: Option<&str>, request_body: String) -> Request<Body> {
+    let mut builder = Request::post("/")
         .header(header::CONTENT_TYPE, "application/json")
         .header(BOT_TOKEN_HEADER, BOT_TOKEN)
-        .header(BOT_SCOPE_HEADER, "user")
-        .body(Body::from(request_body))
-        .unwrap()
+        .header(BOT_SCOPE_HEADER, scope);
+    if let Some(acting_user) = acting_user {
+        builder = builder.header(BOT_FOR_MACRO_USER_ID_HEADER, acting_user);
+    }
+    builder.body(Body::from(request_body)).unwrap()
 }
 
 fn as_harness(request_body: String) -> Request<Body> {
@@ -667,6 +708,118 @@ async fn a_bot_caller_must_claim_an_owner() {
 
     assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
     assert!(opener.opened.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_bot_acting_for_a_verified_user_owns_the_session_for_that_user() {
+    let opener = Arc::new(RecordingOpener::default());
+    let request = as_bot_for(
+        "user",
+        Some(STRANGER),
+        body(None, "/srv/agent", Some(OWNER)),
+    );
+
+    let response = router(opener.clone()).oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let opened = opener.opened.lock().unwrap();
+    assert!(matches!(&opened[0].owner, Owner::User(user) if user.as_ref() == STRANGER));
+}
+
+#[tokio::test]
+async fn a_team_bot_may_still_claim_a_user_owner() {
+    let opener = Arc::new(RecordingOpener::default());
+    let request = as_bot_for("team", None, body(None, "/srv/agent", Some(OWNER)));
+
+    let response = router_with_gate(
+        opener.clone(),
+        OneBotDirectory::external_agent(),
+        Arc::new(RecordingRequester::default()),
+        NonUserOwners::Disabled,
+    )
+    .oneshot(request)
+    .await
+    .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let opened = opener.opened.lock().unwrap();
+    assert!(matches!(&opened[0].owner, Owner::User(user) if user.as_ref() == OWNER));
+}
+
+#[tokio::test]
+async fn a_team_bot_without_a_claim_needs_an_owner_while_the_gate_is_off() {
+    let opener = Arc::new(RecordingOpener::default());
+    let request = as_bot_for("team", None, body(None, "/srv/agent", None));
+
+    let response = router_with_gate(
+        opener.clone(),
+        OneBotDirectory::external_agent(),
+        Arc::new(RecordingRequester::default()),
+        NonUserOwners::Disabled,
+    )
+    .oneshot(request)
+    .await
+    .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(bytes.as_ref(), b"owner is required for bot callers");
+    assert!(opener.opened.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_team_bot_without_a_claim_resolves_to_a_bot_owner_when_the_gate_is_on() {
+    let opener = Arc::new(RecordingOpener::default());
+    let request = as_bot_for("team", None, body(None, "/srv/agent", None));
+
+    let response = router_with_gate(
+        opener.clone(),
+        OneBotDirectory::external_agent(),
+        Arc::new(RecordingRequester::default()),
+        NonUserOwners::Enabled,
+    )
+    .oneshot(request)
+    .await
+    .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(
+        bytes.as_ref(),
+        b"a session cannot be owned by a bot; sessions run as a user"
+    );
+    assert!(opener.opened.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_bot_owner_is_refused_with_an_explicit_message() {
+    let response =
+        CreateSessionApiError::Domain(AgentSessionError::OwnerNotUser(model_owner::OwnerType::Bot))
+            .into_response();
+
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(
+        bytes.as_ref(),
+        b"a session cannot be owned by a bot; sessions run as a user"
+    );
+}
+
+#[tokio::test]
+async fn an_unknown_owner_is_a_422() {
+    let response = CreateSessionApiError::Domain(AgentSessionError::UnknownOwner).into_response();
+
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(bytes.as_ref(), b"owner is not a known user");
 }
 
 #[tokio::test]

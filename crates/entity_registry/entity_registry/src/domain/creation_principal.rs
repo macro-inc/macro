@@ -19,6 +19,24 @@ pub enum NonUserOwners {
     Enabled,
 }
 
+/// `ENABLE_NON_USER_OWNERS` was not `true` or `false`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("ENABLE_NON_USER_OWNERS must be `true` or `false`")]
+pub struct NonUserOwnersParseError;
+
+impl NonUserOwners {
+    /// Parse the `ENABLE_NON_USER_OWNERS` gate.
+    ///
+    /// A missing value is disabled, the same as `false`.
+    pub fn parse_gate(value: Option<&str>) -> Result<Self, NonUserOwnersParseError> {
+        match value.unwrap_or("false").parse::<bool>() {
+            Ok(true) => Ok(Self::Enabled),
+            Ok(false) => Ok(Self::Disabled),
+            Err(_) => Err(NonUserOwnersParseError),
+        }
+    }
+}
+
 /// Why a caller cannot create entities.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
 pub enum CreationPrincipalError {

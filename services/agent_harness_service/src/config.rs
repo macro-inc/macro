@@ -7,6 +7,7 @@
 
 use anyhow::Context;
 use database_env_vars::{DatabaseUrl, RedisUri};
+use entity_registry::NonUserOwners;
 pub use macro_env::Environment;
 use macro_uuid::Uuid;
 
@@ -40,6 +41,8 @@ macro_env_var::maybe_env_vars!(
     pub struct ClaudeOauthKmsKeyId;
     /// Dedicated KMS key for encrypted per-owner Codex OAuth state.
     pub struct CodexOauthKmsKeyId;
+    /// Rollout gate for sessions owned by a bot.
+    pub struct EnableNonUserOwners;
 );
 
 /// The Pipedream project environment matching this deployment: production in
@@ -186,6 +189,8 @@ pub struct Config {
     pub github_sync_app_client_id: String,
     /// PEM private key of that App.
     pub github_sync_app_pem_secret_key: LocalOrRemoteSecret<GithubSyncAppPemSecretKey>,
+    /// Lets a team-scoped bot with no acting user own the sessions it creates.
+    pub enable_non_user_owners: EnableNonUserOwners,
 }
 
 impl Config {
@@ -218,6 +223,11 @@ impl Config {
                 CodexOauthKmsKeyId::new().and_then(|value| value.value().map(str::to_owned))
             })
             .filter(|value| !value.trim().is_empty())
+    }
+
+    /// The parsed `ENABLE_NON_USER_OWNERS` gate. Missing is disabled.
+    pub fn non_user_owners(&self) -> anyhow::Result<NonUserOwners> {
+        NonUserOwners::parse_gate(self.enable_non_user_owners.value()).map_err(Into::into)
     }
 
     /// Load the configuration from the environment.

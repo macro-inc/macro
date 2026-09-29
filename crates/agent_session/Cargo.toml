@@ -13,6 +13,7 @@ cli = ["dep:clap", "outbound"]
 # The axum router serving sessions over HTTP.
 inbound = [
   "dep:axum",
+  "dep:entity_registry",
   "dep:macro_authorization",
   "entity_access/inbound",
   "macro_authorization/axum",

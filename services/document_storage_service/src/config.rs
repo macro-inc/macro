@@ -6,9 +6,6 @@ pub use macro_env::Environment;
 use macro_env_var::{env_vars, maybe_env_vars};
 use secretsmanager_client::LocalOrRemoteSecret;
 
-#[cfg(test)]
-mod test;
-
 pub const DEFAULT_PRESIGNED_URL_EXPIRY_SECONDS: u64 = 900; // 15 minutes
 /// Allow long recordings to play and seek without the signed URL expiring mid-session.
 pub const CALL_RECORDING_PRESIGNED_URL_EXPIRY_SECONDS: u64 = 6 * 60 * 60;
@@ -203,18 +200,6 @@ impl Config {
     }
 
     pub fn non_user_owners(&self) -> anyhow::Result<NonUserOwners> {
-        parse_non_user_owners(self.enable_non_user_owners.value())
+        NonUserOwners::parse_gate(self.enable_non_user_owners.value()).map_err(Into::into)
     }
-}
-
-fn parse_non_user_owners(value: Option<&str>) -> anyhow::Result<NonUserOwners> {
-    let enabled = value
-        .unwrap_or("false")
-        .parse::<bool>()
-        .context("ENABLE_NON_USER_OWNERS must be `true` or `false`")?;
-    Ok(if enabled {
-        NonUserOwners::Enabled
-    } else {
-        NonUserOwners::Disabled
-    })
 }

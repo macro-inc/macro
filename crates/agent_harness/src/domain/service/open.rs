@@ -60,6 +60,7 @@ where
         // checked against what they may post in, and the announcement is
         // made in their name. Any other kind of owner is refused before a
         // row exists for it.
+        // TODO(ownership-v2): T5.4 admits bot owners once the runtime has a bot execution context.
         let owner_user = request
             .owner
             .as_user()
@@ -214,6 +215,7 @@ where
         // reach, and its sandbox size is their preference. Only a person has
         // those, so any other kind of owner is refused before anything is
         // provisioned.
+        // TODO(ownership-v2): T5.4 admits bot owners once the runtime has a bot execution context.
         let owner_user = request
             .owner
             .as_user()

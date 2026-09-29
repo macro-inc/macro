@@ -204,6 +204,7 @@ async fn run() -> anyhow::Result<()> {
         .resolve_remote_secrets(Environment::new_or_prod(), &secrets)
         .await
         .context("failed to resolve agent harness service secrets")?;
+    let non_user_owners = config.non_user_owners()?;
     let bot_id = BotId::new_from_uuid(config.harness_bot_id);
     let enable_dev_commands = matches!(
         config.environment,
@@ -1048,6 +1049,7 @@ async fn run() -> anyhow::Result<()> {
             ),
         ),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+        non_user_owners,
     );
     let routine_sessions = routine_sessions::router(
         (*bots_directory).clone(),

@@ -34,9 +34,11 @@ use chrono::Utc;
 use entity_access::domain::models::{EditAccessLevel, OwnerAccessLevel, ViewAccessLevel};
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::AgentSessionAccessLevelExtractor;
+use entity_registry::{NonUserOwners, resolve_creation_principal};
 use macro_authorization::{
-    ActingUser, InternalOnly, MacroAuthorizationExtractor, MacroAuthorizationService,
-    MacroAuthorizationState, UserBotOrHarness, UserBotOrHarnessAuthorization,
+    ActingUser, InternalOnly, MacroAuthorization, MacroAuthorizationExtractor,
+    MacroAuthorizationService, MacroAuthorizationState, UserBotOrHarness,
+    UserBotOrHarnessAuthorization,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -1416,6 +1418,7 @@ pub struct CreateSessionState<Opener, Bots, Requests, Auth> {
     bots: Arc<Bots>,
     requests: Arc<Requests>,
     authorization_state: MacroAuthorizationState<Auth>,
+    non_user_owners: NonUserOwners,
 }
 
 impl<Opener, Bots, Requests, Auth> CreateSessionState<Opener, Bots, Requests, Auth> {
@@ -1425,12 +1428,14 @@ impl<Opener, Bots, Requests, Auth> CreateSessionState<Opener, Bots, Requests, Au
         bots: Arc<Bots>,
         requests: Arc<Requests>,
         authorization_state: MacroAuthorizationState<Auth>,
+        non_user_owners: NonUserOwners,
     ) -> Self {
         Self {
             opener,
             bots,
             requests,
             authorization_state,
+            non_user_owners,
         }
     }
 }
@@ -1443,6 +1448,7 @@ impl<Opener, Bots, Requests, Auth> Clone for CreateSessionState<Opener, Bots, Re
             bots: Arc::clone(&self.bots),
             requests: Arc::clone(&self.requests),
             authorization_state: self.authorization_state.clone(),
+            non_user_owners: self.non_user_owners,
         }
     }
 }
@@ -1523,13 +1529,12 @@ pub struct CreateAgentSessionRequest {
     /// Omitted, the session starts on the repository's default branch.
     pub repo_branch: Option<String>,
     /// The user who owns the session. Ignored for user callers, who always
-    /// own their own sessions, and for harness callers, whose verified acting
-    /// user (owner or confirmed team member) owns the session instead;
-    /// required for bot callers without verified acting-user claims.
-    ///
-    /// For bot callers this is a claim, not a verified fact: it is scoped to
-    /// the bot's own sessions, but the named user owns the session on the
-    /// bot's say-so.
+    /// own their own sessions, for harness callers, whose verified acting
+    /// user owns the session, and for bots that already act for a verified
+    /// user. A bot without one may name a user here. That claim is trusted
+    /// for the bot's own sessions. With no claim, a team bot owns the session
+    /// itself only while non-user owners are enabled. Every other bot still
+    /// needs an owner.
     pub owner: Option<String>,
     /// The thread whose mention triggered the session, when one did.
     /// Linkage only - the mention's text is delivered by the runtime as the
@@ -1723,6 +1728,10 @@ impl IntoResponse for CreateSessionApiError {
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "owner is not a known user".to_owned(),
             ),
+            Self::Domain(AgentSessionError::OwnerNotUser(owner_type)) => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                format!("a session cannot be owned by a {owner_type}; sessions run as a user"),
+            ),
             // Nothing to open onto: the persona's runtime is its operator's,
             // and it did not answer. Says what they have to fix.
             Self::Domain(AgentSessionError::RuntimeUnavailable(reason)) => {
@@ -1790,31 +1799,53 @@ fn resolve_bot(
 
 /// Resolve who owns the session.
 ///
-/// Only ever a user here: every caller this route admits acts as a person,
-/// and the body's `owner` claim is a user id. The type is wider than that so
-/// the row and the runtimes are asked, not told, what kind of owner they got.
-///
-/// A user caller always owns their own sessions. A harness caller always has a
-/// verified acting user - the owner for a private harness, a confirmed team
-/// member for a team one (the harness authorizer checks the forwarded
-/// `x-macro-harness-for-macro-user-id` claim against ownership) - and that
-/// verified user owns the session; the body's `owner` claim is never trusted
-/// for it. This matches the control endpoint, which already acts only for that
-/// verified user: a session that could not later be prompted for its owner is
-/// one that should never have been created for that owner. A bot caller's
-/// verified acting user wins when present; otherwise the body's claimed owner
-/// is accepted (see [`CreateAgentSessionRequest::owner`] for the trust model).
+/// A user owns their own sessions. A harness owns them as its verified acting
+/// user, because the harness authorizer already checked that person. A bot
+/// with a verified acting user owns the session as that user, and a body
+/// claim does not override it. A bot without one may name a user in the body.
+/// That claim is the owner. With no claim, the shared creation principal
+/// applies. A team bot owns the session itself while non-user owners are
+/// enabled. Every other failure still needs an owner.
 fn resolve_owner(
     caller: &UserBotOrHarnessAuthorization,
     claimed: Option<String>,
+    non_user_owners: NonUserOwners,
 ) -> Result<Owner, CreateSessionApiError> {
-    if let Some(user) = caller.acting_user() {
-        return Ok(Owner::User(user.macro_user_id.clone()));
+    match caller {
+        UserBotOrHarnessAuthorization::User(user) => {
+            principal_owner(&MacroAuthorization::User(user.clone()), non_user_owners)
+        }
+        UserBotOrHarnessAuthorization::Harness(harness) => {
+            Ok(Owner::User(harness.acting_user.macro_user_id.clone()))
+        }
+        UserBotOrHarnessAuthorization::Bot(bot) => match (bot.acting_user.as_ref(), claimed) {
+            (Some(_), _) => principal_owner(&MacroAuthorization::Bot(bot.clone()), non_user_owners),
+            (None, Some(text)) => MacroUserIdStr::try_from(text)
+                .map(Owner::User)
+                .map_err(|_| CreateSessionApiError::UnparseableOwner),
+            (None, None) => {
+                match resolve_creation_principal(
+                    &MacroAuthorization::Bot(bot.clone()),
+                    non_user_owners,
+                ) {
+                    Ok(principal) => Ok(principal.owner()),
+                    Err(_) => Err(CreateSessionApiError::OwnerRequired),
+                }
+            }
+        },
     }
-    let claimed = claimed.ok_or(CreateSessionApiError::OwnerRequired)?;
-    MacroUserIdStr::try_from(claimed)
-        .map(Owner::User)
-        .map_err(|_| CreateSessionApiError::UnparseableOwner)
+}
+
+/// A user or a bot acting for a user cannot miss the shared resolver.
+fn principal_owner(
+    authorization: &MacroAuthorization,
+    non_user_owners: NonUserOwners,
+) -> Result<Owner, CreateSessionApiError> {
+    resolve_creation_principal(authorization, non_user_owners)
+        .map(|principal| principal.owner())
+        .map_err(|error| {
+            CreateSessionApiError::Domain(AgentSessionError::Unknown(anyhow::anyhow!(error)))
+        })
 }
 
 #[utoipa::path(
@@ -1862,7 +1893,7 @@ pub async fn create_agent_session_handler<
         if request.thread.is_some() || request.owner.is_some() {
             return Err(CreateSessionApiError::MixedSessionShape);
         }
-        let owner = resolve_owner(&caller.authorization, None)?;
+        let owner = resolve_owner(&caller.authorization, None, state.non_user_owners)?;
         let profile = if let Some(bot_id) = request.bot_id {
             let selected =
                 persona_for_owner(state.bots.as_ref(), BotId::new_from_uuid(bot_id), &owner)
@@ -2001,7 +2032,7 @@ pub async fn create_agent_session_handler<
     }
 
     validate_workspace(&workspace)?;
-    let owner = resolve_owner(&caller.authorization, request.owner)?;
+    let owner = resolve_owner(&caller.authorization, request.owner, state.non_user_owners)?;
 
     let thread = request
         .thread
