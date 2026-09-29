@@ -55,7 +55,7 @@ import { useMentionsMenuController } from './MentionsMenuController';
 import { createItemHandler } from './utils/mentionHandlers';
 import { sortMobileMentions } from './utils/mobileSort';
 
-const MAX_ITEMS = 8;
+const TARGET_ITEMS = 8;
 const VIRTUAL_ITEM_HEIGHT = 36;
 // Height consumed by Surface's p-px border (2px) + py-2 padding (16px)
 const PANEL_DECORATION_HEIGHT = 18;
@@ -382,7 +382,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
 
   const controller = useMentionsMenuController(bucketConfigs, {
     ignoredIds: () => (blockId ? [blockId] : []),
-    maxItems: MAX_ITEMS,
+    targetItems: TARGET_ITEMS,
   });
 
   const [escapeSpaceState, setEscapeSpaceState] = createSignal<

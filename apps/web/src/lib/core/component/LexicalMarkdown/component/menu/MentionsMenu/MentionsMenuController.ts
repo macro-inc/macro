@@ -41,7 +41,9 @@ const PEOPLE_PREVIEW_COUNT = 3;
 
 class MentionsMenuController {
   private buckets: Accessor<BucketConfig[]>;
-  private maxItems: number;
+  // A soft preview budget: stable People rows and one row per other category
+  // take precedence so asynchronous results cannot hide a category.
+  private targetItems: number;
   private ignoredIds: Accessor<string[]> = () => [];
   private selectedIndexSignal: Signal<number>;
   private viewAllModeSignal: Signal<ViewAllMode>;
@@ -49,12 +51,12 @@ class MentionsMenuController {
   constructor(
     buckets: Accessor<BucketConfig[]>,
     options: {
-      maxItems?: number;
+      targetItems?: number;
       ignoredIds?: Accessor<string[]>;
     } = {}
   ) {
     this.buckets = buckets;
-    this.maxItems = options.maxItems ?? 8;
+    this.targetItems = options.targetItems ?? 8;
     this.ignoredIds = options.ignoredIds ?? (() => []);
 
     this.selectedIndexSignal = createSignal(0);
@@ -101,14 +103,15 @@ class MentionsMenuController {
 
   bins = createLazyMemo((): MentionBins => {
     const { users, ...otherBins } = this.rawBins();
-    if (users === undefined) return this.computeBins(otherBins, this.maxItems);
+    if (users === undefined)
+      return this.computeBins(otherBins, this.targetItems);
 
     // Keep people visible while asynchronous entity/email results arrive.
     // Proportional allocation can otherwise remove the person under the pointer.
-    const peopleCount = Math.min(users, PEOPLE_PREVIEW_COUNT, this.maxItems);
+    const peopleCount = Math.min(users, PEOPLE_PREVIEW_COUNT, this.targetItems);
     return {
       users: peopleCount,
-      ...this.computeBins(otherBins, this.maxItems - peopleCount),
+      ...this.computeBins(otherBins, this.targetItems - peopleCount),
     };
   });
 
@@ -349,11 +352,11 @@ class MentionsMenuController {
     return (config?.getFullCount() ?? 0) > abbreviatedCount;
   }
 
-  private computeBins(rawBins: MentionBins, maxItems: number): MentionBins {
+  private computeBins(rawBins: MentionBins, targetItems: number): MentionBins {
     const total = Object.values(rawBins).reduce((sum, count) => sum + count, 0);
 
-    // If total items fit in max, no scaling needed
-    if (total <= maxItems) {
+    // If total items fit in the target, no scaling needed
+    if (total <= targetItems) {
       return { ...rawBins };
     }
 
@@ -375,7 +378,7 @@ class MentionsMenuController {
     }
 
     // Second pass: distribute remaining slots proportionally
-    const remaining = maxItems - allocated;
+    const remaining = targetItems - allocated;
 
     if (remaining > 0) {
       const nonEmptyTotal = nonEmptyBins.reduce((sum, [_, c]) => sum + c, 0);
@@ -415,12 +418,12 @@ class MentionsMenuController {
 export function useMentionsMenuController(
   buckets: Accessor<BucketConfig[]>,
   options: {
-    maxItems?: number;
+    targetItems?: number;
     ignoredIds?: Accessor<string[]>;
   } = {}
 ): MentionsMenuController {
   return new MentionsMenuController(buckets, {
-    maxItems: options.maxItems,
+    targetItems: options.targetItems,
     ignoredIds: options.ignoredIds,
   });
 }

@@ -95,3 +95,28 @@ it('retains the full combined mobile list and entity-only allocation', () => {
     dispose();
   });
 });
+
+it('keeps every category reachable when stable People rows exceed the preview target', () => {
+  createRoot((dispose) => {
+    const otherCategories: BucketConfig['id'][] = [
+      'openTabs',
+      'documents',
+      'channels',
+      'agentSessions',
+      'companies',
+      'emails',
+      'dates',
+    ];
+    const menu = useMentionsMenuController(() => [
+      bucket('users', items('person', 7)),
+      ...otherCategories.map((id) => bucket(id, items(id, 10))),
+    ]);
+    expect(menu.bins().users).toBe(3);
+    for (const id of otherCategories) {
+      expect(menu.bins()[id]).toBe(1);
+      expect(menu.canViewAllForCategory(id)).toBe(true);
+    }
+    expect(menu.combinedItems()).toHaveLength(10);
+    dispose();
+  });
+});
