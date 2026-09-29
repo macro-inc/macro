@@ -124,8 +124,10 @@ vi.mock('@core/constant/featureFlags', async (importOriginal) => {
   return {
     ...actual,
     enableCalendarUi: { key: 'enable-calendar-ui' },
+    enableReminders: { key: 'enable-reminders' },
     isFeatureEnabled: (flag: Parameters<typeof actual.isFeatureEnabled>[0]) =>
-      'key' in flag && flag.key === 'enable-calendar-ui'
+      'key' in flag &&
+      (flag.key === 'enable-calendar-ui' || flag.key === 'enable-reminders')
         ? true
         : actual.isFeatureEnabled(flag),
   };
@@ -168,6 +170,7 @@ function targetSearch(
 
 afterEach(() => {
   setGlobalSplitManager(undefined);
+  setGlobalSplitRouter(undefined);
   vi.clearAllMocks();
   vi.mocked(isTouchDevice).mockReturnValue(false);
 });
@@ -180,25 +183,24 @@ describe('reminder navigation', () => {
   } as EntityData;
 
   it.each([false, true])(
-    'uses the reminder component for list opening (new split: %s)',
+    'uses the reminder route for list opening (new split: %s)',
     async (openInNewSplit) => {
-      const openWithSplit = vi.fn();
+      const navigate = vi.fn();
       setGlobalSplitManager({
-        activeSplit: vi.fn(),
-        getOrchestrator: vi.fn(),
-        getSplitByContent: vi.fn(),
-        openWithSplit,
+        activeSplitId: () => 'source',
+        activeSplit: () => undefined,
       } as unknown as SplitManager);
+      setGlobalSplitRouter({ navigate } as unknown as SplitRouter<SplitId>);
 
       await openEntityInSplitFromUnifiedList(reminder, { openInNewSplit });
 
-      expect(openWithSplit).toHaveBeenCalledWith(
+      expect(navigate).toHaveBeenCalledExactlyOnceWith(
+        'source',
+        '/reminder/reminder-1',
         {
-          type: 'component',
-          id: 'reminder-view~reminder-1',
-          params: undefined,
-        },
-        expect.objectContaining({ preferNewSplit: openInNewSplit })
+          replace: undefined,
+          target: openInNewSplit ? 'new-split' : 'current',
+        }
       );
     }
   );
@@ -207,7 +209,7 @@ describe('reminder navigation', () => {
     openEntityInNewTab({ entity: reminder });
 
     expect(operationMocks.openExternalUrl).toHaveBeenCalledExactlyOnceWith(
-      expect.stringMatching(/\/app\/component\/reminder-view~reminder-1$/)
+      expect.stringMatching(/\/app\/reminder\/reminder-1$/)
     );
   });
 });

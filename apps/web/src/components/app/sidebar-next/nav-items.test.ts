@@ -16,7 +16,7 @@ describe('reminders navigation item', () => {
 
     expect(enabled.find((item) => item.id === 'reminders')).toMatchObject({
       label: 'Reminders',
-      href: '/component/reminders',
+      href: '/reminders',
     });
     expect(disabled.some((item) => item.id === 'reminders')).toBe(false);
   });

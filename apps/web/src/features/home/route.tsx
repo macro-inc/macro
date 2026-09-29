@@ -10,6 +10,10 @@ import { channelDetailRoute } from '@app/features/channels-view/route';
 import { driveSearch } from '@app/features/drive-view/primitives/drive-search';
 import { driveRootDocumentRoute } from '@app/features/drive-view/route';
 import {
+  HOME_REMINDER_DETAIL_ROUTE_ID,
+  reminderDetailDestination,
+} from '@app/features/reminders/reminder-navigation';
+import {
   createSearchParams,
   defineRoute,
   routeParams,
@@ -26,8 +30,10 @@ import {
 } from '@components/app/split-layout/split-router/app-route-shell';
 import { uuidRouteReference } from '@components/app/split-layout/split-router/mention-links';
 import { Show } from 'solid-js';
+import { z } from 'zod';
 import { URL_PARAMS as EMAIL_URL_PARAMS } from '../email-thread/core/location';
 import { HomeEntityDetailRouteView } from './components/HomeEntityDetailRouteView';
+import { HomeReminderDetailRouteView } from './components/HomeReminderDetailRouteView';
 import {
   homeCalendarLegacyTarget,
   homeDetailParamsFromRoute,
@@ -49,6 +55,7 @@ type HomeDetailParams = Partial<HomePreviewRouteParams> & {
   channelId?: string;
   documentType?: string;
   documentId?: string;
+  reminderId?: string;
   period?: CalendarPeriodView;
 };
 
@@ -58,6 +65,9 @@ function HomeLegacyRouteView() {
   const [documentSearch] = createSearchParams(driveSearch);
   const [eventSearch] = createSearchParams(calendarSearch);
   const legacyTarget = () => {
+    if (params.reminderId) {
+      return reminderDetailDestination(params.reminderId).content;
+    }
     const { period } = params;
     if (period) return homeCalendarLegacyTarget(period, eventSearch);
     const detail = homeDetailParamsFromRoute(params);
@@ -79,6 +89,7 @@ export const HomeRouteView = withAuth(() => {
   const params = useParams<HomeDetailParams>();
   const detailRequested = () =>
     homeDetailParamsFromRoute(params) !== undefined ||
+    typeof params.reminderId === 'string' ||
     typeof params.period === 'string';
 
   return (
@@ -132,6 +143,16 @@ export const homeDocumentRoute = defineRoute({
   remountKey: ({ documentType, documentId }) =>
     `${homeBaseBlockType(documentType)}:${documentId}`,
 });
+
+export const homeReminderRoute = defineRoute({
+  id: HOME_REMINDER_DETAIL_ROUTE_ID,
+  path: 'reminder/:reminderId',
+  params: z.object({ reminderId: z.string().min(1) }),
+  component: HomeReminderDetailRouteView,
+  remountKey: ({ reminderId }) => reminderId,
+  claim: ({ reminderId }) => ({ namespace: 'reminder', id: reminderId }),
+});
+
 export const homePreviewRoute = defineRoute({
   id: 'home-preview',
   path: ':blockType/:previewId',
@@ -181,6 +202,7 @@ export const homeSplitRoute = defineRoute({
     homeCalendarRoute,
     homeChannelRoute,
     homeDocumentRoute,
+    homeReminderRoute,
     homePreviewRoute,
   ],
 });

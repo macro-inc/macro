@@ -15,6 +15,11 @@ import {
 } from '@app/features/calendar-view/types';
 import { driveHostedContent } from '@app/features/drive-view/drive-hosted-content';
 import { projectRouteId } from '@app/features/projects/core/route';
+import {
+  openReminderDetail,
+  reminderDetailDestination,
+  reminderDetailUrl,
+} from '@app/features/reminders/reminder-navigation';
 import { reviewsHostedContent } from '@app/features/reviews-view/reviews-hosted-content';
 import { withListNavigationSource } from '@app/features/soup/collection/list-navigation-source';
 import {
@@ -42,6 +47,7 @@ import {
 import {
   enableCalendarUi,
   enableGraphqlSoup,
+  enableReminders,
   isFeatureEnabled,
   USE_MACRO_PR_SUMMARY_BLOCK,
 } from '@core/constant/featureFlags';
@@ -260,16 +266,9 @@ export const openEntityInNewTab = ({
   location?: SearchLocation;
 }) => {
   location ??= getRowClickFallbackLocation(entity);
-  // A reminder opens its own editor — a `reminder-view` component split with a
-  // URL of its own — the same as the split paths, even a standalone one that
-  // references nothing.
   if (entity.type === 'reminder') {
-    openExternalUrl(
-      new URL(
-        `/app/component/reminder-view~${entity.id}`,
-        window.location.origin
-      ).href
-    );
+    if (!isFeatureEnabled(enableReminders)) return;
+    openExternalUrl(reminderDetailUrl(entity.id));
     return;
   }
 
@@ -698,6 +697,24 @@ export const openEntityInSplitFromUnifiedList = async (
     return;
   }
 
+  if (entity.type === 'reminder') {
+    if (!isFeatureEnabled(enableReminders)) return;
+    const sourceContent =
+      splitHandle?.content() ?? splitManager.activeSplit()?.content();
+    const sourceListView =
+      sourceContent?.type === 'component' && isListViewID(sourceContent.id)
+        ? sourceContent.id
+        : undefined;
+    openReminderDetail(entity.id, {
+      manager: splitManager,
+      handle: splitHandle,
+      openInNewSplit,
+      mergeHistory,
+      referredFrom: options.referredFrom ?? sourceListView,
+    });
+    return;
+  }
+
   const blockOrchestrator = splitManager.getOrchestrator();
 
   if (entity.type === 'channel' && entity.unreadNotifications !== undefined) {
@@ -916,29 +933,12 @@ export function calendarViewTargetForEntity(
 }
 
 /**
- * The entity a reminder references, as block content. A reminder itself opens
- * its own `reminder-view` editor (see `getEntitySplitContent`); this is only
- * the reference, used where the reference is shown directly (PreviewPanel).
- * `undefined` for a standalone reminder, which points at nothing.
- *
- * `fileType`/`subType` come resolved from the server, so a referenced document
- * lands on its real block rather than 'unknown'.
+ * The minimal reminder selection accepted by Home's feature-owned detail route.
  */
 export type ReminderPreviewSelection = Pick<
   ReminderEntity,
   'id' | 'type' | 'referencedEntity'
 >;
-
-export function reminderSplitTarget(entity: ReminderPreviewSelection) {
-  const referenced = entity.referencedEntity;
-  if (!referenced) return undefined;
-  return {
-    type: fileTypeToBlockName(
-      referenced.subType ?? referenced.fileType ?? referenced.type
-    ),
-    id: referenced.id,
-  };
-}
 
 // TODO(dev-rb/github): Map GitHub PRs to { type: 'pr', id }.
 function getEntitySplitContent(entity: EntityData) {
@@ -974,14 +974,7 @@ function getEntitySplitContent(entity: EntityData) {
         return { type: 'contact' as const, id: entity.id };
       })
       .with({ type: 'reminder' }, (entity) => {
-        // A reminder has no block of its own; it opens its editor as a
-        // component split. The reminder id rides in the content id (component
-        // params are dropped on URL restore, and split identity is keyed on the
-        // id, so each reminder needs a distinct one) — see `resolveComponent`.
-        return {
-          type: 'component' as const,
-          id: `reminder-view~${entity.id}`,
-        };
+        return reminderDetailDestination(entity.id).content;
       })
       // Calendar events open the singleton Calendar application view; the open
       // path branches before reaching here, so this only serves duplicate checks.

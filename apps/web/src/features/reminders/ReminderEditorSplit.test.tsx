@@ -10,7 +10,7 @@ const state = vi.hoisted(() => ({
 vi.mock('@app/features/calendar/hooks/use-calendar-ui-flag', () => ({
   useCalendarUiFlag: () => () => state.calendarEnabled,
 }));
-vi.mock('@block-calendar/open-calendar-event', () => ({
+vi.mock('@app/features/calendar-view/open-calendar-event', () => ({
   openCalendarEventSplit: state.openCalendarEvent,
 }));
 vi.mock('@components/app/split-layout/layoutUtils', () => ({

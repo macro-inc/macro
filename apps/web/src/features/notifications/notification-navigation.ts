@@ -1,5 +1,6 @@
 import { openCalendarView } from '@app/features/calendar-view/calendar-navigation';
 import { createCalendarRange } from '@app/features/calendar-view/calendar-range';
+import { openReminderDetail } from '@app/features/reminders/reminder-navigation';
 import {
   getChannelParams,
   navigateToChannelMessage,
@@ -18,10 +19,9 @@ import {
   USE_MACRO_PR_SUMMARY_BLOCK,
 } from '@core/constant/featureFlags';
 import { COMMENT_LINK_PARAM } from '@core/messages/comment-link';
-import type { EntityType, NotificationType } from '@core/types';
+import type { NotificationType } from '@core/types';
 import { openExternalUrl } from '@core/util/url';
 import { getNotificationById } from '@queries/notification/user-notifications';
-import { getReminderById } from '@queries/reminders/reminders';
 import { errAsync, ResultAsync } from 'neverthrow';
 import { match, P } from 'ts-pattern';
 import { projectRouteId } from '../projects/core/route';
@@ -31,7 +31,6 @@ import {
 } from './document-comment-location';
 import { GITHUB_EVENT_TYPES } from './github-event-types';
 import { isChannelNotification } from './notification-helpers';
-import { DefaultNotificationBlockNameResolver } from './notification-resolvers';
 import type { NotificationSource } from './notification-source';
 import { CHANNEL_EVENT_TYPES } from './notification-source';
 import {
@@ -316,28 +315,12 @@ function getSupportedHandler(
         }
       )
       .with('reminder', () => {
-        // The notification points at the reminder itself, so there is nothing to
-        // open until the reminder is fetched and its referenced entity read. A
-        // standalone reminder references nothing and opens nothing.
         return async (lm: SplitManager, newSplit: boolean = false) => {
-          // A reminder created before the flag closed still has a live
-          // notification; opening it would reach reminder surfaces the user is
-          // no longer meant to have.
           if (!isFeatureEnabled(enableReminders)) return;
-          const reminder = await getReminderById(notification.entity_id);
-          const entityType = reminder?.entityType;
-          const entityId = reminder?.entityId;
-          if (!entityType || !entityId) return;
-
-          const blockName = await DefaultNotificationBlockNameResolver(
-            entityId,
-            entityType as EntityType
-          );
-          if (!blockName) return;
-
-          openSplitIfNotOpen(lm, blockName, entityId, {
-            newSplit,
-            sourceHandle,
+          openReminderDetail(notification.entity_id, {
+            manager: lm,
+            handle: sourceHandle,
+            openInNewSplit: newSplit,
           });
         };
       })

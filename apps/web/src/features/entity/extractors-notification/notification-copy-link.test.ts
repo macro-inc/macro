@@ -4,13 +4,14 @@ const mocks = vi.hoisted(() => ({
   remindersEnabled: true,
 }));
 
-vi.mock('@block-calendar/copy-event-mention', () => ({
+vi.mock('@app/features/calendar-view/copy-event-mention', () => ({
   copyCalendarEventMentionTarget: vi.fn(),
 }));
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { success: mocks.success },
 }));
-vi.mock('@core/constant/featureFlags', () => ({
+vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
   enableReminders: { key: 'enable-reminders' },
   isFeatureEnabled: () => mocks.remindersEnabled,
 }));
@@ -46,7 +47,7 @@ it('copies the canonical reminder detail URL', async () => {
   await copyNotificationLink(notification);
 
   expect(mocks.writeText).toHaveBeenCalledExactlyOnceWith(
-    'https://macro.com/app/component/reminder-view~reminder-1'
+    'https://macro.com/app/reminder/reminder-1'
   );
   expect(mocks.success).toHaveBeenCalledWith('Link copied to clipboard');
 });

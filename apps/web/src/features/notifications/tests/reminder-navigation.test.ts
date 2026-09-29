@@ -15,9 +15,14 @@ vi.mock('../notification-stacking', () => ({
 }));
 
 const flags = vi.hoisted(() => ({ reminders: true }));
+const openReminderDetail = vi.hoisted(() => vi.fn());
 
-vi.mock('@block-calendar/calendar-range', () => ({
-  createCalendarBlockRange: vi.fn(),
+vi.mock('@app/features/reminders/reminder-navigation', () => ({
+  openReminderDetail,
+}));
+
+vi.mock('@app/features/calendar-view/calendar-range', () => ({
+  createCalendarRange: vi.fn(),
 }));
 vi.mock('@block-channel/utils/link', () => ({
   getChannelParams: vi.fn(),
@@ -27,7 +32,8 @@ vi.mock('@core/constant/allBlocks', () => ({
   itemToBlockName: (value: { fileType: string }) => value.fileType,
   resolveBlockAlias: (type: string) => type,
 }));
-vi.mock('@core/constant/featureFlags', () => ({
+vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
   enableCalendarUi: { key: 'enable-calendar-ui' },
   enableReminders: { key: 'enable-reminders' },
   isFeatureEnabled: (flag: { key: string }) =>
@@ -41,9 +47,6 @@ vi.mock('@core/util/url', () => ({
 }));
 vi.mock('@queries/notification/user-notifications', () => ({
   getNotificationById: vi.fn(),
-}));
-vi.mock('../notification-resolvers', () => ({
-  DefaultNotificationBlockNameResolver: vi.fn(),
 }));
 
 import type { SplitManager } from '@components/app/split-layout/layoutManager';
@@ -68,37 +71,32 @@ function reminderNotification(): UnifiedNotification {
 describe('reminder notification navigation', () => {
   beforeEach(() => {
     flags.reminders = true;
+    openReminderDetail.mockClear();
   });
 
-  it('opens source-less reminders in their detail component without resolving a document', async () => {
-    const openWithSplit = vi.fn();
+  it('opens source-less reminders through their claimed detail route', async () => {
     const getOrchestrator = vi.fn();
     const layout = {
-      getSplitByContent: vi.fn(() => undefined),
-      openWithSplit,
       getOrchestrator,
     } as unknown as SplitManager;
 
     const result = await openNotification(reminderNotification(), layout);
 
     expect(result.isOk()).toBe(true);
-    expect(openWithSplit).toHaveBeenCalledWith(
-      { type: 'component', id: 'reminder-view~reminder-1' },
-      expect.objectContaining({ activate: true })
-    );
+    expect(openReminderDetail).toHaveBeenCalledExactlyOnceWith('reminder-1', {
+      manager: layout,
+      handle: undefined,
+      openInNewSplit: false,
+    });
     expect(getOrchestrator).not.toHaveBeenCalled();
   });
 
   it('does not open a reminder destination while the feature is disabled', async () => {
     flags.reminders = false;
-    const openWithSplit = vi.fn();
-    const layout = {
-      getSplitByContent: vi.fn(() => undefined),
-      openWithSplit,
-    } as unknown as SplitManager;
+    const layout = {} as SplitManager;
 
     await openNotification(reminderNotification(), layout);
 
-    expect(openWithSplit).not.toHaveBeenCalled();
+    expect(openReminderDetail).not.toHaveBeenCalled();
   });
 });

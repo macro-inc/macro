@@ -35,7 +35,7 @@ export const LIST_VIEW_PATHS = {
   calls: '/calls',
   companies: '/companies',
   folders: '/folders',
-  reminders: '/component/reminders',
+  reminders: '/reminders',
   search: '/search',
 } as const satisfies Record<ListView, string>;
 

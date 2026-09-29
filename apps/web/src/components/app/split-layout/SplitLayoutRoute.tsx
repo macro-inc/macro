@@ -23,3 +23,4 @@ export const LAYOUT_ROUTE: WithRequired<RouteDefinition, 'component'> = {
   path: '/*splits',
   component: LayoutRoute,
 };
+

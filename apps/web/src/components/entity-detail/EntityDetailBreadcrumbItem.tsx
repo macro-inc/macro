@@ -139,3 +139,4 @@ export function EntityDetailBreadcrumbItem(props: {
     </Show>
   );
 }
+

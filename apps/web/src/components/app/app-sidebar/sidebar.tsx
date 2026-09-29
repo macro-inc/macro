@@ -13,6 +13,7 @@ import {
   setInviteModalOpen,
 } from '@app/features/team-invitations/invite-modal';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSplitLayout } from '@components/app/split-layout/layout';
@@ -29,6 +30,7 @@ import { UserIcon } from '@core/component/UserIcon';
 import {
   ENABLE_CALLS,
   enableCrm,
+  enableReminders,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import type { SettingsTab } from '@core/constant/SettingsState';
@@ -139,6 +141,14 @@ const SIDEBAR_LINKS = [
     hotkeyToken: TOKENS.sidebar.goTo.tasks,
   },
   {
+    id: 'reminders',
+    label: 'Reminders',
+    href: LIST_VIEW_PATHS.reminders,
+    icon: getIconConfig('reminder').icon,
+    hotkey: 'm',
+    hotkeyToken: TOKENS.sidebar.goTo.reminders,
+  },
+  {
     id: 'calendar',
     label: 'Calendar',
     href: calendarPath('timeGridWeek'),
@@ -227,12 +237,14 @@ export const GoToHotkeys = () => {
   const calendarUiEnabled = useCalendarUiFlag();
   const activityFeedEnabled = useActivityFeedFlag();
   const recentViewEnabled = useRecentViewFlag();
+  const reminders = useFeatureFlag(enableReminders);
   const links = createMemo((): SidebarItem[] =>
     buildSidebarLinks(
       gettingStartedEnabled(),
       calendarUiEnabled(),
       activityFeedEnabled(),
-      recentViewEnabled()
+      recentViewEnabled(),
+      reminders().enabled
     )
   );
 
@@ -558,7 +570,7 @@ const RECENT_LINK: SidebarItem = {
 
 /**
  * Assemble the ordered sidebar link list: the static links plus Getting
- * started and the flag-gated Recent, Activity, Calendar, Calls, and CRM
+ * started and the flag-gated Recent, Activity, Calendar, Reminders, Calls, and CRM
  * entries in their correct positions.
  * Call from a reactive context — it reads `ENABLE_CALLS` / `isFeatureEnabled(enableCrm)`.
  * `showGettingStarted` is the account-age gate (`useGettingStartedEnabled`),
@@ -569,10 +581,13 @@ const buildSidebarLinks = (
   showGettingStarted: boolean,
   showCalendar: boolean,
   showActivity: boolean,
-  showRecent: boolean
+  showRecent: boolean,
+  showReminders: boolean
 ): SidebarItem[] => {
   let links: SidebarItem[] = SIDEBAR_LINKS.filter(
-    (link) => showCalendar || link.id !== 'calendar'
+    (link) =>
+      (showCalendar || link.id !== 'calendar') &&
+      (showReminders || link.id !== 'reminders')
   );
 
   const insertAfter = (anchorId: string, link: SidebarItem) => {
@@ -721,3 +736,4 @@ export const SidebarOpenInSplitMenu = (props: SidebarOpenInSplitMenuProps) => {
     </ContextMenu>
   );
 };
+

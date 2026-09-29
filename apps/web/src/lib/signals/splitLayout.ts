@@ -1,4 +1,8 @@
-import type { SplitManager } from '@components/app/split-layout/layoutManager';
+import type { SplitRouter } from '@app/lib/split-router';
+import type {
+  SplitId,
+  SplitManager,
+} from '@components/app/split-layout/layoutManager';
 import { until } from '@solid-primitives/promise';
 import { createEffect, createRoot, createSignal } from 'solid-js';
 
@@ -7,6 +11,10 @@ import { createEffect, createRoot, createSignal } from 'solid-js';
  */
 export const [globalSplitManager, setGlobalSplitManager] =
   createSignal<SplitManager>();
+
+/** The route-aware host for navigation initiated outside split components. */
+export const [globalSplitRouter, setGlobalSplitRouter] =
+  createSignal<SplitRouter<SplitId>>();
 
 /**
  * Resolves once the global split manager is initialized. Safe to call from

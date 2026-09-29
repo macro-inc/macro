@@ -16,6 +16,7 @@ import {
   previewBlockTarget,
 } from '@components/app/previewTarget';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { enableReminders, isFeatureEnabled } from '@core/constant/featureFlags';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { useUserId } from '@core/context/user';
 import type { ContextProviderProps } from '@solid-primitives/context';
@@ -49,6 +50,7 @@ import {
   homeChannelRoute,
   homeDocumentRoute,
   homePreviewRoute,
+  homeReminderRoute,
   homeSplitRoute,
 } from './route';
 import type {
@@ -71,6 +73,8 @@ export type HomeViewContext = {
   previewNavigationRequest: Accessor<number>;
   /** Whether the route opens the Calendar view inline. */
   calendarOpen: Accessor<boolean>;
+  /** Whether the route opens a reminder inline. */
+  reminderOpen: Accessor<boolean>;
   /** Bumped when the open calendar event is requested again, to re-aim in place. */
   calendarRefocus: Accessor<number>;
   openPreview: (entity: PreviewSelection) => boolean;
@@ -90,8 +94,9 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
   const panel = useSplitPanelOrThrow();
   const userId = useUserId();
   const navigate = useNavigate();
-  const routeParams =
-    useParams<Parameters<typeof homeDetailParamsFromRoute>[0]>();
+  const routeParams = useParams<
+    Parameters<typeof homeDetailParamsFromRoute>[0] & { reminderId?: string }
+  >();
   const [channelSearch] = createSearchParams(channelsSearch);
   const [documentSearch] = createSearchParams(driveSearch);
   const [tabSearch] = createSearchParams(homeTabSearch);
@@ -156,6 +161,7 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
   });
   const { calendarOpen, calendarRefocus, openCalendarEvent } =
     useHomeCalendarPreview(withTab);
+  const reminderOpen = () => typeof routeParams.reminderId === 'string';
   const navigateDetail = (
     { params, search }: HomePreviewNavigation,
     replace = false
@@ -184,6 +190,14 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
   const openPreview = (entity: PreviewSelection) => {
     if (entity.type === 'calendar_event') {
       return openCalendarEvent(entity);
+    }
+    if (entity.type === 'reminder') {
+      if (!isFeatureEnabled(enableReminders)) return false;
+      navigate(
+        { route: homeReminderRoute, params: { reminderId: entity.id } },
+        { search: withTab(homeDetailSearch()) }
+      );
+      return true;
     }
     const target = previewBlockTarget(entity);
     if (!selectPreview.canSelect(target)) return false;
@@ -236,6 +250,7 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
     previewNavigationRequest,
     calendarOpen,
     calendarRefocus,
+    reminderOpen,
     openPreview,
     closePreview,
     setTab,

@@ -1,5 +1,5 @@
 import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
-import { openCalendarEventSplit } from '@block-calendar/open-calendar-event';
+import { openCalendarEventSplit } from '@app/features/calendar-view/open-calendar-event';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { ItemPreview } from '@core/component/ItemPreview';
 import { toast } from '@core/component/Toast/Toast';
@@ -85,7 +85,7 @@ function ReminderUnavailable() {
  * Reminder detail content shared by the restorable component split and Home's
  * inline preview.
  *
- * It fetches the reminder by id (the id is encoded in the split content, so it
+ * It fetches the reminder by id (the id comes from the typed route, so it
  * survives a reload), seeds the shared {@link ReminderForm}, and shows the
  * entity the reminder is about as a preview card. Saving writes through the same
  * mutation the create modal uses and asks its host to close.
