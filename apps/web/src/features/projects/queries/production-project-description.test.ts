@@ -48,7 +48,10 @@ describe('production project description transport', () => {
       transport().authorize('surface-1', new AbortController().signal)
     ).resolves.toBe('token-1');
 
-    expect(doubles.ensure).toHaveBeenCalledWith('project-1');
+    expect(doubles.ensure).toHaveBeenCalledWith(
+      'project-1',
+      expect.any(AbortSignal)
+    );
     expect(doubles.token).toHaveBeenCalledWith('surface-1');
     expect(doubles.ensure.mock.invocationCallOrder[0]).toBeLessThan(
       doubles.token.mock.invocationCallOrder[0]
@@ -126,6 +129,51 @@ describe('production project description transport', () => {
     await rejected;
     await vi.runAllTimersAsync();
 
+    expect(doubles.ensure).toHaveBeenCalledTimes(1);
+  });
+
+  it('abandons a pending ensure request once the view closes', async () => {
+    // The client settles an abandoned request as an error.
+    doubles.ensure.mockImplementation(
+      (_projectId: string, signal: AbortSignal) =>
+        new Promise((resolve) =>
+          signal.addEventListener('abort', () =>
+            resolve(err([{ code: 'UNKNOWN', message: 'aborted' }]))
+          )
+        )
+    );
+    const closed = new AbortController();
+
+    const authorized = transport().authorize('surface-1', closed.signal);
+    closed.abort();
+
+    await expect(authorized).rejects.toMatchObject({ name: 'AbortError' });
+    const [, requestSignal] = doubles.ensure.mock.calls[0];
+    expect(requestSignal.aborted).toBe(true);
+    expect(doubles.token).not.toHaveBeenCalled();
+  });
+
+  it('ends a hanging ensure request when the budget runs out', async () => {
+    vi.useFakeTimers();
+    doubles.ensure.mockImplementation(
+      (_projectId: string, signal: AbortSignal) =>
+        new Promise((resolve) =>
+          signal.addEventListener('abort', () =>
+            resolve(err([{ code: 'UNKNOWN', message: 'aborted' }]))
+          )
+        )
+    );
+
+    const authorized = transport().authorize(
+      'surface-1',
+      new AbortController().signal
+    );
+    const rejected = expect(authorized).rejects.toMatchObject({
+      name: 'TimeoutError',
+    });
+    await vi.advanceTimersByTimeAsync(15_000);
+
+    await rejected;
     expect(doubles.ensure).toHaveBeenCalledTimes(1);
   });
 

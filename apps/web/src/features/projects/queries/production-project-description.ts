@@ -12,6 +12,31 @@ const PREPARE_TIMEOUT_MS = 15_000;
 const PREPARE_INITIAL_DELAY_MS = 250;
 const PREPARE_MAX_DELAY_MS = 1_000;
 
+/**
+ * A signal for one ensure request: aborts with `signal`, or once `deadline`
+ * passes, so a hanging request cannot outlive the budget.
+ */
+function attemptSignal(
+  signal: AbortSignal,
+  deadline: number
+): { signal: AbortSignal; clear(): void } {
+  const timeout = new AbortController();
+  const timer = setTimeout(
+    () =>
+      timeout.abort(
+        new DOMException(
+          'Preparing the project description timed out.',
+          'TimeoutError'
+        )
+      ),
+    Math.max(deadline - Date.now(), 0)
+  );
+  return {
+    signal: AbortSignal.any([signal, timeout.signal]),
+    clear: () => clearTimeout(timer),
+  };
+}
+
 function wait(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     signal.throwIfAborted();
@@ -39,17 +64,22 @@ async function ensureDescriptionSurface(
   const deadline = Date.now() + PREPARE_TIMEOUT_MS;
   let delay = PREPARE_INITIAL_DELAY_MS;
   for (;;) {
+    const attempt = attemptSignal(signal, deadline);
     try {
       await throwOnErr(() =>
-        initiativeClient.ensureDescriptionSurface(projectId)
+        initiativeClient.ensureDescriptionSurface(projectId, attempt.signal)
       );
       return;
     } catch (error) {
+      // A closed view or a spent budget ends the wait, whatever the request said.
+      attempt.signal.throwIfAborted();
       if (
         !thrownResultErrorHasCode(error, 'CONFLICT') ||
         Date.now() + delay > deadline
       )
         throw error;
+    } finally {
+      attempt.clear();
     }
     await wait(delay, signal);
     delay = Math.min(delay * 2, PREPARE_MAX_DELAY_MS);

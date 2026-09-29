@@ -68,6 +68,31 @@ function clientWith(
   return { client: createInitiativeClient(() => graphql), requests };
 }
 
+/** A client whose requests never answer; records the requests it tears down. */
+function pendingClient() {
+  const tornDown: number[] = [];
+  const exchange: Exchange = () => (operations) =>
+    pipe(
+      operations,
+      filter((operation) => {
+        if (operation.kind === 'teardown') tornDown.push(operation.key);
+        return false;
+      }),
+      map(
+        (operation): OperationResult => ({
+          operation,
+          stale: false,
+          hasNext: false,
+        })
+      )
+    );
+  const graphql = createClient({
+    url: 'https://example.test/graphql',
+    exchanges: [exchange],
+  });
+  return { client: createInitiativeClient(() => graphql), tornDown };
+}
+
 describe('initiative GraphQL transport', () => {
   it('preserves project identity and sharing levels on detail reads', async () => {
     const { client, requests } = clientWith(() => ({
@@ -108,6 +133,34 @@ describe('initiative GraphQL transport', () => {
     expect(requests[0].kind).toBe('mutation');
     expect(requests[0].variables).toEqual({ initiativeId: 'project-1' });
     expect(result.isOk() && result.value).toBe('description-1');
+  });
+
+  it('abandons a pending ensure request once its signal aborts', async () => {
+    const { client, tornDown } = pendingClient();
+    const controller = new AbortController();
+
+    const ensured = client.ensureDescriptionSurface(
+      'project-1',
+      controller.signal
+    );
+    controller.abort();
+
+    // Settles at once even though the request never answers.
+    const result = await ensured;
+    expect(result.isErr()).toBe(true);
+    // urql never tears down mutations; queries are.
+    expect(tornDown).toHaveLength(0);
+  });
+
+  it('tears down a pending detail read once its signal aborts', async () => {
+    const { client, tornDown } = pendingClient();
+    const controller = new AbortController();
+
+    const read = client.get('project-1', controller.signal);
+    controller.abort();
+
+    expect((await read).isErr()).toBe(true);
+    await vi.waitFor(() => expect(tornDown).toHaveLength(1));
   });
 
   it('keeps detail controls read-only when no viewer permission is returned', async () => {
