@@ -39,6 +39,7 @@ import {
   untrack,
 } from 'solid-js';
 import { SettingsTabContent } from './SettingsTabContent';
+import { filterSettingsTabGroups } from './settingsSearch';
 
 /** Where the settings panel is mounted, which determines its header chrome. */
 export type SettingsVariant = 'split' | 'fullscreen';
@@ -102,7 +103,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
     selectTab,
   } = useSettingsState();
   const splitNavigate = useSplitNavigate();
-  const { groups, flatTabs } = useSettingsTabs();
+  const { searchGroups, flatTabs } = useSettingsTabs();
   const logout = useLogout();
 
   const variant = () => props.variant ?? 'split';
@@ -111,40 +112,19 @@ export function SettingsPanel(props: SettingsPanelProps) {
 
   const [searchQuery, setSearchQuery] = createSignal('');
 
-  const searchKeywords: Record<string, string[]> = {
-    'API Keys': ['cursor', 'api', 'key', 'token', 'authentication'],
-    Account: ['profile', 'user', 'email', 'name'],
-    Notifications: ['alerts', 'email', 'sound'],
-    Billing: ['payment', 'subscription', 'invoice', 'plan'],
-    Appearance: ['theme', 'dark', 'light', 'color'],
-    Agents: ['ai', 'assistant', 'bot'],
-    'Mobile App': ['phone', 'ios', 'android'],
-    Shortcuts: ['keyboard', 'hotkey', 'keybinding'],
-    Team: ['members', 'users', 'workspace'],
-    Tags: ['label', 'category'],
-    CRM: ['contacts', 'customers', 'deals'],
-    Connected: ['integrations', 'apps', 'connections'],
-    Agent: ['mcp', 'server', 'protocol'],
-    Bots: ['automation', 'bot'],
-  };
+  const filteredGroups = createMemo(() =>
+    filterSettingsTabGroups(searchGroups(), searchQuery())
+  );
 
-  const filteredGroups = createMemo(() => {
-    const query = searchQuery().toLowerCase().trim();
-    if (!query) return groups();
-
-    return groups()
-      .map((group) => ({
-        ...group,
-        items: group.items.filter((item) => {
-          const labelMatch = item.label.toLowerCase().includes(query);
-          const keywordMatch = searchKeywords[item.tab]?.some((keyword) =>
-            keyword.includes(query)
-          );
-          return labelMatch || keywordMatch;
-        }),
-      }))
-      .filter((group) => group.items.length > 0);
-  });
+  // Runtimes is a search-only row. While it is on screen, highlight that row
+  // for the Harness tab; otherwise the standing Agents row stands in for it.
+  const showsHarnessResult = () =>
+    filteredGroups().some((group) =>
+      group.items.some((item) => item.tab === 'Harness')
+    );
+  const isItemActive = (tab: SettingsTab) =>
+    activeTabId() === tab ||
+    (tab === 'Agents' && activeTabId() === 'Harness' && !showsHarnessResult());
 
   // Responsive state, driven by the panel's own width (see breakpoints above).
   const [panelWidth, setPanelWidth] = createSignal(Number.POSITIVE_INFINITY);
@@ -398,8 +378,8 @@ export function SettingsPanel(props: SettingsPanelProps) {
                       {(item) => (
                         <SideNav.Item
                           icon={item.icon}
-                          active={activeNavigationTab() === item.tab}
-                          onSelect={() => handleTabChange(item.tab)}
+                          active={isItemActive(item.tab)}
+                          onSelect={() => selectRoutedTab(item.tab)}
                           class="text-xs py-1.5"
                         >
                           {item.label}
