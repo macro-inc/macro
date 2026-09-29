@@ -365,7 +365,7 @@ async fn ensure_rejects_mismatched_parent() {
 #[tokio::test]
 async fn ensure_rejects_receipt_for_other_user() {
     let repo = Arc::new(MemRepo::default());
-    let svc = service_with(repo, MockSurfaceInitializer::new());
+    let svc = service_with(repo, no_sessions());
     let receipt = receipt_for(
         "macro|other@b.c",
         EntityType::Channel,
@@ -511,6 +511,10 @@ async fn delete_requires_edit_capable_permission() {
     assert!(matches!(gone, CollabSurfaceError::NotFound));
 }
 
+fn initiative_parent() -> Entity<'static> {
+    EntityType::Initiative.with_entity_string("11111111-1111-4111-8111-111111111111".to_string())
+}
+
 #[tokio::test]
 async fn ensure_refuses_an_id_that_names_a_document() {
     let repo = Arc::new(MemRepo::default());
@@ -553,7 +557,7 @@ async fn a_pending_surface_with_a_document_id_is_never_initialized() {
         created_at: now,
         updated_at: now,
     });
-    let svc = service_with(repo.clone(), MockSurfaceInitializer::new());
+    let svc = service_with(repo.clone(), no_sessions());
     let receipt = receipt_for(
         "macro|a@b.c",
         EntityType::Document,
@@ -574,7 +578,78 @@ async fn a_pending_surface_with_a_document_id_is_never_initialized() {
 }
 
 #[tokio::test]
-async fn mint_token_refuses_a_pending_surface() {
+async fn internal_ensure_adopts_a_document_session_without_reseeding() {
+    let repo = Arc::new(MemRepo::default());
+    repo.document_ids.store(true, Ordering::SeqCst);
+    let mut init = no_sessions();
+    // Adoption only initializes a session the document never got, and then
+    // with the blank document; an existing session is kept as-is.
+    init.expect_initialize()
+        .withf(|_, markdown| markdown.is_empty())
+        .times(1)
+        .returning(|_, _| Box::pin(async { Ok(()) }));
+    let svc = service_with(repo.clone(), init);
+    let id = surface_id();
+
+    let surface = svc
+        .internal_ensure_surface(initiative_parent(), id, SurfaceSeed::AdoptDocumentSession)
+        .await
+        .unwrap();
+
+    assert_eq!(surface.id, id);
+    assert_eq!(surface.state, SurfaceState::Ready);
+    assert_eq!(surface.parent, initiative_parent());
+
+    // The owning domain bound it to the document on purpose, so it mints.
+    let receipt = receipt_for(
+        "macro|a@b.c",
+        EntityType::Initiative,
+        "11111111-1111-4111-8111-111111111111",
+        edit_permission(),
+    );
+    svc.mint_token(&user("macro|a@b.c"), receipt, id)
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn internal_ensure_seeds_markdown_and_rejects_a_second_parent() {
+    let repo = Arc::new(MemRepo::default());
+    let mut init = no_sessions();
+    init.expect_initialize()
+        .withf(|_, markdown| markdown == "# Launch")
+        .times(1)
+        .returning(|_, _| Box::pin(async { Ok(()) }));
+    let svc = service_with(repo, init);
+    let id = surface_id();
+
+    svc.internal_ensure_surface(
+        initiative_parent(),
+        id,
+        SurfaceSeed::Markdown("# Launch".to_string()),
+    )
+    .await
+    .unwrap();
+    // Idempotent for the same parent: no second initialization.
+    svc.internal_ensure_surface(
+        initiative_parent(),
+        id,
+        SurfaceSeed::Markdown(String::new()),
+    )
+    .await
+    .unwrap();
+
+    let other = EntityType::Initiative
+        .with_entity_string("22222222-2222-4222-8222-222222222222".to_string());
+    let err = svc
+        .internal_ensure_surface(other, id, SurfaceSeed::AdoptDocumentSession)
+        .await
+        .unwrap_err();
+    assert!(matches!(err, CollabSurfaceError::AccessDenied));
+}
+
+#[tokio::test]
+async fn mint_token_and_reads_require_a_ready_surface() {
     let repo = Arc::new(MemRepo::default());
     let mut init = no_sessions();
     init.expect_initialize().returning(|_, _| {
@@ -609,6 +684,37 @@ async fn mint_token_refuses_a_pending_surface() {
         .await
         .unwrap_err();
     assert!(matches!(err, CollabSurfaceError::NotReady));
+    let err = svc.internal_read_markdown(id).await.unwrap_err();
+    assert!(matches!(err, CollabSurfaceError::NotReady));
+}
+
+#[tokio::test]
+async fn internal_read_and_delete_act_on_the_surface() {
+    let repo = Arc::new(MemRepo::default());
+    let mut init = no_sessions();
+    init.expect_initialize()
+        .returning(|_, _| Box::pin(async { Ok(()) }));
+    init.expect_read_markdown()
+        .times(1)
+        .returning(|_| Box::pin(async { Ok("# Launch".to_string()) }));
+    let svc = service_with(repo, init);
+    let id = surface_id();
+    svc.internal_ensure_surface(
+        initiative_parent(),
+        id,
+        SurfaceSeed::Markdown(String::new()),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(svc.internal_read_markdown(id).await.unwrap(), "# Launch");
+
+    svc.internal_delete_surface(id).await.unwrap();
+    svc.internal_delete_surface(id).await.unwrap();
+    assert!(matches!(
+        svc.get_parent(id).await.unwrap_err(),
+        CollabSurfaceError::NotFound
+    ));
 }
 
 #[tokio::test]
@@ -619,23 +725,22 @@ async fn parent_comment_access_mints_a_read_only_token() {
         .returning(|_, _| Box::pin(async { Ok(()) }));
     let svc = service_with(repo, init);
     let id = surface_id();
-    let receipt = |access_level| {
-        receipt_for(
-            "macro|a@b.c",
-            EntityType::Document,
-            "doc-1",
-            EntityPermission::AccessLevel { access_level },
-        )
-    };
-    svc.ensure_surface(
-        &user("macro|a@b.c"),
-        receipt(AccessLevel::Edit),
+    svc.internal_ensure_surface(
+        initiative_parent(),
         id,
-        String::new(),
+        SurfaceSeed::Markdown(String::new()),
     )
     .await
     .unwrap();
 
+    let receipt = |access_level| {
+        receipt_for(
+            "macro|a@b.c",
+            EntityType::Initiative,
+            "11111111-1111-4111-8111-111111111111",
+            EntityPermission::AccessLevel { access_level },
+        )
+    };
     for (parent, minted) in [
         (AccessLevel::View, AccessLevel::View),
         (AccessLevel::Comment, AccessLevel::View),

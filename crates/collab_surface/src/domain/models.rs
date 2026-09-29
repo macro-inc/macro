@@ -1,7 +1,7 @@
 //! Domain models for collab surfaces.
 
 use chrono::{DateTime, Utc};
-use model_entity::Entity;
+use model_entity::{Entity, EntityType};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -58,6 +58,39 @@ pub struct CollabSurface {
     pub updated_at: DateTime<Utc>,
 }
 
+/// How a surface's sync-service session is seeded when an ensure creates it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SurfaceSeed {
+    /// Initialize a new session from markdown; empty seeds the canonical blank
+    /// document. The id must not already name a document: a document's session
+    /// is never adopted uninvited.
+    Markdown(String),
+    /// Bind the surface to the existing sync-service session of the document
+    /// with the same id, reusing its CRDT as-is. Only a trusted caller that has
+    /// verified the document belongs to the surface's parent may choose this
+    /// (e.g. an initiative adopting its legacy description document). A
+    /// document that never got a session is initialized blank.
+    AdoptDocumentSession,
+}
+
+impl SurfaceSeed {
+    /// The markdown to initialize a missing session with.
+    pub fn initial_markdown(&self) -> &str {
+        match self {
+            SurfaceSeed::Markdown(markdown) => markdown,
+            SurfaceSeed::AdoptDocumentSession => "",
+        }
+    }
+}
+
+/// Whether surfaces under `parent` belong to the parent's own domain, which
+/// creates them through the internal entry points and may bind them to a
+/// document's session on purpose (an initiative adopting its description
+/// document).
+pub fn owned_by_parent_domain(parent: EntityType) -> bool {
+    matches!(parent, EntityType::Initiative)
+}
+
 /// Errors returned by the collab-surface service.
 #[derive(Debug, thiserror::Error)]
 pub enum CollabSurfaceError {
@@ -77,8 +110,8 @@ pub enum CollabSurfaceError {
     /// a session. A new surface only ever creates its own session.
     #[error("this surface id is already in use")]
     IdReserved,
-    /// The surface exists but has not proven its sync-service session is its
-    /// own (initialization failed or never ran), so it cannot be connected to.
+    /// The surface exists but its sync-service session is not initialized yet,
+    /// so it cannot be connected to.
     #[error("collab surface is not ready")]
     NotReady,
     /// The request was invalid.

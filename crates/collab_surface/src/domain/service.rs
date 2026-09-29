@@ -11,7 +11,9 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use uuid::Uuid;
 
-use crate::domain::models::{CollabSurface, CollabSurfaceError, SurfaceState};
+use crate::domain::models::{
+    CollabSurface, CollabSurfaceError, SurfaceSeed, SurfaceState, owned_by_parent_domain,
+};
 use crate::domain::ports::{
     CollabSurfaceRepo, CollabSurfaceService, DocumentIds, SurfaceInitializer,
 };
@@ -93,56 +95,9 @@ where
         id: Uuid,
         initial_markdown: String,
     ) -> Result<CollabSurface, CollabSurfaceError> {
-        if initial_markdown.len() > MAX_INITIAL_MARKDOWN_LEN {
-            return Err(CollabSurfaceError::BadRequest(format!(
-                "initial markdown exceeds {MAX_INITIAL_MARKDOWN_LEN} bytes"
-            )));
-        }
         let parent = resolve_parent(user_id, &parent_receipt)?;
-
-        // Fast path: the surface already exists. A `pending` row still gets
-        // its initialization retried in `finish_init`.
-        if let Some(existing) = self.get_optional(id).await? {
-            verify_receipt_matches_parent(&existing, &parent)?;
-            if existing.state == SurfaceState::Pending {
-                // A document may have taken the id since the row was written.
-                self.refuse_document_id(id).await?;
-            }
-            return self.finish_init(existing, &initial_markdown).await;
-        }
-
-        // A new surface creates its own session, so its id must be free in the
-        // namespace surfaces share with documents: no document and no session
-        // yet. Checked before inserting, so a refusal leaves no row behind.
-        self.refuse_taken_id(id).await?;
-
-        let now = chrono::Utc::now();
-        let surface = CollabSurface {
-            id,
-            parent,
-            state: SurfaceState::Pending,
-            created_at: now,
-            updated_at: now,
-        };
-
-        let inserted = self
-            .repo
-            .insert(&surface)
+        self.ensure_bound(parent, id, SurfaceSeed::Markdown(initial_markdown))
             .await
-            .map_err(|e| rootcause::Report::new(e).into_dynamic())?;
-
-        if !inserted {
-            // Lost a race with a concurrent ensure (which passed the same
-            // checks), or the id belongs to a soft-deleted surface (which never
-            // comes back).
-            let Some(existing) = self.get_optional(id).await? else {
-                return Err(CollabSurfaceError::Gone);
-            };
-            verify_receipt_matches_parent(&existing, &surface.parent)?;
-            return self.finish_init(existing, &initial_markdown).await;
-        }
-
-        self.finish_init(surface, &initial_markdown).await
     }
 
     #[tracing::instrument(err, skip(self, user_id, parent_receipt))]
@@ -179,8 +134,11 @@ where
             return Err(CollabSurfaceError::NotReady);
         }
         // Checked on every mint, not only at creation, so a surface whose id
-        // names a document never connects to it, however it was bound.
-        self.refuse_document_id(surface.id).await?;
+        // names a document never connects to it, however it was bound. Only
+        // a parent's own domain binds its surfaces to a document on purpose.
+        if !owned_by_parent_domain(surface.parent.entity_type) {
+            self.refuse_document_id(surface.id).await?;
+        }
 
         let access_level = access_level_for(parent_receipt.entity_permission())?;
         encode_surface_token(
@@ -219,6 +177,36 @@ where
             .map_err(|e| rootcause::Report::new(e).into_dynamic())?;
         Ok(())
     }
+
+    #[tracing::instrument(err, skip(self, seed))]
+    async fn internal_ensure_surface(
+        &self,
+        parent: Entity<'static>,
+        id: Uuid,
+        seed: SurfaceSeed,
+    ) -> Result<CollabSurface, CollabSurfaceError> {
+        self.ensure_bound(parent, id, seed).await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn internal_delete_surface(&self, id: Uuid) -> Result<(), CollabSurfaceError> {
+        self.repo
+            .soft_delete(id)
+            .await
+            .map_err(|e| rootcause::Report::new(e).into_dynamic())?;
+        Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn internal_read_markdown(&self, id: Uuid) -> Result<String, CollabSurfaceError> {
+        let surface = self.get_live(id).await?;
+        if surface.state != SurfaceState::Ready {
+            return Err(CollabSurfaceError::NotReady);
+        }
+        self.initializer
+            .read_markdown(&surface.id.to_string())
+            .await
+    }
 }
 
 impl<R, I, D> CollabSurfaceServiceImpl<R, I, D>
@@ -227,6 +215,71 @@ where
     I: SurfaceInitializer,
     D: DocumentIds,
 {
+    /// Load-or-create surface `id` bound to `parent`, returning once it is
+    /// `ready`. See [`CollabSurfaceService::ensure_surface`] for the rules.
+    async fn ensure_bound(
+        &self,
+        parent: Entity<'static>,
+        id: Uuid,
+        seed: SurfaceSeed,
+    ) -> Result<CollabSurface, CollabSurfaceError> {
+        if seed.initial_markdown().len() > MAX_INITIAL_MARKDOWN_LEN {
+            return Err(CollabSurfaceError::BadRequest(format!(
+                "initial markdown exceeds {MAX_INITIAL_MARKDOWN_LEN} bytes"
+            )));
+        }
+
+        // Only the owning domain adopts a document's session; any other seed
+        // never uses a document's id.
+        let own_session = matches!(seed, SurfaceSeed::Markdown(_));
+
+        // Fast path: the surface already exists. A `pending` row still gets
+        // its initialization retried.
+        if let Some(existing) = self.get_optional(id).await? {
+            verify_receipt_matches_parent(&existing, &parent)?;
+            if own_session && existing.state == SurfaceState::Pending {
+                // A document may have taken the id since the row was written.
+                self.refuse_document_id(id).await?;
+            }
+            return self.finish_init(existing, &seed).await;
+        }
+
+        // A new surface creates its own session, so its id must be free in the
+        // namespace surfaces share with documents: no document and no session
+        // yet. Checked before inserting, so a refusal leaves no row behind.
+        if own_session {
+            self.refuse_taken_id(id).await?;
+        }
+
+        let now = chrono::Utc::now();
+        let surface = CollabSurface {
+            id,
+            parent,
+            state: SurfaceState::Pending,
+            created_at: now,
+            updated_at: now,
+        };
+
+        let inserted = self
+            .repo
+            .insert(&surface)
+            .await
+            .map_err(|e| rootcause::Report::new(e).into_dynamic())?;
+
+        if !inserted {
+            // Lost a race with a concurrent ensure (which passed the same
+            // checks), or the id belongs to a soft-deleted surface (which never
+            // comes back).
+            let Some(existing) = self.get_optional(id).await? else {
+                return Err(CollabSurfaceError::Gone);
+            };
+            verify_receipt_matches_parent(&existing, &surface.parent)?;
+            return self.finish_init(existing, &seed).await;
+        }
+
+        self.finish_init(surface, &seed).await
+    }
+
     /// Fetch a live (non-deleted) surface or `NotFound`.
     async fn get_live(&self, id: Uuid) -> Result<CollabSurface, CollabSurfaceError> {
         self.get_optional(id)
@@ -244,7 +297,8 @@ where
     }
 
     /// Refuse an id that names a document. Surfaces share the document
-    /// namespace in sync-service, so a surface never uses a document's id.
+    /// namespace in sync-service, so a surface never uses a document's id
+    /// unless its parent's domain adopts that document's session.
     async fn refuse_document_id(&self, id: Uuid) -> Result<(), CollabSurfaceError> {
         if self.documents.is_document_id(id).await? {
             return Err(CollabSurfaceError::IdReserved);
@@ -281,18 +335,19 @@ where
     /// sync-service session when it is still `Pending`. The initializer treats
     /// an already-initialized session as success, so this is safe to run
     /// concurrently and after partial failures: a pending row whose session
-    /// was initialized before `mark_ready` failed heals here.
+    /// was initialized before `mark_ready` failed heals here. An adoption
+    /// reuses the document's session as-is.
     async fn finish_init(
         &self,
         surface: CollabSurface,
-        initial_markdown: &str,
+        seed: &SurfaceSeed,
     ) -> Result<CollabSurface, CollabSurfaceError> {
         if surface.state == SurfaceState::Ready {
             return Ok(surface);
         }
 
         self.initializer
-            .initialize(&surface.id.to_string(), initial_markdown)
+            .initialize(&surface.id.to_string(), seed.initial_markdown())
             .await?;
 
         self.repo

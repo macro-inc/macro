@@ -6,7 +6,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use uuid::Uuid;
 
-use crate::domain::models::{CollabSurface, CollabSurfaceError};
+use crate::domain::models::{CollabSurface, CollabSurfaceError, SurfaceSeed};
 
 /// Outbound persistence port for collab surfaces.
 pub trait CollabSurfaceRepo: Send + Sync + 'static {
@@ -54,8 +54,8 @@ pub trait DocumentIds: Send + Sync + 'static {
     ) -> impl Future<Output = Result<bool, rootcause::Report>> + Send;
 }
 
-/// Outbound port for a surface's sync-service session: boots it from markdown
-/// and checks whether it exists.
+/// Outbound port for a surface's sync-service session: boots it from
+/// markdown, checks whether it exists, and reads it back.
 ///
 /// Implementations convert the markdown to a Loro snapshot (an empty string
 /// maps to the canonical blank-document snapshot) and store it as the
@@ -78,6 +78,12 @@ pub trait SurfaceInitializer: Send + Sync + 'static {
         &self,
         surface_id: &str,
     ) -> impl Future<Output = Result<bool, CollabSurfaceError>> + Send;
+
+    /// Read the session's current content as internal (lossless) markdown.
+    fn read_markdown(
+        &self,
+        surface_id: &str,
+    ) -> impl Future<Output = Result<String, CollabSurfaceError>> + Send;
 }
 
 /// The collab-surface use-cases, generic over the outbound ports.
@@ -126,7 +132,8 @@ pub trait CollabSurfaceService: Send + Sync + 'static {
     /// Mint a sync-service connection token for a `ready` surface, at the
     /// access level implied by the caller's permission on the parent entity.
     /// A surface whose id names a document is refused
-    /// ([`CollabSurfaceError::IdReserved`]), whenever it was bound.
+    /// ([`CollabSurfaceError::IdReserved`]), whenever it was bound, unless
+    /// its parent's domain adopted that document's session on purpose.
     fn mint_token(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -144,4 +151,30 @@ pub trait CollabSurfaceService: Send + Sync + 'static {
         parent_receipt: EntityAccessReceipt<AnyEntityPermission>,
         id: Uuid,
     ) -> impl Future<Output = Result<(), CollabSurfaceError>> + Send;
+
+    /// Ensure a surface owned by another domain, which has already authorized
+    /// the caller against `parent` (or is creating `parent` itself, so it may
+    /// not exist yet). Same convergence rules as
+    /// [`CollabSurfaceService::ensure_surface`], plus the choice of `seed`.
+    /// For internal callers only; never expose it to a caller-chosen id.
+    fn internal_ensure_surface(
+        &self,
+        parent: Entity<'static>,
+        id: Uuid,
+        seed: SurfaceSeed,
+    ) -> impl Future<Output = Result<CollabSurface, CollabSurfaceError>> + Send;
+
+    /// Soft-delete a surface for the domain that owns it. Idempotent. For
+    /// internal callers only.
+    fn internal_delete_surface(
+        &self,
+        id: Uuid,
+    ) -> impl Future<Output = Result<(), CollabSurfaceError>> + Send;
+
+    /// Read a ready surface's content as internal markdown for the domain that
+    /// owns it. For internal callers only.
+    fn internal_read_markdown(
+        &self,
+        id: Uuid,
+    ) -> impl Future<Output = Result<String, CollabSurfaceError>> + Send;
 }
