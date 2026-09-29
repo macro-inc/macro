@@ -662,7 +662,7 @@ query GroupViews($input: GroupedSoupInput!) {
         let mut storage = engine.into_storage();
         let key = EntityKey("GraphqlUser:user-1".into());
         let mut record = storage
-            .get_batch(&[key.clone()])
+            .get_batch(std::slice::from_ref(&key))
             .await
             .unwrap()
             .remove(0)

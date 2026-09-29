@@ -178,7 +178,7 @@ fn cold_parent_needs_no_query_root_or_cached_page_for_enqueue_and_replay() {
         let selection = RecordSelection::parse(FRAGMENT, "AssignmentParent").unwrap();
         let key = EntityKey("GraphqlSoupDocument:task-1".into());
         let records = engine
-            .read_records_by_keys(&selection, &[key.clone()])
+            .read_records_by_keys(&selection, std::slice::from_ref(&key))
             .await
             .unwrap();
         assert_eq!(
