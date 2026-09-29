@@ -562,6 +562,17 @@ answer: screenshots as images, recordings as video players, and `.txt` / `.log`
 files as an inline `txt` code block (not a download link). Larger or non-UTF-8
 text stays a link.
 
+When a Cursor run subscribes to something outside the conversation (a CI run,
+a pull request, a Slack thread, a Linear issue, a timer), Cursor feeds the
+event back as a prompt wrapped in `<system_notification …>`. The transcript
+renders that as a full-width event card, not a prompt bubble: a source header
+(e.g. **GitHub · CI checks**), a pass/fail pill when the event carries a
+`conclusion`, the summary line, and chips for the repository, branch, short
+commit and check count (repository and commit chips open GitHub). Attributes
+the card has no face for appear as `name: value` chips; the subscription id
+is hidden. The same tag renders as the same card anywhere internal markdown
+is shown; a tag inside a code fence stays code.
+
 On mobile the composer (and any queued prompts above it) floats in the bottom
 accessory region above the dock — same placement as channel and AI chat — so it
 stays tappable and clear of the home indicator. The box is full width; the text

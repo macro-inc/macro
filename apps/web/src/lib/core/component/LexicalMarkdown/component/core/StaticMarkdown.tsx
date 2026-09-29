@@ -32,6 +32,7 @@ import {
   type ReplyTargetNode,
   type SnapshotNode,
   SupportedNodeTypes,
+  type SystemNotificationNode,
   type TagMentionNode,
   type ThemeMentionNode,
   type UnknownMentionNode,
@@ -97,6 +98,7 @@ import { MarkdownVideo as VideoDecorator } from '../decorator/MarkdownVideo';
 import { PasteNode as PasteNodeDecorator } from '../decorator/PasteNode';
 import { ReplyTarget as ReplyTargetDecorator } from '../decorator/ReplyTarget';
 import { Snapshot as SnapshotDecorator } from '../decorator/Snapshot';
+import { SystemNotification as SystemNotificationDecorator } from '../decorator/SystemNotification';
 import { TagMention as TagMentionDecorator } from '../decorator/TagMention';
 import { ThemeMention as ThemeMentionDecorator } from '../decorator/ThemeMention';
 import { UnknownMention as UnknownMentionDecorator } from '../decorator/UnknownMention';
@@ -561,6 +563,18 @@ const ReplyTarget: TypedRenderableEntity<ReplyTargetNode> = {
   ),
 };
 
+const SystemNotification: TypedRenderableEntity<SystemNotificationNode> = {
+  guard: (node: LexicalNode): node is SystemNotificationNode =>
+    node.__type === 'system-notification',
+  render: (props) => (
+    <SystemNotificationDecorator
+      {...props.node.exportComponentProps()}
+      key={props.node.getKey()}
+      theme={props.theme}
+    />
+  ),
+};
+
 const MagicChip: TypedRenderableEntity<MagicChipNode> = {
   guard: (node: LexicalNode): node is MagicChipNode =>
     node.__type === 'magic-chip',
@@ -927,6 +941,7 @@ const InlineEntities: RenderableEntity[] = [
   eraseRenderableEntity(Await),
   eraseRenderableEntity(AgentContext),
   eraseRenderableEntity(ReplyTarget),
+  eraseRenderableEntity(SystemNotification),
   eraseRenderableEntity(MagicChip),
   eraseRenderableEntity(Snapshot),
   eraseRenderableEntity(Image),

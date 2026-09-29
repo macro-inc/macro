@@ -18,6 +18,7 @@ import {
   PullRequestMentionNode,
   ReplyTargetNode,
   SnapshotNode,
+  SystemNotificationNode,
   TagMentionNode,
   ThemeMentionNode,
   UnknownMentionNode,
@@ -49,6 +50,7 @@ import { PasteNode } from './component/decorator/PasteNode';
 import { PullRequestMention } from './component/decorator/PullRequestMention';
 import { ReplyTarget } from './component/decorator/ReplyTarget';
 import { Snapshot } from './component/decorator/Snapshot';
+import { SystemNotification } from './component/decorator/SystemNotification';
 import { TagMention } from './component/decorator/TagMention';
 import { ThemeMention } from './component/decorator/ThemeMention';
 import { UnknownMention } from './component/decorator/UnknownMention';
@@ -86,5 +88,6 @@ export function initializeLexical() {
   setDecorator(WatermarkNode, Watermark);
   setDecorator(AwaitNode, Await);
   setDecorator(MagicChipNode, MagicChip);
+  setDecorator(SystemNotificationNode, SystemNotification);
   registerDiffNodeFactory();
 }
