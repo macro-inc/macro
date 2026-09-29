@@ -8,7 +8,10 @@ import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { PreviewPanel } from '@components/app/PreviewPanel';
 import type { PreviewBlockTarget } from '@components/app/previewTarget';
 import { SidePanel } from '@components/app/side-panel';
-import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import {
+  useSplitDisplayName,
+  useSplitPanelOrThrow,
+} from '@components/app/split-layout/layoutUtils';
 import { type Accessor, createMemo, Match, Show, Switch } from 'solid-js';
 import { isHomeDocumentType } from '../home-route-schema';
 import { useHomeView } from '../home-view-context';
@@ -19,6 +22,11 @@ type DetailParams = {
   documentType?: string;
   documentId?: string;
 };
+
+function HomeEntityDisplayName(props: { name: Accessor<string | undefined> }) {
+  useSplitDisplayName(props.name);
+  return null;
+}
 
 /** The shared details that can render without a legacy block instance. */
 function entityDetailTarget(
@@ -104,6 +112,7 @@ function HomeEntityDetailBody(props: {
 
             return (
               <>
+                <HomeEntityDisplayName name={name} />
                 <ViewBreadcrumbs.Item
                   value={props.value()}
                   metadata={props.target}

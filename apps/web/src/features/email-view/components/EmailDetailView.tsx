@@ -20,6 +20,7 @@ import { SplitFileMenu } from '@components/app/split-layout/components/SplitFile
 import { ListNavigationButtons } from '@components/app/split-layout/components/SplitHeader';
 import {
   useCanAutofocusSplitContent,
+  useSplitDisplayName,
   useSplitPanelOrThrow,
 } from '@components/app/split-layout/layoutUtils';
 import { createSplitAutofocus } from '@components/app/split-layout/utils/createSplitAutofocus';
@@ -128,6 +129,7 @@ export function EmailDetailView(props: {
       'Email'
     );
   };
+  useSplitDisplayName(title);
   const openShare = useShareModal(() => {
     const thread = threadData()?.thread;
     if (!thread) return;
