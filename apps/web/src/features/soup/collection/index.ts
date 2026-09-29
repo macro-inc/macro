@@ -10,6 +10,7 @@ export {
   createSoupGroupHeaderRow,
   createSoupLoadMoreRow,
   createSoupSectionHeaderRow,
+  getSoupMenuEntities,
   getSoupRowEntities,
   getUniqueSoupRowEntities,
   isSoupRowVisible,

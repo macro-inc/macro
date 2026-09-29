@@ -10,7 +10,7 @@ export function RenameProjectDialog(props: {
 }) {
   const [value, setValue] = createSignal(props.name);
   const [pending, setPending] = createSignal(false);
-  const [error, setError] = createSignal<string>();
+  const [failed, setFailed] = createSignal(false);
   const name = () => value().trim();
   const canSubmit = () =>
     !pending() && name().length > 0 && name() !== props.name.trim();
@@ -19,16 +19,13 @@ export function RenameProjectDialog(props: {
     event.preventDefault();
     if (!canSubmit()) return;
     setPending(true);
-    setError(undefined);
+    setFailed(false);
     try {
       await props.onRename(name());
       props.onOpenChange(false);
     } catch (error) {
-      setError(
-        error instanceof Error && error.message
-          ? error.message
-          : 'Could not rename project.'
-      );
+      console.error('Failed to rename project', error);
+      setFailed(true);
     } finally {
       setPending(false);
     }
@@ -63,12 +60,10 @@ export function RenameProjectDialog(props: {
                 onFocus={(event) => event.currentTarget.select()}
               />
             </TextField>
-            <Show when={error()}>
-              {(message) => (
-                <p role="alert" class="text-sm text-failure">
-                  {message()}
-                </p>
-              )}
+            <Show when={failed()}>
+              <p role="alert" class="text-sm text-failure">
+                Could not rename project. Please try again.
+              </p>
             </Show>
           </ActionDialogShell.Body>
           <ActionDialogShell.Footer>

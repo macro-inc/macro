@@ -11,33 +11,32 @@ export type ProjectMenuItem =
   | 'share'
   | 'delete';
 
-/** A menu on one of several selected rows acts on the selection, as in Tasks. */
-export function projectMenuTargets<T extends { id: string }>(
-  clicked: T,
-  selected: readonly T[]
-): readonly T[] {
-  return selected.length > 1 && selected.some((row) => row.id === clicked.id)
-    ? selected
-    : [clicked];
-}
-
 /**
  * The entries every target allows, in separator-delimited groups. Actions on
- * one project's identity drop out of a multi-project menu.
+ * one project's identity drop out of a multi-project menu, and `surface`
+ * removes entries the host cannot offer yet, such as unloaded properties.
  */
 export function projectMenuGroups(
   projects: readonly Pick<Project, 'access'>[],
-  surface: { splits: boolean; share: boolean }
+  surface: {
+    splits: boolean;
+    share: boolean;
+    status: boolean;
+    priority: boolean;
+  }
 ): ProjectMenuItem[][] {
   if (projects.length === 0) return [];
   const single = projects.length === 1;
   const editable = projects.every(canEditProject);
   const groups: ProjectMenuItem[][] = [
     single && surface.splits ? ['open-in-split'] : [],
-    [
-      ...(single && editable ? (['rename'] as const) : []),
-      ...(editable ? (['status', 'priority'] as const) : []),
-    ],
+    editable
+      ? [
+          ...(single ? (['rename'] as const) : []),
+          ...(surface.status ? (['status'] as const) : []),
+          ...(surface.priority ? (['priority'] as const) : []),
+        ]
+      : [],
     single
       ? ['copy-link', 'copy-id', ...(surface.share ? (['share'] as const) : [])]
       : [],

@@ -26,6 +26,7 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { getSoupMenuEntities } from './collection/rows';
 import { useSoupEntityActionDrawer } from './SoupEntityActionDrawerContext';
 import { SoupEntityActionsMenu } from './SoupEntityActionsMenu';
 
@@ -83,16 +84,8 @@ export const SoupEntityContextMenu: FlowComponent<
     y: number;
   }>();
 
-  const menuEntities = () => {
-    const selected = props.selectedEntities();
-    if (
-      selected.length > 1 &&
-      selected.some((entity) => entity.id === props.entity.id)
-    ) {
-      return selected;
-    }
-    return [props.entity];
-  };
+  const menuEntities = () =>
+    getSoupMenuEntities(props.entity, props.selectedEntities());
 
   const canEditTags = () => addTagAction.canExecute(props.entity);
 

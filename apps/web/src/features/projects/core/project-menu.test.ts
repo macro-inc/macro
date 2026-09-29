@@ -1,23 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { projectMenuGroups, projectMenuTargets } from './project-menu';
+import { projectMenuGroups } from './project-menu';
 
-const surface = { splits: true, share: true };
-
-describe('projectMenuTargets', () => {
-  const rows = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
-
-  it('acts on the selection when the clicked row is part of it', () => {
-    expect(projectMenuTargets(rows[1], rows.slice(0, 2))).toEqual(
-      rows.slice(0, 2)
-    );
-  });
-
-  it('acts on the clicked row outside a selection or with one selected', () => {
-    expect(projectMenuTargets(rows[2], rows.slice(0, 2))).toEqual([rows[2]]);
-    expect(projectMenuTargets(rows[0], [rows[0]])).toEqual([rows[0]]);
-    expect(projectMenuTargets(rows[0], [])).toEqual([rows[0]]);
-  });
-});
+const surface = { splits: true, share: true, status: true, priority: true };
 
 describe('projectMenuGroups', () => {
   it('offers every action to a single owned project', () => {
@@ -59,9 +43,24 @@ describe('projectMenuGroups', () => {
     ).toEqual([]);
   });
 
-  it('omits split and share entries the surface cannot honor', () => {
+  it('omits entries the surface cannot offer without leaving empty groups', () => {
+    const limited = {
+      splits: false,
+      share: false,
+      status: false,
+      priority: false,
+    };
+    expect(projectMenuGroups([{ access: 'view' }], limited)).toEqual([
+      ['copy-link', 'copy-id'],
+    ]);
     expect(
-      projectMenuGroups([{ access: 'view' }], { splits: false, share: false })
-    ).toEqual([['copy-link', 'copy-id']]);
+      projectMenuGroups([{ access: 'owner' }, { access: 'owner' }], limited)
+    ).toEqual([['delete']]);
+    expect(
+      projectMenuGroups([{ access: 'edit' }], { ...limited, priority: true })
+    ).toEqual([
+      ['rename', 'priority'],
+      ['copy-link', 'copy-id'],
+    ]);
   });
 });

@@ -2,7 +2,7 @@ import { getPermissions } from '@core/component/SharePermissions';
 import { toast } from '@core/component/Toast/Toast';
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { getDisplayName, tryMacroId } from '@core/user';
-import { type Accessor, onMount, Show } from 'solid-js';
+import { type Accessor, createEffect, on, onMount, Show } from 'solid-js';
 import { ProjectCollaborators } from './components/project-collaborators';
 import {
   type ProjectsContext,
@@ -57,7 +57,10 @@ export function useProjectShareModal(
   }, options);
 }
 
-/** Opens a listed project's Share menu once its detail has loaded. */
+/**
+ * Opens a listed project's Share menu once its detail has loaded, or reports
+ * and closes when the project cannot load, e.g. after losing access.
+ */
 export function ProjectShareLauncher(props: {
   projectId: string;
   onClose(): void;
@@ -70,5 +73,18 @@ export function ProjectShareLauncher(props: {
     { onClose: props.onClose }
   );
   onMount(openShare);
+  // The source only reports the outcome; the toast and close are imperative.
+  createEffect(
+    on(
+      () => !source.loading() && !source.project(),
+      (unavailable) => {
+        if (!unavailable) return;
+        toast.failure('Could not open sharing for this project', {
+          subtext: 'Please try again',
+        });
+        props.onClose();
+      }
+    )
+  );
   return null;
 }

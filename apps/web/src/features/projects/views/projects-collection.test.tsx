@@ -22,8 +22,19 @@ import { createProjectCollection } from '../primitives/project-collection';
 import { ProjectsCollection } from './projects-collection';
 
 const toast = vi.hoisted(() => ({ success: vi.fn(), failure: vi.fn() }));
+const device = vi.hoisted(() => ({ mobile: false }));
 vi.mock('@core/component/Toast/Toast', () => ({ toast }));
-vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));
+vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => device.mobile }));
+// Touch timing is covered by the directive; a test event stands in for it.
+vi.mock('@core/directive/touchHandler', () => ({
+  touchHandler: (
+    element: HTMLElement,
+    options: () => { onLongPress?: () => void }
+  ) =>
+    element.addEventListener('test-long-press', () =>
+      options().onLongPress?.()
+    ),
+}));
 vi.mock('@app/components/ui/components/Tooltip', () => ({
   Tooltip: (props: ParentProps) => props.children,
 }));
@@ -61,22 +72,40 @@ vi.mock(
 vi.mock('@entity/EntitySelectionToolbarModal', () => ({
   EntitySelectionToolbarModal: () => null,
 }));
-vi.mock('../components/project-row', () => ({
-  ProjectListHeader: () => null,
-  ProjectRow: (props: {
-    rowId: string;
-    row: ProjectRow;
-    highlighted: boolean;
-  }) => (
-    <div role="row" id={props.rowId} data-highlighted={props.highlighted}>
-      {props.row.project.name}
-    </div>
-  ),
+vi.mock('@entity', () => ({
+  InlineEntity: (props: { entity: { name: string } }) => props.entity.name,
 }));
+// Rows portal their property editors, as the real cells do.
+vi.mock('../components/project-row', async () => {
+  const { Portal } = await import('solid-js/web');
+  return {
+    ProjectListHeader: () => null,
+    ProjectRow: (props: {
+      rowId: string;
+      row: ProjectRow;
+      highlighted: boolean;
+    }) => (
+      <div role="row" id={props.rowId} data-highlighted={props.highlighted}>
+        {props.row.project.name}
+        <Portal>
+          <button type="button">Edit {props.row.project.name}</button>
+        </Portal>
+      </div>
+    ),
+  };
+});
 
 let animationStyle: HTMLStyleElement;
 beforeEach(() => {
   vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
   Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
     configurable: true,
     value: vi.fn(),
@@ -87,6 +116,8 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
+  device.mobile = false;
+  vi.unstubAllGlobals();
   animationStyle.remove();
   vi.restoreAllMocks();
   vi.clearAllMocks();
@@ -159,13 +190,15 @@ function commands() {
     setMembers: vi.fn(async () => {}),
     assignTasks: vi.fn(async () => []),
     delete: vi.fn(async (_id: string) => {}),
+    deleteMany: vi.fn(async (_ids: readonly string[]): Promise<string[]> => []),
     saveProperty: vi.fn(async () => {}),
+    saveProperties: vi.fn(async () => {}),
   } satisfies ReturnType<ProjectsContext['createCommands']>;
 }
 
 function setup(
   rows: readonly ProjectRow[],
-  options: { canOpenInNewSplit?: boolean } = {}
+  options: { canOpenInNewSplit?: boolean; properties?: Property[] } = {}
 ) {
   const service = commands();
   const unused = (): never => {
@@ -185,7 +218,7 @@ function setup(
     createProjectSource: unused,
     createReferencesSource: unused,
     createPropertyDefinitionsSource: () => ({
-      properties: () => [status, priority],
+      properties: () => options.properties ?? [status, priority],
       loading: () => false,
       error: () => undefined,
     }),
@@ -331,7 +364,7 @@ describe('project row context menu', () => {
     fireEvent.click(save);
     expect(await screen.findByRole('alert')).toHaveProperty(
       'textContent',
-      'Name taken'
+      'Could not rename project. Please try again.'
     );
     fireEvent.click(save);
     await waitFor(() =>
@@ -350,8 +383,58 @@ describe('project row context menu', () => {
     await waitFor(() =>
       expect(screen.queryByText('Delete project?')).toBeNull()
     );
-    expect(view.service.delete).toHaveBeenCalledWith('launch');
+    expect(view.service.deleteMany).toHaveBeenCalledWith(['launch']);
     expect(toast.success).toHaveBeenCalledWith('Project deleted');
+  });
+
+  it('leaves right-clicks in a row’s portaled editors to them', () => {
+    setup([project('launch', 'Launch', 'owner')]);
+    expect(fireEvent.contextMenu(screen.getByText('Edit Launch'))).toBe(true);
+    expect(screen.queryByRole('menu')).toBeNull();
+  });
+
+  it('adds the property submenus once their definitions load', async () => {
+    const view = setup(
+      [
+        project('launch', 'Launch', 'owner'),
+        project('roadmap', 'Roadmap', 'owner'),
+      ],
+      { properties: [] }
+    );
+    view.collection.list.selection.select(view.rowKey('launch'));
+    view.collection.list.selection.select(view.rowKey('roadmap'));
+    await openMenu('Launch');
+    expect(entries()).toEqual(['Delete']);
+    expect(screen.queryByRole('separator')).toBeNull();
+  });
+
+  it('opens the same actions in a long-press drawer on mobile', async () => {
+    device.mobile = true;
+    const view = setup([project('launch', 'Launch', 'owner')]);
+    screen
+      .getByText('Launch')
+      .closest('[role="row"]')
+      ?.parentElement?.dispatchEvent(new Event('test-long-press'));
+    expect(view.collection.list.focus.key()).toBe(view.rowKey('launch'));
+    const drawer = await screen.findByRole('dialog', {
+      name: 'Entity actions',
+    });
+    expect(
+      [...drawer.querySelectorAll('button')].map((item) => item.textContent)
+    ).toEqual([
+      'Rename',
+      'Status: Not Started',
+      'Status: Completed',
+      'Priority: High',
+      'Copy Link',
+      'Copy ID',
+      'Share',
+      'Delete',
+    ]);
+    fireEvent.click(screen.getByRole('button', { name: 'Copy ID' }));
+    await waitFor(() =>
+      expect(view.host.onCopyId).toHaveBeenCalledWith('launch')
+    );
   });
 
   it('acts on the selection and keeps failed deletions for retry', async () => {
@@ -380,27 +463,19 @@ describe('project row context menu', () => {
     await screen.findByRole('menuitem', { name: 'Completed' });
     choose('Completed');
     await waitFor(() =>
-      expect(view.service.saveProperty).toHaveBeenCalledTimes(2)
+      expect(view.service.saveProperties).toHaveBeenCalledOnce()
     );
-    const completed = {
+    const value = {
       valueType: 'SELECT_STRING',
       values: [PROPERTY_OPTION_IDS.STATUS.COMPLETED],
     };
     // A row's own value saves like its cell; a missing one uses the definition.
-    expect(view.service.saveProperty).toHaveBeenCalledWith(
-      'launch',
-      launchStatus,
-      completed
-    );
-    expect(view.service.saveProperty).toHaveBeenCalledWith(
-      'roadmap',
-      status,
-      completed
-    );
+    expect(view.service.saveProperties).toHaveBeenCalledWith([
+      { id: 'launch', property: launchStatus, value },
+      { id: 'roadmap', property: status, value },
+    ]);
 
-    view.service.delete.mockImplementation(async (id: string) => {
-      if (id === 'roadmap') throw new Error('offline');
-    });
+    view.service.deleteMany.mockResolvedValueOnce(['roadmap']);
     await openMenu('Launch');
     choose('Delete');
     fireEvent.click(
@@ -414,11 +489,11 @@ describe('project row context menu', () => {
     expect(view.collection.list.selection.isKeySelected('launch')).toBe(false);
     expect(view.collection.list.selection.isKeySelected('roadmap')).toBe(true);
 
-    view.service.delete.mockResolvedValue(undefined);
     fireEvent.click(screen.getByRole('button', { name: 'Delete project' }));
     await waitFor(() =>
       expect(screen.queryByText('Delete project?')).toBeNull()
     );
-    expect(view.service.delete).toHaveBeenLastCalledWith('roadmap');
+    expect(view.service.deleteMany).toHaveBeenCalledTimes(2);
+    expect(view.service.deleteMany).toHaveBeenLastCalledWith(['roadmap']);
   });
 });

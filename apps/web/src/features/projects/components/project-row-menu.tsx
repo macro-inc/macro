@@ -1,18 +1,31 @@
 import {
+  SoupEntityActionDrawer,
+  type SoupEntityDrawerActionGroup,
+} from '@app/features/soup/SoupEntityActionDrawer';
+import {
   ContextMenuContent,
   MenuItem,
   MenuSeparator,
   SubTrigger,
 } from '@core/component/ContextMenu';
+import { touchHandler } from '@core/directive/touchHandler';
 import { isMobile } from '@core/mobile/isMobile';
+import type { InitiativeEntity } from '@entity';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { PropertyValueIcon } from '@property/component/propertyValue';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { Property } from '@property/types';
-import { For, type ParentProps, Show } from 'solid-js';
+import {
+  createSignal,
+  For,
+  Match,
+  type ParentProps,
+  Show,
+  Switch,
+} from 'solid-js';
 import { match } from 'ts-pattern';
 import type { ProjectRow } from '../context/projects-context';
-import { type ProjectMenuItem, projectMenuGroups } from '../core/project-menu';
+import { projectMenuGroups } from '../core/project-menu';
 
 type SingleProjectCommand =
   | 'open-in-split'
@@ -42,7 +55,173 @@ type ProjectRowMenuProps = {
   onCommand(command: ProjectRowMenuCommand): void;
 };
 
-/** A project row's right-click menu, built from the shared context-menu items. */
+/** One entry, shown as a menu item on desktop and a drawer row on mobile. */
+type ProjectMenuEntry =
+  | {
+      kind: 'action';
+      id: string;
+      label: string;
+      shortcut?: string;
+      disabled?: boolean;
+      destructive?: boolean;
+      run(): void;
+    }
+  | {
+      kind: 'options';
+      id: string;
+      label: string;
+      property: Property;
+      options: { id: string; label: string }[];
+      choose(optionId: string): void;
+    };
+
+function projectMenuEntries(
+  props: ProjectRowMenuProps,
+  rows: readonly ProjectRow[]
+): ProjectMenuEntry[][] {
+  const definition = (id: string) =>
+    props.properties.find((property) => property.propertyDefinitionId === id);
+  const status = definition(SYSTEM_PROPERTY_IDS.STATUS);
+  const priority = definition(SYSTEM_PROPERTY_IDS.PRIORITY);
+  const action = (
+    kind: SingleProjectCommand,
+    label: string,
+    extra: { shortcut?: string; disabled?: boolean } = {}
+  ): ProjectMenuEntry[] => [
+    {
+      kind: 'action',
+      id: kind,
+      label,
+      ...extra,
+      run: () => {
+        const row = rows[0];
+        if (row) props.onCommand({ kind, row });
+      },
+    },
+  ];
+  // Only offered once the definition loads (see `projectMenuGroups`).
+  const options = (
+    label: string,
+    property: Property | undefined
+  ): ProjectMenuEntry[] =>
+    property
+      ? [
+          {
+            kind: 'options',
+            id: property.propertyDefinitionId,
+            label,
+            property,
+            options: (property.options ?? []).flatMap((option) =>
+              option.value.type === 'string'
+                ? [{ id: option.id, label: option.value.value }]
+                : []
+            ),
+            choose: (optionId) =>
+              props.onCommand({ kind: 'set-option', rows, property, optionId }),
+          },
+        ]
+      : [];
+  return projectMenuGroups(
+    rows.map((row) => row.project),
+    {
+      splits: !isMobile(),
+      share: props.canShare,
+      status: Boolean(status),
+      priority: Boolean(priority),
+    }
+  ).map((group) =>
+    group.flatMap((item) =>
+      match(item)
+        .with('open-in-split', () =>
+          action('open-in-split', 'Open in new split', {
+            shortcut: 'shift+enter',
+            // Without room for another split the open would replace this one.
+            disabled: !props.canOpenInNewSplit,
+          })
+        )
+        .with('rename', () => action('rename', 'Rename'))
+        .with('status', () => options('Set status', status))
+        .with('priority', () => options('Set priority', priority))
+        .with('copy-link', () => action('copy-link', 'Copy Link'))
+        .with('copy-id', () => action('copy-id', 'Copy ID'))
+        .with('share', () => action('share', 'Share'))
+        .with('delete', (): ProjectMenuEntry[] => [
+          {
+            kind: 'action',
+            id: 'delete',
+            label: 'Delete',
+            destructive: true,
+            run: () => props.onCommand({ kind: 'delete', rows }),
+          },
+        ])
+        .exhaustive()
+    )
+  );
+}
+
+/** A drawer has no submenus, so each option becomes its own row. */
+function drawerGroups(
+  entries: ProjectMenuEntry[][]
+): SoupEntityDrawerActionGroup[] {
+  return entries.flatMap((group) => {
+    const actions = group.flatMap((entry) =>
+      entry.kind === 'action'
+        ? [
+            {
+              id: entry.id,
+              label: entry.label,
+              disabled: entry.disabled,
+              destructive: entry.destructive,
+              onClick: entry.run,
+            },
+          ]
+        : []
+    );
+    const options = group.flatMap((entry) =>
+      entry.kind === 'options'
+        ? [
+            {
+              items: entry.options.map((option) => ({
+                id: `${entry.id}:${option.id}`,
+                label: `${entry.property.displayName}: ${option.label}`,
+                onClick: () => entry.choose(option.id),
+              })),
+            },
+          ]
+        : []
+    );
+    return actions.length > 0 ? [{ items: actions }, ...options] : options;
+  });
+}
+
+/** The drawer header shows the project like any other entity. */
+const initiativeEntity = (row: ProjectRow): InitiativeEntity => ({
+  type: 'initiative',
+  id: row.project.id,
+  name: row.project.name,
+  ownerId: '',
+  descriptionDocumentId: row.project.descriptionDocumentId,
+});
+
+/**
+ * Solid delegates events from a portal to where it sits in the component
+ * tree, so the row's portaled property editors would open this menu and lose
+ * their native one.
+ */
+const ignorePortaledEvents = (
+  event: Event & { currentTarget: HTMLElement }
+) => {
+  if (
+    !(event.target instanceof Node) ||
+    !event.currentTarget.contains(event.target)
+  )
+    event.stopPropagation();
+};
+
+/**
+ * A project row's actions: a right-click menu on desktop and, as for task
+ * rows, a long-press drawer on mobile.
+ */
 export function ProjectRowMenu(
   props: ParentProps<
     ProjectRowMenuProps & {
@@ -51,139 +230,123 @@ export function ProjectRowMenu(
     }
   >
 ) {
+  const [drawerRows, setDrawerRows] = createSignal<readonly ProjectRow[]>();
   return (
-    <ContextMenu onOpenChange={props.onOpenChange}>
-      <ContextMenu.Trigger class="w-full">{props.children}</ContextMenu.Trigger>
-      <ContextMenu.Portal>
-        <ContextMenuContent
-          class="w-56 text-xs text-ink-muted"
-          onCloseAutoFocus={props.onCloseAutoFocus}
+    <Switch>
+      <Match when={isMobile()}>
+        <div
+          class="w-full"
+          ref={(element) =>
+            touchHandler(element, () => ({
+              onLongPress: () => {
+                props.onOpenChange(true);
+                setDrawerRows(props.targets());
+              },
+            }))
+          }
         >
-          <ProjectRowMenuItems
-            targets={props.targets}
-            properties={props.properties}
-            canOpenInNewSplit={props.canOpenInNewSplit}
-            canShare={props.canShare}
-            onCommand={props.onCommand}
-          />
-        </ContextMenuContent>
-      </ContextMenu.Portal>
-    </ContextMenu>
+          {props.children}
+        </div>
+        <Show when={drawerRows()}>
+          {(rows) => {
+            const [row, ...rest] = rows();
+            return (
+              <SoupEntityActionDrawer
+                entity={
+                  row && rest.length === 0 ? initiativeEntity(row) : undefined
+                }
+                groups={drawerGroups(projectMenuEntries(props, rows()))}
+                open
+                onOpenChange={(open) => {
+                  if (!open) setDrawerRows(undefined);
+                }}
+              />
+            );
+          }}
+        </Show>
+      </Match>
+      <Match when={true}>
+        <ContextMenu onOpenChange={props.onOpenChange}>
+          <ContextMenu.Trigger class="w-full">
+            <div
+              class="contents"
+              onContextMenu={ignorePortaledEvents}
+              onPointerDown={ignorePortaledEvents}
+            >
+              {props.children}
+            </div>
+          </ContextMenu.Trigger>
+          <ContextMenu.Portal>
+            <ContextMenuContent
+              class="w-56 text-xs text-ink-muted"
+              onCloseAutoFocus={props.onCloseAutoFocus}
+            >
+              <ProjectMenuItems
+                targets={props.targets}
+                properties={props.properties}
+                canOpenInNewSplit={props.canOpenInNewSplit}
+                canShare={props.canShare}
+                onCommand={props.onCommand}
+              />
+            </ContextMenuContent>
+          </ContextMenu.Portal>
+        </ContextMenu>
+      </Match>
+    </Switch>
   );
 }
 
-function ProjectRowMenuItems(props: ProjectRowMenuProps) {
+function ProjectMenuItems(props: ProjectRowMenuProps) {
   // Mounted per opening, so the entries match the rows they act on.
-  const rows = props.targets();
-  const groups = () =>
-    projectMenuGroups(
-      rows.map((row) => row.project),
-      { splits: !isMobile(), share: props.canShare }
-    );
-  const single = (kind: SingleProjectCommand) => {
-    const row = rows[0];
-    if (row) props.onCommand({ kind, row });
-  };
-  const choose = (property: Property, optionId: string) =>
-    props.onCommand({ kind: 'set-option', rows, property, optionId });
-  const definition = (id: string) =>
-    props.properties.find((property) => property.propertyDefinitionId === id);
-
-  const entry = (item: ProjectMenuItem) =>
-    match(item)
-      .with('open-in-split', () => (
-        <MenuItem
-          text="Open in new split"
-          shortcut="shift+enter"
-          // Without room for another split the open would replace this one.
-          disabled={!props.canOpenInNewSplit}
-          onClick={() => single('open-in-split')}
-        />
-      ))
-      .with('rename', () => (
-        <MenuItem text="Rename" onClick={() => single('rename')} />
-      ))
-      .with('status', () => (
-        <OptionSubmenu
-          text="Set status"
-          property={definition(SYSTEM_PROPERTY_IDS.STATUS)}
-          onSelect={choose}
-        />
-      ))
-      .with('priority', () => (
-        <OptionSubmenu
-          text="Set priority"
-          property={definition(SYSTEM_PROPERTY_IDS.PRIORITY)}
-          onSelect={choose}
-        />
-      ))
-      .with('copy-link', () => (
-        <MenuItem text="Copy Link" onClick={() => single('copy-link')} />
-      ))
-      .with('copy-id', () => (
-        <MenuItem text="Copy ID" onClick={() => single('copy-id')} />
-      ))
-      .with('share', () => (
-        <MenuItem text="Share" onClick={() => single('share')} />
-      ))
-      .with('delete', () => (
-        <MenuItem
-          text="Delete"
-          class="text-failure-ink"
-          onClick={() => props.onCommand({ kind: 'delete', rows })}
-        />
-      ))
-      .exhaustive();
-
+  const entries = projectMenuEntries(props, props.targets());
   return (
-    <For each={groups()}>
+    <For each={entries}>
       {(group, index) => (
         <>
           <Show when={index() > 0}>
             <MenuSeparator />
           </Show>
-          <For each={group}>{entry}</For>
+          <For each={group}>
+            {(entry) =>
+              match(entry)
+                .with({ kind: 'action' }, (action) => (
+                  <MenuItem
+                    text={action.label}
+                    shortcut={action.shortcut}
+                    disabled={action.disabled}
+                    class={action.destructive ? 'text-failure-ink' : undefined}
+                    onClick={action.run}
+                  />
+                ))
+                .with({ kind: 'options' }, (entry) => (
+                  <ContextMenu.Sub>
+                    <SubTrigger text={entry.label} />
+                    <ContextMenuContent
+                      submenu
+                      class="w-48 text-xs text-ink-muted"
+                    >
+                      <For each={entry.options}>
+                        {(option) => (
+                          <MenuItem
+                            text={option.label}
+                            icon={(icon) => (
+                              <PropertyValueIcon
+                                optionId={option.id}
+                                class={icon.class}
+                              />
+                            )}
+                            onClick={() => entry.choose(option.id)}
+                          />
+                        )}
+                      </For>
+                    </ContextMenuContent>
+                  </ContextMenu.Sub>
+                ))
+                .exhaustive()
+            }
+          </For>
         </>
       )}
     </For>
-  );
-}
-
-/** A select property's options, hidden until its definition has loaded. */
-function OptionSubmenu(props: {
-  text: string;
-  property: Property | undefined;
-  onSelect(property: Property, optionId: string): void;
-}) {
-  return (
-    <Show when={props.property}>
-      {(property) => (
-        <ContextMenu.Sub>
-          <SubTrigger text={props.text} />
-          <ContextMenuContent submenu class="w-48 text-xs text-ink-muted">
-            <For
-              each={(property().options ?? []).flatMap((option) =>
-                option.value.type === 'string'
-                  ? [{ id: option.id, label: option.value.value }]
-                  : []
-              )}
-            >
-              {(option) => (
-                <MenuItem
-                  text={option.label}
-                  icon={(icon) => (
-                    <PropertyValueIcon
-                      optionId={option.id}
-                      class={icon.class}
-                    />
-                  )}
-                  onClick={() => props.onSelect(property(), option.id)}
-                />
-              )}
-            </For>
-          </ContextMenuContent>
-        </ContextMenu.Sub>
-      )}
-    </Show>
   );
 }

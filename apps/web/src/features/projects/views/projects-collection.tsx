@@ -10,6 +10,10 @@ import {
   ViewShell,
 } from '@app/components/view-shell';
 import { SidebarCreateButton } from '@app/components/view-shell/SidebarCreateButton';
+import {
+  getSoupMenuEntities,
+  getSoupRowEntities,
+} from '@app/features/soup/collection/rows';
 import { TaskGroupHeader } from '@app/features/tasks-view/components/task-list/TaskGroupHeader';
 import { taskGridColumnCount } from '@app/features/tasks-view/components/task-list/task-grid-template';
 import { toast } from '@core/component/Toast/Toast';
@@ -33,7 +37,6 @@ import {
   type ProjectRow as ProjectRowData,
   useProjectsContext,
 } from '../context/projects-context';
-import { projectMenuTargets } from '../core/project-menu';
 import type {
   createProjectCollection,
   ProjectListActivation,
@@ -159,12 +162,7 @@ export function ProjectsCollection(props: {
     grid?.focus();
   };
   const menuTargets = (entity: ProjectListEntity) =>
-    projectMenuTargets(
-      entity,
-      list.selection
-        .items()
-        .flatMap((row) => (row.kind === 'entity' ? [row.entity] : []))
-    );
+    getSoupMenuEntities(entity, getSoupRowEntities(list.selection.items()));
   const setOption = async (
     rows: readonly ProjectRowData[],
     property: Property,
@@ -174,39 +172,42 @@ export function ProjectsCollection(props: {
       valueType: 'SELECT_STRING',
       values: [optionId],
     };
-    const results = await Promise.allSettled(
-      rows.map((row) =>
-        commands.saveProperty(
-          row.project.id,
+    try {
+      await commands.saveProperties(
+        rows.map((row) => ({
+          id: row.project.id,
           // A row's own value saves exactly like editing its cell.
-          row.properties.find(
-            (current) =>
-              current.propertyDefinitionId === property.propertyDefinitionId
-          ) ?? property,
-          value
-        )
-      )
-    );
-    const failed = results.filter(
-      (result) => result.status === 'rejected'
-    ).length;
-    if (failed === 0) return;
-    toast.failure(
-      rows.length === 1
-        ? `Could not update ${property.displayName.toLowerCase()}`
-        : `Could not update ${failed} of ${rows.length} projects`
-    );
+          property:
+            row.properties.find(
+              (current) =>
+                current.propertyDefinitionId === property.propertyDefinitionId
+            ) ?? property,
+          value,
+        }))
+      );
+    } catch (error) {
+      console.error('Failed to update projects', error);
+      const name = property.displayName.toLowerCase();
+      toast.failure(
+        rows.length === 1
+          ? `Could not update ${name}`
+          : `Could not update ${name} for every project`
+      );
+    }
   };
   const deleteProjects = async (rows: readonly ProjectRowData[]) => {
     setDeletePending(true);
     setDeleteError(undefined);
-    const results = await Promise.allSettled(
-      rows.map((row) => commands.delete(row.project.id))
-    );
-    setDeletePending(false);
-    const failed = rows.filter(
-      (_, index) => results[index]?.status === 'rejected'
-    );
+    let failedIds: readonly string[];
+    try {
+      failedIds = await commands.deleteMany(rows.map((row) => row.project.id));
+    } catch (error) {
+      console.error('Failed to delete projects', error);
+      failedIds = rows.map((row) => row.project.id);
+    } finally {
+      setDeletePending(false);
+    }
+    const failed = rows.filter((row) => failedIds.includes(row.project.id));
     for (const row of rows)
       if (!failed.includes(row)) list.selection.deselectKey(row.project.id);
     if (failed.length === 0) {

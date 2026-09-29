@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { ImperativeDialogHost } from '@ui';
-import { createSignal, Show } from 'solid-js';
+import { type Accessor, createSignal, Show } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import {
   type ProjectsContext,
@@ -9,6 +9,8 @@ import {
 import type { ProjectDetail } from './core/project';
 import { ProjectShareLauncher } from './project-share';
 
+const toast = vi.hoisted(() => ({ failure: vi.fn() }));
+vi.mock('@core/component/Toast/Toast', () => ({ toast }));
 vi.mock('@core/component/TopBar/ShareButton', () => ({
   ShareModal: (props: {
     name: string;
@@ -37,7 +39,10 @@ vi.mock('./components/project-collaborators', () => ({
   ProjectCollaborators: () => null,
 }));
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
 
 const detail: ProjectDetail = {
   id: 'launch',
@@ -51,8 +56,10 @@ const detail: ProjectDetail = {
   createdAt: '',
 };
 
-it('opens a listed project’s Share menu once its detail loads', async () => {
-  const [project, setProject] = createSignal<ProjectDetail>();
+function launch(source: {
+  project: Accessor<ProjectDetail | undefined>;
+  loading: Accessor<boolean>;
+}) {
   const [sharing, setSharing] = createSignal(true);
   const requested: string[] = [];
   const unused = (): never => {
@@ -66,9 +73,8 @@ it('opens a listed project’s Share menu once its detail loads', async () => {
     createProjectSource: (id) => {
       requested.push(id());
       return {
-        project,
+        ...source,
         properties: () => [],
-        loading: () => !project(),
         error: () => undefined,
         refresh: async () => {},
       };
@@ -81,7 +87,9 @@ it('opens a listed project’s Share menu once its detail loads', async () => {
       setMembers: vi.fn(),
       assignTasks: vi.fn(),
       delete: vi.fn(),
+      deleteMany: vi.fn(),
       saveProperty: vi.fn(),
+      saveProperties: vi.fn(),
     }),
   };
   render(() => (
@@ -95,8 +103,14 @@ it('opens a listed project’s Share menu once its detail loads', async () => {
       <ImperativeDialogHost />
     </ProjectsProvider>
   ));
+  return { sharing, requested };
+}
 
-  expect(requested).toEqual(['launch']);
+it('opens a listed project’s Share menu once its detail loads', async () => {
+  const [project, setProject] = createSignal<ProjectDetail>();
+  const view = launch({ project, loading: () => !project() });
+
+  expect(view.requested).toEqual(['launch']);
   expect(screen.queryByTestId('share-modal')).toBeNull();
   setProject(detail);
   const modal = await screen.findByTestId('share-modal');
@@ -108,6 +122,18 @@ it('opens a listed project’s Share menu once its detail loads', async () => {
   });
 
   fireEvent.click(modal);
-  await vi.waitFor(() => expect(sharing()).toBe(false));
+  await vi.waitFor(() => expect(view.sharing()).toBe(false));
+  expect(screen.queryByTestId('share-modal')).toBeNull();
+  expect(toast.failure).not.toHaveBeenCalled();
+});
+
+it('reports and closes when the project cannot load', async () => {
+  const [loading, setLoading] = createSignal(true);
+  const view = launch({ project: () => undefined, loading });
+
+  expect(view.sharing()).toBe(true);
+  setLoading(false);
+  await vi.waitFor(() => expect(view.sharing()).toBe(false));
+  expect(toast.failure).toHaveBeenCalledOnce();
   expect(screen.queryByTestId('share-modal')).toBeNull();
 });

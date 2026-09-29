@@ -12,6 +12,7 @@ import {
   useProjectsContext,
 } from '../context/projects-context';
 import {
+  canDeleteProject,
   canEditProject,
   type ProjectDetail,
   type ProjectSection,
@@ -86,7 +87,7 @@ export function ProjectWorkspace(props: {
           )}
         </Show>
       </SidePanel.Section>
-      <Show when={props.project.access === 'owner'}>
+      <Show when={canDeleteProject(props.project)}>
         <SidePanel.Section id="actions" title="Actions" order={3}>
           <Button
             size="sm"
