@@ -9,6 +9,31 @@
 -- readable by services still running the previous release. Readers in this release
 -- tolerate a NULL document, so a follow-up can stop creating documents after this one
 -- is fully deployed.
+
+-- The statements below briefly take the table's strongest lock (a scan of a small
+-- table); give up quickly rather than queue behind a long transaction and stall
+-- reads and writes meanwhile.
+SET LOCAL lock_timeout = '5s';
+
+-- The backfill, trigger and check cast description_document_id (TEXT) to uuid. Document
+-- ids are always generated as uuids, but refuse clearly, before changing anything, if
+-- one is not.
+DO $$
+DECLARE
+    document_id TEXT;
+BEGIN
+    FOR document_id IN SELECT description_document_id FROM initiative LOOP
+        BEGIN
+            PERFORM document_id::uuid;
+        EXCEPTION WHEN invalid_text_representation THEN
+            RAISE EXCEPTION
+                'initiative.description_document_id % is not a uuid; fix it before this migration',
+                document_id;
+        END;
+    END LOOP;
+END;
+$$;
+
 ALTER TABLE initiative
     ADD COLUMN IF NOT EXISTS description_surface_id UUID;
 
