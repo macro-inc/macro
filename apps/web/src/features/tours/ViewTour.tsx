@@ -1,3 +1,4 @@
+import { VIEW_SHELL_TOUR } from '@app/components/view-shell/tour';
 import { isMcpToolConnected } from '@app/features/setup/core/connectedTools';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
@@ -103,6 +104,8 @@ function DismissibleTour(props: ViewTourProps & { userId: string }) {
         onDismiss={() => close('dismissed')}
         onComplete={() => close('completed')}
         boundary={(root) => root.closest<HTMLElement>('[data-split-id]')}
+        // Most hidden targets live in the view's collapsed sidebar.
+        fallbackEntry={VIEW_SHELL_TOUR.sidebarToggle}
       >
         <Tour.Highlight class="view-tour-highlight" />
         <Tour.Beacon />

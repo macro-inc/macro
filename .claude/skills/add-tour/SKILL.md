@@ -109,8 +109,13 @@ step. Register the entry control as a target like any other.
   `entry: [CHANNELS_TOUR.conversation, VIEW_SHELL_TOUR.sidebarToggle]`. With
   the sidebar collapsed the beacon marks the toggle; once it opens, the beacon
   moves to the row.
-- Any step whose target or entry lives in the view's sidebar needs
-  `VIEW_SHELL_TOUR.sidebarToggle` as its last entry.
+- `ViewTour` appends `VIEW_SHELL_TOUR.sidebarToggle` to every step that has
+  a target, so a step whose target is in a collapsed sidebar always marks the
+  toggle. You still need it explicitly only as the last link of a chain you
+  write yourself.
+- A view that collapses its sidebar itself instead of through `ViewShell`
+  (like Customers' `NavigationToggle`) must register its own expand control
+  as `VIEW_SHELL_TOUR.sidebarToggle`, or those steps will float.
 - Point entries at a specific control, not a large container. When many
   elements share a target (every conversation row), the top-most one on
   screen is used.
