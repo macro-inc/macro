@@ -1801,10 +1801,10 @@ fn resolve_bot(
 /// A user owns their own sessions. A harness owns them as its verified acting
 /// user, because the harness authorizer already checked that person. A bot
 /// with a verified acting user owns the session as that user, and a body
-/// claim does not override it. A bot without one may name a user in the body.
-/// That claim is the owner. With no claim, the shared creation principal
-/// applies. A team bot owns the session itself while non-user owners are
-/// enabled. Every other failure still needs an owner.
+/// claim does not override it. A bot without one may name a user in the body,
+/// and that claim is the owner. With no claim, the shared creation principal
+/// decides: a team bot owns the session itself while non-user owners are
+/// enabled, and every other bot is told to name an owner.
 fn resolve_owner(
     caller: &UserBotOrHarnessAuthorization,
     claimed: Option<String>,

@@ -277,26 +277,21 @@ pub struct AgentSession {
 }
 
 impl AgentSession {
-    /// The user this session runs as.
-    ///
-    /// For every path that acts as the owner - spends their credentials,
-    /// bills them, grants them access - rather than merely names them. The
-    /// owner is a user for every session today, but the type no longer says
-    /// so; asking here fails typed for any other kind instead of treating a
-    /// bot or team as a person.
+    /// The user this session runs as; see [`session_owner_user`].
     pub fn owner_user(&self) -> Result<&MacroUserIdStr<'static>, AgentSessionError> {
-        session_owner_user(&self.owner_id)?;
-        Ok(self
-            .owner_id
+        self.owner_id
             .as_user()
-            .expect("session_owner_user accepted this owner"))
+            .ok_or_else(|| AgentSessionError::OwnerNotUser(self.owner_id.owner_type()))
     }
 }
 
 /// The user a session runs as.
 ///
-/// Sessions run as a user: egress spends their credentials, work is
-/// attributed to them, and grants are theirs.
+/// For every path that acts as the owner - spends their credentials, bills
+/// them, grants them access - rather than merely names them. The owner is a
+/// user for every session today, but the type no longer says so; asking here
+/// fails typed for any other kind instead of treating a bot or team as a
+/// person.
 // TODO(ownership-v2): T5.4 admits bot owners once the runtime has a bot execution context.
 pub fn session_owner_user(owner: &Owner) -> Result<MacroUserIdStr<'static>, AgentSessionError> {
     owner

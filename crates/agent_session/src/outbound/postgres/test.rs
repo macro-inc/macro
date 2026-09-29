@@ -263,7 +263,6 @@ async fn create_refuses_an_owner_that_is_not_a_user(pool: PgPool) {
     };
     let id = params.id;
 
-    // The repo refuses a non-user owner before it opens a transaction.
     let error = AgentSessionRepo::create(&repo, params)
         .await
         .expect_err("a bot cannot own a session row");

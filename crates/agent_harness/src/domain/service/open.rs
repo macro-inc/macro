@@ -57,8 +57,6 @@ where
         &self,
         request: agent_session::domain::ports::OpenExternalAgentSession,
     ) -> agent_session::domain::error::Result<AgentSession> {
-        // The thread it claims is checked against what they may post in, and
-        // the announcement is made in their name, before a row exists.
         let owner_user = session_owner_user(&request.owner)?;
         // The thread linkage is the caller's claim: it is honoured only when
         // the owner can write to that parent and the message sits in it.
@@ -204,8 +202,6 @@ where
                 servers: Vec::new(),
             };
         }
-        // Repositories and sandbox size belong to this person. Refusal happens
-        // before anything is provisioned.
         let owner_user = session_owner_user(&request.owner)?;
         // Explicit source choices are a domain decision, before any session or egress grant exists.
         let selected_repo = if let Some(url) = request.repo_url.as_deref() {
