@@ -14,8 +14,8 @@ import {
 import { type Accessor, createEffect, createMemo } from 'solid-js';
 import type {
   ChannelListSort,
-  ChannelsGroup,
   ChannelsQueryScope,
+  ChannelsSortGroup,
 } from './types';
 import { channelHasMessages, isDirectMessage } from './utils';
 
@@ -31,7 +31,7 @@ type ChannelsQueryDefinition = {
 
 export type ChannelsDataSource = ListDataSource<ChannelEntity>;
 
-export type ChannelsSourceScope = ChannelsQueryScope | 'search';
+export type ChannelsSourceScope = ChannelsQueryScope | 'search' | 'threads';
 
 export type ChannelsSources = Record<ChannelsSourceScope, ChannelsDataSource>;
 
@@ -68,6 +68,17 @@ export const CHANNELS_QUERY_DEFINITIONS = {
     params: { ...CHANNELS_QUERY_PARAMS, sort_method: 'updated_at' },
     filters: defineQueryFilters({
       include: { channelIsParticipant: [true] },
+    }),
+    matches: () => true,
+  },
+  /**
+   * The Threads rail: channels and DMs together, in one list. Naming both
+   * participation states also brings in team channels the user has not joined.
+   */
+  threads: {
+    params: { ...CHANNELS_QUERY_PARAMS, sort_method: 'updated_at' },
+    filters: defineQueryFilters({
+      include: { channelIsParticipant: [true, false] },
     }),
     matches: () => true,
   },
@@ -248,7 +259,7 @@ function useChannelsDataSource(
 
 export function useChannelsSources(
   enabled: (scope: ChannelsSourceScope) => boolean,
-  sortBy: (group: ChannelsGroup) => ChannelListSort
+  sortBy: (group: ChannelsSortGroup) => ChannelListSort
 ): ChannelsSources {
   return {
     channels: useChannelsDataSource(
@@ -270,6 +281,11 @@ export function useChannelsSources(
       'search',
       () => enabled('search'),
       () => undefined
+    ),
+    threads: useChannelsDataSource(
+      'threads',
+      () => enabled('threads'),
+      () => sortBy('threads')
     ),
   };
 }

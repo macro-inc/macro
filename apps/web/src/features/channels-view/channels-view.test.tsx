@@ -105,6 +105,9 @@ vi.mock('./components/ChannelDetailView', () => ({
     </div>
   ),
 }));
+vi.mock('./components/ChannelThreadsView', () => ({
+  ChannelThreadsView: () => <div data-testid="channel-threads" />,
+}));
 vi.mock('./components/ChannelsMobileView', () => ({
   ChannelsMobileView: (props: {
     source: ChannelsDataSource;

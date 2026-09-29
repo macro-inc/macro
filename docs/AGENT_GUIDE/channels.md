@@ -373,6 +373,24 @@ the user has channel favorites and only lists channels. Channel favorites open
 in the shared channel detail. Shift-clicking a favorite, channel, or DM opens that
 conversation in a new split instead.
 
+### Threads tab
+
+The `enable-channel-threads-preview` feature flag adds a third `Threads` tab.
+It is on in development; `VITE_ENABLE_CHANNEL_THREADS_PREVIEW` overrides it
+locally. The rail shows an `All threads` row above a `Conversations` section
+that lists channels and DMs together, including team channels the user has
+not joined, with the same sort and `+` controls as the
+All tab's sections. Selecting a row filters the main pane instead of opening
+the conversation. `All threads` clears the filter.
+
+The main pane lists channel threads the user takes part in, newest reply first.
+Messages the user sent that have no replies are hidden. Each card shows the
+root message, its replies, and a reply input. In `All threads`, each card is
+labelled with its conversation. `View in channel` switches back to `All`
+and opens the channel at that thread. Shift-clicking a conversation row opens
+it in a new split. The URL keeps the filter as `threadsChannel` in the
+`channels` search namespace.
+
 ### Channel labels
 
 Channel labels require the `enable-channel-tags` feature flag. The flag is off

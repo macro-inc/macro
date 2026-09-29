@@ -187,6 +187,7 @@ const sources: ChannelsSources = {
   direct_messages: source,
   recents: source,
   search: source,
+  threads: source,
 };
 const mount = () =>
   render(() => (

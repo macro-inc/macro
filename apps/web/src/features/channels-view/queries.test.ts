@@ -68,12 +68,12 @@ describe('channel list query selection', () => {
       return dispose;
     });
     try {
-      expect(useSoupAstItemsQuery).toHaveBeenCalledTimes(5);
-      for (const [, options] of useSoupAstItemsQuery.mock.calls.slice(0, 4)) {
+      expect(useSoupAstItemsQuery).toHaveBeenCalledTimes(6);
+      for (const [, options] of useSoupAstItemsQuery.mock.calls.slice(0, 5)) {
         expect(options?.().graphqlProjection).toBe('channel-list');
         expect(options?.().staleTime).toBe(30_000);
       }
-      const [, selectionOptions] = useSoupAstItemsQuery.mock.calls[4];
+      const [, selectionOptions] = useSoupAstItemsQuery.mock.calls[5];
       expect(selectionOptions?.().graphqlProjection).toBeUndefined();
       expect(selectionOptions?.().staleTime).toBe(0);
     } finally {

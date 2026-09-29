@@ -10,8 +10,12 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
 import { type ChannelEntity, Entity } from '@entity';
 import CaretDownIcon from '@phosphor/caret-down.svg';
+import ChatCircleIcon from '@phosphor/chat-circle.svg';
+import ChatsCircleIcon from '@phosphor/chats-circle.svg';
 import CheckIcon from '@phosphor/check.svg';
+import HashIcon from '@phosphor/hash.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
+import PlusIcon from '@phosphor/plus.svg';
 import SortIcon from '@phosphor/sort-ascending.svg';
 import XIcon from '@phosphor/x.svg';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
@@ -33,7 +37,11 @@ import {
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import { canLabelChannel } from '../../core/channel-label-eligibility';
 import { ChannelsLiveCallsSidebar } from '../../live-calls-sidebar';
-import type { ChannelListSort, ChannelsGroup } from '../../types';
+import type {
+  ChannelListSort,
+  ChannelsGroup,
+  ChannelsSortGroup,
+} from '../../types';
 import { channelMentionsUser, formatDetailedTimestamp } from '../../utils';
 import { ChannelsEmptyState } from '../ChannelsEmptyState';
 import {
@@ -51,6 +59,7 @@ import {
   isPrimaryMouseDown,
 } from './ChannelRailItems';
 import {
+  ALL_THREADS_ROW_ID,
   type ChannelLabelDragData,
   type ChannelLabelDropData,
   type ChannelRailRow,
@@ -79,6 +88,10 @@ import {
 const CHANNEL_TABS = [
   { value: 'browse', label: 'All' },
   { value: 'recents', label: 'Recent' },
+];
+const CHANNEL_TABS_WITH_THREADS = [
+  ...CHANNEL_TABS,
+  { value: 'threads', label: 'Threads' },
 ];
 
 type ChannelRailSearch = {
@@ -128,7 +141,10 @@ const CHANNEL_SORT_OPTIONS: {
   { value: 'created_at', label: 'Date created' },
 ];
 
-function ChannelSortDropdown(props: { group: ChannelsGroup; label: string }) {
+function ChannelSortDropdown(props: {
+  group: ChannelsSortGroup;
+  label: string;
+}) {
   const rail = useChannelsRail();
   const setSort = (value: string) => {
     const option = CHANNEL_SORT_OPTIONS.find((item) => item.value === value);
@@ -443,7 +459,11 @@ function ExpandedFavoritesSection() {
 function ExpandedHeader(props: { search: ChannelRailSearch }) {
   const rail = useChannelsRail();
   const selectTab = (value: string) => {
-    if (value === 'browse' || value === 'recents') {
+    if (
+      value === 'browse' ||
+      value === 'recents' ||
+      (value === 'threads' && rail.threadsEnabled())
+    ) {
       rail.selectTab(value);
     }
   };
@@ -460,7 +480,9 @@ function ExpandedHeader(props: { search: ChannelRailSearch }) {
         <ViewSidebar.Toolbar>
           <Tabs
             aria-label="Chat sidebar views"
-            list={CHANNEL_TABS}
+            list={
+              rail.threadsEnabled() ? CHANNEL_TABS_WITH_THREADS : CHANNEL_TABS
+            }
             value={rail.tab()}
             onChange={selectTab}
           />
@@ -1014,6 +1036,134 @@ function ExpandedRecents() {
   );
 }
 
+/** The Threads section's create action: a channel or a direct message. */
+function ConversationsCreateMenu() {
+  return (
+    <Dropdown placement="bottom-end">
+      <Dropdown.Trigger
+        as={ViewSidebar.Control}
+        variant="ghost"
+        size="icon-sm"
+        label="Create channel or direct message"
+      >
+        <PlusIcon class="size-3.5" />
+      </Dropdown.Trigger>
+      <Dropdown.Content class="min-w-44">
+        <Dropdown.Group>
+          <Dropdown.Item onSelect={openNewChannelModal}>
+            <HashIcon class="size-3.5 shrink-0 text-ink-muted" />
+            <span class="flex-1 truncate text-ink-muted">New channel</span>
+          </Dropdown.Item>
+          <Dropdown.Item onSelect={() => runCreateAction('channel')}>
+            <ChatCircleIcon class="size-3.5 shrink-0 text-ink-muted" />
+            <span class="flex-1 truncate text-ink-muted">
+              New direct message
+            </span>
+          </Dropdown.Item>
+        </Dropdown.Group>
+      </Dropdown.Content>
+    </Dropdown>
+  );
+}
+
+function ExpandedThreads() {
+  const rail = useChannelsRail();
+  const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
+  const scope = useChannelRailScopeState(() => 'threads');
+  const pagination = useChannelRailVirtualizer(() => 'threads');
+  const allThreadsDomId = () => domIdForRow(rail.railId, ALL_THREADS_ROW_ID);
+  const allThreadsSelected = () => rail.threadsChannelId() === undefined;
+  const allThreadsFocused = () => rail.list.focus.key() === ALL_THREADS_ROW_ID;
+  const registerScrollRef = (element: HTMLDivElement) => {
+    setScrollRoot(element);
+    rail.registerScrollRef('threads', element);
+  };
+
+  return (
+    <ViewSidebar.Content class="h-full overflow-hidden">
+      <ViewSidebar.Nav aria-label="Thread filters" class="shrink-0">
+        <ViewSidebar.Item
+          as="div"
+          id={allThreadsDomId()}
+          role="treeitem"
+          tabIndex={-1}
+          class={cn(
+            !allThreadsSelected() && allThreadsFocused() && 'bg-hover text-ink'
+          )}
+          active={allThreadsSelected()}
+          aria-current={allThreadsSelected() ? 'page' : undefined}
+          onClick={(event) => {
+            if (!isPrimaryMouseDown(event)) return;
+            rail.activateRow(ALL_THREADS_ROW_ID, event);
+          }}
+        >
+          <ViewSidebar.Icon>
+            <ChatsCircleIcon class="size-4" />
+          </ViewSidebar.Icon>
+          <span class="min-w-0 flex-1 truncate">All threads</span>
+        </ViewSidebar.Item>
+      </ViewSidebar.Nav>
+      <CollapsibleSection.Root open sizing="fill">
+        <CollapsibleSection.Header focused={false} focusWithin={false}>
+          <span class="flex h-full min-w-0 flex-1 items-center px-2">
+            <span class="min-w-0 truncate">Conversations</span>
+          </span>
+          <div data-section-action="" class="flex items-center gap-0.5">
+            <ChannelSortDropdown group="threads" label="Conversations" />
+            <ConversationsCreateMenu />
+          </div>
+        </CollapsibleSection.Header>
+        <CollapsibleSection.Content
+          open
+          contentRef={registerScrollRef}
+          class="flex min-h-0 flex-col gap-0.5"
+        >
+          <Switch>
+            <Match
+              when={scope().source.isLoading() && scope().items.length === 0}
+            >
+              <RailListLoading />
+            </Match>
+            <Match when={scope().source.error() && scope().items.length === 0}>
+              <RailListError retry={scope().source.refresh} />
+            </Match>
+            <Match when={scope().items.length > 0}>
+              <Virtualizer
+                ref={pagination.registerVirtualizer}
+                data={scope().items}
+                scrollRef={scrollRoot()}
+                itemSize={34}
+                bufferSize={240}
+                keepMounted={scope().keepMounted}
+                onScroll={pagination.loadMoreNearEnd}
+              >
+                {(channel) => (
+                  <div class="pb-0.5">
+                    <ChannelOption channel={channel} />
+                  </div>
+                )}
+              </Virtualizer>
+              <Show when={scope().source.isLoadingMore()}>
+                <RailListLoadingMore variant="channel" />
+              </Show>
+              <Show
+                when={scope().source.error() && !scope().source.isLoadingMore()}
+              >
+                <RailListError retry={scope().source.refresh} compact />
+              </Show>
+            </Match>
+            <Match when={true}>
+              <div class="px-2 py-2 text-xs text-ink-extra-muted">
+                No conversations
+              </div>
+            </Match>
+          </Switch>
+        </CollapsibleSection.Content>
+      </CollapsibleSection.Root>
+    </ViewSidebar.Content>
+  );
+}
+
 export function ExpandedChannelsRail(props: { search: ChannelRailSearch }) {
   const rail = useChannelsRail();
   const activeDescendant = () => {
@@ -1042,6 +1192,9 @@ export function ExpandedChannelsRail(props: { search: ChannelRailSearch }) {
             </Match>
             <Match when={rail.tab() === 'recents'}>
               <ExpandedRecents />
+            </Match>
+            <Match when={rail.tab() === 'threads'}>
+              <ExpandedThreads />
             </Match>
           </Switch>
         </div>
