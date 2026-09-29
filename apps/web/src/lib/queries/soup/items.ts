@@ -462,9 +462,12 @@ export function useSoupAstItemsQuery(
         : (restQuery.error ?? null);
     },
     get isPending() {
-      return usesGraphql()
-        ? activeGraphqlQuery().isLoading()
-        : restQuery.isPending;
+      if (!usesGraphql()) return restQuery.isPending;
+      const query = activeGraphqlQuery();
+      return (
+        query.isLoading() ||
+        (query.isEnabled() && query.data() === undefined && !query.error())
+      );
     },
     get isLoading() {
       return usesGraphql()

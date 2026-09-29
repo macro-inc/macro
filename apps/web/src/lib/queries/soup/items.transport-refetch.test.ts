@@ -106,19 +106,22 @@ import {
 
 let disposeRoot: (() => void) | undefined;
 
-function mountAutoTransportQuery(): SoupAstItemsQuery {
+function mountAutoTransportQuery(networkPaused = false): SoupAstItemsQuery {
   let query: SoupAstItemsQuery | undefined;
   createRoot((dispose) => {
     disposeRoot = dispose;
-    query = useSoupAstItemsQuery(() => ({
-      params: {},
-      body: {},
-      groupBy: {
-        type: 'property',
-        propertyDefinitionId: 'priority',
-        entityType: 'TASK',
-      },
-    }));
+    query = useSoupAstItemsQuery(
+      () => ({
+        params: {},
+        body: {},
+        groupBy: {
+          type: 'property',
+          propertyDefinitionId: 'priority',
+          entityType: 'TASK',
+        },
+      }),
+      () => ({ networkPaused })
+    );
   });
   return query!;
 }
@@ -140,6 +143,23 @@ describe('Soup refetch transport selection', () => {
     const query = mountAutoTransportQuery();
     expect(query.isLoading).toBe(false);
     expect(query.isPending).toBe(true);
+  });
+
+  it('keeps paused GraphQL requests pending until data or an error arrives, unless disabled', () => {
+    testState.graphqlEnabled = true;
+    const query = mountAutoTransportQuery(true);
+    expect(query.transport).toBe('graphql');
+    expect(query.isLoading).toBe(false);
+    expect(query.isPending).toBe(true);
+
+    groupedQuery.data.mockReturnValueOnce({ entities: [] });
+    expect(query.isPending).toBe(false);
+
+    groupedQuery.error.mockReturnValueOnce(new Error('Request failed'));
+    expect(query.isPending).toBe(false);
+
+    groupedQuery.isEnabled.mockReturnValueOnce(false);
+    expect(query.isPending).toBe(false);
   });
 
   it('forwards the channel list projection only to the flat GraphQL query', () => {
