@@ -42,6 +42,15 @@ links remain text.
 
 ## Live updates in flat Soup lists
 
+The normalized cache retains at most 64 flat/grouped Soup page snapshots per
+viewer, with a combined 512 KiB encoded budget. Older pages can require a network
+refetch when revisited; normalized entities and queued offline edits are not
+removed. Backfills hydrate entities/indexes without retaining their pagination
+wrappers. Existing oversized viewer records compact once on a compatible open,
+without resetting storage generation or pending mutations. To verify, load many
+pages, revisit an evicted page online, and confirm an offline property edit still
+replays after reopening the app.
+
 With browser or native Tauri GraphQL caching enabled, locally supported flat lists reconcile their
 loaded server pages with matching cached entities. Complete matching updates can
 appear without a list refetch; confirmed non-matches and explicit deletions disappear.
