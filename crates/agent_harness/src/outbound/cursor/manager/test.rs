@@ -1190,53 +1190,53 @@ async fn resume_delivered_session(
 }
 
 /// A run driven from cursor.com while the Macro session sits idle: the mirror
-/// captures it silently and asks the host to reload. The host's standard
-/// `initialize` + `session/load` then shows both runs, a repeated load shows
-/// exactly the same, and the mirror asks for nothing more.
+/// streams it to the host as it happens, the way a turn streams, and
+/// checkpoints it without asking for a reload. Every frame is traffic on the
+/// pipe, so the idle reaper sees the run as the activity it is. A later
+/// load shows both runs, and the mirror finds nothing more.
 #[tokio::test]
-async fn an_idle_foreign_run_is_recovered_through_a_client_load() {
+async fn an_idle_foreign_run_streams_live_to_the_host() {
     let (base_url, _, _) = fake_cursor_api().await;
     let (sender, mut receiver, before) = resume_delivered_session(base_url, "bc-idle").await;
     assert_eq!(count(&before, "/method", "_session/turn_complete"), 1);
 
-    let idle = collect_until(&mut receiver, |message| message == "reload_required").await;
-    assert_eq!(
-        idle.len(),
-        1,
-        "an idle mirror asks for a reload and publishes no frames: {idle:?}"
+    let live = collect_until(&mut receiver, |message| {
+        message.pointer("/params/_meta/macroCursorRunCheckpoint")
+            == Some(&serde_json::json!("run-foreign"))
+    })
+    .await;
+    assert!(
+        !live.iter().any(|message| message == "reload_required"),
+        "a streamed run needs no reload: {live:?}"
     );
-
-    let recovered = reload(&sender, &mut receiver, 3).await;
     assert_eq!(
-        count(&recovered, "/method", "_session/turn_complete"),
+        count(&live, "/params/update/sessionUpdate", "user_message_chunk"),
+        1,
+        "the cursor.com prompt streams with its run: {live:?}"
+    );
+    assert_eq!(count(&live, "/method", "_session/turn_complete"), 1);
+
+    let loaded = reload(&sender, &mut receiver, 3).await;
+    assert_eq!(
+        count(&loaded, "/method", "_session/turn_complete"),
         2,
-        "both runs are history: {recovered:?}"
+        "both runs are history: {loaded:?}"
     );
     assert_eq!(
         count(
-            &recovered,
+            &loaded,
             "/params/update/sessionUpdate",
             "user_message_chunk"
         ),
         2
     );
-    assert!(
-        recovered.len() > before.len(),
-        "history grows, it is not replaced"
-    );
 
-    let again = reload(&sender, &mut receiver, 5).await;
-    assert_eq!(
-        again, recovered,
-        "a repeated load replays the same history once"
-    );
-
-    // Two further mirror ticks pass without another reload: what was loaded
-    // is checkpointed, not rediscovered.
+    // Two further mirror ticks pass quietly: the streamed run is
+    // checkpointed, not rediscovered.
     let quiet = tokio::time::timeout(std::time::Duration::from_millis(2500), receiver.recv()).await;
     assert!(
         quiet.is_err(),
-        "nothing more may arrive after recovery, got {quiet:?}"
+        "nothing more may arrive after the run, got {quiet:?}"
     );
 }
 
