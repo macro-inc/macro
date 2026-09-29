@@ -27,13 +27,23 @@ impl BotFacts for NoBots {
     }
 }
 
+#[derive(Clone)]
+pub(super) struct SponsoredBy(pub(super) Owner);
+
+impl BotFacts for SponsoredBy {
+    async fn sponsor(&self, _bot: bot_id::BotId) -> EntityRegistryResult<Option<Owner>> {
+        Ok(Some(self.0.clone()))
+    }
+}
+
 pub(super) type TestRepo = PgProjectRepo<NoBots>;
 
+pub(super) fn test_repo_with<B: BotFacts>(pool: PgPool, bots: B) -> PgProjectRepo<B> {
+    PgProjectRepo::new(pool, OwnedEntityRegistrar::new(OwnerGrantPolicy::new(bots)))
+}
+
 pub(super) fn test_repo(pool: PgPool) -> TestRepo {
-    PgProjectRepo::new(
-        pool,
-        OwnedEntityRegistrar::new(OwnerGrantPolicy::new(NoBots)),
-    )
+    test_repo_with(pool, NoBots)
 }
 
 const ROOT_ID: &str = "10000000-0000-0000-0000-000000000001";
@@ -361,6 +371,63 @@ async fn create_is_atomic_and_inserts_all_metadata(pool: Pool<Postgres>) -> anyh
     assert_eq!(
         count_entity_rows(&pool).await,
         entity_count_before_failed_create
+    );
+    Ok(())
+}
+
+#[derive(Debug, PartialEq)]
+struct OwnershipRowCounts {
+    projects: i64,
+    entities: i64,
+    grants: i64,
+}
+
+async fn ownership_row_counts(pool: &Pool<Postgres>) -> OwnershipRowCounts {
+    sqlx::query_as!(
+        OwnershipRowCounts,
+        r#"
+        SELECT
+            (SELECT COUNT(*) FROM "Project") AS "projects!",
+            (SELECT COUNT(*) FROM entity) AS "entities!",
+            (SELECT COUNT(*) FROM entity_access) AS "grants!"
+        "#,
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("projects_test_data"))
+)]
+async fn unsponsored_bot_owner_leaves_no_project_rows(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let bot_project = || CreateProjectArgs {
+        owner: Owner::Bot(bot_id::BotId::TEST_A),
+        name: "Bot project".to_owned(),
+        parent_id: None,
+        share_permission: SharePermissionV2::new_project_share_permission(None),
+    };
+    let before = ownership_row_counts(&pool).await;
+
+    assert!(
+        test_repo(pool.clone())
+            .create_project(bot_project())
+            .await
+            .is_err()
+    );
+    assert_eq!(ownership_row_counts(&pool).await, before);
+
+    test_repo_with(pool.clone(), SponsoredBy(project_owner()))
+        .create_project(bot_project())
+        .await?;
+    assert_eq!(
+        ownership_row_counts(&pool).await,
+        OwnershipRowCounts {
+            projects: before.projects + 1,
+            entities: before.entities + 1,
+            grants: before.grants + 2,
+        }
     );
     Ok(())
 }
