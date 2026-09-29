@@ -1,3 +1,4 @@
+import { createSoupRowStore } from '@app/features/soup/collection/row-store';
 import { buildFlatSoupRows } from '@app/features/soup/collection/rows';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import {
@@ -171,7 +172,7 @@ export function createDriveDataSource(options: {
     );
   });
 
-  const items = createMemo(() => buildFlatSoupRows(entities()));
+  const items = createSoupRowStore(() => buildFlatSoupRows(entities()));
 
   const isFetching = () => {
     if (search.isSearching())

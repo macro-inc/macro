@@ -3,6 +3,7 @@ import {
   buildFlatSoupRows,
   buildGroupedSoupRows,
   createSearchState,
+  createSoupRowStore,
   type SoupRow,
   testFacets,
   useSearchContext,
@@ -386,7 +387,7 @@ export function useHomeDataSource(state: HomeDataSourceInput): HomeDataSource {
     );
   };
 
-  const items = createMemo<HomeDataSourceItem[]>(() => {
+  const builtItems = createMemo<HomeDataSourceItem[]>(() => {
     let result: HomeDataSourceItem[];
     if (state.groupBy === 'date' && !search.isSearching()) {
       result = buildGroupedSoupRows(
@@ -400,6 +401,7 @@ export function useHomeDataSource(state: HomeDataSourceInput): HomeDataSource {
 
     return result;
   });
+  const items = createSoupRowStore(builtItems);
 
   const isLoading = () => {
     if (hasNoTypes()) return false;

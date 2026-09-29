@@ -27,6 +27,7 @@ const scheduledRows = vi.hoisted(() => ({
 vi.mock('@app/features/soup', async () => ({
   ...(await import('@app/features/soup/filters')),
   ...(await import('@app/features/soup/collection/rows')),
+  ...(await import('@app/features/soup/collection/row-store')),
   ...(await import('@app/features/soup/search/create-search-state')),
 }));
 // Exercise query transitions without loading UI barrels or the local-search provider.

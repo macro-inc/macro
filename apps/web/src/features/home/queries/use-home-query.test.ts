@@ -11,6 +11,7 @@ import { type HomeDataSource, useHomeDataSource } from './use-home-query';
 vi.mock('@app/features/soup', async () => ({
   ...(await import('@app/features/soup/filters')),
   ...(await import('@app/features/soup/collection/rows')),
+  ...(await import('@app/features/soup/collection/row-store')),
   useSearchContext: () => ({ entityPool: () => [] }),
   createSearchState: () => ({
     isSearching: () => false,
