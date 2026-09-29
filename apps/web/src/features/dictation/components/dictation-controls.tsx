@@ -17,7 +17,7 @@ export function DictationButton(props: {
       <Button
         variant="ghost"
         size="icon-composer"
-        class="rounded-full text-ink not-touch:text-composer-ink"
+        class="text-ink not-touch:text-composer-ink"
         label={props.dictation.label()}
         tooltip={props.dictation.label()}
         disabled={props.disabled || props.dictation.disabled()}
@@ -61,7 +61,7 @@ export function DictationPanel(props: { dictation: DictationController }) {
         <Button
           variant="ghost"
           size="icon-composer"
-          class="rounded-full text-composer-ink touch:bg-ink/5 touch:text-ink-muted"
+          class="text-composer-ink touch:bg-ink/5 touch:text-ink-muted"
           label="Cancel dictation"
           ref={(element) =>
             queueMicrotask(() => {
@@ -77,7 +77,7 @@ export function DictationPanel(props: { dictation: DictationController }) {
         <Button
           variant="ghost"
           size="icon-composer"
-          class="rounded-full text-composer-ink touch:bg-ink touch:text-surface-4"
+          class="text-composer-ink touch:bg-ink touch:text-surface-4"
           label="Use dictation"
           disabled={
             props.dictation.phase() === 'starting' ||

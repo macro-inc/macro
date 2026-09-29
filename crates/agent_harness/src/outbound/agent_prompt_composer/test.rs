@@ -153,6 +153,15 @@ async fn the_comment_anchor_reaches_the_lexical_service_beside_the_history() {
         .await,
         serde_json::json!({ "type": "pdfPin", "anchorId": "pin-1" })
     );
+    assert_eq!(
+        sent(CommentAnchor::Spreadsheet {
+            sheet_id: "sheet-1".into(),
+            sheet_name: "Budget".into(),
+            range: "B4:C9".into(),
+        })
+        .await,
+        serde_json::json!({"type": "spreadsheet", "sheetId": "sheet-1", "sheetName": "Budget", "range": "B4:C9"})
+    );
     server.abort();
 }
 

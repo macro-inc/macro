@@ -137,3 +137,18 @@ fn a_stored_anchor_without_a_snapshot_still_reads() {
         }
     );
 }
+
+#[test]
+fn spreadsheet_anchor_round_trips_without_legacy_metadata() {
+    let value = serde_json::json!({"type": "spreadsheet", "sheetId": "sheet-1", "sheetName": "Budget", "range": "B4:C9"});
+    let input: NewThreadAnchor = serde_json::from_value(value.clone()).unwrap();
+    let stored: ThreadAnchor = serde_json::from_value(value.clone()).unwrap();
+    assert_eq!(input.reference(), stored);
+    assert_eq!(serde_json::to_value(stored).unwrap(), value);
+    assert!(
+        serde_json::from_value::<NewThreadAnchor>(
+            serde_json::json!({"type": "spreadsheet", "sheetId": "sheet-1", "range": "B4:C9"})
+        )
+        .is_err()
+    );
+}

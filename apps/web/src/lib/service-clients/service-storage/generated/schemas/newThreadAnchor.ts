@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { NewThreadAnchorOneOf } from './newThreadAnchorOneOf';
+import type { NewThreadAnchorOneOfEight } from './newThreadAnchorOneOfEight';
 import type { NewThreadAnchorOneOfFour } from './newThreadAnchorOneOfFour';
 import type { NewThreadAnchorOneOfSix } from './newThreadAnchorOneOfSix';
 
@@ -14,4 +15,5 @@ import type { NewThreadAnchorOneOfSix } from './newThreadAnchorOneOfSix';
 export type NewThreadAnchor =
   | NewThreadAnchorOneOf
   | NewThreadAnchorOneOfFour
-  | NewThreadAnchorOneOfSix;
+  | NewThreadAnchorOneOfSix
+  | NewThreadAnchorOneOfEight;

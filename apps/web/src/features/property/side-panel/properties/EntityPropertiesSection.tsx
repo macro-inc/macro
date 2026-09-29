@@ -393,7 +393,7 @@ function AddPinnedPropertyButton() {
       size="sm"
       noTouchResize
       onClick={openPropertySelector}
-      class="m-px rounded-full"
+      class="m-px"
     >
       <Plus class="size-3" />
       <span>Add property</span>
@@ -798,7 +798,6 @@ function NonUserEntityValue(props: { property: Property }) {
             variant="ghost"
             depth={0}
             size="icon-sm"
-            class="rounded-full"
             aria-label={`Add ${props.property.displayName}`}
             onClick={(event) => {
               event.stopPropagation();
@@ -880,7 +879,7 @@ function EntityCollectionPropertyBody(props: {
               variant="ghost"
               depth={0}
               size="icon-sm"
-              class="size-5 rounded-full"
+              class="size-5"
               aria-label={`Add ${props.property.displayName}`}
               onClick={(event) => {
                 event.stopPropagation();

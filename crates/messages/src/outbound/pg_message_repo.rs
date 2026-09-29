@@ -450,7 +450,8 @@ impl PgMessageRepository {
                     anchor_id, command.parent.entity_id(), command.actor.as_ref(), root_id, page,
                     x_pct, y_pct, width_pct, height_pct).execute(&mut **tx).await.map_err(database_error)?;
             }
-            Some(NewThreadAnchor::Markdown { .. }) | None => {}
+            Some(NewThreadAnchor::Markdown { .. } | NewThreadAnchor::Spreadsheet { .. }) | None => {
+            }
         }
         Ok(())
     }
@@ -549,6 +550,17 @@ impl MessageRepository for PgMessageRepository {
         .await
         .map_err(database_error)?;
         self.hydrate(rows).await
+    }
+
+    async fn document_file_type(&self, document_id: &str) -> Result<Option<String>, MessageError> {
+        sqlx::query_scalar!(
+            r#"SELECT "fileType" FROM "Document" WHERE id = $1 AND "deletedAt" IS NULL"#,
+            document_id
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map(Option::flatten)
+        .map_err(database_error)
     }
 
     async fn parent_exists(&self, parent: &MessageParent) -> Result<bool, MessageError> {

@@ -141,7 +141,7 @@ export function IncomingCallActions(props: {
             variant="danger"
             size={isWide() ? 'sm' : 'icon-xs'}
             fullWidth={isWide()}
-            class={cn('rounded-md', isWide() && 'h-7 flex-1')}
+            class={cn(isWide() && 'h-7 flex-1')}
             label="Decline incoming call"
             tooltipDisabled={isWide()}
             onPointerDown={(event) => event.stopPropagation()}
@@ -159,7 +159,7 @@ export function IncomingCallActions(props: {
             variant="success"
             size={isWide() ? 'sm' : 'icon-xs'}
             fullWidth={isWide()}
-            class={cn('rounded-md', isWide() && 'h-7 flex-1')}
+            class={cn(isWide() && 'h-7 flex-1')}
             label="Accept incoming call"
             tooltipDisabled={isWide()}
             onPointerDown={(event) => event.stopPropagation()}

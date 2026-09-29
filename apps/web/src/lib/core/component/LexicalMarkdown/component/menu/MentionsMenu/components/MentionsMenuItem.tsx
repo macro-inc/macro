@@ -5,7 +5,7 @@ import ClockIcon from '@phosphor/clock.svg';
 import EmailIcon from '@phosphor/envelope.svg';
 import UsersIcon from '@phosphor/users.svg';
 import { cn } from '@ui';
-import { createEffect, Show } from 'solid-js';
+import { createEffect, type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import type { MentionItem } from '../../../../utils/mentionsUtils';
 import { isBotMentionItem } from '../utils/botMention';
@@ -23,6 +23,7 @@ export function MentionsMenuItem(props: {
   setOpen: (open: boolean) => void;
   /** When true, disables the internal scrollIntoView behavior (used when list is virtualized) */
   disableScrollIntoView?: boolean;
+  actions?: JSX.Element;
 }) {
   let itemRef: HTMLDivElement | undefined;
 
@@ -130,6 +131,7 @@ export function MentionsMenuItem(props: {
           </span>
         </Show>
       </div>
+      {props.actions}
     </div>
   );
 }

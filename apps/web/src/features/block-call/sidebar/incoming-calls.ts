@@ -151,11 +151,6 @@ export function useVisibleIncomingCalls(): Accessor<IncomingCall[]> {
   });
 }
 
-export function useIncomingCallWidgetVisible() {
-  const visibleIncomingCalls = useVisibleIncomingCalls();
-  return createMemo(() => visibleIncomingCalls().length > 0);
-}
-
 /**
  * Keeps the incoming-call store in sync with the call websocket events.
  *

@@ -112,7 +112,7 @@ impl MessageParent {
     }
 }
 
-/// A thread's location within its document. Geometry remains annotation-owned.
+/// A thread's location within its document. PDF geometry remains annotation-owned.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
@@ -145,6 +145,16 @@ pub enum ThreadAnchor {
     PdfPlaceable {
         /// Placeable annotation UUID.
         anchor_id: Uuid,
+    },
+    /// A cell or rectangular range in a native spreadsheet.
+    #[serde(rename_all = "camelCase")]
+    Spreadsheet {
+        /// Stable sheet identity within the workbook.
+        sheet_id: String,
+        /// Sheet name when the discussion was created.
+        sheet_name: String,
+        /// A1 cell or range, such as B4 or B4:C9.
+        range: String,
     },
 }
 
@@ -184,6 +194,16 @@ pub enum NewThreadAnchor {
         /// Height as a fraction of the page height.
         height_pct: f64,
     },
+    /// A cell or rectangular range in a native spreadsheet.
+    #[serde(rename_all = "camelCase")]
+    Spreadsheet {
+        /// Stable sheet identity within the workbook.
+        sheet_id: String,
+        /// Sheet name when the discussion was created.
+        sheet_name: String,
+        /// A1 cell or range, such as B4 or B4:C9.
+        range: String,
+    },
 }
 
 /// Longest marked-text snapshot kept with a discussion. A comment marks a
@@ -211,6 +231,15 @@ impl NewThreadAnchor {
     /// Thread-owned reference after annotation geometry has been persisted.
     pub fn reference(&self) -> ThreadAnchor {
         match self {
+            Self::Spreadsheet {
+                sheet_id,
+                sheet_name,
+                range,
+            } => ThreadAnchor::Spreadsheet {
+                sheet_id: sheet_id.clone(),
+                sheet_name: sheet_name.clone(),
+                range: range.clone(),
+            },
             Self::Markdown {
                 mark_id,
                 marked_text,

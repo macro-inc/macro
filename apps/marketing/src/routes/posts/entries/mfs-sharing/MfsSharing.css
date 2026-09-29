@@ -1,0 +1,140 @@
+.mfs-post {
+  color: var(--c4);
+  font-family: 'cyberreader', system-ui, sans-serif;
+}
+
+.mfs-post,
+.mfs-post * {
+  box-sizing: border-box;
+}
+
+.mfs-post a {
+  color: var(--a0);
+  text-decoration: none;
+}
+
+.mfs-post a:hover {
+  color: var(--c1);
+}
+
+.mfs-lede {
+  color: var(--c2);
+  font-size: 20px;
+  line-height: 1.6;
+}
+
+.mfs-note {
+  color: color-mix(in srgb, var(--c4) 80%, transparent);
+  font-size: 15px;
+}
+
+/* Brighter (near-white) emphasis without extra weight */
+.mfs-hl {
+  color: var(--c0);
+  font-weight: inherit;
+}
+
+.mfs-post ul.mfs-list,
+.mfs-post ol.mfs-list {
+  line-height: 1.7;
+  margin: 0 0 20px;
+  padding-left: 1.4em;
+}
+
+.mfs-post .mfs-list li + li {
+  margin-top: 8px;
+}
+
+/* SQL / tree code blocks */
+.mfs-post pre.mfs-code {
+  background: color-mix(in srgb, var(--b1) 72%, var(--b0));
+  border: 1px solid color-mix(in srgb, var(--b4) 22%, transparent);
+  border-radius: 10px;
+  color: var(--c3);
+  font-family: 'rajdhani', body, system-ui, sans-serif;
+  font-size: 14.5px;
+  line-height: 1.8;
+  margin: 26px 0;
+  overflow-x: auto;
+  padding: 16px 20px;
+  white-space: pre;
+}
+
+/* Product screenshot in a framed panel (the screenshot is already dark) */
+.mfs-shot {
+  margin: 28px 0 12px;
+}
+
+.mfs-shot-frame {
+  background: color-mix(in srgb, var(--b1) 72%, var(--b0));
+  border: 1px solid color-mix(in srgb, var(--b4) 22%, transparent);
+  border-radius: 14px;
+  overflow: hidden;
+  padding: clamp(16px, 3vw, 28px);
+}
+
+.mfs-shot-frame img {
+  display: block;
+}
+
+.mfs-figcaption {
+  color: var(--c4);
+  font-size: 14px;
+  margin: 14px auto 44px;
+  text-align: center;
+}
+
+/* entity_access example tables */
+.mfs-table-wrap {
+  border: 1px solid color-mix(in srgb, var(--c1) 9%, transparent);
+  border-radius: 8px;
+  left: 50%;
+  margin: 28px 0;
+  overflow-x: auto;
+  position: relative;
+  transform: translateX(-50%);
+  width: min(860px, calc(100vw - 48px));
+}
+
+.mfs-table {
+  border-collapse: collapse;
+  font-family: 'rajdhani', body, system-ui, sans-serif;
+  font-size: 14px;
+  width: 100%;
+}
+
+.mfs-table th,
+.mfs-table td {
+  border-bottom: 1px solid color-mix(in srgb, var(--c1) 7%, transparent);
+  color: var(--c3);
+  padding: 10px 14px;
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.mfs-table thead th {
+  background: color-mix(in srgb, var(--c1) 5%, transparent);
+  color: var(--c1);
+  font-weight: 400;
+}
+
+.mfs-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.mfs-post code {
+  color: var(--c1);
+  font-family: 'rajdhani', body, system-ui, sans-serif;
+  font-size: 0.95em;
+}
+
+.mfs-table code {
+  color: var(--c2);
+}
+
+@media (max-width: 720px) {
+  .mfs-table-wrap {
+    width: calc(100vw - 40px);
+  }
+}

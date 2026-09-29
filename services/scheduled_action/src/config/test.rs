@@ -21,7 +21,21 @@ fn config_values() -> Value {
 fn event_routines_default_off_and_reuse_existing_brokers() {
     let config: Config = serde_json::from_value(config_values()).unwrap();
     assert!(!config.event_routines_enabled);
+    assert!(!config.routine_agents_enabled);
     assert_eq!(config.kafka_brokers.to_string(), "existing-broker:9092");
+}
+
+#[test]
+fn routine_agents_require_an_explicit_boolean() {
+    for enabled in [false, true] {
+        let mut values = config_values();
+        values["ROUTINE_AGENTS_ENABLED"] = json!(enabled);
+        let config: Config = serde_json::from_value(values).unwrap();
+        assert_eq!(config.routine_agents_enabled, enabled);
+    }
+    let mut values = config_values();
+    values["ROUTINE_AGENTS_ENABLED"] = json!("enabled");
+    assert!(serde_json::from_value::<Config>(values).is_err());
 }
 
 #[test]

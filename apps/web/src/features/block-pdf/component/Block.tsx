@@ -14,6 +14,7 @@ import { useSearchParams } from '@solidjs/router';
 import { Show } from 'solid-js';
 import { usePdfDocument } from '../context/pdf-document-context';
 import type { PdfBlockData } from '../definition';
+import { createPdfRouteTarget } from '../primitives/create-pdf-route-target';
 import { type LocationSearchParams, URL_PARAMS } from '../signal/location';
 import {
   PdfDocument,
@@ -28,6 +29,9 @@ export default function BlockPdf() {
   useBlockEntityCommands();
   const documentId = useBlockId();
   const isNested = useIsNestedBlock();
+  const target = isNested
+    ? () => undefined
+    : createPdfRouteTarget(() => documentId);
   const metadata = blockMetadataSignal.get;
   const documentName = useBlockDocumentName('Unknown Filename');
   const canComment = useCanComment();
@@ -57,6 +61,7 @@ export default function BlockPdf() {
           isOwner: isOwner(),
         }}
         locationParams={getLocationParams(searchParams)}
+        navigationTarget={target()}
         registerMethods={registerMethods}
       >
         <PdfBlockContent />

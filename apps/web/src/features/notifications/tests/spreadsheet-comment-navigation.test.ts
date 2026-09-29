@@ -58,6 +58,8 @@ it.each([
 ] as const)(
   'opens %s at the spreadsheet comment, including an already open sheet',
   async (tag) => {
+    const commentId = '019f862a-84b6-7f00-8000-000000000042';
+    const threadId = '019f862a-84b6-7f00-8000-000000000007';
     const navigate = vi.fn();
     const open = vi.fn();
     const activate = vi.fn();
@@ -72,7 +74,7 @@ it.each([
       entity_id: 'sheet-doc',
       notification_metadata: {
         tag,
-        content: { fileType: 'spreadsheet', commentId: 42, threadId: 7 },
+        content: { fileType: 'spreadsheet', commentId, threadId },
       },
     } as UnifiedNotification;
     const result = await openNotification(
@@ -81,7 +83,7 @@ it.each([
     );
     expect(result.isOk()).toBe(true);
     await vi.waitFor(() =>
-      expect(navigate).toHaveBeenCalledWith({ comment_id: '42' })
+      expect(navigate).toHaveBeenCalledWith({ comment_id: commentId })
     );
     expect(open).toHaveBeenCalledWith(
       { type: 'spreadsheet', id: 'sheet-doc' },
@@ -92,7 +94,7 @@ it.each([
     navigate.mockClear();
     await openNotification(notification, layout as unknown as SplitManager);
     await vi.waitFor(() =>
-      expect(navigate).toHaveBeenCalledWith({ comment_id: '42' })
+      expect(navigate).toHaveBeenCalledWith({ comment_id: commentId })
     );
     expect(activate).toHaveBeenCalledOnce();
     expect(open).not.toHaveBeenCalled();

@@ -92,7 +92,7 @@ it('keeps the button neutral after copying and colors only the check', async () 
   const copied = await screen.findByRole('button', {
     name: 'Today availability copied',
   });
-  expect(copied.getAttribute('data-variant')).toBe('outline');
+  expect(copied.getAttribute('data-variant')).toBe('strong');
   expect(copied.className).not.toContain('bg-success');
   expect(copied.textContent).toContain('Copied');
   expect(copied.querySelector('svg.text-success')).toBeTruthy();

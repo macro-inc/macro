@@ -20,6 +20,9 @@ pub mod credentials;
 
 pub mod repository_branch;
 
+/// Owner-authorized session execution for routines.
+pub mod routines;
+
 /// Durable activity projection and bounded history backfill.
 pub mod turn_state;
 

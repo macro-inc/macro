@@ -69,7 +69,7 @@ export function DocumentMentionPill(props: {
       <EntityIcon targetType={targetType()} size="xs" />
       <span class="truncate min-w-0">{documentName()}</span>
       <Button
-        class="absolute -top-1.5 -right-1.5 size-5 rounded-full bg-surface border border-edge-muted/50 p-0 place-items-center hidden group-hover:grid hover:bg-accent! hover:text-surface!"
+        class="absolute -top-1.5 -right-1.5 size-5 bg-surface border border-edge-muted/50 p-0 place-items-center hidden group-hover:grid hover:bg-accent! hover:text-surface!"
         tooltip="Mark as done"
         onClick={(e) => {
           e.stopPropagation();

@@ -1055,7 +1055,8 @@ pub fn build_reminders_tool_context(
 
 /// Type alias for the chat service implementation used by AI tools.
 /// Uses an empty toolset — the read-only tool never invokes tool execution.
-pub type ToolChatService = ChatServiceImpl<PgChatRepo, (), ToolEntityAccessManagementService>;
+pub type ToolChatService =
+    ChatServiceImpl<PgChatRepo<PgBotsRepo>, (), ToolEntityAccessManagementService>;
 
 /// Type alias for the project service implementation used by AI tools.
 /// Upload, content-hash, and search-cleanup ports are unwired — project
@@ -1512,6 +1513,7 @@ pub struct ToolServiceContext {
     pub crm_tool_context: ToolCrmToolContext,
     pub skill_tool_context: ToolSkillToolContext,
     pub schedule_tool_context: NoOpScheduleContext,
+    #[from_ref(skip)]
     pub anthropic_tool_context: AnthropicToolContext,
     /// Records token usage / cost for AI calls made with this context.
     pub recorder: std::sync::Arc<dyn ai_usage::UsageRecorder>,
@@ -1519,6 +1521,15 @@ pub struct ToolServiceContext {
     /// this context. Set per-session by the caller so AI calls made by tools
     /// (e.g. subagents) are attributed to the feature that spawned them.
     pub usage_context: ai_usage::UsageContext,
+}
+
+impl FromRef<ToolServiceContext> for AnthropicToolContext {
+    fn from_ref(context: &ToolServiceContext) -> Self {
+        let mut tools = context.anthropic_tool_context.clone();
+        tools.recorder = context.recorder.clone();
+        tools.usage_context = context.usage_context.clone();
+        tools
+    }
 }
 
 impl ToolServiceContext {

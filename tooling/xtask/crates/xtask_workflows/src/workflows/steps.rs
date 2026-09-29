@@ -105,6 +105,15 @@ pub fn setup_rust_sccache() -> Step<Use> {
     .add_with(("rust-cache", "false"))
 }
 
+/// Install Nix on a macOS runner. The Linux [`setup_nix`] action doesn't apply
+/// there, so Apple jobs (DMG signing, the iOS simulator preview) install it
+/// with the same script instead.
+pub fn install_nix_macos() -> Step<Run> {
+    Step::new("Install Nix")
+        .run(include_str!("scripts/install_nix_macos.sh"))
+        .shell("bash")
+}
+
 /// Install + initialise Nix on the runner. Namespace profiles don't ship Nix,
 /// so this must run before [`setup_dev_shell`] (which shells out to `nix`). The
 /// `/nix` cache volume mounted by [`mount_cache_volume`] keeps the store warm,

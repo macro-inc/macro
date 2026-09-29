@@ -38,7 +38,7 @@ export const EntitySelectionToolbarModal = (
               <Button
                 onClick={props.onAction}
                 variant="outline"
-                class="p-1 pl-2 rounded-md bg-surface"
+                class="p-1 pl-2 bg-surface"
                 depth={3}
               >
                 <span>Actions</span>
@@ -49,7 +49,7 @@ export const EntitySelectionToolbarModal = (
             <Button
               onClick={props.onClose}
               variant="outline"
-              class="p-1 pl-2 rounded-md bg-surface"
+              class="p-1 pl-2 bg-surface"
               depth={3}
             >
               <span>Clear</span>

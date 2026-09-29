@@ -3059,6 +3059,53 @@ describe('normalizedCacheExchange', () => {
       expect(host.commits).toHaveLength(1);
     });
 
+    it('uses only explicit recovery queries when a record-rooted parent is missing', async () => {
+      const base = makeMutationOp(1, optimistic);
+      const recovery = {
+        query: 'query Target { user { id } }',
+        operationName: 'Target',
+        variablesJson: '{}',
+      };
+      const op = makeOperation(base.kind, base, {
+        ...base.context,
+        normalizedCacheOptimistic: {
+          uuid: crypto.randomUUID(),
+          optimisticResponse: optimistic,
+          linkPatches: [
+            {
+              query:
+                'fragment Parent on GraphqlSoupDocument { properties { id } }',
+              recordRoot: {
+                fragmentName: 'Parent',
+                entityKey: 'GraphqlSoupDocument:missing',
+              },
+              variablesJson: '{}',
+              path: [{ field: 'properties' }],
+              operation: {
+                kind: 'prependUnique',
+                entityKey: 'GraphqlProperty:temporary',
+              },
+            },
+          ],
+          revalidations: [recovery],
+        },
+      });
+      const enqueue = host.enqueueOptimisticMutation.bind(host);
+      host.enqueueOptimisticMutation = vi.fn(async (args, claim) => {
+        if (args.linkPatches?.length) throw new Error('missing parent');
+        return enqueue(args, claim);
+      });
+      const { ops } = harness(host);
+      ops.next(op);
+      await tick();
+      expect(host.begins[0]?.linkPatches).toEqual([]);
+      expect(host.enqueueOptimisticMutation).toHaveBeenLastCalledWith(
+        expect.objectContaining({ linkPatches: [], revalidations: [recovery] }),
+        expect.anything()
+      );
+      expect(host.commits).toHaveLength(1);
+    });
+
     it('bounds queued network attempts to one minute', async () => {
       const timeoutSignal = new AbortController().signal;
       const existingSignal = new AbortController().signal;

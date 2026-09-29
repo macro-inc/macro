@@ -7,7 +7,6 @@ import {
 } from '@app/components/list';
 import { setSidebarSectionCollapsed } from '@app/components/view-shell';
 import { useMobileSearchText } from '@app/features/command/mobile/use-mobile-search-text';
-import { registerInboxFilterSplit } from '@app/features/next-soup/soup-view/inbox-filter-controllers';
 import { normalizeFacetSelection } from '@app/features/soup';
 import { registerListNavigationSource } from '@app/features/soup/collection/list-navigation-source';
 import { makePersistedState } from '@app/lib/persistence';
@@ -366,17 +365,6 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
       'collapsedSidebarSectionIds',
       setSidebarSectionCollapsed(id, open)
     );
-
-  // The classic sidebar's nested account rows scope the mail list by split id
-  // (see `SidebarMailLink`); registering keeps them driving this view too, and
-  // flushes a selection queued while navigating here.
-  onCleanup(
-    registerInboxFilterSplit(panel.handle.id, {
-      inboxFilter: () => state.inboxIds,
-      setInboxFilter: setInboxIds,
-    })
-  );
-
   return {
     state,
     setState,

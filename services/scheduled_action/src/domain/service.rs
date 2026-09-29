@@ -11,18 +11,22 @@ use super::event_runs::ConfigurationRevision;
 use super::event_trigger::ActionTrigger;
 use super::models::{
     ActionConfiguration, ActionExecutionRecord, ActionPolicyError, CreateScheduledAction,
-    DispatchEvent, InProgressExecution, MAX_ACTION_TIME, ScheduledAction, UpdateScheduledAction,
+    DispatchEvent, InProgressExecution, ScheduledAction, UpdateScheduledAction,
 };
-use super::ports::{ScheduledActionExecutor, ScheduledActionRepo, ScheduledActionService};
+use super::ports::{
+    ScheduledActionExecutor, ScheduledActionRepo, ScheduledActionService, TaskTargetValidator,
+};
+use super::target_validation::{ModelOnlyTargets, require_explicit_agent};
 
 #[cfg(test)]
 pub(crate) mod test;
 
-pub struct ScheduledActionServiceImpl<Rpo, Exe> {
+pub struct ScheduledActionServiceImpl<Rpo, Exe, Targets = ModelOnlyTargets> {
     repo: Arc<Rpo>,
     executor: Arc<Exe>,
     dispatcher_tx: Sender<DispatchEvent>,
     event_management_enabled: bool,
+    targets: Targets,
 }
 
 impl<Rpo: ScheduledActionRepo, Exe> ScheduledActionServiceImpl<Rpo, Exe> {
@@ -33,6 +37,22 @@ impl<Rpo: ScheduledActionRepo, Exe> ScheduledActionServiceImpl<Rpo, Exe> {
             executor,
             dispatcher_tx,
             event_management_enabled: false,
+            targets: ModelOnlyTargets,
+        }
+    }
+}
+
+impl<Rpo: ScheduledActionRepo, Exe, Targets> ScheduledActionServiceImpl<Rpo, Exe, Targets> {
+    pub fn with_target_validation<T: TaskTargetValidator>(
+        self,
+        targets: T,
+    ) -> ScheduledActionServiceImpl<Rpo, Exe, T> {
+        ScheduledActionServiceImpl {
+            repo: self.repo,
+            executor: self.executor,
+            dispatcher_tx: self.dispatcher_tx,
+            event_management_enabled: self.event_management_enabled,
+            targets,
         }
     }
 
@@ -58,6 +78,61 @@ impl<Rpo: ScheduledActionRepo, Exe> ScheduledActionServiceImpl<Rpo, Exe> {
         }
         Ok(())
     }
+
+    async fn replace_configuration(
+        &self,
+        mut action: ScheduledAction,
+        input: ActionConfiguration,
+        caller: &MacroUserIdStr<'static>,
+    ) -> Result<ScheduledAction>
+    where
+        Targets: TaskTargetValidator,
+    {
+        require_explicit_agent(&action.task, &input.task)?;
+        let trigger_changed = !same_trigger(&action.trigger, &input.trigger);
+        let configuration_changed = trigger_changed
+            || action.name != input.name
+            || action.kind != input.kind
+            || action.task != input.task;
+        let disable_only = !input.enabled && !configuration_changed;
+        // A rollout gate must not prevent an owner from stopping an existing
+        // event action. Deletion, history and explicit manual runs also remain available.
+        if !disable_only {
+            self.check_event_management(&action.trigger)?;
+            self.check_event_management(&input.trigger)?;
+        }
+        let now = Utc::now();
+        if claim_blocks_replacement(&action, now) && !disable_only {
+            return Err(ActionPolicyError::UpdateConflict.into());
+        }
+        if !disable_only {
+            self.targets.validate_task(&input.task, caller).await?;
+            action.next_run_at = next_run(&input.trigger)?;
+        }
+        action.event_activated_at = match &input.trigger {
+            ActionTrigger::Cron { .. } => None,
+            ActionTrigger::Events { .. }
+                if trigger_changed || (!action.enabled && input.enabled) =>
+            {
+                Some(now)
+            }
+            ActionTrigger::Events { .. } => action.event_activated_at,
+        };
+        action.configuration_revision = action.configuration_revision.next()?;
+        action.name = input.name;
+        action.trigger = input.trigger;
+        action.kind = input.kind;
+        action.task = input.task;
+        action.enabled = input.enabled;
+        action.updated_at = now;
+
+        let updated = self.repo.update_action(action).await?;
+        self.dispatcher_tx
+            .send(DispatchEvent::Update(updated.clone()))
+            .await
+            .map_err(|e| anyhow::anyhow!("failed to dispatch update event: {e}"))?;
+        Ok(updated)
+    }
 }
 
 fn next_run(trigger: &ActionTrigger) -> Result<Option<DateTime<Utc>>> {
@@ -70,6 +145,30 @@ fn next_run(trigger: &ActionTrigger) -> Result<Option<DateTime<Utc>>> {
         // constructors can supply unbounded, empty or unsupported selectors.
         ActionTrigger::Events { .. } => Ok(None),
     }
+}
+
+pub(crate) async fn list_owned_actions<R: ScheduledActionRepo>(
+    repo: &R,
+    user_id: &MacroUserIdStr<'static>,
+) -> Result<Vec<ScheduledAction>> {
+    let mut actions = repo
+        .get_actions(user_id.clone())
+        .await?
+        .into_iter()
+        .filter(|action| action.owner.is_user(user_id))
+        .collect::<Vec<_>>();
+    actions.sort_by(|left, right| {
+        left.created_at
+            .cmp(&right.created_at)
+            .then(left.id.cmp(&right.id))
+    });
+    Ok(actions)
+}
+
+fn claim_blocks_replacement(action: &ScheduledAction, now: DateTime<Utc>) -> bool {
+    action
+        .claim_expires_at()
+        .is_some_and(|expires_at| now <= expires_at)
 }
 
 fn same_trigger(left: &ActionTrigger, right: &ActionTrigger) -> bool {
@@ -89,9 +188,10 @@ fn same_trigger(left: &ActionTrigger, right: &ActionTrigger) -> bool {
     }
 }
 
-impl<Rpo, Exe> ScheduledActionService for ScheduledActionServiceImpl<Rpo, Exe>
+impl<Rpo, Exe, Targets> ScheduledActionService for ScheduledActionServiceImpl<Rpo, Exe, Targets>
 where
     Rpo: ScheduledActionRepo,
+    Targets: TaskTargetValidator,
     Exe: ScheduledActionExecutor + Send + Sync + 'static,
 {
     async fn delete_user_actions(&self, user_id: MacroUserIdStr<'static>) -> Result<()> {
@@ -120,6 +220,7 @@ where
     ) -> Result<ScheduledAction> {
         let input = ActionConfiguration::from(input);
         self.check_event_management(&input.trigger)?;
+        self.targets.validate_task(&input.task, &user_id).await?;
         let now = Utc::now();
         let next_run_at = next_run(&input.trigger)?;
         let event_activated_at = match &input.trigger {
@@ -156,12 +257,9 @@ where
         user_id: MacroUserIdStr<'static>,
         include_events: bool,
     ) -> Result<Vec<ScheduledAction>> {
-        Ok(self
-            .repo
-            .get_actions(user_id.clone())
+        Ok(list_owned_actions(self.repo.as_ref(), &user_id)
             .await?
             .into_iter()
-            .filter(|action| action.owner.is_user(&user_id))
             .filter(|action| include_events || matches!(action.trigger, ActionTrigger::Cron { .. }))
             .collect())
     }
@@ -172,54 +270,31 @@ where
         input: UpdateScheduledAction,
         macro_user_id: MacroUserIdStr<'static>,
     ) -> Result<ScheduledAction> {
-        let mut action = self.owned_action(id, &macro_user_id).await?;
-        let input = ActionConfiguration::from(input);
-        let trigger_changed = !same_trigger(&action.trigger, &input.trigger);
-        let configuration_changed = trigger_changed
-            || action.name != input.name
-            || action.kind != input.kind
-            || action.task != input.task;
-        let disable_only = !input.enabled && !configuration_changed;
-        // A rollout gate must not prevent an owner from stopping an existing
-        // event action. Deletion, history and explicit manual runs also remain available.
-        if !disable_only {
-            self.check_event_management(&action.trigger)?;
-            self.check_event_management(&input.trigger)?;
-        }
-        let now = Utc::now();
-        if action
-            .claimed
-            .is_some_and(|claimed| claimed >= now - MAX_ACTION_TIME)
-            && !disable_only
-        {
-            return Err(ActionPolicyError::UpdateConflict.into());
-        }
-        if !disable_only {
-            action.next_run_at = next_run(&input.trigger)?;
-        }
-        action.event_activated_at = match &input.trigger {
-            ActionTrigger::Cron { .. } => None,
-            ActionTrigger::Events { .. }
-                if trigger_changed || (!action.enabled && input.enabled) =>
-            {
-                Some(now)
-            }
-            ActionTrigger::Events { .. } => action.event_activated_at,
-        };
-        action.configuration_revision = action.configuration_revision.next()?;
-        action.name = input.name;
-        action.trigger = input.trigger;
-        action.kind = input.kind;
-        action.task = input.task;
-        action.enabled = input.enabled;
-        action.updated_at = now;
-
-        let updated = self.repo.update_action(action).await?;
-        self.dispatcher_tx
-            .send(DispatchEvent::Update(updated.clone()))
+        let action = self.owned_action(id, &macro_user_id).await?;
+        let input = input.into_configuration(action.enabled);
+        self.replace_configuration(action, input, &macro_user_id)
             .await
-            .map_err(|e| anyhow::anyhow!("failed to dispatch update event: {e}"))?;
-        Ok(updated)
+    }
+
+    async fn set_enabled(
+        &self,
+        id: &Uuid,
+        enabled: bool,
+        macro_user_id: MacroUserIdStr<'static>,
+    ) -> Result<ScheduledAction> {
+        let action = self.owned_action(id, &macro_user_id).await?;
+        if action.enabled == enabled {
+            return Ok(action);
+        }
+        let input = ActionConfiguration {
+            name: action.name.clone(),
+            trigger: action.trigger.clone(),
+            kind: action.kind.clone(),
+            task: action.task.clone(),
+            enabled,
+        };
+        self.replace_configuration(action, input, &macro_user_id)
+            .await
     }
 
     async fn delete_action(&self, id: &Uuid, macro_user_id: MacroUserIdStr<'static>) -> Result<()> {

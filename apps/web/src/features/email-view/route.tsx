@@ -5,34 +5,17 @@ import {
 } from '@app/lib/split-router';
 import type { SplitContent } from '@components/app/split-layout/layoutManager';
 import {
-  NewAppView,
+  AppView,
   RedirectSplit,
   withAuth,
 } from '@components/app/split-layout/split-router/app-route-shell';
 import { uuidRouteReference } from '@components/app/split-layout/split-router/mention-links';
-import { lazy, Show } from 'solid-js';
+import { Show } from 'solid-js';
 import { z } from 'zod';
 import { URL_PARAMS as EMAIL_URL_PARAMS } from '../email-thread/core/location';
-import { getViewPreset } from '../next-soup/sidebar/soup-filter-presets';
 import { EmailDetailRouteView } from './components/EmailDetailView';
 import { emailDetailSearch } from './email-route';
 import { EmailView } from './email-view';
-
-const SoupView = lazy(async () => ({
-  default: (await import('../next-soup/soup-view/soup-view')).SoupView,
-}));
-
-function LegacyMailView() {
-  const preset = getViewPreset('mail');
-  return (
-    <SoupView
-      viewName="Email"
-      initialFilters={preset?.filters}
-      initialClientFilters={preset?.clientFilters}
-      initialGroupBy={preset?.groupBy}
-    />
-  );
-}
 
 function MailLegacyRouteView() {
   const params = useParams<{ threadId?: string }>();
@@ -44,7 +27,7 @@ function MailLegacyRouteView() {
   };
 
   return (
-    <Show when={params.threadId} fallback={<LegacyMailView />}>
+    <Show when={params.threadId}>
       {(threadId) => <RedirectSplit to={legacyThread(threadId())} />}
     </Show>
   );
@@ -55,15 +38,14 @@ export const MailRouteView = withAuth(() => {
   const detailRequested = () => typeof params.threadId === 'string';
 
   return (
-    <NewAppView
+    <AppView
       id="mail"
       detailDesktopOnly
       detailRequested={detailRequested}
       detailFallback={<MailLegacyRouteView />}
-      fallback={<LegacyMailView />}
     >
       <EmailView />
-    </NewAppView>
+    </AppView>
   );
 });
 

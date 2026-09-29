@@ -7,6 +7,47 @@ fn payer() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from("macro|payer@example.com".to_string()).unwrap()
 }
 
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn legacy_anchor_accepts_end_corrections_but_not_stale_or_overlapping_starts(pool: PgPool) {
+    let repo = PgBillingRepo::new(pool);
+    let start = DateTime::from_timestamp(1_800_000_000, 0).unwrap();
+    let end = start + chrono::Duration::days(30);
+    repo.set_period(&payer(), start, end).await.unwrap();
+    for corrected in [
+        end + chrono::Duration::days(2),
+        end - chrono::Duration::days(2),
+    ] {
+        repo.set_period(&payer(), start, corrected).await.unwrap();
+        assert_eq!(
+            repo.settings(&payer()).await.unwrap().period_anchor,
+            Some((start, corrected))
+        );
+        for stale_start in [
+            start - chrono::Duration::days(30),
+            start + chrono::Duration::days(1),
+        ] {
+            repo.set_period(&payer(), stale_start, end).await.unwrap();
+            assert_eq!(
+                repo.settings(&payer()).await.unwrap().period_anchor,
+                Some((start, corrected))
+            );
+        }
+    }
+    let next_start = end;
+    let next_end = end + chrono::Duration::days(30);
+    repo.set_period(&payer(), next_start, next_end)
+        .await
+        .unwrap();
+    // A delayed correction for the old period must not rewind the new anchor.
+    repo.set_period(&payer(), start, end + chrono::Duration::days(1))
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.settings(&payer()).await.unwrap().period_anchor,
+        Some((next_start, next_end))
+    );
+}
+
 fn policy(period_ended: bool) -> SettlementPolicy {
     SettlementPolicy {
         overage_active: true,

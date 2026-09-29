@@ -8,7 +8,7 @@ export function EmailTaskButton(props: { onClick: () => void }) {
       size="sm"
       onClick={props.onClick}
       depth={2}
-      class="gap-1.5 rounded-full border border-edge-muted px-2 text-ink-extra-muted"
+      class="gap-1.5 border border-edge-muted px-2 text-ink-extra-muted"
     >
       <TaskIcon />
       <span class="text-xs font-semibold">Task</span>

@@ -6,32 +6,15 @@ import {
 import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import type { SplitContent } from '@components/app/split-layout/layoutManager';
 import {
-  NewAppView,
+  AppView,
   RedirectSplit,
   withAuth,
 } from '@components/app/split-layout/split-router/app-route-shell';
 import { uuidRouteReference } from '@components/app/split-layout/split-router/mention-links';
-import { lazy, Show } from 'solid-js';
+import { Show } from 'solid-js';
 import { z } from 'zod';
-import { getViewPreset } from '../next-soup/sidebar/soup-filter-presets';
 import { channelsSearch } from './channels-route';
 import { ChannelDetailRouteView, ChannelsView } from './channels-view';
-
-const SoupView = lazy(async () => ({
-  default: (await import('../next-soup/soup-view/soup-view')).SoupView,
-}));
-
-function LegacyChannelsView() {
-  const preset = getViewPreset('channels');
-  return (
-    <SoupView
-      viewName="Channels"
-      initialFilters={preset?.filters}
-      initialClientFilters={preset?.clientFilters}
-      initialGroupBy={preset?.groupBy}
-    />
-  );
-}
 
 function ChannelsLegacyRouteView() {
   const params = useParams<{ channelId?: string }>();
@@ -44,7 +27,7 @@ function ChannelsLegacyRouteView() {
   };
 
   return (
-    <Show when={params.channelId} fallback={<LegacyChannelsView />}>
+    <Show when={params.channelId}>
       {(channelId) => <RedirectSplit to={legacyChannel(channelId())} />}
     </Show>
   );
@@ -55,15 +38,14 @@ export const ChannelsRouteView = withAuth(() => {
   const detailRequested = () => typeof params.channelId === 'string';
 
   return (
-    <NewAppView
+    <AppView
       id="channels"
       detailDesktopOnly
       detailRequested={detailRequested}
       detailFallback={<ChannelsLegacyRouteView />}
-      fallback={<LegacyChannelsView />}
     >
       <ChannelsView />
-    </NewAppView>
+    </AppView>
   );
 });
 
