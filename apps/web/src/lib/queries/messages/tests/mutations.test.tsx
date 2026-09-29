@@ -42,6 +42,7 @@ import {
   type MessageTimelineData,
   useMessageTimelineQuery,
 } from '../timeline';
+import { timelineMessages } from '../timeline-entries';
 
 const time = '2026-09-09T00:00:00Z';
 function message(
@@ -95,7 +96,13 @@ it('reopens a resolved project discussion through the real mutation and shared t
   const threadKey = getThreadRepliesQueryKey(parent, 'root');
   testQueryClient.setQueryData<MessageTimelineData>(timelineKey, {
     pageParams: [null],
-    pages: [{ items: [root], next_cursor: null, previous_cursor: null }],
+    pages: [
+      {
+        entries: [{ type: 'message', message: root }],
+        next_cursor: null,
+        previous_cursor: null,
+      },
+    ],
   });
   testQueryClient.setQueryData<MessageThread>(threadKey, {
     root,
@@ -113,7 +120,9 @@ it('reopens a resolved project discussion through the real mutation and shared t
       () => null
     );
     const mutation = usePatchThreadMutation();
-    const resolved = () => timeline.data?.pages[0].items[0].state.resolved;
+    const resolved = () =>
+      timeline.data &&
+      timelineMessages(timeline.data.pages[0])[0].state.resolved;
     return (
       <>
         <span>{resolved() ? 'Resolved' : 'Open'}</span>
@@ -151,8 +160,9 @@ it('reopens a resolved project discussion through the real mutation and shared t
     testQueryClient.getQueryData<MessageThread>(threadKey)?.state.resolved
   ).toBe(false);
   expect(
-    testQueryClient.getQueryData<MessageTimelineData>(timelineKey)?.pages[0]
-      .items[0].state.resolved
+    timelineMessages(
+      testQueryClient.getQueryData<MessageTimelineData>(timelineKey)!.pages[0]
+    )[0].state.resolved
   ).toBe(false);
 });
 
@@ -183,7 +193,13 @@ describe.each(['channel', 'document'] as const)('%s reply deletion', (type) => {
       const threadKey = getThreadRepliesQueryKey(parent, 'root');
       testQueryClient.setQueryData<MessageTimelineData>(timelineKey, {
         pageParams: [null],
-        pages: [{ items: [root], next_cursor: null, previous_cursor: null }],
+        pages: [
+          {
+            entries: [{ type: 'message', message: root }],
+            next_cursor: null,
+            previous_cursor: null,
+          },
+        ],
       });
       testQueryClient.setQueryData(selectedKey, [root]);
       testQueryClient.setQueryData<MessageThread>(threadKey, {
@@ -223,8 +239,11 @@ describe.each(['channel', 'document'] as const)('%s reply deletion', (type) => {
       if (echoTiming === 'after response') echo();
 
       expect(
-        testQueryClient.getQueryData<MessageTimelineData>(timelineKey)!.pages[0]
-          .items[0].thread.reply_count
+        testQueryClient
+          .getQueryData<MessageTimelineData>(timelineKey)!
+          .pages[0].entries.flatMap((entry) =>
+            entry.type === 'message' ? [entry.message] : []
+          )[0].thread.reply_count
       ).toBe(1);
       expect(
         testQueryClient.getQueryData<MessageListItem[]>(selectedKey)![0].thread
@@ -264,7 +283,13 @@ describe('root deletion', () => {
       getMessageTimelineQueryKey(parent),
       {
         pageParams: [null],
-        pages: [{ items: [root], next_cursor: null, previous_cursor: null }],
+        pages: [
+          {
+            entries: [{ type: 'message', message: root }],
+            next_cursor: null,
+            previous_cursor: null,
+          },
+        ],
       }
     );
     if (withThreadCache)
@@ -292,7 +317,7 @@ describe('root deletion', () => {
   const roots = (parent: MessageParent) =>
     testQueryClient
       .getQueryData<MessageTimelineData>(getMessageTimelineQueryKey(parent))!
-      .pages.flatMap((page) => page.items);
+      .pages.flatMap(timelineMessages);
 
   it("takes the whole discussion, including another author's replies", async () => {
     const parent: MessageParent = { type: 'document', id: 'doc' };
@@ -391,9 +416,9 @@ describe('thread resolution', () => {
   const timelineKey = getMessageTimelineQueryKey(parent);
   const threadKey = getThreadRepliesQueryKey(parent, 'root');
   const cachedResolved = () => ({
-    timeline:
+    timeline: timelineMessages(
       testQueryClient.getQueryData<MessageTimelineData>(timelineKey)!.pages[0]
-        .items[0].state.resolved,
+    )[0].state.resolved,
     thread:
       testQueryClient.getQueryData<MessageThread>(threadKey)!.state.resolved,
   });
@@ -406,7 +431,13 @@ describe('thread resolution', () => {
     };
     testQueryClient.setQueryData<MessageTimelineData>(timelineKey, {
       pageParams: [null],
-      pages: [{ items: [root], next_cursor: null, previous_cursor: null }],
+      pages: [
+        {
+          entries: [{ type: 'message', message: root }],
+          next_cursor: null,
+          previous_cursor: null,
+        },
+      ],
     });
     testQueryClient.setQueryData<MessageThread>(threadKey, {
       state,
@@ -468,12 +499,13 @@ describe('sending', () => {
     const timelineKey = getMessageTimelineQueryKey(parent);
     testQueryClient.setQueryData<MessageTimelineData>(timelineKey, {
       pageParams: [null],
-      pages: [{ items: [], next_cursor: null, previous_cursor: null }],
+      pages: [{ entries: [], next_cursor: null, previous_cursor: null }],
     });
     const rootIds = () =>
       testQueryClient
         .getQueryData<MessageTimelineData>(timelineKey)!
-        .pages[0].items.map((item) => [item.id, item.state.root_id]);
+        .pages.flatMap(timelineMessages)
+        .map((item) => [item.id, item.state.root_id]);
     let respond!: () => void;
     mocks.post.mockImplementation(
       (_parent, input) =>
@@ -515,7 +547,7 @@ describe('sending', () => {
     const timelineKey = getMessageTimelineQueryKey(parent);
     testQueryClient.setQueryData<MessageTimelineData>(timelineKey, {
       pageParams: [null],
-      pages: [{ items: [], next_cursor: null, previous_cursor: null }],
+      pages: [{ entries: [], next_cursor: null, previous_cursor: null }],
     });
     mocks.post.mockResolvedValue(message(parent, 'server-id'));
     let mutation!: ReturnType<typeof useSendMessageMutation>;
@@ -540,7 +572,8 @@ describe('sending', () => {
     expect(
       testQueryClient
         .getQueryData<MessageTimelineData>(timelineKey)!
-        .pages[0].items.map((item) => [item.id, item.state])
+        .pages.flatMap(timelineMessages)
+        .map((item) => [item.id, item.state])
     ).toEqual([
       [
         'server-id',

@@ -30583,6 +30583,37 @@ export const messageTimelineQueryParams = zod.object({
 
 export const messageTimelineResponse = zod
   .object({
+    activity: zod
+      .array(
+        zod
+          .object({
+            action: zod
+              .string()
+              .describe(
+                'Durable action tag. Unknown tags remain representable during rollouts.'
+              ),
+            actor_id: zod
+              .string()
+              .describe('Principal who performed the action.'),
+            id: zod
+              .uuid()
+              .describe(
+                'Stable activity identity, independent of message ids.'
+              ),
+            occurred_at: zod.iso
+              .datetime({})
+              .describe('Immutable chronological position.'),
+            payload: zod
+              .unknown()
+              .optional()
+              .describe("The action's stored payload."),
+          })
+          .describe('A displayable fact returned together with a message page.')
+      )
+      .optional()
+      .describe(
+        'System activity within the same window when requested, newest first.\nClients merge it with `items` by `(created_at | occurred_at, id)`.'
+      ),
     items: zod
       .array(
         zod
@@ -31054,10 +31085,14 @@ export const messageTimelineResponse = zod
           .object({
             created_at: zod.iso
               .datetime({})
-              .describe('Last root creation time.'),
+              .describe(
+                'Last message creation time or activity occurrence time.'
+              ),
             id: zod
               .uuid()
-              .describe('Last root UUID, used to break timestamp ties.'),
+              .describe(
+                'Last entry UUID, used to break timestamp ties across both sources.'
+              ),
           })
           .describe('Cursor for a chronological parent timeline.'),
       ])
@@ -31069,16 +31104,20 @@ export const messageTimelineResponse = zod
           .object({
             created_at: zod.iso
               .datetime({})
-              .describe('Last root creation time.'),
+              .describe(
+                'Last message creation time or activity occurrence time.'
+              ),
             id: zod
               .uuid()
-              .describe('Last root UUID, used to break timestamp ties.'),
+              .describe(
+                'Last entry UUID, used to break timestamp ties across both sources.'
+              ),
           })
           .describe('Cursor for a chronological parent timeline.'),
       ])
       .optional(),
   })
-  .describe('Bidirectional, bounded timeline page, ordered newest root first.');
+  .describe('Bidirectional, bounded timeline page, ordered newest first.');
 
 /**
  * @summary Create a root message or reply.

@@ -76,6 +76,16 @@ pub struct ChannelUpdatedMetadata {
     pub channel_name: Option<String>,
 }
 
+/// Metadata for a channel picture update, including removals.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct ChannelPictureChangedMetadata {
+    /// Channel whose picture changed.
+    pub channel_id: Uuid,
+    /// User who changed the picture.
+    pub actor: MacroUserIdStr<'static>,
+}
+
 /// Metadata for [`ChannelTopicEvent::Deleted`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
@@ -235,6 +245,9 @@ pub struct ChannelParticipantRemovedMetadata {
 #[serde(tag = "event_type", content = "metadata")]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub enum ChannelTopicEvent {
+    /// A channel's profile picture changed.
+    #[serde(rename = "channel.picture_changed")]
+    PictureChanged(ChannelPictureChangedMetadata),
     /// A channel was created.
     #[serde(rename = "channel.created")]
     Created(ChannelCreatedMetadata),
@@ -283,6 +296,13 @@ pub struct ChannelMacroEvent {
 }
 
 impl ChannelMacroEvent {
+    /// Build a picture update event keyed by the channel id.
+    pub fn picture_changed(metadata: ChannelPictureChangedMetadata) -> Self {
+        Self::new(
+            metadata.channel_id,
+            ChannelTopicEvent::PictureChanged(metadata),
+        )
+    }
     /// Build a created event keyed by the created channel id.
     pub fn created(metadata: ChannelCreatedMetadata) -> Self {
         Self::new(metadata.channel_id, ChannelTopicEvent::Created(metadata))

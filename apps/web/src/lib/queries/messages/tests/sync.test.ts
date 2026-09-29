@@ -27,7 +27,12 @@ vi.mock('@service-storage/messages', async (importOriginal) => ({
 
 import { registerNonce } from '../../nonce';
 import { MessageNonceKeys, messageKeys } from '../keys';
-import { applyMessage, applyThreadState, handleMessageEvent } from '../sync';
+import {
+  applyMessage,
+  applyThreadState,
+  handleMessageEvent,
+  handleTimelineActivity,
+} from '../sync';
 import {
   getThreadRepliesQueryKey,
   threadRepliesQueryOptions,
@@ -90,7 +95,14 @@ describe.each(['channel', 'document', 'initiative', 'crm_company'] as const)(
       testQueryClient.setQueryData<MessageTimelineData>(timelineKey(), {
         pageParams: [null],
         pages: [
-          { items: [item(parent)], next_cursor: null, previous_cursor: null },
+          {
+            entries: [item(parent)].map((message) => ({
+              type: 'message' as const,
+              message,
+            })),
+            next_cursor: null,
+            previous_cursor: null,
+          },
         ],
       });
       testQueryClient.setQueryData<MessageListItem[]>(
@@ -128,9 +140,11 @@ describe.each(['channel', 'document', 'initiative', 'crm_company'] as const)(
         reactions: [{ emoji: '👍', users: ['macro|a@example.com'] }],
       };
       applyMessage(edit, 'edited');
-      const root = testQueryClient.getQueryData<MessageTimelineData>(
-        timelineKey()
-      )!.pages[0].items[0];
+      const root = testQueryClient
+        .getQueryData<MessageTimelineData>(timelineKey())!
+        .pages[0].entries.flatMap((entry) =>
+          entry.type === 'message' ? [entry.message] : []
+        )[0];
       expect(root.thread.reply_count).toBe(1);
       expect(root.thread.preview).toEqual([expect.objectContaining(edit)]);
       expect(
@@ -184,7 +198,16 @@ describe.each(['channel', 'document', 'initiative', 'crm_company'] as const)(
       };
       testQueryClient.setQueryData<MessageTimelineData>(timelineKey(), {
         pageParams: [null],
-        pages: [{ items: [root], next_cursor: null, previous_cursor: null }],
+        pages: [
+          {
+            entries: [root].map((message) => ({
+              type: 'message' as const,
+              message,
+            })),
+            next_cursor: null,
+            previous_cursor: null,
+          },
+        ],
       });
       testQueryClient.setQueryData<MessageListItem[]>(
         messageKeys.messagesByIds(parent, ['root']).queryKey,
@@ -206,8 +229,11 @@ describe.each(['channel', 'document', 'initiative', 'crm_company'] as const)(
       });
 
       expect(
-        testQueryClient.getQueryData<MessageTimelineData>(timelineKey())!
-          .pages[0].items[0].thread
+        testQueryClient
+          .getQueryData<MessageTimelineData>(timelineKey())!
+          .pages[0].entries.flatMap((entry) =>
+            entry.type === 'message' ? [entry.message] : []
+          )[0].thread
       ).toEqual(root.thread);
       expect(
         testQueryClient.getQueryData<MessageListItem[]>(
@@ -243,8 +269,11 @@ describe.each(['channel', 'document', 'initiative', 'crm_company'] as const)(
         }),
       ]);
       expect(
-        testQueryClient.getQueryData<MessageTimelineData>(timelineKey())!
-          .pages[0].items[0].thread.reply_count
+        testQueryClient
+          .getQueryData<MessageTimelineData>(timelineKey())!
+          .pages[0].entries.flatMap((entry) =>
+            entry.type === 'message' ? [entry.message] : []
+          )[0].thread.reply_count
       ).toBe(1);
     });
     it('updates the canonical root when only a linked thread is cached', () => {
@@ -281,8 +310,11 @@ describe.each(['channel', 'document', 'initiative', 'crm_company'] as const)(
         'message_deleted'
       );
       expect(
-        testQueryClient.getQueryData<MessageTimelineData>(timelineKey())!
-          .pages[0].items[0].deleted_at
+        testQueryClient
+          .getQueryData<MessageTimelineData>(timelineKey())!
+          .pages[0].entries.flatMap((entry) =>
+            entry.type === 'message' ? [entry.message] : []
+          )[0].deleted_at
       ).toBe(time);
       expect(
         testQueryClient.getQueryData<MessageThread>(threadKey())!.replies
@@ -293,8 +325,11 @@ describe.each(['channel', 'document', 'initiative', 'crm_company'] as const)(
       ).toBe(true);
       applyThreadState(parent, { ...state, deleted_at: time });
       expect(
-        testQueryClient.getQueryData<MessageTimelineData>(timelineKey())!
-          .pages[0].items
+        testQueryClient
+          .getQueryData<MessageTimelineData>(timelineKey())!
+          .pages[0].entries.flatMap((entry) =>
+            entry.type === 'message' ? [entry.message] : []
+          )
       ).toEqual(
         parent.type === 'document'
           ? [expect.objectContaining({ state: { ...state, deleted_at: time } })]
@@ -309,7 +344,10 @@ describe.each(['channel', 'document', 'initiative', 'crm_company'] as const)(
         nonce: null,
         change: {
           type: 'posted',
-          message: message(parent, 'newer-root'),
+          message: {
+            ...message(parent, 'newer-root'),
+            created_at: '2026-09-09T00:00:01Z',
+          },
           mentions: [],
           notification_policy: 'Default',
         },
@@ -317,14 +355,20 @@ describe.each(['channel', 'document', 'initiative', 'crm_company'] as const)(
       expect(
         testQueryClient
           .getQueryData<MessageTimelineData>(timelineKey())!
-          .pages[0].items.map((root) => root.id)
+          .pages[0].entries.flatMap((entry) =>
+            entry.type === 'message' ? [entry.message] : []
+          )
+          .map((root) => root.id)
       ).toEqual(['newer-root', 'root']);
 
       testQueryClient.setQueryData<MessageTimelineData>(timelineKey(), {
         pageParams: [null],
         pages: [
           {
-            items: [item(parent)],
+            entries: [item(parent)].map((message) => ({
+              type: 'message' as const,
+              message,
+            })),
             next_cursor: null,
             previous_cursor: { created_at: time, id: 'root' },
           },
@@ -334,7 +378,10 @@ describe.each(['channel', 'document', 'initiative', 'crm_company'] as const)(
       expect(
         testQueryClient
           .getQueryData<MessageTimelineData>(timelineKey())!
-          .pages[0].items.map((root) => root.id)
+          .pages[0].entries.flatMap((entry) =>
+            entry.type === 'message' ? [entry.message] : []
+          )
+          .map((root) => root.id)
       ).toEqual(['root']);
     });
     it(
@@ -378,8 +425,11 @@ describe.each(['channel', 'document', 'initiative', 'crm_company'] as const)(
           },
         });
         const newestRoot = () =>
-          testQueryClient.getQueryData<MessageTimelineData>(timelineKey())!
-            .pages[0].items[0];
+          testQueryClient
+            .getQueryData<MessageTimelineData>(timelineKey())!
+            .pages[0].entries.flatMap((entry) =>
+              entry.type === 'message' ? [entry.message] : []
+            )[0];
         const agentSender = expect.objectContaining({
           type: 'bot',
           name: 'Bingus',
@@ -443,7 +493,14 @@ describe.each(['channel', 'document', 'initiative', 'crm_company'] as const)(
       resolveFetch({
         pageParams: [null],
         pages: [
-          { items: [item(parent)], next_cursor: null, previous_cursor: null },
+          {
+            entries: [item(parent)].map((message) => ({
+              type: 'message' as const,
+              message,
+            })),
+            next_cursor: null,
+            previous_cursor: null,
+          },
         ],
       });
       await fetching.catch(() => undefined);
@@ -481,7 +538,16 @@ describe.each(['channel', 'document', 'initiative', 'crm_company'] as const)(
       // still runs once the page settles.
       resolveFetch({
         pageParams: [null],
-        pages: [{ items: [], next_cursor: null, previous_cursor: null }],
+        pages: [
+          {
+            entries: [].map((message) => ({
+              type: 'message' as const,
+              message,
+            })),
+            next_cursor: null,
+            previous_cursor: null,
+          },
+        ],
       });
       await fetching.catch(() => undefined);
       await vi.waitFor(() =>
@@ -497,7 +563,14 @@ describe.each(['channel', 'document', 'initiative', 'crm_company'] as const)(
       testQueryClient.setQueryData<MessageTimelineData>(timelineKey(), {
         pageParams: [null],
         pages: [
-          { items: [item(parent)], next_cursor: null, previous_cursor: null },
+          {
+            entries: [item(parent)].map((message) => ({
+              type: 'message' as const,
+              message,
+            })),
+            next_cursor: null,
+            previous_cursor: null,
+          },
         ],
       });
       mocks.thread.mockReset();
@@ -541,9 +614,11 @@ describe.each(['channel', 'document', 'initiative', 'crm_company'] as const)(
       expect(mocks.thread).toHaveBeenCalledTimes(1);
 
       // The timeline preview mirrors the reply while the thread settles.
-      const root = testQueryClient.getQueryData<MessageTimelineData>(
-        timelineKey()
-      )!.pages[0].items[0];
+      const root = testQueryClient
+        .getQueryData<MessageTimelineData>(timelineKey())!
+        .pages[0].entries.flatMap((entry) =>
+          entry.type === 'message' ? [entry.message] : []
+        )[0];
       expect(root.thread.reply_count).toBe(1);
       expect(root.thread.preview).toEqual([
         expect.objectContaining({ id: 'reply' }),
@@ -650,3 +725,63 @@ describe.each(['channel', 'document', 'initiative', 'crm_company'] as const)(
     });
   }
 );
+
+describe('live timeline activity', () => {
+  const parent: MessageParent = { type: 'channel', id: 'live-activity' };
+  const root = (id: string, created_at: string) => ({
+    type: 'message' as const,
+    message: { ...item(parent), id, created_at },
+  });
+  const activity = {
+    id: 'renamed',
+    actor_id: 'macro|a@example.com',
+    occurred_at: '2026-09-09T00:00:01Z',
+    action: 'renamed',
+    payload: { to: 'Planning' },
+  };
+  const keys = (key: readonly unknown[]) =>
+    testQueryClient
+      .getQueryData<MessageTimelineData>(key)!
+      .pages.flatMap((page) =>
+        page.entries.map((entry) =>
+          entry.type === 'message'
+            ? entry.message.id
+            : `activity:${entry.activity.id}`
+        )
+      );
+
+  it('places activity by position in windows that contain it', () => {
+    const latest = getMessageTimelineQueryKey(parent);
+    const history = getMessageTimelineQueryKey(parent, 'older');
+    testQueryClient.setQueryData<MessageTimelineData>(latest, {
+      pageParams: [null],
+      pages: [
+        {
+          entries: [
+            root('newer', '2026-09-09T00:00:02Z'),
+            root('older', '2026-09-09T00:00:00Z'),
+          ],
+          next_cursor: null,
+          previous_cursor: null,
+        },
+      ],
+    });
+    // A load-around window whose newest loaded row predates the activity.
+    testQueryClient.setQueryData<MessageTimelineData>(history, {
+      pageParams: [null],
+      pages: [
+        {
+          entries: [root('older', '2026-09-09T00:00:00Z')],
+          next_cursor: null,
+          previous_cursor: { id: 'older', created_at: '2026-09-09T00:00:00Z' },
+        },
+      ],
+    });
+
+    handleTimelineActivity({ channel_id: parent.id, activities: [activity] });
+    handleTimelineActivity({ channel_id: parent.id, activities: [activity] });
+
+    expect(keys(latest)).toEqual(['newer', 'activity:renamed', 'older']);
+    expect(keys(history)).toEqual(['older']);
+  });
+});

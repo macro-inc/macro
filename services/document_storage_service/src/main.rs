@@ -898,6 +898,20 @@ async fn run() -> anyhow::Result<()> {
         }
     });
 
+    let (timeline_publisher, timeline_delivery) =
+        crate::service::activity::ChannelTimelinePublisher::new(
+            conn_gateway_client.clone(),
+            PgChannelsRepo::new(db.clone()),
+        );
+    consumer_tracker.spawn({
+        let cancellation_token = consumer_cancellation_token.clone();
+        async move {
+            tokio::select! {
+                _ = cancellation_token.cancelled() => {},
+                _ = timeline_delivery => {},
+            }
+        }
+    });
     let activity_consumer_brokers = config.kafka_brokers.as_ref().to_string();
     let editing_activity = Arc::new(
         documents_hex::outbound::editing_activity::RedisEditingActivityStore::new(
@@ -927,7 +941,7 @@ async fn run() -> anyhow::Result<()> {
                         crate::service::activity::ingest(event, editing_activity.as_ref()).await
                     }
                 },
-                activity_realtime,
+                (activity_realtime, timeline_publisher),
             );
             loop {
                 if cancellation_token.is_cancelled() {
@@ -1090,6 +1104,9 @@ async fn run() -> anyhow::Result<()> {
                 ),
             ),
         )
+        .with_activity(activity::outbound::pg_activity_repo::PgActivityRepo::new(
+            db.clone(),
+        ))
         .with_group_recipients(channels::domain::group_mentions::ChannelGroupRecipients(
             PgChannelsRepo::new(db.clone()),
         ))

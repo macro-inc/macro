@@ -28,9 +28,9 @@ pub enum MessageError {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct MessageCursor {
-    /// Last root creation time.
+    /// Last message creation time or activity occurrence time.
     pub created_at: DateTime<Utc>,
-    /// Last root UUID, used to break timestamp ties.
+    /// Last entry UUID, used to break timestamp ties across both sources.
     pub id: Uuid,
 }
 
@@ -50,6 +50,9 @@ pub enum MessageDirection {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct MessageTimelineQuery {
+    /// Merge the parent's selected system activity into the same bounded page.
+    #[serde(default)]
+    pub include_activity: bool,
     /// Stable creation-time and UUID cursor.
     pub cursor: Option<MessageCursor>,
     /// Which side of the cursor to fetch.
@@ -75,15 +78,19 @@ pub struct MessageTimelineQuery {
 
 pub use super::models::{MessageListItem, MessageThreadPreview};
 
-/// Bidirectional, bounded timeline page, ordered newest root first.
+/// Bidirectional, bounded timeline page, ordered newest first.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct MessagePage {
     /// Root messages with bounded previews.
     pub items: Vec<MessageListItem>,
-    /// Continue to older roots.
+    /// System activity within the same window when requested, newest first.
+    /// Clients merge it with `items` by `(created_at | occurred_at, id)`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub activity: Vec<activity::domain::timeline::TimelineActivity>,
+    /// Continue to older entries.
     pub next_cursor: Option<MessageCursor>,
-    /// Continue to newer roots.
+    /// Continue to newer entries.
     pub previous_cursor: Option<MessageCursor>,
 }
 
@@ -413,6 +420,15 @@ impl MessageGroupRecipients for NoMessageGroups {
         ))
     }
 }
+
+/// Channel facts displayed inline; message/view actions would duplicate content.
+pub const CHANNEL_TIMELINE_ACTIONS: &[&str] = &[
+    "renamed",
+    "picture_changed",
+    "participant_added",
+    "participant_removed",
+    "call_ended",
+];
 
 /// Identity of a CRM company or contact that hosts a discussion.
 #[derive(Debug, Clone, PartialEq, Eq)]

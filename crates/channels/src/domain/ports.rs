@@ -129,12 +129,13 @@ pub trait ChannelAttachmentRepo: Send + Sync + 'static {
 /// Repository for channel persistence and query data.
 #[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
 pub trait ChannelRepo: Send + Sync + 'static {
-    /// Replace or remove the channel's static-file picture reference.
+    /// Replace or remove the channel's static-file picture reference atomically.
+    /// Returns whether the stored reference changed.
     fn set_channel_picture(
         &self,
         channel_id: Uuid,
         picture_id: Option<Uuid>,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
     /// Error type for repo operations.
     type Err: Into<anyhow::Error> + Send;
 

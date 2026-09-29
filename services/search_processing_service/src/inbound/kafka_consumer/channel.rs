@@ -26,6 +26,11 @@ pub(super) struct ChannelEventDescription {
 
 pub(super) fn describe_channel_event(event: &ChannelTopicEvent) -> ChannelEventDescription {
     match event {
+        ChannelTopicEvent::PictureChanged(metadata) => ChannelEventDescription {
+            action: ChannelIndexAction::Ignore,
+            channel_id: metadata.channel_id,
+            event_type: "channel.picture_changed",
+        },
         ChannelTopicEvent::Created(metadata) => ChannelEventDescription {
             action: ChannelIndexAction::Ignore,
             channel_id: metadata.channel_id,

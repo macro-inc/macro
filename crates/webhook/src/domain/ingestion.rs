@@ -286,6 +286,9 @@ pub(crate) fn normalized_channel_event(
     let (event_name, channel_id) = match &event.event {
         ChannelTopicEvent::Created(metadata) => ("channel.created", metadata.channel_id),
         ChannelTopicEvent::Updated(metadata) => ("channel.updated", metadata.channel_id),
+        ChannelTopicEvent::PictureChanged(metadata) => {
+            ("channel.picture_changed", metadata.channel_id)
+        }
         ChannelTopicEvent::Deleted(metadata) => ("channel.deleted", metadata.channel_id),
         ChannelTopicEvent::MessagePosted(metadata) => {
             ("channel.message_posted", metadata.channel_id)

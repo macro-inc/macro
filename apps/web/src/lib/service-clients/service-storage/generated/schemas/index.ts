@@ -1485,6 +1485,7 @@ export * from './threadState';
 export * from './threadStateAnchor';
 export * from './threadStateDeletedAt';
 export * from './threadUpdatedAt';
+export * from './timelineActivity';
 export * from './transcribeDictationParams';
 export * from './transcribeResponse';
 export * from './transcriptSegmentRequest';

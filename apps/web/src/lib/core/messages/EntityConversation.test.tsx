@@ -1,5 +1,8 @@
 import { ThrownResultError } from '@core/util/result';
-import type { MessageListItem } from '@service-storage/messages';
+import type {
+  MessageListItem,
+  MessageTimelinePage,
+} from '@service-storage/messages';
 import { cleanup, fireEvent, render } from '@solidjs/testing-library';
 import { type Accessor, createSignal, For, type ParentProps } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -118,7 +121,15 @@ function discussion(
   mocks.timeline.mockReturnValue({
     isSuccess: true,
     get data() {
-      return { pages: pages().map((items) => ({ items })) };
+      return {
+        pages: pages().map(
+          (messages): MessageTimelinePage => ({
+            entries: messages.map((message) => ({ type: 'message', message })),
+            next_cursor: null,
+            previous_cursor: null,
+          })
+        ),
+      };
     },
   });
   return {
@@ -253,7 +264,15 @@ describe('EntityConversation linked message highlight', () => {
     const [cleared, setCleared] = createSignal(false);
     mocks.timeline.mockReturnValue({
       isSuccess: true,
-      data: { pages: [{ items: [thread('root-of-reply', null)] }] },
+      data: {
+        pages: [
+          {
+            entries: [
+              { type: 'message', message: thread('root-of-reply', null) },
+            ],
+          },
+        ],
+      },
     });
     const view = render(() => (
       <EntityConversation
@@ -288,7 +307,15 @@ it('retains loaded comments on a pagination failure and removes them immediately
     get isFetching() {
       return fetching();
     },
-    data: { pages: [{ items: [thread('Known discussion', null)] }] },
+    data: {
+      pages: [
+        {
+          entries: [
+            { type: 'message', message: thread('Known discussion', null) },
+          ],
+        },
+      ],
+    },
     hasNextPage: true,
     fetchNextPage: loadMore,
   });
@@ -326,7 +353,15 @@ it('hides cached comments when a linked message denies access and retries the li
   const refetch = vi.fn();
   mocks.timeline.mockReturnValue({
     isPending: false,
-    data: { pages: [{ items: [thread('Cached discussion', null)] }] },
+    data: {
+      pages: [
+        {
+          entries: [
+            { type: 'message', message: thread('Cached discussion', null) },
+          ],
+        },
+      ],
+    },
     refetch,
   });
   const view = render(() => (

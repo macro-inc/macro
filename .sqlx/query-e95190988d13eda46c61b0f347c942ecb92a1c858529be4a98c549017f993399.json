@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE comms_channels SET profile_picture_id = $2, updated_at = NOW() WHERE id = $1 AND profile_picture_id IS DISTINCT FROM $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e95190988d13eda46c61b0f347c942ecb92a1c858529be4a98c549017f993399"
+}

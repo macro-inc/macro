@@ -12,6 +12,7 @@ import {
   useSendMessageMutation,
 } from '@queries/messages/mutations';
 import { useMessageTimelineQuery } from '@queries/messages/timeline';
+import { timelineMessages } from '@queries/messages/timeline-entries';
 import type { MessageParent } from '@service-storage/messages';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { MessageThread } from './MessageThread';
@@ -88,7 +89,7 @@ export function EntityConversation(props: {
   const messages = () =>
     target.resolved() && !query.isPending && !unavailable()
       ? (query.data?.pages
-          .flatMap((page) => page.items)
+          .flatMap(timelineMessages)
           // Only known unanchored roots belong in Discussion. Live roots have
           // undefined anchors until their thread metadata is fetched.
           .filter(

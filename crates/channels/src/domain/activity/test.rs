@@ -24,6 +24,52 @@ fn envelope(event: ChannelTopicEvent) -> Event<ChannelTopicEvent> {
 const CHANNEL_ID: Uuid = Uuid::from_u128(7);
 
 #[test]
+fn rename_preserves_names_and_skips_noops() {
+    let metadata = crate::domain::broker_events::ChannelUpdatedMetadata {
+        channel_id: CHANNEL_ID,
+        actor: user("macro|actor@example.com"),
+        previous_name: Some("Before".into()),
+        channel_name: Some("After".into()),
+    };
+    let event = envelope(ChannelTopicEvent::Updated(metadata.clone()));
+    let Ingest::Insert(rows) = event.event.ingest(event.event_id) else {
+        panic!("expected rename");
+    };
+    assert_eq!(
+        rows[0].action,
+        Action::Renamed(::activity::domain::models::NameChange {
+            from: Some("Before".into()),
+            to: Some("After".into()),
+        })
+    );
+    let unchanged = envelope(ChannelTopicEvent::Updated(
+        crate::domain::broker_events::ChannelUpdatedMetadata {
+            channel_name: metadata.previous_name.clone(),
+            ..metadata
+        },
+    ));
+    assert_eq!(unchanged.event.ingest(unchanged.event_id), Ingest::Ignore);
+}
+
+#[test]
+fn picture_changes_are_attributed_and_replay_stable() {
+    let event = envelope(ChannelTopicEvent::PictureChanged(
+        crate::domain::broker_events::ChannelPictureChangedMetadata {
+            channel_id: CHANNEL_ID,
+            actor: user("macro|actor@example.com"),
+        },
+    ));
+    let first = event.event.ingest(event.event_id);
+    assert_eq!(first, event.event.ingest(event.event_id));
+    let Ingest::Insert(rows) = first else {
+        panic!("expected picture activity");
+    };
+    assert_eq!(rows[0].action, Action::PictureChanged);
+    assert_eq!(rows[0].actor.as_ref(), "macro|actor@example.com");
+    assert_eq!(rows[0].entity_id, CHANNEL_ID.to_string());
+}
+
+#[test]
 fn message_posted_maps_to_messaged_with_triggered_by_as_subject() {
     let created_at = Utc::now();
     let event = envelope(ChannelTopicEvent::MessagePosted(

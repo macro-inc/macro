@@ -308,7 +308,7 @@ export function ThreadList(props: ThreadListProps) {
         element?.addEventListener('touchstart', onTouchStart, {
           passive: true,
         });
-      const cleanup = observeElementOffset(instance, (offset, isScrolling) => {
+      const reportOffset = (offset: number, isScrolling: boolean) => {
         // An instant navigation/correction must not extend gesture compensation.
         const isOwnScroll =
           programmaticOffset !== undefined &&
@@ -321,8 +321,18 @@ export function ThreadList(props: ThreadListProps) {
             isScrolling && !isOwnScroll
           ) ?? offset;
         callback(logicalOffset, isScrolling && !isOwnScroll);
+      };
+      const cleanup = observeElementOffset(instance, reportOffset);
+      // A short list clamps the initial end scroll to zero without emitting a
+      // scroll event. Read it back after the initial write so the virtual range
+      // includes the first rows, before paint.
+      let disposed = false;
+      queueMicrotask(() => {
+        if (!disposed && element?.isConnected)
+          reportOffset(element.scrollTop, false);
       });
       return () => {
+        disposed = true;
         cleanup?.();
         if (onWheel) element?.removeEventListener('wheel', onWheel);
         if (onTouchStart)

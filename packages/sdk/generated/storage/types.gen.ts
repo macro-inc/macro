@@ -2810,6 +2810,20 @@ export type ChannelParticipantRemovedMetadata = {
 };
 
 /**
+ * Metadata for a channel picture update, including removals.
+ */
+export type ChannelPictureChangedMetadata = {
+    /**
+     * User who changed the picture.
+     */
+    actor: MacroUserIdStr;
+    /**
+     * Channel whose picture changed.
+     */
+    channel_id: string;
+};
+
+/**
  * Preview entry for a single channel id.
  */
 export type ChannelPreview = (ChannelPreviewData & {
@@ -2887,6 +2901,12 @@ export type ChannelThreadFilters = {
  * Events that can be published to [`MacroChannelsTopic`].
  */
 export type ChannelTopicEvent = {
+    event_type: 'channel.picture_changed';
+    /**
+     * A channel's profile picture changed.
+     */
+    metadata: ChannelPictureChangedMetadata;
+} | {
     event_type: 'channel.created';
     /**
      * A channel was created.
@@ -7193,11 +7213,11 @@ export type MessageChange = {
  */
 export type MessageCursor = {
     /**
-     * Last root creation time.
+     * Last message creation time or activity occurrence time.
      */
     created_at: string;
     /**
-     * Last root UUID, used to break timestamp ties.
+     * Last entry UUID, used to break timestamp ties across both sources.
      */
     id: string;
 };
@@ -7244,9 +7264,14 @@ export type MessageListItem = Message & {
 };
 
 /**
- * Bidirectional, bounded timeline page, ordered newest root first.
+ * Bidirectional, bounded timeline page, ordered newest first.
  */
 export type MessagePage = {
+    /**
+     * System activity within the same window when requested, newest first.
+     * Clients merge it with `items` by `(created_at | occurred_at, id)`.
+     */
+    activity?: Array<TimelineActivity>;
     /**
      * Root messages with bounded previews.
      */
@@ -7377,6 +7402,10 @@ export type MessageTimelineQuery = {
      * Restrict roots to this set, for selected source threads.
      */
     ids?: Array<string>;
+    /**
+     * Merge the parent's selected system activity into the same bounded page.
+     */
+    include_activity?: boolean;
     /**
      * Include whole-thread tombstones when reconciling persisted document marks.
      */
@@ -10438,6 +10467,32 @@ export type ThreadState = {
      * User who owns this discussion, including imported discussions.
      */
     user_id: string;
+};
+
+/**
+ * A displayable fact returned together with a message page.
+ */
+export type TimelineActivity = {
+    /**
+     * Durable action tag. Unknown tags remain representable during rollouts.
+     */
+    action: string;
+    /**
+     * Principal who performed the action.
+     */
+    actor_id: string;
+    /**
+     * Stable activity identity, independent of message ids.
+     */
+    id: string;
+    /**
+     * Immutable chronological position.
+     */
+    occurred_at: string;
+    /**
+     * The action's stored payload.
+     */
+    payload?: unknown;
 };
 
 /**

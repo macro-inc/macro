@@ -147,6 +147,15 @@ impl ToolActivityAction {
             },
             RecordedAction::Known(Action::TaskAdded(_)) => Self::TaskAdded,
             RecordedAction::Known(Action::TaskRemoved(_)) => Self::TaskRemoved,
+            RecordedAction::Known(
+                action @ (Action::Renamed(_) | Action::PictureChanged | Action::CallEnded(_)),
+            ) => {
+                let (tag, payload) = action.to_columns();
+                Self::Unknown {
+                    tag: tag.to_owned(),
+                    payload,
+                }
+            }
             RecordedAction::Unknown { tag, payload } => Self::Unknown { tag, payload },
         }
     }
