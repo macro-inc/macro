@@ -223,6 +223,7 @@ function TreeItem(props: {
       <Show when={props.expanded !== undefined}>
         <span class="absolute right-(--sidebar-action-inset) top-1/2 flex -translate-y-1/2">
           <Control
+            class="rounded-md"
             label={`${props.expanded ? 'Collapse' : 'Expand'} ${props.label}`}
             aria-expanded={props.expanded}
             onClick={props.onToggle}
