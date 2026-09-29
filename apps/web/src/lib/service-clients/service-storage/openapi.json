@@ -29496,6 +29496,7 @@
             "required": [
               "id",
               "name",
+              "isArchived",
               "ownerId",
               "botId",
               "harness",
@@ -29522,6 +29523,10 @@
                 "type": "string",
                 "format": "uuid",
                 "description": "The agent session uuid"
+              },
+              "isArchived": {
+                "type": "boolean",
+                "description": "Whether the session is archived and read-only."
               },
               "name": {
                 "type": "string",

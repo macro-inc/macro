@@ -214,6 +214,7 @@ async fn touch_entity_updated(
 struct AgentSessionRow {
     id: Uuid,
     name: String,
+    is_archived: bool,
     owner_id: String,
     thread_id: Option<Uuid>,
     thread_parent: Option<Json<MessageParent>>,
@@ -249,6 +250,7 @@ impl TryFrom<AgentSessionRow> for AgentSession {
         Ok(Self {
             id: AgentSessionId::new_from_uuid(row.id),
             name: row.name,
+            is_archived: row.is_archived,
             owner_id: Owner::from_principal_str(&row.owner_id)
                 .context("agent session has an unparseable owner")?,
             thread_id: row.thread_id,
@@ -351,7 +353,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
             RETURNING
-                id, name, owner_id, thread_id, originating_message_id, bot_id,
+                id, name, is_archived, owner_id, thread_id, originating_message_id, bot_id,
                 model, harness, repo_url, repo_branch, pull_request_url, workspace, sandbox_size, instructions,
                 mcp_scope, mcp_servers, acp_session_id, status,
                 status_event_name, created_at, modified_at,
@@ -460,7 +462,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
             AgentSessionRow,
             r#"
             SELECT
-                id, name, owner_id, thread_id, originating_message_id, bot_id,
+                id, name, is_archived, owner_id, thread_id, originating_message_id, bot_id,
                 model, harness, repo_url, repo_branch, pull_request_url, workspace, sandbox_size, instructions,
                 mcp_scope, mcp_servers, acp_session_id, status,
                 status_event_name, agent_session.created_at, modified_at,
@@ -568,7 +570,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
             AgentSessionRow,
             r#"
             SELECT
-                id, name, owner_id, thread_id, originating_message_id, bot_id,
+                id, name, is_archived, owner_id, thread_id, originating_message_id, bot_id,
                 model, harness, repo_url, repo_branch, pull_request_url, workspace, sandbox_size, instructions,
                 mcp_scope, mcp_servers, acp_session_id, status,
                 status_event_name, agent_session.created_at, modified_at,
@@ -609,7 +611,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
             AgentSessionRow,
             r#"
             SELECT
-                id, name, owner_id, thread_id, originating_message_id, bot_id,
+                id, name, is_archived, owner_id, thread_id, originating_message_id, bot_id,
                 model, harness, repo_url, repo_branch, pull_request_url, workspace, sandbox_size, instructions,
                 mcp_scope, mcp_servers, acp_session_id, status,
                 status_event_name, agent_session.created_at, modified_at,
@@ -643,7 +645,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
             AgentSessionRow,
             r#"
             SELECT
-                id, name, owner_id, thread_id, originating_message_id, bot_id,
+                id, name, is_archived, owner_id, thread_id, originating_message_id, bot_id,
                 model, harness, repo_url, repo_branch, pull_request_url, workspace, sandbox_size, instructions,
                 mcp_scope, mcp_servers, acp_session_id, status,
                 status_event_name, agent_session.created_at, modified_at,
@@ -679,7 +681,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
             AgentSessionRow,
             r#"
             SELECT
-                id, name, owner_id, thread_id, originating_message_id, bot_id,
+                id, name, is_archived, owner_id, thread_id, originating_message_id, bot_id,
                 model, harness, repo_url, repo_branch, pull_request_url, workspace, sandbox_size, instructions,
                 mcp_scope, mcp_servers, acp_session_id, status,
                 status_event_name, agent_session.created_at, modified_at,
@@ -867,6 +869,40 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
         Ok(())
     }
 
+    async fn set_archived(&self, id: AgentSessionId, is_archived: bool) -> Result<()> {
+        let mut transaction = self
+            .pool
+            .begin()
+            .await
+            .context("begin agent session set_archived")?;
+        let modified_at = sqlx::query_scalar!(
+            r#"
+            UPDATE agent_session
+            SET is_archived = $2,
+                modified_at = CASE
+                    WHEN is_archived IS DISTINCT FROM $2 THEN NOW()
+                    ELSE modified_at
+                END
+            WHERE id = $1
+            RETURNING modified_at
+            "#,
+            id.as_uuid(),
+            is_archived,
+        )
+        .fetch_optional(&mut *transaction)
+        .await
+        .context("failed to persist agent session archive state")?;
+        let Some(modified_at) = modified_at else {
+            return Err(anyhow::anyhow!("agent session not found").into());
+        };
+        touch_entity_updated(&mut transaction, id, Some(modified_at)).await?;
+        transaction
+            .commit()
+            .await
+            .context("commit agent session set_archived")?;
+        Ok(())
+    }
+
     async fn set_name_if_default(&self, id: AgentSessionId, name: &str) -> Result<bool> {
         let mut transaction = self
             .pool
@@ -880,6 +916,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
                 modified_at = NOW()
             WHERE id = $1
               AND name = $3
+              AND NOT is_archived
             RETURNING modified_at
             "#,
             id.as_uuid(),

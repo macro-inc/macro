@@ -393,9 +393,9 @@ export const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
       onOpenChange={props.onMenuOpenChange}
     >
       <Dropdown.Trigger
-        variant="plain"
+        variant="ghost"
         class={cn(
-          'flex items-center rounded-md cursor-default text-ink-extra-muted not-disabled:hover:bg-ink/3 h-9',
+          'flex items-center cursor-default text-ink-extra-muted not-disabled:hover:bg-ink/3 h-9',
           props.compact
             ? 'justify-center gap-0 p-0'
             : 'justify-start gap-3 px-1.5 py-1'

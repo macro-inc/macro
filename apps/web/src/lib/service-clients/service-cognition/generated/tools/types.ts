@@ -9,6 +9,15 @@
  */
 
 /**
+ * Tool-facing status of a task assignment.
+ */
+export type TaskAssignmentStatus =
+  | 'assigned'
+  | 'moved'
+  | 'not_a_task'
+  | 'not_found'
+  | 'skipped_no_permission';
+/**
  * Content of a bash code execution response - either a result or an error
  */
 export type BashCodeExecutionContent =
@@ -1147,6 +1156,10 @@ export type TextEditorCodeExecutionContent =
       type: 'text_editor_code_execution_tool_result_error';
     });
 /**
+ * Tool-facing status of a task unassignment.
+ */
+export type TaskUnassignmentStatus = 'unassigned' | 'not_assigned';
+/**
  * How much of a recurring series an update applies to.
  */
 export type UpdateScopeInput = 'all' | 'this_event';
@@ -1238,6 +1251,42 @@ export type ReadThreadReadContent =
       type: 'itemPreviews';
     };
 
+/**
+ * Move tasks into an initiative. A task already in another initiative is moved; duplicates are ignored; at most 100 unique task ids per call. Requires edit access to the initiative and to each task. Returns one status per task id: assigned, moved, not_a_task, not_found, or skipped_no_permission.
+ */
+export interface AssignTasksToInitiative {
+  /**
+   * The id of the initiative to assign tasks to. Requires edit access.
+   */
+  initiativeId: string;
+  /**
+   * Task document ids to assign, at least one and at most 100 unique ids per call. Duplicates are ignored. Requires edit access to each task.
+   */
+  taskIds: string[];
+}
+/**
+ * Response from [`AssignTasksToInitiative`].
+ */
+export interface AssignTasksToInitiativeResponse {
+  /**
+   * The id of the initiative receiving the tasks.
+   */
+  initiativeId: string;
+  /**
+   * Outcomes in request order after removing duplicates.
+   */
+  results: TaskAssignmentOutcome[];
+}
+/**
+ * The result of assigning one task to an initiative.
+ */
+export interface TaskAssignmentOutcome {
+  /**
+   * The task id this outcome describes.
+   */
+  taskId: string;
+  status: TaskAssignmentStatus;
+}
 /**
  * Execute a bash command in a sandboxed environment using Claude's built-in code execution tool.
  */
@@ -6539,6 +6588,42 @@ export interface TextEditorCodeExecutionResult {
  */
 export interface TextEditorCodeExecutionToolError {
   error_code: CodeExecutionErrorCode;
+}
+/**
+ * Move tasks out of a specific initiative (project). Requires edit access to the initiative and each task; at most 100 unique tasks. Returns one status per task id: unassigned, or not_assigned when the task was not in this initiative. Tasks in other initiatives are left unchanged. An access or service failure stops the batch; earlier removals may have succeeded.
+ */
+export interface UnassignTasksFromInitiative {
+  /**
+   * The id of the initiative to remove tasks from. Requires edit access.
+   */
+  initiativeId: string;
+  /**
+   * Task document ids to remove. Provide at least one and at most 100 unique ids; duplicates are ignored. Requires edit access to each task.
+   */
+  taskIds: string[];
+}
+/**
+ * Response from [`UnassignTasksFromInitiative`].
+ */
+export interface UnassignTasksFromInitiativeResponse {
+  /**
+   * The id of the initiative the tasks were removed from.
+   */
+  initiativeId: string;
+  /**
+   * Outcomes in request order after removing duplicates.
+   */
+  results: TaskUnassignmentOutcome[];
+}
+/**
+ * The result of removing one task from an initiative.
+ */
+export interface TaskUnassignmentOutcome {
+  /**
+   * The task id this outcome describes.
+   */
+  taskId: string;
+  status: TaskUnassignmentStatus;
 }
 /**
  * Update an existing calendar event. Only the supplied fields change; omitted fields keep their current values. The change is written to Google immediately and attendees are notified of it, so confirm details with the user first. Get the `eventId` from ListCalendarEvents.

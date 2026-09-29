@@ -92,7 +92,6 @@ export function DeleteDialog(props: DeleteDialogProps) {
             type="button"
             variant="ghost"
             depth={2}
-            class="rounded-lg"
             disabled={props.pending}
             onClick={close}
           >
@@ -100,9 +99,8 @@ export function DeleteDialog(props: DeleteDialogProps) {
           </Button>
           <Button
             type="button"
-            variant="danger"
+            variant="strong"
             depth={2}
-            class="rounded-lg"
             disabled={!canDelete()}
             onClick={deleteItem}
           >

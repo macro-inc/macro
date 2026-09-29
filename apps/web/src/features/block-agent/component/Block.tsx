@@ -29,6 +29,7 @@ import { AgentComposer } from './AgentComposer';
 import { AgentPreviewBanner } from './AgentPreviewBanner';
 import { AgentSessionReadMarker } from './AgentSessionReadMarker';
 import { AgentSplitHeader } from './AgentSplitHeader';
+import { ArchivedSessionFooter } from './ArchivedSessionFooter';
 import { AgentSidePanelSections } from './sidepanel/AgentSidePanelSections';
 import { Transcript } from './Transcript';
 
@@ -152,15 +153,24 @@ function AgentBlockContent(props: {
                     the same height as the channel input. */}
                 <div class="flex w-full justify-center shrink-0 px-4 pb-2.5 pointer-events-auto touch:px-(--mobile-chrome-gutter) touch:pb-0">
                   <div class="macro-message-width mx-auto flex flex-col gap-2">
-                    <ChangesHandoff />
-                    <ReviewNotesDock />
-                    <AgentComposer
-                      autofocus={
-                        canAutofocusSplitContent &&
-                        !navigatedFromJK() &&
-                        !searchTarget()
+                    <Show
+                      when={!session()?.isArchived}
+                      fallback={
+                        <Show when={sessionId()}>
+                          {(id) => <ArchivedSessionFooter sessionId={id()} />}
+                        </Show>
                       }
-                    />
+                    >
+                      <ChangesHandoff />
+                      <ReviewNotesDock />
+                      <AgentComposer
+                        autofocus={
+                          canAutofocusSplitContent &&
+                          !navigatedFromJK() &&
+                          !searchTarget()
+                        }
+                      />
+                    </Show>
                   </div>
                 </div>
               </FloatRegionOrInline>

@@ -6,6 +6,8 @@
 #[cfg(test)]
 mod test;
 
+use std::str::ParseBoolError;
+
 use bot_id::NonSystemBotId;
 use macro_authorization::{BotAuthentication, BotScope, MacroAuthorization};
 use model_owner::CreationPrincipal;
@@ -19,21 +21,18 @@ pub enum NonUserOwners {
     Enabled,
 }
 
-/// `ENABLE_NON_USER_OWNERS` was not `true` or `false`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
-#[error("ENABLE_NON_USER_OWNERS must be `true` or `false`")]
-pub struct NonUserOwnersParseError;
-
 impl NonUserOwners {
-    /// Parse the `ENABLE_NON_USER_OWNERS` gate.
+    /// Parse the gate from a config value the caller already loaded.
     ///
-    /// A missing value is disabled, the same as `false`.
-    pub fn parse_gate(value: Option<&str>) -> Result<Self, NonUserOwnersParseError> {
-        match value.unwrap_or("false").parse::<bool>() {
-            Ok(true) => Ok(Self::Enabled),
-            Ok(false) => Ok(Self::Disabled),
-            Err(_) => Err(NonUserOwnersParseError),
-        }
+    /// `"true"` enables non-user owners. `"false"` or a missing value disables
+    /// them. Any other value is an error. This never reads the environment.
+    pub fn from_config_value(value: Option<&str>) -> Result<Self, ParseBoolError> {
+        let enabled = value.unwrap_or("false").parse::<bool>()?;
+        Ok(if enabled {
+            Self::Enabled
+        } else {
+            Self::Disabled
+        })
     }
 }
 

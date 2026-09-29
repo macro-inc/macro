@@ -148,6 +148,18 @@ export const agentHarnessServiceClient = {
     ).then((result) => result.map(() => undefined));
   },
 
+  setArchived(sessionId: string, isArchived: boolean) {
+    return fetchWithToken<Record<string, never>>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/archived`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isArchived }),
+        errorResponseHandler: sessionError,
+      }
+    ).then((result) => result.map(() => undefined));
+  },
+
   /**
    * Returns the accepted action's id — which the fold stamps as `requestId`
    * on the folded message the action derives — plus whether the action went

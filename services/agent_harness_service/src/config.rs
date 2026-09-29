@@ -227,7 +227,8 @@ impl Config {
 
     /// The parsed `ENABLE_NON_USER_OWNERS` gate. Missing is disabled.
     pub fn non_user_owners(&self) -> anyhow::Result<NonUserOwners> {
-        NonUserOwners::parse_gate(self.enable_non_user_owners.value()).map_err(Into::into)
+        NonUserOwners::from_config_value(self.enable_non_user_owners.value())
+            .context("ENABLE_NON_USER_OWNERS must be `true` or `false`")
     }
 
     /// Load the configuration from the environment.

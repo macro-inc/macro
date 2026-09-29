@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT configuration AS \"configuration: Json<UsageRollout>\" FROM ai_billing_usage_rollout WHERE policy = 'public_allowance_v1'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "configuration: Json<UsageRollout>",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "a4ad80f1fba67280db263dc839150756f5b4f640d9212918eec8116c26138425"
+}

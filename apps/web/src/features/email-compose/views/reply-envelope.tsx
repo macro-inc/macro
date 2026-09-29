@@ -145,7 +145,6 @@ export function ReplyEnvelope(props: ReplyEnvelopeProps) {
                     <Show when={!showCc()}>
                       <Button
                         size="sm"
-                        class="rounded-lg"
                         disabled={props.disabled()}
                         onClick={() => {
                           setShowCc(true);
@@ -158,7 +157,6 @@ export function ReplyEnvelope(props: ReplyEnvelopeProps) {
                     <Show when={!showBcc()}>
                       <Button
                         size="sm"
-                        class="rounded-lg"
                         disabled={props.disabled()}
                         onClick={() => {
                           setShowBcc(true);
@@ -254,7 +252,7 @@ export function ReplyEnvelope(props: ReplyEnvelopeProps) {
           <Button
             variant="ghost"
             size="icon-sm"
-            class="shrink-0 rounded-full bg-transparent text-ink-placeholder"
+            class="shrink-0 bg-transparent text-ink-placeholder"
             tooltip={mobileDrawerCcBccOpen() ? 'Hide Cc/Bcc' : 'Show Cc/Bcc'}
             aria-expanded={mobileDrawerCcBccOpen()}
             onClick={toggleMobileDrawerCcBcc}

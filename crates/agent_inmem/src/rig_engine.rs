@@ -104,12 +104,13 @@ impl TurnEngine for RigTurnEngine {
         let (parts, receiver) = mpsc::channel(PART_BUFFER);
         let db = self.db.clone();
         let tool_context = self.tool_context.clone();
+        let metering = agent::MeteringContext::current();
         tokio::spawn(
-            async move {
+            agent::MeteringContext::carry(metering, async move {
                 if let Err(error) = drive_turn(db, tool_context, request, &parts).await {
                     let _ = parts.send(Err(error)).await;
                 }
-            }
+            })
             .in_current_span(),
         );
         receiver

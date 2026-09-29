@@ -41,8 +41,10 @@ import { match } from 'ts-pattern';
 import { v5 as uuidv5 } from 'uuid';
 import { buildGraphqlEntitySoupInput } from '../../soup/graphql/entity-input';
 import {
-  buildOptimisticGroupedPropertyUpdates,
+  type buildOptimisticGroupedPropertyUpdates,
+  createGroupedPropertyPreparation,
   groupedPropertyKeys,
+  type PrepareGroupedPropertyUpdates,
 } from '../../soup/grouped/graphql-optimistic';
 import {
   buildOptimisticSetEntityProperty,
@@ -217,7 +219,8 @@ function getPropertyDefinitionId(
 }
 
 async function prepareMutationArgs(
-  input: GraphqlEntityPropertyMutationInput
+  input: GraphqlEntityPropertyMutationInput,
+  prepareGrouped?: PrepareGroupedPropertyUpdates
 ): Promise<SetEntityPropertyArgs> {
   if (input.kind === 'add') {
     return {
@@ -268,8 +271,9 @@ async function prepareMutationArgs(
       }
       const oldGroupKeys = groupedPropertyKeys(input.property);
       const newGroupKeys = groupedPropertyKeys(input.apiValues);
-      const grouped = await buildOptimisticGroupedPropertyUpdates({
-        host,
+      const grouped = await (
+        prepareGrouped ?? createGroupedPropertyPreparation(host)
+      )({
         entityId: input.entityId,
         propertyDefinitionId,
         oldGroupKeys: oldGroupKeys ?? [],
@@ -352,9 +356,10 @@ type EntityPropertyExecution = Parameters<
 
 async function executeGraphqlEntityPropertyMutation(
   { client, mutation, input, context }: EntityPropertyExecution,
-  onEnqueued?: () => void
+  onEnqueued?: () => void,
+  prepareGrouped?: PrepareGroupedPropertyUpdates
 ) {
-  const args = await prepareMutationArgs(input);
+  const args = await prepareMutationArgs(input, prepareGrouped);
   const variables: SetEntityPropertyMutationVariables = {
     input: {
       entityType: args.entityType,
@@ -515,9 +520,11 @@ export function createGraphqlBulkSaveEntityPropertiesMutation<Context = void>(
       let permanentError: Error | undefined;
 
       const pending = [];
-      const settlements = observePropertyMutationSettlements(
-        getGraphqlCacheHost()
-      );
+      const host = getGraphqlCacheHost();
+      const prepareGrouped = host
+        ? createGroupedPropertyPreparation(host)
+        : undefined;
+      const settlements = observePropertyMutationSettlements(host);
       try {
         for (const item of input.properties) {
           let acknowledge!: () => void;
@@ -533,7 +540,8 @@ export function createGraphqlBulkSaveEntityPropertiesMutation<Context = void>(
                   input: { kind: 'save', ...item },
                   context,
                 },
-                acknowledge
+                acknowledge,
+                prepareGrouped
               );
               acknowledge();
               const disposition = mutationDisposition(result);

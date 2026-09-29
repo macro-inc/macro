@@ -383,7 +383,6 @@ export function EventForm(props: EventFormProps) {
         <Button
           type="button"
           variant="ghost"
-          class="rounded-lg"
           disabled={formIsDisabled()}
           onClick={props.onCancel}
         >
@@ -391,9 +390,8 @@ export function EventForm(props: EventFormProps) {
         </Button>
         <Button
           type="submit"
-          variant={controller.canSave() ? 'accent' : 'ghost'}
+          variant="strong"
           depth={3}
-          class="rounded-lg border-0"
           disabled={!controller.canSave() || formIsDisabled()}
           aria-label={isEdit() ? 'Save' : 'Create event'}
         >

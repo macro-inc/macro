@@ -97,6 +97,7 @@ impl AgentSessionRepo for StubSessions {
             pull_request_url: None,
             workspace: "/workspace".to_owned(),
             name: DEFAULT_AGENT_SESSION_NAME.to_owned(),
+            is_archived: false,
             sandbox_size: SandboxSize::Default,
             instructions: None,
             mcp_servers: Default::default(),
@@ -174,6 +175,10 @@ impl AgentSessionRepo for StubSessions {
 
     async fn set_name(&self, _id: AgentSessionId, _name: &str) -> SessionResult<()> {
         unimplemented!("naming sessions is the session actor's job")
+    }
+
+    async fn set_archived(&self, _id: AgentSessionId, _is_archived: bool) -> SessionResult<()> {
+        unimplemented!("archiving sessions is the harness service's job")
     }
 
     async fn set_name_if_default(&self, _id: AgentSessionId, _name: &str) -> SessionResult<bool> {
@@ -430,25 +435,28 @@ impl CursorApiKeys for UnavailableKeys {
     }
 }
 
-/// A user who reaches no repository through the GitHub App: the chooser
-/// short-circuits on an empty listing, so these tests drive the whole spawn
+/// A user who reaches one repository through the GitHub App: the chooser
+/// short-circuits on a single candidate, so these tests drive the whole spawn
 /// path without a model call.
-struct NoRepositories;
+struct OneRepository;
 
 #[async_trait::async_trait]
-impl ReachableRepositories for NoRepositories {
+impl ReachableRepositories for OneRepository {
     async fn for_user(
         &self,
         _user: &MacroUserIdStr<'_>,
     ) -> Result<Vec<crate::domain::model::ReachableRepository>> {
-        Ok(Vec::new())
+        Ok(vec![crate::domain::model::ReachableRepository {
+            url: "https://github.com/macro-inc/macro".into(),
+            default_branch: Some("main".into()),
+        }])
     }
 }
 
 fn manager(
     base_url: String,
     sessions: StubSessions,
-) -> CursorContainerManager<StubSessions, StubKeys, NoRepositories, NoArtifactStore> {
+) -> CursorContainerManager<StubSessions, StubKeys, OneRepository, NoArtifactStore> {
     manager_with_keys(base_url, sessions, StubKeys::connected())
 }
 
@@ -456,12 +464,12 @@ fn manager_with_keys<Keys: CursorApiKeys>(
     base_url: String,
     sessions: StubSessions,
     keys: Keys,
-) -> CursorContainerManager<StubSessions, Keys, NoRepositories, NoArtifactStore> {
+) -> CursorContainerManager<StubSessions, Keys, OneRepository, NoArtifactStore> {
     CursorContainerManager::with_memory_journal(
         keys,
         base_url,
         sessions,
-        Arc::new(NoRepositories),
+        Arc::new(OneRepository),
         NoArtifactStore,
     )
 }

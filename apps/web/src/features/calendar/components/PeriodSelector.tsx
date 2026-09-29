@@ -148,7 +148,7 @@ export function PeriodSelector(props: { isNarrow?: boolean }) {
         aria-label="Choose calendar view"
         variant="ghost"
         size="lg"
-        class="shrink-0 rounded-full border-transparent bg-transparent text-sm"
+        class="shrink-0 border-transparent bg-transparent text-sm"
       >
         {CALENDAR_VIEWS.find((view) => view.value === controls.activeView())
           ?.label ?? 'Week'}

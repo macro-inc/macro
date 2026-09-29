@@ -18,6 +18,17 @@
    failure does not block the remaining content; signup retries repair tags
    without resetting task priorities. The guide waits until its tag IDs resolve.
 
+## Hosted-dev proxy SSO
+
+On an allowed OAuth origin such as `https://localhost:<port>`, Google/SSO
+sign-in navigates the browser to `/__macro_dev/gateway/auth/login/sso` with
+`is_mobile=true` to request the session-code handoff. The `original_url`
+remains the browser destination (including its query and hash). Returning
+from the provider redeems the session code to establish cookies locally.
+This browser flow must not open a native authentication session. Verify the
+redirect separately from provider completion; arbitrary development hostnames
+are not on the hosted OAuth redirect allowlist.
+
 ## Native iOS 27
 
 The native welcome screen offers `Create new account` and `Log into existing
@@ -36,6 +47,29 @@ For simulator checks, `xcrun devicectl device process launch --device <udid>
 Signed universal links and share-sheet flows still need end-to-end verification;
 see the [Tauri guide](../../apps/web/tauri/src-tauri/README.md#ios-27-scene-lifecycle)
 and [repeatable iOS smoke test](../../apps/web/tests/native/ios/README.md).
+
+## Native Android
+
+The Android welcome screen also offers `Create new account` and `Log into existing
+account`. Google sign-in opens a system browser Auth Tab; completing or canceling
+returns to Macro. Cancel and retry should open a fresh attempt. Enter provider
+passwords and verification codes only in that browser, never in agent messages.
+For browsers using the Custom Tabs fallback, verify that the callback returns to
+the original Macro task. A callback for another attempt must leave the current
+attempt pending; a callback after process death must not restore that attempt.
+
+After signing in, test background/foreground, force-stop/relaunch, logout, and
+signing in as another account. An entity link opened while signed out should
+remain pending until authentication completes. The destination expires after
+30 minutes and explicit logout clears it. Test both cold and warm delivery;
+forcing an Android intent to Macro proves routing, not verified App Links.
+Root links must preserve query parameters through the welcome or inbox redirect,
+including when Android delivers the link after the session gate mounts. Test
+with a harmless marker query; checkout return parameters can trigger analytics
+and license refreshes and should only be exercised in a checkout test.
+See [Android development](../ANDROID_DEVELOPMENT.md) for build commands and
+certificate-dependent domain verification. Provider completion, account linking,
+and verified links still require end-to-end qualification.
 
 ## Mailpit (local email)
 

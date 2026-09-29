@@ -9,9 +9,22 @@ keeps loaded items visible. Wait for real rows before navigating or selecting.
 
 ## Top bars
 
-Right-aligned split-header actions (including Calendar's touch/preview New event
-and Channel's Call and Ask Macro) are borderless with a rounded-xl background on
-hover. Channel header tabs use fully rounded tracks and selected pills.
+Low-emphasis right-aligned split-header actions (including Calendar's touch/preview
+New event and Channel's idle Call and Ask Macro) are borderless with a rounded-xl
+background on hover. Emphasized variants retain their treatment, including an
+active call's green ink and outline frame. Channel header tabs use fully rounded tracks and
+selected pills. Button sizes do not change variant colors or framing; individual
+framed controls default to glass on touch and flat on desktop. Use `glass={true}`
+to enable glass on all devices, or `glass={false}` to disable it everywhere.
+Embedded and low-emphasis actions use `ghost`; inline calendar-invitation text
+actions remove the transparent border to keep their text alignment.
+
+## Dialog actions
+
+Cancel uses a ghost button. Confirm, save, and create actions use strong: the
+outline surface and border with semibold text, without inverted colors. Disabled
+and pending primary actions retain the strong variant. Mobile confirmation drawers
+use the same action hierarchy.
 
 ## User cards
 
@@ -1145,7 +1158,8 @@ Join-preview and in-call controls use the standard Macro icon buttons. Pause
 over the microphone, camera, or background group to reveal an animated settings popover
 above the call toolbar; click its caret to keep it open. Brief pointer passes
 do not open settings, and moving into the popover keeps it open. Settings
-respect reduced-motion preferences.
+respect reduced-motion preferences. The toolbar and settings panels use Macro's
+shared glass surface in both light and dark themes.
 Audio settings include microphone, speaker, and noise suppression. Camera
 settings include the camera selector. Clicking the background icon toggles the
 selected effect off/on, restoring the last blur strength or image (Strong blur
@@ -1155,6 +1169,11 @@ and touch access. Click outside or press Escape to close the settings.
 The controls also work by keyboard and touch.
 
 ### Sharing a call
+
+With quick calls enabled, channel calls use the same **Copy Meeting Url** button
+as instant and scheduled calls. Clicking it creates the share link and copies it;
+opening the call tab alone does not create a link. If loading fails, click again
+to retry. If clipboard access fails, a selectable URL appears below the button.
 
 A channel call's **Share** dialog has a `Team access` control (None or View) for the same canonical
 team share. Its side panel has a `Sharing` section with one `Share with team` checkbox, and the

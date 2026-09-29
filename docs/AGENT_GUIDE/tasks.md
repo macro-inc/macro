@@ -262,6 +262,13 @@ unset priority stays unchanged. First assignments target the normalized entity
 through a fragment-rooted relation recipe: no flat/grouped Soup page discovery
 or pre-save network fetch is needed, even with more than 128 cached pages.
 Check a grouped-only row and an offline/reloaded queued edit as well.
+Property-group moves read only mounted, enabled grouped queries and their loaded
+continuations, never all historical cache variants. Verify that a move still works
+with more than 128 cached grouped pages, that duplicate split views do not multiply
+membership reads, and that closing/disabling a view stops its revalidation. Bulk
+moves share membership reads for distinct entities; repeat edits to one entity
+reread its installed optimism. Each durable mutation retains its own recovery
+queries so partial failures and offline replay still reconcile correctly.
 On success the temporary assignment is replaced
 by the server assignment without a blank cell or duplicate property; failure
 restores the unset cell. Bulk property edits install every optimistic layer before

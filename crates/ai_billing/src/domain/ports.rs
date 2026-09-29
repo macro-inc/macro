@@ -1,15 +1,52 @@
 //! Ports: what the billing service needs from the outside world, and what it
 //! offers inbound adapters.
 
+use super::financial::FundingPeriod;
 use super::ledger::SettlementPolicy;
 use super::models::{
     AllowanceDecision, AllowanceStore, BillingPeriod, BillingSettings, Entitlement,
     OpenPeriodStart, OverageChargeStatus, PeriodAllowance, PeriodLedger, Result, SeatAllowance,
     SeatGeneration, SeatUsage, SubscriptionScope, UsageSnapshot,
 };
+use super::policy::UsageAllocation;
+use ai_usage::domain::financial::{
+    BeginInvocation, FundingAuthorization, InvocationId, InvocationRecord, PendingInvocations,
+    RateSnapshot,
+};
+use ai_usage::domain::ports::FinancialFuture;
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+
+/// Durable V1 funding transactions. All mutations serialize on the existing payer
+/// account row, including legacy settlement, settings and credit purchases. Replays
+/// compare immutable request/rate/authorization/evidence facts before returning success.
+pub trait FundingRepo: Send + Sync + 'static {
+    /// Resolve the recorded seat policy at occurrence time, never today's role/catalog.
+    fn period(
+        &self,
+        seat: MacroUserIdStr<'static>,
+        at: DateTime<Utc>,
+    ) -> FinancialFuture<'_, Option<FundingPeriod>>;
+    /// Insert immutable verified facts. Reject overlapping or contradictory bindings.
+    fn record_period(&self, period: FundingPeriod) -> FinancialFuture<'_, ()>;
+    /// Reserve the entire execution ceiling before acknowledging authorization.
+    /// Funding denials are durable for this identity: later purchases/settings require
+    /// a new attempt ID, never retroactive authorization of blocked history.
+    fn authorize(
+        &self,
+        request: BeginInvocation,
+        rate: RateSnapshot,
+    ) -> FinancialFuture<'_, FundingAuthorization>;
+    /// Persist handoff once, then allocate in payer sequence, not completion order.
+    fn finalize(&self, record: InvocationRecord) -> FinancialFuture<'_, ()>;
+    /// Read recorded source consumption, never recalculate from current settings.
+    fn allocation(&self, id: InvocationId) -> FinancialFuture<'_, Option<UsageAllocation>>;
+    /// Discover unresolved and ready-but-unallocated work, including old periods.
+    fn pending(&self, query: PendingInvocations) -> FinancialFuture<'_, Vec<InvocationId>>;
+    /// Process a bounded prefix at the allocation watermark; unresolved work retains holds.
+    fn reconcile(&self, payer: MacroUserIdStr<'static>) -> FinancialFuture<'_, ()>;
+}
 
 /// Resolves who a user is billed as.
 pub trait EntitlementSource: Send + Sync + 'static {
@@ -71,6 +108,15 @@ pub struct SettlementOutcome {
 
 /// The billing tables.
 pub trait BillingRepo: Send + Sync + 'static {
+    /// Exclude recorded V1 seats from legacy analytics/settlement for this period.
+    /// A mixed-policy payer must retain only its legacy seats on this path.
+    fn legacy_seats(
+        &self,
+        payer: &MacroUserIdStr<'_>,
+        period: BillingPeriod,
+        seats: Vec<SeatAllowance>,
+    ) -> impl Future<Output = Result<Vec<SeatAllowance>>> + Send;
+
     /// The payer's settings (defaults when no row exists).
     fn settings(
         &self,
@@ -85,7 +131,9 @@ pub trait BillingRepo: Send + Sync + 'static {
         limit_cents: i64,
     ) -> impl Future<Output = Result<()>> + Send;
 
-    /// Record the subscription period synced from Stripe.
+    /// Record the legacy subscription anchor synced from Stripe. A correction
+    /// to the current start's end is allowed; older/overlapping starts cannot
+    /// replace it. This does not rewrite allowance or financial period history.
     fn set_period(
         &self,
         payer: &MacroUserIdStr<'_>,
@@ -303,7 +351,12 @@ impl SettlementTrigger for NoOpSettlementTrigger {
     fn request_settlement(&self, _payer: MacroUserIdStr<'static>) {}
 }
 
-/// The use cases offered to inbound adapters and other services.
+/// Existing billing use cases offered to inbound adapters and other services.
+///
+/// Admission and aggregate settlement here retain legacy semantics. Activated
+/// public-allowance traffic must instead use the awaited financial funding port
+/// (`ai_usage::domain::ports::InvocationFunding`) backed by the reservation and
+/// allocation rules in [`super::policy`]. It must never also enter legacy settlement.
 pub trait BillingService: Send + Sync + 'static {
     /// May `user` start another AI request?
     ///
@@ -359,12 +412,14 @@ pub trait BillingService: Send + Sync + 'static {
         stripe_reference: &str,
     ) -> impl Future<Output = Result<()>> + Send;
 
-    /// Record the payer's subscription period (webhook).
+    /// Record the payer's explicit subscription interval. Optional verified item
+    /// facts feed the gated renewal use case; bare anchors remain legacy-only.
     fn sync_period(
         &self,
         payer: &MacroUserIdStr<'_>,
         start: DateTime<Utc>,
         end: DateTime<Utc>,
+        verified: Option<super::period::SubscriptionPeriod>,
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// Record the outcome of an overage invoice (webhook). Unknown invoices

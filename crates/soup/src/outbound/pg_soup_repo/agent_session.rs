@@ -27,6 +27,7 @@ mod test;
 struct AgentSessionRow {
     id: Uuid,
     name: String,
+    is_archived: bool,
     owner_id: String,
     bot_id: Uuid,
     harness: String,
@@ -220,6 +221,7 @@ const ACCESS_SQL: &str = r#" AND cp.left_at IS NULL
     SELECT
         s.id,
         s.name,
+        s.is_archived,
         s.owner_id,
         s.bot_id,
         s.harness,
@@ -325,6 +327,7 @@ fn row_to_item(row: AgentSessionRow) -> Result<SoupItem<()>, sqlx::Error> {
     Ok(SoupItem::AgentSession(SoupAgentSession {
         id: row.id,
         name: row.name,
+        is_archived: row.is_archived,
         owner_id,
         bot_id: row.bot_id,
         harness: row.harness,

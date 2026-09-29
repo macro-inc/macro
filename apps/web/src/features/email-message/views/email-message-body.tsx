@@ -60,7 +60,7 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
               size="icon-sm"
               onClick={() => setShowFullHTML(true)}
               class={cn(
-                'rounded-md text-ink-extra-muted hover:text-ink-muted',
+                'text-ink-extra-muted hover:text-ink-muted',
                 props.isFocused ? 'hover:bg-surface' : 'hover:bg-active'
               )}
             >

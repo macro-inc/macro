@@ -190,29 +190,27 @@ fn a_row_bot_without_a_user_owns_only_in_verified_team_scope_behind_the_gate() {
 #[test]
 fn missing_or_false_gate_disables_non_user_owners() {
     assert_eq!(
-        NonUserOwners::parse_gate(None).unwrap(),
-        NonUserOwners::Disabled
+        NonUserOwners::from_config_value(None),
+        Ok(NonUserOwners::Disabled)
     );
     assert_eq!(
-        NonUserOwners::parse_gate(Some("false")).unwrap(),
-        NonUserOwners::Disabled
+        NonUserOwners::from_config_value(Some("false")),
+        Ok(NonUserOwners::Disabled)
     );
 }
 
 #[test]
 fn true_gate_enables_non_user_owners() {
     assert_eq!(
-        NonUserOwners::parse_gate(Some("true")).unwrap(),
-        NonUserOwners::Enabled
+        NonUserOwners::from_config_value(Some("true")),
+        Ok(NonUserOwners::Enabled)
     );
 }
 
 #[test]
 fn invalid_gate_value_is_rejected() {
-    let error = NonUserOwners::parse_gate(Some("yes")).unwrap_err();
-
     assert_eq!(
-        error.to_string(),
-        "ENABLE_NON_USER_OWNERS must be `true` or `false`"
+        NonUserOwners::from_config_value(Some("yes")).map_err(|error| error.to_string()),
+        Err("provided string was not `true` or `false`".to_owned())
     );
 }

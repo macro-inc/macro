@@ -37,7 +37,7 @@ function ReplyActionButton(props: {
       disabled={props.disabled}
       class={cn(
         // Island pills when floating in the mobile/tablet accessory region.
-        'touch:island touch:h-8 touch:rounded-full touch:border-0',
+        'touch:island touch:h-8 touch:border-0',
         !props.label && 'touch:w-9 touch:p-0'
       )}
       onClick={props.onClick}

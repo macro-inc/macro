@@ -212,7 +212,6 @@ export function AiUsageControls(props: {
                   variant="outline"
                   size="sm"
                   depth={2}
-                  class="rounded-full"
                   disabled={busy()}
                   onClick={() => void buyCredits(cents)}
                 >
@@ -255,7 +254,7 @@ export function AiUsageControls(props: {
                       variant={selectedLimit() === cents ? 'accent' : 'outline'}
                       size="xs"
                       depth={2}
-                      class="rounded-full px-2"
+                      class="px-2"
                       disabled={busy()}
                       onClick={() => {
                         setPendingLimit(cents);
