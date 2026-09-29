@@ -71,7 +71,6 @@ export function RenameProjectDialog(props: {
               type="button"
               variant="ghost"
               depth={2}
-              class="rounded-lg"
               disabled={pending()}
               onClick={() => props.onOpenChange(false)}
             >
@@ -81,7 +80,6 @@ export function RenameProjectDialog(props: {
               type="submit"
               variant="strong"
               depth={2}
-              class="rounded-lg"
               disabled={!canSubmit()}
             >
               {pending() ? 'Saving…' : 'Save name'}
