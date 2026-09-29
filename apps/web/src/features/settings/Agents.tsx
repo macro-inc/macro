@@ -534,7 +534,7 @@ function AgentDeleteDialog(props: {
           </Button>
           <Button
             type="button"
-            variant="danger"
+            variant="strong"
             size="sm"
             disabled={props.pending}
             onClick={props.onConfirm}
@@ -1188,7 +1188,7 @@ function AgentEditorPage(props: {
           <Button
             type="submit"
             form="agent-form"
-            variant="cta"
+            variant="strong"
             size="sm"
             disabled={!canCreate()}
           >

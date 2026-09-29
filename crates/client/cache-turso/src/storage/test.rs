@@ -6,6 +6,7 @@ mod engine_writes;
 mod fact_lookup_cost;
 mod filter_scope_cost;
 mod filter_scope_semantics;
+mod page_retention;
 mod predicate_cost;
 mod projection_writes;
 mod search_projection;
@@ -488,7 +489,7 @@ fn fresh_schema_metadata_foreign_keys_quick_check_and_cascade_are_real() {
         let mut storage = TursoStorage::open_in_memory("schema-scope").unwrap();
         assert_eq!(raw_scalar(&storage, "PRAGMA foreign_keys"), 1);
         storage.check_integrity().unwrap();
-        assert_eq!(raw_scalar(&storage, "SELECT COUNT(*) FROM meta"), 4);
+        assert_eq!(raw_scalar(&storage, "SELECT COUNT(*) FROM meta"), 5);
 
         let violation = driver::execute(
             &storage.connection(),

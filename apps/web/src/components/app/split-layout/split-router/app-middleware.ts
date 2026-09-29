@@ -30,13 +30,7 @@ import { match } from 'ts-pattern';
 import { appSplitRoutes } from './app-routes';
 import { decodeLegacyPair } from './legacy-route';
 
-type NewAppViewsState = {
-  enabled: boolean;
-  loading: boolean;
-};
-
 type AppMiddlewareState = {
-  newAppViews: () => NewAppViewsState;
   isTouchDevice: () => boolean;
 };
 
@@ -92,11 +86,7 @@ function redirectLegacyRoutes(
         : undefined
     )
     .when(
-      () => {
-        if (isTouch) return true;
-        const flag = options.newAppViews();
-        return flag.loading || !flag.enabled;
-      },
+      () => isTouch,
       () => undefined
     )
     .with({ type: 'email' }, ({ id }) => `/mail/${encodeURIComponent(id)}`)

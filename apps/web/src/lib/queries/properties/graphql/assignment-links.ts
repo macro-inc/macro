@@ -1,76 +1,47 @@
-import type { CacheHost } from '@graphql-cache/host/types';
 import {
-  inspect,
   type OptimisticUpdate,
-  select,
-  selectAll,
+  selectRecord,
   upsertByField,
 } from '@graphql-cache/index';
-import {
-  EntityPropertiesDocument,
-  GroupEntityPropertiesDocument,
-  GroupSoupMembershipDocument,
-  SoupMembershipDocument,
-} from '@service-storage/graphql/generated/graphql';
+import type { PropertyTargetEntityType } from '@service-properties/generated/schemas/propertyTargetEntityType';
+import { PropertyAssignmentParentFragmentDoc } from '@service-storage/graphql/generated/graphql';
+import { match } from 'ts-pattern';
 
 /**
- * One path to the normalized parent suffices for every mounted list/detail
- * query. Discover through ID-only documents so unrelated partial rows cannot
- * hide an otherwise usable path. No new query is fetched before the edit.
+ * Link one assignment directly to its normalized parent, independent of cached
+ * list/detail queries. The durable recipe resolves the server assignment ID on
+ * commit and still applies when the parent exists only in cold storage.
  */
-export async function buildPropertyAssignmentLinks(
-  host: CacheHost,
+export function buildPropertyAssignmentLinks(
+  entityType: PropertyTargetEntityType,
   entityId: string,
   propertyId: string,
   propertyDefinitionId: string
-): Promise<OptimisticUpdate[]> {
-  const identity = {
-    entity: { __typename: 'GraphqlProperty', id: propertyId },
-    whereField: 'propertyDefinitionId' as const,
-    equals: propertyDefinitionId,
-  };
-  const pages = await inspect(
-    host,
-    selectAll(SoupMembershipDocument).field('user').field('soup')
-  );
-  const page = pages.find(({ value }) =>
-    value?.items.some((item) => item.id === entityId)
-  );
-  if (page) {
-    return [
-      upsertByField(
-        select(EntityPropertiesDocument, page.variables)
-          .field('user')
-          .field('soup')
-          .field('items')
-          .item('id', entityId)
-          .field('properties'),
-        identity
-      ),
-    ];
-  }
-  const groupedPages = await inspect(
-    host,
-    selectAll(GroupSoupMembershipDocument).field('user').field('groupSoup')
-  );
-  for (const { variables, value } of groupedPages) {
-    const bin = value?.bins.find((bin) =>
-      bin.items.some((item) => item.id === entityId)
-    );
-    if (!bin) continue;
-    return [
-      upsertByField(
-        select(GroupEntityPropertiesDocument, variables)
-          .field('user')
-          .field('groupSoup')
-          .field('bins')
-          .item('key', bin.key)
-          .field('items')
-          .item('id', entityId)
-          .field('properties'),
-        identity
-      ),
-    ];
-  }
-  return [];
+): OptimisticUpdate[] {
+  const typename = match(entityType)
+    .with('DOCUMENT', () => 'GraphqlSoupDocument' as const)
+    .with('CHAT', () => 'GraphqlSoupChat' as const)
+    .with('PROJECT', () => 'GraphqlSoupProject' as const)
+    .with('INITIATIVE', () => 'GraphqlSoupInitiative' as const)
+    .with('THREAD', () => 'GraphqlSoupEmailThread' as const)
+    .with('CHANNEL', () => 'GraphqlSoupChannel' as const)
+    .with('CALL_RECORD', () => 'GraphqlSoupCall' as const)
+    .with('COMPANY', () => 'GraphqlSoupCrmCompany' as const)
+    .with('USER', () => undefined)
+    .exhaustive();
+  if (!typename) return [];
+
+  return [
+    upsertByField(
+      selectRecord(PropertyAssignmentParentFragmentDoc, {
+        __typename: typename,
+        id: entityId,
+      }).field('properties'),
+      {
+        entity: { __typename: 'GraphqlProperty', id: propertyId },
+        whereField: 'propertyDefinitionId',
+        equals: propertyDefinitionId,
+      }
+    ),
+  ];
 }

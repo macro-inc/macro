@@ -2910,6 +2910,7 @@ fn initialize(
                 vec![text(&STORAGE_SCHEMA_VERSION.to_string())],
             )?;
             save_search_projection_version(connection)?;
+            page_retention::save_version(connection)?;
             Ok(())
         })
         .map_err(TursoStorageError::initialization)?;
@@ -2982,6 +2983,7 @@ fn initialize(
     }
     validate_queue_consistency(connection)?;
     validate_optimistic_shadow_consistency(connection)?;
+    page_retention::compact_legacy_pages(connection)?;
     ensure_search_projection_version(connection)
 }
 
@@ -4960,6 +4962,7 @@ impl TursoStorage {
 mod alternatives;
 mod conjunction;
 mod integrity;
+mod page_retention;
 
 #[cfg(all(test, target_arch = "wasm32"))]
 mod browser_test;

@@ -7,6 +7,7 @@ use ai_tools::{
 };
 use attachment::provider::AttachmentProvider;
 use axum::extract::FromRef;
+use bots::outbound::pg_bots_repo::PgBotsRepo;
 use channels::inbound::attachment::ChannelAttachmentService;
 use channels::outbound::pg_channels_repo::PgChannelsRepo;
 use chat::domain::service::MessageServiceImpl;
@@ -17,6 +18,7 @@ use document_storage_service_client::DocumentStorageServiceClient;
 use documents::inbound::attachment::DocumentAttachmentService;
 use email::inbound::attachment::EmailAttachmentService;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
+use entity_registry::NonUserOwners;
 use macro_auth::InternalApiKey;
 use macro_authorization::{
     MacroAuthJwtValidator, MacroAuthorizationServiceImpl, MacroAuthorizationState,
@@ -67,7 +69,7 @@ pub type DcsChatModelAccess = chat::inbound::http::extractors::ChatModelAccess<
 pub type DcsAttachmentProvider = AttachmentProvider<
     DocumentAttachmentService<ToolDocumentService, ToolEntityAccessService>,
     EmailAttachmentService<ToolEmailService, ToolEntityAccessService>,
-    ChatAttachmentService<PgChatRepo, ToolEntityAccessService>,
+    ChatAttachmentService<PgChatRepo<PgBotsRepo>, ToolEntityAccessService>,
     ChannelAttachmentService<PgChannelsRepo, ToolEntityAccessService>,
     StaticFileAttachmentService<CdnStaticFileRepo>,
 >;
@@ -79,7 +81,8 @@ pub type DcsEventBroker = macro_event_broker::MacroEventBrokerService<
 >;
 
 /// Type alias for the message service wired to concrete DCS services.
-pub type DcsMessageService = MessageServiceImpl<PgChatRepo, DcsAttachmentProvider, DcsEventBroker>;
+pub type DcsMessageService =
+    MessageServiceImpl<PgChatRepo<PgBotsRepo>, DcsAttachmentProvider, DcsEventBroker>;
 
 #[cfg(test)]
 mod test;
@@ -145,6 +148,8 @@ pub struct ApiContext {
     pub email_service_client_external: Arc<email_service_client::EmailServiceClientExternal>,
     pub authorization_state: MacroAuthorizationState<DcsAuthorizationService>,
     pub user_permissions_service: Arc<DcsUserPermissionsService>,
+    /// Whether a team bot with no acting user may own what it creates.
+    pub non_user_owners: NonUserOwners,
     /// Plan allowance gate for AI requests.
     pub ai_billing: Arc<DcsAiBillingService>,
     pub config: Arc<Config>,

@@ -8,7 +8,6 @@ import {
   useViewControlHotkeys,
   useViewTabHotkeys,
 } from '@app/components/view-shell';
-import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
 import {
   type ChannelPreviewSelection,
   channelPreviewSelection,
@@ -32,17 +31,16 @@ import {
 import { toast } from '@core/component/Toast/Toast';
 import { enableChannelTags } from '@core/constant/featureFlags';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
-import { debouncedDependent } from '@core/util/debounce';
 import { thrownResultErrorHasCode } from '@core/util/result';
 import {
   type ChannelEntity,
   isChannelEntity,
   type WithNotification,
-  type WithSearch,
 } from '@entity';
 import { notificationIsRead } from '@entity/utils/notification';
 import { ensureNotificationSourceLoaded } from '@notifications/notification-helpers';
 import { hydrateChannelNotificationSelection } from '@queries/channel/notification-selection';
+import { fetchChannelSelectionById } from '@queries/channel/selection-by-id';
 import {
   useChannelLabelsQuery,
   useCreateChannelLabelMutation,
@@ -51,8 +49,6 @@ import {
   useSetChannelLabelMutation,
 } from '@queries/channel-labels/channel-labels';
 import { useFavoritesData } from '@queries/favorites/favorites';
-import { useSearchSoupQuery } from '@queries/soup/search';
-import type { EntityFilters } from '@service-search/generated/models';
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
 import { debounce } from '@solid-primitives/scheduled';
 import { useDragDropContext } from '@thisbeyond/solid-dnd';
@@ -120,14 +116,12 @@ const LABEL_KEY_PREFIX = 'label:';
 const BROWSE_QUERY_SCOPES = ['channels', 'direct_messages'] as const;
 const CHANNEL_TAB_IDS: ChannelsTab[] = ['browse', 'recents'];
 const DM_LOADING_PREVIEW_OFFSET = 80;
-const CHANNEL_SEARCH_FILTERS = {
-  ...QUERY_FILTERS_BASE,
-  channel_filters: { is_participant: true },
-} satisfies EntityFilters;
 
 export type ChannelsRailProps = {
   sources: ChannelsSources;
   searchOpen: boolean;
+  searchQuery: string;
+  onSearchQueryChange: (query: string) => void;
   onSearchOpenChange: (open: boolean) => void;
 };
 
@@ -173,23 +167,23 @@ export function ChannelsRail(props: ChannelsRailProps) {
           openInNewSplit: true,
           referredFrom: 'channels',
           notificationSource,
-          scopeChannelThreads: false,
+          channelNavigation: 'latest',
+          channelReadScope: 'top-level',
         });
         return;
       }
       const selection = channelPreviewSelection(channelId, {
         target: getChannelEntityTarget(entity, {
-          scopeChannelThreads: false,
+          channelNavigation: 'latest',
         }),
-        notifications: entity.notifications,
       });
       const previous = selectedChannel();
       if (!setSelectedChannel(selection)) return;
-      // Mark on every accepted activation, including re-clicks of the same
-      // route. The detail's ready-id effect only handles initial/route opens.
-      if (channel.isParticipant !== false) {
+      // The detail owns read marking on route opens. Re-clicks refresh and
+      // mark again even though the mounted route does not change.
+      if (previous?.id === selection.id && channel.isParticipant !== false) {
         markChannelNotificationsSeenOnOpen(entity, notificationSource, {
-          scopeChannelThreads: false,
+          channelReadScope: 'top-level',
         });
       }
       // Repeated clicks must navigate even when the route stays the same.
@@ -233,6 +227,19 @@ export function ChannelsRail(props: ChannelsRailProps) {
       reportActivationError(new Error('Missing channel id'));
       return;
     }
+    // A different channel owns its loading UI and notification hydration.
+    // Select it before fetching so the rail and destination respond to the
+    // click immediately. Re-clicks still refresh and re-aim the open channel.
+    if (!openInNewSplit && selectedChannel()?.id !== channelId) {
+      setSelectedChannel(
+        channelPreviewSelection(channelId, {
+          target: channel.target
+            ? { kind: 'message', ...channel.target }
+            : undefined,
+        })
+      );
+      return;
+    }
     const selection = hydrateChannelNotificationSelection(
       channel,
       notificationSource.withLocalOverrides
@@ -259,13 +266,10 @@ export function ChannelsRail(props: ChannelsRailProps) {
     Partial<Record<ChannelsSourceScope, VirtualizerHandle>>
   >({});
 
-  const [searchQuery, setSearchQuery] = createSignal('');
+  const searchQuery = () => props.searchQuery;
+  const setSearchQuery = (query: string) => props.onSearchQueryChange(query);
 
   const [restoreListScroll, setRestoreListScroll] = createSignal(false);
-
-  const normalizedSearchQuery = () => searchQuery().trim();
-
-  const serviceSearchQuery = debouncedDependent(normalizedSearchQuery, 300);
 
   let searchInput: HTMLInputElement | undefined;
 
@@ -303,73 +307,10 @@ export function ChannelsRail(props: ChannelsRailProps) {
     ])
   );
 
-  const channelSearchQuery = useSearchSoupQuery(
-    () => ({
-      params: { page_size: 100 },
-      body: {
-        query: serviceSearchQuery(),
-        match_type: 'partial',
-        search_on: 'name',
-        filters: CHANNEL_SEARCH_FILTERS,
-      },
-    }),
-    () => ({
-      enabled:
-        props.searchOpen && normalizedSearchQuery() === serviceSearchQuery(),
-    })
-  );
-
-  const localSearchResults = createMemo(() => {
-    const query = normalizedSearchQuery().toLocaleLowerCase();
-    const items = props.sources.search.items();
-    if (!query) return items;
-
-    return items.filter((channel) =>
-      channel.name.toLocaleLowerCase().includes(query)
-    );
-  });
-
-  const serviceSearchResults = createMemo(() => {
-    if (
-      normalizedSearchQuery() !== serviceSearchQuery() ||
-      channelSearchQuery.isFetching ||
-      !channelSearchQuery.isSuccess
-    ) {
-      return [];
-    }
-
-    return channelSearchQuery.data.filter(
-      (entity): entity is WithSearch<ChannelEntity> => isChannelEntity(entity)
-    );
-  });
-
-  const searchResults = createMemo(() =>
-    deduplicateChannels([localSearchResults(), serviceSearchResults()])
-  );
-
-  const searchLoading = () =>
-    props.sources.search.isLoading() ||
-    (normalizedSearchQuery().length >= 3 &&
-      (normalizedSearchQuery() !== serviceSearchQuery() ||
-        channelSearchQuery.isFetching));
-
-  const searchError = () => {
-    if (
-      normalizedSearchQuery() === serviceSearchQuery() &&
-      channelSearchQuery.error instanceof Error
-    ) {
-      return channelSearchQuery.error;
-    }
-
-    return props.sources.search.error() ?? undefined;
-  };
-
-  const retrySearch = async () => {
-    await props.sources.search.refresh();
-    if (normalizedSearchQuery().length >= 3) {
-      await channelSearchQuery.refetch();
-    }
-  };
+  const searchResults = () => props.sources.search.items();
+  const searchLoading = () => props.sources.search.isFetching();
+  const searchError = () => props.sources.search.error();
+  const retrySearch = () => props.sources.search.refresh();
 
   // Shared or private labels; channel membership is always viewer-relative.
   const labelsQuery = useChannelLabelsQuery();
@@ -523,12 +464,17 @@ export function ChannelsRail(props: ChannelsRailProps) {
             ? item.channel
             : channelsById().get(channelId);
         if (channel) activateChannel(channel, openInNewSplit);
-        else if (openInNewSplit) {
-          layout.openWithSplit(
-            { type: 'channel', id: channelId },
-            { preferNewSplit: true, referredFrom: 'channels' }
-          );
-        } else setSelectedChannel({ type: 'channel', id: channelId });
+        else {
+          const request = ++activation;
+          if (openInNewSplit) {
+            void selectHydratedChannel(
+              fetchChannelSelectionById(channelId),
+              request,
+              channelId,
+              true
+            );
+          } else setSelectedChannel({ type: 'channel', id: channelId });
+        }
       },
     })
   );
@@ -858,7 +804,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
   };
   const labelChannelById = (channelId: string) =>
     channelsById().get(channelId) ??
-    serviceSearchResults().find((channel) => channel.id === channelId);
+    searchResults().find((channel) => channel.id === channelId);
   const channelName = (channelId: string) => {
     const name = labelChannelById(channelId)?.name;
     return name ? `#${name}` : 'the channel';

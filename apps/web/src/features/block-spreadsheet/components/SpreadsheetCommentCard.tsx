@@ -1,14 +1,9 @@
-import {
-  DiscussionComposer,
-  type DiscussionThread,
-  DiscussionThreadView,
-} from '@core/comments/discussion';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { floatWithElement } from '@core/component/LexicalMarkdown/directive/floatWithElement';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import XIcon from '@phosphor/x.svg';
 import { Button } from '@ui/components/Button';
-import { For, Show } from 'solid-js';
+import type { JSX } from 'solid-js';
 
 false && floatWithElement;
 
@@ -16,8 +11,7 @@ false && floatWithElement;
 export function SpreadsheetCommentCard(props: {
   element: HTMLElement;
   label: string;
-  creating: boolean;
-  threads: DiscussionThread[];
+  children: JSX.Element;
   onEnter: () => void;
   onLeave: () => void;
   onInteract: () => void;
@@ -58,16 +52,7 @@ export function SpreadsheetCommentCard(props: {
           </Button>
         </div>
         <div class="max-h-[min(28rem,65dvh)] overflow-y-auto p-3 text-xs">
-          <StaticMarkdownContext>
-            <For each={props.threads}>
-              {(thread) => (
-                <DiscussionThreadView showReplyAction thread={thread} />
-              )}
-            </For>
-            <Show when={props.creating}>
-              <DiscussionComposer autofocus />
-            </Show>
-          </StaticMarkdownContext>
+          <StaticMarkdownContext>{props.children}</StaticMarkdownContext>
         </div>
       </div>
     </ScopedPortal>

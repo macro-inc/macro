@@ -22,15 +22,29 @@ const channel = (
 describe('channel selection hydration', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('returns synchronously for a read channel or a legacy row', () => {
+  it('returns synchronously for a legacy row', () => {
     const legacy = channel(undefined);
     expect(hydrateChannelNotificationSelection(legacy)).toBe(legacy);
-    const read = hydrateChannelNotificationSelection(channel([]));
-    expect(read).not.toBeInstanceOf(Promise);
-    if (read instanceof Promise)
-      throw new Error('Unexpected notification fetch');
-    expect(read.notifications?.()).toEqual([]);
     expect(fetchNotifications).not.toHaveBeenCalled();
+  });
+
+  it('refreshes an empty unread witness instead of treating a stale list as read', async () => {
+    const incoming = [{ id: 'new-reply' }];
+    fetchNotifications.mockResolvedValue(incoming);
+
+    const selection = await hydrateChannelNotificationSelection(channel([]));
+
+    expect(fetchNotifications).toHaveBeenCalledOnce();
+    expect(selection.notifications?.()).toEqual(incoming);
+  });
+
+  it('returns an empty selection only after refreshing a read channel', async () => {
+    fetchNotifications.mockResolvedValue([]);
+
+    const selection = await hydrateChannelNotificationSelection(channel([]));
+
+    expect(fetchNotifications).toHaveBeenCalledOnce();
+    expect(selection.notifications?.()).toEqual([]);
   });
 
   it('uses the complete edge, not the one unread witness, for the selected row', async () => {
@@ -80,12 +94,20 @@ describe('channel selection hydration', () => {
     }
   );
 
-  it('does not silently mark a partial selection on a failed full read', async () => {
-    fetchNotifications.mockRejectedValue(new Error('offline and uncached'));
-    await expect(
-      hydrateChannelNotificationSelection(
-        channel([{ id: 'one', state: 'unseen', createdAt: '2026-01-01' }])
-      )
-    ).rejects.toThrow('offline and uncached');
-  });
+  it.each<{ unreadNotifications: ChannelEntity['unreadNotifications'] }>([
+    { unreadNotifications: [] },
+    {
+      unreadNotifications: [
+        { id: 'one', state: 'unseen', createdAt: '2026-01-01' },
+      ],
+    },
+  ])(
+    'does not silently use a partial selection when the refresh fails (%j)',
+    async ({ unreadNotifications }) => {
+      fetchNotifications.mockRejectedValue(new Error('offline and uncached'));
+      await expect(
+        hydrateChannelNotificationSelection(channel(unreadNotifications))
+      ).rejects.toThrow('offline and uncached');
+    }
+  );
 });

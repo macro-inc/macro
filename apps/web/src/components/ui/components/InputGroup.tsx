@@ -70,7 +70,7 @@ const INPUT_GROUP_BUTTON_SIZE: Record<InputSize, ButtonSize> = {
 /** Canonical variants for a framed input composition. */
 export const inputGroupVariants = createVariants(
   cn(
-    'group/input-group relative flex w-full min-w-0 items-center overflow-hidden rounded-full border transition-[background-color,border-color,box-shadow] duration-120 motion-reduce:transition-none',
+    'group/input-group relative flex w-full min-w-0 items-center overflow-hidden rounded-lg border transition-[background-color,border-color,box-shadow] duration-120 motion-reduce:transition-none',
     'has-[[data-slot=input-group-control]:disabled]:pointer-events-none has-[[data-slot=input-group-control]:disabled]:opacity-50',
     'has-[[data-slot=input-group-control][aria-invalid=true]]:border-failure has-[[data-slot=input-group-control][aria-invalid=true]]:ring-2 has-[[data-slot=input-group-control][aria-invalid=true]]:ring-failure/20'
   ),
@@ -138,9 +138,7 @@ function InputGroupRoot(props: InputGroupProps) {
     return size && !size.startsWith('icon-') ? (size as InputSize) : undefined;
   };
   const size = (): InputSize => local.size ?? inheritedSize() ?? 'md';
-  const variant = (): InputVariant =>
-    local.variant ??
-    (buttonGroup?.variant === 'navigation' ? 'bare' : 'outline');
+  const variant = (): InputVariant => local.variant ?? 'outline';
   const grouped = () => buttonGroup !== undefined;
 
   const context: InputGroupContextValue = {

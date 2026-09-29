@@ -18,7 +18,7 @@ function EditBottomRow(props: {
       <Button
         tooltip="Delete Draft"
         size="icon-sm"
-        class="size-7 rounded-full"
+        class="size-7"
         variant="ghost"
         on:click={props.handleCancel}
       >

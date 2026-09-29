@@ -32,6 +32,28 @@ afterEach(() => {
 });
 
 describe('controlled confirmation', () => {
+  it.each([false, true])(
+    'uses ghost/strong actions with mobile=%s',
+    (isMobile) => {
+      mobile.value = isMobile;
+      render(() => (
+        <ConfirmDialog
+          title="Confirm change"
+          open
+          tone="danger"
+          onOpenChange={() => {}}
+          onConfirm={() => {}}
+        />
+      ));
+      expect(
+        screen.getByRole('button', { name: 'Cancel' }).dataset.variant
+      ).toBe('ghost');
+      expect(
+        screen.getByRole('button', { name: 'Confirm' }).dataset.variant
+      ).toBe('strong');
+    }
+  );
+
   it('stays open while pending and can reopen after dismissal', () => {
     const [open, setOpen] = createSignal(true);
     const [pending, setPending] = createSignal(false);

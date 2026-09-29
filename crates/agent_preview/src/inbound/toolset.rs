@@ -3,7 +3,13 @@ use crate::domain::{AgentIdentity, PreviewService};
 use ai_toolset::{
     AsyncTool, RequestContext, ServiceContext, ToolAnnotated, ToolAnnotations, ToolResult,
 };
-use axum::Router;
+use axum::{
+    Router,
+    extract::{Request, State},
+    http::{HeaderMap, HeaderValue, Uri, header},
+    middleware::{self, Next},
+    response::Response,
+};
 use rmcp::{
     ServerHandler,
     model::{
@@ -203,19 +209,41 @@ impl Mcp {
         &self,
         context: &McpContext<rmcp::RoleServer>,
     ) -> Result<AgentIdentity, rmcp::ErrorData> {
-        let token = context
-            .extensions
-            .get::<axum::http::request::Parts>()
-            .and_then(|p| p.headers.get(axum::http::header::AUTHORIZATION))
-            .and_then(|v| v.to_str().ok())
-            .and_then(|v| v.strip_prefix("Bearer "))
-            .filter(|v| v.len() <= 256)
-            .ok_or_else(|| {
-                rmcp::ErrorData::invalid_request("agent session authentication required", None)
-            })?;
-        self.0.agent(token).await.map_err(|_| {
-            rmcp::ErrorData::invalid_request("agent session authentication failed", None)
-        })
+        let Some(parts) = context.extensions.get::<axum::http::request::Parts>() else {
+            tracing::warn!("preview mcp request had no http parts");
+            return Err(rmcp::ErrorData::invalid_request(
+                "agent session authentication required",
+                None,
+            ));
+        };
+        let Some(header) = parts.headers.get(header::AUTHORIZATION) else {
+            tracing::warn!("preview mcp request missing authorization");
+            return Err(rmcp::ErrorData::invalid_request(
+                "agent session authentication required",
+                None,
+            ));
+        };
+        let Some(token) = header
+            .to_str()
+            .ok()
+            .and_then(|value| value.strip_prefix("Bearer "))
+            .filter(|value| value.len() <= 256)
+        else {
+            tracing::warn!("preview mcp bearer was unreadable or longer than 256 bytes");
+            return Err(rmcp::ErrorData::invalid_request(
+                "agent session authentication required",
+                None,
+            ));
+        };
+        self.0
+            .agent(token)
+            .await
+            .inspect_err(|error| {
+                tracing::warn!(error = %error, "preview mcp session authentication failed");
+            })
+            .map_err(|_| {
+                rmcp::ErrorData::invalid_request("agent session authentication failed", None)
+            })
     }
 }
 impl ServerHandler for Mcp {
@@ -229,25 +257,17 @@ impl ServerHandler for Mcp {
     async fn list_tools(
         &self,
         _: Option<PaginatedRequestParams>,
-        context: McpContext<rmcp::RoleServer>,
+        _: McpContext<rmcp::RoleServer>,
     ) -> Result<ListToolsResult, rmcp::ErrorData> {
-        self.identity(&context).await?;
-        let schema = schemars::schema_for!(SharePreview);
-        let value = serde_json::to_value(schema)
-            .map_err(|_| rmcp::ErrorData::internal_error("tool schema unavailable", None))?;
-        let object = value
-            .as_object()
-            .cloned()
-            .ok_or_else(|| rmcp::ErrorData::internal_error("tool schema unavailable", None))?;
+        // Schema only: Cursor's live discovery calls tools/list before a tool
+        // runs. Requiring a session here made the whole server look broken
+        // while SharePreview itself still needed the credential.
         Ok(ListToolsResult {
-            tools: vec![Tool::new(
-                "SharePreview",
-                "Share a local HTTP development server with this session's viewers. Execute the returned OpenSSH script to connect it; supports WebSockets and HMR.",
-                Arc::new(object),
-            )],
+            tools: vec![share_preview_tool()?],
             ..Default::default()
         })
     }
+    #[tracing::instrument(skip_all, err, fields(tool = %request.name))]
     async fn call_tool(
         &self,
         request: CallToolRequestParams,
@@ -280,9 +300,109 @@ impl ServerHandler for Mcp {
         })
     }
 }
-/// Build a stateless MCP server: every tool request authenticates its session credential.
+fn share_preview_tool() -> Result<Tool, rmcp::ErrorData> {
+    let schema = schemars::schema_for!(SharePreview);
+    let value = serde_json::to_value(schema)
+        .map_err(|_| rmcp::ErrorData::internal_error("tool schema unavailable", None))?;
+    let object = value
+        .as_object()
+        .cloned()
+        .ok_or_else(|| rmcp::ErrorData::internal_error("tool schema unavailable", None))?;
+    Ok(Tool::new(
+        "SharePreview",
+        "Share a local HTTP development server with this session's viewers. Execute the returned OpenSSH script to connect it; supports WebSockets and HMR.",
+        Arc::new(object),
+    ))
+}
+
+/// Loopback plus the configured control hosts. rmcp matches a hostname
+/// without a port against any port, so `preview-gateway` covers `:8080`.
+fn mcp_allowed_hosts(configured: Vec<String>) -> Vec<String> {
+    let mut hosts = vec![
+        "localhost".to_owned(),
+        "127.0.0.1".to_owned(),
+        "::1".to_owned(),
+    ];
+    for host in configured {
+        let host = host.trim();
+        if !host.is_empty() && !hosts.iter().any(|existing| existing == host) {
+            hosts.push(host.to_owned());
+        }
+    }
+    hosts
+}
+
+/// `Router::nest` can drop the Host header hyper synthesized from HTTP/2
+/// `:authority`. The public gateway reaches MCP at `/preview/mcp` that way.
+fn restore_dropped_host(headers: &mut HeaderMap, uri: &Uri, allowed: &[String]) {
+    if headers.contains_key(header::HOST) {
+        return;
+    }
+    if let Some(value) = headers.get("x-forwarded-host")
+        && let Ok(host) = value.to_str()
+        && host_name_allowed(host, allowed)
+    {
+        headers.insert(header::HOST, value.clone());
+        return;
+    }
+    if let Some(authority) = uri.authority()
+        && host_name_allowed(authority.as_str(), allowed)
+        && let Ok(value) = HeaderValue::from_str(authority.as_str())
+    {
+        headers.insert(header::HOST, value);
+    }
+}
+
+fn host_name_allowed(host: &str, allowed: &[String]) -> bool {
+    let name = host_name(host);
+    allowed
+        .iter()
+        .any(|allowed| host_name(allowed).eq_ignore_ascii_case(&name))
+}
+
+fn host_name(host: &str) -> String {
+    let host = host.rsplit_once('@').map_or(host, |(_, host)| host);
+    host.split(':')
+        .next()
+        .unwrap_or(host)
+        .trim()
+        .trim_matches(['[', ']'])
+        .to_ascii_lowercase()
+}
+
+#[derive(Clone)]
+struct McpHttp {
+    allowed_hosts: Vec<String>,
+}
+
+async fn prepare_mcp(State(state): State<McpHttp>, mut request: Request, next: Next) -> Response {
+    let uri = request.uri().clone();
+    restore_dropped_host(request.headers_mut(), &uri, &state.allowed_hosts);
+    let host = request
+        .headers()
+        .get(header::HOST)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or("-")
+        .to_owned();
+    let method = request.method().clone();
+    let path = request.uri().path().to_owned();
+    let response = next.run(request).await;
+    let status = response.status();
+    if status.is_success() {
+        tracing::debug!(%method, %path, host, %status, "preview mcp");
+    } else {
+        tracing::warn!(%method, %path, host, %status, "preview mcp rejected");
+    }
+    response
+}
+
+/// Build a stateless MCP server. `tools/list` is public; `SharePreview` still
+/// authenticates the session credential.
 pub fn router(service: PreviewService, allowed_hosts: Vec<String>) -> Router {
-    let mut config = StreamableHttpServerConfig::default().with_allowed_hosts(allowed_hosts);
+    let allowed_hosts = mcp_allowed_hosts(allowed_hosts);
+    tracing::info!(hosts = ?allowed_hosts, "preview mcp host allowlist");
+    let mut config =
+        StreamableHttpServerConfig::default().with_allowed_hosts(allowed_hosts.clone());
     config.stateful_mode = false;
     config.json_response = true;
     let transport = StreamableHttpService::new(
@@ -290,7 +410,12 @@ pub fn router(service: PreviewService, allowed_hosts: Vec<String>) -> Router {
         Arc::new(LocalSessionManager::default()),
         config,
     );
-    Router::new().nest_service("/mcp", transport)
+    Router::new()
+        .nest_service("/mcp", transport)
+        .layer(middleware::from_fn_with_state(
+            McpHttp { allowed_hosts },
+            prepare_mcp,
+        ))
 }
 
 #[cfg(test)]

@@ -133,7 +133,7 @@ export function CrmImport(props: { onClose: () => void }) {
                 Close
               </Button>
               <Button
-                variant="accent"
+                variant="strong"
                 disabled={pending() || !rows().length}
                 onClick={() => void run()}
               >

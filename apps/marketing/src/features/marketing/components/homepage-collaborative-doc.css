@@ -1,0 +1,49 @@
+.homepage-collaborative-doc {
+  --history-overlap: 64px;
+  isolation: isolate;
+}
+
+/* Finish the dissolve before the timeline, leaving its rule on the page background. */
+.homepage-collaborative-doc > .mdf-frame {
+  height: 600px;
+  padding-top: 40px;
+  -webkit-mask-image: linear-gradient(to bottom, #000 36%, rgb(0 0 0 / 30%) 64%, transparent calc(100% - var(--history-overlap)));
+  mask-image: linear-gradient(to bottom, #000 36%, rgb(0 0 0 / 30%) 64%, transparent calc(100% - var(--history-overlap)));
+}
+
+.homepage-doc-timeline {
+  position: relative;
+  margin-top: calc(-1 * var(--history-overlap));
+}
+
+@media (max-width: 699px) {
+  .homepage-collaborative-doc {
+    --history-overlap: 40px;
+  }
+
+  .homepage-collaborative-doc > .mdf-frame {
+    height: 560px;
+    padding-top: 20px;
+  }
+}
+
+.homepage-collaborative-doc .mds-caret {
+  position: relative;
+  background-color: #a78bfa;
+  animation: none;
+}
+
+.homepage-collaborative-doc .mds-caret::after {
+  content: 'Julia';
+  position: absolute;
+  left: 0;
+  bottom: 100%;
+  border-radius: 4px 4px 4px 0;
+  padding: 3px 6px;
+  background-color: #a78bfa;
+  color: #171020;
+  font: 500 11px/1.2 Inter, sans-serif;
+  letter-spacing: 0;
+  white-space: nowrap;
+  pointer-events: none;
+}

@@ -125,7 +125,55 @@ function ProjectDetailsResult(props: { project: ProjectDetails }) {
   );
 }
 
+function TaskMembershipResults(props: {
+  results?: { taskId: string; status: string }[];
+}) {
+  return (
+    <Tool.List>
+      <For each={props.results}>
+        {(outcome) => (
+          <Tool.ListItem>
+            {outcome.taskId} — {outcome.status.replaceAll('_', ' ')}
+          </Tool.ListItem>
+        )}
+      </For>
+    </Tool.List>
+  );
+}
+
 export const initiativeToolHandlers = {
+  AssignTasksToInitiative: createToolRenderer({
+    name: 'AssignTasksToInitiative',
+    handleResponse: refreshProjectsAfterMutation,
+    render: (ctx) => (
+      <ProjectToolCard
+        label={`Add ${ctx.tool.data.taskIds.length} tasks to project`}
+        renderContext={ctx.renderContext}
+        hasResult={!!ctx.response}
+        result={ctx.response?.data}
+        projectId={ctx.tool.data.initiativeId}
+        status={resultCount(ctx.response?.data.results.length ?? 0, 'task')}
+      >
+        <TaskMembershipResults results={ctx.response?.data.results} />
+      </ProjectToolCard>
+    ),
+  }),
+  UnassignTasksFromInitiative: createToolRenderer({
+    name: 'UnassignTasksFromInitiative',
+    handleResponse: refreshProjectsAfterMutation,
+    render: (ctx) => (
+      <ProjectToolCard
+        label={`Remove ${ctx.tool.data.taskIds.length} tasks from project`}
+        renderContext={ctx.renderContext}
+        hasResult={!!ctx.response}
+        result={ctx.response?.data}
+        projectId={ctx.tool.data.initiativeId}
+        status={resultCount(ctx.response?.data.results.length ?? 0, 'task')}
+      >
+        <TaskMembershipResults results={ctx.response?.data.results} />
+      </ProjectToolCard>
+    ),
+  }),
   ListInitiatives: createToolRenderer({
     name: 'ListInitiatives',
     render: (ctx) => (

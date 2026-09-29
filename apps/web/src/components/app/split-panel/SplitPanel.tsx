@@ -185,7 +185,7 @@ function BackButton(props: SplitControlButtonProps) {
       square={local.square ?? true}
       class={cn(
         !local.size && 'p-1',
-        'rounded-lg transition-none touch:active:bg-transparent',
+        'transition-none touch:active:bg-transparent',
         local.class
       )}
       aria-label={local['aria-label']}
@@ -224,7 +224,7 @@ function ForwardButton(props: SplitControlButtonProps) {
       square={local.square ?? true}
       class={cn(
         !local.size && 'p-1',
-        'rounded-lg transition-none touch:active:bg-transparent',
+        'transition-none touch:active:bg-transparent',
         local.class
       )}
       aria-label={local['aria-label']}
@@ -263,7 +263,7 @@ function CloseButton(props: SplitControlButtonProps) {
         variant={local.variant}
         size={local.size ?? 'icon-sm'}
         square={local.square ?? true}
-        class={cn('rounded-lg transition-none', local.class)}
+        class={cn('transition-none', local.class)}
         aria-label={local['aria-label']}
         label={label()}
         hotkey={local.hotkey ?? TOKENS.split.close}

@@ -104,20 +104,7 @@ impl MacroNavigationPlugin {
 
     #[tracing::instrument(ret, level = tracing::Level::DEBUG, skip(self))]
     fn as_app_link(&self, url: &Url) -> Option<MacroScheme> {
-        if !matches!(url.scheme(), "http" | "https") {
-            return None;
-        }
-        let domain = url.domain()?;
-        let domain = domain.strip_prefix("www.").unwrap_or(domain);
-        if !self
-            .app_link_hosts
-            .iter()
-            .any(|host| domain.eq_ignore_ascii_case(host))
-        {
-            return None;
-        }
-        let path = url.path();
-        if path != "/app" && !path.starts_with("/app/") {
+        if !is_app_link(self.app_link_hosts, url) {
             return None;
         }
         MacroScheme::from_url(url).ok()
@@ -151,6 +138,21 @@ impl MacroNavigationPlugin {
             Err(ExternalUrl(Cow::Borrowed(url)))
         }
     }
+}
+
+/// Whether `url` is an `http(s)://<host>/app...` link for one of `hosts`,
+/// ignoring a `www.` prefix and host case.
+pub fn is_app_link(hosts: &[&str], url: &Url) -> bool {
+    if !matches!(url.scheme(), "http" | "https") {
+        return false;
+    }
+    let Some(domain) = url.domain() else {
+        return false;
+    };
+    let domain = domain.strip_prefix("www.").unwrap_or(domain);
+    let path = url.path();
+    hosts.iter().any(|host| domain.eq_ignore_ascii_case(host))
+        && (path == "/app" || path.starts_with("/app/"))
 }
 
 #[tracing::instrument(ret, level = tracing::Level::DEBUG)]

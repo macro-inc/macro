@@ -1,5 +1,5 @@
 import type { QueryRevalidation } from '@graphql-cache/exchange/optimistic';
-import { createRequest } from '@urql/core';
+import { type Client, createRequest } from '@urql/core';
 
 type ActiveGraphqlSoupQuery = {
   isEnabled: () => boolean;
@@ -7,21 +7,29 @@ type ActiveGraphqlSoupQuery = {
 };
 
 const activeQueries = new Set<ActiveGraphqlSoupQuery>();
-const revalidationSources = new Set<() => readonly QueryRevalidation[]>();
+const revalidationSources = new Set<{
+  queries: () => readonly QueryRevalidation[];
+  client?: () => Pick<Client, 'query'>;
+}>();
 
 /** Each reader supplies its enabled, loaded pages for durable mutation replay. */
 export function registerGraphqlSoupRevalidations(
-  queries: () => readonly QueryRevalidation[]
+  queries: () => readonly QueryRevalidation[],
+  client?: () => Pick<Client, 'query'>
 ): () => void {
-  revalidationSources.add(queries);
-  return () => revalidationSources.delete(queries);
+  const source = { queries, client };
+  revalidationSources.add(source);
+  return () => revalidationSources.delete(source);
 }
 
 /** Snapshot query descriptors without fetching or waiting on the cache. */
-export function getActiveGraphqlSoupRevalidations(): QueryRevalidation[] {
+export function getActiveGraphqlSoupRevalidations(
+  client?: Pick<Client, 'query'>
+): QueryRevalidation[] {
   const queries = new Map<number, QueryRevalidation>();
   for (const source of revalidationSources) {
-    for (const query of source()) {
+    if (client && source.client && source.client() !== client) continue;
+    for (const query of source.queries()) {
       queries.set(createRequest(query.document, query.variables).key, query);
     }
   }

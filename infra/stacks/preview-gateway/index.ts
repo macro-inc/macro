@@ -15,6 +15,8 @@ import {
 import { get_coparse_api_vpc } from '../../packages/vpc';
 
 const name = 'preview-gateway';
+// Load balancer and target group names are capped at 32 characters, auto-suffix included.
+const shortName = 'pvgw';
 const tags = {
   environment: stack,
   env: stack,
@@ -125,7 +127,7 @@ const control = new ServiceTargetGroup(`${name}-${stack}`, {
   serviceSecurityGroupId: taskSg.id,
   albSecurityGroupId: gateway.albSecurityGroupId,
 });
-const httpAlb = new aws.lb.LoadBalancer(`${name}-http-${stack}`, {
+const httpAlb = new aws.lb.LoadBalancer(`${shortName}-http-${stack}`, {
   loadBalancerType: 'application',
   subnets: vpc.publicSubnetIds,
   securityGroups: [albSg.id],
@@ -133,7 +135,7 @@ const httpAlb = new aws.lb.LoadBalancer(`${name}-http-${stack}`, {
   dropInvalidHeaderFields: true,
   tags,
 });
-const httpTarget = new aws.lb.TargetGroup(`${name}-http-${stack}`, {
+const httpTarget = new aws.lb.TargetGroup(`${shortName}-http-${stack}`, {
   port: 8111,
   protocol: 'HTTP',
   targetType: 'ip',
@@ -151,14 +153,14 @@ const httpListener = new aws.lb.Listener(`${name}-https-${stack}`, {
   defaultActions: [{ type: 'forward', targetGroupArn: httpTarget.arn }],
   tags,
 });
-const sshNlb = new aws.lb.LoadBalancer(`${name}-ssh-${stack}`, {
+const sshNlb = new aws.lb.LoadBalancer(`${shortName}-ssh-${stack}`, {
   loadBalancerType: 'network',
   subnets: vpc.publicSubnetIds,
   securityGroups: [sshSg.id],
   enableCrossZoneLoadBalancing: true,
   tags,
 });
-const sshTarget = new aws.lb.TargetGroup(`${name}-ssh-${stack}`, {
+const sshTarget = new aws.lb.TargetGroup(`${shortName}-ssh-${stack}`, {
   port: 2222,
   protocol: 'TCP',
   targetType: 'ip',
@@ -210,10 +212,6 @@ const deploymentConfig = {
   ENVIRONMENT: stack,
   PREVIEW_DOMAIN: domain,
   PREVIEW_SSH_HOST: sshHost,
-  // Local stacks reach their SSH listener through a Cloudflare quick tunnel;
-  // a deployed gateway is dialled directly and rejects a proxy host outright.
-  // Present-but-empty because MacroConfig does not merge missing JSON keys.
-  PREVIEW_SSH_PROXY_HOST: '',
   PREVIEW_APP_ORIGIN:
     stack === 'prod' ? 'https://macro.com' : 'https://dev.macro.com',
   PREVIEW_CONTROL_HOSTS:

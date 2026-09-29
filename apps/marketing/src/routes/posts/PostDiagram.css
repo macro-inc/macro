@@ -1,0 +1,222 @@
+/* ------------------------------------------------------------------ */
+/* Post diagrams — boxes-and-arrows figures rebuilt as theme-native    */
+/* markup so they render in the site's dark palette instead of baked   */
+/* light-mode images. Used via PostDiagram.tsx.                        */
+/* ------------------------------------------------------------------ */
+
+/* Gentle breakout just past the prose column (same trick as the video
+ * embeds in other posts). */
+.pdg-figure {
+  left: 50%;
+  margin: 40px 0 12px;
+  position: relative;
+  transform: translateX(-50%);
+  width: min(860px, calc(100vw - 48px));
+}
+
+.pdg-figcaption {
+  color: var(--c4);
+  font-size: 14px;
+  margin: 14px auto 56px;
+  max-width: 695px;
+  text-align: center;
+}
+
+.pdg-diagram {
+  background: color-mix(in srgb, var(--b1) 72%, var(--b0));
+  border: 1px solid color-mix(in srgb, var(--b4) 22%, transparent);
+  border-radius: 14px;
+  font-family: 'rajdhani', body, system-ui, sans-serif;
+  padding: 20px clamp(14px, 3vw, 26px) 24px;
+}
+
+/* "— Title —" ruled header, like a hand-drawn figure label */
+.pdg-diagram-title {
+  align-items: center;
+  color: var(--c4);
+  display: flex;
+  font-size: 11px;
+  gap: 14px;
+  letter-spacing: 0.12em;
+  margin-bottom: 20px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.pdg-diagram-title::before,
+.pdg-diagram-title::after {
+  background: color-mix(in srgb, var(--b4) 45%, transparent);
+  content: '';
+  flex: 1;
+  height: 1px;
+}
+
+.pdg-diagram-footer {
+  align-items: center;
+  color: var(--c4);
+  display: flex;
+  font-size: 11.5px;
+  gap: 14px;
+  letter-spacing: 0.08em;
+  margin-top: 18px;
+  white-space: nowrap;
+}
+
+.pdg-diagram-footer::before,
+.pdg-diagram-footer::after {
+  border-bottom: 1px dashed color-mix(in srgb, var(--b4) 55%, transparent);
+  content: '';
+  flex: 1;
+  height: 0;
+}
+
+.pdg-row {
+  align-items: stretch;
+  display: flex;
+  gap: 12px;
+}
+
+.pdg-box {
+  background: color-mix(in srgb, var(--b2) 40%, transparent);
+  border: 1px solid color-mix(in srgb, var(--b4) 45%, transparent);
+  border-radius: 9px;
+  flex: 1;
+  min-width: 0;
+  padding: 13px 15px;
+}
+
+.pdg-box--dashed {
+  background: transparent;
+  border-style: dashed;
+}
+
+.pdg-box-title {
+  color: var(--c1);
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.pdg-box--dashed .pdg-box-title {
+  color: var(--a0);
+}
+
+.pdg-box-items {
+  color: var(--c4);
+  font-size: 12.5px;
+  line-height: 1.9;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.pdg-box-note {
+  color: var(--c4);
+  font-size: 12.5px;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.pdg-stack {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.pdg-arrow {
+  align-self: center;
+  color: color-mix(in srgb, var(--c4) 70%, transparent);
+  flex: none;
+  font-size: 15px;
+}
+
+/* Nested group (a box that itself holds a row of boxes) */
+.pdg-group {
+  border: 1px solid color-mix(in srgb, var(--b4) 45%, transparent);
+  border-radius: 9px;
+  flex: 2.2;
+  min-width: 0;
+  padding: 13px 15px;
+}
+
+.pdg-group-title {
+  color: var(--c1);
+  font-size: 13px;
+  margin-bottom: 10px;
+  text-align: center;
+}
+
+.pdg-row--inner {
+  gap: 10px;
+}
+
+.pdg-footnote {
+  display: flex;
+  justify-content: center;
+  margin-top: 14px;
+}
+
+.pdg-footnote .pdg-box {
+  flex: none;
+  max-width: 420px;
+}
+
+/* Two group boxes side by side (before/after, browser/desktop, ...) */
+.pdg-duo {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.pdg-chain {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+
+.pdg-pill {
+  background: color-mix(in srgb, var(--b2) 40%, transparent);
+  border: 1px solid color-mix(in srgb, var(--b4) 45%, transparent);
+  border-radius: 7px;
+  color: var(--c2);
+  font-size: 12px;
+  padding: 7px 10px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.pdg-group-note {
+  border: 1px dashed color-mix(in srgb, var(--b4) 55%, transparent);
+  border-radius: 7px;
+  color: var(--c4);
+  font-size: 11.5px;
+  margin: 12px 0 0;
+  padding: 8px 10px;
+  text-align: center;
+}
+
+@media (max-width: 720px) {
+  .pdg-figure {
+    width: calc(100vw - 40px);
+  }
+
+  .pdg-row {
+    flex-direction: column;
+  }
+
+  .pdg-arrow {
+    transform: rotate(90deg);
+  }
+
+  .pdg-duo {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Chains keep their own horizontal arrows; they wrap instead of stacking */
+  .pdg-chain .pdg-arrow {
+    transform: none;
+  }
+}

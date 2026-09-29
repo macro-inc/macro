@@ -125,7 +125,7 @@ export function CopyAvailabilityDialog(props: ManagedDialogProps) {
           <ActionDialogShell.Header class="flex items-start justify-between gap-3">
             <ActionDialogShell.Title>Copy availability</ActionDialogShell.Title>
             <Button
-              variant="navigation"
+              variant="ghost"
               size="icon-sm"
               label="Close availability dialog"
               onClick={() => props.onOpenChange(false)}
@@ -224,10 +224,10 @@ export function CopyAvailabilityDialog(props: ManagedDialogProps) {
                   tabIndex={unavailable() ? 0 : undefined}
                 >
                   <Button
-                    variant="outline"
+                    variant="strong"
                     size="md"
                     class={cn(
-                      'w-full rounded-full px-2 disabled:cursor-not-allowed disabled:opacity-50',
+                      'w-full px-2 disabled:cursor-not-allowed disabled:opacity-50',
                       isCopying() &&
                         'data-disabled:opacity-100 disabled:opacity-100'
                     )}

@@ -16,8 +16,10 @@
 
 use std::collections::BTreeMap;
 
+use anyhow::Result;
+
 use super::instance::{Instance, Port};
-use super::{Mode, identity, resources};
+use super::{Mode, frontend, identity, proxy, resources};
 
 /// The public hostnames `--with-cf-tunnel` minted for this run.
 ///
@@ -38,16 +40,17 @@ pub struct Tunnels<'a> {
 pub struct LocalEnv {
     environment: &'static str,
     project_name: String,
-    /// Where the browser-facing app lives: the proxy (static bundle at
-    /// `/app`) or the bun dev server. `default_redirect_url()` in
-    /// authentication_service sends post-login browsers to
-    /// `http://localhost:{FRONTEND_PORT}`, so this must track the serving
-    /// mode or every OAuth signup dead-ends on an unused port.
+    /// Legacy localhost fallback port. `FRONTEND_ORIGIN` is authoritative for
+    /// browser redirects and points at the HTTPS proxy in both serving modes.
     frontend_port: u16,
     external_egress_url: String,
     preview_ssh_proxy_host: Option<String>,
     preview_ssh_port: u16,
     preview_https_port: u16,
+    preview_control_hosts: String,
+    /// Browser-facing origin for post-login redirects and Pipedream CORS.
+    /// Both attached and headless frontends are exposed through HTTPS.
+    frontend_origin: String,
     /// Browser-facing route to document cognition's MCP OAuth callback.
     mcp_public_url: String,
     /// Browser-facing base the static file service stamps into permalinks.
@@ -82,17 +85,30 @@ impl LocalEnv {
         instance: &Instance,
         static_frontend: bool,
         tunnels: Tunnels<'_>,
-    ) -> Self {
+    ) -> Result<Self> {
         let name = instance.name();
-        LocalEnv {
+        let frontend_port = if static_frontend {
+            instance.port(Port::Proxy)
+        } else {
+            instance.port(Port::Frontend)
+        };
+        let frontend_origin = if static_frontend {
+            proxy::url(instance)
+        } else {
+            frontend::https_origin(instance)?
+        };
+        Ok(LocalEnv {
             // Both local flavors run against local infra (`local` env defaults).
             environment: mode.environment_var(),
             project_name: instance.project_name().to_string(),
-            frontend_port: if static_frontend {
-                instance.port(Port::Proxy)
-            } else {
-                instance.port(Port::Frontend)
-            },
+            frontend_port,
+            mcp_public_url: format!("{frontend_origin}/cognition"),
+            static_file_public_url: format!("{frontend_origin}/static-file"),
+            frontend_origin,
+            preview_control_hosts: format!(
+                "localhost,127.0.0.1,preview-gateway,{}",
+                super::tls::hostname()?
+            ),
             external_egress_url: tunnels.egress.map(str::to_owned).unwrap_or_else(|| {
                 format!(
                     "http://localhost:{}",
@@ -102,11 +118,6 @@ impl LocalEnv {
             preview_ssh_proxy_host: tunnels.preview_ssh.map(str::to_owned),
             preview_ssh_port: instance.port(Port::PreviewSsh),
             preview_https_port: instance.port(Port::PreviewHttps),
-            mcp_public_url: format!("http://localhost:{}/cognition", instance.port(Port::Proxy)),
-            static_file_public_url: format!(
-                "http://localhost:{}/static-file",
-                instance.port(Port::Proxy)
-            ),
             infra: InfraEnv::local(instance),
             storage: StorageEnv::local(),
             queues: QueueEnv::local(),
@@ -115,7 +126,7 @@ impl LocalEnv {
             service_auth: ServiceAuthEnv::for_instance(name),
             fusionauth: FusionAuthEnv::for_instance(instance),
             boot_stubs: BootStubEnv,
-        }
+        })
     }
 
     /// Flatten to the env map services receive. The single struct→env boundary.
@@ -125,6 +136,7 @@ impl LocalEnv {
         env.insert("COMPOSE_PROJECT_NAME".into(), self.project_name.clone());
         env.insert("PORT".into(), "8080".into());
         env.insert("FRONTEND_PORT".into(), self.frontend_port.to_string());
+        env.insert("FRONTEND_ORIGIN".into(), self.frontend_origin.clone());
         env.insert("MCP_PUBLIC_URL".into(), self.mcp_public_url.clone());
         env.insert(
             "STATIC_FILE_SERVICE_URL".into(),
@@ -136,7 +148,7 @@ impl LocalEnv {
         // port, so connecting an app there would fail at the consent popup.
         env.insert(
             "PIPEDREAM_ALLOWED_ORIGINS".into(),
-            format!("http://localhost:{}", self.frontend_port),
+            self.frontend_origin.clone(),
         );
         // Calendar ingestion/sync ships dark (both flags default off in
         // deployed envs); local stacks keep it on for development.
@@ -169,13 +181,10 @@ impl LocalEnv {
             "PREVIEW_HTTPS_PORT".into(),
             self.preview_https_port.to_string(),
         );
-        env.insert(
-            "PREVIEW_APP_ORIGIN".into(),
-            format!("http://localhost:{}", self.frontend_port),
-        );
+        env.insert("PREVIEW_APP_ORIGIN".into(), self.frontend_origin.clone());
         env.insert(
             "PREVIEW_CONTROL_HOSTS".into(),
-            "localhost,127.0.0.1,preview-gateway".into(),
+            self.preview_control_hosts.clone(),
         );
         self.infra.write(&mut env);
         self.storage.write(&mut env);

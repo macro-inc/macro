@@ -163,6 +163,16 @@ const STREAM_RECONNECT_ATTEMPTS: usize = 5;
 /// agent is drivable from cursor.com) before giving up, in poll intervals.
 const BUSY_ATTEMPTS: usize = 450;
 
+/// How soon after the mirror's last live frame a prompt is taken to have been
+/// sent while that frame was still on its way.
+///
+/// The client opens a prompt's turn when it sends the prompt; the request
+/// reaches this service a pipe hop later, in milliseconds. Mirror frames sent
+/// in between land inside that turn, and nothing here can tell which, so such
+/// a prompt asks for a reload that puts the mirrored run back in its place.
+/// Generous on purpose: a false positive costs one reload.
+const MIRROR_PROMPT_OVERLAP: std::time::Duration = std::time::Duration::from_secs(2);
+
 /// How long a prompt waits for the turn gate while a background mirror is
 /// following a run started elsewhere, before giving up.
 ///
@@ -193,20 +203,35 @@ const ARTIFACT_LISTING_RETRY_DELAY: std::time::Duration = std::time::Duration::f
 /// file, loudly, rather than the process losing its memory.
 const MAX_ARTIFACT_BYTES: u64 = 64 * 1024 * 1024;
 
+/// Whether a captured frame reaches the client as it is journaled.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Emit {
+    /// Published as captured: the frames of this session's own turn.
+    Live,
+    /// Journaled only, for a load to show.
+    Silent,
+    /// A run started on cursor.com, mirrored into an idle session: published
+    /// as captured, exactly like a turn, unless a prompt is waiting behind
+    /// the mirror. That prompt's turn is already open on the client, and the
+    /// run's frames would render inside it, so they are withheld instead and
+    /// the sweep asks for a reload.
+    Mirror,
+}
+
 #[derive(Clone, Copy)]
 struct IngestMode {
-    emit: bool,
+    emit: Emit,
     strict: bool,
     attempt: usize,
 }
 impl IngestMode {
     const LIVE: Self = Self {
-        emit: true,
+        emit: Emit::Live,
         strict: false,
         attempt: 0,
     };
     const HYDRATE: Self = Self {
-        emit: false,
+        emit: Emit::Silent,
         strict: true,
         attempt: 0,
     };
@@ -404,6 +429,18 @@ struct SessionState {
     /// Pause background capture while the host loads, without refusing prompts
     /// it already dispatched before observing the recovery requirement.
     reload_pending: bool,
+    /// Prompts parked behind a mirror's hold on the turn gate. Each one's
+    /// turn is already open on the client, so the mirror stops publishing
+    /// once one arrives.
+    prompts_waiting: usize,
+    /// Something journaled since the last load projected updates the client
+    /// was never sent. Until a load shows them, the mirror cannot deliver a
+    /// run by streaming it: the client would be missing whatever came
+    /// before, so the sweep captures silently and asks for a reload instead.
+    unshown: bool,
+    /// When the mirror last published a frame live; see
+    /// [`MIRROR_PROMPT_OVERLAP`].
+    mirror_published_at: Option<tokio::time::Instant>,
     /// Set by cancel; read by the turn when its stream ends.
     ///
     /// The *verdict*, not the mechanism: a cancel that raced the stream's own
@@ -445,6 +482,33 @@ struct SessionState {
     journal_loaded: bool,
     fresh: bool,
     capture_failed: bool,
+}
+
+/// Counts a prompt as parked behind the mirror for as long as it is held.
+struct WaitingPrompt<'session>(&'session Session);
+
+impl<'session> WaitingPrompt<'session> {
+    /// The client opened this prompt's turn when it sent the prompt, before
+    /// it got here, so whatever the mirror streamed in between may already
+    /// sit inside that turn. Nothing can tell those frames apart, so the
+    /// mirror's run is left for a reload to put in its place.
+    fn new(session: &'session Session) -> Self {
+        let mut state = session.state.lock().expect("session state poisoned");
+        state.prompts_waiting += 1;
+        state.unshown = true;
+        drop(state);
+        Self(session)
+    }
+}
+
+impl Drop for WaitingPrompt<'_> {
+    fn drop(&mut self) {
+        self.0
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .prompts_waiting -= 1;
+    }
 }
 
 /// A session shared between a streaming turn and a concurrent cancel.
@@ -602,10 +666,15 @@ where
         &self,
         session_id: &SessionId,
     ) -> Result<Option<String>, SessionError> {
-        Ok(self
-            .effective_model(session_id)
-            .await?
-            .map(|model| model.id))
+        Ok(self.session_model(session_id).await?.map(|model| model.id))
+    }
+
+    /// The concrete model variant the session's next run will use.
+    pub async fn session_model(
+        &self,
+        session_id: &SessionId,
+    ) -> Result<Option<ModelChoice>, SessionError> {
+        self.effective_model(session_id).await
     }
 
     /// Choose the model a session's next run will use.
@@ -635,6 +704,72 @@ where
                 ))
             })?;
         session.state.lock().expect("session state poisoned").model = Some(model.default_choice());
+        Ok(())
+    }
+
+    /// Choose the reasoning effort for the session's next run.
+    ///
+    /// Cursor accepts only combinations returned by `GET /v1/models`, so the
+    /// selected effort is resolved to a variant that preserves every other
+    /// parameter of the current choice.
+    pub async fn set_reasoning_effort(
+        &self,
+        session_id: &SessionId,
+        effort: &str,
+    ) -> Result<(), SessionError> {
+        use crate::domain::model_options::REASONING_PARAMETER_IDS;
+
+        let session = self.session(session_id)?;
+        let current = self.effective_model(session_id).await?.ok_or_else(|| {
+            SessionError::Cursor(rootcause::report!(
+                "choose a concrete cursor model before setting reasoning effort"
+            ))
+        })?;
+        let models = self.models().await?;
+        let model = models
+            .iter()
+            .find(|model| model.id == current.id)
+            .ok_or_else(|| {
+                SessionError::Cursor(rootcause::report!(
+                    "current cursor model is no longer offered"
+                ))
+            })?;
+        let parameter_id = current
+            .params
+            .iter()
+            .find(|param| REASONING_PARAMETER_IDS.contains(&param.id.as_str()))
+            .map(|param| param.id.as_str())
+            .ok_or_else(|| {
+                SessionError::Cursor(rootcause::report!(
+                    "cursor model {} has no reasoning effort parameter",
+                    current.id
+                ))
+            })?;
+        let choice = model
+            .variants
+            .iter()
+            .find(|variant| {
+                variant
+                    .params
+                    .iter()
+                    .any(|param| param.id == parameter_id && param.value == effort)
+                    && super::model_options::model_params_match_except(
+                        &variant.params,
+                        &current.params,
+                        parameter_id,
+                    )
+            })
+            .map(|variant| ModelChoice {
+                id: model.id.clone(),
+                params: variant.params.clone(),
+            })
+            .ok_or_else(|| {
+                SessionError::Cursor(rootcause::report!(
+                    "cursor model {} has no compatible reasoning effort {effort}",
+                    current.id
+                ))
+            })?;
+        session.state.lock().expect("session state poisoned").model = Some(choice);
         Ok(())
     }
 
@@ -846,6 +981,7 @@ where
                 // is the one place a turn's time goes that no Cursor call
                 // accounts for, and a trace of a slow turn has to show it.
                 let waiting_since = std::time::Instant::now();
+                let _waiting = WaitingPrompt::new(&session);
                 let span = tracing::Span::current();
                 tracing::info!(
                     "waiting for the turn gate behind a mirror of a run started elsewhere"
@@ -882,6 +1018,18 @@ where
                 }
             }
         };
+        // A mirror that finished streaming just before this prompt arrived
+        // may have streamed its last frames into this prompt's turn.
+        let overlapped = session
+            .state
+            .lock()
+            .expect("session state poisoned")
+            .mirror_published_at
+            .is_some_and(|at| at.elapsed() < MIRROR_PROMPT_OVERLAP);
+        if overlapped {
+            tracing::info!("prompt arrived as a mirrored run finished streaming; reloading");
+            self.require_reload(session_id, &session).await?;
+        }
 
         if !session
             .state
@@ -904,7 +1052,7 @@ where
             .agent
             .clone();
         if let Some(agent) = &prior_agent {
-            self.backfill_foreign_runs(session_id, &session, agent, None, &cancel)
+            self.backfill_foreign_runs(session_id, &session, agent, None, &cancel, Emit::Silent)
                 .await?;
         }
         // Preserve original content before the provider creates remote work.
@@ -913,7 +1061,7 @@ where
             &session,
             None,
             JournalInput::Prompt(blocks.clone()),
-            false,
+            Emit::Silent,
         )
         .await?;
 
@@ -932,7 +1080,7 @@ where
                 &session,
                 None,
                 JournalInput::PromptAborted(prompt_sequence),
-                false,
+                Emit::Silent,
             )
             .await?;
             return Ok(StopReason::Cancelled);
@@ -1020,7 +1168,7 @@ where
                         &session,
                         None,
                         JournalInput::PromptAborted(prompt_sequence),
-                        false,
+                        Emit::Silent,
                     )
                     .await?;
                     if cancel.is_cancelled() {
@@ -1053,7 +1201,7 @@ where
             &session,
             Some(&run),
             JournalInput::PromptAccepted(prompt_sequence),
-            false,
+            Emit::Silent,
         )
         .await?;
         {
@@ -1063,8 +1211,15 @@ where
         }
         // Acceptance is durable even if recovery of an older run fails. Do
         // not observe/project the new run until every older run is reconciled.
-        self.backfill_foreign_runs(session_id, &session, &agent, Some(&run), &cancel)
-            .await?;
+        self.backfill_foreign_runs(
+            session_id,
+            &session,
+            &agent,
+            Some(&run),
+            &cancel,
+            Emit::Silent,
+        )
+        .await?;
         // The turn span is the only place all three identities meet, and it
         // is what makes a Macro session joinable to the cursor.com run that
         // served it.
@@ -1116,7 +1271,7 @@ where
                 &session,
                 Some(&run),
                 JournalInput::Interrupted(interrupted),
-                true,
+                Emit::Live,
             )
             .await?;
         }
@@ -1126,7 +1281,7 @@ where
                 &session,
                 Some(&run),
                 JournalInput::Interrupted("user cancelled the turn".into()),
-                true,
+                Emit::Live,
             )
             .await?;
         }
@@ -1361,7 +1516,7 @@ where
             agent.acp.session_id = ?session_id,
             cursor.agent.id = %agent,
             cursor.run.id = %run,
-            cursor.ingest.emit = mode.emit,
+            cursor.ingest.emit = ?mode.emit,
             cursor.ingest.strict = mode.strict,
             cursor.ingest.attempt = mode.attempt,
             cursor.stream.reconnects = tracing::field::Empty,
@@ -1410,7 +1565,7 @@ where
                 session,
                 Some(run),
                 JournalInput::Reconciled,
-                false,
+                Emit::Silent,
             )
             .await?;
             return match status {
@@ -1842,7 +1997,7 @@ where
         agent: &CursorAgentId,
         run: &CursorRunId,
         cancel: &tokio_util::sync::CancellationToken,
-        emit: bool,
+        emit: Emit,
     ) -> Result<crate::domain::model::RunOutcome, SessionError> {
         let mut raw = None;
         for attempt in 0..=POLL_ERROR_TOLERANCE {
@@ -2005,6 +2160,11 @@ where
     /// following of a run that has not ended. That run is left as a turn
     /// leaves one it gave up on: interrupted, to be mirrored in once it does
     /// end, and never blocking the prompt behind it again.
+    ///
+    /// `emit` is [`Emit::Mirror`] for the host's sweep, which publishes the
+    /// runs as they happen and checkpoints them like a turn, and
+    /// [`Emit::Silent`] for a prompt catching up, whose own turn is already
+    /// open on the client; silent recovery is shown by a reload.
     async fn backfill_foreign_runs(
         &self,
         session_id: &SessionId,
@@ -2012,6 +2172,7 @@ where
         agent: &CursorAgentId,
         current_run: Option<&CursorRunId>,
         cancel: &tokio_util::sync::CancellationToken,
+        emit: Emit,
     ) -> Result<bool, SessionError> {
         self.ensure_journal(session_id, session).await?;
         let last = session
@@ -2081,6 +2242,7 @@ where
         }
         runs.retain(|run| !unfinished.contains(run));
         let mirrored = !runs.is_empty();
+        let mut delivered = None;
         for run in &runs {
             if !reconciled.contains(run) {
                 // Before the ingestion, not after: a run still going is
@@ -2107,7 +2269,7 @@ where
                         run,
                         cancel,
                         IngestMode {
-                            emit: false,
+                            emit,
                             ..IngestMode::LIVE
                         },
                     )
@@ -2139,32 +2301,76 @@ where
                 }
                 return Err(rootcause::report!("Cursor run {run} remains unreconciled").into());
             }
+            delivered = Some(run);
         }
         if mirrored {
-            let notify = {
-                let mut state = session.state.lock().expect("session state poisoned");
-                if let Err(error) =
-                    history_projection(&state.journal_entries, HistoryGap::DeclinesReplacement)
+            // Everything the client has not seen went out live, so the runs
+            // are delivered the way a turn's is: checkpointed, no reload.
+            let unshown = session
+                .state
+                .lock()
+                .expect("session state poisoned")
+                .unshown;
+            if emit == Emit::Mirror && !unshown {
+                if let Some(run) = delivered {
+                    self.notifier
+                        .checkpoint(session_id, run)
+                        .await
+                        .map_err(SessionError::Cursor)?;
+                    session
+                        .state
+                        .lock()
+                        .expect("session state poisoned")
+                        .last_run = Some(run.clone());
+                }
+                // A prompt that parked while the checkpoint was on its way
+                // may hold the run's last frames in its turn.
+                if !session
+                    .state
+                    .lock()
+                    .expect("session state poisoned")
+                    .unshown
                 {
-                    tracing::warn!(error = ?error, %session_id, "captured recovery cannot replace history yet");
                     return Ok(mirrored);
                 }
-                !std::mem::replace(&mut state.reload_pending, true)
-            };
-            if notify {
-                self.notifier
-                    .require_reload(session_id)
-                    .await
-                    .inspect_err(|_| {
-                        session
-                            .state
-                            .lock()
-                            .expect("session state poisoned")
-                            .reload_pending = false;
-                    })?;
             }
+            self.require_reload(session_id, session).await?;
         }
         Ok(mirrored)
+    }
+
+    /// Ask the host to reload, once, so a load shows what was captured.
+    ///
+    /// Declined while the journal cannot yet replace the visible history:
+    /// a load then would show less than the client already has.
+    async fn require_reload(
+        &self,
+        session_id: &SessionId,
+        session: &Session,
+    ) -> Result<(), SessionError> {
+        let notify = {
+            let mut state = session.state.lock().expect("session state poisoned");
+            if let Err(error) =
+                history_projection(&state.journal_entries, HistoryGap::DeclinesReplacement)
+            {
+                tracing::warn!(error = ?error, %session_id, "captured recovery cannot replace history yet");
+                return Ok(());
+            }
+            !std::mem::replace(&mut state.reload_pending, true)
+        };
+        if notify {
+            self.notifier
+                .require_reload(session_id)
+                .await
+                .inspect_err(|_| {
+                    session
+                        .state
+                        .lock()
+                        .expect("session state poisoned")
+                        .reload_pending = false;
+                })?;
+        }
+        Ok(())
     }
 
     /// Re-host the walkthrough files this run produced and say so in the
@@ -2296,7 +2502,7 @@ where
             session,
             Some(run),
             JournalInput::ArtifactsCollected(collected),
-            true,
+            Emit::Live,
         )
         .await
     }
@@ -2359,8 +2565,14 @@ where
             state.fresh
         };
         if fresh {
-            self.capture(id, session, None, JournalInput::HistoryComplete, false)
-                .await?;
+            self.capture(
+                id,
+                session,
+                None,
+                JournalInput::HistoryComplete,
+                Emit::Silent,
+            )
+            .await?;
             session.state.lock().expect("session state poisoned").fresh = false;
         }
         Ok(())
@@ -2374,7 +2586,7 @@ where
         session: &Session,
         run: Option<&CursorRunId>,
         input: JournalInput,
-        emit: bool,
+        emit: Emit,
     ) -> Result<(), SessionError> {
         let (expected, duplicate) = {
             let state = session.state.lock().expect("session state poisoned");
@@ -2445,6 +2657,29 @@ where
                 .map(|(repository, branch)| (repository.clone(), branch.clone()))
                 .collect();
             (updates, completion, pull_request, working_branches)
+        };
+        let emit = {
+            let emit_mode = emit;
+            let mut state = session.state.lock().expect("session state poisoned");
+            let emit = match emit {
+                Emit::Live => true,
+                Emit::Silent => false,
+                // Once anything is held back, the rest of the run is too:
+                // later frames make no sense to a client missing earlier ones.
+                Emit::Mirror => state.prompts_waiting == 0 && !state.unshown,
+            };
+            if emit && emit_mode == Emit::Mirror {
+                state.mirror_published_at = Some(tokio::time::Instant::now());
+            }
+            // A prompt's own blocks are on the client already: it sent them.
+            let visible = !updates.is_empty()
+                || completion.is_some()
+                || pull_request.is_some()
+                || !working_branches.is_empty();
+            if !emit && visible && !matches!(input, JournalInput::Prompt(_)) {
+                state.unshown = true;
+            }
+            emit
         };
         if emit {
             for (repository, branch) in working_branches {
@@ -2556,7 +2791,13 @@ where
             };
             let blocks = vec![ContentBlock::Text(TextContent::new(prompt))];
             if let Err(error) = self
-                .capture(id, session, None, JournalInput::Prompt(blocks), false)
+                .capture(
+                    id,
+                    session,
+                    None,
+                    JournalInput::Prompt(blocks),
+                    Emit::Silent,
+                )
                 .await
             {
                 tracing::warn!(%error, %run, "could not journal a recovered Cursor prompt");
@@ -2576,7 +2817,7 @@ where
                     session,
                     Some(&run),
                     JournalInput::PromptAccepted(sequence),
-                    false,
+                    Emit::Silent,
                 )
                 .await
             {
@@ -2652,8 +2893,14 @@ where
                     .await?;
                 }
             }
-            self.capture(id, &session, None, JournalInput::HistoryComplete, false)
-                .await?;
+            self.capture(
+                id,
+                &session,
+                None,
+                JournalInput::HistoryComplete,
+                Emit::Silent,
+            )
+            .await?;
         }
         // Before projecting, not after: a prompt recovered here closes the gap
         // rather than merely surviving it, and lands in the transcript this
@@ -2744,8 +2991,20 @@ where
                 state.mirror_cancel = tokio_util::sync::CancellationToken::new();
                 state.mirror_cancel.clone()
             };
+            // Streaming a run is only whole if the client has everything
+            // before it; otherwise capture silently and let a load show it.
+            let emit = if session
+                .state
+                .lock()
+                .expect("session state poisoned")
+                .unshown
+            {
+                Emit::Silent
+            } else {
+                Emit::Mirror
+            };
             if let Err(error) = self
-                .backfill_foreign_runs(&session_id, &session, &agent, None, &cancel)
+                .backfill_foreign_runs(&session_id, &session, &agent, None, &cancel, emit)
                 .await
             {
                 tracing::warn!(%session_id, %agent, %error, "could not mirror cursor.com runs");
@@ -2787,6 +3046,8 @@ impl ReplayGuard {
         let mut state = self.session.state.lock().expect("session state poisoned");
         state.ready_for_sync = true;
         state.reload_pending = false;
+        state.unshown = false;
+        state.mirror_published_at = None;
     }
 }
 

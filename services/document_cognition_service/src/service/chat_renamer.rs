@@ -1,8 +1,11 @@
 use crate::api::context::ApiContext;
 use agent::PredefinedModel;
+use bots::outbound::pg_bots_repo::PgBotsRepo;
 use chat::domain::models::PatchChatRepoArgs;
 use chat::domain::ports::ChatRepo;
 use chat::outbound::postgres::PgChatRepo;
+use entity_registry::OwnerGrantPolicy;
+use entity_registry_db_utils::OwnedEntityRegistrar;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use std::sync::Arc;
@@ -67,19 +70,22 @@ async fn rename_initial_chat(
     }
     let user_id_string = user_id.as_ref().to_string();
 
-    PgChatRepo::new(ctx.db.clone())
-        .patch(
-            user_id,
-            &chat_id,
-            PatchChatRepoArgs {
-                name: Some(name.clone()),
-                project_id: None,
-                share_permission: None,
-                team_share: None,
-            },
-        )
-        .await
-        .map_err(anyhow::Error::from)?;
+    PgChatRepo::new(
+        ctx.db.clone(),
+        OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(ctx.db.clone()))),
+    )
+    .patch(
+        user_id,
+        &chat_id,
+        PatchChatRepoArgs {
+            name: Some(name.clone()),
+            project_id: None,
+            share_permission: None,
+            team_share: None,
+        },
+    )
+    .await
+    .map_err(anyhow::Error::from)?;
 
     ctx.connection_gateway_client
         .batch_send_to_entities(

@@ -1,7 +1,7 @@
 //! The per-session command queue: admission, the worker that drains it one
 //! command at a time, and routing to the replica that holds the session.
 
-use agent_fold::domain::model::{StopReason, TurnSignal};
+use agent_fold::domain::model::{StopReason, TurnId, TurnSignal};
 use agent_session::domain::error::AgentSessionError;
 use agent_session::domain::events::{
     AgentSessionLifecycleEvent, InputReceivedMetadata, SessionDeletedMetadata,
@@ -319,6 +319,9 @@ where
             | HarnessCommand::EditQueued { actor, .. }
             | HarnessCommand::RemoveQueued { actor, .. } => {
                 let session = self.sessions.get_session(session_id).await?;
+                if session.is_archived {
+                    return Err(AgentSessionError::Archived(session_id).into());
+                }
                 if AgentKind::for_session(session.bot_id, &session.harness)
                     == AgentKind::ClaudeCloud
                     && !actor
@@ -336,8 +339,12 @@ where
             HarnessCommand::Open(_)
             | HarnessCommand::Turn(_)
             | HarnessCommand::SessionStopped { .. }
-            | HarnessCommand::SetSandboxSize(_)
             | HarnessCommand::Delete => {}
+            HarnessCommand::SetSandboxSize(_) => {
+                if self.sessions.get_session(session_id).await?.is_archived {
+                    return Err(AgentSessionError::Archived(session_id).into());
+                }
+            }
         }
 
         match command {
@@ -850,6 +857,12 @@ where
     /// own action triggered this dispatch hears about it.
     #[tracing::instrument(err, skip(self), fields(%session_id))]
     pub(super) async fn dispatch_next(&self, session_id: AgentSessionId) -> Result<Dispatch> {
+        if self.sessions.get_session(session_id).await?.is_archived {
+            self.queues.drop_session(session_id);
+            self.write_queue(session_id).await?;
+            self.publish_queue(session_id).await;
+            return Ok(Dispatch::QueueEmpty);
+        }
         let Some(mut entry) = self.queues.claim_next(session_id) else {
             return Ok(Dispatch::QueueEmpty);
         };
@@ -858,18 +871,6 @@ where
         // mark) and keeps every still-waiting action.
         if let Err(error) = self.write_queue(session_id).await {
             self.queues.requeue_front(session_id, entry);
-            return Err(error);
-        }
-
-        // Compose a copy: the queued entry stays raw so a retry still edits
-        // and re-composes the user's text, and the chip (below) still shows
-        // what they typed rather than the composed payload.
-        let mut composed = entry.action.clone();
-        if let Err(error) = self
-            .compose_action(&mut composed, entry.actor.as_ref(), entry.announce.as_ref())
-            .await
-        {
-            self.requeue_claimed(session_id, entry).await;
             return Err(error);
         }
 
@@ -883,6 +884,24 @@ where
                 return Err(error.into());
             }
         };
+
+        // Compose a copy: the queued entry stays raw so a retry still edits
+        // and re-composes the user's text, and the chip (below) still shows
+        // what they typed rather than the composed payload.
+        let mut composed = entry.action.clone();
+        if let Err(error) = self
+            .compose_action(
+                session_id,
+                &mut composed,
+                entry.actor.as_ref(),
+                entry.announce.as_ref(),
+                prompted_message_id.turn == TurnId(0),
+            )
+            .await
+        {
+            self.requeue_claimed(session_id, entry).await;
+            return Err(error);
+        }
 
         if entry.announced.is_none() {
             let announcement = match self

@@ -1,4 +1,5 @@
 import { listOwnedSlotName } from '@app/components/list';
+import { useMobileSearchText } from '@app/features/command/mobile/use-mobile-search-text';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import {
   type FacetSelection,
@@ -46,10 +47,15 @@ function DriveComposition(props: { route: DriveRouteState }) {
   const tagSets = useTagSets();
   const tagSetsReady = useTagSetsReady();
   const view = createDriveViewState(props.route, () => list.reset());
+  const searchText = useMobileSearchText(
+    () => view.value().search,
+    panel.handle.isActive
+  );
+  const selection = () => ({ ...view.value(), search: searchText() });
   const sidebar = createDriveSidebarSource();
   const source = withSplitPanelOwner(listOwnedSlotName('data-source'), () =>
     createDriveDataSource({
-      selection: view.value,
+      selection,
       userId,
       tagSets,
       tagSetsReady,
@@ -146,7 +152,15 @@ function DriveComposition(props: { route: DriveRouteState }) {
   onMount(() => panel.handle.setDisplayName('Drive'));
 
   return (
-    <DriveProvider value={{ state, source, list, sidebar, actions }}>
+    <DriveProvider
+      value={{
+        state: { ...state, value: selection },
+        source,
+        list,
+        sidebar,
+        actions,
+      }}
+    >
       <DriveWorkspace />
     </DriveProvider>
   );

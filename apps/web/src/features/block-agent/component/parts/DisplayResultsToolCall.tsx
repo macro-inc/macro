@@ -1,6 +1,7 @@
 /** DisplayResults is message content, rendered directly from the call's view. */
 
 import { DashboardToolView } from '@app/features/dynamic-ui/DashboardToolView.lazy';
+import { Telemetry } from '@macro-inc/observability';
 import { ErrorBoundary, Show, Suspense } from 'solid-js';
 import { isToolActive, ToolCard } from '../../ui';
 import type { ToolCallCommon } from './shared';
@@ -39,7 +40,12 @@ export function DisplayResultsToolCall(props: {
         />
       }
     >
-      <ErrorBoundary fallback={unavailable()}>
+      <ErrorBoundary
+        fallback={(err) => {
+          Telemetry.error(err, { surface: 'display-results' });
+          return unavailable();
+        }}
+      >
         <Suspense
           fallback={
             <Show when={!pending()}>

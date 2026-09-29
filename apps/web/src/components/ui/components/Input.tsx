@@ -24,7 +24,7 @@ export const inputOutlineFocusClasses =
 /** Canonical visual variants for standalone inputs. */
 export const inputVariants = createVariants(
   cn(
-    'w-full min-w-0 rounded-full border text-ink caret-current outline-none transition-[background-color,border-color,box-shadow] duration-120 motion-reduce:transition-none',
+    'w-full min-w-0 rounded-lg border text-ink caret-current outline-none transition-[background-color,border-color,box-shadow] duration-120 motion-reduce:transition-none',
     'file:inline-flex file:border-0 file:bg-transparent file:text-[inherit] file:font-medium file:text-ink',
     'placeholder:text-ink-placeholder',
     'aria-invalid:border-failure aria-invalid:ring-2 aria-invalid:ring-failure/20',

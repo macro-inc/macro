@@ -52,3 +52,6 @@ infra/local/generated/
 
 # Owner-bound subscription OAuth credentials for the internal Claude demo.
 /.claude-cloud/
+
+# Marketing site prerender bundle (dist/ is covered by **/dist).
+/apps/marketing/dist-prerender/

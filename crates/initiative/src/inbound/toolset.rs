@@ -1,19 +1,29 @@
 //! Workflow tools for projects (the initiative domain), separate from folder tools.
 
+mod assign_tasks_to_initiative;
 mod lifecycle;
 mod reads;
 mod sharing;
 mod tasks;
 mod types;
+mod unassign_tasks_from_initiative;
 
 #[cfg(test)]
 mod test;
 
+pub use assign_tasks_to_initiative::{
+    AssignTasksToInitiative, AssignTasksToInitiativeResponse, TaskAssignmentOutcome,
+    TaskAssignmentStatus,
+};
 pub use lifecycle::{CreateInitiative, DeleteInitiative, UpdateInitiative};
 pub use reads::{ListInitiatives, ReadInitiative, ReadInitiativeActivity, ReadTaskInitiatives};
 pub use sharing::UpdateInitiativeSharing;
 pub use tasks::SetTaskInitiative;
 pub use types::*;
+pub use unassign_tasks_from_initiative::{
+    TaskUnassignmentOutcome, TaskUnassignmentStatus, UnassignTasksFromInitiative,
+    UnassignTasksFromInitiativeResponse,
+};
 
 use std::sync::Arc;
 
@@ -106,6 +116,17 @@ fn failure(error: InitiativeError) -> ToolCallError {
     }
 }
 
+fn required_task_batch(task_ids: Vec<String>) -> ToolResult<Vec<String>> {
+    if task_ids.is_empty() {
+        return Err(failure(InitiativeError::BadRequest(
+            "provide at least one task id".into(),
+        )));
+    }
+    crate::domain::models::TaskAssignmentBatch::try_new(task_ids)
+        .map(|batch| batch.into_task_ids())
+        .map_err(failure)
+}
+
 /// Complete project lifecycle, sharing, membership and history toolset.
 pub fn initiative_toolset<S: InitiativeService, A: EntityAccessService, R: EntityActivityReads>()
 -> AsyncToolCollection<InitiativeToolContext<S, A, R>> {
@@ -117,6 +138,8 @@ pub fn initiative_toolset<S: InitiativeService, A: EntityAccessService, R: Entit
         .add_tool::<DeleteInitiative, InitiativeToolContext<S, A, R>>()
         .add_tool::<UpdateInitiativeSharing, InitiativeToolContext<S, A, R>>()
         .add_tool::<SetTaskInitiative, InitiativeToolContext<S, A, R>>()
+        .add_tool::<AssignTasksToInitiative, InitiativeToolContext<S, A, R>>()
+        .add_tool::<UnassignTasksFromInitiative, InitiativeToolContext<S, A, R>>()
         .add_tool::<ReadTaskInitiatives, InitiativeToolContext<S, A, R>>()
         .add_tool::<ReadInitiativeActivity, InitiativeToolContext<S, A, R>>()
 }

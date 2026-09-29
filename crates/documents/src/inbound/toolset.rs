@@ -1,12 +1,11 @@
 //! Toolset inbound adapter for Documents.
 
-mod comment_on_document_text;
+mod comment_on_document;
 mod create_document;
 mod edit_document;
 mod read_content;
 mod read_metadata;
 mod rename_document;
-mod reply_to_document_comment;
 mod resolve_document_comment;
 mod spreadsheet;
 mod upload_file;
@@ -24,13 +23,12 @@ use crate::{
     domain::ports::editing::{EditingWorkerService, EditorName},
     domain::ports::mentions::NoOpDocumentMentionTracker,
     inbound::toolset::{
-        comment_on_document_text::CommentOnDocumentText,
+        comment_on_document::CommentOnDocument,
         create_document::CreateDocument,
         edit_document::EditDocument,
         read_content::ReadContent,
         read_metadata::ReadMetadata,
         rename_document::RenameDocument,
-        reply_to_document_comment::ReplyToDocumentComment,
         resolve_document_comment::ResolveDocumentComment,
         spreadsheet::{CalculateSpreadsheet, EditSpreadsheet, ReadSpreadsheet},
         upload_file::UploadFile,
@@ -265,8 +263,7 @@ where
         .add_tool::<UploadFile, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<RenameDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<EditDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
-        .add_tool::<ReplyToDocumentComment, DocumentToolContext<DSvc, ESvc, EDSvc>>()
-        .add_tool::<CommentOnDocumentText, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<CommentOnDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<ResolveDocumentComment, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<ReadSpreadsheet, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<CalculateSpreadsheet, DocumentToolContext<DSvc, ESvc, EDSvc>>()

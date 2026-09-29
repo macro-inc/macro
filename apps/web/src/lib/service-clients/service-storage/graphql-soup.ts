@@ -55,6 +55,7 @@ import {
 } from 'graphql-ws';
 import { createSignal } from 'solid-js';
 import { match } from 'ts-pattern';
+import { delegateChannelNotificationRefresh } from '../../queries/channel/notification-refresh';
 import type { SoupApiItem } from './generated/schemas/soupApiItem';
 import type { SoupCalendarEventSoupPropertiesField } from './generated/schemas/soupCalendarEventSoupPropertiesField';
 import type { SoupCalendarEventTime } from './generated/schemas/soupCalendarEventTime';
@@ -529,6 +530,7 @@ export function getGraphqlSoupClient(): Client {
             // Preserve the optimistic layer on transport failures and on
             // application failures the server explicitly allows us to retry.
             shouldRetryMutation: shouldRetryGraphqlMutation,
+            delegateRevalidation: delegateChannelNotificationRefresh,
           }),
           graphqlSoupSubscriptionExchange(graphqlWsClient),
           fetchExchange,
@@ -762,6 +764,8 @@ type GraphqlNotification =
   | SoupNotificationFieldsFragment
   | ChannelListNotificationFieldsFragment;
 
+// Convert the GraphQL union and aliased fields into the shared tag/content
+// payload used to render, stack, and navigate REST, realtime, and GraphQL notifications.
 function mapGraphqlNotificationMetadata(
   metadata: GraphqlNotificationMetadata
 ): NotifEvent {
@@ -952,6 +956,24 @@ function mapGraphqlNotificationMetadata(
               metadata.channelMessageSendSenderProfilePictureUrl,
           },
         }) satisfies NotifEventMember<'channel_message_send'>
+    )
+    .with(
+      { __typename: 'GraphqlChannelMessageReactionMetadata' },
+      (metadata) =>
+        ({
+          tag: 'channel_message_reaction',
+          content: {
+            messageId: metadata.channelMessageReactionMessageId,
+            threadId: metadata.channelMessageReactionThreadId,
+            messageContent: metadata.channelMessageReactionMessageContent,
+            emoji: metadata.channelMessageReactionEmoji,
+            channelType:
+              metadata.channelMessageReactionChannelType.toLowerCase() as ChannelType,
+            channelName: metadata.channelMessageReactionChannelName,
+            senderProfilePictureUrl:
+              metadata.channelMessageReactionSenderProfilePictureUrl,
+          },
+        }) satisfies NotifEventMember<'channel_message_reaction'>
     )
     .with(
       { __typename: 'GraphqlChannelReplyMetadata' },
@@ -1421,6 +1443,7 @@ export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem | null {
           data: {
             id: entity.id,
             name: entity.sessionName,
+            isArchived: entity.isArchived,
             ownerId: entity.ownerId,
             botId: entity.botId,
             harness: entity.harness,

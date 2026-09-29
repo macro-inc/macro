@@ -17,6 +17,7 @@ import { NewChatPage } from './NewChatPage';
 
 const mocks = vi.hoisted(() => ({
   openSettings: vi.fn(),
+  capabilitiesPending: false,
   attachments: [] as InputAttachmentData[],
   recentIds: [] as string[],
   recentUrls: [] as string[],
@@ -70,6 +71,35 @@ vi.mock('../queries/repository-branches', () => ({
   }),
 }));
 vi.mock('../components/AgentGlyph', () => ({ AgentIcon: () => <span /> }));
+
+vi.mock('@queries/agents/capabilities', () => ({
+  useAgentCapabilitiesQuery: (
+    target: () => { model?: string } | undefined
+  ) => ({
+    get isSuccess() {
+      return !mocks.capabilitiesPending;
+    },
+    isFetching: false,
+    get data() {
+      if (target()?.model !== 'gpt-5') return { configOptions: [] };
+      return {
+        configOptions: [
+          {
+            id: 'cursor_effort',
+            name: 'Effort',
+            category: 'thought_level',
+            type: 'select',
+            currentValue: 'low',
+            options: [
+              { value: 'low', name: 'Low' },
+              { value: 'ultra', name: 'Ultra' },
+            ],
+          },
+        ],
+      };
+    },
+  }),
+}));
 
 vi.mock('@queries/agents/models', () => ({
   useAgentModelsQueries: (targets: () => { harness: string }[]) => [
@@ -154,6 +184,10 @@ vi.mock('../components/ChatComposer', () => ({
   ),
 }));
 
+beforeEach(() => {
+  localStorage.clear();
+});
+
 function page(
   connected = true,
   agents: PersistedAgentLike[] = [],
@@ -214,6 +248,7 @@ async function hoverAgent(name: string) {
 describe('agent-led new conversation', () => {
   let motionStyles: HTMLStyleElement;
   beforeEach(() => {
+    mocks.capabilitiesPending = false;
     mocks.attachments = [];
     mocks.recentIds = [MACRO_CODER_BOT_ID];
     mocks.recentUrls = [];
@@ -297,6 +332,17 @@ describe('agent-led new conversation', () => {
       repoUrl: 'https://github.com/macro-inc/macro',
       repoBranch: 'feature/home',
     });
+  });
+  it('restores an unsent draft after the page remounts', () => {
+    page();
+    fireEvent.input(screen.getByRole('textbox', { name: 'Draft' }), {
+      target: { value: 'Keep this prompt' },
+    });
+    cleanup();
+    page();
+    expect(
+      (screen.getByRole('textbox', { name: 'Draft' }) as HTMLInputElement).value
+    ).toBe('Keep this prompt');
   });
   it('starts a new conversation on Choose repository, not the last used one', async () => {
     mocks.recentIds = [CURSOR_BOT_ID];
@@ -587,6 +633,7 @@ describe('agent-led new conversation', () => {
         selected={macro}
         loading={false}
         onSelect={onSelect}
+        onSelectEffort={onSelect}
         onConnect={vi.fn()}
         onCreate={vi.fn()}
       />
@@ -643,6 +690,36 @@ describe('agent-led new conversation', () => {
       'Chat default'
     );
     expect(screen.getByTestId('drawer').hasAttribute('hidden')).toBe(true);
+  });
+  it('passes opaque effort and clears it with the model override after sending', async () => {
+    const send = page();
+    const models = await hoverAgent('Cursor');
+    fireEvent.keyDown(models.getByRole('menuitem', { name: /^GPT-5/ }), {
+      key: 'ArrowRight',
+    });
+    await screen.findByRole('menuitem', { name: 'Ultra' });
+    fireEvent.keyDown(screen.getByRole('menuitem', { name: 'Ultra' }), {
+      key: 'Enter',
+    });
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+    mocks.capabilitiesPending = true;
+    expect(screen.getByRole('button', { name: 'Agent' }).textContent).toContain(
+      'GPT-5 · Ultra'
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        modelOverride: 'gpt-5',
+        effortOverride: { configId: 'cursor_effort', value: 'ultra' },
+      })
+    );
+    expect(
+      screen.queryByRole('button', { name: 'Reasoning effort' })
+    ).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenLastCalledWith(
+      expect.objectContaining({ effortOverride: undefined })
+    );
   });
 });
 

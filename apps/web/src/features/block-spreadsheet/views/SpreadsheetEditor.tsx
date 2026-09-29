@@ -500,10 +500,14 @@ export function SpreadsheetEditor(props: {
             class="w-full rounded border border-edge-muted bg-input px-3 py-2 outline-none focus:border-accent"
           />
           <div class="mt-4 flex justify-end gap-2">
-            <Button type="button" onClick={() => setResize(undefined)}>
+            <Button
+              variant="ghost"
+              type="button"
+              onClick={() => setResize(undefined)}
+            >
               Cancel
             </Button>
-            <Button type="submit" variant="accent">
+            <Button type="submit" variant="strong">
               Apply
             </Button>
           </div>

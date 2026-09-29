@@ -567,16 +567,12 @@ function CalendarSearchControl(props: {
         <Show when={rawQuery().trim()}>
           <Button
             type="button"
-            variant="plain"
+            variant="ghost"
             size="icon-sm"
             square
             aria-pressed={filters().matchType === 'exact'}
             label="Exact match"
-            class={
-              filters().matchType === 'exact'
-                ? 'rounded-full bg-active text-ink'
-                : 'rounded-full'
-            }
+            class={filters().matchType === 'exact' ? 'bg-active text-ink' : ''}
             onPointerDown={(event) => event.preventDefault()}
             onClick={() =>
               setFilters((current) => ({
@@ -762,7 +758,7 @@ function CalendarSearchControl(props: {
                         <Show when={rawQuery()}>
                           <Button
                             type="button"
-                            variant="plain"
+                            variant="ghost"
                             size="icon-sm"
                             square
                             label="Clear search"
@@ -863,11 +859,11 @@ function CalendarSearchControl(props: {
                                     {(link) => (
                                       <Button
                                         type="button"
-                                        variant="plain"
+                                        variant="ghost"
                                         size="sm"
                                         label={`Join ${link().label}`}
                                         class={cn(
-                                          'rounded-full px-2',
+                                          'px-2',
                                           link().kind === 'google'
                                             ? 'bg-blue text-[white] light-mode:not-touch:not-disabled:hover:text-[white] dark-mode:bg-blue-bg dark-mode:text-blue-ink dark-mode:not-touch:not-disabled:hover:bg-blue-hover dark-mode:not-touch:not-disabled:hover:text-blue-ink'
                                             : 'bg-hover text-ink not-touch:not-disabled:hover:bg-active not-touch:not-disabled:hover:text-ink'

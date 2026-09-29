@@ -13,7 +13,7 @@ function ToolbarButton(props: ButtonProps) {
       variant="ghost"
       size="icon-md"
       noTouchResize
-      class="island size-(--mobile-chrome-button-size) rounded-full border-0 bg-chrome p-0 text-ink"
+      class="island size-(--mobile-chrome-button-size) border-0 bg-chrome p-0 text-ink"
     />
   );
 }
