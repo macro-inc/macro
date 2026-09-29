@@ -563,6 +563,13 @@ preview replies per thread. Expand a thread to load its replies;
 `Load earlier comments` pages backward. Live updates preserve unsent replies
 and edits while updating the surrounding thread.
 
+When verifying `@` mentions, compare the same person query in the document body
+and the Discussion composer: shared contacts use the same recent-interaction
+ranking. The desktop menu keeps up to three People results visible while other
+result categories load; use **View all** for the remaining matches. Check that a
+person stays clickable after document and email results arrive, and clear the
+unsent draft after testing.
+
 Select text and choose the comment action to create an anchored comment. These
 threads appear beside their text in the margin (or in the active thread drawer
 on phones) and never in the bottom Discussion, including after live updates or

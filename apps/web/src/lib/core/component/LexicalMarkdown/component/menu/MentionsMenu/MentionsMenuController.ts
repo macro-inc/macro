@@ -37,6 +37,8 @@ type SelectedCategory = string | null;
 /** result of bin computation - how many items to show per bucket */
 type MentionBins = Record<string, number>;
 
+const PEOPLE_PREVIEW_COUNT = 3;
+
 class MentionsMenuController {
   private buckets: Accessor<BucketConfig[]>;
   private maxItems: number;
@@ -98,7 +100,16 @@ class MentionsMenuController {
   });
 
   bins = createLazyMemo((): MentionBins => {
-    return this.computeBins(this.rawBins(), this.maxItems);
+    const { users, ...otherBins } = this.rawBins();
+    if (users === undefined) return this.computeBins(otherBins, this.maxItems);
+
+    // Keep people visible while asynchronous entity/email results arrive.
+    // Proportional allocation can otherwise remove the person under the pointer.
+    const peopleCount = Math.min(users, PEOPLE_PREVIEW_COUNT, this.maxItems);
+    return {
+      users: peopleCount,
+      ...this.computeBins(otherBins, this.maxItems - peopleCount),
+    };
   });
 
   combinedItems = createLazyMemo((): MentionItem[] => {
