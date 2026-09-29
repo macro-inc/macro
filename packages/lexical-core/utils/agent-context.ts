@@ -84,6 +84,8 @@ export type AgentContextAnchor =
 /** Input used to compose an agent prompt with private conversation context. */
 export type AgentContextPrompt = {
   promptMarkdown: string;
+  /** Trusted session instructions supplied by the agent harness. */
+  instructions?: string;
   /** Supplied by the message service, never by the prompt's author. */
   parent?: AgentContextParent;
   anchor?: AgentContextAnchor;
@@ -354,6 +356,14 @@ function renderConversation(input: AgentContextPrompt): string | undefined {
   ]).trimStart();
 }
 
+function renderInstructions(
+  instructions: string | undefined
+): string | undefined {
+  const trimmed = instructions?.trim();
+  if (!trimmed) return undefined;
+  return buildXml([el('instructions', [text(trimmed)])]).trimStart();
+}
+
 function escapeAgentContextTags(markdown: string): string {
   // No user-authored entity may decode into reserved syntax during import.
   return markdown
@@ -383,12 +393,15 @@ export function composeAgentContextPrompt(input: AgentContextPrompt): string {
 
   editor.update(
     () => {
-      const conversation = renderConversation(input);
-      if (conversation === undefined) return;
+      const sections = [
+        renderInstructions(input.instructions),
+        renderConversation(input),
+      ].filter((section) => section !== undefined);
+      if (sections.length === 0) return;
 
       const context = $createAgentContextNode({
         version: 1,
-        text: conversation,
+        text: sections.join('\n'),
       });
       const firstChild = $getRoot().getFirstChild();
       if (firstChild) firstChild.insertBefore(context);

@@ -61,13 +61,11 @@ import { TaskListEntity } from './TaskListEntity';
 import { TaskListHeader } from './TaskListHeader';
 import { taskGridColumnCount } from './task-grid-template';
 import './task-list.css';
-import { ProjectChip } from '@app/features/projects/components/project-chip';
-import { openProject } from '@app/features/projects/open-project';
 import {
-  ProjectAssignmentDialog,
-  useTaskProjectReferences,
-} from '@app/features/projects/projects';
-import { useSplitLayout } from '@components/app/split-layout/layout';
+  ProjectPickerPopover,
+  ProjectPropertyCell,
+} from '@app/features/projects/project-property';
+import { useTaskProjectReferences } from '@app/features/projects/projects';
 
 function ResponsiveTaskListHeader() {
   const layout = useListLayout();
@@ -228,10 +226,11 @@ export function TaskList(props: TaskListProps) {
       row.kind === 'entity' ? [row.entity.id] : []
     )
   );
-  const projectLayout = useSplitLayout();
   const columnCount = () => taskGridColumnCount(projectsEnabled());
-  const [assigningProjectTasks, setAssigningProjectTasks] =
-    createSignal<string[]>();
+  const [assigningProjectTasks, setAssigningProjectTasks] = createSignal<{
+    ids: string[];
+    anchor: HTMLElement;
+  }>();
   const tasksById = createMemo(() => {
     const tasks = new Map<string, TaskEntityWithProperties>();
     for (const row of visibleRows()) {
@@ -513,15 +512,11 @@ export function TaskList(props: TaskListProps) {
                             <TaskListEntity
                               projectSlot={
                                 projectsEnabled() ? (
-                                  <ProjectChip
+                                  <ProjectPropertyCell
+                                    taskId={entityRow().entity.id}
                                     reference={projectReferences
                                       .references()
                                       .get(entityRow().entity.id)}
-                                    onOpen={(id, event) =>
-                                      openProject(projectLayout, id, {
-                                        newSplit: event.shiftKey,
-                                      })
-                                    }
                                   />
                                 ) : undefined
                               }
@@ -675,10 +670,11 @@ export function TaskList(props: TaskListProps) {
                 <Button
                   size="sm"
                   class="whitespace-nowrap"
-                  onClick={() =>
-                    setAssigningProjectTasks(
-                      selectedTasks().map((task) => task.id)
-                    )
+                  onClick={(event) =>
+                    setAssigningProjectTasks({
+                      ids: selectedTasks().map((task) => task.id),
+                      anchor: event.currentTarget,
+                    })
                   }
                 >
                   Set project
@@ -687,10 +683,14 @@ export function TaskList(props: TaskListProps) {
             </EntitySelectionToolbar>
           </Show>
           <Show when={projectsEnabled() && assigningProjectTasks()}>
-            {(ids) => (
-              <ProjectAssignmentDialog
-                taskIds={ids()}
-                onClose={() => setAssigningProjectTasks(undefined)}
+            {(assigning) => (
+              <ProjectPickerPopover
+                taskIds={assigning().ids}
+                open
+                onOpenChange={(open) => {
+                  if (!open) setAssigningProjectTasks(undefined);
+                }}
+                getAnchorRect={() => assigning().anchor.getBoundingClientRect()}
               />
             )}
           </Show>

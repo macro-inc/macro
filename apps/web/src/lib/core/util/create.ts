@@ -82,6 +82,7 @@ export async function createMarkdownFile(
 }
 
 type CreateTaskArgs = {
+  shareWithTeam?: boolean;
   /** Composite mutations revalidate after their final write. */
   revalidateSoup?: boolean;
   title?: string;
@@ -142,6 +143,7 @@ async function createTaskResponse(args?: CreateTaskArgs) {
 
   // Create task, properties, and sync-service content in one backend-owned lifecycle.
   const result = await storageServiceClient.createTask({
+    shareWithTeam: args?.shareWithTeam,
     taskName: args?.title ?? '',
     markdown: args?.content ?? '',
     projectId: args?.projectId,

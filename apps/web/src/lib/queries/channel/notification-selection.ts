@@ -7,17 +7,15 @@ import { fetchGraphqlEntityNotifications } from '@service-storage/graphql-notifi
 import { buildGraphqlEntitySoupInput } from '../soup/graphql/entity-input';
 
 /**
- * Return immediately when no fetch is needed. A limit-one unread edge needs
- * hydration to determine message targets, mark-read IDs, and thread membership.
+ * Refresh a bounded list projection before choosing a message target. Even an
+ * empty unread edge can be stale after a new notification arrives. Only rows
+ * without that projection keep their existing notification source.
  */
 export function hydrateChannelNotificationSelection(
   channel: ChannelEntity,
   applyLocalOverrides?: (notification: Notification) => Notification
 ): WithNotification<ChannelEntity> | Promise<WithNotification<ChannelEntity>> {
   if (channel.unreadNotifications === undefined) return channel;
-  if (channel.unreadNotifications.length === 0) {
-    return { ...channel, notifications: () => [] };
-  }
   return fetchChannelNotificationSelection(channel, applyLocalOverrides);
 }
 

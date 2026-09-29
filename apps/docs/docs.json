@@ -134,6 +134,7 @@
               "AI/mcp/tools/read-initiative-activity",
               "AI/mcp/tools/read-metadata",
               "AI/mcp/tools/read-project",
+              "AI/mcp/tools/read-skill",
               "AI/mcp/tools/read-spreadsheet",
               "AI/mcp/tools/read-task-initiatives",
               "AI/mcp/tools/read-thread",

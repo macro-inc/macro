@@ -66,7 +66,24 @@ cd apps/web
 bun run dev
 ```
 
-The first run, or a run after a wasm version change, may build wasm packages. Vite prints a local URL when it is ready.
+The first run, or a run after a wasm version change, may build wasm packages.
+Vite detects your hostname and prints `https://<hostname>:3000/app/` when ready
+(`PORT` overrides the port). It generates a certificate with the same stable
+development CA as `just local`; trust `infra/local/certs/ca.pem` once on the
+machine running the browser. See the [certificate README](../infra/local/certs/README.md).
+The visiting machine must resolve the hostname and reach that port. No Docker
+proxy or Tailscale is needed. Vite forwards hosted development API and WebSocket
+requests through `/__macro_dev/` on this same origin, so arbitrary machine
+hostnames do not need to be added to the deployed CORS allowlist. Authentication
+cookies are scoped to the visiting hostname; sign in with an email code on that
+hostname rather than relying on an existing `.macro.com` cookie. Google/SSO
+redirects still use the hosted authentication service’s redirect allowlist, which
+does not currently include arbitrary development hostnames.
+
+Use `MACRO_DEV_HTTPS=false bun run dev` for an HTTP-only workflow. Tauri and the
+local stack's internal Vite server keep using HTTP automatically; the stack
+provides HTTPS through its proxy. Builds and preview servers are unchanged.
+`MACRO_DEV_PROXY=false` opts out of the hosted API proxy.
 
 ## Run the local stack
 
@@ -113,6 +130,8 @@ This command:
 
 When startup finishes, the command prints the frontend URL and the important service URLs.
 
+The reverse proxy is HTTPS at `https://localhost:8090` (or the instance's proxy port) using a generated machine certificate signed by the checked-in development CA. Trust `infra/local/certs/ca.pem` once so the browser accepts it; see that directory's README. Local Caddy also reflects any `Origin` (wildcard CORS) so `https://` and `*.localhost` frontends can call the proxy.
+
 Open the frontend URL in your browser.
 
 The local environment supplies both `LOCAL_AWS_URL` (the container endpoint)
@@ -121,6 +140,11 @@ other presigned uploads use the public endpoint in browser-facing URLs. If an
 upload attempts `localhost:4566` on a named instance, rebuild the service and
 reload its generated environment; named instances publish storage on their own
 port.
+
+If LocalStack loses its temporary resources after a restart, restore missing
+buckets, queues, tables, and keys without resetting Postgres or volumes:
+`cargo x localstack-provision --instance <name>`. Include `--port-base` if the
+instance uses an explicit port base. This restores resources, not lost objects.
 
 The stack does not create accounts in advance. Passwordless login creates a user
 on demand. Register with any email address. FusionAuth sends you a one-time code
@@ -250,12 +274,32 @@ infra/local/generated/<instance>
 
 ### Access a remote dev server through one URL
 
-`run_local` and `run_dev` serve API requests and backend WebSockets through Vite,
-so the browser needs only the frontend port. For example, forward a remote
-instance's frontend with `ssh -N -L 3000:127.0.0.1:20110 your-dev-host`, then open
-`http://localhost:3000/app/`. A WebSocket-capable reverse proxy can instead expose
-that frontend under a different hostname/port, including HTTPS. Vite HMR follows
-the page's origin; no separate HMR or backend port forward is needed.
+`just local` (the `run_local` alias) and `run_dev` call `hostname`, add that
+name to Vite's allowed hosts, and issue a certificate for it using the stable
+CA in `infra/local/certs`. Startup prints `https://<hostname>:<proxy-port>/app/`.
+Caddy serves backend routes directly and forwards frontend assets and HMR to
+Vite, so the browser only needs the HTTPS proxy port.
+Login fallback redirects, Pipedream origins, MCP callbacks, and file permalinks
+use that same HTTPS origin for attached local stacks.
+If your host firewall blocks Docker-to-host traffic, allow the instance's
+Docker network to reach the Vite port through `host.docker.internal`.
+Startup verifies `/app/` through the HTTPS proxy before printing “ready”;
+a listening Vite port alone is insufficient. A 502 with a proxy log such as
+`dial tcp <host-gateway>:<vite-port>: i/o timeout` indicates this firewall path
+is blocked. Firewall rules must cover the current instance's Docker network
+and frontend port, which can differ between instances.
+
+Trust `infra/local/certs/ca.pem` in the visiting browser once (see the
+[certificate README](../infra/local/certs/README.md)), then open that URL.
+The visiting machine must resolve the hostname and reach the proxy port over
+your network. Tailscale is not required. The generated certificate also covers
+`localhost`, `*.localhost`, `127.0.0.1`, and `::1`. Other aliases require a
+matching certificate and a Vite allowlist entry; arbitrary names are not
+accepted automatically.
+
+An SSH forward to the HTTP Vite port still works for localhost-only access:
+`ssh -N -L 3000:127.0.0.1:20110 your-dev-host`, then open
+`http://localhost:3000/app/`. HMR follows the page's host, port, and protocol.
 
 The launcher sets `VITE_LOCAL_BACKEND_ORIGIN=same-origin` and supplies Vite's
 server-only `MACRO_LOCAL_BACKEND_PROXY` and `MACRO_LOCAL_BACKEND_ROUTES` from the
@@ -265,6 +309,10 @@ enabled browser telemetry also use same-origin paths. Bare `bun run dev` without
 these variables still uses hosted services; `TAURI_DEV_HOST` remains an explicit
 native HMR override. Keep local dev stacks private: same-origin routing does not
 add authentication or make passwordless local login safe to publish.
+
+The launcher sets `NODE_EXTRA_CA_CERTS` for Vite so its HTTP and WebSocket
+forwarding verifies the backend certificate. Plain HTTP on a remote hostname
+cannot retain the app's secure login cookies; use the printed HTTPS URL.
 
 The stack launches Vite directly with Node (available in the Nix shell), because
 Bun's Node HTTP compatibility currently hangs on Vite's proxied WebSocket

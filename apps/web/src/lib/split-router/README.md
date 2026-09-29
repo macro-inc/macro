@@ -13,6 +13,8 @@ stay outside this library.
   output types, including `remountKey`, and types descendant references relative
   to that root. `defineRoutes()` assembles the static tree and rebinds ancestry.
   Both attach a non-enumerable `to(params)` builder to route definitions in place.
+- `toReference(params)` optionally describes the matched content as `{ type, id }`
+  for host consumers. The router does not interpret or invoke it during navigation.
 - `useRouteParams(route)` reads only that node's params. `useParams(route)` reads
   the merged branch through that node; `useParams()` still reads the entire
   active branch.

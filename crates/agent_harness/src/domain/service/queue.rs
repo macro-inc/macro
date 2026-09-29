@@ -1,7 +1,7 @@
 //! The per-session command queue: admission, the worker that drains it one
 //! command at a time, and routing to the replica that holds the session.
 
-use agent_fold::domain::model::{StopReason, TurnSignal};
+use agent_fold::domain::model::{StopReason, TurnId, TurnSignal};
 use agent_session::domain::error::AgentSessionError;
 use agent_session::domain::events::{
     AgentSessionLifecycleEvent, InputReceivedMetadata, SessionDeletedMetadata,
@@ -861,18 +861,6 @@ where
             return Err(error);
         }
 
-        // Compose a copy: the queued entry stays raw so a retry still edits
-        // and re-composes the user's text, and the chip (below) still shows
-        // what they typed rather than the composed payload.
-        let mut composed = entry.action.clone();
-        if let Err(error) = self
-            .compose_action(&mut composed, entry.actor.as_ref(), entry.announce.as_ref())
-            .await
-        {
-            self.requeue_claimed(session_id, entry).await;
-            return Err(error);
-        }
-
         // The turn this action opens, read before delivery appends the
         // prompt to the log. Unchanged across a failed attempt, so a retry
         // reports the same turn.
@@ -883,6 +871,24 @@ where
                 return Err(error.into());
             }
         };
+
+        // Compose a copy: the queued entry stays raw so a retry still edits
+        // and re-composes the user's text, and the chip (below) still shows
+        // what they typed rather than the composed payload.
+        let mut composed = entry.action.clone();
+        if let Err(error) = self
+            .compose_action(
+                session_id,
+                &mut composed,
+                entry.actor.as_ref(),
+                entry.announce.as_ref(),
+                prompted_message_id.turn == TurnId(0),
+            )
+            .await
+        {
+            self.requeue_claimed(session_id, entry).await;
+            return Err(error);
+        }
 
         if entry.announced.is_none() {
             let announcement = match self

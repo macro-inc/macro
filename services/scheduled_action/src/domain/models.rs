@@ -1,4 +1,5 @@
 use anyhow::Result;
+use bot_id::BotId;
 use chrono::{DateTime, Duration, Utc};
 use chrono_tz::Tz;
 use cron::Schedule as CronSchedule;
@@ -63,9 +64,78 @@ pub enum ActionKind {
 
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
 pub struct AgentTask {
-    pub model: String,
+    /// Required for model targets; overrides the persona default for agent targets.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<RoutineModelId>,
+    /// Absent for legacy model-only tasks.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent: Option<AgentTaskAgent>,
     pub prompt: String,
     pub user_prompt: String,
+}
+
+/// A persona selection, independent of its runtime and current default model.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, ToSchema)]
+pub struct AgentTaskAgent {
+    #[schema(value_type = String, format = Uuid)]
+    pub bot_id: BotId,
+}
+
+/// A nonblank model identifier. Runtime catalogs, not the scheduler, own availability.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, ToSchema)]
+#[serde(try_from = "String")]
+pub struct RoutineModelId(String);
+
+impl TryFrom<String> for RoutineModelId {
+    type Error = TaskTargetError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        if value.trim().is_empty() {
+            return Err(TaskTargetError::BlankModel);
+        }
+        Ok(Self(value))
+    }
+}
+
+impl RoutineModelId {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+/// Validated execution choice. Callers must not fall back from an agent to a model.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResolvedTaskTarget<'a> {
+    Model {
+        model: &'a RoutineModelId,
+    },
+    Agent {
+        bot_id: BotId,
+        /// None means use the selected persona's default at execution time.
+        model: Option<&'a RoutineModelId>,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum TaskTargetError {
+    #[error("a supplied model must not be blank")]
+    BlankModel,
+    #[error("a task must select a model or an agent")]
+    MissingTarget,
+}
+
+impl AgentTask {
+    /// Resolve target policy once, without interpreting either prompt as configuration.
+    pub fn resolve_target(&self) -> Result<ResolvedTaskTarget<'_>, TaskTargetError> {
+        match (&self.agent, &self.model) {
+            (Some(agent), model) => Ok(ResolvedTaskTarget::Agent {
+                bot_id: agent.bot_id,
+                model: model.as_ref(),
+            }),
+            (None, Some(model)) => Ok(ResolvedTaskTarget::Model { model }),
+            (None, None) => Err(TaskTargetError::MissingTarget),
+        }
+    }
 }
 
 /// Canonical client configuration. Ownership and execution state are server-owned.
@@ -204,11 +274,59 @@ impl ScheduledAction {
     }
 }
 
+/// Transcript resource created by a run. Never infer this from current task configuration.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+pub struct ExecutionResource {
+    #[serde(rename = "type")]
+    pub resource_type: ExecutionResourceType,
+    pub id: String,
+}
+
+/// Closed set of transcript destinations understood by routine clients.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ExecutionResourceType {
+    Chat,
+    Agent,
+}
+
+impl ExecutionResource {
+    /// Compatibility field for old clients; agent session IDs are never chat IDs.
+    pub fn chat_id(&self) -> Option<String> {
+        match self.resource_type {
+            ExecutionResourceType::Chat => Some(self.id.clone()),
+            ExecutionResourceType::Agent => None,
+        }
+    }
+}
+
+/// Version 1 execution metadata stored in the existing JSON result column.
+/// Null/string column values predate this envelope and refer to legacy chats.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct ExecutionResult {
+    pub version: u8,
+    pub resource: Option<ExecutionResource>,
+    pub error: Option<String>,
+}
+
+impl ExecutionResult {
+    pub fn new(resource: Option<ExecutionResource>, error: Option<String>) -> Self {
+        Self {
+            version: 1,
+            resource,
+            error,
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct InProgressExecution {
     #[schema(value_type = String, format = Uuid)]
     pub action_id: Uuid,
     pub chat_id: Option<String>,
+    /// Absent only in responses from legacy workers.
+    #[serde(default)]
+    pub resource: Option<ExecutionResource>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
@@ -217,8 +335,8 @@ pub struct ActionExecutionRecord {
     pub id: Option<Uuid>,
     #[schema(value_type = String, format = Uuid)]
     pub action_id: Uuid,
-    /// ID of the primary resource produced by this run (e.g. a chat thread).
-    /// Opaque to the scheduler; the UI interprets it based on the action kind.
+    /// ID of the primary resource produced by this run. Its type is recorded in
+    /// `result`, independently of the routine's current configuration.
     pub resource_id: Option<String>,
     pub start_time: DateTime<Utc>,
     pub end_time: DateTime<Utc>,
@@ -226,6 +344,25 @@ pub struct ActionExecutionRecord {
     #[schema(value_type = Object)]
     pub result: Value,
     pub created_at: DateTime<Utc>,
+}
+
+impl ActionExecutionRecord {
+    /// Decode typed metadata, falling back to chat only for genuinely legacy rows.
+    pub fn execution_resource(&self) -> Result<Option<ExecutionResource>> {
+        if self.result.is_null() || self.result.is_string() {
+            return Ok(self.resource_id.clone().map(|id| ExecutionResource {
+                resource_type: ExecutionResourceType::Chat,
+                id,
+            }));
+        }
+        let result: ExecutionResult = serde_json::from_value(self.result.clone())?;
+        anyhow::ensure!(result.version == 1, "unsupported execution result version");
+        anyhow::ensure!(
+            result.resource.as_ref().map(|resource| &resource.id) == self.resource_id.as_ref(),
+            "execution resource does not match history ID"
+        );
+        Ok(result.resource)
+    }
 }
 
 #[derive(Debug)]
@@ -236,8 +373,9 @@ pub enum DispatchEvent {
 }
 
 /// Live status update for a scheduled-action run, broadcast via the connection
-/// gateway to the owner. Clients use the `chat_id` to navigate to the run
-/// transcript and the variant tag to toggle the running indicator.
+/// gateway to the owner. Clients use the typed resource to navigate to the run
+/// transcript and the variant tag to toggle the running indicator. `chat_id`
+/// remains populated only for chat runs, for older clients.
 ///
 /// Serialized with a `type` tag (`started`/`stopped`) and delivered over the
 /// single `scheduled_action_update` message type on the gateway.
@@ -249,14 +387,18 @@ pub enum ScheduledActionUpdate {
         owner: MacroUserIdStr<'static>,
         #[schema(value_type = String, format = Uuid)]
         action_id: Uuid,
-        chat_id: String,
+        chat_id: Option<String>,
+        #[serde(default)]
+        resource: Option<ExecutionResource>,
     },
     Stopped {
         #[schema(value_type = String)]
         owner: MacroUserIdStr<'static>,
         #[schema(value_type = String, format = Uuid)]
         action_id: Uuid,
-        chat_id: String,
+        chat_id: Option<String>,
+        #[serde(default)]
+        resource: Option<ExecutionResource>,
         is_success: bool,
     },
 }

@@ -57,8 +57,9 @@ global Favorites sidebar or command menu.
 
 Select a PR to open `/app/reviews/pr/<foreignEntityId>` in the Reviews shell.
 Its breadcrumb returns to the Reviews list. Old `/app/pr/<id>` links redirect
-to the Reviews detail. When the flag is off, the Reviews shortcut is hidden,
-but copied PR detail links still work.
+to the Reviews detail. When the flag is off, the Reviews shortcut is hidden and
+opening `/app/reviews` redirects to `/app/tasks` after flags load. Copied PR
+detail links still work; check both URLs with the flag off.
 
 Check all three tab URLs, author avatars and display names, row selection and
 context menu, favorites add/remove and collapse/empty visibility, filters, sort,
@@ -80,6 +81,13 @@ filter sheets. Desktop uses the centered composer dialog.
    `Add description...`, and property buttons: `Not Started` (status), `Priority`, assignee
    chip (defaults to you), `Due Date`, `Change or select tags`, `Attach image or video`,
    a `Create More` switch, and `Create Task Ctrl ↵`.
+   The `Shared with Team` row defaults to on and remembers your choice in local
+   storage across composer openings and page reloads. Its hint explains whether
+   the task will be visible to your whole team or only to you and the people you
+   share it with. The choice also applies to Create More, continuing in a split,
+   and tasks created from a project.
+   This row sits below the creation buttons, separated by an edge-to-edge divider.
+   A second divider separates it from Similar Tasks when matches are shown.
 3. `type_text` the title, then press **Ctrl+Enter** to create (the `Create Task` button
    enables once there is a title). Dialog also offers `Continue editing in split` to open the
    task as a full document.

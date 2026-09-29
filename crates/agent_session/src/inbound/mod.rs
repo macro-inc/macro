@@ -1,6 +1,7 @@
 //! Inbound transport adapters for the agent session service.
 
 pub mod axum_router;
+pub mod routine_sessions;
 
 pub use axum_router::{
     AgentSessionControlState, AgentSessionRouterState, agent_sandbox_size_router,

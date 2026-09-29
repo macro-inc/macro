@@ -331,6 +331,19 @@ records `path` (`catch_up` or `full`) and `reason`
 (`watermark`, `list_ahead`, `no_cache`, `cache_not_at_latest`, `load_around`,
 `delta_overflow`, or `catch_up_error`).
 
+## Message reaction notifications
+
+Message reaction notifications are enabled by default. The message author can
+turn them off with **Message reactions** in notification settings. Adding a
+reaction from another account notifies the author; self-reactions and removing a
+reaction do not notify.
+
+In Home, reactions belong to the message's thread row: a top-level message uses
+its own row, and a reply uses its parent thread. Verify that an incoming reaction
+brings that row back into the inbox, displays the reaction and channel name, and
+opens the reacted-to message. Marking the row done should clear its reaction
+notifications along with the other notifications for that thread.
+
 ## Chat navigation rail
 
 Following a channel mention or browser notification for the conversation already
@@ -492,7 +505,23 @@ conversation cards on `Recent`. Switching tabs preserves the active search and
 query, then scrolls the results to the selected channel when present or to the
 start. Closing search restores the active tab and applies the same scroll
 behavior to its lists. An empty result uses the standard search empty state
-artwork and wraps long queries.
+artwork and wraps long queries. Desktop and the mobile dock use the same channel
+name search: local fuzzy matches plus service results, deduplicated by channel
+ID. Desktop searches across channels and DMs; mobile retains its Recent,
+Channels, or DMs scope. An empty query shows the ordinary list. Scrolling search
+results loads the next search page; clearing the query restores ordinary list
+pagination. Check both surfaces with a matching query, a query with no matches,
+and a clear/reopen cycle.
+On mobile, a nonempty query with no matches shows **No results**, echoes the
+query, and offers **Clear search**. Clearing restores the selected tab's list
+and keeps the dock search session open. The tab's usual empty state and create
+actions appear only when no search text is entered; loading and request errors
+keep their own states.
+Recent search includes both channels and DMs, including service hits without
+message previews. It does not require message metadata or an importance filter.
+Loaded conversation metadata is preserved when a service hit has the same ID.
+Pending and placeholder service results never appear as current hits. Ordinary
+list errors do not affect an active search.
 Collapsing a section does not discard its loaded pages. Recent has its own
 pagination cursor. Each list is virtualized, so offscreen conversations may not
 exist in the DOM.
@@ -655,17 +684,20 @@ shows Connecting and waits for that request before registering again.
 ## Channel tabs
 
 Private and team channels show an `Invite` button on the right of both the
-split header and the inline conversation header for current participants.
-Click it to open `Invite people to <channel>` using the standard dialog at the
-top of the viewport, matching the create menu and create-channel dialog (a
-drawer on mobile). Choose `Add all members of <team>` to add current teammates
-once, or `Add specific people` to search teammates and enter external email
-addresses using the same recipient picker as channel creation. Existing channel
-members are excluded. `Add` submits; Cancel, Close, or Escape dismisses without
-sending. Failed additions preserve the selection for retry. The team option is
-disabled when no team is available. This action does not enable team auto-join.
-Check opening and reopening, switching options, keyboard recipient selection,
-external email chips, cancellation, and focus restoration before sending invites.
+split header and the inline conversation header for current participants. On
+mobile it renders as its own floating glass pill next to the `Call` pill (the
+split header is `pointer-events-none`, so the button must sit in a
+`HeaderIsland` to be tappable). Click it to open `Invite people to <channel>`
+using the standard dialog at the top of the viewport, matching the create menu
+and create-channel dialog (a drawer on mobile). Choose `Add all members of
+<team>` to add current teammates once, or `Add specific people` to search
+teammates and enter external email addresses using the same recipient picker as
+channel creation. Existing channel members are excluded. `Add` submits; Cancel,
+Close, or Escape dismisses without sending. Failed additions preserve the
+selection for retry. The team option is disabled when no team is available.
+This action does not enable team auto-join. Check opening and reopening,
+switching options, keyboard recipient selection, external email chips,
+cancellation, and focus restoration before sending invites.
 
 Radio group at the top of the channel pane: `Messages` / `Attachments` / `Calls` / `Participants`,
 plus `Ask Macro` and `Call` buttons. The `Calls` tab lists recordings for that channel

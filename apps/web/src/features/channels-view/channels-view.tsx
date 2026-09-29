@@ -1,5 +1,6 @@
 import { ViewShell } from '@app/components/view-shell';
 import { SearchState } from '@app/features/command/mobile/mobileSearchState';
+import { useMobileSearchText } from '@app/features/command/mobile/use-mobile-search-text';
 import { markChannelNotificationsSeenOnOpen } from '@app/features/next-soup/utils';
 import { MaybeSoupEntityActionDrawerManager } from '@app/features/soup';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
@@ -32,49 +33,65 @@ import {
   useChannelByIdQuery,
   useChannelsSources,
 } from './queries';
-import { useMobileChannelSearch } from './queries/mobile-channel-search';
+import { createChannelSearchSource } from './queries/channel-search-source';
 
 const ChannelSourcesContext =
   createContext<ReturnType<typeof useChannelsSources>>();
 
-import type { ChannelsQueryScope, ChannelsViewStateOptions } from './types';
+import type { ChannelsViewStateOptions } from './types';
 
 export type ChannelsViewProps = {
   /** Explicit navigation state. When present, it wins over entry restoration. */
   initialState?: ChannelsViewStateOptions;
 };
 
-function MobileChannels(props: {
-  sources: ChannelsSources;
-  tab: ChannelsQueryScope;
-  onTabChange: (tab: ChannelsQueryScope) => void;
-}) {
+// Mounted inside the mobile list's Suspense boundary.
+function MobileChannelsList(props: { sources: ChannelsSources }) {
   const panel = useSplitPanelOrThrow();
-  // The dock lives outside the split. Derive its query only for the active
-  // mobile list so closing search or navigating away restores ordinary rows.
-  const searchText = () =>
-    SearchState.isOpen() && panel.handle.isActive()
-      ? SearchState.query().trim()
-      : '';
-  const source = useMobileChannelSearch({
-    text: searchText,
-    scope: () => props.tab,
-    source: () => props.sources[props.tab],
+  const { state, setMobileTab } = useChannelsView();
+  const mobileSearchText = useMobileSearchText(() => '', panel.handle.isActive);
+  const mobileSearchSource = createChannelSearchSource({
+    text: mobileSearchText,
+    scope: () => state.mobileTab,
+    source: () => props.sources[state.mobileTab],
   });
-
   return (
     <ChannelsMobileView
-      source={source}
-      tab={props.tab}
-      onTabChange={props.onTabChange}
-      searchText={searchText()}
+      source={mobileSearchSource}
+      searchQuery={mobileSearchText()}
+      onClearSearch={() => SearchState.setQuery('')}
+      tab={state.mobileTab}
+      onTabChange={setMobileTab}
+    />
+  );
+}
+
+function DesktopChannelsRail(props: {
+  sources: ChannelsSources;
+  searchOpen: boolean;
+  onSearchOpenChange: (open: boolean) => void;
+}) {
+  const [searchQuery, setSearchQuery] = createSignal('');
+  const searchSource = createChannelSearchSource({
+    text: searchQuery,
+    enabled: () => props.searchOpen,
+    scope: () => 'search',
+    source: () => props.sources.search,
+  });
+  return (
+    <ChannelsRail
+      sources={{ ...props.sources, search: searchSource }}
+      searchQuery={searchQuery()}
+      onSearchQueryChange={setSearchQuery}
+      searchOpen={props.searchOpen}
+      onSearchOpenChange={props.onSearchOpenChange}
     />
   );
 }
 
 function ChannelsViewRoot() {
   const panel = useSplitPanelOrThrow();
-  const { state, mobileLayout, selectedChannel, setAsideWidth, setMobileTab } =
+  const { state, mobileLayout, selectedChannel, setAsideWidth } =
     useChannelsView();
   const [railSearchOpen, setRailSearchOpen] = createSignal(false);
 
@@ -112,8 +129,16 @@ function ChannelsViewRoot() {
                     resizable
                   >
                     <ViewShell.Aside onWidthChangeEnd={setAsideWidth}>
-                      <DebugSuspense name="ChannelsView.rail">
-                        <ChannelsRail
+                      <DebugSuspense
+                        name="ChannelsView.rail"
+                        fallback={
+                          <SpinnerIcon
+                            aria-label="Loading channels"
+                            class="size-5 animate-spin"
+                          />
+                        }
+                      >
+                        <DesktopChannelsRail
                           sources={sources}
                           searchOpen={railSearchOpen()}
                           onSearchOpenChange={setRailSearchOpen}
@@ -164,11 +189,7 @@ function ChannelsViewRoot() {
                     </div>
                   }
                 >
-                  <MobileChannels
-                    sources={sources}
-                    tab={state.mobileTab}
-                    onTabChange={setMobileTab}
-                  />
+                  <MobileChannelsList sources={sources} />
                 </DebugSuspense>
               </MaybeSoupEntityActionDrawerManager>
             </Show>

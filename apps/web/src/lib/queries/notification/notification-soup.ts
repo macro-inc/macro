@@ -58,7 +58,7 @@ export function updateSoupForNotification(notification: UnifiedNotification) {
     void refetchSoupEntity(notification.entity_id, soupTag);
   }
 
-  // Mentions and replies belong to the thread's Home row, not the channel's.
+  // Mentions, replies, and reactions belong to the thread's Home row.
   // The floor also protects against older pages that are already in flight.
   const threadRootId = channelThreadRootId(notification);
   if (notification.created_at) {

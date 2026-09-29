@@ -5,6 +5,7 @@ import {
 } from '@app/lib/split-router/url';
 import { describe, expect, it, vi } from 'vitest';
 import { appSplitRoutes } from '../split-router/app-routes';
+import { createMacroMentionLinkResolver } from '../split-router/mention-links';
 
 vi.mock('@service-storage/websocket', () => ({
   storageWS: { reconnectIfDisconnected: vi.fn() },
@@ -57,5 +58,80 @@ describe('application route search ownership', () => {
     expect(roundTrip('/agents/session-1', 'unowned=1', true)).not.toContain(
       'unowned'
     );
+  });
+});
+
+const mentionId = '019507e8-14a3-7bc1-8610-419f16bd03a8';
+const projectId = '019507e8-14a3-7bc1-8610-419f16bd03a9';
+const resolveMention = createMacroMentionLinkResolver(routes);
+
+describe('application route mentions', () => {
+  it('preserves task comment targets in both task contexts', () => {
+    for (const path of [
+      `tasks/${mentionId}`,
+      `tasks/projects/${projectId}/tasks/task/${mentionId}`,
+    ]) {
+      expect(
+        resolveMention(
+          `https://dev.macro.com/app/${path}?comment_id=comment&referral_code=ignored&unknown=drop`
+        )
+      ).toEqual({
+        id: mentionId,
+        block: 'task',
+        params: { comment_id: 'comment' },
+      });
+    }
+  });
+
+  it('converts Home PR links with foreign entity IDs', () => {
+    const id = 'macro-inc/macro/pull/6303';
+    expect(
+      resolveMention(
+        `https://dev.macro.com/app/home/pr/${encodeURIComponent(id)}`
+      )
+    ).toEqual({ id, block: 'pr', params: {} });
+  });
+
+  it('converts agent chats and coding sessions', () => {
+    expect(
+      resolveMention(`https://dev.macro.com/app/agents/chat/${mentionId}`)
+    ).toEqual({ id: mentionId, block: 'chat', params: {} });
+    expect(
+      resolveMention(`https://dev.macro.com/app/coders/${mentionId}`)
+    ).toEqual({ id: mentionId, block: 'agent', params: {} });
+  });
+
+  it('uses the rightmost pane of a copied layout URL', () => {
+    expect(
+      resolveMention(
+        `https://dev.macro.com/app/home/~/drive/md/${mentionId}?comment_id=comment`
+      )
+    ).toEqual({
+      id: mentionId,
+      block: 'md',
+      params: { comment_id: 'comment' },
+    });
+    expect(
+      resolveMention(
+        `https://dev.macro.com/app/md/${mentionId}/~/drive/md/${mentionId}`
+      )
+    ).toEqual({ id: mentionId, block: 'md', params: {} });
+    expect(
+      resolveMention(
+        `https://dev.macro.com/app/not-a-route/~/drive/md/${mentionId}`
+      )
+    ).toBeUndefined();
+    expect(
+      resolveMention(
+        `https://dev.macro.com/app/drive/md/${mentionId}/~/reviews`
+      )
+    ).toBeUndefined();
+  });
+
+  it('leaves unsupported and invalid destinations as links', () => {
+    expect(resolveMention('https://dev.macro.com/app/reviews')).toBeUndefined();
+    expect(
+      resolveMention('https://dev.macro.com/app/tasks/not-a-uuid')
+    ).toBeUndefined();
   });
 });

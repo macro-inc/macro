@@ -7,6 +7,7 @@ import {
   usePageViewTracking,
   withAuth,
 } from '@components/app/split-layout/split-router/app-route-shell';
+import { uuidRouteReference } from '@components/app/split-layout/split-router/mention-links';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { enableChatV3Agents } from '@core/constant/featureFlags';
 import { useUserContext } from '@core/context/user';
@@ -113,6 +114,7 @@ export const agentsRoute = defineRoute({
   remountKey: ({ id }) => id,
   claim: ({ id }) => ({ namespace: 'agent', id }),
   search: [changesSearch.namespace],
+  toReference: ({ id }) => uuidRouteReference(id, 'agent'),
 });
 
 export const codersRoute = defineRoute({
@@ -123,6 +125,7 @@ export const codersRoute = defineRoute({
   remountKey: ({ id }) => id,
   claim: ({ id }) => ({ namespace: 'agent', id }),
   search: [changesSearch.namespace],
+  toReference: ({ id }) => uuidRouteReference(id, 'agent'),
 });
 
 export const agentChatsRoute = defineRoute({
@@ -134,6 +137,7 @@ export const agentChatsRoute = defineRoute({
   remountKey: ({ id }) => id,
   claim: ({ id }) => ({ namespace: 'chat', id }),
   search: [changesSearch.namespace],
+  toReference: ({ id }) => uuidRouteReference(id, 'chat'),
 });
 
 export const agentsViewRoute = defineRoute({

@@ -132,7 +132,8 @@ bottom remains available. Hidden cells are skipped by keyboard navigation.
 Cells support Macro mentions without Markdown formatting. Type `@` in a cell or
 the formula bar to search people, documents, channels, email and dates, then choose an
 item with the pointer or keyboard. Pasting a Macro app link renders a document
-pill, preserving navigation parameters. Formulas still use the formula editor;
+pill. Legacy links retain navigation parameters. Routed links retain compatible
+block targets, but not workspace paths or pane-local search. Formulas still use
 `@` inside a formula or email address does not start mention search. Other Markdown
 is literal text. Mentions remain attached through copy/fill, undo and collaboration;
 Excel/CSV export uses their display text. Plain URLs and email addresses are clickable;
@@ -296,6 +297,14 @@ service; the frontend alone cannot test their hosted path.
 Pasting a Macro `/app/agents/<uuid>` session URL into a Markdown editor converts
 it to an agent mention, just like the legacy `/app/agent/<uuid>` URL. Link query
 parameters are retained, except for referral codes.
+
+Pasting a routed entity link such as `/app/drive/md/<uuid>` in an app editor
+creates the same document mention as a legacy link. Routed links retain the
+entity identity and compatible block targets (for example `comment_id`), but
+not the workspace path or pane-local search state. A copied multi-pane URL
+(`/app/.../~/...`) references its rightmost pane. If that pane has no supported
+entity, the URL remains an ordinary link. Project task comment targets, Home PRs,
+and agent chat links also convert to their respective entity mentions.
 
 1. `Create` → `Document D`. The app navigates to `/app/md/<uuid>` with the **title field
    focused**.

@@ -35,6 +35,12 @@ permission failures should display a failed tool call without a successful resul
 
 ## Where chats live
 
+The Agents conversation list shows row skeletons after a short delay on first
+load. Fetching another page appends three placeholders while existing sessions
+remain usable. Wait for named conversation buttons before selecting a session;
+the placeholders are decorative and cannot be focused. Reduced motion disables
+the shimmer.
+
 - If session creation fails, the session view shows **Unable to start this agent**
   with the service's reason. Repository access requires a GitHub connection to
   Macro that covers that repository; connecting only Cursor does not grant Macro
@@ -104,14 +110,24 @@ permission failures should display a failed tool call without a successful resul
   Hover an agent (or use the right arrow key) to open its model submenu, with
   the searchable Settings catalog, provider icons, and scrollable **More models**.
   The submenu focuses the `Search models` field so you can type immediately.
-  Clicking an agent directly uses its default; choosing a submenu model selects
-  both the agent and that model. A checkmark identifies the selected model,
+  Clicking an agent directly, or pressing Enter/Space on its focused row, uses
+  its default and clears any previous model override. Right Arrow still opens
+  the model submenu; choosing a submenu model selects both the agent and that
+  model. Escape dismisses the picker and restores focus to its trigger.
+  A checkmark identifies the selected model,
   including when it is the agent’s configured default; there is no separate default row.
   Disconnected Cursor offers **Connect Cursor**, opening Settings → Agents → Runtimes.
   The built-in sandbox and paired macrod runtimes are not offered here.
 - Selecting an agent changes the heading: **What should we work on?** for chat
   agents and **What should we build?** for coding agents. The draft stays intact
-  when changing agents. **Create agent** stays pinned at the bottom of the dropdown
+  when changing agents. Unsent New conversation text and attachments also come
+  back after opening a session and returning, the same way channel replies persist
+  when switching channels. Home's agent input also restores unsent text, under a
+  separate key from Agents → New conversation. Check the Home path explicitly:
+  type a prompt on Home, visit an agent session, then return using the Home sidebar
+  button or Back. The Home prompt should remain after returning and after a reload.
+  Sending or clearing the input removes only that surface's saved text draft.
+  **Create agent** stays pinned at the bottom of the dropdown
   while the agent and model lists scroll. It opens the roster on the selected kind's
   tab, where either kind can be created.
 - On Home and New conversation, selecting a coding agent expands the input even
@@ -204,6 +220,16 @@ permission failures should display a failed tool call without a successful resul
   Automations / Skills list. On touch devices, conversation links open standalone
   agent sessions or legacy chats instead of the desktop Agents workspace. A standalone legacy chat is `/app/chat/<uuid>`; doc-scoped chat
   is `/app/md/<doc>/chat/<chat>` (split view).
+
+## Routine run history
+
+A routine's **History** can contain both legacy chats and agent sessions. Each
+row opens the surface created by that run; changing the routine's execution
+target does not change older links. Shift-click opens the run in a new split.
+Loading metadata affects only its row. Deleted, inaccessible, or missing resources
+show **Run unavailable** without a link, including failed preparation that created
+no resource. Live pending rows remain neutral; persisted unsuccessful runs keep
+the failure-colored timestamp even when their transcript is still available.
 
 ## Start a standalone chat
 
@@ -726,6 +752,26 @@ with `set_pull_request`, then use **Refresh changes**. An unavailable or
 oversized PR is explained in the pane; there is no branch or container fallback.
 Refresh request failures show a retry banner while keeping the last diff visible.
 The pane does not create PRs or generate their descriptions.
+### Live development previews
+
+Coding agents can call the internal **SharePreview** tool with their local HTTP
+server port and execute the returned SSH script in that same environment. Keep
+the server running while editing; ordinary HTTP and WebSocket HMR traffic are
+forwarded. Never paste the script or its credentials into a final chat message.
+
+In an agent session (`/app/coders/<uuid>` for a coding session), the banner
+above the transcript moves from **Agent is
+connecting a preview…** to **Agent is sharing a preview** once HTTP is reachable.
+Click **View preview ↗** to open a new tab. Any viewer of the agent-session entity
+can open it; a copied preview URL alone does not authenticate another browser.
+Allow popups if opening is blocked. The destination is an isolated HTTPS origin
+with normal root paths and no authorization query parameters.
+
+The owner can click **Stop sharing** in the banner; open preview connections
+close. Disconnection and expiry leave a banner asking the agent to share again.
+Leases last up to one hour and expire after 15 minutes without browser requests.
+Continue prompting in the agent session while the preview tab stays open; page
+edits should arrive through the app's own HMR connection.
 
 ### Transcript navigation
 
@@ -883,3 +929,18 @@ webhook sync completes; its chip should then appear without a page refresh.
 Verify status changes (open/merged/closed) while the chip stays mounted, and
 verify that reconnecting the gateway catches up changes missed while disconnected.
 There is no periodic PR lookup polling.
+
+
+## Reading skills
+
+Agents in Macro and connected MCP harnesses can discover saved skill documents
+and built-in skills with `ListSkills`, then load the full instructions with
+`ReadSkill` using the returned `documentId`. `ListSkills` returns the 100 most
+recently updated visible skill documents plus built-ins; `SearchSkills` finds a
+skill by name, including older skills outside that list. A skill mention's id can
+also be passed directly to `ReadSkill`.
+
+The chat's **Read skill** tool row expands to show the full instructions. When
+verifying this flow, invoke a saved skill by name, confirm the agent reads it,
+and expand the row to inspect the returned content. Document access permissions
+apply; ordinary documents and deleted skills cannot be read as skills.

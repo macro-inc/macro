@@ -117,6 +117,23 @@ fn to_typed_row_channel_message_reply() {
 }
 
 #[test]
+fn to_typed_row_channel_message_reaction() {
+    let metadata = serde_json::json!({
+        "messageId": "msg-4",
+        "messageContent": "Great idea",
+        "emoji": "👍",
+        "channelType": "Public",
+        "channelName": "general"
+    });
+    let row = make_row("channel_message_reaction", metadata);
+    let typed = to_typed_row(row).expect("should deserialize channel_message_reaction");
+    assert!(matches!(
+        typed.notification_metadata,
+        NotifEvent::ChannelMessageReaction(_)
+    ));
+}
+
+#[test]
 fn to_typed_row_new_email() {
     let metadata = serde_json::json!({
         "sender": "ext@example.com",

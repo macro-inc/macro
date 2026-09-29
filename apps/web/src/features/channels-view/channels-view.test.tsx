@@ -93,7 +93,10 @@ vi.mock(
   '@core/component/LexicalMarkdown/component/core/StaticMarkdown',
   () => ({ StaticMarkdownContext: mocks.pass })
 );
-vi.mock('@entity', () => ({ ListEntityMetadataQueryProvider: mocks.pass }));
+vi.mock('@entity', async () => ({
+  ...(await import('@entity/types/entity')),
+  ListEntityMetadataQueryProvider: mocks.pass,
+}));
 vi.mock('./components/ChannelDetailView', () => ({
   ChannelDetailView: (props: { channel: ChannelEntity }) => (
     <div data-testid="channel-detail">
@@ -105,9 +108,9 @@ vi.mock('./components/ChannelDetailView', () => ({
 vi.mock('./components/ChannelsMobileView', () => ({
   ChannelsMobileView: (props: {
     source: ChannelsDataSource;
-    searchText: string;
+    searchQuery: string;
   }) => (
-    <div data-testid="mobile-channels" data-query={props.searchText}>
+    <div data-testid="mobile-channels" data-query={props.searchQuery}>
       <For each={props.source.items()}>
         {(channel) => <div>{channel.name}</div>}
       </For>
@@ -115,6 +118,12 @@ vi.mock('./components/ChannelsMobileView', () => ({
   ),
 }));
 vi.mock('./components/rail/ChannelsRail', () => ({ ChannelsRail: () => null }));
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => mocks.mobileLayout(),
+}));
+vi.mock('@app/features/soup/search/context', () => ({
+  useOptionalSearchContext: () => undefined,
+}));
 vi.mock('./channels-view-context', () => ({
   ChannelsViewProvider: mocks.pass,
   useChannelsView: () => ({
@@ -136,6 +145,8 @@ vi.mock('./channels-view-context', () => ({
   }),
 }));
 vi.mock('./queries', () => ({
+  filterChannelsForScope: (_scope: string, channels: ChannelEntity[]) =>
+    channels,
   deduplicateChannels: (collections: ChannelEntity[][]) => [
     ...new Map(
       collections.flat().map((channel) => [channel.id, channel])
@@ -235,7 +246,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('mobile dock search wiring', () => {
-  it('filters DMs from the active dock session and restores rows on close or navigation', () => {
+  it('filters DMs from the active dock session and restores rows on close or navigation', async () => {
     mocks.mobileLayout = () => true;
     mocks.mobileTab = () => 'direct_messages';
     const [open, setOpen] = createSignal(true);
@@ -255,12 +266,14 @@ describe('mobile dock search wiring', () => {
     render(() => <ChannelsView />);
     expect(screen.getByText('hutch')).toBeTruthy();
     setText('Julia');
-    expect(screen.getByText('Julia Westphal')).toBeTruthy();
-    expect(screen.queryByText('hutch')).toBeNull();
+    await waitFor(() =>
+      expect(screen.getByText('Julia Westphal')).toBeTruthy()
+    );
+    await waitFor(() => expect(screen.queryByText('hutch')).toBeNull());
     setActive(false);
     expect(screen.getByText('hutch')).toBeTruthy();
     setActive(true);
-    expect(screen.queryByText('hutch')).toBeNull();
+    await waitFor(() => expect(screen.queryByText('hutch')).toBeNull());
     setOpen(false);
     expect(screen.getByText('hutch')).toBeTruthy();
     expect(screen.getByTestId('mobile-channels').dataset.query).toBe('');

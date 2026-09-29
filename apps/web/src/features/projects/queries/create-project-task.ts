@@ -71,7 +71,7 @@ export function createProjectTaskMutation(
           properties,
           definitions,
           history,
-          { revalidateSoup: false }
+          { revalidateSoup: false, shareWithTeam: draft[5]?.shareWithTeam }
         );
         if (!result) throw new Error('Task creation failed');
         let assigned = false;

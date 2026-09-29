@@ -70,6 +70,7 @@ pub struct ApiStates<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes
     repositories: AgentRepositoriesRouterState<Auth>,
     claude_auth: Router,
     sharing: Router,
+    routine_sessions: Router,
     changes: AgentChangesRouterState<Changes, Access, Auth>,
 }
 
@@ -95,6 +96,7 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
             repositories,
             claude_auth: Router::new(),
             sharing: Router::new(),
+            routine_sessions: Router::new(),
             changes,
         }
     }
@@ -102,6 +104,12 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
     /// Attach the optional owner-authenticated Claude demo connection routes.
     pub fn with_claude_auth(mut self, router: Router) -> Self {
         self.claude_auth = router;
+        self
+    }
+
+    /// Attach internal-only routine routes with their independent domain service.
+    pub fn with_routine_sessions(mut self, router: Router) -> Self {
+        self.routine_sessions = router;
         self
     }
 
@@ -208,6 +216,7 @@ where
         .merge(agent_models_router(states.models))
         .merge(agent_repositories_router(states.repositories))
         .merge(states.claude_auth)
+        .merge(states.routine_sessions)
         .nest("/runtime", runtime_gateway_router(states.gateway))
 }
 

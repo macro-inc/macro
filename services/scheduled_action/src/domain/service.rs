@@ -13,16 +13,20 @@ use super::models::{
     ActionConfiguration, ActionExecutionRecord, ActionPolicyError, CreateScheduledAction,
     DispatchEvent, InProgressExecution, ScheduledAction, UpdateScheduledAction,
 };
-use super::ports::{ScheduledActionExecutor, ScheduledActionRepo, ScheduledActionService};
+use super::ports::{
+    ScheduledActionExecutor, ScheduledActionRepo, ScheduledActionService, TaskTargetValidator,
+};
+use super::target_validation::{ModelOnlyTargets, require_explicit_agent};
 
 #[cfg(test)]
 pub(crate) mod test;
 
-pub struct ScheduledActionServiceImpl<Rpo, Exe> {
+pub struct ScheduledActionServiceImpl<Rpo, Exe, Targets = ModelOnlyTargets> {
     repo: Arc<Rpo>,
     executor: Arc<Exe>,
     dispatcher_tx: Sender<DispatchEvent>,
     event_management_enabled: bool,
+    targets: Targets,
 }
 
 impl<Rpo: ScheduledActionRepo, Exe> ScheduledActionServiceImpl<Rpo, Exe> {
@@ -33,6 +37,22 @@ impl<Rpo: ScheduledActionRepo, Exe> ScheduledActionServiceImpl<Rpo, Exe> {
             executor,
             dispatcher_tx,
             event_management_enabled: false,
+            targets: ModelOnlyTargets,
+        }
+    }
+}
+
+impl<Rpo: ScheduledActionRepo, Exe, Targets> ScheduledActionServiceImpl<Rpo, Exe, Targets> {
+    pub fn with_target_validation<T: TaskTargetValidator>(
+        self,
+        targets: T,
+    ) -> ScheduledActionServiceImpl<Rpo, Exe, T> {
+        ScheduledActionServiceImpl {
+            repo: self.repo,
+            executor: self.executor,
+            dispatcher_tx: self.dispatcher_tx,
+            event_management_enabled: self.event_management_enabled,
+            targets,
         }
     }
 
@@ -113,9 +133,10 @@ fn same_trigger(left: &ActionTrigger, right: &ActionTrigger) -> bool {
     }
 }
 
-impl<Rpo, Exe> ScheduledActionService for ScheduledActionServiceImpl<Rpo, Exe>
+impl<Rpo, Exe, Targets> ScheduledActionService for ScheduledActionServiceImpl<Rpo, Exe, Targets>
 where
     Rpo: ScheduledActionRepo,
+    Targets: TaskTargetValidator,
     Exe: ScheduledActionExecutor + Send + Sync + 'static,
 {
     async fn delete_user_actions(&self, user_id: MacroUserIdStr<'static>) -> Result<()> {
@@ -144,6 +165,7 @@ where
     ) -> Result<ScheduledAction> {
         let input = ActionConfiguration::from(input);
         self.check_event_management(&input.trigger)?;
+        self.targets.validate_task(&input.task, &user_id).await?;
         let now = Utc::now();
         let next_run_at = next_run(&input.trigger)?;
         let event_activated_at = match &input.trigger {
@@ -195,6 +217,7 @@ where
     ) -> Result<ScheduledAction> {
         let mut action = self.owned_action(id, &macro_user_id).await?;
         let input = ActionConfiguration::from(input);
+        require_explicit_agent(&action.task, &input.task)?;
         let trigger_changed = !same_trigger(&action.trigger, &input.trigger);
         let configuration_changed = trigger_changed
             || action.name != input.name
@@ -212,6 +235,9 @@ where
             return Err(ActionPolicyError::UpdateConflict.into());
         }
         if !disable_only {
+            self.targets
+                .validate_task(&input.task, &macro_user_id)
+                .await?;
             action.next_run_at = next_run(&input.trigger)?;
         }
         action.event_activated_at = match &input.trigger {
