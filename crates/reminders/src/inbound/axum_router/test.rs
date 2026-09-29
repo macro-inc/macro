@@ -20,7 +20,9 @@ use tower::ServiceExt;
 use uuid::Uuid;
 
 use super::*;
-use crate::domain::models::{ReminderCursor, ReminderForSoup, ReminderPage, SoupReminderQuery};
+use crate::domain::models::{
+    ReminderCursor, ReminderForSoup, ReminderOccurrence, ReminderPage, SoupReminderQuery,
+};
 
 const USER_ID: &str = "macro|reminders-user@macro.com";
 const VALID_JWT: &str = "valid";
@@ -260,8 +262,14 @@ enum ServiceCall {
         entity_types: Vec<EntityType>,
         entity_ids: Vec<Uuid>,
         include_completed: bool,
+        attached: Option<bool>,
         limit: Option<u32>,
         cursor: Option<ReminderCursor>,
+    },
+    Occurrences {
+        starts_at: DateTime<Utc>,
+        ends_at: DateTime<Utc>,
+        attached: Option<bool>,
     },
     Get(Uuid),
     Update {
@@ -360,6 +368,7 @@ impl RemindersService for FakeRemindersService {
             entity_types: filter.entity_types.clone(),
             entity_ids: filter.entity_ids.clone(),
             include_completed: filter.include_completed,
+            attached: filter.attached,
             limit: filter.limit,
             cursor: filter.cursor,
         });
@@ -381,6 +390,24 @@ impl RemindersService for FakeRemindersService {
             reminder: sample_reminder(None),
             reference: None,
         }])
+    }
+
+    async fn list_reminder_occurrences(
+        &self,
+        _user_id: &MacroUserIdStr<'_>,
+        query: ReminderOccurrenceQuery,
+    ) -> Result<Vec<ReminderOccurrence>, ReminderError> {
+        self.record(ServiceCall::Occurrences {
+            starts_at: query.window.starts_at(),
+            ends_at: query.window.ends_at(),
+            attached: query.attached,
+        });
+        self.fail_if_configured()?;
+        let reminder = sample_reminder(None);
+        Ok(vec![ReminderOccurrence::of(
+            &reminder,
+            reminder.next_run_at,
+        )])
     }
 
     async fn update_reminder(
@@ -698,6 +725,7 @@ async fn list_passes_filters_and_paging_through() {
             entity_types: vec![EntityType::Document],
             entity_ids: vec![ACCESSIBLE_DOC.parse().expect("valid uuid")],
             include_completed: true,
+            attached: None,
             limit: Some(25),
             cursor: Some(cursor),
         }],
@@ -731,10 +759,32 @@ async fn list_collects_repeated_entity_keys_into_both_dimensions() {
                 FORBIDDEN_DOC.parse().expect("valid uuid"),
             ],
             include_completed: false,
+            attached: None,
             limit: None,
             cursor: None,
         }]
     );
+}
+
+#[tokio::test]
+async fn list_passes_the_attachment_filter_through() {
+    for (param, attached) in [("false", Some(false)), ("true", Some(true))] {
+        let service = FakeRemindersService::default();
+        let response = build_router(service.clone(), FakeEntityAccessService::default())
+            .oneshot(
+                authed(axum::http::Request::get(format!("/?attached={param}")))
+                    .body(axum::body::Body::empty())
+                    .expect("request should build"),
+            )
+            .await
+            .expect("router should respond");
+
+        assert_eq!(response.status(), StatusCode::OK);
+        match service.calls().first() {
+            Some(ServiceCall::List { attached: got, .. }) => assert_eq!(*got, attached),
+            other => panic!("expected a list call, got {other:?}"),
+        }
+    }
 }
 
 #[tokio::test]
@@ -769,6 +819,7 @@ async fn a_list_filter_with_only_one_dimension_is_accepted() {
                 entity_types: vec![EntityType::Document],
                 entity_ids: Vec::new(),
                 include_completed: false,
+                attached: None,
                 limit: None,
                 cursor: None,
             },
@@ -776,6 +827,7 @@ async fn a_list_filter_with_only_one_dimension_is_accepted() {
                 entity_types: Vec::new(),
                 entity_ids: vec![ACCESSIBLE_DOC.parse().expect("valid uuid")],
                 include_completed: false,
+                attached: None,
                 limit: None,
                 cursor: None,
             },
@@ -1096,6 +1148,7 @@ async fn an_oversized_limit_clamps_instead_of_failing_to_parse() {
             entity_types: Vec::new(),
             entity_ids: Vec::new(),
             include_completed: false,
+            attached: None,
             limit: Some(999_999),
             cursor: None,
         }],
@@ -1317,6 +1370,103 @@ async fn create_is_reachable_at_the_mounted_collection_path() {
             .any(|call| matches!(call, ServiceCall::Create { .. })),
         "POST /reminders did not reach the handler"
     );
+}
+
+/// `occurrences` sits where `/{id}` would otherwise match it, so pin that it
+/// reaches its own handler rather than being rejected as a malformed id.
+#[tokio::test]
+async fn occurrences_pass_the_window_through_at_the_mounted_path() {
+    let service = FakeRemindersService::default();
+    let response = mounted_router(service.clone())
+        .oneshot(
+            authed(axum::http::Request::get(
+                "/reminders/occurrences?start=2026-07-01T00:00:00Z&end=2026-08-01T00:00:00Z",
+            ))
+            .body(axum::body::Body::empty())
+            .expect("request should build"),
+        )
+        .await
+        .expect("router should respond");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        service.calls(),
+        vec![ServiceCall::Occurrences {
+            starts_at: instant(1, 0),
+            ends_at: Utc
+                .with_ymd_and_hms(2026, 8, 1, 0, 0, 0)
+                .single()
+                .expect("unambiguous instant"),
+            attached: None,
+        }]
+    );
+    let body = read_json(response).await;
+    let occurrence = &body["occurrences"][0];
+    assert_eq!(occurrence["reminderId"], Uuid::from_u128(1).to_string());
+    assert_eq!(occurrence["scheduledFor"], "2026-07-02T13:00:00Z");
+    assert_eq!(occurrence["schedule"]["type"], "once");
+    assert!(
+        occurrence.get("entityType").is_none(),
+        "a standalone reminder's firing omits its entity"
+    );
+}
+
+#[tokio::test]
+async fn occurrences_pass_the_attachment_filter_through() {
+    for (param, attached) in [("false", Some(false)), ("true", Some(true))] {
+        let service = FakeRemindersService::default();
+        let response = build_router(service.clone(), FakeEntityAccessService::default())
+            .oneshot(
+                authed(axum::http::Request::get(format!(
+                    "/occurrences?start=2026-07-01T00:00:00Z&end=2026-07-08T00:00:00Z&attached={param}"
+                )))
+                .body(axum::body::Body::empty())
+                .expect("request should build"),
+            )
+            .await
+            .expect("router should respond");
+
+        assert_eq!(response.status(), StatusCode::OK);
+        match service.calls().first() {
+            Some(ServiceCall::Occurrences { attached: got, .. }) => assert_eq!(*got, attached),
+            other => panic!("expected an occurrences call, got {other:?}"),
+        }
+    }
+}
+
+#[tokio::test]
+async fn an_invalid_occurrence_window_is_400_and_never_reaches_the_service() {
+    for query in [
+        // Reversed.
+        "start=2026-07-02T00:00:00Z&end=2026-07-01T00:00:00Z",
+        // Empty.
+        "start=2026-07-01T00:00:00Z&end=2026-07-01T00:00:00Z",
+        // 63 days.
+        "start=2026-07-01T00:00:00Z&end=2026-09-02T00:00:00Z",
+        // Missing an end.
+        "start=2026-07-01T00:00:00Z",
+        // Not an instant.
+        "start=yesterday&end=2026-07-01T00:00:00Z",
+        // Not a boolean.
+        "start=2026-07-01T00:00:00Z&end=2026-07-08T00:00:00Z&attached=maybe",
+    ] {
+        let service = FakeRemindersService::default();
+        let response = build_router(service.clone(), FakeEntityAccessService::default())
+            .oneshot(
+                authed(axum::http::Request::get(format!("/occurrences?{query}")))
+                    .body(axum::body::Body::empty())
+                    .expect("request should build"),
+            )
+            .await
+            .expect("router should respond");
+
+        assert_eq!(
+            response.status(),
+            StatusCode::BAD_REQUEST,
+            "expected 400 for {query}"
+        );
+        assert!(service.calls().is_empty(), "{query} reached the service");
+    }
 }
 
 #[tokio::test]

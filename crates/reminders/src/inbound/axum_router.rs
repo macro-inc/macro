@@ -13,6 +13,7 @@ use axum::{
     routing::{delete, get, patch, post},
 };
 use axum_extra::extract::Query;
+use chrono::{DateTime, Utc};
 use entity_access::domain::{
     models::{AccessError, AnyEntityPermission, EntityAccessReceipt, OwnerAccessLevel},
     ports::EntityAccessService,
@@ -29,8 +30,9 @@ use uuid::Uuid;
 
 use crate::domain::{
     models::{
-        CreateReminder, Reminder, ReminderCursor, ReminderError, ReminderFilter, ReminderPatch,
-        ReminderSchedule, RemindersList,
+        CreateReminder, OccurrenceWindow, Reminder, ReminderCursor, ReminderError, ReminderFilter,
+        ReminderOccurrenceQuery, ReminderOccurrencesList, ReminderPatch, ReminderSchedule,
+        RemindersList,
     },
     ports::RemindersService,
 };
@@ -88,6 +90,7 @@ impl<S, Eas, Auth> FromRef<RemindersRouterState<S, Eas, Auth>> for MacroAuthoriz
 /// Routes:
 /// - `GET /` — list the caller's reminders.
 /// - `POST /` — create a reminder.
+/// - `GET /occurrences` — list the caller's reminder firings in a window.
 /// - `GET /{id}` — fetch one reminder.
 /// - `PATCH /{id}` — modify a reminder.
 /// - `DELETE /{id}` — delete a reminder.
@@ -101,6 +104,10 @@ where
     Router::new()
         .route("/", get(list_reminders_handler::<S, Eas, Auth>))
         .route("/", post(create_reminder_handler::<S, Eas, Auth>))
+        .route(
+            "/occurrences",
+            get(list_reminder_occurrences_handler::<S, Eas, Auth>),
+        )
         .route("/{id}", get(get_reminder_handler::<S, Eas, Auth>))
         .route("/{id}", patch(update_reminder_handler::<S, Eas, Auth>))
         .route("/{id}", delete(delete_reminder_handler::<S, Eas, Auth>))
@@ -172,11 +179,32 @@ pub struct ListRemindersParams {
     /// Include reminders that have already fired.
     #[serde(default)]
     pub include_completed: bool,
+    /// `true` for only reminders attached to an entity, `false` for only
+    /// standalone ones. Omit for both. `false` alongside `entityType` or
+    /// `entityId` matches nothing.
+    pub attached: Option<bool>,
     /// Page size. Defaults to 100; larger values are capped at 500. A value
     /// that is not a non-negative integer is rejected by the query extractor.
     pub limit: Option<u32>,
     /// `nextCursor` from a previous page.
     pub cursor: Option<String>,
+}
+
+/// Query params for listing reminder firings in a window.
+///
+/// Instants are RFC 3339. Send a `Z` offset, or percent-encode `+`: a bare `+`
+/// in a query string decodes to a space.
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[serde(rename_all = "camelCase")]
+#[into_params(parameter_in = Query)]
+pub struct ListReminderOccurrencesParams {
+    /// Inclusive UTC start of the window.
+    pub start: DateTime<Utc>,
+    /// Exclusive UTC end of the window, at most 62 days after `start`.
+    pub end: DateTime<Utc>,
+    /// `true` for only reminders attached to an entity, `false` for only
+    /// standalone ones. Omit for both.
+    pub attached: Option<bool>,
 }
 
 /// Path params for the single-reminder routes.
@@ -287,6 +315,7 @@ where
         entity_types: params.entity_type,
         entity_ids: parse_filter_entity_ids(params.entity_id)?,
         include_completed: params.include_completed,
+        attached: params.attached,
         cursor: params
             .cursor
             .as_deref()
@@ -302,6 +331,42 @@ where
         reminders: page.reminders,
         next_cursor: page.next_cursor.map(|cursor| cursor.encode()),
     }))
+}
+
+/// List every firing of the caller's reminders inside a window, soonest first.
+#[utoipa::path(
+    get,
+    tag = "reminders",
+    operation_id = "list_reminder_occurrences",
+    path = "/reminders/occurrences",
+    params(ListReminderOccurrencesParams),
+    responses(
+        (status = 200, body = ReminderOccurrencesList),
+        (status = 400, body = ErrorResponse),
+        (status = 401, description = "Missing or invalid credentials", body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn list_reminder_occurrences_handler<S, Eas, Auth>(
+    State(state): State<RemindersRouterState<S, Eas, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Query(params): Query<ListReminderOccurrencesParams>,
+) -> Result<Json<ReminderOccurrencesList>, ReminderError>
+where
+    S: RemindersService,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    let query = ReminderOccurrenceQuery {
+        window: OccurrenceWindow::new(params.start, params.end)?,
+        attached: params.attached,
+    };
+    let occurrences = state
+        .service
+        .list_reminder_occurrences(&user.authorization.user.macro_user_id, query)
+        .await?;
+    Ok(Json(ReminderOccurrencesList { occurrences }))
 }
 
 /// Create a reminder, optionally attached to an entity the caller can view.

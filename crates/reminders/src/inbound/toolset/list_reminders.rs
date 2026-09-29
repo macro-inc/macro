@@ -34,6 +34,8 @@ the id for, pass it in `reminderIds`.\n\
 Filters:\n\
 - `overdue: true` / `false` — already fired and waiting on the user, or still upcoming\n\
 - `completed: true` / `false` — dealt with, or still outstanding\n\
+- `attached: true` / `false` — reminders about some item, or standalone reminders about \
+nothing in particular\n\
 - `entityType` + `entityId` — reminders about one specific thing. `entityType` takes the same \
 values CreateReminder accepts: document, ai_chat, project, email, channel, call, \
 calendar_event\n\
@@ -96,6 +98,16 @@ pub struct ListReminders {
     #[serde(default)]
     pub overdue: Option<bool>,
 
+    /// Filter on whether the reminder is attached to an entity. `None`
+    /// returns both.
+    #[schemars(
+        description = "Filter on whether the reminder is about something. True returns only \
+                       reminders attached to an item, false only standalone ones. Omit for \
+                       both. False together with entityType and entityId matches nothing."
+    )]
+    #[serde(default)]
+    pub attached: Option<bool>,
+
     /// Page size, clamped into range.
     #[schemars(
         description = "Maximum number of reminders to return. Defaults to 20, capped at 100."
@@ -130,6 +142,7 @@ where
         user_id = ?request_context.user_id,
         completed = ?self.completed,
         overdue = ?self.overdue,
+        attached = ?self.attached,
     ), err)]
     async fn call(
         &self,
@@ -156,6 +169,7 @@ where
                     // means, so default to those rather than to everything.
                     completed: Some(self.completed.unwrap_or(false)),
                     fired: self.overdue,
+                    attached: self.attached,
                     // Soonest first, and with no cursor this picks the rows
                     // rather than merely arranging them: the other direction
                     // would return the furthest-future reminders and never an

@@ -1,0 +1,91 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                id,\n                description,\n                entity_type,\n                entity_id,\n                remind_at,\n                cron,\n                timezone,\n                next_run_at,\n                enabled,\n                completed_at,\n                created_at,\n                updated_at\n            FROM reminder\n            WHERE user_id = $1\n              AND enabled\n              AND (\n                  -- Completion settles one firing of a series, not the series,\n                  -- so it does not exclude one. See `due_firings`.\n                  (cron IS NOT NULL AND created_at < $3)\n                  OR (completed_at IS NULL AND remind_at >= $2 AND remind_at < $3)\n              )\n              AND ($4::bool IS NULL OR (entity_id IS NOT NULL) = $4)\n            ORDER BY created_at, id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "entity_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "entity_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "remind_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "cron",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "timezone",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "next_run_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "enabled",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 9,
+        "name": "completed_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz",
+        "Timestamptz",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "98bcd8bf7be5751ba84c3a9bb4093816cbb455dfa1c890c6910f792ed7a7928a"
+}

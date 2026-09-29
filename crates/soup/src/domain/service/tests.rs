@@ -38,8 +38,8 @@ use models_pagination::{
 use models_soup::document::{SoupDocument, SoupDocumentSubType};
 use ordered_float::OrderedFloat;
 use reminders::domain::models::{
-    CreateReminder, Reminder, ReminderError, ReminderFilter, ReminderForSoup, ReminderPage,
-    ReminderPatch,
+    CreateReminder, Reminder, ReminderError, ReminderFilter, ReminderForSoup, ReminderOccurrence,
+    ReminderOccurrenceQuery, ReminderPage, ReminderPatch,
 };
 use rootcause::Report;
 use std::sync::{Arc, Mutex};
@@ -2951,6 +2951,14 @@ impl RemindersService for RecordingRemindersService {
             .unwrap()
             .push((query.ids.to_vec(), query.limit));
         Ok(Vec::new())
+    }
+
+    async fn list_reminder_occurrences(
+        &self,
+        _user_id: &MacroUserIdStr<'_>,
+        _query: ReminderOccurrenceQuery,
+    ) -> Result<Vec<ReminderOccurrence>, ReminderError> {
+        unimplemented!("RecordingRemindersService.list_reminder_occurrences")
     }
 
     async fn update_reminder(

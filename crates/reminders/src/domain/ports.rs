@@ -8,7 +8,8 @@ use uuid::Uuid;
 use crate::domain::models::{
     Advance, Completion, CreateReminder, DeliveryOutcome, DueFiring, DueReminder, NewReminder,
     Reminder, ReminderBatch, ReminderDispatchMessage, ReminderError, ReminderFilter,
-    ReminderForSoup, ReminderPage, ReminderPatch, ReminderUpdate, SoupReminderQuery, SweepSummary,
+    ReminderForSoup, ReminderOccurrence, ReminderOccurrenceQuery, ReminderPage, ReminderPatch,
+    ReminderUpdate, SoupReminderQuery, SweepSummary,
 };
 
 /// Source of the current time.
@@ -88,6 +89,23 @@ pub trait RemindersRepo: Send + Sync + 'static {
         user_id: &MacroUserIdStr<'_>,
         query: SoupReminderQuery<'_>,
     ) -> impl Future<Output = Result<Vec<ReminderForSoup>, Self::Err>> + Send;
+
+    /// Read the user's reminders that can fire inside `query.window`: every
+    /// live recurring reminder created before the window ends, and every live
+    /// one-shot whose instant falls inside it. `query.attached` narrows to
+    /// reminders with or without an entity.
+    ///
+    /// Live means what dispatch means by it: enabled, and for a one-shot not
+    /// yet completed. Completion settles one firing of a series rather than the
+    /// series, so a completed recurring reminder is still read.
+    ///
+    /// Firings are not expanded here. As in [`RemindersRepo::list_reminders`],
+    /// an undecodable row is skipped rather than failing the whole read.
+    fn list_reminders_firing_within(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        query: &ReminderOccurrenceQuery,
+    ) -> impl Future<Output = Result<Vec<Reminder>, Self::Err>> + Send;
 
     /// Apply `update` to one of the user's reminders, returning the new state.
     fn update_reminder(
@@ -342,6 +360,20 @@ pub trait RemindersService: Send + Sync + 'static {
         user_id: &MacroUserIdStr<'_>,
         query: SoupReminderQuery<'_>,
     ) -> impl Future<Output = Result<Vec<ReminderForSoup>, ReminderError>> + Send;
+
+    /// Every firing of the user's reminders inside `query.window`, soonest
+    /// first, for laying them out on a calendar.
+    ///
+    /// Firings are expanded from each schedule rather than read from delivery
+    /// records, so a past firing of a series appears whether or not it was
+    /// delivered. More than [`MAX_OCCURRENCES`] firings is a `BadRequest`.
+    ///
+    /// [`MAX_OCCURRENCES`]: crate::domain::models::MAX_OCCURRENCES
+    fn list_reminder_occurrences(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        query: ReminderOccurrenceQuery,
+    ) -> impl Future<Output = Result<Vec<ReminderOccurrence>, ReminderError>> + Send;
 
     /// Modify the reminder the receipt was minted for.
     fn update_reminder(
