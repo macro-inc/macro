@@ -2,7 +2,8 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { enableReminders } from '@core/constant/featureFlags';
 import { useIsAuthenticated, useUserId } from '@core/context/user';
-import { isTabFocused } from '@core/signal/tabFocus';
+import { makeEventListener } from '@solid-primitives/event-listener';
+import { createSignal } from 'solid-js';
 import { createReminderAlerts } from './primitives/create-reminder-alerts';
 import {
   type AlertNotificationSource,
@@ -12,7 +13,7 @@ import { createReminderAlertDismissals } from './reminder-alert-dismissals';
 import { openReminderDetail } from './reminder-navigation';
 import { showReminderAlert } from './views/reminder-alert-toast';
 
-/** App composition: delivered occurrences, browser focus, and native Macro toasts. */
+/** App composition: delivered occurrences, tab visibility, and native Macro toasts. */
 export function useReminderAlerts(
   source: Omit<AlertNotificationSource, 'isStarted'> & {
     readonly _notificationsQuery: { readonly isStarted: boolean };
@@ -23,6 +24,12 @@ export function useReminderAlerts(
   const remindersFlag = useFeatureFlag(enableReminders);
   const account = () =>
     isAuthenticated() && remindersFlag().enabled ? userId() : undefined;
+  const [isVisible, setIsVisible] = createSignal(
+    document.visibilityState === 'visible'
+  );
+  makeEventListener(document, 'visibilitychange', () => {
+    setIsVisible(document.visibilityState === 'visible');
+  });
   const dismissals = createReminderAlertDismissals(account);
 
   createReminderAlerts({
@@ -38,7 +45,7 @@ export function useReminderAlerts(
       },
       account
     ),
-    active: () => !!account() && isTabFocused(),
+    active: () => !!account() && isVisible(),
     acknowledgedKeys: dismissals.keys,
     acknowledge: dismissals.acknowledge,
     show: (items, acknowledge) =>

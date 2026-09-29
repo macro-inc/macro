@@ -124,10 +124,11 @@ it does not imply deletion. Only explicit `GraphqlCacheDeletion` events remove r
 ## In-app reminder alerts
 
 With reminders enabled, an unseen reminder notification produces a persistent
-alert while the Macro tab has focus. Browser notification permission is not
-required. Returning to the tab also surfaces unseen reminders from the loaded
-notification feed. Alerts do not activate the full notification history query:
-live arrivals are buffered independently, including while the tab is blurred.
+alert while the Macro tab is visible, including when DevTools, the address bar,
+or another window has keyboard focus. Browser notification permission is not
+required. Returning to a hidden tab also surfaces unseen reminders from the
+loaded notification feed. Alerts do not activate the full notification history
+query: live arrivals are buffered independently while the tab is hidden.
 Multiple occurrences share one alert, with up to three descriptions and a count
 of the rest; normal save/copy toasts do not replace it.
 
@@ -145,7 +146,7 @@ not add a new per-occurrence Snooze control.
 
 When verifying, intercept notification responses in an owned browser tab and
 inject unseen reminder fixtures instead of scheduling real hosted reminders.
-Check permission denied, a burst of reminders before history loads, blur/focus,
+Check permission denied, a burst of reminders before history loads, hide/show,
 reload after dismissal, mute/unmute, snooze expiry, and desktop/mobile widths. This foreground path does not deliver browser
 push when Macro is closed.
 

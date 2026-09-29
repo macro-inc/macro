@@ -24,7 +24,6 @@ vi.mock('@core/context/user', () => ({
   useUserId: () => () => 'test-user',
   useIsAuthenticated: () => () => true,
 }));
-vi.mock('@core/signal/tabFocus', () => ({ isTabFocused: () => true }));
 vi.mock('./reminder-navigation', () => ({
   openReminderDetail: mocks.openReminder,
 }));
@@ -56,6 +55,7 @@ const notification: UnifiedNotification = {
 describe('reminder alert app wiring', () => {
   afterEach(() => {
     localStorage.clear();
+    vi.restoreAllMocks();
     vi.clearAllMocks();
   });
 
@@ -125,5 +125,75 @@ describe('reminder alert app wiring', () => {
     h.setUseOverrides(false);
     expect(mocks.custom).toHaveBeenCalledTimes(2);
     h.dispose();
+  });
+
+  it('alerts while the tab is visible even when the window is blurred', () => {
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    expect(document.hasFocus()).toBe(false);
+    mocks.flag = () => ({ enabled: true });
+    window.dispatchEvent(new Event('blur'));
+
+    const dispose = createRoot((dispose) => {
+      useReminderAlerts({
+        notifications: () => [notification],
+        isLoading: () => false,
+        _notificationsQuery: { isStarted: true },
+        mutedEntities: () => [],
+        subscribe: () => () => {},
+      });
+      return dispose;
+    });
+
+    expect(mocks.custom).toHaveBeenCalledOnce();
+    dispose();
+  });
+
+  it('defers alerts while hidden and catches up when the tab becomes visible', () => {
+    let state: DocumentVisibilityState = 'hidden';
+    vi.spyOn(document, 'visibilityState', 'get').mockImplementation(
+      () => state
+    );
+    mocks.flag = () => ({ enabled: true });
+
+    const dispose = createRoot((dispose) => {
+      useReminderAlerts({
+        notifications: () => [notification],
+        isLoading: () => false,
+        _notificationsQuery: { isStarted: true },
+        mutedEntities: () => [],
+        subscribe: () => () => {},
+      });
+      return dispose;
+    });
+
+    expect(mocks.custom).not.toHaveBeenCalled();
+    state = 'visible';
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(mocks.custom).toHaveBeenCalledOnce();
+    dispose();
+  });
+
+  it('removes its visibility listener when the app owner is disposed', () => {
+    const remove = vi.spyOn(document, 'removeEventListener');
+    mocks.flag = () => ({ enabled: false });
+
+    const dispose = createRoot((dispose) => {
+      useReminderAlerts({
+        notifications: () => [],
+        isLoading: () => false,
+        _notificationsQuery: { isStarted: false },
+        mutedEntities: () => [],
+        subscribe: () => () => {},
+      });
+      return dispose;
+    });
+    dispose();
+
+    expect(remove).toHaveBeenCalledWith(
+      'visibilitychange',
+      expect.any(Function),
+      undefined
+    );
   });
 });
