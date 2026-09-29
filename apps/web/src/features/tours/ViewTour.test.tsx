@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { defineTourTargets, tourTarget } from '@ui/components/Tour';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineViewTour } from './core/view-tour';
@@ -56,6 +57,8 @@ const linear = defineViewTour({
   steps,
 });
 const key = (id: string) => `macro:tour:${id}:tour-user`;
+const saved = (id: string) =>
+  JSON.parse(localStorage.getItem(key(id)) ?? 'null');
 
 beforeEach(() => {
   vi.stubEnv('DEV', false);
@@ -78,7 +81,7 @@ describe('ViewTour', () => {
     const view = render(() => <ViewTour tour={plain} />);
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss Plain tour' }));
     expect(screen.queryByRole('dialog')).toBeNull();
-    expect(localStorage.getItem(key('plain'))).toBe('hidden');
+    expect(saved('plain')).toEqual({ status: 'dismissed' });
     view.unmount();
     render(() => <ViewTour tour={plain} />);
     expect(screen.queryByRole('dialog')).toBeNull();
@@ -89,17 +92,32 @@ describe('ViewTour', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
     expect(screen.getByRole('dialog', { name: 'Second step' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Got it' }));
-    expect(localStorage.getItem(key('plain'))).toBe('hidden');
+    expect(saved('plain')).toEqual({ status: 'completed' });
+  });
+
+  it('resumes an unfinished tour at the last step reached', () => {
+    const view = render(() => <ViewTour tour={plain} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(saved('plain')).toEqual({ status: 'active', step: 1 });
+    view.unmount();
+    render(() => <ViewTour tour={plain} />);
+    expect(screen.getByRole('dialog', { name: 'Second step' })).toBeTruthy();
+  });
+
+  it('starts fresh when saved progress is unreadable', () => {
+    localStorage.setItem(key('plain'), 'hidden');
+    render(() => <ViewTour tour={plain} />);
+    expect(screen.getByRole('dialog', { name: 'First step' })).toBeTruthy();
   });
 
   it('reopens on localhost without touching saved dismissals', () => {
     vi.stubEnv('DEV', true);
     vi.stubGlobal('location', { hostname: 'localhost' });
-    localStorage.setItem(key('plain'), 'hidden');
+    localStorage.setItem(key('plain'), JSON.stringify({ status: 'dismissed' }));
     render(() => <ViewTour tour={plain} />);
     expect(screen.getByRole('dialog')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss Plain tour' }));
-    expect(localStorage.getItem(key('plain'))).toBe('hidden');
+    expect(saved('plain')).toEqual({ status: 'dismissed' });
   });
 
   it('unmounts off desktop without saving a dismissal', () => {
@@ -147,5 +165,67 @@ describe('ViewTour', () => {
     ));
     fireEvent.click(screen.getByRole('button', { name: 'Import' }));
     expect(onClick).toHaveBeenCalledOnce();
+  });
+});
+
+describe('ViewTour waiting hint', () => {
+  const T = defineTourTargets('hint-test', ['entry', 'a', 'b', 'c']);
+  const waiting = defineViewTour({
+    id: 'waiting',
+    title: 'Waiting',
+    steps: [
+      {
+        target: T.a,
+        entry: T.entry,
+        entryLabel: 'Open the thing to continue',
+        title: 'A',
+        description: 'a',
+      },
+      {
+        target: T.b,
+        entry: T.entry,
+        entryLabel: 'Open the thing to continue',
+        title: 'B',
+        description: 'b',
+      },
+      {
+        target: T.c,
+        entry: T.entry,
+        entryLabel: 'Open the thing to continue',
+        title: 'C',
+        description: 'c',
+      },
+      { title: 'After', description: 'done waiting' },
+    ],
+  });
+
+  beforeEach(() => {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(
+      new DOMRect(10, 10, 100, 20)
+    );
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  it('shows the action to take, then offers Skip all after one Skip', async () => {
+    render(() => (
+      <>
+        <button type="button" ref={tourTarget(T.entry)}>
+          Thing
+        </button>
+        <ViewTour tour={waiting} />
+      </>
+    ));
+    await Promise.resolve();
+    const hint = () => document.querySelector('[data-tour-hint]');
+    expect(hint()?.textContent).toContain('Open the thing to continue');
+    expect(screen.queryByRole('button', { name: 'Skip all' })).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'Dismiss Waiting tour' })
+    ).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
+    expect(hint()?.textContent).toContain('2 / 4');
+    fireEvent.click(screen.getByRole('button', { name: 'Skip all' }));
+    expect(screen.getByRole('dialog', { name: 'After' })).toBeTruthy();
   });
 });

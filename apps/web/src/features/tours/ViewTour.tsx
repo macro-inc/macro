@@ -27,8 +27,8 @@ export type ViewTourProps = {
 };
 
 /**
- * A view's automatic, dismissible tour. Mount it once inside the view; it
- * stays within the view's split and is saved as dismissed per user.
+ * A view's automatic tour. Mount it once inside the view; it stays within
+ * the view's split, and its progress is saved per user on this browser.
  */
 export function ViewTour(props: ViewTourProps) {
   const userId = useUserId();
@@ -44,29 +44,69 @@ const isLocalTesting = () =>
   import.meta.env.DEV &&
   ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname);
 
+/**
+ * Saved per user and tour on this browser: finished or dismissed tours stay
+ * hidden, and an unfinished tour resumes at the step the user last reached.
+ */
+type TourProgress =
+  | { status: 'completed' | 'dismissed' }
+  | { status: 'active'; step: number };
+
+function readProgress(raw: string | null): TourProgress | undefined {
+  if (!raw) return undefined;
+  try {
+    const value = JSON.parse(raw) as Partial<TourProgress & { step: unknown }>;
+    if (value.status === 'completed' || value.status === 'dismissed')
+      return { status: value.status };
+    if (value.status === 'active' && typeof value.step === 'number')
+      return { status: 'active', step: value.step };
+  } catch {
+    // Unreadable progress starts the tour fresh.
+  }
+  return undefined;
+}
+
 function DismissibleTour(props: ViewTourProps & { userId: string }) {
   const storage = createUserScopedStorage(`macro:tour:${props.tour.id}`);
-  // Localhost reopens tours on remount so they can be iterated on; saved
-  // dismissals are left alone.
+  // Localhost reopens tours from the start on every mount so they can be
+  // iterated on, and leaves saved progress alone.
   const localTesting = isLocalTesting();
-  const [dismissed, setDismissed] = createSignal(
-    !localTesting && storage.read(props.userId) === 'hidden'
+  const saved = localTesting
+    ? undefined
+    : readProgress(storage.read(props.userId));
+  const [closed, setClosed] = createSignal(
+    saved?.status === 'completed' || saved?.status === 'dismissed'
   );
-  const dismiss = () => {
-    setDismissed(true);
-    if (!localTesting) storage.write(props.userId, 'hidden');
+  const [step, setStep] = createSignal(
+    saved?.status === 'active'
+      ? Math.min(saved.step, props.tour.steps.length - 1)
+      : 0
+  );
+  const save = (progress: TourProgress) => {
+    if (!localTesting) storage.write(props.userId, JSON.stringify(progress));
+  };
+  const changeStep = (next: number) => {
+    setStep(next);
+    save({ status: 'active', step: next });
+  };
+  const close = (status: 'completed' | 'dismissed') => {
+    setClosed(true);
+    save({ status });
   };
 
   return (
-    <Show when={!dismissed()}>
+    <Show when={!closed()}>
       <Tour.Root
         steps={props.tour.steps}
-        onDismiss={dismiss}
+        step={step()}
+        onStepChange={changeStep}
+        onDismiss={() => close('dismissed')}
+        onComplete={() => close('completed')}
         boundary={(root) => root.closest<HTMLElement>('[data-split-id]')}
       >
         <Tour.Highlight class="view-tour-highlight" />
         <Tour.Beacon />
-        <Tour.Hint class="view-tour-hint flex max-w-64 items-center gap-1 rounded-full border border-edge bg-dialog py-1 pr-1 pl-3 text-xs text-ink">
+        <Tour.Hint class="view-tour-hint w-64 rounded-xl border border-edge bg-dialog p-3 text-ink">
           <ViewTourHint tour={props.tour} />
         </Tour.Hint>
         <Tour.Popover class="view-tour-card w-80 overflow-y-auto rounded-2xl border border-edge bg-dialog p-5 text-ink">
@@ -77,26 +117,56 @@ function DismissibleTour(props: ViewTourProps & { userId: string }) {
   );
 }
 
-/** What to press to continue, shown beside the beacon while a step waits. */
+const entryKey = (step: ViewTourStep) =>
+  [step.entry ?? []]
+    .flat()
+    .map((entry) => entry.id)
+    .join('|');
+
+/**
+ * What to do to continue, shown beside the beacon while a step waits. After
+ * one Skip, Skip all appears when more steps wait on the same action.
+ */
 function ViewTourHint(props: { tour: ViewTourDefinition }) {
   const tour = useTour<ViewTourStep>();
+  const [skippedPath, setSkippedPath] = createSignal<string>();
+  const canSkipAll = () =>
+    skippedPath() === entryKey(tour.current()) && tour.pathEnd() > tour.index();
   return (
     <>
-      <span class="min-w-0 flex-1 truncate">
+      <p class="text-[10px] uppercase tracking-widest text-ink-muted">
+        {props.tour.title} tour · <Tour.Progress />
+      </p>
+      <p class="mt-1.5 text-sm leading-5">
         {tour.current().entryLabel ?? `Continue the ${props.tour.title} tour`}
-      </span>
-      <Tour.Next variant="ghost" size="xs" doneLabel="Done">
-        Skip
-      </Tour.Next>
-      <Tour.Close size="icon-xs" label={`Dismiss ${props.tour.title} tour`} />
+      </p>
+      <div class="mt-3 flex items-center gap-1.5">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            setSkippedPath(entryKey(tour.current()));
+            tour.next();
+          }}
+        >
+          Skip
+        </Button>
+        <Show when={canSkipAll()}>
+          <Button variant="ghost" size="sm" onClick={tour.skipPath}>
+            Skip all
+          </Button>
+        </Show>
+      </div>
     </>
   );
 }
 
 function ViewTourCard(props: ViewTourProps) {
   const tour = useTour<ViewTourStep>();
+  // Explain how to reach the feature when the tour can't point at it, or
+  // points at a stand-in because it isn't set up yet.
   const missingHint = () =>
-    tour.status() === 'floating' && tour.current().target
+    (tour.status() === 'floating' && tour.current().target) || tour.isFallback()
       ? tour.current().missingHint
       : undefined;
 
