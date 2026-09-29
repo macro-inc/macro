@@ -95,6 +95,17 @@ update filter membership on the authoritative reply, not from a guessed optimist
 state. Rollback restores only the failed operation's contribution. `DONE` predicates,
 other entity partitions, and notified-at sorting still use the network path.
 
+The Mark done action (`e`, row menu) hides its rows at once from GraphQL lists that
+exclude done items, such as Email Important/Noise and Home Signal, without waiting
+for the server. Lists that show done items, such as Email All, keep the row. Undo
+or a failed write brings the row back, and so does a new active notification on the
+entity. To verify, mark a row done and watch it for a few seconds. It must not
+reappear once the server reply lands, and it must stay gone after a reload.
+In Tasks, Email, Home and Drive, rows keep their DOM when the list updates. A
+property edit or a rename updates the edited row in place instead of rebuilding
+every visible row. To verify, watch the row nodes with a `MutationObserver` while
+editing: only moved or removed rows should be added or removed.
+
 Channels use the same general Soup reconciliation path, not a separate local page
 chain. Channel ID, type, team, organization, importance, and participant-scoped
 filters operate over synchronized channel metadata. The default channel scope

@@ -52,6 +52,7 @@ import {
   untrack,
 } from 'solid-js';
 import { NIL as NIL_UUID } from 'uuid';
+import { soupQueryExcludesDone } from '../excludes-done';
 import type { SoupAstBody, SoupAstItemsData, SoupAstParams } from '../items';
 import { soupPageTimestamp } from '../page-timestamp';
 import {
@@ -65,6 +66,10 @@ import {
   usePendingGraphqlSoupDeleteIds,
   withoutPendingGraphqlSoupDeletes,
 } from './optimistic-deletions';
+import {
+  usePendingGraphqlSoupDone,
+  withPendingDoneIds,
+} from './optimistic-done';
 import {
   materializeReconciledSoup,
   soupItemKey,
@@ -113,6 +118,8 @@ export function createGraphqlSoupAstItemsQuery(
 ): GraphqlSoupAstItemsQuery {
   const instructionsIdQuery = useInstructionsMdIdQuery();
   const pendingDeleteIds = usePendingGraphqlSoupDeleteIds();
+  const pendingDone = usePendingGraphqlSoupDone();
+  const excludesDone = createMemo(() => soupQueryExcludesDone([args().body]));
   const [offline, setOffline] = createSignal(
     typeof navigator !== 'undefined' && !navigator.onLine
   );
@@ -797,7 +804,13 @@ export function createGraphqlSoupAstItemsQuery(
           ...data,
           oldestFetchedTimestamp: query.data?.data.oldestFetchedTimestamp,
         },
-        pendingDeleteIds()
+        excludesDone()
+          ? withPendingDoneIds(
+              pendingDeleteIds(),
+              data?.entities ?? [],
+              pendingDone()
+            )
+          : pendingDeleteIds()
       );
     }),
     error,
