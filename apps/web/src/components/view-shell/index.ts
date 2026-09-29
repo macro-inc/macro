@@ -60,3 +60,4 @@ export {
   type DetailPlacement,
   type MainLayout,
 } from './view-shell-layout';
+export { VIEW_SHELL_TOUR } from './tour';
