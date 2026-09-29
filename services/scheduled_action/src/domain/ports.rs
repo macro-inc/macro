@@ -7,8 +7,12 @@ use super::models::{
 };
 use anyhow::Result;
 use chrono::{DateTime, Utc};
+use entity_access::domain::models::{
+    EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use model_owner::CreationPrincipal;
 use rootcause::Report;
 use tokio::sync::mpsc::{Receiver, Sender};
 
@@ -101,13 +105,12 @@ pub trait ScheduledActionRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<()>> + Send;
 }
 
-/// Lists one user's routines for read-only clients.
+/// Lists routines a caller can access for read-only clients.
 ///
-/// The list includes cron and event triggers, keeps only actions whose owner
-/// is that user, and orders them by `(created_at, id)`.
+/// The list includes cron and event triggers and orders them by `(created_at, id)`.
 pub trait ScheduledActionReadService: Send + Sync + 'static {
-    /// Routines owned by `user_id` in stable `(created_at, id)` order.
-    fn list_owned(
+    /// Cron and event actions the user can access, ordered by `(created_at, id)`.
+    fn list_accessible(
         &self,
         user_id: MacroUserIdStr<'static>,
     ) -> impl Future<Output = std::result::Result<Vec<ScheduledAction>, Report>> + Send;
@@ -121,14 +124,17 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         user_id: MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<()>> + Send;
 
+    /// Records `principal.owner()`. A non-user owner is `OwnerNotUserError`
+    /// before validation and before any write. `BotForUser` records the user.
     fn create_action(
         &self,
+        principal: &CreationPrincipal,
         input: CreateScheduledAction,
-        user_id: MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
-    /// Legacy clients see cron actions only. Backend clients opt into events.
-    /// ID-based operations and workers must never authorize through this list.
+    /// Actions `user_id` can access. Legacy clients see cron actions only;
+    /// backend clients opt into events. ID-based operations and workers must
+    /// never authorize through this list.
     fn get_actions(
         &self,
         user_id: MacroUserIdStr<'static>,
@@ -137,36 +143,31 @@ pub trait ScheduledActionService: Send + Sync + 'static {
 
     fn update_action(
         &self,
-        id: &Uuid,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
         input: UpdateScheduledAction,
-        macro_user_id: MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
     /// Change activation without touching configuration. Requesting the
     /// current state returns the stored action unchanged.
     fn set_enabled(
         &self,
-        id: &Uuid,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
         enabled: bool,
-        macro_user_id: MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
     fn delete_action(
         &self,
-        id: &Uuid,
-        macro_user_id: MacroUserIdStr<'static>,
+        receipt: EntityAccessReceipt<OwnerAccessLevel>,
     ) -> impl Future<Output = Result<()>> + Send;
 
     fn execute_action_now(
         &self,
-        id: &Uuid,
-        macro_user_id: MacroUserIdStr<'static>,
+        receipt: EntityAccessReceipt<OwnerAccessLevel>,
     ) -> impl Future<Output = Result<InProgressExecution>> + Send;
 
     fn get_execution_records(
         &self,
-        id: &Uuid,
-        macro_user_id: MacroUserIdStr<'static>,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<Vec<ActionExecutionRecord>>> + Send;
 }
 

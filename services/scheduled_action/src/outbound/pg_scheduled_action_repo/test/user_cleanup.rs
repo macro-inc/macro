@@ -2,7 +2,19 @@ use super::*;
 use crate::domain::models::InProgressExecution;
 use crate::domain::ports::{ScheduledActionExecutor, ScheduledActionService};
 use crate::domain::service::ScheduledActionServiceImpl;
+use entity_access::domain::{models::AccessError, ports::ScheduledActionGrants};
+use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use std::sync::Arc;
+
+struct UnusedGrants;
+impl ScheduledActionGrants for UnusedGrants {
+    async fn accessible_scheduled_action_ids(
+        &self,
+        _user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> std::result::Result<Vec<macro_uuid::Uuid>, AccessError> {
+        Ok(Vec::new())
+    }
+}
 
 struct NeverExecutor;
 impl ScheduledActionExecutor for NeverExecutor {
@@ -37,7 +49,12 @@ async fn deletes_user_actions_without_cascade_and_preserves_other_users(pool: Pg
         .await
         .unwrap();
     let (tx, _rx) = tokio::sync::mpsc::channel(10);
-    let service = ScheduledActionServiceImpl::new(repo.clone(), Arc::new(NeverExecutor), tx);
+    let service = ScheduledActionServiceImpl::new(
+        repo.clone(),
+        Arc::new(NeverExecutor),
+        tx,
+        Arc::new(UnusedGrants),
+    );
 
     service.delete_user_actions(user(USER_A)).await.unwrap();
     service.delete_user_actions(user(USER_A)).await.unwrap();

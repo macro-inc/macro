@@ -18,6 +18,8 @@ use chrono::Utc;
 use entity_access::domain::models::{
     AccessLevel, Entity, EntityAccessReceipt, EntityPermission, EntityType,
 };
+use entity_access::domain::service::EntityAccessServiceImpl;
+use entity_access::outbound::PgAccessRepository;
 use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
 use macro_authorization::{
@@ -234,10 +236,15 @@ impl Harness {
             CancellationToken::new(),
         ));
         let (tx, notifications) = mpsc::channel(100);
-        let service = ScheduledActionServiceImpl::new(actions.clone(), executor.clone(), tx)
-            .with_event_management_enabled(true);
+        let access = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
+            pool.clone(),
+        )));
+        let service =
+            ScheduledActionServiceImpl::new(actions.clone(), executor.clone(), tx, access.clone())
+                .with_event_management_enabled(true);
         let app = scheduled_action_router(ScheduledActionRouterState {
             service: Arc::new(service),
+            access_service: access,
             authorization_state: MacroAuthorizationState::new(Arc::new(FakeAuth)),
         });
         Self {
@@ -456,13 +463,7 @@ async fn legacy_cron_and_canonical_events_share_crud_and_manual_execution(pool: 
             request(&h.app, "DELETE", &url, Value::Null).await.0,
             StatusCode::NO_CONTENT
         );
-        assert!(
-            h.actions
-                .get_action(&id)
-                .await
-                .unwrap()
-                .is_none()
-        );
+        assert!(h.actions.get_action(&id).await.unwrap().is_none());
     }
     assert_eq!(h.count().await, 0);
     let calls = h.runner.calls.lock().unwrap();

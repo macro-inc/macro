@@ -1,7 +1,21 @@
 use super::super::*;
 use super::{configuration, user};
 use crate::domain::event_runs::ClaimToken;
+use entity_access::domain::{models::AccessError, ports::ScheduledActionGrants};
+use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
+use macro_uuid::Uuid;
+use model_owner::Owner;
 use std::sync::Mutex;
+
+struct UnusedGrants;
+impl ScheduledActionGrants for UnusedGrants {
+    async fn accessible_scheduled_action_ids(
+        &self,
+        _user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<Vec<Uuid>, AccessError> {
+        Ok(Vec::new())
+    }
+}
 
 #[derive(Default)]
 struct FakeRepo {
@@ -112,7 +126,12 @@ async fn deletes_disabled_and_claimed_actions_not_other_owners_and_retries_empty
     ];
     let (tx, mut rx) = tokio::sync::mpsc::channel(10);
     // Event management is disabled by default, but cleanup must still remove events.
-    let service = ScheduledActionServiceImpl::new(repo.clone(), Arc::new(NeverExecutor), tx);
+    let service = ScheduledActionServiceImpl::new(
+        repo.clone(),
+        Arc::new(NeverExecutor),
+        tx,
+        Arc::new(UnusedGrants),
+    );
 
     service.delete_user_actions(user()).await.unwrap();
     service.delete_user_actions(user()).await.unwrap();
@@ -134,7 +153,12 @@ async fn repository_failure_keeps_retry_state_and_emits_no_delete() {
         .push(action(Owner::User(user()), false));
     *repo.fail_delete.lock().unwrap() = true;
     let (tx, mut rx) = tokio::sync::mpsc::channel(10);
-    let service = ScheduledActionServiceImpl::new(repo.clone(), Arc::new(NeverExecutor), tx);
+    let service = ScheduledActionServiceImpl::new(
+        repo.clone(),
+        Arc::new(NeverExecutor),
+        tx,
+        Arc::new(UnusedGrants),
+    );
     assert!(service.delete_user_actions(user()).await.is_err());
     assert_eq!(repo.actions.lock().unwrap().len(), 1);
     assert!(rx.try_recv().is_err());
@@ -152,7 +176,12 @@ async fn closed_dispatcher_fails_before_deleting_rows() {
         .push(action(Owner::User(user()), false));
     let (tx, rx) = tokio::sync::mpsc::channel(10);
     drop(rx);
-    let service = ScheduledActionServiceImpl::new(repo.clone(), Arc::new(NeverExecutor), tx);
+    let service = ScheduledActionServiceImpl::new(
+        repo.clone(),
+        Arc::new(NeverExecutor),
+        tx,
+        Arc::new(UnusedGrants),
+    );
     assert!(service.delete_user_actions(user()).await.is_err());
     assert_eq!(repo.actions.lock().unwrap().len(), 1);
 }

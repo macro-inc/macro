@@ -107,9 +107,10 @@ async fn main() -> Result<()> {
     let repo = Arc::new(PgScheduledActionRepo::new(db.clone(), registrar));
 
     let event_repo = Arc::new(PgEventRunRepo::new(db.clone()));
-    let event_access = Arc::new(EventAccessAdapter::new(EntityAccessServiceImpl::new(
-        PgAccessRepository::new(db.clone()),
+    let access = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
+        db.clone(),
     )));
+    let event_access = Arc::new(EventAccessAdapter::new(access.as_ref().clone()));
     let memory = MemoryServiceImpl::new(
         PgMemoryRepo::new(db.clone()),
         tool_context.clone(),
@@ -198,18 +199,24 @@ async fn main() -> Result<()> {
     );
 
     let service = Arc::new(
-        ScheduledActionServiceImpl::new(Arc::clone(&repo), service_executor, dispatcher_tx)
-            .with_event_management_enabled(config.event_routines_enabled)
-            .with_target_validation(TargetValidation::new(
-                sessions,
-                config.routine_agents_enabled,
-            )),
+        ScheduledActionServiceImpl::new(
+            Arc::clone(&repo),
+            service_executor,
+            dispatcher_tx,
+            access.clone(),
+        )
+        .with_event_management_enabled(config.event_routines_enabled)
+        .with_target_validation(TargetValidation::new(
+            sessions,
+            config.routine_agents_enabled,
+        )),
     );
     let state = ScheduledActionRouterState {
         service,
+        access_service: access,
         authorization_state,
     };
-    let authed_routes = scheduled_action_router::<_, _, ()>(state);
+    let authed_routes = scheduled_action_router::<_, _, _, ()>(state);
 
     let router = Router::new()
         .merge(mount_at_root_and_prefix(
