@@ -253,18 +253,22 @@ commented range. Hover any cell in that range to read its threads; choose
 triangle also opens the card on touch devices. Interacting with a card keeps it
 open until dismissed so a reply is not lost when moving the pointer.
 
-**Comments** in the document header opens all workbook threads. Range labels
+**Comments** in the document header opens the workbook commenting sidebar. Range labels
 navigate to the corresponding sheet and cells; deleted-sheet threads remain
-readable. **Workbook discussion** contains comments about the whole workbook,
-with its own composer. The pinned composer at the bottom posts on the displayed
-range; **Use selection** changes that range. Both surfaces use the shared message
-controls for replies, edits, deletion, reactions, and attachments. Range threads
-also offer **Resolve** and **Reopen**. Mentions and replies use inbox notifications
-and message links. Older spreadsheet annotation comments are not displayed.
+readable. The **Cell comments** section separates range threads from
+**Workbook discussion** and filters them by **Open**, **Resolved**, or **All**;
+Open is the default. **Workbook discussion** contains comments about the whole
+workbook and is the sidebar's new-comment composer. To start a cell comment,
+select the range and use the ribbon, keyboard shortcut, or cell context menu.
+Both surfaces use the shared message controls for replies, edits, deletion,
+reactions, and attachments. Range threads also offer **Resolve** and **Reopen**.
+Mentions and replies use inbox notifications and message links. Older spreadsheet
+annotation comments are not displayed.
 Opening an inbox notification opens the sidebar and targets its comment/range.
 Range links leave Workbook discussion on its normal timeline; workbook links
-open that discussion at the linked message, clear the previous range highlight
-or navigation error, and preserve an open range draft's attachment.
+open that discussion at the linked message and clear the previous range highlight
+or navigation error. A resolved range link switches the filter to **Resolved** so
+the targeted thread remains visible.
 Comment-only access can post/reply; view-only access can read. Edit/delete applies
 to the author's own comments, and failures retain the input draft. Draft demos
 must be saved before persistent comments are available.
