@@ -3169,3 +3169,97 @@ fn presigned_url_path_for_bot_and_team_owners_uses_their_principals() {
         "https://cdn.example.test/00000000-0000-0000-0000-000000000456/doc-1/7"
     );
 }
+
+fn sync_with_session(
+    id: uuid::Uuid,
+    exists: bool,
+) -> crate::domain::ports::sync::MockDocumentSyncPort {
+    let mut sync = crate::domain::ports::sync::MockDocumentSyncPort::new();
+    sync.expect_exists()
+        .withf(move |document_id| document_id == id.to_string())
+        .times(1)
+        .returning(move |_| Box::pin(std::future::ready(Ok(exists))));
+    sync
+}
+
+#[tokio::test]
+async fn a_caller_chosen_id_that_already_has_a_session_is_refused() {
+    let id = uuid::Uuid::from_u128(42);
+    let mut repo = make_mock_repo();
+    repo.expect_get_owner_team().times(0);
+    repo.expect_create_document().times(0);
+    let service = spreadsheet_test_service(repo, sync_with_session(id, true));
+    let mut document = new_document(FileType::Md);
+    document.id = Some(id);
+
+    let err = DocumentService::create_document(
+        &service,
+        &CreationPrincipal::User(test_user()),
+        document,
+        None,
+    )
+    .await
+    .unwrap_err();
+
+    assert!(matches!(err, DocumentError::Conflict(_)));
+}
+
+#[tokio::test]
+async fn a_caller_chosen_id_without_a_session_is_created() {
+    let id = uuid::Uuid::from_u128(43);
+    let mut repo = make_mock_repo();
+    repo.expect_get_owner_team()
+        .returning(|_| Box::pin(std::future::ready(Ok(None))));
+    repo.expect_create_document()
+        .withf(move |args, _| args.document.id == Some(id))
+        .times(1)
+        .returning(|_, _| {
+            let mut metadata = make_test_metadata();
+            metadata.file_type = Some("spreadsheet".to_string());
+            Box::pin(std::future::ready(Ok(metadata)))
+        });
+    repo.expect_set_document_content()
+        .returning(|_, _| Box::pin(std::future::ready(Ok(()))));
+    repo.expect_get_team_task_metadata()
+        .returning(|_| Box::pin(std::future::ready(Ok(None))));
+    let mut sync = sync_with_session(id, false);
+    sync.expect_initialize_spreadsheet()
+        .times(1)
+        .returning(|_| Box::pin(std::future::ready(Ok(()))));
+    let service = spreadsheet_test_service(repo, sync);
+    let mut document = spreadsheet_document();
+    document.id = Some(id);
+
+    DocumentService::create_document(
+        &service,
+        &CreationPrincipal::User(test_user()),
+        document,
+        None,
+    )
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
+async fn an_email_import_with_an_id_that_already_has_a_session_is_refused() {
+    let id = uuid::Uuid::from_u128(44);
+    let mut repo = make_mock_repo();
+    repo.expect_get_owner_team().times(0);
+    repo.expect_import_email_attachment_document().times(0);
+    let service = spreadsheet_test_service(repo, sync_with_session(id, true));
+    let mut document = new_document(FileType::Pdf);
+    document.id = Some(id);
+
+    let err = DocumentService::import_email_attachment(
+        &service,
+        ImportEmailAttachmentRepoArgs {
+            email_attachment_id: uuid::Uuid::from_u128(45),
+            owner: test_user(),
+            document,
+        },
+    )
+    .await
+    .unwrap_err();
+
+    assert!(matches!(err, DocumentError::Conflict(_)));
+}
