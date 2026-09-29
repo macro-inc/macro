@@ -1070,8 +1070,9 @@ Opening or reloading an in-call URL returns to setup and requires a deliberate
 join; existing shared links continue to work.
 
 Guests enter `Your name`, choose their microphone and camera preferences, and
-press `Join call`. Setup requests device
-permissions and previews video locally; sharing starts only after joining.
+press `Join call`. Setup requests microphone permission and waits until that
+prompt finishes before requesting the camera, then previews video locally;
+sharing starts only after joining.
 Permission denial leaves the affected device off and still allows joining.
 The preview and full-width join button retain their size while joining.
 Copying the meeting URL is available after joining, in the in-call header.

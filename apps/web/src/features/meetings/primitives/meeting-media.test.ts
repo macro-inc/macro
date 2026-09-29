@@ -21,14 +21,18 @@ const withTracks = (...tracks: MediaStreamTrack[]) =>
 describe('prejoin media', () => {
   beforeEach(stubMediaStream);
 
-  it('asks for both permissions in one request and previews only enabled devices', async () => {
+  it('asks for each permission in turn and previews only enabled devices', async () => {
     const { request, tracks } = fakeMediaAccess();
     const { media, dispose } = setup(request);
     try {
       await media.prepare();
-      expect(request).toHaveBeenCalledExactlyOnceWith({
-        audio: true,
-        video: expect.any(Object),
+      expect(request).toHaveBeenNthCalledWith(1, { audio: true, video: false });
+      expect(request).toHaveBeenNthCalledWith(2, {
+        audio: false,
+        video: expect.objectContaining({
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        }),
       });
       const [microphone, cameraPermission] = tracks;
       expect(cameraPermission.stop).toHaveBeenCalledOnce();
@@ -81,36 +85,54 @@ describe('prejoin media', () => {
     }
   });
 
-  it('falls back to per-device requests so a microphone denial keeps camera setup', async () => {
+  it('still requests the camera after microphone permission is denied', async () => {
     const camera = fakeTrack('video');
     const request = vi
       .fn()
-      .mockRejectedValueOnce(new DOMException('Denied', 'NotAllowedError'))
       .mockRejectedValueOnce(new DOMException('Denied', 'NotAllowedError'))
       .mockResolvedValueOnce(withTracks(camera));
     const { media, dispose } = setup(request);
     try {
       await media.prepare();
-      expect(request).toHaveBeenCalledTimes(3);
+      expect(request).toHaveBeenNthCalledWith(1, { audio: true, video: false });
+      expect(request).toHaveBeenNthCalledWith(2, {
+        audio: false,
+        video: expect.any(Object),
+      });
       expect(media.microphoneEnabled()).toBe(false);
       expect(media.pending()).toBe(false);
       expect(media.errors()[0]).toContain('Microphone access is blocked');
+      expect(camera.stop).toHaveBeenCalledOnce();
     } finally {
       dispose();
     }
   });
 
-  it('requests a device the combined grant left out on its own', async () => {
+  it('does not request the camera until the microphone permission settles', async () => {
     const microphone = fakeTrack('audio');
-    const request = vi
-      .fn()
-      .mockResolvedValueOnce(withTracks(fakeTrack('video')))
-      .mockResolvedValueOnce(withTracks(microphone));
+    const camera = fakeTrack('video');
+    let resolveMicrophone!: (stream: MediaStream) => void;
+    const request = vi.fn((constraints: MediaStreamConstraints) => {
+      if (constraints.audio)
+        return new Promise<MediaStream>((resolve) => {
+          resolveMicrophone = resolve;
+        });
+      return Promise.resolve(withTracks(camera));
+    });
     const { media, dispose } = setup(request);
     try {
-      await media.prepare();
-      expect(request).toHaveBeenLastCalledWith({ audio: true, video: false });
-      expect(media.handoff()).toEqual({ microphone });
+      const preparing = media.prepare();
+      await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(1));
+      expect(request).toHaveBeenCalledWith({ audio: true, video: false });
+      media.setCameraEnabled(true);
+      await Promise.resolve();
+      expect(request).toHaveBeenCalledTimes(1);
+      resolveMicrophone(withTracks(microphone));
+      await preparing;
+      expect(request).toHaveBeenCalledTimes(2);
+      expect(media.handoff()).toEqual({ microphone, camera });
+      expect(microphone.stop).not.toHaveBeenCalled();
+      expect(camera.stop).not.toHaveBeenCalled();
     } finally {
       dispose();
     }
@@ -130,6 +152,7 @@ describe('prejoin media', () => {
       );
       const { media, dispose } = setup(request);
       const preparing = media.prepare();
+      await vi.waitFor(() => expect(request).toHaveBeenCalledOnce());
       if (action === 'dispose') dispose();
       else media.release();
       resolve(withTracks(microphone, camera));
@@ -153,7 +176,7 @@ describe('prejoin device and background settings', () => {
       await media.prepare();
       media.selectDevice('camera', 'camera-2');
       media.selectDevice('speaker', 'speaker-2');
-      expect(request).toHaveBeenCalledTimes(1);
+      expect(request).toHaveBeenCalledTimes(2);
       media.setCameraEnabled(true);
       await vi.waitFor(() => expect(media.video()).toBeDefined());
       expect(request).toHaveBeenLastCalledWith({
