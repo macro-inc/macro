@@ -172,7 +172,9 @@ pub fn run() {
 
     #[cfg(target_os = "android")]
     {
-        builder = builder.plugin(tauri_plugin_android_auth::init());
+        builder = builder
+            .plugin(tauri_plugin_android_auth::init())
+            .plugin(tauri_plugin_android_mobile::init());
     }
 
     // register the rest of the common plugins

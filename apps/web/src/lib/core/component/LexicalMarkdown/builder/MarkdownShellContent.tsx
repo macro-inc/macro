@@ -13,6 +13,10 @@ export function MarkdownShellContent(props: {
         data-markdown-editable
         ref={props.connectRoot}
         contentEditable={!props.disabled}
+        role="textbox"
+        aria-multiline="true"
+        aria-readonly={props.disabled}
+        aria-label={props.placeholder === '...' ? 'Message' : props.placeholder}
       />
       <Show when={props.showPlaceholder}>
         <div

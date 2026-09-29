@@ -215,6 +215,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tauri-plugin-android-auth",
+ "tauri-plugin-android-mobile",
  "tauri-plugin-auth",
  "tauri-plugin-call-kit",
  "tauri-plugin-deep-link",
@@ -6570,6 +6571,14 @@ name = "tauri-plugin-android-auth"
 version = "0.1.0"
 dependencies = [
  "serde",
+ "tauri",
+ "tauri-plugin",
+]
+
+[[package]]
+name = "tauri-plugin-android-mobile"
+version = "0.1.0"
+dependencies = [
  "tauri",
  "tauri-plugin",
 ]

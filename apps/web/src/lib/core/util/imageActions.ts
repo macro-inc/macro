@@ -1,5 +1,7 @@
 import { toast } from '@core/component/Toast/Toast';
+import { exportAndroidFileWithProgress } from '@core/mobile/exportAndroidFileWithProgress';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { isPlatform } from './platform';
 
 function extensionForImageBlob(blob: Blob): string {
   const t = (blob.type || '').toLowerCase().split(';')[0].trim();
@@ -53,6 +55,16 @@ export async function copyImageToClipboard(
   try {
     const blob = await getBlob();
     if (!blob) throw new Error('No blob');
+
+    if (isPlatform('android')) {
+      await exportAndroidFileWithProgress(
+        blob,
+        `image.${extensionForImageBlob(blob)}`,
+        'copy'
+      );
+      toast.success('Copied to clipboard');
+      return;
+    }
 
     if (isTouchDevice() && navigator.share) {
       try {
@@ -110,6 +122,11 @@ export async function downloadImage(
     if (!blob) throw new Error('No blob');
 
     const filename = `image-${imageId}.${extensionForImageBlob(blob)}`;
+
+    if (isPlatform('android')) {
+      await exportAndroidFileWithProgress(blob, filename, 'share');
+      return;
+    }
 
     // iOS: Use the native share sheet instead — the user can save to Photos, AirDrop, etc.
     if (isTouchDevice() && navigator.share) {

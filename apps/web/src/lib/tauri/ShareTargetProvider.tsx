@@ -1,3 +1,4 @@
+import { toast } from '@core/component/Toast/Toast';
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import type { OsType } from '@tauri-apps/plugin-os';
@@ -10,6 +11,7 @@ import {
   onMount,
   useContext,
 } from 'solid-js';
+import { useAndroidShares } from './androidShares';
 
 interface StagedSharedFileData {
   token: string;
@@ -27,6 +29,7 @@ export interface PendingShareFile {
   previewSrc?: string;
   isSharedText?: boolean;
   sharedText?: string;
+  sha256?: string;
 }
 
 export interface UploadPendingShareFileArgs {
@@ -128,19 +131,34 @@ export function ShareTargetProvider(props: {
 
   const clearPendingShareFiles = async () => {
     const files = pendingShareFiles();
-    setPendingShareFiles([]);
-    setPendingShareFileNames([]);
+    if (props.os !== 'android') {
+      setPendingShareFiles([]);
+      setPendingShareFileNames([]);
+    }
 
     if (files.length === 0) {
       return;
     }
 
     try {
-      await clearSharedFiles(files.map((file) => file.token));
+      const tokens = files.map((file) => file.token);
+      if (props.os === 'android') {
+        await invoke('plugin:android-mobile|clearShares', { tokens });
+        // A queue notification may already have loaded the next batch.
+        setPendingShareFiles((current) =>
+          current.filter((file) => !tokens.includes(file.token))
+        );
+      } else {
+        await clearSharedFiles(tokens);
+      }
     } catch (error) {
       console.error('failed to clear shared files', error);
+      if (props.os === 'android')
+        toast.failure('Unable to clear this share. Please try again.');
     }
   };
+
+  if (props.os === 'android') useAndroidShares(setPendingShareFiles);
 
   const clearLoadedPendingShare = (files: readonly PendingShareFile[]) => {
     setPendingShareFiles([]);

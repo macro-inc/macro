@@ -1,4 +1,9 @@
 import { toast } from '@core/component/Toast/Toast';
+import {
+  getNativeStagedUpload,
+  nativeUploadChecksum,
+  uploadNativeStagedFileToPresignedUrl,
+} from '@core/mobile/nativeStagedUpload';
 import { contentHash } from '@core/util/hash';
 import { throwOnErr } from '@core/util/result';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
@@ -43,8 +48,12 @@ export const useUploadDraftAttachmentsMutation = (
   return useMutation(() => ({
     mutationFn: async (params: UploadDraftAttachmentsParams) => {
       for (const attachment of params.attachments) {
-        const arrayBuffer = await attachment.arrayBuffer();
-        const sha = await contentHash(arrayBuffer);
+        const staged = getNativeStagedUpload(attachment);
+        const arrayBuffer = staged ? undefined : await attachment.arrayBuffer();
+        const sha =
+          staged?.sha256 ??
+          (arrayBuffer ? await contentHash(arrayBuffer) : undefined);
+        if (!sha) throw new Error('Missing native attachment checksum');
 
         const result = await throwOnErr(
           async () =>
@@ -53,7 +62,7 @@ export const useUploadDraftAttachmentsMutation = (
                 draftID: params.draftID,
                 attachment: {
                   file_name: attachment.name,
-                  size: attachment.size,
+                  size: staged?.size ?? attachment.size,
                   sha,
                 },
               },
@@ -67,14 +76,23 @@ export const useUploadDraftAttachmentsMutation = (
         // so onError removes the record and clears the id -- a plain throw from
         // the fetch (network drop, abort) would otherwise leave the id in
         // place and the broken record would never be retried.
-        let uploadedResponse: Awaited<ReturnType<typeof uploadToPresignedUrl>>;
+        let uploadedResponse:
+          | Awaited<ReturnType<typeof uploadToPresignedUrl>>
+          | undefined;
         try {
-          uploadedResponse = await uploadToPresignedUrl({
-            presignedUrl: result.upload_url,
-            sha,
-            buffer: arrayBuffer,
-            type: result.content_type,
-          });
+          if (staged) {
+            await uploadNativeStagedFileToPresignedUrl(
+              { ...staged, mimeType: result.content_type },
+              result.upload_url,
+              nativeUploadChecksum(sha)
+            );
+          } else
+            uploadedResponse = await uploadToPresignedUrl({
+              presignedUrl: result.upload_url,
+              sha,
+              buffer: arrayBuffer!,
+              type: result.content_type,
+            });
         } catch (cause) {
           throw new UploadDraftAttachmentError(
             'Upload failed',
@@ -86,7 +104,7 @@ export const useUploadDraftAttachmentsMutation = (
           );
         }
 
-        if (uploadedResponse.isErr()) {
+        if (uploadedResponse?.isErr()) {
           const uploadError = uploadedResponse.error[0] ?? {
             code: 'SERVER_ERROR',
             message: 'Upload failed',

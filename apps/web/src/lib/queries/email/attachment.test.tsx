@@ -1,7 +1,11 @@
+import { createNativeStagedUploadFile } from '@core/mobile/nativeStagedUpload';
 import { err, ok, type Result } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useUploadDraftAttachmentsMutation } from './attachment';
 import { mountEmailMutation } from './tests/mutation';
+
+const invokeMock = vi.hoisted(() => vi.fn());
+vi.mock('@tauri-apps/api/core', () => ({ invoke: invokeMock }));
 
 const addDraftAttachmentMock = vi.hoisted(() => vi.fn());
 const removeDraftAttachmentMock = vi.hoisted(() => vi.fn());
@@ -143,5 +147,45 @@ describe('useUploadDraftAttachmentsMutation', () => {
     );
     expect(onAttachmentUploadFailed).toHaveBeenCalledWith(attachment);
     expect(toastFailureMock).toHaveBeenCalledWith('Failed to save attachments');
+  });
+  it('uploads native clipboard bytes with the real size and checksum', async () => {
+    const attachment = createNativeStagedUploadFile('pasteboard', {
+      token: 'paste-stage-fixture',
+      name: 'photo.png',
+      mimeType: 'image/png',
+      size: 1024,
+      previewPath: null,
+      sha256: 'ab'.repeat(32),
+    })!;
+    invokeMock.mockResolvedValue(undefined);
+    const mutation = mountEmailMutation(useUploadDraftAttachmentsMutation);
+    await mutation.mutateAsync({
+      draftID: 'draft-1',
+      attachments: [attachment],
+    });
+    expect(addDraftAttachmentMock).toHaveBeenCalledWith(
+      {
+        draftID: 'draft-1',
+        attachment: {
+          file_name: 'photo.png',
+          size: 1024,
+          sha: 'ab'.repeat(32),
+        },
+      },
+      undefined
+    );
+    expect(uploadToPresignedUrlMock).not.toHaveBeenCalled();
+    expect(invokeMock).toHaveBeenCalledWith(
+      'upload_staged_file_to_presigned_url',
+      {
+        source: 'pasteboard',
+        token: 'paste-stage-fixture',
+        uploadUrl: 'https://bucket/att-1',
+        mimeType: 'application/pdf',
+        checksumSha256: btoa(
+          String.fromCharCode(...new Uint8Array(32).fill(171))
+        ),
+      }
+    );
   });
 });

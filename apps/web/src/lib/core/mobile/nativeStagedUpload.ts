@@ -9,7 +9,7 @@ import { convertFileSrc, invoke } from '@tauri-apps/api/core';
  * URL.
  */
 
-export type NativeStagedUploadSource = 'pasteboard' | 'photo-library';
+export type NativeStagedUploadSource = 'pasteboard' | 'photo-library' | 'share';
 
 export type NativeStagedUploadData = {
   token: string | null;
@@ -17,6 +17,7 @@ export type NativeStagedUploadData = {
   mimeType: string | null;
   size: number | null;
   previewPath: string | null;
+  sha256?: string;
 };
 
 export type NativeStagedUpload = {
@@ -26,6 +27,7 @@ export type NativeStagedUpload = {
   mimeType: string;
   size: number;
   previewSrc?: string;
+  sha256?: string;
 };
 
 const nativeStagedUploads = new WeakMap<File, NativeStagedUpload>();
@@ -45,6 +47,7 @@ export function createNativeStagedUploadFile(
     name: media.name,
     mimeType: media.mimeType,
     size: media.size,
+    sha256: media.sha256,
     previewSrc: media.previewPath
       ? convertFileSrc(media.previewPath)
       : undefined,
@@ -64,12 +67,31 @@ export function getNativeStagedUpload(
  */
 export async function uploadNativeStagedFileToPresignedUrl(
   file: NativeStagedUpload,
-  uploadUrl: string
+  uploadUrl: string,
+  checksumSha256?: string
 ): Promise<void> {
   await invoke('upload_staged_file_to_presigned_url', {
     source: file.source,
     token: file.token,
     uploadUrl,
     mimeType: file.mimeType,
+    checksumSha256,
   });
+}
+
+/** Native placeholders have no JS bytes; use their staged byte count for limits. */
+export function getUploadFileSize(file: File): number {
+  return getNativeStagedUpload(file)?.size ?? file.size;
+}
+
+/** S3 expects the native SHA-256 digest as base64 rather than hexadecimal. */
+export function nativeUploadChecksum(sha256: string): string {
+  if (!/^[a-f0-9]{64}$/i.test(sha256))
+    throw new Error('Invalid staged file checksum');
+  return btoa(
+    sha256
+      .match(/../g)!
+      .map((byte) => String.fromCharCode(Number.parseInt(byte, 16)))
+      .join('')
+  );
 }

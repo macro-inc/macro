@@ -1,5 +1,6 @@
 import { idToEmail } from '@core/user/util';
 import { type CrmCompanyEntity, getCompanyOwnerId } from '@entity';
+import { downloadFile } from '@filesystem/download';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
 import { Button, Dialog, Panel } from '@ui';
@@ -156,14 +157,7 @@ export function CrmExport(props: {
     const blob = new Blob([createCrmCsv(selectedColumns(), data)], {
       type: 'text/csv;charset=utf-8',
     });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename();
-    document.body.append(link);
-    link.click();
-    link.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    downloadFile(blob, filename());
     props.onClose();
   }
   return (

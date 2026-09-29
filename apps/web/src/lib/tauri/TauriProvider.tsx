@@ -1,5 +1,7 @@
 import { NativeCallProvider } from '@channel/Call/native-call-state';
 import { useCallKitSetup } from '@channel/Call/use-callkit';
+import { useAndroidBack } from '@core/mobile/androidBack';
+import { useAndroidWindowInsets } from '@core/mobile/androidWindowInsets';
 import { NativeAppUpdateRequiredDialog } from '@core/mobile/NativeAppUpdateRequiredDialog';
 import { isPlatform, isTauri } from '@core/util/platform';
 import { PlatformNotificationProvider } from '@notifications';
@@ -17,12 +19,9 @@ import {
   onMount,
   useContext,
 } from 'solid-js';
-import { getInsets, type Insets } from 'tauri-plugin-safe-area-insets';
 import { useTauriNavigationEffect } from './navigation';
 import { MaybePushNotificationRegistration } from './PushNotification';
 import { ShareTargetProvider } from './ShareTargetProvider';
-
-type NotAndroid = 'not-android';
 
 export type BundleUpdateStatus =
   | { status: 'Idle' }
@@ -42,7 +41,6 @@ export type BundleUpdateStatus =
 
 interface TauriContextValue {
   os: OsType;
-  runtimeInsets: Accessor<Insets | NotAndroid>;
   bundleUpdateStatus: Accessor<BundleUpdateStatus>;
 }
 
@@ -68,10 +66,8 @@ function shouldShowNativeAppUpdateRequiredDialog(status: BundleUpdateStatus) {
 }
 
 function TauriProvider(props: { children: JSX.Element }) {
-  // we only care about this value on android.
-  // ios should use the env(safe-area-inset-top) css properties
-  // this css is not reliably set on android
-  const [insets, setInsets] = createSignal<NotAndroid | Insets>('not-android');
+  if (isPlatform('android')) useAndroidWindowInsets();
+  useAndroidBack();
   const [bundleUpdateStatus, setBundleUpdateStatus] =
     createSignal<BundleUpdateStatus>({ status: 'Idle' });
   const [
@@ -101,7 +97,6 @@ function TauriProvider(props: { children: JSX.Element }) {
   if (isTauri() && isPlatform('ios')) useCallKitSetup();
 
   const value: TauriContextValue = {
-    runtimeInsets: insets,
     os: osType(),
     bundleUpdateStatus,
   };
@@ -127,29 +122,6 @@ function TauriProvider(props: { children: JSX.Element }) {
     onCleanup(() => {
       unlistenPromise.then((unlisten) => unlisten());
     });
-
-    if (value.os === 'android') {
-      getInsets().then((insets) => {
-        setInsets(insets);
-        // Set CSS variables for Tauri insets
-        document.documentElement.style.setProperty(
-          '--tauri-inset-top',
-          `${insets.top}px`
-        );
-        document.documentElement.style.setProperty(
-          '--tauri-inset-bottom',
-          `${insets.bottom}px`
-        );
-        document.documentElement.style.setProperty(
-          '--tauri-inset-left',
-          `${insets.left}px`
-        );
-        document.documentElement.style.setProperty(
-          '--tauri-inset-right',
-          `${insets.right}px`
-        );
-      });
-    }
 
     document.body.classList.add('tauri');
     document.body.classList.add(`tauri-${value.os}`);

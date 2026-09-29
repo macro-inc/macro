@@ -1,3 +1,4 @@
+import { isPlatform } from '@core/util/platform';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import {
   createNativeStagedUploadFile,
@@ -11,7 +12,7 @@ import {
  * native picker is unavailable so callers can fall back to a file input.
  */
 export async function pickNativePhotoLibraryMedia(): Promise<File[] | null> {
-  if (!isTauri()) return null;
+  if (!isTauri() || !isPlatform('ios')) return null;
 
   let media: NativeStagedUploadData[];
   try {
