@@ -59,6 +59,7 @@ vi.mock('./ReminderForm', () => ({
   ),
 }));
 vi.mock('./reminder-schedule', () => ({
+  describeReminderConfirmation: () => 'Sep 22, 2026 at 9:00 AM (UTC)',
   reminderEditPatch: state.editPatch,
   resolveEditedDescription: (description: string) => description,
 }));

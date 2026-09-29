@@ -409,11 +409,20 @@ describe('recurrence', () => {
   });
 });
 
-it('uses predictable Cancel behavior', () => {
-  const { onCancel } = renderForm({ initialDescription: 'Follow up' });
+it('reverts an edited form in place when its host requests that behavior', () => {
+  const { onCancel } = renderForm({
+    initialDescription: 'Follow up',
+    revertOnCancel: true,
+  });
   fireEvent.input(screen.getByLabelText('Reminder description'), {
     target: { value: 'Unsaved edit' },
   });
   fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-  expect(onCancel).toHaveBeenCalledOnce();
+  expect(onCancel).toHaveBeenCalledWith(true);
+  expect(
+    (screen.getByLabelText('Reminder description') as HTMLInputElement).value
+  ).toBe('Follow up');
+
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  expect(onCancel).toHaveBeenLastCalledWith(false);
 });

@@ -16,6 +16,7 @@ import SpinnerIcon from '@phosphor/spinner.svg';
 import type { ReminderSchedule } from '@service-storage/generated/schemas/reminderSchedule';
 import { ActionDialogShell, Button, Input } from '@ui';
 import {
+  createEffect,
   createMemo,
   createSignal,
   createUniqueId,
@@ -83,7 +84,12 @@ export interface ReminderFormProps {
   header?: JSX.Element;
   layout?: 'dialog' | 'inline';
   autofocus?: boolean;
-  onCancel: () => void;
+  /** Revert unsaved editor fields before notifying the host of cancellation. */
+  revertOnCancel?: boolean;
+  /** Notified when the form drifts from (or returns to) its seeded values. */
+  onDirtyChange?: (dirty: boolean) => void;
+  /** Cancel with whether the form contained unsaved changes. */
+  onCancel: (wasDirty: boolean) => void;
   onSubmit: (values: ReminderFormValues) => void;
 }
 
@@ -245,17 +251,16 @@ export function ReminderForm(props: ReminderFormProps) {
   // browser's first interpretation of an ambiguous `YYYY-MM-DDTHH:MM` value.
   // Existing one-shots need the same treatment: their ISO timestamp says
   // which copy of a repeated wall time they use, while the native fields do not.
+  const initialSelectedOnceInstant = isEdit
+    ? seed.originalSchedule.type === 'once'
+      ? new Date(seed.originalSchedule.remindAt)
+      : props.initialRemindAt
+        ? new Date(props.initialRemindAt)
+        : undefined
+    : undefined;
   const [selectedOnceInstant, setSelectedOnceInstant] = createSignal<
     Date | undefined
-  >(
-    isEdit
-      ? seed.originalSchedule.type === 'once'
-        ? new Date(seed.originalSchedule.remindAt)
-        : props.initialRemindAt
-          ? new Date(props.initialRemindAt)
-          : undefined
-      : undefined
-  );
+  >(initialSelectedOnceInstant);
   const [repeatParts, setRepeatParts] = createSignal<CronParts>(seed.parts);
   // A recurring cron fires at a wall-clock time in this zone. It defaults to the
   // reminder's stored zone (or the viewer's, for a new recurrence) and is
@@ -275,23 +280,23 @@ export function ReminderForm(props: ReminderFormProps) {
   // Week and month have different editable day shapes. Remember each shape
   // once it is intentional so crossing cadences can seed a missing shape from
   // the selected occurrence without throwing away edits when switching back.
+  const initialSavedWeeklyDays =
+    !storedCronIsCustom &&
+    seed.repeat === 'week' &&
+    !sameDays(seed.parts.daysOfWeek, ALL_WEEKDAYS) &&
+    !sameDays(seed.parts.daysOfWeek, DEFAULT_WEEKDAYS)
+      ? [...seed.parts.daysOfWeek]
+      : undefined;
   const [savedWeeklyDays, setSavedWeeklyDays] = createSignal<
     string[] | undefined
-  >(
-    !storedCronIsCustom &&
-      seed.repeat === 'week' &&
-      !sameDays(seed.parts.daysOfWeek, ALL_WEEKDAYS) &&
-      !sameDays(seed.parts.daysOfWeek, DEFAULT_WEEKDAYS)
-      ? [...seed.parts.daysOfWeek]
-      : undefined
-  );
-  const [savedMonthlyDay, setSavedMonthlyDay] = createSignal<
-    string | undefined
-  >(
+  >(initialSavedWeeklyDays);
+  const initialSavedMonthlyDay =
     !storedCronIsCustom && seed.repeat === 'month'
       ? seed.parts.dayOfMonth
-      : undefined
-  );
+      : undefined;
+  const [savedMonthlyDay, setSavedMonthlyDay] = createSignal<
+    string | undefined
+  >(initialSavedMonthlyDay);
   const quickPresets = reminderQuickPresets(openedAt);
 
   const dateOptions = useDateSearch({
@@ -385,6 +390,35 @@ export function ReminderForm(props: ReminderFormProps) {
     const trimmed = description().trim();
     const titleChanged = trimmed !== '' && trimmed !== seed.description.trim();
     return titleChanged || !scheduleUntouched();
+  };
+
+  createEffect(() => props.onDirtyChange?.(isDirty()));
+
+  const reset = () => {
+    setDescription(seed.description);
+    setRepeat(seed.repeat);
+    setOnceDate(seed.onceDate);
+    setOnceTime(seed.onceTime);
+    setSelectedOnceInstant(
+      initialSelectedOnceInstant
+        ? new Date(initialSelectedOnceInstant.getTime())
+        : undefined
+    );
+    setRepeatParts(seed.parts);
+    setTimezone(initialTimezone);
+    setWhenQuery('');
+    setShowCustomTime(false);
+    setCustomScheduleReplaced(false);
+    setSavedWeeklyDays(
+      initialSavedWeeklyDays ? [...initialSavedWeeklyDays] : undefined
+    );
+    setSavedMonthlyDay(initialSavedMonthlyDay);
+  };
+
+  const cancel = () => {
+    const wasDirty = isDirty();
+    if (props.revertOnCancel && wasDirty) reset();
+    props.onCancel(wasDirty);
   };
 
   const seedRepeatParts = (kind: ScheduleFrequency) => {
@@ -942,7 +976,7 @@ export function ReminderForm(props: ReminderFormProps) {
           variant="ghost"
           class="ml-auto"
           disabled={props.pending}
-          onClick={props.onCancel}
+          onClick={cancel}
         >
           Cancel
         </Button>
