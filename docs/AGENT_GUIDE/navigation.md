@@ -495,6 +495,9 @@ restart rules still apply.
 - `c` then `d`/`t`/`e`/`m`/`a` — create doc / task / email / channel / AI chat.
   Single-letter shortcuts only work when no editor has focus; press `Escape` first.
 - `/` — search everything. `j`/`k` — move in lists. `e` — mark done.
+- `#` — move email to Trash, with an Undo toast. Works on the selected or focused
+  rows in a mail list and on the thread open in an email detail or block. Email
+  only; other entity types keep Delete/Backspace and do not answer `#`.
 - `g` then `h` — Home; `g` then `i` remains an alias.
 - In Email and Tasks search, `Escape` returns focus to the list and keeps the query.
   Use the search field's clear button to clear it.

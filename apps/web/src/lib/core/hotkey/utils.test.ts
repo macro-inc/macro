@@ -1,7 +1,12 @@
 import { describe, expect, test } from 'vitest';
 import type { HotkeyToken } from './tokens';
 import type { HotkeyCommand } from './types';
-import { removeCommandsFromTokenMap } from './utils';
+import {
+  getKeyString,
+  normalizeEventKeyPress,
+  prettyPrintHotkeyString,
+  removeCommandsFromTokenMap,
+} from './utils';
 
 const makeCommand = (token: HotkeyToken | undefined): HotkeyCommand =>
   ({
@@ -71,5 +76,20 @@ describe('removeCommandsFromTokenMap', () => {
 
     expect(result.get('hotkey:a' as HotkeyToken)).toEqual([cmd3]);
     expect(result.has('hotkey:b' as HotkeyToken)).toBe(false);
+  });
+});
+
+// Shift punctuation is registered by the combination that produces it, so a
+// hotkey written as '#' would never match. Delete-email registers 'shift+3'.
+describe('shift punctuation round trip', () => {
+  test("a shifted '#' resolves to the 'shift+3' registration", () => {
+    const event = new KeyboardEvent('keydown', { key: '#', shiftKey: true });
+
+    expect(normalizeEventKeyPress(event)).toBe('3');
+    expect(getKeyString(new Set(['3', 'shift']))).toBe('shift+3');
+  });
+
+  test("'shift+3' displays as '#'", () => {
+    expect(prettyPrintHotkeyString('shift+3')).toBe('#');
   });
 });

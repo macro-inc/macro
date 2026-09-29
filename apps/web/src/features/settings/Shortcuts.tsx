@@ -995,6 +995,11 @@ const shortcutSections: ShortcutSection[] = [
         codes: ['ShiftLeft', 'KeyU'],
         description: 'Mark read',
       },
+      {
+        keys: ['#'],
+        codes: ['ShiftLeft', 'Digit3'],
+        description: 'Delete email',
+      },
     ],
   },
 ];
