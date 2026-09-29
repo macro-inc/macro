@@ -41,6 +41,7 @@ import { PullRequestMentionNode } from './nodes/PullRequestMentionNode';
 import { ReplyTargetNode } from './nodes/ReplyTargetNode';
 import { SearchMatchNode } from './nodes/SearchMatchNode';
 import { SnapshotNode } from './nodes/SnapshotNode';
+import { SystemNotificationNode } from './nodes/SystemNotificationNode';
 import { TagMentionNode } from './nodes/TagMentionNode';
 import { ThemeMentionNode } from './nodes/ThemeMentionNode';
 import { UnknownMentionNode } from './nodes/UnknownMentionNode';
@@ -118,6 +119,7 @@ export const SupportedNodeTypes = [
   AwaitNode,
   MagicChipNode,
   AgentContextNode,
+  SystemNotificationNode,
 ] as const;
 
 export const NodeReplacements: LexicalNodeReplacement[] = [

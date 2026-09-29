@@ -67,6 +67,10 @@ import type {
   SnapshotNode,
 } from './nodes/SnapshotNode';
 import type {
+  SystemNotificationDecoratorProps,
+  SystemNotificationNode,
+} from './nodes/SystemNotificationNode';
+import type {
   TagMentionDecoratorProps,
   TagMentionNode,
 } from './nodes/TagMentionNode';
@@ -194,6 +198,10 @@ export interface NodeDecoratorMap {
   MagicChipNode: {
     klass: typeof MagicChipNode;
     props: MagicChipDecoratorProps;
+  };
+  SystemNotificationNode: {
+    klass: typeof SystemNotificationNode;
+    props: SystemNotificationDecoratorProps;
   };
 }
 

@@ -31,6 +31,7 @@ export * from './nodes/PasteNode';
 export * from './nodes/PullRequestMentionNode';
 export * from './nodes/ReplyTargetNode';
 export * from './nodes/SnapshotNode';
+export * from './nodes/SystemNotificationNode';
 export * from './nodes/TagMentionNode';
 export * from './nodes/ThemeMentionNode';
 export * from './nodes/UnknownMentionNode';

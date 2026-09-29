@@ -38,6 +38,7 @@ import {
 import { E_PASTE_NODE, I_PASTE_NODE } from './paste';
 import { E_REPLY_TARGET_NODE, I_REPLY_TARGET_NODE } from './reply-target';
 import { E_SNAPSHOT_NODE, I_SNAPSHOT_NODE } from './snapshot';
+import { I_SYSTEM_NOTIFICATION } from './systemNotification';
 import { E_TABLE_NODE, I_TABLE_NODE } from './tables';
 import {
   BR_TAG_TO_LINE_BREAK,
@@ -94,6 +95,7 @@ export const INTERNAL_TRANSFORMERS: Transformer[] = [
   I_CONNECT_APP,
   I_WATERMARK,
   ...CUSTOM_TRANSFORMERS,
+  I_SYSTEM_NOTIFICATION, // After the code fence so a tag quoted in one stays text
   UNKNOWN_MENTION, // Must be last to act as fallback for unrecognized XML tags
 ];
 
@@ -191,5 +193,6 @@ export const ALL_TRANSFORMERS: Transformer[] = [
   E_INLINE_EQUATION_NODE,
   ...HTML_ENTITY_TRANSFORMERS,
   ...CUSTOM_TRANSFORMERS,
+  I_SYSTEM_NOTIFICATION, // After the code fence so a tag quoted in one stays text
   UNKNOWN_MENTION, // Must be last to act as fallback for unrecognized XML tags
 ];
