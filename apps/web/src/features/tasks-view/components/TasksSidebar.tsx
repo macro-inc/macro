@@ -25,12 +25,12 @@ import StackIcon from '@phosphor/stack.svg';
 import { SidebarTagsSection } from '@property/tags/SidebarTagsSection';
 import { useFavoritesData } from '@queries/favorites/favorites';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
+import { tourTarget } from '@ui/components/Tour';
 import { createMemo, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { useTasksView } from '../tasks-view-context';
-import type { TasksTab } from '../types';
-import { tourTarget } from '@ui';
 import { TASKS_TOUR } from '../tour';
+import type { TasksTab } from '../types';
 
 const TASK_NAV_ITEMS = [
   { id: 'my-tasks', label: 'My Tasks', icon: CheckSquareIcon },

@@ -131,7 +131,9 @@ function TourRoot<Step extends TourStep>(props: TourRootProps<Step>) {
     resolveTourTarget(toList(current().target), boundary())
   );
   const entry = createMemo(() =>
-    target() ? undefined : resolveTourTarget(toList(current().entry), boundary())
+    target()
+      ? undefined
+      : resolveTourTarget(toList(current().entry), boundary())
   );
 
   // Pressing the entry clears its beacon; the target appearing (by any route)
@@ -168,7 +170,8 @@ function TourRoot<Step extends TourStep>(props: TourRootProps<Step>) {
     isFirst: () => index() === 0,
     isLast: () => index() === props.steps.length - 1,
     goTo,
-    next: () => (index() === props.steps.length - 1 ? complete() : goTo(index() + 1)),
+    next: () =>
+      index() === props.steps.length - 1 ? complete() : goTo(index() + 1),
     previous: () => goTo(index() - 1),
     dismiss,
     complete,
@@ -210,7 +213,16 @@ function restingPoint(boundary: HTMLElement | undefined): VirtualElement {
       };
       const x = rect.right - EDGE;
       const y = rect.top + 72;
-      return { x, y, left: x, top: y, right: x, bottom: y, width: 0, height: 0 };
+      return {
+        x,
+        y,
+        left: x,
+        top: y,
+        right: x,
+        bottom: y,
+        width: 0,
+        height: 0,
+      };
     },
   };
 }
@@ -235,7 +247,8 @@ function TourPopover(props: TourPopoverProps) {
     y: 0,
     maxWidth: 0,
     maxHeight: 0,
-    hidden: true,
+    placed: false,
+    hidden: false,
   });
 
   createEffect(() => {
@@ -265,20 +278,23 @@ function TourPopover(props: TourPopoverProps) {
           size({
             boundary: clip,
             padding: EDGE,
-            apply: ({ availableWidth, availableHeight }) =>
+            apply: ({ availableWidth, availableHeight }) => {
               setPosition((p) => ({
                 ...p,
                 maxWidth: availableWidth,
                 maxHeight: availableHeight,
-              })),
+              }));
+            },
           }),
-          hide({ boundary: clip }),
+          // Only an anchored card follows its target out of view.
+          ...(target ? [hide({ boundary: clip })] : []),
         ],
       }).then(({ x, y, middlewareData }) =>
         setPosition((p) => ({
           ...p,
           x,
           y,
+          placed: true,
           hidden: !!middlewareData.hide?.referenceHidden,
         }))
       );
@@ -298,6 +314,8 @@ function TourPopover(props: TourPopoverProps) {
           class={cn('fixed left-0 top-0 z-[70]', props.class)}
           style={{
             transform: `translate3d(${position().x}px, ${position().y}px, 0)`,
+            // Transparent until first placed, so it never flashes at 0,0.
+            opacity: position().placed ? undefined : 0,
             visibility: position().hidden ? 'hidden' : 'visible',
             'max-width': position().maxWidth
               ? `${position().maxWidth}px`
@@ -422,7 +440,8 @@ function TourBeacon(props: { class?: string }) {
           <span class="absolute inset-0 rounded-full bg-accent" />
         </span>
         <span role="status" class="sr-only">
-          {tour.current().entryLabel ?? `Tour continues: ${tour.current().title}`}
+          {tour.current().entryLabel ??
+            `Tour continues: ${tour.current().title}`}
         </span>
       </Portal>
     </Show>
@@ -440,7 +459,9 @@ function TourTitle(props: { class?: string; children?: JSX.Element }) {
 
 function TourDescription(props: { class?: string; children?: JSX.Element }) {
   const tour = useTour();
-  return <p class={props.class}>{props.children ?? tour.current().description}</p>;
+  return (
+    <p class={props.class}>{props.children ?? tour.current().description}</p>
+  );
 }
 
 /** "2 / 5", announced when the step changes. */
@@ -475,9 +496,20 @@ function TourPrevious(props: TourButtonProps) {
 function TourNext(props: TourButtonProps & { doneLabel?: JSX.Element }) {
   const tour = useTour();
   const [local, others] = splitProps(props, ['children', 'doneLabel']);
+  // Text children name the button; only the icon form needs a label.
+  const iconOnly = () =>
+    local.children === undefined && !(tour.isLast() && local.doneLabel);
   return (
-    <Button size="icon-sm" label="Next step" {...others} onClick={tour.next}>
-      <Show when={tour.isLast() && local.doneLabel} fallback={local.children ?? <CaretRightIcon />}>
+    <Button
+      size="icon-sm"
+      label={iconOnly() ? 'Next step' : undefined}
+      {...others}
+      onClick={tour.next}
+    >
+      <Show
+        when={tour.isLast() && local.doneLabel}
+        fallback={local.children ?? <CaretRightIcon />}
+      >
         {local.doneLabel}
       </Show>
     </Button>
@@ -488,7 +520,12 @@ function TourClose(props: TourButtonProps) {
   const tour = useTour();
   const [local, others] = splitProps(props, ['children']);
   return (
-    <Button size="icon-sm" label="Dismiss tour" {...others} onClick={tour.dismiss}>
+    <Button
+      size="icon-sm"
+      label="Dismiss tour"
+      {...others}
+      onClick={tour.dismiss}
+    >
       {local.children ?? <XIcon />}
     </Button>
   );

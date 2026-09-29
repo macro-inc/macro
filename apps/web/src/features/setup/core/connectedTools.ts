@@ -19,6 +19,7 @@ export function isMcpToolConnected(
       (connection) => connection.server_name.toLowerCase() === wanted
     );
   return sources.native.some(
-    (server) => server.authenticated && server.server_name.toLowerCase() === wanted
+    (server) =>
+      server.authenticated && server.server_name.toLowerCase() === wanted
   );
 }

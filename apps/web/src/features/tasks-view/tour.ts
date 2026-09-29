@@ -1,6 +1,6 @@
 import { VIEW_SHELL_TOUR } from '@app/components/view-shell';
 import { defineViewTour } from '@app/features/tours/core/view-tour';
-import { defineTourTargets } from '@ui';
+import { defineTourTargets } from '@ui/components/Tour';
 
 export const TASKS_TOUR = defineTourTargets('tasks', ['tags']);
 

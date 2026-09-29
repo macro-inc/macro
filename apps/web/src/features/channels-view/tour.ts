@@ -1,6 +1,6 @@
 import { CHANNEL_TOUR } from '@app/features/channel/tour';
 import { defineViewTour } from '@app/features/tours/core/view-tour';
-import { defineTourTargets } from '@ui';
+import { defineTourTargets } from '@ui/components/Tour';
 
 export const CHANNELS_TOUR = defineTourTargets('channels', ['list', 'create']);
 

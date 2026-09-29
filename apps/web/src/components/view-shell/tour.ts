@@ -1,4 +1,4 @@
-import { defineTourTargets } from '@ui';
+import { defineTourTargets } from '@ui/components/Tour';
 
 /**
  * Parts every view shell registers for tours. They resolve per split, so a

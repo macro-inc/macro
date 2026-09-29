@@ -48,6 +48,7 @@ vi.mock('@app/lib/split-router', () => ({
     ),
   },
 }));
+vi.mock('@app/features/tours/ViewTour', () => ({ ViewTour: () => null }));
 vi.mock('@app/components/view-shell', () => ({
   ViewShell: {
     Root: mocks.pass,

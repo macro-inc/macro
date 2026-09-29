@@ -9,6 +9,7 @@ import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
 import { uploadFile } from '@core/util/upload';
 import type { PromptAttachment } from '@service-agent-harness/generated/schemas';
+import { tourTarget } from '@ui/components/Tour';
 import { createMemo, createSignal } from 'solid-js';
 import { ChatComposer } from '../components/ChatComposer';
 import type { AgentKind } from '../core/agent-kind';
@@ -23,10 +24,9 @@ import { createRecentRepositories } from '../primitives/recent-repositories';
 import { createComposerModels } from '../queries/composer-models';
 import { createReachableRepositories } from '../queries/reachable-repositories';
 import { createRepositoryBranches } from '../queries/repository-branches';
+import { AGENTS_TOUR } from '../tour';
 import { AgentPicker } from './AgentPicker';
 import { RepositoryPicker } from './RepositoryPicker';
-import { tourTarget } from '@ui';
-import { AGENTS_TOUR } from '../tour';
 
 /** What the composer hands the workspace to start a session with. */
 export type StartConversation = {

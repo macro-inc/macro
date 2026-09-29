@@ -1,6 +1,6 @@
 import { VIEW_SHELL_TOUR } from '@app/components/view-shell';
 import { defineViewTour } from '@app/features/tours/core/view-tour';
-import { defineTourTargets } from '@ui';
+import { defineTourTargets } from '@ui/components/Tour';
 
 /** Parts of the shared list view that tours can point at. */
 export const SOUP_TOUR = defineTourTargets('soup', ['list']);

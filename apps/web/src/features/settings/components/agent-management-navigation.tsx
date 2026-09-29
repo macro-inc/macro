@@ -1,7 +1,7 @@
+import { AGENTS_TOUR } from '@app/features/agents-view/tour';
 import HardDrivesIcon from '@phosphor/hard-drives.svg';
 import SparkleIcon from '@phosphor/sparkle.svg';
-import { AGENTS_TOUR } from '@app/features/agents-view/tour';
-import { tourTarget } from '@ui';
+import { tourTarget } from '@ui/components/Tour';
 
 export type AgentManagementSection = 'agents' | 'runtimes';
 

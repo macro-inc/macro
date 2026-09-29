@@ -27,6 +27,7 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
+import { isMcpToolConnected } from '../core/connectedTools';
 import type { ModuleLogo, ModuleState } from '../Module';
 import { MODULE_LOGOS } from '../moduleLogos';
 import { BrandHandoff, type BrandHandoffSource } from './BrandHandoff';
@@ -49,7 +50,6 @@ import {
   NoiseBackground,
 } from './shared';
 import { TeamStep } from './TeamStep';
-import { isMcpToolConnected } from '../core/connectedTools';
 
 /**
  * The full-screen onboarding flow new users land in after signup (desktop

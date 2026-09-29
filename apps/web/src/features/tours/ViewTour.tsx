@@ -6,12 +6,13 @@ import { useEmailLinksQuery } from '@queries/email/link';
 import { useMcpServersQuery } from '@queries/mcp-servers';
 import { usePipedreamConnectionsQuery } from '@queries/pipedream-connectors';
 import { createMediaQuery } from '@solid-primitives/media';
-import { Button, Tour, useTour } from '@ui';
+import { Button } from '@ui';
+import { Tour, useTour } from '@ui/components/Tour';
 import { createSignal, type JSX, Match, Show, Switch } from 'solid-js';
 import { ViewTourVideo } from './components/ViewTourVideo';
 import type {
-  ViewTour as ViewTourDefinition,
   ViewTourConnector,
+  ViewTour as ViewTourDefinition,
   ViewTourStep,
 } from './core/view-tour';
 import './view-tour.css';
@@ -107,7 +108,7 @@ function ViewTourCard(props: ViewTourProps) {
         {props.actions}
       </div>
       <div class="mt-5 flex items-center justify-end">
-        <Tour.Next variant="cta" size="sm" label={undefined} doneLabel="Got it">
+        <Tour.Next variant="cta" size="sm" doneLabel="Got it">
           Next
         </Tour.Next>
       </div>

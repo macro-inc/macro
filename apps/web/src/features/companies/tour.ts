@@ -1,6 +1,6 @@
 import { VIEW_SHELL_TOUR } from '@app/components/view-shell';
 import { defineViewTour } from '@app/features/tours/core/view-tour';
-import { defineTourTargets } from '@ui';
+import { defineTourTargets } from '@ui/components/Tour';
 
 export const COMPANIES_TOUR = defineTourTargets('companies', [
   'layout',
@@ -10,7 +10,11 @@ export const COMPANIES_TOUR = defineTourTargets('companies', [
 export const companiesTour = defineViewTour({
   id: 'companies',
   title: 'Customers',
-  connector: { kind: 'mcp', label: 'HubSpot or Attio', tools: ['HubSpot', 'Attio'] },
+  connector: {
+    kind: 'mcp',
+    label: 'HubSpot or Attio',
+    tools: ['HubSpot', 'Attio'],
+  },
   video: {
     youtubeId: '5d2K_NYs50k',
     title: 'Teams and CRM in Macro',

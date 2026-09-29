@@ -1,4 +1,4 @@
-import type { TourStep } from '@ui';
+import type { TourStep } from '@ui/components/Tour';
 
 export type ViewTourVideo = {
   youtubeId: string;

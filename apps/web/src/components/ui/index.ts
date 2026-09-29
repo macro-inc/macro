@@ -171,15 +171,6 @@ export type {
 export { Toolbar } from './components/Toolbar';
 export type { TooltipClassOptions } from './components/Tooltip';
 export { Tooltip, tooltipClasses } from './components/Tooltip';
-export {
-  defineTourTargets,
-  Tour,
-  type TourStatus,
-  type TourStep,
-  type TourTarget,
-  tourTarget,
-  useTour,
-} from './components/Tour';
 export { UserMessageBubble } from './components/UserMessageBubble';
 export { cn } from './utils/classname';
 export type { CtrlJKMenuNavigationOptions } from './utils/menuKeyboardNavigation';

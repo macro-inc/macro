@@ -1,11 +1,11 @@
 import { listOwnedSlotName } from '@app/components/list';
 import { useMobileSearchText } from '@app/features/command/mobile/use-mobile-search-text';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
-import { ViewTour } from '@app/features/tours/ViewTour';
 import {
   type FacetSelection,
   useSoupListNavigationHotkeys,
 } from '@app/features/soup';
+import { ViewTour } from '@app/features/tours/ViewTour';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import {
   useSplitPanelOrThrow,
@@ -35,8 +35,8 @@ import {
 import { createDriveState } from './primitives/drive-state';
 import { createDriveDataSource } from './queries/drive-data-source';
 import { createDriveSidebarSource } from './queries/drive-sidebar-source';
-import { DriveLoading, DriveWorkspace } from './views/drive-workspace';
 import { documentsTour } from './tour';
+import { DriveLoading, DriveWorkspace } from './views/drive-workspace';
 
 export type DriveViewProps = { initialFacets?: FacetSelection };
 

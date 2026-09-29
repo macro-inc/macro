@@ -1,6 +1,6 @@
 import { VIEW_SHELL_TOUR } from '@app/components/view-shell';
 import { defineViewTour } from '@app/features/tours/core/view-tour';
-import { defineTourTargets } from '@ui';
+import { defineTourTargets } from '@ui/components/Tour';
 
 export const HOME_TOUR = defineTourTargets('home', ['list', 'filter']);
 

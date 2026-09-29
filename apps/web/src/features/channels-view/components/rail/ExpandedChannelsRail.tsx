@@ -20,7 +20,8 @@ import {
   createDroppable,
   useDragDropContext,
 } from '@thisbeyond/solid-dnd';
-import { cn, Dropdown, EmptyStatePanel, Hotkey, Tabs, Tooltip, tourTarget } from '@ui';
+import { cn, Dropdown, EmptyStatePanel, Hotkey, Tabs, Tooltip } from '@ui';
+import { tourTarget } from '@ui/components/Tour';
 import {
   type Accessor,
   createSignal,
@@ -33,6 +34,7 @@ import {
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import { canLabelChannel } from '../../core/channel-label-eligibility';
 import { ChannelsLiveCallsSidebar } from '../../live-calls-sidebar';
+import { CHANNELS_TOUR } from '../../tour';
 import type { ChannelListSort, ChannelsGroup } from '../../types';
 import { channelMentionsUser, formatDetailedTimestamp } from '../../utils';
 import { ChannelsEmptyState } from '../ChannelsEmptyState';
@@ -75,7 +77,6 @@ import {
   useChannelRailSectionState,
   useChannelRailVirtualizer,
 } from './hooks/useChannelRailState';
-import { CHANNELS_TOUR } from '../../tour';
 
 const CHANNEL_TABS = [
   { value: 'browse', label: 'All' },

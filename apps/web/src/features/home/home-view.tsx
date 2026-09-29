@@ -21,8 +21,8 @@ import { HomeReturnBreadcrumb } from './components/HomeReturnBreadcrumb';
 import { HomeTabs } from './components/HomeTabs';
 import { HomeViewProvider, useHomeView } from './home-view-context';
 import { homeCalendarRoute } from './route';
-import type { HomeViewStateOptions } from './types';
 import { homeTour } from './tour';
+import type { HomeViewStateOptions } from './types';
 
 export type HomeViewProps = {
   /** Explicit navigation state. When present, it wins over entry restoration. */

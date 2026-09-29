@@ -1,6 +1,6 @@
 import { APP_TOUR } from '@app/features/command/sidebar/tour';
 import { defineViewTour } from '@app/features/tours/core/view-tour';
-import { defineTourTargets } from '@ui';
+import { defineTourTargets } from '@ui/components/Tour';
 
 export const AGENTS_TOUR = defineTourTargets('agents', [
   'newChat',

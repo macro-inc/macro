@@ -57,10 +57,15 @@ const observeSize = (element: HTMLElement) => {
 
 function register(target: TourTarget, element: HTMLElement) {
   let set = elements.get(target.id);
-  if (!set) elements.set(target.id, (set = new Set()));
+  if (!set) {
+    set = new Set();
+    elements.set(target.id, set);
+  }
   set.add(element);
   observeSize(element);
   bump();
+  // Refs run before the element is inserted; resolve again once it is.
+  queueMicrotask(bump);
   return () => {
     set.delete(element);
     if (!set.size) elements.delete(target.id);

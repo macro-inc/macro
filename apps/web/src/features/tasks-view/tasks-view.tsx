@@ -25,8 +25,8 @@ import { TasksSidebar } from './components/TasksSidebar';
 import { TaskList } from './components/task-list/TaskList';
 import { projectDetailRoute } from './route';
 import { TasksViewProvider, useTasksView } from './tasks-view-context';
-import type { TasksViewStateOptions } from './types';
 import { tasksTour } from './tour';
+import type { TasksViewStateOptions } from './types';
 
 export type TasksViewProps = {
   /** Explicit navigation state. When present, it wins over entry restoration. */

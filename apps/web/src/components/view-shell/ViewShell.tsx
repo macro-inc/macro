@@ -14,8 +14,9 @@ import SidebarIcon from '@phosphor/sidebar-simple.svg';
 import { createWritableMemo } from '@solid-primitives/memo';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createElementSize } from '@solid-primitives/resize-observer';
-import { Button, cn, tourTarget } from '@ui';
+import { Button, cn } from '@ui';
 import { CollapseTransition } from '@ui/components/CollapseTransition';
+import { tourTarget } from '@ui/components/Tour';
 import {
   type Accessor,
   batch,

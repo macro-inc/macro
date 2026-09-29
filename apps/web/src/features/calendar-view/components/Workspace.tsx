@@ -15,8 +15,9 @@ import {
 import { SplitPanel } from '@components/app/split-panel';
 import { isMobile } from '@core/mobile/isMobile';
 import { createElementSize } from '@solid-primitives/resize-observer';
-import { Layer, tourTarget } from '@ui';
+import { Layer } from '@ui';
 import { Pager, PagerSwipeGestures } from '@ui/components/Pager';
+import { tourTarget } from '@ui/components/Tour';
 import {
   createEffect,
   createSignal,
@@ -28,12 +29,12 @@ import {
   Suspense,
   Switch,
 } from 'solid-js';
+import { CALENDAR_TOUR, calendarTour } from '../tour';
 import { CalendarSidebar } from './CalendarSidebar';
 import { Header } from './Header';
 import { Page } from './Page';
 import { SelectedEventDetails } from './SelectedEventDetails';
 import { SetupStatus } from './SetupStatus';
-import { CALENDAR_TOUR, calendarTour } from '../tour';
 
 const CALENDAR_SWIPE_EDGE_INSET = 40;
 

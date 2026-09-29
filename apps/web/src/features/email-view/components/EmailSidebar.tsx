@@ -13,15 +13,16 @@ import UsersThreeIcon from '@phosphor/users-three.svg';
 import SignalIcon from '@phosphor/wave-sine.svg';
 import NoiseIcon from '@phosphor/waveform.svg';
 import { SidebarTagsSection } from '@property/tags/SidebarTagsSection';
-import { pressHandlers, tourTarget } from '@ui';
+import { pressHandlers } from '@ui';
+import { tourTarget } from '@ui/components/Tour';
 import { type Component, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { composeEmail } from '../compose-email';
 import { EMAIL_TAB_IDS, EMAIL_TABS, type EmailTabItem } from '../constants';
 import { useEmailView } from '../email-view-context';
+import { EMAIL_TOUR } from '../tour';
 import type { EmailTab } from '../types';
 import { EmailInboxList } from './EmailInboxSelector';
-import { EMAIL_TOUR } from '../tour';
 
 const TAB_ICONS: Record<EmailTab, Component<{ class?: string }>> = {
   important: SignalIcon,

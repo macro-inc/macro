@@ -7,14 +7,14 @@ import {
 import { SidebarCreateButton } from '@app/components/view-shell/SidebarCreateButton';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { tourTarget } from '@ui/components/Tour';
 import { createSignal, Show } from 'solid-js';
 import { composeEmail } from '../compose-email';
 import { EMAIL_TABS } from '../constants';
 import { useEmailView } from '../email-view-context';
+import { EMAIL_TOUR } from '../tour';
 import { EmailControls } from './EmailControls';
 import { EmailInboxFilter, EmailInboxMenu } from './EmailInboxSelector';
-import { tourTarget } from '@ui';
-import { EMAIL_TOUR } from '../tour';
 
 export type EmailHeaderProps = {
   /** Restores list focus when Escape leaves the search field. */

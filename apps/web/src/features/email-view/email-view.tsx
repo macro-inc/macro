@@ -26,8 +26,8 @@ import { EmailList } from './components/EmailList';
 import { EmailSidebar } from './components/EmailSidebar';
 import { EMAIL_TABS } from './constants';
 import { EmailViewProvider, useEmailView } from './email-view-context';
-import type { EmailTab, EmailViewStateOptions } from './types';
 import { emailTour } from './tour';
+import type { EmailTab, EmailViewStateOptions } from './types';
 
 export type EmailViewProps = {
   /** Explicit navigation state. When present, it wins over entry restoration. */

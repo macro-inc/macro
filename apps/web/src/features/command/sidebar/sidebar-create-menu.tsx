@@ -7,7 +7,8 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { activateClosestDOMScope } from '@core/hotkey/utils';
 import CreateIcon from '@phosphor/note-pencil.svg';
 import PlusIcon from '@phosphor/plus.svg';
-import { Button, Dropdown, Hotkey, NavRow, tourTarget } from '@ui';
+import { Button, Dropdown, Hotkey, NavRow } from '@ui';
+import { tourTarget } from '@ui/components/Tour';
 import {
   createSignal,
   For,

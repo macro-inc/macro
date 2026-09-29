@@ -1,5 +1,5 @@
 import { defineViewTour } from '@app/features/tours/core/view-tour';
-import { defineTourTargets } from '@ui';
+import { defineTourTargets } from '@ui/components/Tour';
 
 export const EMAIL_TOUR = defineTourTargets('email', [
   'signalNoise',

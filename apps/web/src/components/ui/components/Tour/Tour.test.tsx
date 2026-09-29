@@ -1,6 +1,10 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal, Show } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+/** Targets resolve again once refs are inserted; let that settle. */
+const settle = () => Promise.resolve();
+
 import {
   defineTourTargets,
   resolveTourTarget,
@@ -91,7 +95,7 @@ describe('Tour', () => {
     { target: T.second, title: 'Second', description: 'Two' },
   ];
 
-  it('steps through and completes on the last step', () => {
+  it('steps through and completes on the last step', async () => {
     const onComplete = vi.fn();
     render(() => (
       <>
@@ -104,6 +108,7 @@ describe('Tour', () => {
         </Tour.Root>
       </>
     ));
+    await settle();
     const dialog = screen.getByRole('dialog', { name: 'First' });
     expect(dialog.textContent).toContain('1 / 2');
     expect(status()).toBe('anchored');
@@ -112,7 +117,7 @@ describe('Tour', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Previous step' }));
     expect(screen.getByRole('dialog', { name: 'First' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Next step' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Next step' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     expect(onComplete).toHaveBeenCalledOnce();
   });
 
@@ -141,7 +146,7 @@ describe('Tour', () => {
     expect(status()).toBe('floating');
   });
 
-  it('waits on the entry instead of navigating, and resumes when pressed or when the target appears', () => {
+  it('waits on the entry instead of navigating, and resumes when pressed or when the target appears', async () => {
     const [shown, setShown] = createSignal(false);
     const waiting: TourStep[] = [
       {
@@ -168,6 +173,7 @@ describe('Tour', () => {
         </Tour.Root>
       </>
     ));
+    await settle();
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(document.querySelector('[data-tour-beacon]')).toBeTruthy();
     expect(screen.getByRole('status').textContent).toBe(
@@ -179,10 +185,12 @@ describe('Tour', () => {
     expect(status()).toBe('floating');
 
     setShown(true);
+    await settle();
     expect(status()).toBe('anchored');
 
     // Leaving again brings the beacon back.
     setShown(false);
+    await settle();
     expect(document.querySelector('[data-tour-beacon]')).toBeTruthy();
   });
 

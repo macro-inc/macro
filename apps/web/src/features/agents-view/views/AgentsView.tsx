@@ -3,8 +3,8 @@ import { startPendingSession } from '@app/features/block-agent/context/pending-s
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
 import { AgentSettings } from '@app/features/settings/AgentSettings';
 import { McpConnections } from '@app/features/settings/McpConnections';
-import { ViewTour } from '@app/features/tours/ViewTour';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
+import { ViewTour } from '@app/features/tours/ViewTour';
 import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
@@ -50,8 +50,8 @@ import {
 import { kindForBot } from '../core/roster';
 import { type AgentsRoute, agentsRouteId } from '../core/route';
 import { createAgentRosterSource } from '../queries/agent-roster-source';
-import { NewChatPage, type StartConversation } from './NewChatPage';
 import { agentsTour } from '../tour';
+import { NewChatPage, type StartConversation } from './NewChatPage';
 
 type SelectedConversation = {
   conversation: AgentConversationTarget;

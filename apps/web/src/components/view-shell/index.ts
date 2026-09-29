@@ -19,6 +19,7 @@ export {
 } from './ListDropdowns';
 export { MobileFilterDrawer } from './MobileFilterDrawer';
 export { SearchBar, type SearchBarProps } from './SearchBar';
+export { VIEW_SHELL_TOUR } from './tour';
 export {
   type UseViewControlHotkeysOptions,
   useViewControlHotkeys,
@@ -60,4 +61,3 @@ export {
   type DetailPlacement,
   type MainLayout,
 } from './view-shell-layout';
-export { VIEW_SHELL_TOUR } from './tour';

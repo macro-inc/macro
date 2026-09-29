@@ -10,8 +10,13 @@ const DEMO = defineTourTargets('tour-demo', [
   'hidden',
 ]);
 
-const cardClass =
-  'w-72 rounded-2xl border border-edge bg-dialog p-4 text-ink shadow-lg';
+function CardPopover() {
+  return (
+    <Tour.Popover class="w-72 rounded-2xl border border-edge bg-dialog p-4 text-ink shadow-lg">
+      <Card />
+    </Tour.Popover>
+  );
+}
 
 function Card() {
   return (
@@ -63,9 +68,7 @@ function PopoverDemo() {
       <Show when={open()}>
         <Tour.Root steps={POPOVER_STEPS} onDismiss={() => setOpen(false)}>
           <Tour.Highlight />
-          <Tour.Popover class={cardClass}>
-            <Card />
-          </Tour.Popover>
+          <CardPopover />
         </Tour.Root>
       </Show>
     </div>
@@ -114,9 +117,7 @@ function EntryDemo() {
         <Tour.Root steps={ENTRY_STEPS} onDismiss={() => setOpen(false)}>
           <Tour.Highlight />
           <Tour.Beacon />
-          <Tour.Popover class={cardClass}>
-            <Card />
-          </Tour.Popover>
+          <CardPopover />
         </Tour.Root>
       </Show>
     </div>
@@ -143,7 +144,20 @@ export default defineDoc({
     'Composable product tours. Features declare named targets with `defineTourTargets` and attach them with `tourTarget`; a tour lists steps that point at them.',
   status: 'beta',
   exports: ['Tour', 'defineTourTargets', 'tourTarget', 'useTour'],
-  import: "import { defineTourTargets, Tour, tourTarget } from '@ui';",
+  import:
+    "import { defineTourTargets, Tour, tourTarget } from '@ui/components/Tour';",
+  guidelines: {
+    do: [
+      'Declare targets with `defineTourTargets` and attach them with `ref={tourTarget(...)}`.',
+      'Give a step an `entry` when its target must be opened first; the beacon marks the way.',
+      "Use `scope: 'app'` only for shared chrome outside any split.",
+    ],
+    dont: [
+      'Do not target elements with selectors or data attributes.',
+      'Do not navigate, open panels, or change pages from a tour step.',
+      'Do not attach a target to a `display: contents` element; it has no box to point at.',
+    ],
+  },
   demos: [
     {
       id: 'popover',

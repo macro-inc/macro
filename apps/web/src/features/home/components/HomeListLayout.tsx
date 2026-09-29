@@ -1,10 +1,10 @@
 import { SidebarCreateHeader } from '@app/components/view-shell/SidebarCreateButton';
 import { MobileTopEdgeFade } from '@components/app/mobile/MobileEdgeFade';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { tourTarget } from '@ui/components/Tour';
 import { type JSX, type ParentProps, Show } from 'solid-js';
-import { HomeFilterDropdown } from './HomeFilters';
-import { tourTarget } from '@ui';
 import { HOME_TOUR } from '../tour';
+import { HomeFilterDropdown } from './HomeFilters';
 
 function MobileHomeHeader(props: ParentProps) {
   return (

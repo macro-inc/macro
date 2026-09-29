@@ -72,6 +72,7 @@ import {
 import { usePostTypingUpdateMutation } from '@queries/messages/typing';
 import { ChannelTypeEnum } from '@service-storage/client';
 import { useBeforeLeave } from '@solidjs/router';
+import { tourTarget } from '@ui/components/Tour';
 import {
   createEffect,
   createMemo,
@@ -92,6 +93,7 @@ import { ChannelInputContainer } from '../Input/ChannelInputContainer';
 import { hasSendableInputContent } from '../Input/utils/sendable-content';
 import { ChannelThread } from '../Thread';
 import { buildReplyTargetValue } from '../Thread/utils/message-actions';
+import { CHANNEL_TOUR } from '../tour';
 import { isUnifiedInputMode } from '../unified-input-mode';
 import { ActiveCallMessage } from './ActiveCallMessage';
 import { ChannelDropZone } from './ChannelDropZone';
@@ -127,8 +129,6 @@ import {
   createUnifiedInputManager,
   type UnifiedReplyTargetSnapshot,
 } from './unified-input-manager';
-import { tourTarget } from '@ui';
-import { CHANNEL_TOUR } from '../tour';
 
 export type ChannelProps = {
   channelId: string;

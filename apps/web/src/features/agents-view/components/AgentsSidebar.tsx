@@ -26,7 +26,8 @@ import PlugIcon from '@phosphor/plugs-connected.svg';
 import AgentIcon from '@phosphor/sparkle.svg';
 import TrayIcon from '@phosphor/tray.svg';
 import { Key } from '@solid-primitives/keyed';
-import { cn, tourTarget } from '@ui';
+import { cn } from '@ui';
+import { tourTarget } from '@ui/components/Tour';
 import { createSignal, type JSX, Show } from 'solid-js';
 import { compactAge } from '../core/format-age';
 import type { AgentsMode } from '../core/mode';
@@ -35,9 +36,9 @@ import {
   type AgentConversationEntity,
   conversationTimestamp,
 } from '../core/recent-conversations';
+import { AGENTS_TOUR } from '../tour';
 import { AgentSessionListItem } from '../views/AgentSessionListItem';
 import { AgentSessionListSkeleton } from './AgentSessionListSkeleton';
-import { AGENTS_TOUR } from '../tour';
 
 const AGENTS_ACTION_VIEW_CONTEXT: EntityActionViewContext = {
   supportsMarkDone: false,

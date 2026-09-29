@@ -1,3 +1,4 @@
+import { ViewTour } from '@app/features/tours/ViewTour';
 import { defineRoute } from '@app/lib/split-router';
 import {
   CRM_VIEW_URL_PARAM,
@@ -11,7 +12,6 @@ import {
 import { enableCrm, isFeatureEnabled } from '@core/constant/featureFlags';
 import { lazy } from 'solid-js';
 import { getViewPreset } from '../next-soup/sidebar/soup-filter-presets';
-import { ViewTour } from '@app/features/tours/ViewTour';
 import { companiesTour } from './tour';
 
 const SoupView = lazy(async () => ({
