@@ -370,7 +370,7 @@ routes are no longer called by the web app. Live updates arrive as one
 `message_deleted`, `reaction_changed`, `thread_updated`, `typing`); the older
 `comms_message`, `comms_reaction`, `comms_attachment`, and `comms_typing`
 frames are ignored. Documents share the same client, cache, and components
-behind `enable-unified-document-discussions` (see documents.md).
+(see documents.md).
 
 Reopening a channel already loaded this session requests
 `GET /dss/messages/channel/<id>?selection=<cursor of the newest cached root, direction newer, limit 50>`
