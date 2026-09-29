@@ -101,7 +101,6 @@ export function createEmptyDraft(): ScheduleDraft {
     daysOfWeek: [...DEFAULT_WEEKDAYS],
     dayOfMonth: '1',
     target: { kind: 'model', model: DEFAULT_MODEL },
-    enabled: true,
   };
 }
 
@@ -155,7 +154,6 @@ export function draftFromSchedule(
     daysOfWeek: parsed.daysOfWeek,
     dayOfMonth: parsed.dayOfMonth,
     target: targetFromTask(task),
-    enabled: schedule.enabled,
   };
 }
 
@@ -192,7 +190,7 @@ export function draftToCreateBody(draft: ScheduleDraft): CreateScheduledAction {
     },
     kind: 'Agent',
     task: buildAgentTask(draft),
-    enabled: draft.enabled,
+    enabled: true,
   };
 }
 
@@ -219,7 +217,6 @@ export function draftToUpdateBody(
   }
 
   // Preserve API-written cron expressions and raw task data when not edited.
-  // The backend permits disabling a running action only if configuration matches.
   const parsed = parseCron(trigger.schedule);
   const scheduleChanged =
     draft.frequency !== parsed.frequency ||
@@ -236,7 +233,6 @@ export function draftToUpdateBody(
       : trigger,
     kind: previous.kind,
     task,
-    enabled: draft.enabled,
   };
 }
 

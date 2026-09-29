@@ -425,14 +425,19 @@ the static highlight.
 
 ## Routines (automations)
 
-Create → Automation creates a cron-scheduled routine. Cron routines support
+Create → Automation creates an active cron-scheduled routine. Cron routines support
 editing instructions, schedule, and the **Execution target** model/agent picker,
-Rename, Pause/Resume, Duplicate, Run Now, and History links to run chats.
-Edits autosave in order. **Run Now** stays disabled until the latest valid edit
-saves successfully; it also works while paused. A failed save keeps the selection
-visible with **Changes not saved** and **Retry save**. While running, configuration
-cannot be changed, but **Pause** still disables the saved routine. Duplicate
-retains the saved execution configuration, not unsaved edits.
+Rename, the **Active** switch, Duplicate, Run Now, and History links to run chats.
+The **Active** switch next to **Run Now** pauses or resumes the routine at once,
+separately from autosave and even while the draft is invalid. A paused routine
+shows no next run in its editor; routine lists mute its title and label it
+**Paused**. Edits autosave in order and never change whether the routine is
+active. **Run Now** stays disabled until the latest valid edit saves successfully;
+it also works while paused. A failed save keeps the selection visible with
+**Changes not saved** and **Retry save**. While running, configuration cannot be
+changed, and the switch can pause the routine but cannot resume it until the run
+ends. Duplicate retains the saved execution configuration and active state, not
+unsaved edits.
 If a background refresh fails, cached cron routines stay listed and their editor
 and queued autosave remain available. An initial load failure without cached data
 shows **Unable to load automation** instead. Cached event routines remain

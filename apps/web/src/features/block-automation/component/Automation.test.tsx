@@ -22,6 +22,8 @@ const mocks = vi.hoisted(() => ({
   update: vi.fn(),
   create: vi.fn(),
   run: vi.fn(),
+  setEnabled: vi.fn(),
+  activationPending: (): boolean => false,
   openWithSplit: vi.fn(),
   setDisplayName: vi.fn(),
   changePrompt: (_value: string): void => {},
@@ -116,6 +118,21 @@ vi.mock('@ui', () => ({
     <button {...props} />
   ),
   cn: (...classes: string[]) => classes.join(' '),
+  ToggleSwitch: (props: {
+    label: string;
+    checked: boolean;
+    disabled?: boolean;
+    onChange: (checked: boolean) => void;
+  }) => (
+    <button
+      type="button"
+      role="switch"
+      aria-label={props.label}
+      aria-checked={props.checked}
+      disabled={props.disabled}
+      onClick={() => props.onChange(!props.checked)}
+    />
+  ),
 }));
 vi.mock('@queries/chat', () => ({
   useChatQuery: (id: () => string) => {
@@ -177,6 +194,12 @@ vi.mock('@queries/agent-schedule/schedules', () => ({
   useUpdateScheduleMutation: () => ({ mutateAsync: mocks.update }),
   useCreateScheduleMutation: () => ({ mutate: mocks.create, isPending: false }),
   useRunScheduleNowMutation: () => ({ mutate: mocks.run, isPending: false }),
+  useSetScheduleEnabledMutation: () => ({
+    mutate: mocks.setEnabled,
+    get isPending() {
+      return mocks.activationPending();
+    },
+  }),
   invalidateSchedules: vi.fn(),
 }));
 
@@ -208,12 +231,14 @@ const events: ScheduledAction = {
 };
 let setSchedules: Setter<ScheduledAction[]>;
 let setStatus: Setter<string>;
+let setActivationPending: Setter<boolean>;
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.update.mockReset().mockResolvedValue(cron);
   vi.useFakeTimers();
   [mocks.status, setStatus] = createSignal('success');
   [mocks.readSchedules, setSchedules] = createSignal([cron]);
+  [mocks.activationPending, setActivationPending] = createSignal(false);
   mocks.metadataStatus = () => 'success';
   mocks.chatMetadata = () => ({ chat: { name: 'Run transcript' } });
   mocks.agentMetadata = () => ({ name: 'Agent transcript' });
@@ -240,6 +265,10 @@ const agentTarget: RoutineTarget = {
 
 function runButton(): HTMLButtonElement {
   return screen.getByRole('button', { name: 'Run Now' });
+}
+
+function activeSwitch(): HTMLButtonElement {
+  return screen.getByRole('switch', { name: 'Active' });
 }
 
 function selectedTarget(): RoutineTarget {
@@ -375,35 +404,17 @@ describe('automation execution target autosave', () => {
     expect(runButton().disabled).toBe(true);
   });
 
-  it('pauses a running action with only its saved configuration, discarding queued changes', async () => {
+  it('pauses a routine with an invalid draft without saving the draft', async () => {
     render(() => <Automation />);
-    mocks.changeTarget(agentTarget);
-    const running = {
-      ...cron,
-      claimed: new Date().toISOString(),
-      task: {
-        ...(cron.task as object),
-        prompt: 'Keep system prompt',
-        future: true,
-      },
-    };
-    setSchedules([running]);
-    mocks.changeTarget({ kind: 'model', model: 'ignored-while-running' });
-    fireEvent.click(screen.getByText('Pause'));
-    await vi.advanceTimersByTimeAsync(300);
-    expect(mocks.update).toHaveBeenCalledExactlyOnceWith({
-      scheduleId: cron.id,
-      body: {
-        name: cron.name,
-        kind: cron.kind,
-        trigger: cron.trigger,
-        task: running.task,
-        enabled: false,
-      },
+    mocks.changePrompt('');
+    expect(screen.getByText('Prompt is required.')).toBeTruthy();
+    fireEvent.click(activeSwitch());
+    expect(mocks.setEnabled).toHaveBeenCalledExactlyOnceWith({
+      scheduleId: 'routine-id',
+      enabled: false,
     });
-    expect(
-      screen.getByRole<HTMLButtonElement>('button', { name: 'Resume' }).disabled
-    ).toBe(true);
+    await vi.advanceTimersByTimeAsync(300);
+    expect(mocks.update).not.toHaveBeenCalled();
   });
 
   it('keeps a queued target through a cached-data refetch error', async () => {
@@ -422,39 +433,42 @@ describe('automation execution target autosave', () => {
     });
   });
 
-  it('builds a queued pause from the configuration saved by an in-flight edit', async () => {
-    const first = deferredSave();
-    mocks.update.mockReturnValueOnce(first.promise);
+  it('pauses a running routine but blocks resuming until the run ends', () => {
+    vi.setSystemTime(new Date('2026-09-28T12:00:00Z'));
+    const claimed = '2026-09-28T11:55:00Z';
+    setSchedules([{ ...cron, claimed }]);
     render(() => <Automation />);
-    mocks.changeTarget(agentTarget);
-    await vi.advanceTimersByTimeAsync(300);
-    setSchedules([{ ...cron, claimed: new Date().toISOString() }]);
-    fireEvent.click(screen.getByText('Pause'));
-    await vi.advanceTimersByTimeAsync(300);
-    expect(mocks.update).toHaveBeenCalledTimes(1);
-    const saved = {
-      ...cron,
-      claimed: new Date().toISOString(),
-      task: {
-        ...(cron.task as object),
-        agent: { bot_id: agentTarget.agentId },
-        model: 'runtime-model',
-      },
-    };
-    setSchedules([saved]);
-    first.resolve(saved);
-    await vi.advanceTimersByTimeAsync(0);
-    expect(mocks.update).toHaveBeenLastCalledWith({
-      scheduleId: cron.id,
-      body: {
-        name: saved.name,
-        kind: saved.kind,
-        trigger: saved.trigger,
-        task: saved.task,
-        enabled: false,
-      },
+    expect(screen.getByText('Running')).toBeTruthy();
+    fireEvent.click(activeSwitch());
+    expect(mocks.setEnabled).toHaveBeenCalledExactlyOnceWith({
+      scheduleId: 'routine-id',
+      enabled: false,
     });
-    expect(selectedTarget()).toEqual(agentTarget);
+    setSchedules([{ ...cron, claimed, enabled: false }]);
+    expect(activeSwitch().getAttribute('aria-checked')).toBe('false');
+    expect(activeSwitch().disabled).toBe(true);
+    setSchedules([{ ...cron, enabled: false }]);
+    expect(activeSwitch().disabled).toBe(false);
+  });
+
+  it('shows a paused routine switched off and still runs it on demand', () => {
+    render(() => <Automation />);
+    expect(activeSwitch().getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByText('Next run 2026-09-28T09:00:00Z')).toBeTruthy();
+    setSchedules([{ ...cron, enabled: false }]);
+    expect(activeSwitch().getAttribute('aria-checked')).toBe('false');
+    expect(screen.queryByText(/Next run/)).toBeNull();
+    fireEvent.click(runButton());
+    expect(mocks.run).toHaveBeenCalledExactlyOnceWith({
+      scheduleId: 'routine-id',
+    });
+  });
+
+  it('holds the switch while an activation request is pending', () => {
+    render(() => <Automation />);
+    expect(activeSwitch().disabled).toBe(false);
+    setActivationPending(true);
+    expect(activeSwitch().disabled).toBe(true);
   });
 
   it.each(['events', 'unmount'])(
@@ -585,7 +599,6 @@ describe('automation editor trigger guards', () => {
       body: {
         name: 'Summary',
         kind: 'Agent',
-        enabled: true,
         trigger: cron.trigger,
         task: {
           model: 'claude-sonnet-4-6',

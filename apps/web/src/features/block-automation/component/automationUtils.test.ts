@@ -126,7 +126,7 @@ describe('routine execution payloads', () => {
     { agent: { bot_id: agentId }, model: null },
     { agent: { bot_id: agentId }, model: 'runtime/custom' },
   ])(
-    'preserves exact task and configuration for disable-only updates: %j',
+    'preserves exact task and configuration for unedited drafts: %j',
     (selection) => {
       const action = {
         ...cron,
@@ -144,16 +144,12 @@ describe('routine execution payloads', () => {
         },
       };
       const before = JSON.stringify(action.task);
-      const body = draftToUpdateBody(
-        { ...loadedDraft(action), enabled: false },
-        action
-      );
+      const body = draftToUpdateBody(loadedDraft(action), action);
       expect(body).toEqual({
         name: action.name,
         trigger: action.trigger,
         kind: action.kind,
         task: action.task,
-        enabled: false,
       });
       expect(JSON.stringify(body?.task)).toBe(before);
       expect(body?.task).toBe(action.task);
@@ -255,6 +251,7 @@ describe('cron automation payloads', () => {
     const body = draftToCreateBody(draft());
     expect(body).toMatchObject({
       name: 'Summary',
+      enabled: true,
       trigger: { type: 'cron', schedule: '0 0 9 * * 2,3,4,5,6' },
       task: { user_prompt: 'Summarize updates' },
     });
@@ -291,6 +288,16 @@ describe('cron automation payloads', () => {
       });
     }
   );
+
+  it('keeps a paused routine paused when duplicating it', () => {
+    expect(scheduleToDuplicateBody({ ...cron, enabled: false })).toEqual({
+      name: 'Weekly summary copy',
+      enabled: false,
+      kind: 'Agent',
+      task: cron.task,
+      trigger: cron.trigger,
+    });
+  });
 
   it('duplicates API-written cron expressions losslessly', () => {
     const trigger = {
