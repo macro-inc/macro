@@ -437,6 +437,77 @@ describe('recurrence', () => {
     });
   });
 
+  it('keeps Weekly controls visible through preset-equivalent day sets', () => {
+    const { onSubmit } = renderForm({ initialDescription: 'Six-day review' });
+
+    chooseRepeat('weekly');
+    for (const day of [
+      'Sunday',
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+    ]) {
+      const button = screen.getByRole('button', { name: day });
+      const shouldRepeat = day !== 'Sunday';
+      if ((button.getAttribute('aria-pressed') === 'true') !== shouldRepeat) {
+        fireEvent.click(button);
+      }
+    }
+
+    expect(
+      screen.getByRole('button', { name: 'Repeat, Weekly' })
+    ).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Saturday' })).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Set reminder' }));
+    expect(onSubmit.mock.calls[0]?.[0].schedule).toEqual({
+      type: 'recurring',
+      cron: '0 0 9 * * 2,3,4,5,6,7',
+      timezone: 'UTC',
+    });
+  });
+
+  it('seeds an edited Weekly cadence independently from its day shape', () => {
+    const { onSubmit } = renderForm({
+      initialDescription: 'Existing weekly review',
+      initialSchedule: {
+        type: 'recurring',
+        cron: '0 0 9 * * 3',
+        timezone: 'UTC',
+      },
+      initialRemindAt: '2026-09-22T09:00:00.000Z',
+      submitLabel: 'Save',
+    });
+
+    for (const day of [
+      'Sunday',
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+    ]) {
+      const button = screen.getByRole('button', { name: day });
+      const shouldRepeat = day !== 'Sunday';
+      if ((button.getAttribute('aria-pressed') === 'true') !== shouldRepeat) {
+        fireEvent.click(button);
+      }
+    }
+
+    expect(
+      screen.getByRole('button', { name: 'Repeat, Weekly' })
+    ).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(onSubmit.mock.calls[0]?.[0].schedule).toEqual({
+      type: 'recurring',
+      cron: '0 0 9 * * 2,3,4,5,6,7',
+      timezone: 'UTC',
+    });
+  });
+
   it('keeps edited time and cadence-specific days while switching repeat shapes', () => {
     const { onSubmit } = renderForm({
       initialDescription: 'Monthly review',

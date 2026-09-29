@@ -270,6 +270,7 @@ function ReminderDetailsForId(props: {
                 }
                 revertOnCancel
                 onCancel={(wasDirty) => {
+                  setUpdateError(undefined);
                   // Reverting an edit keeps the panel open; a clean cancel
                   // dismisses the preview.
                   if (!wasDirty) props.onClose();

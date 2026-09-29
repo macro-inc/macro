@@ -147,6 +147,18 @@ const REPEAT_PRESETS = [
 ] as const;
 
 type RepeatPreset = (typeof REPEAT_PRESETS)[number]['value'];
+type RepeatChoice = RepeatPreset | 'custom';
+
+function repeatPresetFromShape(
+  repeat: RepeatKind,
+  parts: CronParts
+): RepeatPreset {
+  if (repeat === 'once') return 'once';
+  if (repeat === 'month') return 'monthly';
+  if (sameDays(parts.daysOfWeek, ALL_WEEKDAYS)) return 'daily';
+  if (sameDays(parts.daysOfWeek, DEFAULT_WEEKDAYS)) return 'weekdays';
+  return 'weekly';
+}
 
 function sameDays(a: string[], b: string[]): boolean {
   return a.length === b.length && a.every((day) => b.includes(day));
@@ -310,6 +322,12 @@ export function ReminderForm(props: ReminderFormProps) {
   );
   const [whenQuery, setWhenQuery] = createSignal('');
   const [showCustomTime, setShowCustomTime] = createSignal(false);
+  // Keep an explicit cadence choice separate from its cron shape. Weekly can
+  // intentionally contain Mon–Fri or all seven days while the user is still
+  // editing toward another set (for example Mon–Sat); shape inference alone
+  // would relabel it Weekdays/Daily and hide the weekday controls mid-edit.
+  const [selectedRepeatPreset, setSelectedRepeatPreset] =
+    createSignal<RepeatPreset>(repeatPresetFromShape(seed.repeat, seed.parts));
   const storedCronIsCustom =
     isEdit &&
     props.initialSchedule !== undefined &&
@@ -458,6 +476,7 @@ export function ReminderForm(props: ReminderFormProps) {
     setTimezone(initialTimezone);
     setWhenQuery('');
     setShowCustomTime(false);
+    setSelectedRepeatPreset(repeatPresetFromShape(seed.repeat, seed.parts));
     setCustomScheduleReplaced(false);
     setSavedWeeklyDays(
       initialSavedWeeklyDays ? [...initialSavedWeeklyDays] : undefined
@@ -481,6 +500,7 @@ export function ReminderForm(props: ReminderFormProps) {
   };
 
   const selectRepeat = (option: RepeatPreset) => {
+    setSelectedRepeatPreset(option);
     if (option === 'once') {
       setCustomScheduleReplaced(true);
       setRepeat('once');
@@ -579,13 +599,9 @@ export function ReminderForm(props: ReminderFormProps) {
     }
   };
 
-  const repeatChoice = () => {
+  const repeatChoice = (): RepeatChoice => {
     if (storedCronIsCustom && !customScheduleReplaced()) return 'custom';
-    if (repeat() === 'once') return 'once';
-    if (repeat() === 'month') return 'monthly';
-    if (sameDays(repeatParts().daysOfWeek, ALL_WEEKDAYS)) return 'daily';
-    if (sameDays(repeatParts().daysOfWeek, DEFAULT_WEEKDAYS)) return 'weekdays';
-    return 'weekly';
+    return selectedRepeatPreset();
   };
 
   const repeatLabel = () =>

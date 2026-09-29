@@ -39,11 +39,14 @@ vi.mock('@queries/soup/cache', () => ({
 }));
 vi.mock('./ReminderForm', () => ({
   ReminderForm: (props: {
+    error?: string;
     reference?: import('solid-js').JSX.Element;
+    onCancel: (wasDirty: boolean) => void;
     onSubmit: (values: unknown) => void;
   }) => (
     <div data-testid="reminder-form">
       {props.reference}
+      {props.error ? <div role="alert">{props.error}</div> : null}
       <button
         type="button"
         onClick={() =>
@@ -54,6 +57,9 @@ vi.mock('./ReminderForm', () => ({
         }
       >
         Save fixture
+      </button>
+      <button type="button" onClick={() => props.onCancel(true)}>
+        Cancel fixture
       </button>
     </div>
   ),
@@ -209,6 +215,26 @@ describe('ReminderDetails', () => {
     await Promise.resolve();
 
     expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('clears a failed update error when reverting the edit in place', async () => {
+    state.mutateAsync.mockRejectedValue(new Error('request failed'));
+    const onClose = vi.fn();
+    const view = render(() => (
+      <ReminderDetails reminderId="reminder-1" onClose={onClose} />
+    ));
+
+    fireEvent.click(view.getByRole('button', { name: 'Save fixture' }));
+    expect(
+      await view.findByText(
+        'We couldn’t save these changes. Your edits are still here—try again.'
+      )
+    ).toBeTruthy();
+
+    fireEvent.click(view.getByRole('button', { name: 'Cancel fixture' }));
+
+    expect(view.queryByRole('alert')).toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it('renders a useful fallback for a missing or inaccessible reminder', () => {
