@@ -15,7 +15,7 @@ use super::{
     require_detail,
 };
 use crate::domain::models::{
-    CreateInitiativeRepoArgs, DeletedInitiative, DescriptionDocumentId, InitiativeDetail,
+    CreateInitiativeRepoArgs, DescriptionDocumentId, DescriptionLocation, InitiativeDetail,
     InitiativeError, InitiativeId, UpdateInitiativeRepoArgs,
 };
 
@@ -205,7 +205,7 @@ pub(super) async fn update(
 pub(super) async fn delete(
     pool: &PgPool,
     id: InitiativeId,
-) -> Result<DeletedInitiative, InitiativeError> {
+) -> Result<DescriptionLocation, InitiativeError> {
     let mut tx = pool
         .begin()
         .await
@@ -252,13 +252,11 @@ pub(super) async fn delete(
         .map_err(AdapterError::Sqlx)
         .map_err(map_sqlx)?;
 
-    Ok(DeletedInitiative {
-        description: description_location(
-            uuid,
-            deleted.description_surface_id,
-            deleted.description_document_id.as_deref(),
-        )?,
-    })
+    description_location(
+        uuid,
+        deleted.description_surface_id,
+        deleted.description_document_id.as_deref(),
+    )
 }
 
 struct PatchedRow {

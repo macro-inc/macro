@@ -46,15 +46,10 @@ export function ProjectDescription(props: {
   const [attempt, setAttempt] = createSignal(0);
   // Project refreshes re-read the same surface; only a new surface or retry reopens.
   const identity = createMemo(
-    () => ({
-      projectId: props.projectId,
-      surfaceId: props.surfaceId,
-      attempt: attempt(),
-    }),
+    () => ({ surfaceId: props.surfaceId, attempt: attempt() }),
     undefined,
     {
       equals: (previous, next) =>
-        previous.projectId === next.projectId &&
         previous.surfaceId === next.surfaceId &&
         previous.attempt === next.attempt,
     }
@@ -63,7 +58,7 @@ export function ProjectDescription(props: {
     <Show when={identity().surfaceId ? identity() : undefined} keyed>
       {(identity) => (
         <DescriptionSession
-          projectId={identity.projectId}
+          projectId={props.projectId}
           surfaceId={identity.surfaceId}
           canEdit={props.canEdit}
           onRetry={() => setAttempt((attempt) => attempt + 1)}

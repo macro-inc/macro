@@ -6,8 +6,8 @@
 use std::str::FromStr;
 use std::sync::Arc;
 
-use collab_surface::domain::models::{CollabSurfaceError, SurfaceSeed};
-use collab_surface::domain::ports::CollabSurfaceService;
+use collab_surface::domain::models::CollabSurfaceError;
+use collab_surface::domain::ports::OwnedSurfaceService;
 
 use documents_hex::domain::create::{
     DocumentCreator, MarkdownSubtype, NewDocumentMetadata, NewMarkdownTextDocument,
@@ -117,8 +117,8 @@ fn map_document_error(error: DocumentError) -> InitiativeError {
 }
 
 /// Description surfaces composed from the collab-surface domain service. The initiative
-/// domain has authorized every call, so this uses the service's internal entry points and
-/// always names the initiative as the surface's parent.
+/// domain owns these surfaces and has authorized every call; the initiative is always the
+/// surface's parent.
 pub struct InitiativeDescriptionSurfacesAdapter<S> {
     surfaces: Arc<S>,
 }
@@ -132,7 +132,7 @@ impl<S> InitiativeDescriptionSurfacesAdapter<S> {
 
 impl<S> InitiativeDescriptionSurfaces for InitiativeDescriptionSurfacesAdapter<S>
 where
-    S: CollabSurfaceService,
+    S: OwnedSurfaceService,
 {
     #[tracing::instrument(skip(self), err)]
     async fn adopt(
@@ -141,10 +141,9 @@ where
         initiative: InitiativeId,
     ) -> Result<(), InitiativeError> {
         self.surfaces
-            .internal_ensure_surface(
+            .adopt_document_session(
                 EntityType::Initiative.with_entity_string(initiative.to_string()),
                 document.adopting_surface().as_uuid(),
-                SurfaceSeed::AdoptDocumentSession,
             )
             .await
             .map_err(map_surface_error)?;
@@ -154,7 +153,7 @@ where
     #[tracing::instrument(skip(self), err)]
     async fn delete(&self, id: DescriptionSurfaceId) -> Result<(), InitiativeError> {
         self.surfaces
-            .internal_delete_surface(id.as_uuid())
+            .retire_surface(id.as_uuid())
             .await
             .map_err(map_surface_error)
     }
@@ -169,11 +168,11 @@ fn map_surface_error(error: CollabSurfaceError) -> InitiativeError {
         CollabSurfaceError::NotReady => InitiativeError::Conflict(
             "the project description is still being prepared; try again shortly".to_string(),
         ),
-        CollabSurfaceError::IdReserved => {
-            InitiativeError::Conflict("the description surface id is already in use".to_string())
-        }
         CollabSurfaceError::BadRequest(message) => InitiativeError::BadRequest(message),
         CollabSurfaceError::AccessDenied => InitiativeError::Unauthorized,
-        error @ CollabSurfaceError::Internal(_) => internal!(error),
+        // Adoption never seeds, so an id reserved by a document cannot come back here.
+        error @ (CollabSurfaceError::IdReserved | CollabSurfaceError::Internal(_)) => {
+            internal!(error)
+        }
     }
 }

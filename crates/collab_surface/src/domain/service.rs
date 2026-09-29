@@ -12,15 +12,30 @@ use model_entity::Entity;
 use uuid::Uuid;
 
 use crate::domain::models::{
-    CollabSurface, CollabSurfaceError, SurfaceSeed, SurfaceState, owned_by_parent_domain,
+    CollabSurface, CollabSurfaceError, SurfaceOwnership, SurfaceState, surface_ownership,
 };
 use crate::domain::ports::{
-    CollabSurfaceRepo, CollabSurfaceService, DocumentIds, SurfaceInitializer,
+    CollabSurfaceRepo, CollabSurfaceService, DocumentIds, OwnedSurfaceService, SurfaceInitializer,
 };
 use crate::domain::token::{access_level_for, encode_surface_token};
 
 /// Upper bound on initial markdown, mirroring the lexical-service request cap.
 const MAX_INITIAL_MARKDOWN_LEN: usize = 1_000_000;
+
+/// How a surface's sync-service session comes to exist when an ensure creates
+/// the surface.
+enum SurfaceSeed {
+    /// Initialize a new session from markdown; empty seeds the canonical blank
+    /// document.
+    Markdown(String),
+    /// Reuse the existing session of the document with the same id.
+    AdoptDocumentSession,
+}
+
+/// Whether the public API may create and delete surfaces under `parent`.
+fn caller_owned(parent: &Entity<'_>) -> bool {
+    surface_ownership(parent.entity_type) == Some(SurfaceOwnership::Callers)
+}
 
 /// Production implementation of [`CollabSurfaceService`].
 pub struct CollabSurfaceServiceImpl<R, I, D> {
@@ -96,7 +111,7 @@ where
         initial_markdown: String,
     ) -> Result<CollabSurface, CollabSurfaceError> {
         let parent = resolve_parent(user_id, &parent_receipt)?;
-        if owned_by_parent_domain(parent.entity_type) {
+        if !caller_owned(&parent) {
             return Err(CollabSurfaceError::AccessDenied);
         }
         self.ensure_bound(parent, id, SurfaceSeed::Markdown(initial_markdown))
@@ -139,7 +154,7 @@ where
         // Checked on every mint, not only at creation, so a surface whose id
         // names a document never connects to it, however it was bound. Only
         // a parent's own domain binds its surfaces to a document on purpose.
-        if !owned_by_parent_domain(surface.parent.entity_type) {
+        if surface_ownership(surface.parent.entity_type) != Some(SurfaceOwnership::ParentDomain) {
             self.refuse_document_id(surface.id).await?;
         }
 
@@ -167,7 +182,7 @@ where
         verify_receipt_matches_parent(&surface, &parent)?;
         // A deleted id never comes back, so a surface its parent's domain owns
         // (e.g. a project description) is retired only by that domain.
-        if owned_by_parent_domain(parent.entity_type) {
+        if !caller_owned(&parent) {
             return Err(CollabSurfaceError::AccessDenied);
         }
 
@@ -185,19 +200,26 @@ where
             .map_err(|e| rootcause::Report::new(e).into_dynamic())?;
         Ok(())
     }
+}
 
-    #[tracing::instrument(err, skip(self, seed))]
-    async fn internal_ensure_surface(
+impl<R, I, D> OwnedSurfaceService for CollabSurfaceServiceImpl<R, I, D>
+where
+    R: CollabSurfaceRepo,
+    I: SurfaceInitializer,
+    D: DocumentIds,
+{
+    #[tracing::instrument(err, skip(self))]
+    async fn adopt_document_session(
         &self,
         parent: Entity<'static>,
         id: Uuid,
-        seed: SurfaceSeed,
     ) -> Result<CollabSurface, CollabSurfaceError> {
-        self.ensure_bound(parent, id, seed).await
+        self.ensure_bound(parent, id, SurfaceSeed::AdoptDocumentSession)
+            .await
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn internal_delete_surface(&self, id: Uuid) -> Result<(), CollabSurfaceError> {
+    async fn retire_surface(&self, id: Uuid) -> Result<(), CollabSurfaceError> {
         self.repo
             .soft_delete(id)
             .await

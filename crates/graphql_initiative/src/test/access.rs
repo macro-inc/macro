@@ -332,10 +332,10 @@ async fn task_assignment_validates_batch_and_destination_before_authorizing_task
     assert!(service.assignments.lock().unwrap().is_empty());
 }
 
-/// Grants project view access only, recording what was asked for.
+/// Grants view access, recording which entities were checked.
 #[derive(Default)]
 struct ProjectViewAccess {
-    calls: Mutex<Vec<(String, EntityType, AccessLevel)>>,
+    calls: Mutex<Vec<(String, EntityType)>>,
 }
 
 impl InitiativeAuthorizer for ProjectViewAccess {
@@ -348,7 +348,7 @@ impl InitiativeAuthorizer for ProjectViewAccess {
         self.calls
             .lock()
             .unwrap()
-            .push((id.to_string(), entity_type, AccessLevel::View));
+            .push((id.to_string(), entity_type));
         EntityAccessReceipt::try_new(
             EntityAccessAuth::Authenticated(user.clone()),
             entity_access::domain::models::Entity {
@@ -389,10 +389,6 @@ async fn viewers_ensure_the_description_surface_with_a_project_view_receipt() {
     );
     assert_eq!(
         *access.calls.lock().unwrap(),
-        [(
-            PROJECT_ID.to_string(),
-            EntityType::Initiative,
-            AccessLevel::View
-        )]
+        [(PROJECT_ID.to_string(), EntityType::Initiative)]
     );
 }

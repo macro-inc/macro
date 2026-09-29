@@ -433,6 +433,7 @@ async fn anonymous_queries_and_mutations_never_call_domain() {
     for query in [
         "{ user { id initiative(initiativeId: \"00000000-0000-4000-8000-000000000001\") { id } } }",
         "mutation { createInitiative(input: { name: \"Launch\" }) { id } }",
+        "mutation { ensureInitiativeDescriptionSurface(initiativeId: \"00000000-0000-4000-8000-000000000001\") }",
     ] {
         let response = schema.execute(query).await;
         assert_eq!(response.errors[0].message, "authentication required");
@@ -460,14 +461,6 @@ async fn ensure_description_surface_returns_the_surface_id() {
         *api.calls.lock().unwrap(),
         vec!["ensure_description_surface".to_string()]
     );
-
-    let anonymous = schema(api.clone())
-        .execute(format!(
-            "mutation {{ ensureInitiativeDescriptionSurface(initiativeId: \"{PROJECT_ID}\") }}"
-        ))
-        .await;
-    assert_eq!(anonymous.errors[0].message, "authentication required");
-    assert_eq!(api.calls.lock().unwrap().len(), 1);
 }
 
 #[tokio::test]

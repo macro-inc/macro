@@ -135,13 +135,9 @@ async fn repeated_assignment_has_no_activity() {
 #[tokio::test]
 async fn committed_deletion_purges_activity_even_when_description_cleanup_fails() {
     let mut repo = MockInitiativeRepo::new();
-    repo.expect_delete().times(1).return_once(|_| {
-        Box::pin(async {
-            Ok(DeletedInitiative {
-                description: description(),
-            })
-        })
-    });
+    repo.expect_delete()
+        .times(1)
+        .return_once(|_| Box::pin(async { Ok(description()) }));
     let mut documents = MockInitiativeDescriptionDocuments::new();
     documents.expect_purge().times(1).return_once(|_| {
         Box::pin(async {

@@ -55,11 +55,7 @@ use channels::{
         pg_channels_repo::PgChannelsRepo, pg_side_effect_context::PgChannelSideEffectContext,
     },
 };
-use collab_surface::{
-    domain::service::CollabSurfaceServiceImpl, inbound::axum_router::CollabSurfaceRouterState,
-    outbound::pg_collab_surface_repo::PgCollabSurfaceRepo,
-    outbound::surface_init::LexicalSyncSurfaceInitializer,
-};
+use collab_surface::inbound::axum_router::CollabSurfaceRouterState;
 use config::{Config, Environment};
 use connection::{
     domain::service::ConnectionServiceImpl,
@@ -1230,13 +1226,11 @@ async fn run() -> anyhow::Result<()> {
             lexical_client.clone(),
         ),
     );
-    let collab_surface_service = Arc::new(CollabSurfaceServiceImpl::new(
-        Arc::new(PgCollabSurfaceRepo::new(db.clone())),
-        Arc::new(LexicalSyncSurfaceInitializer::new(
-            lexical_client.as_ref().clone(),
-            sync_service_client.as_ref().clone(),
-        )),
-        Arc::new(service::collab_surface_document_ids::DssCollabSurfaceDocumentIds(db.clone())),
+    let collab_surface_service = Arc::new(collab_surface::outbound::pg_collab_surface_service(
+        db.clone(),
+        lexical_client.as_ref().clone(),
+        sync_service_client.as_ref().clone(),
+        service::collab_surface_document_ids::DssCollabSurfaceDocumentIds(db.clone()),
         config.document_permission_jwt.as_ref().to_string(),
     ));
 

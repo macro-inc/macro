@@ -31,8 +31,8 @@ use unicode_segmentation::UnicodeSegmentation;
 
 use crate::domain::models::{
     AssignTaskStatus, AssignTasksResponse, AssignTasksResult, CreateInitiativeRepoArgs,
-    CreateInitiativeRequest, DeletedInitiative, DescriptionSurfaceId, InitiativeBasic,
-    InitiativeDetail, InitiativeError, InitiativeId, InitiativeList, LockstepTeamShare,
+    CreateInitiativeRequest, DescriptionSurfaceId, InitiativeBasic, InitiativeDetail,
+    InitiativeError, InitiativeId, InitiativeList, LockstepTeamShare,
     MAX_INITIATIVE_DESCRIPTION_GRAPHEMES, MAX_INITIATIVE_NAME_GRAPHEMES, MAX_TASKS_PER_ASSIGN,
     NewDescriptionDocument, TaskAssignment, UpdateInitiativeRepoArgs, UpdateInitiativeRequest,
 };
@@ -553,7 +553,7 @@ where
         receipt: EntityAccessReceipt<OwnerAccessLevel>,
     ) -> Result<(), InitiativeError> {
         let id = initiative_id_from_receipt(&receipt)?;
-        let DeletedInitiative { description } = self.repo.delete(id).await.map_err(Into::into)?;
+        let description = self.repo.delete(id).await.map_err(Into::into)?;
         self.publish(id, InitiativeTopicEvent::Purged { initiative_id: id })
             .await;
         // Cleanup follows an authorized deletion and is not a fresh user edit.

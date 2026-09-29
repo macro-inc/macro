@@ -58,30 +58,37 @@ pub struct CollabSurface {
     pub updated_at: DateTime<Utc>,
 }
 
-/// How a surface's sync-service session comes to exist when an ensure creates
-/// the surface.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SurfaceSeed {
-    /// Initialize a new session from markdown; empty seeds the canonical blank
-    /// document. The id must not already name a document: a document's session
-    /// is never adopted uninvited.
-    Markdown(String),
-    /// Bind the surface to the existing sync-service session of the document
-    /// with the same id, reusing its CRDT as-is. Only a trusted caller that has
-    /// verified the document belongs to the surface's parent may choose this
-    /// (e.g. an initiative adopting its description document). Adoption never
-    /// initializes: until the document's own session exists (it may still be
-    /// initializing), the surface stays `pending` and ensure reports
-    /// [`CollabSurfaceError::NotReady`].
-    AdoptDocumentSession,
+/// Who creates and retires the surfaces under a parent entity type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SurfaceOwnership {
+    /// Any caller with access to the parent, through the public API.
+    Callers,
+    /// The parent's own domain, through [`OwnedSurfaceService`], which may
+    /// bind them to its own document's session. The public API mints tokens
+    /// for these surfaces but never ensures or deletes them.
+    ///
+    /// [`OwnedSurfaceService`]: crate::domain::ports::OwnedSurfaceService
+    ParentDomain,
 }
 
-/// Whether surfaces under `parent` are owned by the parent's domain, which
-/// creates and deletes them through the internal entry points and may bind
-/// them to its own document's session. The public API may mint tokens for
-/// them but never ensures or deletes them.
-pub fn owned_by_parent_domain(parent: EntityType) -> bool {
-    matches!(parent, EntityType::Initiative)
+/// The surface policy for a parent entity type; `None` when surfaces cannot
+/// attach to it.
+///
+/// `ChannelMessage` is deliberately absent: it has no access resolution in
+/// `entity_access`, so a message-scoped surface attaches to its channel
+/// instead (the `Call → Channel` precedent). The rest are excluded until they
+/// have a surface story.
+pub fn surface_ownership(parent: EntityType) -> Option<SurfaceOwnership> {
+    match parent {
+        EntityType::Document
+        | EntityType::Channel
+        | EntityType::Project
+        | EntityType::Chat
+        | EntityType::EmailThread
+        | EntityType::Call => Some(SurfaceOwnership::Callers),
+        EntityType::Initiative => Some(SurfaceOwnership::ParentDomain),
+        _ => None,
+    }
 }
 
 /// Errors returned by the collab-surface service.

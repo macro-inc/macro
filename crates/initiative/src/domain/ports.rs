@@ -14,10 +14,10 @@ use std::collections::HashMap;
 
 use crate::domain::events::{AssignedTasks, TaskMembershipChange};
 use crate::domain::models::{
-    AssignTasksResponse, CreateInitiativeRepoArgs, CreateInitiativeRequest, DeletedInitiative,
-    DescriptionDocumentId, DescriptionLocation, DescriptionSurfaceId, InitiativeBasic,
-    InitiativeDetail, InitiativeError, InitiativeId, InitiativeList, LockstepTeamShareFacts,
-    NewDescriptionDocument, TaskAssignment, UpdateInitiativeRepoArgs, UpdateInitiativeRequest,
+    AssignTasksResponse, CreateInitiativeRepoArgs, CreateInitiativeRequest, DescriptionDocumentId,
+    DescriptionLocation, DescriptionSurfaceId, InitiativeBasic, InitiativeDetail, InitiativeError,
+    InitiativeId, InitiativeList, LockstepTeamShareFacts, NewDescriptionDocument, TaskAssignment,
+    UpdateInitiativeRepoArgs, UpdateInitiativeRequest,
 };
 
 /// Outbound port for the description document's lifecycle.
@@ -161,7 +161,7 @@ pub trait InitiativeRepo: Send + Sync + 'static {
     fn delete(
         &self,
         id: InitiativeId,
-    ) -> impl Future<Output = Result<DeletedInitiative, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<DescriptionLocation, Self::Err>> + Send;
 }
 
 /// Inbound service port: the initiative API used by drivers (HTTP).

@@ -25,9 +25,9 @@ use sqlx::{Executor, PgPool, Postgres};
 
 use crate::domain::events::{AssignedTasks, TaskMembershipChange};
 use crate::domain::models::{
-    CreateInitiativeRepoArgs, DeletedInitiative, DescriptionDocumentId, DescriptionLocation,
-    DescriptionSurfaceId, InitiativeBasic, InitiativeDetail, InitiativeError, InitiativeId,
-    InitiativeList, LockstepTeamShareFacts, UpdateInitiativeRepoArgs,
+    CreateInitiativeRepoArgs, DescriptionDocumentId, DescriptionLocation, DescriptionSurfaceId,
+    InitiativeBasic, InitiativeDetail, InitiativeError, InitiativeId, InitiativeList,
+    LockstepTeamShareFacts, UpdateInitiativeRepoArgs,
 };
 use crate::domain::ports::InitiativeRepo;
 
@@ -192,7 +192,7 @@ impl InitiativeRepo for PgInitiativeRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn delete(&self, id: InitiativeId) -> Result<DeletedInitiative, Self::Err> {
+    async fn delete(&self, id: InitiativeId) -> Result<DescriptionLocation, Self::Err> {
         create::delete(&self.pool, id).await
     }
 }

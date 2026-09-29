@@ -49,13 +49,6 @@ describe('production project description transport', () => {
     );
   });
 
-  it('refuses a surface the project does not name', async () => {
-    doubles.ensure.mockResolvedValue(ok('surface-2'));
-
-    await expect(transport().authorize('surface-1')).rejects.toThrow();
-    expect(doubles.token).not.toHaveBeenCalled();
-  });
-
   it('fails without a connection token', async () => {
     doubles.ensure.mockResolvedValue(ok('surface-1'));
     doubles.token.mockResolvedValue(undefined);

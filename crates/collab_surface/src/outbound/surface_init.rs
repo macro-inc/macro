@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use lexical_client::LexicalClient;
 use sync_service_client::SyncServiceClient;
-use tokio_retry::{Retry, RetryIf, strategy::FixedInterval};
+use tokio_retry::{Retry, strategy::FixedInterval};
 
 use crate::domain::models::CollabSurfaceError;
 use crate::domain::ports::SurfaceInitializer;
@@ -109,27 +109,26 @@ impl SurfaceInitializer for LexicalSyncSurfaceInitializer {
     #[tracing::instrument(err, skip(self))]
     async fn await_session(&self, surface_id: &str) -> Result<bool, CollabSurfaceError> {
         // A document's own initialization runs in the background after it is
-        // created, so give a just-created session a moment to land. Only a
-        // missing session is retried; a failed check is reported at once.
-        let result = RetryIf::start(
-            SESSION_WAIT_BACKOFF_MS.map(Duration::from_millis),
-            || async {
-                match self.sync_service_client.exists(surface_id).await {
-                    Ok(true) => Ok(()),
-                    Ok(false) => Err(None),
-                    Err(error) => Err(Some(error)),
-                }
-            },
-            |error: &Option<anyhow::Error>| error.is_none(),
-        )
-        .await;
-        match result {
-            Ok(()) => Ok(true),
-            Err(None) => Ok(false),
-            Err(Some(error)) => Err(CollabSurfaceError::Internal(
-                rootcause::report!("failed to check sync-service session: {error:?}")
-                    .into_dynamic(),
-            )),
+        // created, so give a just-created session a moment to land.
+        let mut backoff = SESSION_WAIT_BACKOFF_MS.into_iter();
+        loop {
+            let exists = self
+                .sync_service_client
+                .exists(surface_id)
+                .await
+                .map_err(|e| {
+                    CollabSurfaceError::Internal(
+                        rootcause::report!("failed to check sync-service session: {e:?}")
+                            .into_dynamic(),
+                    )
+                })?;
+            if exists {
+                return Ok(true);
+            }
+            let Some(delay) = backoff.next() else {
+                return Ok(false);
+            };
+            tokio::time::sleep(Duration::from_millis(delay)).await;
         }
     }
 }

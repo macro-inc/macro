@@ -22,7 +22,9 @@ use model_error_response::ErrorResponse;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::domain::models::{CollabSurface, CollabSurfaceError, SurfaceState};
+use crate::domain::models::{
+    CollabSurface, CollabSurfaceError, SurfaceOwnership, SurfaceState, surface_ownership,
+};
 use crate::domain::ports::CollabSurfaceService;
 
 /// Router state for collab-surface endpoints.
@@ -99,24 +101,6 @@ where
         .with_state(state)
 }
 
-/// Parent entity types a surface may attach to in v1.
-///
-/// `ChannelMessage` is deliberately absent: it has no access resolution in
-/// `entity_access` — a message-scoped surface attaches to its channel instead
-/// (the `Call → Channel` precedent). `Initiative` is absent because its
-/// description surface is owned by the initiative domain, which adopts its
-/// description document itself; its surfaces still mint tokens here, with
-/// access derived from the initiative. The rest are excluded until they have a
-/// surface story.
-const SUPPORTED_PARENT_TYPES: &[EntityType] = &[
-    EntityType::Document,
-    EntityType::Channel,
-    EntityType::Project,
-    EntityType::Chat,
-    EntityType::EmailThread,
-    EntityType::Call,
-];
-
 /// Request body for ensuring a collab surface.
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -180,7 +164,7 @@ fn build_parent(
     entity_type: EntityType,
     entity_id: &str,
 ) -> Result<Entity<'static>, CollabSurfaceError> {
-    if !SUPPORTED_PARENT_TYPES.contains(&entity_type) {
+    if surface_ownership(entity_type) != Some(SurfaceOwnership::Callers) {
         return Err(CollabSurfaceError::BadRequest(format!(
             "unsupported parent entity type: {entity_type}"
         )));

@@ -1,12 +1,7 @@
 //! Composition of project workflows from owning domain ports and adapters.
 
 use super::*;
-use collab_surface::{
-    domain::service::CollabSurfaceServiceImpl,
-    outbound::{
-        pg_collab_surface_repo::PgCollabSurfaceRepo, surface_init::LexicalSyncSurfaceInitializer,
-    },
-};
+use collab_surface::outbound::{PgCollabSurfaceService, pg_collab_surface_service};
 use documents::domain::{ports::mentions::NoOpDocumentMentionTracker, purge::DocumentPurger};
 use documents::outbound::{
     document_bytes_upload::ReqwestDocumentBytesUploader,
@@ -30,11 +25,7 @@ type ToolDescriptionDocuments = initiative_documents::InitiativeDescriptionDocum
 >;
 
 type ToolDescriptionSurfaces = initiative_documents::InitiativeDescriptionSurfacesAdapter<
-    CollabSurfaceServiceImpl<
-        PgCollabSurfaceRepo,
-        LexicalSyncSurfaceInitializer,
-        ToolCollabSurfaceDocumentIds,
-    >,
+    PgCollabSurfaceService<ToolCollabSurfaceDocumentIds>,
 >;
 
 /// Glue giving collab surfaces their view of the document id namespace, which
@@ -89,13 +80,11 @@ pub fn build_initiative_tool_context(
         purger,
     );
     let surfaces = initiative_documents::InitiativeDescriptionSurfacesAdapter::new(Arc::new(
-        CollabSurfaceServiceImpl::new(
-            Arc::new(PgCollabSurfaceRepo::new(pool.clone())),
-            Arc::new(LexicalSyncSurfaceInitializer::new(
-                documents.lexical_client.as_ref().clone(),
-                documents.sync_service_client.as_ref().clone(),
-            )),
-            Arc::new(ToolCollabSurfaceDocumentIds(pool.clone())),
+        pg_collab_surface_service(
+            pool.clone(),
+            documents.lexical_client.as_ref().clone(),
+            documents.sync_service_client.as_ref().clone(),
+            ToolCollabSurfaceDocumentIds(pool.clone()),
             documents.document_permission_jwt_secret.clone(),
         ),
     ));

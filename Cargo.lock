@@ -4148,7 +4148,6 @@ dependencies = [
 name = "collab_surface"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "axum",
  "chrono",
  "entity_access",
@@ -9605,10 +9604,7 @@ dependencies = [
  "chrono",
  "collab_surface",
  "documents",
- "entity_access",
  "initiative",
- "macro_sync_service_jwt",
- "macro_user_id",
  "model-entity",
  "model_owner",
  "rootcause",

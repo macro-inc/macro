@@ -15,11 +15,9 @@ export function createProductionProjectDescriptionSession(project: {
 }) {
   return createProjectDescriptionSession(project.surfaceId, {
     authorize: async (surfaceId) => {
-      const ensured = await throwOnErr(() =>
+      await throwOnErr(() =>
         initiativeClient.ensureDescriptionSurface(project.projectId)
       );
-      if (ensured !== surfaceId)
-        throw new Error('The project description moved. Reload to open it.');
       const token = await getCollabSurfaceToken(surfaceId);
       if (!token) throw new Error('Could not open the project description.');
       return token;

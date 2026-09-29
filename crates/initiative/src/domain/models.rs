@@ -448,13 +448,6 @@ pub struct LockstepTeamShareFacts {
     pub description: Option<TeamShareFacts>,
 }
 
-/// What a deleted initiative leaves for the service to clean up after the commit.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct DeletedInitiative {
-    /// Where the deleted initiative kept its description.
-    pub description: DescriptionLocation,
-}
-
 /// Errors returned by the initiative service.
 #[derive(Debug, thiserror::Error)]
 pub enum InitiativeError {

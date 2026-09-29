@@ -19,11 +19,11 @@ use models_permissions::share_permission::{
 
 use super::InitiativeServiceImpl;
 use crate::domain::models::{
-    AssignTaskStatus, AssignTasksResult, CreateInitiativeRequest, DeletedInitiative,
-    DescriptionDocumentId, DescriptionLocation, DescriptionSurfaceId, InitiativeBasic,
-    InitiativeDetail, InitiativeError, InitiativeId, InitiativeList, InitiativeSummary,
-    LockstepTeamShareFacts, MAX_INITIATIVE_DESCRIPTION_GRAPHEMES, MAX_INITIATIVE_NAME_GRAPHEMES,
-    MAX_TASKS_PER_ASSIGN, TaskAssignment, UpdateInitiativeRequest,
+    AssignTaskStatus, AssignTasksResult, CreateInitiativeRequest, DescriptionDocumentId,
+    DescriptionLocation, DescriptionSurfaceId, InitiativeBasic, InitiativeDetail, InitiativeError,
+    InitiativeId, InitiativeList, InitiativeSummary, LockstepTeamShareFacts,
+    MAX_INITIATIVE_DESCRIPTION_GRAPHEMES, MAX_INITIATIVE_NAME_GRAPHEMES, MAX_TASKS_PER_ASSIGN,
+    TaskAssignment, UpdateInitiativeRequest,
 };
 use crate::domain::ports::{
     InitiativeService, MockInitiativeDescriptionDocuments, MockInitiativeDescriptionSurfaces,
@@ -704,13 +704,7 @@ async fn delete_purges_the_document_then_retires_the_surface() {
         .withf(|id| *id == initiative_id())
         .times(1)
         .in_sequence(&mut sequence)
-        .return_once(|_| {
-            Box::pin(async {
-                Ok(DeletedInitiative {
-                    description: description(),
-                })
-            })
-        });
+        .return_once(|_| Box::pin(async { Ok(description()) }));
     // Purging the document drops the sync-service session the surface adopted.
     documents
         .expect_purge()
@@ -735,13 +729,8 @@ async fn delete_purges_the_document_then_retires_the_surface() {
 async fn delete_surfaces_a_failed_purge_after_the_initiative_is_gone() {
     let mut repo = MockInitiativeRepo::new();
     let mut documents = MockInitiativeDescriptionDocuments::new();
-    repo.expect_delete().return_once(|_| {
-        Box::pin(async {
-            Ok(DeletedInitiative {
-                description: description(),
-            })
-        })
-    });
+    repo.expect_delete()
+        .return_once(|_| Box::pin(async { Ok(description()) }));
     documents.expect_purge().return_once(|_| {
         Box::pin(async { Err(InitiativeError::Internal(rootcause::report!("sync down"))) })
     });
@@ -756,13 +745,8 @@ async fn delete_surfaces_a_failed_purge_after_the_initiative_is_gone() {
 #[tokio::test]
 async fn delete_of_a_documentless_initiative_only_retires_its_surface() {
     let mut repo = MockInitiativeRepo::new();
-    repo.expect_delete().return_once(|_| {
-        Box::pin(async {
-            Ok(DeletedInitiative {
-                description: documentless_description(),
-            })
-        })
-    });
+    repo.expect_delete()
+        .return_once(|_| Box::pin(async { Ok(documentless_description()) }));
 
     service_with(
         repo,

@@ -71,11 +71,7 @@ use agent_session::{
     domain::search::{AgentSessionSearchMetadataService, AgentSessionSearchMetadataServiceImpl},
     outbound::postgres::PgAgentSessionRepo,
 };
-use collab_surface::{
-    domain::service::CollabSurfaceServiceImpl, inbound::axum_router::CollabSurfaceRouterState,
-    outbound::pg_collab_surface_repo::PgCollabSurfaceRepo,
-    outbound::surface_init::LexicalSyncSurfaceInitializer,
-};
+use collab_surface::inbound::axum_router::CollabSurfaceRouterState;
 use foreign_entity::{
     domain::service::ForeignEntityServiceImpl, inbound::axum_router::ForeignEntityRouterState,
     outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
@@ -524,9 +520,7 @@ pub(crate) type DssInitiativeState =
     InitiativeRouterState<InitiativeServiceType, EntityAccessService, AuthorizationService>;
 
 /// Type alias for the collab-surface service.
-pub(crate) type CollabSurfaceServiceType = CollabSurfaceServiceImpl<
-    PgCollabSurfaceRepo,
-    LexicalSyncSurfaceInitializer,
+pub(crate) type CollabSurfaceServiceType = collab_surface::outbound::PgCollabSurfaceService<
     crate::service::collab_surface_document_ids::DssCollabSurfaceDocumentIds,
 >;
 

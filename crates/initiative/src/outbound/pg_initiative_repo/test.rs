@@ -1114,7 +1114,7 @@ async fn delete_returns_the_document_id_and_leaves_no_initiative_rows(
         .expect("description document");
 
     assert_eq!(
-        repo.delete(created.id).await?.description,
+        repo.delete(created.id).await?,
         DescriptionLocation {
             surface_id: document_id.adopting_surface(),
             document_id: Some(document_id),

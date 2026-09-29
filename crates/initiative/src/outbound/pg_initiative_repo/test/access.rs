@@ -15,6 +15,9 @@ async fn assignee_sharing_adds_manageable_collaborators_without_owner_downgrade(
             TeamShareCreation::Unshared,
         )
         .await?;
+    let document = created
+        .description_document_id
+        .expect("description document");
 
     repo.grant_assignees(created.id, vec![user(OWNER), user(MEMBER)])
         .await?;
@@ -25,27 +28,11 @@ async fn assignee_sharing_adds_manageable_collaborators_without_owner_downgrade(
     assert!(detail.member_ids.contains(&user(MEMBER)));
     assert!(detail.member_ids.contains(&user(TEAMMATE)));
     assert_eq!(
-        mirrored_access(
-            &pool,
-            created.id,
-            created
-                .description_document_id
-                .expect("description document"),
-            MEMBER
-        )
-        .await?,
+        mirrored_access(&pool, created.id, document, MEMBER).await?,
         (Some("edit".into()), Some("edit".into()))
     );
     assert_eq!(
-        mirrored_access(
-            &pool,
-            created.id,
-            created
-                .description_document_id
-                .expect("description document"),
-            OWNER
-        )
-        .await?,
+        mirrored_access(&pool, created.id, document, OWNER).await?,
         (Some("owner".into()), Some("owner".into()))
     );
 
@@ -73,15 +60,7 @@ async fn assignee_sharing_adds_manageable_collaborators_without_owner_downgrade(
         vec![user(TEAMMATE)]
     );
     assert_eq!(
-        mirrored_access(
-            &pool,
-            created.id,
-            created
-                .description_document_id
-                .expect("description document"),
-            MEMBER
-        )
-        .await?,
+        mirrored_access(&pool, created.id, document, MEMBER).await?,
         (None, None)
     );
     Ok(())

@@ -7,8 +7,8 @@ use model_entity::Entity;
 use uuid::Uuid;
 
 #[cfg(doc)]
-use crate::domain::models::owned_by_parent_domain;
-use crate::domain::models::{CollabSurface, CollabSurfaceError, SurfaceSeed};
+use crate::domain::models::SurfaceOwnership;
+use crate::domain::models::{CollabSurface, CollabSurfaceError};
 
 /// Outbound persistence port for collab surfaces.
 pub trait CollabSurfaceRepo: Send + Sync + 'static {
@@ -103,8 +103,8 @@ pub trait CollabSurfaceService: Send + Sync + 'static {
     /// - the id names a document, or a new id already has a sync-service
     ///   session → [`CollabSurfaceError::IdReserved`], before any row is
     ///   written: a new surface only ever creates its own session.
-    /// - the parent's domain owns its surfaces ([`owned_by_parent_domain`]) →
-    ///   [`CollabSurfaceError::AccessDenied`].
+    /// - the parent's domain owns its surfaces
+    ///   ([`SurfaceOwnership::ParentDomain`]) → [`CollabSurfaceError::AccessDenied`].
     ///
     /// Concurrent ensures for the same id converge: the insert is
     /// conflict-tolerant and the initializer treats an already-initialized
@@ -148,8 +148,8 @@ pub trait CollabSurfaceService: Send + Sync + 'static {
 
     /// Soft-delete a surface. Requires an edit-capable permission on the
     /// parent, and a parent whose domain does not own its surfaces
-    /// ([`owned_by_parent_domain`]): a deleted id never comes back, so only the
-    /// owning domain may retire one. The sync-service session is not reclaimed
+    /// ([`SurfaceOwnership::ParentDomain`]): a deleted id never comes back, so
+    /// only the owning domain may retire one. The sync-service session is not reclaimed
     /// (documented gap shared with documents); deletion makes the surface
     /// unmintable, which cuts off all access.
     fn delete_surface(
@@ -158,22 +158,26 @@ pub trait CollabSurfaceService: Send + Sync + 'static {
         parent_receipt: EntityAccessReceipt<AnyEntityPermission>,
         id: Uuid,
     ) -> impl Future<Output = Result<(), CollabSurfaceError>> + Send;
+}
 
-    /// Ensure a surface owned by another domain, which has already authorized
-    /// the caller against `parent` (or is creating `parent` itself, so it may
-    /// not exist yet). Same convergence rules as
-    /// [`CollabSurfaceService::ensure_surface`], plus the choice of `seed`.
-    /// For internal callers only; never expose it to a caller-chosen id.
-    fn internal_ensure_surface(
+/// Surfaces a parent's domain owns ([`SurfaceOwnership::ParentDomain`]). That
+/// domain has already authorized its caller, so these take no receipt; keep
+/// them out of reach of caller-chosen ids.
+pub trait OwnedSurfaceService: Send + Sync + 'static {
+    /// Idempotently bind surface `id`, parented by `parent`, to the existing
+    /// sync-service session of the document with the same id, which the
+    /// owning domain has verified belongs to `parent`. The CRDT is reused
+    /// as-is and never initialized here: while the document's own session is
+    /// still missing the surface stays `pending` and this returns
+    /// [`CollabSurfaceError::NotReady`].
+    fn adopt_document_session(
         &self,
         parent: Entity<'static>,
         id: Uuid,
-        seed: SurfaceSeed,
     ) -> impl Future<Output = Result<CollabSurface, CollabSurfaceError>> + Send;
 
-    /// Soft-delete a surface for the domain that owns it. Idempotent. For
-    /// internal callers only.
-    fn internal_delete_surface(
+    /// Soft-delete a surface for the domain that owns it. Idempotent.
+    fn retire_surface(
         &self,
         id: Uuid,
     ) -> impl Future<Output = Result<(), CollabSurfaceError>> + Send;

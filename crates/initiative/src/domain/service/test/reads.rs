@@ -134,13 +134,9 @@ async fn failed_property_initialization_compensates_project_and_description() {
         .return_once(|_| Box::pin(async { Ok(None) }));
     repo.expect_create()
         .return_once(|_, _, _| Box::pin(async { Ok(detail(Vec::new())) }));
-    repo.expect_delete().times(1).return_once(|_| {
-        Box::pin(async {
-            Ok(crate::domain::models::DeletedInitiative {
-                description: description(),
-            })
-        })
-    });
+    repo.expect_delete()
+        .times(1)
+        .return_once(|_| Box::pin(async { Ok(description()) }));
     let mut documents = MockInitiativeDescriptionDocuments::new();
     documents
         .expect_create()
