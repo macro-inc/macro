@@ -51,6 +51,7 @@ import {
   type Client as GraphqlWsClient,
 } from 'graphql-ws';
 import { match } from 'ts-pattern';
+import { delegateChannelNotificationRefresh } from '../../queries/channel/notification-refresh';
 import type { SoupApiItem } from './generated/schemas/soupApiItem';
 import type { SoupCalendarEventSoupPropertiesField } from './generated/schemas/soupCalendarEventSoupPropertiesField';
 import type { SoupCalendarEventTime } from './generated/schemas/soupCalendarEventTime';
@@ -498,6 +499,7 @@ export function getGraphqlSoupClient(): Client {
             // Preserve the optimistic layer on transport failures and on
             // application failures the server explicitly allows us to retry.
             shouldRetryMutation: shouldRetryGraphqlMutation,
+            delegateRevalidation: delegateChannelNotificationRefresh,
           }),
           graphqlSoupSubscriptionExchange(graphqlWsClient),
           fetchExchange,

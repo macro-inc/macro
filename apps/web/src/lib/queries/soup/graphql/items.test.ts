@@ -75,6 +75,10 @@ vi.mock('@queries/client', async () => {
 });
 
 import { queryClient } from '@queries/client';
+import {
+  delegateChannelNotificationRefresh,
+  disposeChannelNotificationRefresh,
+} from '../../channel/notification-refresh';
 import { getActiveGraphqlSoupRevalidations } from './active-queries';
 import { createGraphqlSoupAstItemsQuery } from './items';
 import {
@@ -555,6 +559,72 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       }
     } finally {
       dispose();
+    }
+  });
+
+  it('keeps loaded channel pages registered for retry after a transient refresh failure', async () => {
+    vi.useFakeTimers();
+    const visibility = vi
+      .spyOn(document, 'hidden', 'get')
+      .mockReturnValue(false);
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    makeGraphqlSoupInputMock.mockImplementation(({ cursor }) =>
+      cursor ? { continuation: { cursor } } : { initial: { limit: 50 } }
+    );
+    const { query, dispose } = createRoot((dispose) => ({
+      dispose,
+      query: createGraphqlSoupAstItemsQuery(
+        () => ({ params: {}, body: {} }),
+        () => ({ enabled: true, projection: 'channel-list' })
+      ),
+    }));
+    const error = new CombinedError({ networkError: new Error('offline') });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const pageData = graphqlSoupPage({ items: [], next_cursor: null });
+    const refresh = vi
+      .fn()
+      .mockReturnValueOnce({
+        toPromise: async () => {
+          fake.executions[1].fail(error);
+          return { error };
+        },
+      })
+      .mockReturnValue({
+        toPromise: async () => {
+          fake.executions[1].next(pageData);
+          return { data: pageData };
+        },
+      });
+    fake.client.query = refresh as unknown as Client['query'];
+    try {
+      fake.executions[0].next(
+        graphqlSoupPage({ items: [], next_cursor: 'next' })
+      );
+      const more = query.fetchNextPage();
+      fake.executions[1].next(pageData);
+      await more;
+      const page = getActiveGraphqlSoupRevalidations().find(
+        (entry) => entry.variables?.input?.continuation?.cursor === 'next'
+      )!;
+      expect(delegateChannelNotificationRefresh(fake.client, page)).toBe(true);
+      await vi.advanceTimersByTimeAsync(100);
+      expect(refresh).toHaveBeenCalledOnce();
+      expect(query.error()).toBe(error);
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(refresh).toHaveBeenCalledTimes(2);
+      expect(refresh).toHaveBeenLastCalledWith(page.document, page.variables, {
+        requestPolicy: 'network-only',
+      });
+      expect(query.error()).toBeUndefined();
+      query.resetToInitialPage();
+      expect(delegateChannelNotificationRefresh(fake.client, page)).toBe(false);
+    } finally {
+      dispose();
+      disposeChannelNotificationRefresh(fake.client);
+      warn.mockRestore();
+      visibility.mockRestore();
+      vi.useRealTimers();
     }
   });
 

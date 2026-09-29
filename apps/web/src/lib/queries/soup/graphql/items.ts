@@ -53,6 +53,7 @@ import {
   untrack,
 } from 'solid-js';
 import { NIL as NIL_UUID } from 'uuid';
+import { registerChannelNotificationRefresh } from '../../channel/register-notification-refresh';
 import type { SoupAstBody, SoupAstItemsData, SoupAstParams } from '../items';
 import { soupPageTimestamp } from '../page-timestamp';
 import {
@@ -683,8 +684,37 @@ export function createGraphqlSoupAstItemsQuery(
           ? [{ document: queryDocument(), variables: { input } }]
           : [];
       });
-    })
+    }, getGraphqlSoupClient)
   );
+
+  registerChannelNotificationRefresh(() => ({
+    client: getGraphqlSoupClient(),
+    // urql retains loaded pages after errors; keep them registered for retry.
+    queries:
+      options().projection === 'channel-list'
+        ? [...new Set([null, ...(query.data?.pageParams ?? [])])].flatMap(
+            (cursor) => {
+              const input = inputForCursor(cursor);
+              return input
+                ? [{ document: queryDocument(), variables: { input } }]
+                : [];
+            }
+          )
+        : [],
+    reader: {
+      enabled: query.isEnabled && !options().networkPaused,
+      fetching: query.isFetching,
+      filtered: true,
+      notificationIds: query.isSuccess
+        ? (query.data?.records() ?? []).flatMap((item) =>
+            item.__typename === 'GraphqlSoupChannel' &&
+            'unreadNotifications' in item
+              ? (item.unreadNotifications?.map((n) => n.id) ?? [])
+              : []
+          )
+        : [],
+    },
+  }));
 
   // Capture membership/sort evidence for each published projection, so a later
   // cache revision cannot change the baseline of an in-flight reconciliation.
@@ -914,6 +944,8 @@ export function createGraphqlSoupAstItemsQuery(
     },
     refresh: async () => {
       if (firstPageInput() === undefined) return;
+      // An explicit list refresh rebuilds the cursor chain in order. The
+      // notification queue observes isFetching and waits for this to finish.
       await query.refetch({
         requestPolicy: 'network-only',
         throwOnError: true,

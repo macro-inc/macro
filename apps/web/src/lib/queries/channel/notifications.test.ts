@@ -3,14 +3,17 @@ import type { GraphqlNotificationPatch } from '@service-storage/graphql-soup-web
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getActiveGraphqlSoupRevalidations } from '../soup/graphql/active-queries';
+import {
+  channelNotificationRefresh,
+  disposeChannelNotificationRefresh,
+} from './notification-refresh';
 import { createChannelNotificationsQuery } from './notifications';
 
 const mocks = vi.hoisted(() => ({
   createQuery: vi.fn(),
   refetch: vi.fn().mockResolvedValue(undefined),
   subscribe: vi.fn(),
-  unsubscribe: vi.fn(),
-  client: {},
+  client: { query: vi.fn() },
 }));
 vi.mock('@app/lib/urql-solid', () => ({ createUrqlQuery: mocks.createQuery }));
 vi.mock('@service-storage/graphql-soup', () => ({
@@ -23,23 +26,34 @@ vi.mock('@service-storage/graphql-soup-websocket', () => ({
 let dispose: () => void;
 afterEach(() => {
   dispose?.();
+  disposeChannelNotificationRefresh(mocks.client as never);
   vi.useRealTimers();
   vi.clearAllMocks();
+  vi.restoreAllMocks();
 });
 
 function setup() {
   vi.useFakeTimers();
-  mocks.subscribe.mockReturnValue(mocks.unsubscribe);
+  vi.spyOn(document, 'hidden', 'get').mockReturnValue(false);
+  mocks.client.query.mockImplementation(() => ({
+    toPromise: async () => {
+      await mocks.refetch();
+      return {};
+    },
+  }));
   mocks.createQuery.mockReturnValue({ refetch: mocks.refetch });
   return createRoot((cleanup) => {
     dispose = cleanup;
     const [enabled, setEnabled] = createSignal(true);
     createChannelNotificationsQuery('channel', enabled);
     const patch = (entityId = 'channel', kind = 'GraphqlNewNotification') => {
-      mocks.subscribe.mock.calls[0][0]({
-        __typename: kind,
-        notification: { entityType: 'CHANNEL', entityId },
-      } as GraphqlNotificationPatch);
+      channelNotificationRefresh(mocks.client as never).onPatch(
+        {
+          __typename: kind,
+          notification: { entityType: 'CHANNEL', entityId },
+        } as GraphqlNotificationPatch,
+        false
+      );
     };
     return { setEnabled, patch };
   });
@@ -69,9 +83,8 @@ describe('complete channel notification edge', () => {
     f.patch('channel', 'GraphqlUpdatedNotification');
     await vi.advanceTimersByTimeAsync(100);
     expect(mocks.refetch).toHaveBeenCalledOnce();
-    expect(mocks.refetch).toHaveBeenCalledWith({
+    expect(mocks.client.query.mock.calls[0][2]).toEqual({
       requestPolicy: 'network-only',
-      throwOnError: true,
     });
     f.setEnabled(false);
     f.patch();
@@ -104,7 +117,7 @@ describe('complete channel notification edge', () => {
     dispose();
     await vi.advanceTimersByTimeAsync(100);
     expect(mocks.refetch).not.toHaveBeenCalled();
-    expect(mocks.unsubscribe).toHaveBeenCalledOnce();
+    expect(mocks.subscribe).not.toHaveBeenCalled();
     expect(getActiveGraphqlSoupRevalidations()).toHaveLength(0);
   });
 });

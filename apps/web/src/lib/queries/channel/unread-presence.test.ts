@@ -91,6 +91,7 @@ describe('channel unread presence query', () => {
   });
 
   it('shares bounded notification revalidation and unregisters on disposal', async () => {
+    const visible = vi.spyOn(document, 'hidden', 'get').mockReturnValue(false);
     const f = setup();
     try {
       f.setEnabled(true);
@@ -103,12 +104,19 @@ describe('channel unread presence query', () => {
         typeof f.client,
         'query'
       >);
-      expect(query).toHaveBeenCalledWith(
+      expect(query).not.toHaveBeenCalled();
+      const ownQuery = vi.spyOn(f.client, 'query');
+      await revalidateChannelLists(f.client);
+      await vi.waitFor(() => expect(ownQuery).toHaveBeenCalledOnce());
+      expect(ownQuery).toHaveBeenCalledWith(
         ChannelUnreadPresenceDocument,
         { input: { initial: { limit: 500 } } },
         { requestPolicy: 'network-only' }
       );
+      f.respond('SEEN');
+      expect(f.query.data).toEqual([{ id: 'one', state: 'SEEN' }]);
     } finally {
+      visible.mockRestore();
       f.dispose();
     }
     expect(getChannelListRevalidations()).toHaveLength(0);

@@ -684,6 +684,10 @@ describe('normalizedCacheExchange', () => {
     expect(host.writes[0]?.data).toBe(data);
     expect(results).toHaveLength(1);
     expect(results[0]?.data).toBe(data);
+    expect(normalizedCacheResultMetadata(results[0]!)).toEqual({
+      source: 'live-network',
+      cacheEffectsApplied: true,
+    });
   });
 
   it('deletes the exact normalized key from subscription patches', async () => {
@@ -929,6 +933,10 @@ describe('normalizedCacheExchange', () => {
     expect(host.invalidations).toEqual([['GraphqlSoupDocument:document-2']]);
     expect(results).toHaveLength(1);
     expect(results[0]?.data).toBe(data);
+    expect(normalizedCacheResultMetadata(results[0]!)).toEqual({
+      source: 'live-network',
+      cacheEffectsApplied: false,
+    });
   });
 
   it('cache-first miss forwards to network and writes through', async () => {
@@ -3330,6 +3338,64 @@ describe('normalizedCacheExchange', () => {
       expect(vi.mocked(client.query).mock.calls[0]?.[2]).toEqual({
         requestPolicy: 'network-only',
       });
+    });
+
+    it.each([true, false])(
+      'delegates persisted commit revalidations only when an owner accepts: %s',
+      async (handled) => {
+        const commit = host.commitOptimisticWrite.bind(host);
+        host.commitOptimisticWrite = async (transactionId, claim, args) => ({
+          ...(await commit(transactionId, claim, args)),
+          revalidations: [
+            {
+              query: stringifyDocument(QUERY),
+              operationName: 'Soup',
+              variablesJson: '{"input":{"limit":2}}',
+            },
+          ],
+        });
+        const delegateRevalidation = vi.fn(() => handled);
+        const { ops, client, results } = harness(host, undefined, {
+          delegateRevalidation,
+        });
+        ops.next(makeMutationOp(1, optimistic));
+        await tick();
+        expect(delegateRevalidation).toHaveBeenCalledWith(client, {
+          document: expect.any(Object),
+          variables: { input: { limit: 2 } },
+        });
+        expect(vi.mocked(client.query)).toHaveBeenCalledTimes(handled ? 0 : 1);
+        expect(results[0]?.error).toBeUndefined();
+        expect(host.commits).toHaveLength(1);
+      }
+    );
+
+    it('preserves a committed mutation when delegated reconciliation fails', async () => {
+      const commit = host.commitOptimisticWrite.bind(host);
+      host.commitOptimisticWrite = async (transactionId, claim, args) => ({
+        ...(await commit(transactionId, claim, args)),
+        revalidations: [
+          {
+            query: stringifyDocument(QUERY),
+            operationName: 'Soup',
+            variablesJson: '{}',
+          },
+        ],
+      });
+      const error = new Error('refresh owner unavailable');
+      const onCacheError = vi.fn();
+      const { ops, results } = harness(host, undefined, {
+        delegateRevalidation: () => {
+          throw error;
+        },
+        onCacheError,
+      });
+      ops.next(makeMutationOp(1, optimistic));
+      await tick();
+      expect(onCacheError).toHaveBeenCalledWith(error, expect.any(Object));
+      expect(results[0]?.error).toBeUndefined();
+      expect(host.commits).toHaveLength(1);
+      expect(host.rollbacks).toHaveLength(0);
     });
 
     it('rolls back on a GraphQL error result', async () => {
