@@ -2,12 +2,9 @@ import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { Property } from '@property/types';
 import { createRoot, createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
-import type {
-  PendingProject,
-  ProjectRow,
-  ProjectsSource,
-} from '../context/projects-context';
+import type { PendingProject, ProjectRow } from '../context/projects-context';
 import type { ProjectFilters } from '../core/project';
+import { emptySource, noPendingProjects } from '../tests/fixtures';
 import { createProjectCollection } from './project-collection';
 
 describe('project collection', () => {
@@ -163,7 +160,7 @@ describe('project collection', () => {
         row('older'),
       ]);
       const [pending, setPending] = createSignal<readonly PendingProject[]>([
-        pendingProject('pending-project-1', 'in-progress'),
+        pendingProject('pending-project-1', 'creating', 'in-progress'),
       ]);
       const open = vi.fn();
       const collection = createProjectCollection({
@@ -173,13 +170,17 @@ describe('project collection', () => {
         createPendingSource: () => ({ projects: pending }),
       });
       const shown = () =>
-        collection
-          .items()
-          .flatMap((item) =>
-            item.kind === 'entity'
-              ? [[item.entity.id, item.entity.pending ?? false]]
-              : []
-          );
+        collection.items().flatMap((item) =>
+          item.kind === 'entity'
+            ? [
+                {
+                  id: item.entity.id,
+                  pending: item.entity.pending ?? false,
+                  drafted: item.entity.properties.length > 0,
+                },
+              ]
+            : []
+        );
       const entityKey = (id: string) =>
         collection
           .items()
@@ -193,29 +194,59 @@ describe('project collection', () => {
       ]);
       collection.setGroupBy('none');
       expect(shown()).toEqual([
-        ['pending-project-1', true],
-        ['older', false],
+        { id: 'pending-project-1', pending: true, drafted: true },
+        { id: 'older', pending: false, drafted: false },
       ]);
       // It may not exist yet, so it can be neither opened nor batch-selected.
       collection.list.activate.key(entityKey('pending-project-1'));
       collection.list.selection.select(entityKey('pending-project-1'));
       expect(open).not.toHaveBeenCalled();
       expect(collection.list.selection.count()).toBe(0);
-      // Created while its properties save; a list refresh already returns it.
-      setPending([pendingProject('created', 'in-progress')]);
+      // Created while its properties save: a list refreshed meanwhile returns
+      // it without them, and the saving row keeps its drafted values.
+      setPending([pendingProject('created', 'saving', 'in-progress')]);
       setRows([row('created'), row('older')]);
       expect(shown()).toEqual([
-        ['created', true],
-        ['older', false],
-      ]);
-      // Settled: the server row alone remains and opens normally.
-      setPending([]);
-      expect(shown()).toEqual([
-        ['created', false],
-        ['older', false],
+        { id: 'created', pending: false, drafted: true },
+        { id: 'older', pending: false, drafted: false },
       ]);
       collection.list.activate.key(entityKey('created'));
       expect(open).toHaveBeenCalledWith('created', undefined);
+      // Saved: the server row now takes precedence.
+      setPending([pendingProject('created', 'saved', 'in-progress')]);
+      expect(shown()).toEqual([
+        { id: 'created', pending: false, drafted: false },
+        { id: 'older', pending: false, drafted: false },
+      ]);
+      setPending([]);
+      expect(shown()).toEqual([
+        { id: 'created', pending: false, drafted: false },
+        { id: 'older', pending: false, drafted: false },
+      ]);
+      dispose();
+    });
+  });
+
+  it('keeps a saved project listed until a refresh includes it', () => {
+    createRoot((dispose) => {
+      const [rows, setRows] = createSignal<readonly ProjectRow[]>([
+        row('older'),
+      ]);
+      const collection = createProjectCollection({
+        userId: () => 'user',
+        createSource: () => ({ ...emptySource(), rows }),
+        createPendingSource: () => ({
+          projects: () => [pendingProject('created', 'saved')],
+        }),
+      });
+      collection.setGroupBy('none');
+      const ids = () =>
+        collection
+          .items()
+          .flatMap((item) => (item.kind === 'entity' ? [item.entity.id] : []));
+      expect(ids()).toEqual(['created', 'older']);
+      setRows([row('created'), row('older')]);
+      expect(ids()).toEqual(['created', 'older']);
       dispose();
     });
   });
@@ -224,7 +255,7 @@ describe('project collection', () => {
     createRoot((dispose) => {
       const loaded = [row('older')];
       const [pending, setPending] = createSignal<readonly PendingProject[]>([
-        pendingProject('pending-project-1'),
+        pendingProject('pending-project-1', 'creating'),
       ]);
       const collection = createProjectCollection({
         userId: () => 'user',
@@ -249,7 +280,9 @@ describe('project collection', () => {
         userId: () => 'user',
         createSource: () => ({ ...emptySource(), rows: () => [] }),
         createPendingSource: () => ({
-          projects: () => [pendingProject('pending', 'in-progress')],
+          projects: () => [
+            pendingProject('pending', 'creating', 'in-progress'),
+          ],
         }),
       });
       const count = () => {
@@ -283,11 +316,16 @@ const status: Property = {
   updatedAt: '',
 };
 
-function pendingProject(id: string, statusOption?: string): PendingProject {
+function pendingProject(
+  id: string,
+  phase: PendingProject['phase'],
+  statusOption?: string
+): PendingProject {
   return {
     id,
     name: `Project ${id}`,
     submittedAt: '2026-09-29T12:00:00.000Z',
+    phase,
     properties: statusOption
       ? [
           {
@@ -308,21 +346,5 @@ function row(id: string): ProjectRow {
       updatedAt: '',
     },
     properties: [],
-  };
-}
-
-function noPendingProjects() {
-  return { projects: () => [] };
-}
-
-function emptySource(): ProjectsSource {
-  return {
-    rows: () => undefined,
-    loading: () => false,
-    error: () => undefined,
-    hasMore: () => false,
-    loadingMore: () => false,
-    loadMore: vi.fn(async () => {}),
-    refresh: vi.fn(async () => {}),
   };
 }

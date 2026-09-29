@@ -7,33 +7,28 @@ import { useProjectsContext } from '../context/projects-context';
 import {
   createProjectComposer,
   type ProjectComposerDraft,
+  type ProjectComposerSubmission,
 } from '../primitives/create-project';
 import { withProjectPropertyValue } from '../primitives/property-draft';
 
 export function CreateProject(props: {
   initialDraft?: ProjectComposerDraft;
   onClose(): void;
-  onCreated(id: string): void;
+  /** The project is listed as pending at once; the host closes the composer. */
+  onSubmit(submission: ProjectComposerSubmission): void;
   onContinueInSplit?(draft: ProjectComposerDraft): void;
-  onFailure?(draft: ProjectComposerDraft): void;
 }) {
   const context = useProjectsContext();
   const definitions = context.createPropertyDefinitionsSource();
   const composer = createProjectComposer(
     context.createCommands(),
-    props.onCreated,
     props.initialDraft
   );
   let titleInput: HTMLInputElement | undefined;
   onMount(() => titleInput?.focus());
-  const submit = async () => {
+  const submit = () => {
     const submission = composer.submit();
-    if (!submission) return;
-    // The project is already listed as pending; the server settles it later.
-    props.onClose();
-    if ((await submission).status !== 'created') {
-      props.onFailure?.(composer.snapshot());
-    }
+    if (submission) props.onSubmit(submission);
   };
 
   return (
@@ -42,7 +37,7 @@ export function CreateProject(props: {
       aria-label="New project"
       onSubmit={(event) => {
         event.preventDefault();
-        void submit();
+        submit();
       }}
       onKeyDown={(event) => {
         if (
@@ -52,7 +47,7 @@ export function CreateProject(props: {
         ) {
           event.preventDefault();
           event.stopPropagation();
-          void submit();
+          submit();
         }
       }}
     >
@@ -65,7 +60,7 @@ export function CreateProject(props: {
                 aria-label="Continue editing in split"
                 tooltip="Continue editing in split"
                 size="icon-composer"
-                disabled={composer.pending()}
+                disabled={composer.submitted()}
                 onClick={() => props.onContinueInSplit?.(composer.snapshot())}
               >
                 <ArrowsOutIcon />
@@ -74,7 +69,7 @@ export function CreateProject(props: {
           </div>
           <Show
             when={
-              !composer.createdId() &&
+              !composer.createdId &&
               (composer.name() || composer.drafts().size > 0)
             }
           >
@@ -84,7 +79,7 @@ export function CreateProject(props: {
               variant="outline"
               depth={3}
               class="bg-surface px-3"
-              disabled={composer.pending()}
+              disabled={composer.submitted()}
               onClick={() => {
                 composer.clear();
                 titleInput?.focus();
@@ -98,7 +93,7 @@ export function CreateProject(props: {
             aria-label="Close"
             tooltip="Close"
             size="icon-composer"
-            disabled={composer.pending()}
+            disabled={composer.submitted()}
             onClick={props.onClose}
           >
             <XIcon />
@@ -114,7 +109,7 @@ export function CreateProject(props: {
               class="ph-no-capture w-full min-w-0 text-xl/7 font-medium outline-none bg-transparent placeholder:text-ink-placeholder"
               value={composer.name()}
               required
-              disabled={composer.pending() || Boolean(composer.createdId())}
+              disabled={composer.submitted() || Boolean(composer.createdId)}
               onInput={(event) => composer.setName(event.currentTarget.value)}
             />
           </EntityComposer.Title>
@@ -128,10 +123,10 @@ export function CreateProject(props: {
                       composer.drafts().get(property.propertyDefinitionId)
                         ?.value
                     )}
-                    canEdit={!composer.pending()}
+                    canEdit={!composer.submitted()}
                     entitySelfFilter={{
                       entityType: 'INITIATIVE',
-                      blockId: composer.createdId(),
+                      blockId: composer.createdId,
                     }}
                     onSave={async (_, value) => {
                       composer.saveDraft(property, value);
@@ -166,7 +161,7 @@ export function CreateProject(props: {
         <EntityComposer.Footer class="items-center flex-wrap">
           <Checkbox
             checked={composer.shareWithTeam()}
-            disabled={composer.pending() || Boolean(composer.createdId())}
+            disabled={composer.submitted() || Boolean(composer.createdId)}
             onChange={composer.setShareWithTeam}
           >
             <Checkbox.Control />
@@ -178,13 +173,9 @@ export function CreateProject(props: {
             type="submit"
             class="ml-auto"
             hasContent={Boolean(composer.name().trim())}
-            disabled={composer.pending() || !composer.name().trim()}
+            disabled={composer.submitted() || !composer.name().trim()}
           >
-            {composer.pending()
-              ? 'Saving…'
-              : composer.createdId()
-                ? 'Retry saving properties'
-                : 'Create Project'}
+            {composer.createdId ? 'Retry saving properties' : 'Create Project'}
           </EntityComposer.Submit>
         </EntityComposer.Footer>
       </EntityComposer.Root>

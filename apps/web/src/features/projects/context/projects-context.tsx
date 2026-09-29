@@ -13,8 +13,26 @@ import type {
 export type ProjectRow = {
   project: Project;
   properties: readonly Property[];
-  /** Submitted from a composer and not yet confirmed; its id may be provisional. */
+  /** Stands in for a project the server has not assigned an id yet. */
   pending?: boolean;
+};
+
+export type ProjectPropertyDraft = {
+  property: Property;
+  value: PropertyApiValues;
+};
+
+/**
+ * A composer submission shown in lists before they include it. `creating`
+ * has a provisional id; `saving` exists and its properties are in flight;
+ * `saved` has settled and waits for the lists to refresh.
+ */
+export type PendingProject = {
+  id: string;
+  name: string;
+  properties: readonly ProjectPropertyDraft[];
+  submittedAt: string;
+  phase: 'creating' | 'saving' | 'saved';
 };
 
 export type ProjectsSource = {
@@ -35,11 +53,6 @@ export type ProjectSource = {
   refresh(): Promise<void>;
 };
 
-export type ProjectPropertyDraft = {
-  property: Property;
-  value: PropertyApiValues;
-};
-
 export type ProjectCreationInput = {
   name: string;
   shareWithTeam: boolean;
@@ -48,19 +61,14 @@ export type ProjectCreationInput = {
   createdId?: string;
 };
 
-/** A failed request stays distinct from a property failure after the project exists. */
+/**
+ * A failed request stays distinct from a failure after the project exists:
+ * once created, every outcome carries its id so a retry cannot duplicate it.
+ */
 export type ProjectCreationResult =
   | { status: 'created'; id: string }
   | { status: 'failed'; error: Error }
   | { status: 'propertiesFailed'; id: string; error: Error };
-
-/** A creation the server has not settled. `id` is provisional until it is created. */
-export type PendingProject = {
-  id: string;
-  name: string;
-  properties: readonly ProjectPropertyDraft[];
-  submittedAt: string;
-};
 
 /** Capabilities supplied by the production entry point or by a test. */
 export type ProjectsContext = {
@@ -70,7 +78,7 @@ export type ProjectsContext = {
     enabled?: Accessor<boolean>
   ): ProjectsSource;
   createProjectSource(id: Accessor<string>): ProjectSource;
-  /** Every composer's in-flight creations, including composers that have closed. */
+  /** Every composer's unlisted creations, including composers that have closed. */
   createPendingProjectsSource(): {
     projects: Accessor<readonly PendingProject[]>;
   };
@@ -92,7 +100,7 @@ export type ProjectsContext = {
     pending: Accessor<boolean>;
     /**
      * Lists the project as pending at once, then creates it and saves its
-     * properties. Settles only after the server confirms, and never rejects.
+     * properties. Settles once the server has, and never rejects.
      */
     create(input: ProjectCreationInput): Promise<ProjectCreationResult>;
     rename(id: string, name: string): Promise<void>;

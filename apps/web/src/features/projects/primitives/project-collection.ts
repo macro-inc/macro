@@ -99,9 +99,13 @@ export function createProjectCollection(capabilities: {
       if (error) return { kind: 'error', error };
       return { kind: 'loading' };
     }
+    // Filters are only tracked here while something is pending.
+    const projects = pending.projects();
     return {
       kind: 'ready',
-      rows: withPendingProjects(rows, pending.projects(), filters()),
+      rows: projects.length
+        ? withPendingProjects(rows, projects, filters())
+        : rows,
       backgroundError: source.error(),
     };
   });

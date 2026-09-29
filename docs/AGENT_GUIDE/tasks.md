@@ -129,17 +129,20 @@ Submit with
 `Create Project` or Cmd/Ctrl+Enter. `Continue editing in split` preserves the
 name, properties, and sharing choice; `Clear Draft` resets an uncreated draft.
 Leaving a property unset keeps its normal server default.
-Submitting closes the composer at once. The Projects list shows the new project
-immediately as a dimmed row at the top, in the group of its selected Status and
-only under filters that match it. It cannot be opened, selected, or edited
-while the project and its properties save. Once the server confirms and the
-list refreshes, the saved row replaces it in place, without a duplicate.
-Creating from the popover then opens the project in another split; creating
-from a full composer returns that split to Projects, then to the project.
-If creation fails, the dimmed row disappears and the composer reopens with the
-draft and the error. If creation succeeds but a property write fails, the
-composer reopens with `Retry saving properties`, which finishes the existing
-project, including after continuing in a split, without creating a duplicate.
+Submitting closes the composer at once; a full composer returns its split to
+Projects, and Back skips the submitted composer. The Projects list shows the
+new project immediately at the top, in the group of its selected Status and
+only under filters that match it. Until the server creates it, the row is
+dimmed and cannot be opened, selected, or edited; once created it is a normal
+row showing the selected values while they save, and the refreshed server row
+replaces it in place without a duplicate. If the list cannot refresh, the row
+stays for up to a minute. When everything is saved, a `Project created` toast
+offers `Open` and `Open (New Split)`; nothing navigates on its own.
+If creation fails, the dimmed row disappears and the composer reopens as a
+popover with the draft and the error. If creation succeeds but a property write
+fails, the project stays listed without those values and the composer reopens
+with `Retry saving properties`, which finishes the existing project, including
+after continuing in a split, without creating a duplicate.
 Closing the popover without submitting keeps the underlying view open.
 
 Opening a project keeps the Tasks workspace and its navigation. The top bar

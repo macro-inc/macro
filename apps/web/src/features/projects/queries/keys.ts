@@ -1,7 +1,6 @@
 import { createQueryKeys } from '@lukemorales/query-key-factory';
 
 export const projectKeys = createQueryKeys('initiatives', {
-  create: null,
   createTask: (id: string) => [id],
   detail: (userId: string | undefined, id: string) => ({
     queryKey: [userId, id],
@@ -12,4 +11,6 @@ export const projectKeys = createQueryKeys('initiatives', {
   taskReferences: (userId: string | undefined, ids: readonly string[]) => ({
     queryKey: [userId, [...ids].sort()],
   }),
+  /** Composer submissions not yet in the lists; client-only, never fetched. */
+  pending: null,
 });

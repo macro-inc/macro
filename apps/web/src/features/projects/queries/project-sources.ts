@@ -5,6 +5,7 @@ import {
   type BulkSaveEntityPropertiesInput,
   createGraphqlBulkSaveEntityPropertiesMutation,
   refetchGraphqlInitiativeProperties,
+  saveGraphqlEntityProperties,
 } from '@queries/properties/graphql/entity';
 import { propertiesKeys } from '@queries/properties/keys';
 import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
@@ -17,7 +18,7 @@ import {
   useQuery,
 } from '@tanstack/solid-query';
 import type { Client } from '@urql/core';
-import { type Accessor, createRoot } from 'solid-js';
+import type { Accessor } from 'solid-js';
 import type {
   ProjectPropertyDraft,
   ProjectsContext,
@@ -26,12 +27,12 @@ import { assignProjectTasks } from '../core/assignment';
 import type { ProjectDetail, TaskProjectReference } from '../core/project';
 import {
   createProjectCreationMutation,
+  type ProjectCreationCapabilities,
   usePendingProjects,
 } from './create-project';
 import { createProjectTaskMutation } from './create-project-task';
 import { projectKeys } from './keys';
 import { projectDetailQueryOptions } from './project-identity';
-import { toProjectDetail } from './project-model';
 import { projectDefinitionProperties } from './project-properties';
 import { createProjectSoupSource } from './project-soup';
 
@@ -52,46 +53,6 @@ const propertyInput = (
   })),
 });
 
-async function refreshSavedProperties(
-  cache: QueryClient,
-  input: BulkSaveEntityPropertiesInput
-) {
-  await Promise.all([
-    ...[...new Set(input.properties.map(({ entityId }) => entityId))].map(
-      refetchGraphqlInitiativeProperties
-    ),
-    ...input.properties.map(({ entityId }) =>
-      cache.invalidateQueries({
-        queryKey: propertiesKeys.entity({
-          entityType: 'INITIATIVE',
-          entityId,
-        }).queryKey,
-      })
-    ),
-  ]);
-}
-
-/**
- * The composer closes before its project exists, so a creation cannot save
- * through the composer's mutation observer. Each save owns a root instead.
- */
-function saveCreatedProjectProperties(
-  cache: QueryClient,
-  id: string,
-  properties: readonly ProjectPropertyDraft[]
-) {
-  return createRoot(async (dispose) => {
-    try {
-      const result = await createGraphqlBulkSaveEntityPropertiesMutation({
-        onSuccess: (input) => refreshSavedProperties(cache, input),
-      }).mutateAsync(propertyInput(id, properties));
-      if (result.error) throw result.error;
-    } finally {
-      dispose();
-    }
-  });
-}
-
 /** GraphQL Soup lists projects and holds the optimistic rows of their tasks. */
 export type ProjectSoupTransport = {
   client(): Client;
@@ -111,6 +72,21 @@ export function createProjectSources(
       cache.invalidateQueries({ queryKey: projectKeys._def }),
       refreshActiveGraphqlSoupQueries(),
     ]);
+  };
+  // Context-scoped, so a finished creation holds no closed composer's scope.
+  const creation: ProjectCreationCapabilities = {
+    create: (input) => throwOnErr(() => client.create(input)),
+    saveProperties: (id, properties) =>
+      saveGraphqlEntityProperties(propertyInput(id, properties)),
+    // Only the new project and the lists can have changed.
+    revalidate: async (id) => {
+      await Promise.all([
+        cache.invalidateQueries({
+          queryKey: projectKeys.detail(userId(), id).queryKey,
+        }),
+        refreshActiveGraphqlSoupQueries({ throwOnError: true }),
+      ]);
+    },
   };
   const context: ProjectsContext = {
     userId,
@@ -261,16 +237,6 @@ export function createProjectSources(
           ]);
         }
       );
-      const creation = createProjectCreationMutation(
-        {
-          create: async (input) =>
-            toProjectDetail(await throwOnErr(() => client.create(input))),
-          saveProperties: (id, properties) =>
-            saveCreatedProjectProperties(cache, id, properties),
-          refresh,
-        },
-        cache
-      );
       const update = useMutation(
         () => ({
           mutationFn: ({
@@ -294,7 +260,20 @@ export function createProjectSources(
       );
       const property = createGraphqlBulkSaveEntityPropertiesMutation({
         onSuccess: async (input) => {
-          await Promise.all([refresh(), refreshSavedProperties(cache, input)]);
+          await Promise.all([
+            refresh(),
+            ...[
+              ...new Set(input.properties.map(({ entityId }) => entityId)),
+            ].map(refetchGraphqlInitiativeProperties),
+            ...input.properties.map(({ entityId }) =>
+              cache.invalidateQueries({
+                queryKey: propertiesKeys.entity({
+                  entityType: 'INITIATIVE',
+                  entityId,
+                }).queryKey,
+              })
+            ),
+          ]);
         },
       });
       const assign = useMutation(
@@ -344,12 +323,11 @@ export function createProjectSources(
       return {
         createTask,
         pending: () =>
-          creation.pending() ||
           update.isPending ||
           remove.isPending ||
           property.isPending ||
           assign.isPending,
-        create: creation.create,
+        create: createProjectCreationMutation(creation, cache),
         rename: async (id, name) => {
           await update.mutateAsync({ id, name });
         },

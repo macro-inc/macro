@@ -13,6 +13,7 @@ import type { Property, PropertyApiValues } from '@property/types';
 import { cn } from '@ui';
 import { For, Show, Suspense } from 'solid-js';
 import type { ProjectRow as ProjectRowData } from '../context/projects-context';
+import { canEditProject } from '../core/project';
 
 // Projects reuse the task grid; its project column holds the due date.
 const gridStyle = taskGridTemplate({ indicator: true, project: true });
@@ -65,10 +66,7 @@ export function ProjectRow(props: {
   onChecked(selected: boolean, shiftKey: boolean): void;
   onSave(property: Property, value: PropertyApiValues): Promise<void>;
 }) {
-  const canEdit = () =>
-    !props.row.pending &&
-    (props.row.project.access === 'edit' ||
-      props.row.project.access === 'owner');
+  const canEdit = () => !props.row.pending && canEditProject(props.row.project);
   const properties = () => [...props.row.properties];
   const propertyFor = (id: string) =>
     props.row.properties.find(
@@ -110,7 +108,7 @@ export function ProjectRow(props: {
             'bg-list-selected-highlighted': props.checked && props.highlighted,
             'bg-list-highlighted': props.highlighted && !props.checked,
             'hover:bg-list-hover': !props.highlighted && !props.checked,
-            // Saving: the real row, dimmed, until the server confirms it.
+            // Being created: no server id yet.
             'opacity-60': props.row.pending,
           }
         )}

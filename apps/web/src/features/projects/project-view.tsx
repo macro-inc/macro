@@ -3,12 +3,21 @@ import {
   tasksProjectsRoute,
 } from '@app/features/tasks-view/route';
 import { useNavigate, useSplitHistory } from '@app/lib/split-router';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
-import { createEffect, onCleanup, onMount } from 'solid-js';
-import { type ProjectRoute, projectRouteId } from './core/route';
-import type { ProjectComposerDraft } from './primitives/create-project';
+import { toast } from '@core/component/Toast/Toast';
+import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
+import SplitIcon from '@phosphor/square-half.svg';
+import { createEffect, onMount } from 'solid-js';
+import type { ProjectRoute } from './core/route';
+import { openProject } from './open-project';
+import {
+  failedProjectDraft,
+  type ProjectComposerDraft,
+  type ProjectComposerSubmission,
+} from './primitives/create-project';
 import { Projects } from './projects';
 import { CreateProject } from './views/create-project';
 
@@ -57,32 +66,69 @@ export function ProjectView(props: { route: ProjectRoute }) {
   return null;
 }
 
+/**
+ * The composer is gone before the server answers, so the outcome uses only
+ * the app's split manager, never the closed composer's panel. Like task
+ * creation, success offers to open the project rather than navigating away
+ * from wherever the user has gone since.
+ */
+async function settleProjectSubmission({
+  draft,
+  result,
+}: ProjectComposerSubmission) {
+  const outcome = await result;
+  const manager = globalSplitManager();
+  if (!manager) return;
+  if (outcome.status !== 'created') {
+    manager.createPopoverSplit({
+      content: {
+        type: 'component',
+        id: 'project-compose',
+        params: { initialDraft: failedProjectDraft(draft, outcome) },
+      },
+    });
+    return;
+  }
+  toast.success('Project created', {
+    actions: [
+      {
+        label: 'Open',
+        icon: ArrowSquareOutIcon,
+        onClick: () => openProject(manager, outcome.id),
+      },
+      {
+        label: 'Open (New Split)',
+        icon: SplitIcon,
+        onClick: () => openProject(manager, outcome.id, { newSplit: true }),
+      },
+    ],
+  });
+}
+
 export function CreateProjectView(props: {
   initialDraft?: ProjectComposerDraft;
 }) {
   const layout = useSplitLayout();
   const panel = useSplitPanelOrThrow();
-  let disposed = false;
-  onCleanup(() => {
-    disposed = true;
-  });
   onMount(() => panel.handle.setDisplayName('New project'));
+  // A full composer returns its split to Projects; a submitted one also
+  // leaves history, so Back does not reopen an empty composer.
+  const close = (mergeHistory?: boolean) => {
+    if (panel.handle.isPopover()) {
+      panel.handle.close();
+      return;
+    }
+    layout.replaceSplit({
+      content: { type: 'component', id: 'tasks-projects' },
+      mergeHistory,
+    });
+  };
   return (
     <Projects>
       <SplitPanel.Root class="bg-transparent">
         <SplitPanel.Body>
           <CreateProject
             initialDraft={props.initialDraft}
-            onFailure={(initialDraft) => {
-              // Submitting closes the composer before the server answers.
-              // Restore its failed draft just like the task composer does.
-              if (disposed)
-                layout.popoverSplit({
-                  type: 'component',
-                  id: 'project-compose',
-                  params: { initialDraft },
-                });
-            }}
             onContinueInSplit={
               panel.handle.isPopover()
                 ? (initialDraft) => {
@@ -98,29 +144,10 @@ export function CreateProjectView(props: {
                   }
                 : undefined
             }
-            onClose={() => {
-              if (panel.handle.isPopover()) {
-                panel.handle.close();
-                return;
-              }
-              layout.replaceSplit({
-                content: { type: 'component', id: 'tasks-projects' },
-              });
-            }}
-            onCreated={(id) => {
-              // Runs once the server confirms, after submitting closed the
-              // composer: a popover's project opens beside the current view,
-              // and a split's replaces the Projects list it returned to.
-              const content = {
-                type: 'component' as const,
-                id: projectRouteId({ id, section: 'overview' }),
-              };
-              if (panel.handle.isPopover()) {
-                panel.handle.close();
-                layout.openWithSplit(content, { preferNewSplit: true });
-                return;
-              }
-              layout.replaceSplit({ content });
+            onClose={() => close()}
+            onSubmit={(submission) => {
+              close(true);
+              void settleProjectSubmission(submission);
             }}
           />
         </SplitPanel.Body>

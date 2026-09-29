@@ -15,7 +15,7 @@ function pendingProjectRow(project: PendingProject): ProjectRow {
     properties: project.properties.map(({ property, value }) =>
       withProjectPropertyValue(property, value)
     ),
-    pending: true,
+    pending: project.phase === 'creating',
   };
 }
 
@@ -68,15 +68,19 @@ function matchesProjectFilters(row: ProjectRow, filters: ProjectFilters) {
 }
 
 /**
- * New projects lead the newest-first list while they save, standing in for
- * their server row once it exists so reconciliation never shows both.
+ * New projects lead the newest-first list. While being created or saved they
+ * stand in for their server row, so a refresh mid-save neither duplicates the
+ * row nor drops its drafted values. Once saved, they only fill in until the
+ * refreshed list includes them.
  */
 export function withPendingProjects(
   rows: readonly ProjectRow[],
   pending: readonly PendingProject[],
   filters: ProjectFilters
 ): readonly ProjectRow[] {
+  const listed = new Set(rows.map((row) => row.project.id));
   const shown = pending
+    .filter((project) => project.phase !== 'saved' || !listed.has(project.id))
     .map(pendingProjectRow)
     .filter((row) => matchesProjectFilters(row, filters));
   if (shown.length === 0) return rows;

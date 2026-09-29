@@ -2,26 +2,43 @@ import type { Property, PropertyApiValues } from '@property/types';
 import { createSignal } from 'solid-js';
 import { match } from 'ts-pattern';
 import type {
+  ProjectCreationInput,
   ProjectCreationResult,
   ProjectPropertyDraft,
   ProjectsContext,
 } from '../context/projects-context';
 
-export type ProjectComposerDraft = {
-  name: string;
-  shareWithTeam: boolean;
-  properties: ProjectPropertyDraft[];
-  createdId?: string;
-  error?: string;
+export type ProjectComposerDraft = ProjectCreationInput & { error?: string };
+
+/** What the composer hands its host: it closes, and the host owns the outcome. */
+export type ProjectComposerSubmission = {
+  draft: ProjectComposerDraft;
+  result: Promise<ProjectCreationResult>;
 };
 
 const PROPERTIES_FAILED =
   'Your project was created, but some properties could not be saved. Retry to finish saving it.';
 
-/** Retain the created identity if a property save fails so retry cannot duplicate it. */
+/** Reopens a failed submission, keeping a created id so retry cannot duplicate it. */
+export function failedProjectDraft(
+  draft: ProjectComposerDraft,
+  result: Exclude<ProjectCreationResult, { status: 'created' }>
+): ProjectComposerDraft {
+  return match(result)
+    .with({ status: 'propertiesFailed' }, ({ id }) => ({
+      ...draft,
+      createdId: id,
+      error: PROPERTIES_FAILED,
+    }))
+    .with({ status: 'failed' }, ({ error }) => ({
+      ...draft,
+      error: error.message || 'Could not create project.',
+    }))
+    .exhaustive();
+}
+
 export function createProjectComposer(
   commands: ReturnType<ProjectsContext['createCommands']>,
-  onCreated: (id: string) => void,
   initial?: ProjectComposerDraft
 ) {
   const [name, setName] = createSignal(initial?.name ?? '');
@@ -36,47 +53,29 @@ export function createProjectComposer(
       ])
     )
   );
-  const [createdId, setCreatedId] = createSignal(initial?.createdId);
-  const [pending, setPending] = createSignal(false);
+  const createdId = initial?.createdId;
+  // A submitted composer is finished; its host closes it.
+  const [submitted, setSubmitted] = createSignal(false);
   const [error, setError] = createSignal(initial?.error);
-  // The composer may be closed by now; its signals still feed the failure draft.
-  const settle = async (creation: Promise<ProjectCreationResult>) => {
-    const result = await creation;
-    setPending(false);
-    match(result)
-      .with({ status: 'created' }, ({ id }) => onCreated(id))
-      .with({ status: 'propertiesFailed' }, ({ id }) => {
-        setCreatedId(id);
-        setError(PROPERTIES_FAILED);
-      })
-      .with({ status: 'failed' }, ({ error }) =>
-        setError(
-          createdId()
-            ? PROPERTIES_FAILED
-            : error.message || 'Could not create project.'
-        )
-      )
-      .exhaustive();
-    return result;
-  };
+  const snapshot = (): ProjectComposerDraft => ({
+    name: name(),
+    shareWithTeam: shareWithTeam(),
+    properties: [...drafts().values()],
+    createdId,
+    error: error(),
+  });
   return {
     name,
     setName,
     shareWithTeam,
     setShareWithTeam,
     drafts,
-    pending,
+    submitted,
     error,
     createdId,
-    snapshot: (): ProjectComposerDraft => ({
-      name: name(),
-      shareWithTeam: shareWithTeam(),
-      properties: [...drafts().values()],
-      createdId: createdId(),
-      error: error(),
-    }),
+    snapshot,
     clear() {
-      if (pending() || createdId()) return;
+      if (submitted() || createdId) return;
       setName('');
       setShareWithTeam(true);
       setDrafts(new Map());
@@ -89,23 +88,15 @@ export function createProjectComposer(
           value,
         })
       ),
-    /**
-     * Starts creation, or returns nothing when there is nothing to submit.
-     * The project is listed as pending at once, so callers need not wait for
-     * the returned outcome before closing the composer.
-     */
-    submit(): Promise<ProjectCreationResult> | undefined {
-      if (pending() || !name().trim()) return;
-      setPending(true);
-      setError(undefined);
-      return settle(
-        commands.create({
-          name: name().trim(),
-          shareWithTeam: shareWithTeam(),
-          properties: [...drafts().values()],
-          createdId: createdId(),
-        })
-      );
+    /** Starts creation once, or returns nothing when there is nothing to submit. */
+    submit(): ProjectComposerSubmission | undefined {
+      if (submitted() || !name().trim()) return;
+      setSubmitted(true);
+      const { error: _stale, ...draft } = snapshot();
+      return {
+        draft,
+        result: commands.create({ ...draft, name: draft.name.trim() }),
+      };
     },
   };
 }
