@@ -426,14 +426,15 @@ export function SpreadsheetComments(props: {
                       Comments attached to a sheet selection
                     </p>
                   </div>
-                  <SegmentedControl
-                    value={commentFilter()}
-                    options={COMMENT_FILTER_OPTIONS}
-                    onChange={setCommentFilter}
-                    size="sm"
-                    class="mb-3"
-                    aria-label="Filter cell comments"
-                  />
+                  <div class="mb-3">
+                    <SegmentedControl
+                      value={commentFilter()}
+                      options={COMMENT_FILTER_OPTIONS}
+                      onChange={setCommentFilter}
+                      size="sm"
+                      aria-label="Filter cell comments"
+                    />
+                  </div>
                   <Show when={selectionThreads().length === 0}>
                     <p class="py-3 text-sm text-ink-muted">
                       No cell comments yet. Select cells in the sheet to add
