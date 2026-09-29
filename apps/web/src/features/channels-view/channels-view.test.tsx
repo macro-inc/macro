@@ -294,7 +294,7 @@ describe('mobile dock search wiring', () => {
 
 describe('channel selection loading and recovery', () => {
   it.each(['pointerDown', 'keyDown', 'wheel'] as const)(
-    'captures %s in the conversation to prevent a late unread jump',
+    'stays at latest after %s and notification hydration',
     (event) => {
       setQuery({ isFetching: true, data: undefined });
       render(() => <ChannelsView />);
@@ -307,14 +307,14 @@ describe('channel selection loading and recovery', () => {
         })
       );
       expect(mocks.resolveTarget).not.toHaveBeenCalled();
-      expect(
-        screen.getByTestId('channel-detail').dataset.target
-      ).toBeUndefined();
+      expect(screen.getByTestId('channel-detail').dataset.target).toBe(
+        JSON.stringify({ kind: 'latest' })
+      );
       expect(mocks.markRead).toHaveBeenCalledOnce();
     }
   );
 
-  it('applies the unread destination after mounting when the user has not interacted', () => {
+  it('stays at latest after mounting when notifications arrive', () => {
     setQuery({ isFetching: true, data: undefined });
     render(() => <ChannelsView />);
     const composer = screen.getByRole('textbox', { name: 'Composer' });
@@ -325,7 +325,7 @@ describe('channel selection loading and recovery', () => {
       })
     );
     expect(screen.getByTestId('channel-detail').dataset.target).toBe(
-      JSON.stringify({ kind: 'message', messageId: 'unread' })
+      JSON.stringify({ kind: 'latest' })
     );
     expect(screen.getByRole('textbox', { name: 'Composer' })).toBe(composer);
   });
@@ -484,7 +484,7 @@ describe('channel selection loading and recovery', () => {
     expect(mocks.markRead).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ id: 'two' }),
       expect.anything(),
-      { scopeChannelThreads: false }
+      { channelReadScope: 'top-level' }
     );
   });
 
@@ -506,7 +506,7 @@ describe('channel selection loading and recovery', () => {
     expect(mocks.markRead).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ id: 'one' }),
       expect.anything(),
-      { scopeChannelThreads: false }
+      { channelReadScope: 'top-level' }
     );
   });
 

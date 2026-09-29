@@ -15,11 +15,6 @@ const channel = (id: string): ChannelEntity => ({
   ownerId: 'viewer',
   channelType: 'private',
 });
-const unreadTarget = {
-  kind: 'message' as const,
-  messageId: 'unread',
-  threadId: 'thread',
-};
 const disposers: (() => void)[] = [];
 afterEach(() => disposers.splice(0).forEach((dispose) => dispose()));
 
@@ -36,12 +31,10 @@ function setup() {
       status: 'pending',
     });
     const markRead = vi.fn();
-    const resolveDestination = vi.fn(() => unreadTarget);
     const detail = createChannelDetail({
       selection,
       cached,
       source: { load, refresh: vi.fn(async () => {}) },
-      resolveDestination,
       markRead,
     });
     return {
@@ -50,7 +43,6 @@ function setup() {
       setCached,
       setLoad,
       markRead,
-      resolveDestination,
     };
   });
 }
@@ -85,22 +77,20 @@ describe('channel opening', () => {
     expect(markRead).toHaveBeenCalledTimes(3);
   });
 
-  it('preserves interrupted navigation when an equivalent selection object replaces it', () => {
-    const { detail, setSelection, setLoad, resolveDestination } = setup();
-    detail.onInteraction();
+  it('keeps latest navigation when an equivalent selection object replaces it', () => {
+    const { detail, setSelection, setLoad } = setup();
     setSelection({ id: 'one' });
     setLoad({ status: 'ready', channel: channel('one') });
-    expect(detail.target()).toBeUndefined();
-    expect(resolveDestination).not.toHaveBeenCalled();
+    expect(detail.target()).toEqual({ kind: 'latest' });
   });
 
-  it('renders cached metadata before notifications and resolves the unread target once', () => {
-    const { detail, setLoad, markRead, resolveDestination } = setup();
+  it('opens cached metadata at latest before notifications and marks read once', () => {
+    const { detail, setLoad, markRead } = setup();
     expect(detail.view()).toEqual({ status: 'ready', channel: channel('one') });
-    expect(detail.target()).toBeUndefined();
+    expect(detail.target()).toEqual({ kind: 'latest' });
     expect(markRead).not.toHaveBeenCalled();
     setLoad({ status: 'ready', channel: channel('one') });
-    expect(detail.target()).toEqual(unreadTarget);
+    expect(detail.target()).toEqual({ kind: 'latest' });
     expect(markRead).toHaveBeenCalledOnce();
     setLoad({ status: 'pending' });
     expect(detail.view().status).toBe('ready');
@@ -108,28 +98,24 @@ describe('channel opening', () => {
       status: 'ready',
       channel: { ...channel('one'), notifications: () => [] },
     });
-    expect(detail.target()).toEqual(unreadTarget);
-    expect(resolveDestination).toHaveBeenCalledOnce();
+    expect(detail.target()).toEqual({ kind: 'latest' });
     expect(markRead).toHaveBeenCalledOnce();
   });
 
   it('uses explicit targets immediately, including a new target during refresh', () => {
-    const { detail, setSelection, setLoad, resolveDestination } = setup();
+    const { detail, setSelection, setLoad } = setup();
     setSelection({ id: 'one', target: { messageId: 'explicit' } });
     expect(detail.target()).toEqual({ kind: 'message', messageId: 'explicit' });
     setLoad({ status: 'ready', channel: channel('one') });
     setLoad({ status: 'pending' });
     setSelection({ id: 'one', target: { messageId: 'another' } });
     expect(detail.target()).toEqual({ kind: 'message', messageId: 'another' });
-    expect(resolveDestination).not.toHaveBeenCalled();
   });
 
-  it('lets interaction cancel late automatic navigation without skipping read marking', () => {
-    const { detail, setLoad, markRead, resolveDestination } = setup();
-    detail.onInteraction();
+  it('stays at latest when notification hydration completes', () => {
+    const { detail, setLoad, markRead } = setup();
     setLoad({ status: 'ready', channel: channel('one') });
-    expect(detail.target()).toBeUndefined();
-    expect(resolveDestination).not.toHaveBeenCalled();
+    expect(detail.target()).toEqual({ kind: 'latest' });
     expect(markRead).toHaveBeenCalledOnce();
   });
 
@@ -141,7 +127,7 @@ describe('channel opening', () => {
     setLoad({ status: 'pending' });
     expect(detail.view().status).toBe('ready');
     setLoad({ status: 'ready', channel: channel('one') });
-    expect(detail.target()).toBeUndefined();
+    expect(detail.target()).toEqual({ kind: 'latest' });
     expect(markRead).toHaveBeenCalledOnce();
   });
 
@@ -159,7 +145,7 @@ describe('channel opening', () => {
     expect(markRead).not.toHaveBeenCalled();
     setLoad({ status: 'ready', channel: channel('one') });
     expect(detail.view().status).toBe('ready');
-    expect(detail.target()).toEqual(unreadTarget);
+    expect(detail.target()).toEqual({ kind: 'latest' });
     expect(markRead).toHaveBeenCalledOnce();
   });
 
@@ -179,25 +165,24 @@ describe('channel opening', () => {
 
   it('ignores another channel’s result and resets navigation and marking on each open', () => {
     const { detail, setSelection, setCached, setLoad, markRead } = setup();
-    detail.onInteraction();
     batch(() => {
       setSelection({ id: 'two' });
       setCached(channel('two'));
     });
     setLoad({ status: 'ready', channel: channel('one') });
-    expect(detail.target()).toBeUndefined();
+    expect(detail.target()).toEqual({ kind: 'latest' });
     expect(markRead).not.toHaveBeenCalled();
     setLoad({ status: 'ready', channel: channel('two') });
-    expect(detail.target()).toEqual(unreadTarget);
+    expect(detail.target()).toEqual({ kind: 'latest' });
     expect(markRead).toHaveBeenCalledExactlyOnceWith(channel('two'));
     batch(() => {
       setSelection({ id: 'one' });
       setCached(channel('one'));
       setLoad({ status: 'pending' });
     });
-    expect(detail.target()).toBeUndefined();
+    expect(detail.target()).toEqual({ kind: 'latest' });
     setLoad({ status: 'ready', channel: channel('one') });
-    expect(detail.target()).toEqual(unreadTarget);
+    expect(detail.target()).toEqual({ kind: 'latest' });
     expect(markRead).toHaveBeenCalledTimes(2);
   });
 

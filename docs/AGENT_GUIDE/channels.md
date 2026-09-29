@@ -356,15 +356,14 @@ back to Messages; changing unread notifications does not restart navigation.
 
 On desktop, switching conversations selects and mounts the cached conversation
 immediately. Messages load alongside the notification refresh. Explicit message
-or search targets apply immediately; otherwise the first notification result can
-navigate to the newest unread message. Scrolling, clicking, or typing in the
-conversation cancels that automatic jump. Later notification updates never
-restart navigation. With a slow connection, switch channels quickly: an earlier
+or search targets apply immediately; ordinary opens start at the bottom. Notification
+results never change the destination. With a slow connection, switch channels
+quickly: an earlier
 response must not switch back or mark that earlier channel read.
 
 A transient notification-fetch failure keeps the conversation and composer mounted
-and offers **Retry**. Retrying preserves focus and scroll; recovery marks the full
-notification list read without a delayed jump. No notification read marking runs
+while notifications are unavailable. Recovery marks top-level message notifications
+seen without moving the conversation. No notification read marking runs
 from an abbreviated list result, even if that result is empty. Access failures
 show **Conversation unavailable** and stay hidden during retry until access is
 confirmed. A route without cached channel metadata shows **Loading conversation**
@@ -576,25 +575,23 @@ request must not show a load-error message over valid search hits or replace
 **No results**, including during debounce and short local-only queries. Search
 failures still show their own error; clearing search restores the browse error.
 With `enable-graphql-soup` enabled, open an unread conversation from each tab
-and return to the list: all its message notifications should be read, including
-mentions, replies, and ones older than the global notification feed's loaded page.
-Chat opens the whole conversation; opening a parent channel row in Inbox still
-leaves separate thread-stack notifications unread.
+and return to the list: all notifications on top-level messages should be seen,
+including mentions and reactions older than the global feed's loaded page.
+Replies and mentions inside threads remain unread. Channel-view unread badges
+only represent top-level messages and mentions; unread replies and reactions do
+not contribute to that badge. Top-level reactions are still marked seen on open. Verify an older unread root behind a newer reply still badges.
+Inbox retains its own thread-stack behavior.
 
-On desktop, each click on a conversation in the Chat rail opens its most recent
-currently unread notification, including replies in threads. Read notifications
-are not retained as click targets: once a channel has no unread
-notifications, clicking it opens the latest message. Explicit search hits still
-open their matched message. Each accepted click marks the complete loaded channel
-edge read, even when the same conversation is already selected. Shift-clicks use
-the same channel-wide read behavior, but mark notifications only after the split
-opens or reuses an existing conversation. Route opens, reloads, and uncached
-favorites also target the newest unread notification across the channel,
-including thread replies; an explicit message target still wins. Verify repeated
-clicks after read-state updates, a failed read, and a new notification; previously
-read targets must not loop around. A rejected selection or unavailable split must
-not mark the conversation read. Hydrating an unread non-participant row must
-preserve its membership status and must not mark its notifications read.
+Each ordinary conversation click opens the bottom, including re-clicks,
+shift-clicks, mobile opens, reloads, and favorites. Explicit search hits and message
+links still open their target. Each accepted click marks top-level notifications
+from the full loaded edge seen; an abbreviated list edge is never sufficient.
+A rejected selection or unavailable split must not mark the conversation read.
+Non-participant rows retain their membership status and do not mark notifications.
+Shift-click a favorite whose channel is not loaded in the rail: its membership
+and full notification edge load before the split opens with the same top-level
+read policy. Selecting another channel while that request is pending must cancel
+the pending open; failed lookups must not open a split or mark anything seen.
 
 With GraphQL enabled, the app-shell Chat badge uses `ChannelUnreadPresence`: only
 channel IDs and at most one unread notification ID/state per channel, with a

@@ -21,7 +21,7 @@ describe('bounded channel unread projection', () => {
             field.arguments?.find((arg) => arg.name.value === 'limit')?.value
           ).toMatchObject({ kind: Kind.INT, value: '1' });
           expect(print(field)).toContain('states: [UNSEEN]');
-          expect(print(field)).toContain('channel_message_reply');
+          expect(print(field)).toContain('topLevelMessagesOnly: true');
           expect(print(field)).not.toContain('metadata');
         },
       });

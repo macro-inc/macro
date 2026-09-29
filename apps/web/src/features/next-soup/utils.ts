@@ -51,7 +51,7 @@ import {
 } from '@core/dom-selectors';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { BlockOrchestrator } from '@core/orchestrator';
-import { compareDateDesc, type DateValue } from '@core/util/date';
+import type { DateValue } from '@core/util/date';
 import { throwOnErr } from '@core/util/result';
 import { waitForFrames } from '@core/util/sleep';
 import { openExternalUrl } from '@core/util/url';
@@ -91,6 +91,7 @@ import {
   setDoneOverride,
   type UnifiedNotification,
 } from '@notifications';
+import { isTopLevelChannelNotification } from '@notifications/top-level-channel-notification';
 import { hydrateChannelNotificationSelection } from '@queries/channel/notification-selection';
 import { queryClient } from '@queries/client';
 import {
@@ -379,8 +380,10 @@ interface OpenEntityOptions {
    * opening a channel row. Callers that can open channels must provide it.
    */
   notificationSource?: NotificationSource;
-  /** False for Chat conversations; Inbox rows keep their thread-scoped reads. */
-  scopeChannelThreads?: boolean;
+  /** Default: notification. Explicit message targets always take precedence. */
+  channelNavigation?: 'latest' | 'notification';
+  /** Default: inbox-row. Top-level includes mentions and reactions outside threads. */
+  channelReadScope?: 'top-level' | 'inbox-row';
 }
 
 /**
@@ -473,7 +476,9 @@ export function channelIdForPreviewNavigation(
 
 export function getChannelEntityTarget(
   entity: EntityData | ChannelPreviewSelection,
-  options: { scopeChannelThreads?: boolean } = {}
+  {
+    channelNavigation = 'notification',
+  }: { channelNavigation?: 'latest' | 'notification' } = {}
 ): ChannelClickTarget | undefined {
   if (
     entity.type !== 'channel' &&
@@ -500,15 +505,11 @@ export function getChannelEntityTarget(
           threadId: entity.threadId,
         };
 
-  if (!isWithNotification(entity)) return fallback;
+  if (channelNavigation === 'latest' || !isWithNotification(entity))
+    return fallback;
 
   const notifications = entity.notifications?.() ?? [];
-  const scoped =
-    options.scopeChannelThreads === false
-      ? [...notifications].sort((a, b) =>
-          compareDateDesc(a.created_at, b.created_at)
-        )
-      : scopeChannelNotificationsForEntity(entity, notifications);
+  const scoped = scopeChannelNotificationsForEntity(entity, notifications);
   for (const notification of scoped) {
     // For a whole-`channel` row, ignore notifications you have already read:
     // the row stands for the entire channel, so once read it should open at
@@ -716,7 +717,7 @@ export const openEntityInSplitFromUnifiedList = async (
   const content = getEntitySplitContent(entity);
 
   const channelTarget = getChannelEntityTarget(entity, {
-    scopeChannelThreads: options.scopeChannelThreads,
+    channelNavigation: options.channelNavigation,
   });
   const channelMessageTarget =
     channelTarget?.kind === 'message' ? channelTarget : undefined;
@@ -760,16 +761,19 @@ export const openEntityInSplitFromUnifiedList = async (
     splitContent = withListNavigationSource(splitContent, splitHandle);
   }
 
+  let markedNotifications = false;
   const markNotificationsSeen = () => {
+    if (markedNotifications) return;
+    markedNotifications = true;
     if (options.notificationSource) {
       markChannelNotificationsSeenOnOpen(entity, options.notificationSource, {
-        scopeChannelThreads: options.scopeChannelThreads,
+        channelReadScope: options.channelReadScope,
       });
     }
   };
   const result = splitManager.openWithSplit(splitContent, {
     search: target ? searchLocationUpdates(content.id, target) : undefined,
-    onApplied: target ? markNotificationsSeen : undefined,
+    onApplied: markNotificationsSeen,
     referredFrom,
     activate: true,
     preferNewSplit: openInNewSplit,
@@ -809,12 +813,14 @@ export const openEntityInSplitFromUnifiedList = async (
  * back to the separately paginated global source. Passing these notifications
  * through the source keeps its REST cache and durable seen overrides in sync
  * while the configured mutation updates GraphQL edges. Chat opens the whole
- * conversation (scopeChannelThreads: false); Inbox opens only the row's stack.
+ * conversation's top-level messages; Inbox opens only the row's stack.
  */
 export function markChannelNotificationsSeenOnOpen(
   entity: EntityWithRawNotifications<EntityData>,
   notificationSource: NotificationSource,
-  options: { scopeChannelThreads?: boolean } = {}
+  {
+    channelReadScope = 'inbox-row',
+  }: { channelReadScope?: 'top-level' | 'inbox-row' } = {}
 ) {
   if (
     entity.type !== 'channel' &&
@@ -825,8 +831,13 @@ export function markChannelNotificationsSeenOnOpen(
   }
 
   const notifications = getEntityNotifications(entity, notificationSource, {
-    scopeChannelThreads: options.scopeChannelThreads !== false,
-  }).filter((notification) => !notificationIsRead(notification));
+    scopeChannelThreads: channelReadScope === 'inbox-row',
+  }).filter(
+    (notification) =>
+      !notificationIsRead(notification) &&
+      (channelReadScope === 'inbox-row' ||
+        isTopLevelChannelNotification(notification))
+  );
   if (notifications.length === 0) return;
 
   void notificationSource.bulkMarkAsRead(notifications).catch((error) => {

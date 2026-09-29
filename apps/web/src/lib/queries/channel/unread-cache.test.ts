@@ -127,6 +127,41 @@ describe('websocket channel unread cache writes', () => {
     }
   );
 
+  it.each([null, 'thread'])(
+    'writes a conversation witness only for top-level mentions (thread=%s)',
+    async (threadId) => {
+      const host = setup(['channel']);
+      await cacheNewChannelUnread(
+        host,
+        {
+          ...notification,
+          eventType: 'channel_mention',
+          metadata: {
+            __typename: 'GraphqlChannelMentionMetadata',
+            channelMentionMessageId: 'message',
+            channelMentionMessageContent: 'Hello',
+            channelMentionThreadId: threadId,
+            channelMentionChannelType: 'PRIVATE',
+            channelMentionHasAttachments: false,
+            channelMentionSenderDisplayName: null,
+            channelMentionChannelName: 'Channel',
+            channelMentionSenderProfilePictureUrl: null,
+          },
+        },
+        () => true
+      );
+      expect(host.writeQuery).toHaveBeenCalledOnce();
+      const write = host.writeQuery.mock.calls[0][0];
+      expect(write.variables).toEqual({
+        includeConversation: threadId === null,
+      });
+      const payload = JSON.stringify(write.data);
+      expect(payload.includes('topLevelUnreadNotifications')).toBe(
+        threadId === null
+      );
+    }
+  );
+
   it('preserves other badge identities without replaying their notification states, and stays bounded', async () => {
     const host = setup(['other', 'oldest']);
     await cacheNewChannelUnread(host, notification, () => true);
@@ -194,11 +229,14 @@ describe('websocket channel unread cache writes', () => {
   });
 
   it('uses exactly the same argument-keyed relationship as the channel list and badge', () => {
-    const argumentsOf = (document: DocumentNode) => {
+    const argumentsOf = (
+      document: DocumentNode,
+      alias = 'unreadNotifications'
+    ) => {
       let argumentsKey: string | undefined;
       visit(document, {
         Field(node) {
-          if (node.alias?.value === 'unreadNotifications') {
+          if (node.alias?.value === alias) {
             argumentsKey = node.arguments
               ?.map((argument) => print(argument))
               .join('\n');
@@ -209,7 +247,12 @@ describe('websocket channel unread cache writes', () => {
     };
     const key = argumentsOf(ChannelUnreadCacheWriteDocument);
     expect(key).toBeDefined();
-    expect(argumentsOf(ChannelListSoupDocument)).toBe(key);
+    expect(argumentsOf(ChannelListSoupDocument)).toBe(
+      argumentsOf(
+        ChannelUnreadCacheWriteDocument,
+        'topLevelUnreadNotifications'
+      )
+    );
     expect(argumentsOf(ChannelUnreadPresenceDocument)).toBe(key);
   });
 });

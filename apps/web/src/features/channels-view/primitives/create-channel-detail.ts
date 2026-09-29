@@ -1,12 +1,6 @@
 import { isTransientRequestError } from '@core/util/request-error';
 import type { ChannelEntity } from '@entity/types/entity';
-import {
-  type Accessor,
-  createEffect,
-  createMemo,
-  createSignal,
-  on,
-} from 'solid-js';
+import { type Accessor, createEffect, createMemo, on } from 'solid-js';
 import type {
   ChannelDestination,
   ChannelDetailSource,
@@ -23,21 +17,12 @@ export function createChannelDetail(options: {
   selection: Accessor<ChannelSelection | undefined>;
   cached: Accessor<ChannelEntity | undefined>;
   source: ChannelDetailSource;
-  resolveDestination: (
-    channel: ChannelEntity
-  ) => ChannelDestination | undefined;
   markRead: (channel: ChannelEntity) => void;
 }) {
   // `on` tracks reads; it does not compare the values returned by its sources.
   // Memoize the fields so replacing a selection object is not a new open/jump.
   const channelId = createMemo(() => options.selection()?.id);
-  const messageId = createMemo(() => options.selection()?.target?.messageId);
-  const threadId = createMemo(() => options.selection()?.target?.threadId);
   const activation = createMemo(on(channelId, () => ({})));
-  const navigation = createMemo(
-    on([activation, messageId, threadId], () => ({}))
-  );
-  const [interrupted, setInterrupted] = createSignal<object>();
   const complete = () => {
     const load = options.source.load();
     return load.status === 'ready' && load.channel?.id === channelId()
@@ -77,33 +62,10 @@ export function createChannelDetail(options: {
       : { status: 'loading' };
   });
 
-  const destination = createMemo<{
-    navigation: object;
-    settled: boolean;
-    target: ChannelDestination | undefined;
-  }>((previous) => {
-    const request = navigation();
-    if (previous?.navigation === request && previous.settled) return previous;
+  // Conversation opens always start at latest; only explicit links pick a message.
+  const target = createMemo<ChannelDestination>(() => {
     const explicit = options.selection()?.target;
-    if (explicit)
-      return {
-        navigation: request,
-        settled: true,
-        target: { kind: 'message', ...explicit },
-      };
-    // Once the user takes control, or a failed lookup opens at latest, a late
-    // response may update read state but must not move the conversation.
-    if (
-      interrupted() === request ||
-      (options.source.load().status === 'error' && view().status === 'ready')
-    )
-      return { navigation: request, settled: true, target: undefined };
-    const channel = complete();
-    return {
-      navigation: request,
-      settled: channel !== undefined,
-      target: channel ? options.resolveDestination(channel) : undefined,
-    };
+    return explicit ? { kind: 'message', ...explicit } : { kind: 'latest' };
   });
 
   let markedActivation: object | undefined;
@@ -122,8 +84,7 @@ export function createChannelDetail(options: {
 
   return {
     view,
-    target: () => destination().target,
-    onInteraction: () => setInterrupted(navigation()),
+    target,
     refresh: options.source.refresh,
   };
 }

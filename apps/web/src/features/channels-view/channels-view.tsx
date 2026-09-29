@@ -1,10 +1,7 @@
 import { ViewShell } from '@app/components/view-shell';
 import { SearchState } from '@app/features/command/mobile/mobileSearchState';
 import { useMobileSearchText } from '@app/features/command/mobile/use-mobile-search-text';
-import {
-  getChannelEntityTarget,
-  markChannelNotificationsSeenOnOpen,
-} from '@app/features/next-soup/utils';
+import { markChannelNotificationsSeenOnOpen } from '@app/features/next-soup/utils';
 import { MaybeSoupEntityActionDrawerManager } from '@app/features/soup';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { SplitRouter } from '@app/lib/split-router';
@@ -206,7 +203,7 @@ function ChannelsViewRoot() {
 function ChannelDetailRouteContent() {
   const { selectedChannel } = useChannelsView();
   const notificationSource = useGlobalNotificationSource();
-  const channelId = () => selectedChannel()?.id;
+  const channelId = createMemo(() => selectedChannel()?.id);
   const sources = useContext(ChannelSourcesContext);
   const loaded = createMemo(() =>
     resolveSelectedChannel(
@@ -230,16 +227,11 @@ function ChannelDetailRouteContent() {
     selection: selectedChannel,
     cached: loaded,
     source,
-    resolveDestination: (channel) =>
-      getChannelEntityTarget(
-        withEntityNotifications(channel, notificationSource),
-        { scopeChannelThreads: false }
-      ),
     markRead: (channel) =>
       markChannelNotificationsSeenOnOpen(
         withEntityNotifications(channel, notificationSource),
         notificationSource,
-        { scopeChannelThreads: false }
+        { channelReadScope: 'top-level' }
       ),
   });
   const visibleChannel = createMemo(() => {
@@ -289,16 +281,7 @@ function ChannelDetailRouteContent() {
         }
       >
         {(channel) => (
-          <div
-            class="flex size-full min-h-0 flex-col"
-            on:pointerdown={{
-              capture: true,
-              handleEvent: detail.onInteraction,
-            }}
-            on:keydown={{ capture: true, handleEvent: detail.onInteraction }}
-            on:wheel={{ capture: true, handleEvent: detail.onInteraction }}
-            on:touchmove={{ capture: true, handleEvent: detail.onInteraction }}
-          >
+          <div class="flex size-full min-h-0 flex-col">
             <ChannelDetailView channel={channel()} target={detail.target()} />
           </div>
         )}
