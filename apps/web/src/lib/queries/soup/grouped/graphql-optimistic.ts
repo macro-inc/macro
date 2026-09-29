@@ -1,4 +1,3 @@
-import { documentOperationName } from '@graphql-cache/exchange/generated-selection';
 import {
   type OptimisticUpdate,
   type QueryRevalidation,
@@ -7,7 +6,7 @@ import {
   upsertEmbeddedLink,
 } from '@graphql-cache/exchange/optimistic';
 import type { CacheHost } from '@graphql-cache/host/types';
-import { stringifyDocument } from '@urql/core';
+import { getOperationName, stringifyDocument } from '@urql/core';
 import {
   type GroupedSoupInput,
   GroupSoupDocument,
@@ -153,7 +152,7 @@ async function readGroupPage(
 ): Promise<GroupPage | null> {
   const result = await host.readQuery({
     query: stringifyDocument(GroupSoupMembershipDocument),
-    operationName: documentOperationName(GroupSoupMembershipDocument),
+    operationName: getOperationName(GroupSoupMembershipDocument),
     variables: { input },
     priority: 'user-visible',
   });
