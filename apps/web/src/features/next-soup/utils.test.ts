@@ -170,7 +170,6 @@ function targetSearch(
 
 afterEach(() => {
   setGlobalSplitManager(undefined);
-  setGlobalSplitRouter(undefined);
   vi.clearAllMocks();
   vi.mocked(isTouchDevice).mockReturnValue(false);
 });
@@ -185,22 +184,25 @@ describe('reminder navigation', () => {
   it.each([false, true])(
     'uses the reminder route for list opening (new split: %s)',
     async (openInNewSplit) => {
-      const navigate = vi.fn();
+      const openWithSplit = vi.fn(() => ({ status: 'navigating' as const }));
       setGlobalSplitManager({
-        activeSplitId: () => 'source',
         activeSplit: () => undefined,
+        openWithSplit,
       } as unknown as SplitManager);
-      setGlobalSplitRouter({ navigate } as unknown as SplitRouter<SplitId>);
 
       await openEntityInSplitFromUnifiedList(reminder, { openInNewSplit });
 
-      expect(navigate).toHaveBeenCalledExactlyOnceWith(
-        'source',
-        '/reminder/reminder-1',
-        {
-          replace: undefined,
-          target: openInNewSplit ? 'new-split' : 'current',
-        }
+      expect(openWithSplit).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          type: 'component',
+          id: 'reminder-detail',
+          params: { reminderId: 'reminder-1' },
+        }),
+        expect.objectContaining({
+          activate: true,
+          preferNewSplit: openInNewSplit,
+          search: {},
+        })
       );
     }
   );

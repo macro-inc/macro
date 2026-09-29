@@ -736,4 +736,3 @@ export const SidebarOpenInSplitMenu = (props: SidebarOpenInSplitMenuProps) => {
     </ContextMenu>
   );
 };
-

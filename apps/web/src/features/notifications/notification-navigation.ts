@@ -6,6 +6,7 @@ import {
   navigateToChannelMessage,
 } from '@block-channel/utils/link';
 import type {
+  OpenSplitResult,
   SplitHandle,
   SplitManager,
 } from '@components/app/split-layout/layoutManager';
@@ -62,21 +63,37 @@ function openSplitIfNotOpen(
     newSplit?: boolean;
     params?: Record<string, unknown>;
     sourceHandle?: SplitHandle;
+    onApplied?: VoidFunction;
   } = {}
 ) {
+  let onApplied = options.onApplied;
+  const reportApplied = () => {
+    const callback = onApplied;
+    onApplied = undefined;
+    callback?.();
+  };
+  const reportImmediateResult = (result: OpenSplitResult | undefined) => {
+    if (!result) return;
+    if (result.status === 'opened' || result.status === 'reused') {
+      reportApplied();
+    }
+  };
   const existing = layoutManager.getSplitByContent(type, id);
   if (existing) {
     existing.activate();
+    reportApplied();
   } else {
-    layoutManager.openWithSplit(
+    const result = layoutManager.openWithSplit(
       { type, id },
       {
         activate: true,
         referredFrom: null,
         preferNewSplit: options.newSplit,
         handle: options.sourceHandle,
+        ...(options.onApplied ? { onApplied: reportApplied } : {}),
       }
     );
+    reportImmediateResult(result);
   }
   if (options.params && type !== 'component') {
     goToLocationInSplit(layoutManager, type, id, options.params);
@@ -123,7 +140,8 @@ async function openChannelNotification(
   notification: UnifiedNotification,
   layoutManager: SplitManager,
   newSplit: boolean = false,
-  sourceHandle?: SplitHandle
+  sourceHandle?: SplitHandle,
+  onApplied?: VoidFunction
 ) {
   const channelId = notification.entity_id;
   const { messageId, threadId } = getChannelNotificationParams(notification);
@@ -132,6 +150,7 @@ async function openChannelNotification(
     openSplitIfNotOpen(layoutManager, 'channel', channelId, {
       newSplit,
       sourceHandle,
+      onApplied,
     });
     return;
   }
@@ -141,6 +160,7 @@ async function openChannelNotification(
     splitManager: layoutManager,
     preferNewSplit: newSplit,
     sourceHandle,
+    ...(onApplied ? { onApplied } : {}),
   });
 }
 
@@ -167,7 +187,8 @@ type OpenNotificationFromIdError =
 function getSupportedHandler(
   notification: UnifiedNotification,
   entity?: NotificationEntityOverride,
-  sourceHandle?: SplitHandle
+  sourceHandle?: SplitHandle,
+  onApplied?: VoidFunction
 ): ((layoutManager: SplitManager, newSplit?: boolean) => Promise<void>) | null {
   const tag = notification.notification_metadata.tag as NotificationType;
 
@@ -177,7 +198,13 @@ function getSupportedHandler(
         P.union(...CHANNEL_EVENT_TYPES),
         () =>
           (lm: SplitManager, newSplit: boolean = false) =>
-            openChannelNotification(notification, lm, newSplit, sourceHandle)
+            openChannelNotification(
+              notification,
+              lm,
+              newSplit,
+              sourceHandle,
+              onApplied
+            )
       )
       .with(
         'ai_response',
@@ -186,6 +213,7 @@ function getSupportedHandler(
             openSplitIfNotOpen(lm, 'chat', notification.entity_id, {
               newSplit,
               sourceHandle,
+              onApplied,
             })
       )
       .with('new_email', () => {
@@ -195,6 +223,7 @@ function getSupportedHandler(
           openSplitIfNotOpen(lm, 'email', meta.content.threadId, {
             newSplit,
             sourceHandle,
+            onApplied,
           });
         };
       })
@@ -205,6 +234,7 @@ function getSupportedHandler(
             openSplitIfNotOpen(lm, 'channel', notification.entity_id, {
               newSplit,
               sourceHandle,
+              onApplied,
             })
       )
       .with('invite_to_team', () => null)
@@ -215,6 +245,7 @@ function getSupportedHandler(
             openSplitIfNotOpen(lm, 'channel', notification.entity_id, {
               newSplit,
               sourceHandle,
+              onApplied,
             })
       )
       // Every agent-session kind opens the session itself: the chip in the
@@ -239,6 +270,7 @@ function getSupportedHandler(
             openSplitIfNotOpen(lm, 'agent', meta.content.sessionId, {
               newSplit,
               sourceHandle,
+              onApplied,
             });
           };
         }
@@ -250,6 +282,7 @@ function getSupportedHandler(
           openSplitIfNotOpen(lm, 'task', meta.content.taskId, {
             newSplit,
             sourceHandle,
+            onApplied,
           });
         };
       })
@@ -270,6 +303,7 @@ function getSupportedHandler(
             openSplitIfNotOpen(lm, 'pr', notification.entity_id, {
               newSplit,
               sourceHandle,
+              onApplied,
             });
             return;
           }
@@ -280,6 +314,7 @@ function getSupportedHandler(
           }
 
           openExternalUrl(url);
+          onApplied?.();
         };
       })
       .with('initiative_discussion', () => {
@@ -299,7 +334,7 @@ function getSupportedHandler(
               section: 'overview',
               discussionId: meta.content.messageId,
             }),
-            { newSplit, sourceHandle }
+            { newSplit, sourceHandle, onApplied }
           );
         };
       })
@@ -318,6 +353,7 @@ function getSupportedHandler(
               newSplit,
               params: location.params,
               sourceHandle,
+              onApplied,
             });
         }
       )
@@ -327,6 +363,7 @@ function getSupportedHandler(
             manager: lm,
             handle: sourceHandle,
             openInNewSplit: newSplit,
+            ...(onApplied ? { onApplied } : {}),
           });
         };
       })
@@ -338,7 +375,10 @@ function getSupportedHandler(
           // A reminder delivered before the flag closed still has a live
           // notification; opening it must not reach a surface the user is no
           // longer meant to have.
-          if (!isFeatureEnabled(enableCalendarUi)) return;
+          if (!isFeatureEnabled(enableCalendarUi)) {
+            onApplied?.();
+            return;
+          }
           const content = meta.content;
           const time = content.startsAt
             ? {
@@ -360,6 +400,7 @@ function getSupportedHandler(
               manager: lm,
               handle: sourceHandle,
               openInNewSplit: newSplit,
+              ...(onApplied ? { onApplied } : {}),
             }
           );
         };
@@ -374,6 +415,7 @@ function getSupportedHandler(
             newSplit,
             params: { [COMMENT_LINK_PARAM]: meta.content.messageId },
             sourceHandle,
+            onApplied,
           });
       })
       .with('inbox_reauth_required', () => null)
@@ -394,9 +436,15 @@ export function openNotification(
    * The split this navigation originates from (e.g. the list whose row was
    * clicked).
    */
-  sourceHandle?: SplitHandle
+  sourceHandle?: SplitHandle,
+  options: { onApplied?: VoidFunction } = {}
 ): ResultAsync<void, NotSupportedError> {
-  const handler = getSupportedHandler(notification, entity, sourceHandle);
+  const handler = getSupportedHandler(
+    notification,
+    entity,
+    sourceHandle,
+    options.onApplied
+  );
   if (!handler) {
     return errAsync({
       tag: 'NotSupportedError',
@@ -429,7 +477,7 @@ export function openNotificationFromId(
   notificationId: string,
   layoutManager: SplitManager,
   notificationSource: NotificationSource,
-  options: { canOpen?: () => boolean } = {}
+  options: { canOpen?: () => boolean; onApplied?: VoidFunction } = {}
 ): ResultAsync<void, OpenNotificationFromIdError> {
   const openIfReady = (notification: UnifiedNotification) => {
     if (options.canOpen && !options.canOpen()) {
@@ -438,7 +486,14 @@ export function openNotificationFromId(
         notificationId,
       });
     }
-    return openNotification(notification, layoutManager);
+    return openNotification(
+      notification,
+      layoutManager,
+      false,
+      undefined,
+      undefined,
+      { onApplied: options.onApplied }
+    );
   };
 
   // Check notification source first

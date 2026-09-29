@@ -18,7 +18,6 @@ import {
   REMINDER_DETAIL_ROUTE_ID,
   reminderDetailContent,
   reminderIdFromDetailContent,
-  reminderIdFromLegacyComponent,
 } from '@app/features/reminders/reminder-navigation';
 import {
   defineRoute,
@@ -67,6 +66,8 @@ export function decodeLegacyPair(
   }
 
   if (type === 'component') {
+    // Reminder list/detail surfaces are native routes only.
+    if (id === 'reminders' || id === REMINDER_DETAIL_COMPONENT_ID) return;
     // Preview Pair placeholders must never reach the view registry.
     return {
       type: 'component',
@@ -95,23 +96,6 @@ export function decodeLegacyPair(
 }
 
 function legacyEntry(type: string, id: string): SplitRouterEntry | undefined {
-  const legacyReminderId =
-    type === 'component' ? reminderIdFromLegacyComponent(id) : undefined;
-  if (legacyReminderId) {
-    return {
-      location: {
-        route: {
-          matches: [
-            {
-              id: REMINDER_DETAIL_ROUTE_ID,
-              params: { reminderId: legacyReminderId },
-            },
-          ],
-        },
-      },
-    };
-  }
-
   const agentsRoute = agentsRouteFromSegments(type, id);
   if (agentsRoute) {
     return {
@@ -210,9 +194,7 @@ export function splitLocationFromContent(
   content: SplitContent
 ): SplitLocation {
   const reminderId =
-    content.type === 'component' &&
-    (content.id === REMINDER_DETAIL_COMPONENT_ID ||
-      reminderIdFromLegacyComponent(content.id))
+    content.type === 'component' && content.id === REMINDER_DETAIL_COMPONENT_ID
       ? reminderIdFromDetailContent(content)
       : undefined;
   if (reminderId) {

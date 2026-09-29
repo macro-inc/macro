@@ -1,44 +1,27 @@
-import type { SplitRouter } from '@app/lib/split-router';
-import { globalSplitManager, globalSplitRouter } from '@app/signal/splitLayout';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import type {
+  OpenSplitResult,
   ReferredFrom,
   SplitContent,
   SplitHandle,
-  SplitId,
   SplitManager,
 } from '@components/app/split-layout/layoutManager';
-import { enableReminders, isFeatureEnabled } from '@core/constant/featureFlags';
 import { buildSimpleEntityUrl } from '@core/util/url';
 
 export const REMINDER_DETAIL_ROUTE_ID = 'reminder-detail';
 export const HOME_REMINDER_DETAIL_ROUTE_ID = 'home-reminder-detail';
 export const REMINDER_DETAIL_COMPONENT_ID = 'reminder-detail';
-export const LEGACY_REMINDER_DETAIL_COMPONENT_PREFIX = 'reminder-view~';
-
-/** Parse the reminder id carried by a pre-route reminder component link. */
-export function reminderIdFromLegacyComponent(
-  componentId: string
-): string | undefined {
-  if (!componentId.startsWith(LEGACY_REMINDER_DETAIL_COMPONENT_PREFIX)) return;
-  const reminderId = componentId.slice(
-    LEGACY_REMINDER_DETAIL_COMPONENT_PREFIX.length
-  );
-  return reminderId || undefined;
-}
 
 function record(value: unknown): Record<string, unknown> | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return;
   return value as Record<string, unknown>;
 }
 
-/** Reminder identity from either current route metadata or legacy content. */
+/** Reminder identity from current standalone or Home route metadata. */
 export function reminderIdFromDetailContent(
   content: SplitContent
 ): string | undefined {
   if (content.type !== 'component') return;
-
-  const legacyId = reminderIdFromLegacyComponent(content.id);
-  if (legacyId) return legacyId;
 
   const metadata = record(content.entryMetadata);
   const location = record(metadata?.location) ?? metadata;
@@ -62,7 +45,7 @@ export function reminderIdFromDetailContent(
 
   // The router may preserve shell params while replacing this fixed component
   // from reminder A to B. Route metadata is authoritative when present; params
-  // are only the startup/legacy fallback before the route host is available.
+  // are only the startup fallback before the route host is available.
   if (content.id === REMINDER_DETAIL_COMPONENT_ID) {
     const reminderId = record(content.params)?.reminderId;
     if (typeof reminderId === 'string' && reminderId.length > 0) {
@@ -118,10 +101,9 @@ export function reminderDetailPath(reminderId: string): string {
 /**
  * Open a reminder through its route-backed lightweight component.
  *
- * Split Router owns reminder identity through the route claim. The contained
- * manager fallback exists only for startup/tests before the route host is
- * registered; it applies the same exact-reminder rule to route and legacy
- * content.
+ * Split Manager delegates route-owned content to the app navigator, so the
+ * reminder claim controls reuse across standalone and Home locations without a
+ * second router owner.
  */
 export function openReminderDetail(
   reminderId: string,
@@ -131,45 +113,19 @@ export function openReminderDetail(
     openInNewSplit?: boolean;
     mergeHistory?: boolean;
     referredFrom?: ReferredFrom;
-    router?: Pick<SplitRouter<SplitId>, 'navigate'>;
+    onApplied?: VoidFunction;
   } = {}
-): void {
+): OpenSplitResult {
   const manager = options.manager ?? globalSplitManager();
-  if (!manager) return;
+  if (!manager) return { status: 'unavailable' };
 
-  const router = options.router ?? globalSplitRouter();
-  const sourceId = options.handle?.id ?? manager.activeSplitId();
-  if (router && sourceId) {
-    router.navigate(sourceId, reminderDetailPath(reminderId), {
-      replace: options.mergeHistory,
-      target: options.openInNewSplit ? 'new-split' : 'current',
-    });
-    return;
-  }
-
-  // Route-backed opens wait reactively for flag hydration. This fallback has
-  // no route component to enforce the flag, so it may only mount content from
-  // an already-enabled snapshot. Startup notification intents wait for the
-  // router separately instead of reaching this branch while flags load.
-  if (!isFeatureEnabled(enableReminders)) return;
-
-  const existingState = manager
-    .splits()
-    .find((split) => reminderIdFromDetailContent(split.content) === reminderId);
-  const existing = existingState
-    ? manager.getSplit(existingState.id)
-    : undefined;
-  if (existing) {
-    existing.activate();
-    return;
-  }
-
-  manager.openWithSplit(reminderDetailContent(reminderId), {
+  return manager.openWithSplit(reminderDetailContent(reminderId), {
     activate: true,
-    allowDuplicate: true,
     preferNewSplit: options.openInNewSplit,
     handle: options.handle,
     mergeHistory: options.mergeHistory,
     referredFrom: options.referredFrom ?? null,
+    search: {},
+    onApplied: options.onApplied,
   });
 }

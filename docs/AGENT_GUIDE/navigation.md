@@ -69,8 +69,13 @@ message/thread target when opening a channel or reusing its existing pane.
 Returning to Home's list clears the prior target, so reopening an item without
 a specific location does not replay the previous search hit.
 
-Existing `/app/component/reminder-view~<uuid>` links decode to the standalone
-reminder route. New navigation and copied links always use `/app/reminder/<uuid>`.
+Reminder navigation is native-route only: list, Home, notifications, commands,
+copied links, and new browser tabs use `/app/reminders`,
+`/app/home/reminder/<uuid>`, or `/app/reminder/<uuid>`. Imperative callers use
+`openReminderDetail` so Split Manager sends the typed destination through the
+app content navigator. The standalone and Home routes claim the same reminder
+identity, and callers must never treat a reminder ID as a document ID. Startup
+notification intents are consumed only by the destination's applied callback.
 
 When an event opens inline from Home, changing the Calendar period stays under
 `/app/home/calendar/`, updates the period segment, and re-focuses that event.

@@ -9,10 +9,7 @@ import { channelsSearch } from '@app/features/channels-view/channels-route';
 import { channelDetailRoute } from '@app/features/channels-view/route';
 import { driveSearch } from '@app/features/drive-view/primitives/drive-search';
 import { driveRootDocumentRoute } from '@app/features/drive-view/route';
-import {
-  HOME_REMINDER_DETAIL_ROUTE_ID,
-  reminderDetailDestination,
-} from '@app/features/reminders/reminder-navigation';
+import { HOME_REMINDER_DETAIL_ROUTE_ID } from '@app/features/reminders/reminder-navigation';
 import {
   createSearchParams,
   defineRoute,
@@ -65,9 +62,6 @@ function HomeLegacyRouteView() {
   const [documentSearch] = createSearchParams(driveSearch);
   const [eventSearch] = createSearchParams(calendarSearch);
   const legacyTarget = () => {
-    if (params.reminderId) {
-      return reminderDetailDestination(params.reminderId).content;
-    }
     const { period } = params;
     if (period) return homeCalendarLegacyTarget(period, eventSearch);
     const detail = homeDetailParamsFromRoute(params);

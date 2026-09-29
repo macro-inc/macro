@@ -110,6 +110,28 @@ describe('reminder notification navigation', () => {
     });
   });
 
+  it('forwards acceptance so startup intent clears only after route apply', async () => {
+    const layout = {} as SplitManager;
+    const onApplied = vi.fn();
+
+    await openNotification(
+      reminderNotification(),
+      layout,
+      false,
+      undefined,
+      undefined,
+      { onApplied }
+    );
+
+    expect(openReminderDetail).toHaveBeenCalledExactlyOnceWith('reminder-1', {
+      manager: layout,
+      handle: undefined,
+      openInNewSplit: false,
+      onApplied,
+    });
+    expect(onApplied).not.toHaveBeenCalled();
+  });
+
   it('does not open a fetched reminder after its route host becomes stale', async () => {
     const notification = reminderNotification();
     getNotificationById.mockResolvedValue(notification);

@@ -11,16 +11,12 @@ vi.mock('@core/component/Toast/Toast', () => ({
   toast: { failure: vi.fn() },
 }));
 
-import type { SplitRouter } from '@app/lib/split-router';
-import {
-  setGlobalSplitManager,
-  setGlobalSplitRouter,
-} from '@app/signal/splitLayout';
+import { setGlobalSplitManager } from '@app/signal/splitLayout';
 import type {
-  SplitId,
+  SplitEventWithType,
   SplitManager,
 } from '@components/app/split-layout/layoutManager';
-import { createRoot, createSignal } from 'solid-js';
+import { batch, createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   pendingNotificationNavigationId,
@@ -29,41 +25,64 @@ import {
 import type { NotificationSource } from './notification-source';
 import { usePendingNotificationNavigationEffect } from './PendingNotificationNavigationEffect';
 
-function routerHarness(initiallyReady = false) {
-  let ready = initiallyReady;
-  const listeners = new Set<VoidFunction>();
-  const router = {
-    isReady: () => ready,
-    entry: () => (ready ? {} : undefined),
-    subscribe: (listener: VoidFunction) => {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
-    },
-  } as unknown as SplitRouter<SplitId>;
+type OpenAttempt = {
+  canOpen: () => boolean;
+  onApplied: VoidFunction;
+  succeed: VoidFunction;
+};
+
+function managerHarness(initiallyReady = false) {
+  const [ready, setReady] = createSignal(initiallyReady);
+  const [version, setVersion] = createSignal(initiallyReady ? 1 : 0);
+  const [event, setEvent] = createSignal<SplitEventWithType | undefined>(
+    undefined,
+    { equals: false }
+  );
+  const manager = {
+    contentNavigationReady: ready,
+    contentNavigationVersion: version,
+    events: event,
+  } as unknown as SplitManager;
+
   return {
-    router,
-    markReady: () => {
-      ready = true;
-      for (const listener of listeners) listener();
+    manager,
+    bind: () => {
+      batch(() => {
+        setReady(true);
+        setVersion((value) => value + 1);
+      });
     },
+    unbind: () => {
+      batch(() => {
+        setReady(false);
+        setVersion((value) => value + 1);
+      });
+    },
+    reconcile: () => setEvent({ type: 3 } as SplitEventWithType),
   };
 }
 
 describe('usePendingNotificationNavigationEffect', () => {
   let dispose: VoidFunction | undefined;
-  let completeOpen: VoidFunction | undefined;
+  let attempts: OpenAttempt[];
 
   beforeEach(() => {
+    attempts = [];
     mocks.openNotificationFromId.mockReset();
-    completeOpen = undefined;
-    mocks.openNotificationFromId.mockReturnValue({
-      match: (onSuccess: VoidFunction) => {
-        completeOpen = onSuccess;
-      },
-    });
+    mocks.openNotificationFromId.mockImplementation(
+      (
+        _notificationId: string,
+        _manager: SplitManager,
+        _source: NotificationSource,
+        options: Pick<OpenAttempt, 'canOpen' | 'onApplied'>
+      ) => ({
+        match: (onSuccess: VoidFunction) => {
+          attempts.push({ ...options, succeed: onSuccess });
+        },
+      })
+    );
     setPendingNotificationNavigationId(undefined);
     setGlobalSplitManager(undefined);
-    setGlobalSplitRouter(undefined);
   });
 
   afterEach(() => {
@@ -71,131 +90,108 @@ describe('usePendingNotificationNavigationEffect', () => {
     dispose = undefined;
     setPendingNotificationNavigationId(undefined);
     setGlobalSplitManager(undefined);
-    setGlobalSplitRouter(undefined);
   });
 
-  it('keeps a startup intent pending until route navigation is accepted', async () => {
-    const [activeSplitId, setActiveSplitId] = createSignal<SplitId>();
-    const manager = { activeSplitId } as unknown as SplitManager;
-    const router = routerHarness();
-    const source = {} as NotificationSource;
+  function mount(source = {} as NotificationSource) {
     dispose = createRoot((rootDispose) => {
       usePendingNotificationNavigationEffect(source);
       return rootDispose;
     });
+    return source;
+  }
 
-    setGlobalSplitManager(manager);
+  it('keeps a startup intent pending until the native host applies it', async () => {
+    const host = managerHarness();
+    const source = mount();
+    setGlobalSplitManager(host.manager);
     setPendingNotificationNavigationId('notification-1');
     await Promise.resolve();
 
     expect(mocks.openNotificationFromId).not.toHaveBeenCalled();
     expect(pendingNotificationNavigationId()).toBe('notification-1');
 
-    setGlobalSplitRouter(router.router);
-    await Promise.resolve();
-
-    expect(mocks.openNotificationFromId).not.toHaveBeenCalled();
-    expect(pendingNotificationNavigationId()).toBe('notification-1');
-
-    router.markReady();
-    await Promise.resolve();
-
-    expect(mocks.openNotificationFromId).not.toHaveBeenCalled();
-    expect(pendingNotificationNavigationId()).toBe('notification-1');
-
-    setActiveSplitId('source' as SplitId);
+    host.bind();
     await Promise.resolve();
 
     expect(mocks.openNotificationFromId).toHaveBeenCalledExactlyOnceWith(
       'notification-1',
-      manager,
+      host.manager,
       source,
-      { canOpen: expect.any(Function) }
+      { canOpen: expect.any(Function), onApplied: expect.any(Function) }
     );
+    expect(attempts[0]?.canOpen()).toBe(true);
+
+    attempts[0]?.succeed();
     expect(pendingNotificationNavigationId()).toBe('notification-1');
 
-    setActiveSplitId('new-source' as SplitId);
-    await Promise.resolve();
-    expect(mocks.openNotificationFromId).toHaveBeenCalledTimes(1);
-
-    completeOpen?.();
+    attempts[0]?.onApplied();
     expect(pendingNotificationNavigationId()).toBeUndefined();
   });
 
-  it('does not clear an in-flight intent across a route-host transition', async () => {
-    const sourceId = 'source' as SplitId;
-    const manager = {
-      activeSplitId: () => sourceId,
-    } as unknown as SplitManager;
-    const firstRouter = routerHarness(true).router;
-    const secondRouter = routerHarness(true).router;
-    const source = {} as NotificationSource;
-    const completions: VoidFunction[] = [];
-    mocks.openNotificationFromId.mockImplementation(() => ({
-      match: (onSuccess: VoidFunction) => {
-        completions.push(onSuccess);
-      },
-    }));
-    dispose = createRoot((rootDispose) => {
-      usePendingNotificationNavigationEffect(source);
-      return rootDispose;
-    });
-
-    setGlobalSplitManager(manager);
-    setGlobalSplitRouter(firstRouter);
+  it('retries a settled but aborted request after layout reconciliation', async () => {
+    const host = managerHarness(true);
+    mount();
+    setGlobalSplitManager(host.manager);
     setPendingNotificationNavigationId('notification-1');
     await Promise.resolve();
-    expect(completions).toHaveLength(1);
+    expect(attempts).toHaveLength(1);
 
-    setGlobalSplitRouter(undefined);
-    completions[0]?.();
-    expect(pendingNotificationNavigationId()).toBe('notification-1');
-
-    setGlobalSplitRouter(secondRouter);
+    host.reconcile();
     await Promise.resolve();
-    expect(completions).toHaveLength(2);
-    completions[1]?.();
+    expect(attempts).toHaveLength(1);
+
+    attempts[0]?.succeed();
+    await Promise.resolve();
+    expect(attempts).toHaveLength(2);
+
+    attempts[0]?.onApplied();
+    expect(pendingNotificationNavigationId()).toBe('notification-1');
+    attempts[1]?.succeed();
+    attempts[1]?.onApplied();
     expect(pendingNotificationNavigationId()).toBeUndefined();
   });
 
-  it('keeps an in-flight intent across account teardown', async () => {
-    const sourceId = 'source' as SplitId;
-    const firstManager = {
-      activeSplitId: () => sourceId,
-    } as unknown as SplitManager;
-    const secondManager = {
-      activeSplitId: () => sourceId,
-    } as unknown as SplitManager;
-    const firstRouter = routerHarness(true).router;
-    const secondRouter = routerHarness(true).router;
-    const source = {} as NotificationSource;
-    const completions: VoidFunction[] = [];
-    mocks.openNotificationFromId.mockImplementation(() => ({
-      match: (onSuccess: VoidFunction) => {
-        completions.push(onSuccess);
-      },
-    }));
-    dispose = createRoot((rootDispose) => {
-      usePendingNotificationNavigationEffect(source);
-      return rootDispose;
-    });
-
-    setGlobalSplitManager(firstManager);
-    setGlobalSplitRouter(firstRouter);
+  it('invalidates an in-flight request when the route host is replaced', async () => {
+    const host = managerHarness(true);
+    mount();
+    setGlobalSplitManager(host.manager);
     setPendingNotificationNavigationId('notification-1');
     await Promise.resolve();
-    expect(completions).toHaveLength(1);
+    expect(attempts).toHaveLength(1);
+
+    host.unbind();
+    expect(attempts[0]?.canOpen()).toBe(false);
+    host.bind();
+    await Promise.resolve();
+    expect(attempts).toHaveLength(2);
+
+    attempts[0]?.succeed();
+    attempts[0]?.onApplied();
+    expect(pendingNotificationNavigationId()).toBe('notification-1');
+    attempts[1]?.succeed();
+    attempts[1]?.onApplied();
+    expect(pendingNotificationNavigationId()).toBeUndefined();
+  });
+
+  it('keeps the intent across account teardown and ignores stale completion', async () => {
+    const first = managerHarness(true);
+    const second = managerHarness(true);
+    mount();
+    setGlobalSplitManager(first.manager);
+    setPendingNotificationNavigationId('notification-1');
+    await Promise.resolve();
+    expect(attempts).toHaveLength(1);
 
     setGlobalSplitManager(undefined);
-    setGlobalSplitRouter(undefined);
-    completions[0]?.();
+    attempts[0]?.succeed();
+    attempts[0]?.onApplied();
     expect(pendingNotificationNavigationId()).toBe('notification-1');
 
-    setGlobalSplitManager(secondManager);
-    setGlobalSplitRouter(secondRouter);
+    setGlobalSplitManager(second.manager);
     await Promise.resolve();
-    expect(completions).toHaveLength(2);
-    completions[1]?.();
+    expect(attempts).toHaveLength(2);
+    attempts[1]?.succeed();
+    attempts[1]?.onApplied();
     expect(pendingNotificationNavigationId()).toBeUndefined();
   });
 });

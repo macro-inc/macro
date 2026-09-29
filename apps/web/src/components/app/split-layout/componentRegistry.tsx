@@ -25,10 +25,7 @@ import {
   ProjectView,
 } from '@app/features/projects/project-view';
 import { ReminderEditorSplit } from '@app/features/reminders/ReminderEditorSplit';
-import {
-  REMINDER_DETAIL_COMPONENT_ID,
-  reminderIdFromLegacyComponent,
-} from '@app/features/reminders/reminder-navigation';
+import { REMINDER_DETAIL_COMPONENT_ID } from '@app/features/reminders/reminder-navigation';
 import { RemindersRouteView } from '@app/features/reminders/route';
 import { ReviewsRouteView } from '@app/features/reviews-view/route';
 import { SettingsRouteView } from '@app/features/settings/route';
@@ -135,20 +132,6 @@ export function resolveComponent(
         return {
           element: () => base.factory({ ...(params ?? {}), agentsRoute: name }),
           initialMeta: resolveInitialMeta('agents', base.initialMeta),
-        };
-      }
-    }
-    const legacyReminderId = reminderIdFromLegacyComponent(name);
-    if (legacyReminderId) {
-      const base = REGISTRY.get(REMINDER_DETAIL_COMPONENT_ID);
-      if (base) {
-        return {
-          element: () =>
-            base.factory({ ...(params ?? {}), reminderId: legacyReminderId }),
-          initialMeta: resolveInitialMeta(
-            REMINDER_DETAIL_COMPONENT_ID,
-            base.initialMeta
-          ),
         };
       }
     }

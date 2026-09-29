@@ -1,20 +1,11 @@
-import type { SplitRouter } from '@app/lib/split-router';
+import { setGlobalSplitManager } from '@app/signal/splitLayout';
 import type {
-  SplitId,
+  SplitHandle,
   SplitManager,
 } from '@components/app/split-layout/layoutManager';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-const flags = vi.hoisted(() => ({ reminders: true }));
-
-vi.mock('@core/constant/featureFlags', () => ({
-  enableReminders: { key: 'enable-reminders' },
-  isFeatureEnabled: () => flags.reminders,
-}));
-
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   HOME_REMINDER_DETAIL_ROUTE_ID,
-  LEGACY_REMINDER_DETAIL_COMPONENT_PREFIX,
   openReminderDetail,
   REMINDER_DETAIL_COMPONENT_ID,
   REMINDER_DETAIL_ROUTE_ID,
@@ -22,8 +13,9 @@ import {
   reminderDetailPath,
   reminderDetailUrl,
   reminderIdFromDetailContent,
-  reminderIdFromLegacyComponent,
 } from './reminder-navigation';
+
+afterEach(() => setGlobalSplitManager(undefined));
 
 describe('reminder detail destination', () => {
   it('uses a canonical route while retaining route-backed split content', () => {
@@ -54,19 +46,7 @@ describe('reminder detail destination', () => {
     );
   });
 
-  it('decodes legacy links only at the compatibility boundary', () => {
-    expect(
-      reminderIdFromLegacyComponent(
-        `${LEGACY_REMINDER_DETAIL_COMPONENT_PREFIX}reminder-1`
-      )
-    ).toBe('reminder-1');
-    expect(reminderIdFromLegacyComponent('reminders')).toBeUndefined();
-    expect(
-      reminderIdFromLegacyComponent(LEGACY_REMINDER_DETAIL_COMPONENT_PREFIX)
-    ).toBeUndefined();
-  });
-
-  it('recognizes standalone, Home, and legacy reminder content', () => {
+  it('recognizes standalone and Home reminder content', () => {
     expect(
       reminderIdFromDetailContent(
         reminderDetailDestination('standalone').content
@@ -89,12 +69,6 @@ describe('reminder detail destination', () => {
         },
       })
     ).toBe('inline');
-    expect(
-      reminderIdFromDetailContent({
-        type: 'component',
-        id: `${LEGACY_REMINDER_DETAIL_COMPONENT_PREFIX}legacy`,
-      })
-    ).toBe('legacy');
   });
 
   it('prefers current route identity over preserved component params', () => {
@@ -119,85 +93,42 @@ describe('reminder detail destination', () => {
 });
 
 describe('openReminderDetail', () => {
-  beforeEach(() => {
-    flags.reminders = true;
-  });
+  it.each([false, true])(
+    'navigates through the manager-owned route (new split: %s)',
+    (openInNewSplit) => {
+      const openWithSplit = vi.fn(() => ({ status: 'navigating' as const }));
+      const handle = { id: 'source' } as SplitHandle;
+      const onApplied = vi.fn();
+      const manager = { openWithSplit } as unknown as SplitManager;
 
-  it.each([
-    [false, 'current'],
-    [true, 'new-split'],
-  ] as const)(
-    'navigates through route claims (new split: %s)',
-    (openInNewSplit, target) => {
-      const navigate = vi.fn();
-      const manager = {
-        activeSplitId: () => 'source',
-      } as unknown as SplitManager;
-      const router = { navigate } as unknown as Pick<
-        SplitRouter<SplitId>,
-        'navigate'
-      >;
-
-      openReminderDetail('reminder-1', {
+      const result = openReminderDetail('reminder-1', {
         manager,
-        router,
+        handle,
         openInNewSplit,
         mergeHistory: true,
+        referredFrom: 'home',
+        onApplied,
       });
 
-      expect(navigate).toHaveBeenCalledExactlyOnceWith(
-        'source',
-        '/reminder/reminder-1',
-        { replace: true, target }
+      expect(result).toEqual({ status: 'navigating' });
+      expect(openWithSplit).toHaveBeenCalledExactlyOnceWith(
+        reminderDetailDestination('reminder-1').content,
+        {
+          activate: true,
+          preferNewSplit: openInNewSplit,
+          handle,
+          mergeHistory: true,
+          referredFrom: 'home',
+          search: {},
+          onApplied,
+        }
       );
     }
   );
 
-  it('uses route-aware identity in the startup fallback', () => {
-    const activate = vi.fn();
-    const openWithSplit = vi.fn();
-    const manager = {
-      activeSplitId: () => undefined,
-      splits: () => [
-        {
-          id: 'home',
-          content: {
-            type: 'component',
-            id: 'home',
-            entryMetadata: {
-              route: {
-                matches: [
-                  {
-                    id: HOME_REMINDER_DETAIL_ROUTE_ID,
-                    params: { reminderId: 'reminder-1' },
-                  },
-                ],
-              },
-            },
-          },
-        },
-      ],
-      getSplit: () => ({ activate }),
-      openWithSplit,
-    } as unknown as SplitManager;
-
-    openReminderDetail('reminder-1', { manager });
-
-    expect(activate).toHaveBeenCalledOnce();
-    expect(openWithSplit).not.toHaveBeenCalled();
-  });
-
-  it('does not mount fallback content while reminders are disabled', () => {
-    flags.reminders = false;
-    const openWithSplit = vi.fn();
-    const manager = {
-      activeSplitId: () => undefined,
-      splits: () => [],
-      openWithSplit,
-    } as unknown as SplitManager;
-
-    openReminderDetail('reminder-1', { manager });
-
-    expect(openWithSplit).not.toHaveBeenCalled();
+  it('reports unavailable when the app has no split manager', () => {
+    expect(openReminderDetail('reminder-1')).toEqual({
+      status: 'unavailable',
+    });
   });
 });

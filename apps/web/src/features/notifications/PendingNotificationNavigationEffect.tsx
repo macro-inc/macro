@@ -1,4 +1,8 @@
-import { globalSplitManager, globalSplitRouter } from '@app/signal/splitLayout';
+import { globalSplitManager } from '@app/signal/splitLayout';
+import type {
+  SplitEventWithType,
+  SplitManager,
+} from '@components/app/split-layout/layoutManager';
 import { toast } from '@core/component/Toast/Toast';
 import {
   type NotificationSource,
@@ -6,125 +10,107 @@ import {
   pendingNotificationNavigationId,
   setPendingNotificationNavigationId,
 } from '@notifications';
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  on,
-  onCleanup,
-} from 'solid-js';
+import { createEffect, createSignal, onCleanup } from 'solid-js';
+
+type NavigationAttempt = {
+  notificationId: string;
+  layoutManager: SplitManager;
+  navigationVersion: number;
+  eventAtStart: SplitEventWithType | undefined;
+  settled: boolean;
+};
 
 export function usePendingNotificationNavigationEffect(
   notificationSource: NotificationSource
 ) {
-  const [routerRevision, setRouterRevision] = createSignal(0);
+  const [retryRevision, setRetryRevision] = createSignal(0);
   let disposed = false;
-  let activeAttempt:
-    | {
-        notificationId: string;
-        layoutManager: NonNullable<ReturnType<typeof globalSplitManager>>;
-        router: NonNullable<ReturnType<typeof globalSplitRouter>>;
-      }
-    | undefined;
-
-  createEffect(() => {
-    const router = globalSplitRouter();
-    if (!router) return;
-    const unsubscribe = router.subscribe(() =>
-      setRouterRevision((revision) => revision + 1)
-    );
-    onCleanup(unsubscribe);
-  });
-
-  const routableSourceId = createMemo(() => {
-    routerRevision();
-    const layoutManager = globalSplitManager();
-    const router = globalSplitRouter();
-    const sourceId = layoutManager?.activeSplitId();
-    if (!router?.isReady() || !sourceId || !router.entry(sourceId)) return;
-    return sourceId;
-  });
+  let activeAttempt: NavigationAttempt | undefined;
 
   onCleanup(() => {
     disposed = true;
     activeAttempt = undefined;
   });
 
-  createEffect(
-    on(
-      [
-        pendingNotificationNavigationId,
-        globalSplitManager,
-        globalSplitRouter,
-        routableSourceId,
-      ],
-      ([notificationId, layoutManager, router, sourceId]) => {
-        if (!notificationId || !layoutManager || !router || !sourceId) {
-          activeAttempt = undefined;
-          return;
+  createEffect(() => {
+    retryRevision();
+    const notificationId = pendingNotificationNavigationId();
+    const layoutManager = globalSplitManager();
+    const navigationReady = layoutManager?.contentNavigationReady() ?? false;
+    const navigationVersion = layoutManager?.contentNavigationVersion() ?? 0;
+    const currentEvent = layoutManager?.events();
+
+    if (!notificationId || !layoutManager || !navigationReady) {
+      activeAttempt = undefined;
+      return;
+    }
+
+    if (
+      activeAttempt?.notificationId === notificationId &&
+      activeAttempt.layoutManager === layoutManager &&
+      activeAttempt.navigationVersion === navigationVersion
+    ) {
+      // Do not overlap a fetch/open. Once it settles without being applied,
+      // retry only after reconciliation changes the live layout.
+      if (
+        !activeAttempt.settled ||
+        activeAttempt.eventAtStart === currentEvent
+      ) {
+        return;
+      }
+    }
+
+    const attempt: NavigationAttempt = {
+      notificationId,
+      layoutManager,
+      navigationVersion,
+      eventAtStart: currentEvent,
+      settled: false,
+    };
+    activeAttempt = attempt;
+
+    const isCurrentAttempt = () =>
+      !disposed &&
+      activeAttempt === attempt &&
+      pendingNotificationNavigationId() === notificationId &&
+      globalSplitManager() === layoutManager &&
+      layoutManager.contentNavigationReady() &&
+      layoutManager.contentNavigationVersion() === navigationVersion;
+
+    const onApplied = () => {
+      if (!isCurrentAttempt()) return;
+      activeAttempt = undefined;
+      setPendingNotificationNavigationId(undefined);
+    };
+
+    void openNotificationFromId(
+      notificationId,
+      layoutManager,
+      notificationSource,
+      { canOpen: isCurrentAttempt, onApplied }
+    ).match(
+      () => {
+        if (!isCurrentAttempt()) return;
+        attempt.settled = true;
+        if (layoutManager.events() !== attempt.eventAtStart) {
+          setRetryRevision((revision) => revision + 1);
         }
-        // Reminder intents need the route host so feature-flag loading is
-        // handled reactively instead of falling through to an ungated legacy
-        // component mount. Router and manager signals keep the intent pending
-        // until navigate has a reconciled source entry to accept.
+      },
+      (error) => {
+        if (activeAttempt !== attempt) return;
+        activeAttempt = undefined;
+        if (error.tag === 'NavigationDeferredError') return;
         if (
-          activeAttempt?.notificationId === notificationId &&
-          activeAttempt.layoutManager === layoutManager &&
-          activeAttempt.router === router
+          disposed ||
+          pendingNotificationNavigationId() !== notificationId ||
+          globalSplitManager() !== layoutManager ||
+          layoutManager.contentNavigationVersion() !== navigationVersion
         ) {
           return;
         }
-
-        const attempt = { notificationId, layoutManager, router };
-        activeAttempt = attempt;
-
-        const canOpen = () =>
-          !disposed &&
-          activeAttempt === attempt &&
-          pendingNotificationNavigationId() === notificationId &&
-          globalSplitManager() === layoutManager &&
-          globalSplitRouter() === router &&
-          router.isReady() &&
-          (() => {
-            const currentSourceId = layoutManager.activeSplitId();
-            return Boolean(currentSourceId && router.entry(currentSourceId));
-          })();
-
-        void openNotificationFromId(
-          notificationId,
-          layoutManager,
-          notificationSource,
-          { canOpen }
-        ).match(
-          () => {
-            if (activeAttempt !== attempt) return;
-            activeAttempt = undefined;
-            if (
-              !disposed &&
-              pendingNotificationNavigationId() === notificationId &&
-              globalSplitManager() === layoutManager &&
-              globalSplitRouter() === router
-            ) {
-              setPendingNotificationNavigationId(undefined);
-            }
-          },
-          (error) => {
-            if (activeAttempt !== attempt) return;
-            activeAttempt = undefined;
-            if (error.tag === 'NavigationDeferredError') return;
-            if (
-              disposed ||
-              pendingNotificationNavigationId() !== notificationId ||
-              globalSplitManager() !== layoutManager ||
-              globalSplitRouter() !== router
-            ) {
-              return;
-            }
-            setPendingNotificationNavigationId(undefined);
-            toast.failure('Failed to open notification.');
-          }
-        );
+        setPendingNotificationNavigationId(undefined);
+        toast.failure('Failed to open notification.');
       }
-    )
-  );
+    );
+  });
 }

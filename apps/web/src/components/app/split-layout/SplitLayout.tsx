@@ -189,4 +189,3 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
     </SplitRouter.Root>
   );
 }
-

@@ -1,6 +1,9 @@
 import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { openCalendarEventSplit } from '@app/features/calendar-view/open-calendar-event';
-import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import {
+  useSplitDisplayName,
+  useSplitPanelOrThrow,
+} from '@components/app/split-layout/layoutUtils';
 import { ItemPreview } from '@core/component/ItemPreview';
 import { toast } from '@core/component/Toast/Toast';
 import type { ReminderEntity } from '@entity';
@@ -18,7 +21,7 @@ import {
 } from '@queries/soup/cache';
 import type { Reminder } from '@service-storage/generated/schemas/reminder';
 import { Button } from '@ui';
-import { createMemo, Match, onCleanup, onMount, Show, Switch } from 'solid-js';
+import { createMemo, Match, onCleanup, Show, Switch } from 'solid-js';
 import { ReminderForm, type ReminderFormValues } from './ReminderForm';
 import {
   reminderEditPatch,
@@ -259,7 +262,7 @@ function ReminderDetailsForId(props: {
 /** Restorable split adapter for {@link ReminderDetails}. */
 export function ReminderEditorSplit(props: { reminderId: string | undefined }) {
   const panel = useSplitPanelOrThrow();
-  onMount(() => panel.handle.setDisplayName('Reminder'));
+  useSplitDisplayName(() => 'Reminder');
 
   return (
     <ReminderDetails

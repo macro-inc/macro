@@ -1,6 +1,9 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { defineRoute, useRouteParams } from '@app/lib/split-router';
-import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import {
+  useSplitDisplayName,
+  useSplitPanelOrThrow,
+} from '@components/app/split-layout/layoutUtils';
 import {
   RedirectSplit,
   usePageViewTracking,
@@ -8,7 +11,7 @@ import {
 } from '@components/app/split-layout/split-router/app-route-shell';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { enableReminders } from '@core/constant/featureFlags';
-import { lazy, onMount, Show } from 'solid-js';
+import { lazy, Show } from 'solid-js';
 import { z } from 'zod';
 import { getViewPreset } from '../next-soup/sidebar/soup-filter-presets';
 import { ReminderDetails } from './ReminderEditorSplit';
@@ -58,7 +61,7 @@ function ReminderDetailView() {
   const params = useRouteParams(reminderDetailRoute);
   const panel = useSplitPanelOrThrow();
   usePageViewTracking('reminder');
-  onMount(() => panel.handle.setDisplayName('Reminder'));
+  useSplitDisplayName(() => 'Reminder');
   return (
     <ReminderDetails
       reminderId={params.reminderId}
