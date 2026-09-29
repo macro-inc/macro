@@ -104,6 +104,12 @@ The `beforeBuildCommand` is `just build-tauri`, which runs `bun run build` and
 emits the frontend into `dist`. Tauri then packages that output
 according to `tauri.conf.json`.
 
+GraphQL hydration checkpoints require the native
+`graphql_cache_current_storage_generation` command. When shipping this frontend
+through the bundle updater, set `MIN_NATIVE_BUILD` to the first native build that
+includes that command. Older binaries must receive a native update before this
+bundle; they cannot validate a saved hydration cursor against the cache database.
+
 ## Automated offline tests (Linux)
 
 See [native E2E](../../tests/native/README.md) for the isolated WebDriver setup,

@@ -1292,6 +1292,12 @@ html[data-touch-device='true'] :is(
   animation: skeleton-shimmer 1.4s infinite;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-shimmer::after {
+    animation: none;
+  }
+}
+
 @keyframes slideIn {
   from { transform: translateX(calc(100% + 16px)); }
   to   { transform: translateX(0                ); }

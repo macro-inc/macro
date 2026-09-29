@@ -1,9 +1,13 @@
-import { defineRoute } from '@app/lib/split-router';
+import { tasksSplitRoute } from '@app/features/tasks-view/route';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { defineRoute, useNavigate, useParams } from '@app/lib/split-router';
 import {
   usePageViewTracking,
   withAuth,
 } from '@components/app/split-layout/split-router/app-route-shell';
-import { lazy } from 'solid-js';
+import { LoadingBlock } from '@core/component/LoadingBlock';
+import { enableTasksReviews } from '@core/constant/featureFlags';
+import { lazy, onMount, Show } from 'solid-js';
 import { z } from 'zod';
 import { reviewsTabSearch } from './reviews-tab-search';
 
@@ -15,12 +19,35 @@ const ReviewsPrDetailRouteView = lazy(async () => ({
     .ReviewsPrDetailRouteView,
 }));
 
+function DisabledReviewsRoute() {
+  const navigate = useNavigate();
+  onMount(() =>
+    navigate({ route: tasksSplitRoute, params: {} }, { replace: true })
+  );
+  return null;
+}
+
 function TrackedReviewsView() {
   usePageViewTracking('reviews');
   return <ReviewsView />;
 }
 
-export const ReviewsRouteView = withAuth(TrackedReviewsView);
+export const ReviewsRouteView = withAuth(() => {
+  const params = useParams<{ foreignEntityId?: string }>();
+  const flag = useFeatureFlag(enableTasksReviews);
+  return (
+    <Show
+      when={params.foreignEntityId || flag().enabled}
+      fallback={
+        <Show when={!flag().loading} fallback={<LoadingBlock />}>
+          <DisabledReviewsRoute />
+        </Show>
+      }
+    >
+      <TrackedReviewsView />
+    </Show>
+  );
+});
 
 export const reviewsPrRoute = defineRoute({
   id: 'reviews-pr',
@@ -32,6 +59,7 @@ export const reviewsPrRoute = defineRoute({
     namespace: 'block',
     id: `pr:${foreignEntityId}`,
   }),
+  toReference: ({ foreignEntityId }) => ({ type: 'pr', id: foreignEntityId }),
 });
 
 export const reviewsSplitRoute = defineRoute({

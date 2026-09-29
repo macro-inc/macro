@@ -233,7 +233,14 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         "test-bucket",
         "test-docx-bucket",
     );
-    let document_repo = documents::outbound::pg_document_repo::PgDocumentRepo::new(pool.clone());
+    let document_repo = documents::outbound::pg_document_repo::PgDocumentRepo::new(
+        pool.clone(),
+        entity_registry_db_utils::OwnedEntityRegistrar::new(
+            entity_registry::OwnerGrantPolicy::new(bots::outbound::pg_bots_repo::PgBotsRepo::new(
+                pool.clone(),
+            )),
+        ),
+    );
     let cloudfront_config = documents::domain::models::CloudFrontConfig {
         distribution_url: "https://test.cloudfront.net".to_string(),
         signer_public_key_id: "test-key-id".to_string(),
@@ -410,6 +417,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         skill_tool_context: ai_tools::build_skill_tool_context(
             search_service_client.clone(),
             soup_service.clone(),
+            &document_tool_context,
         ),
         schedule_tool_context: ai_tools::no_op_schedule_context(),
         anthropic_tool_context: ai_tools::build_anthropic_tool_context_test(),

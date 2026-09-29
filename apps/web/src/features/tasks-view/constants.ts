@@ -17,12 +17,17 @@ export const TEAM_TASK_TABS: TaskTabItem[] = [
   { id: 'team-tasks', label: 'All tasks' },
 ];
 
-export const TASK_TABS = [...PERSONAL_TASK_TABS, ...TEAM_TASK_TABS];
+export const TASK_TABS: TaskTabItem[] = [
+  ...PERSONAL_TASK_TABS,
+  ...TEAM_TASK_TABS,
+  { id: 'projects', label: 'Projects' },
+];
 
 export const TASK_DEFAULT_GROUP_BY: Record<TasksTab, TaskGroupBy> = {
   'my-tasks': 'priority',
   'created-by-me': 'status',
   'team-tasks': 'priority',
+  projects: 'status',
 };
 
 export const TASK_GROUP_OPTIONS: {

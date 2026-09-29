@@ -1,6 +1,6 @@
 import { type CompletionContext, getTokens, Model } from '@ironcalc/wasm';
 import { format as formatExcelNumber } from 'ssf';
-import { cellPlainText } from './cell-mentions';
+import { cellDateMention, cellPlainText } from './cell-mentions';
 import {
   formatCellAddress,
   parseCellAddress,
@@ -85,9 +85,74 @@ const timeFormatter = new Intl.DateTimeFormat('en-US', {
   second: '2-digit',
 });
 const DAY_MILLISECONDS = 86_400_000;
+const SERIAL_EPOCH = Date.UTC(1899, 11, 30);
+/** 1 January 2000 as an Excel serial number. */
+const MIN_FORMULA_DATE_SERIAL = 36_526;
 // IronCalc treats this exact extent as a column style, without materializing
 // a style cell for every empty row. The editable grid is still bounded to 1,000.
 const ENGINE_COLUMN_HEIGHT = 1_048_576;
+const numericLiteral = /^\s*[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?\s*$/i;
+
+/**
+ * Excel serial for the mention's local calendar day. Presets such as
+ * "Tomorrow" carry an end-of-day time, so the time of day is dropped to keep
+ * date differences whole.
+ */
+function dateMentionSerial(iso: string): number {
+  const date = new Date(iso);
+  return (
+    (Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) -
+      SERIAL_EPOCH) /
+    DAY_MILLISECONDS
+  );
+}
+
+/**
+ * IronCalc assigns date and time number formats to typed dates and to formulas
+ * that operate on them, as Excel does. Honor those for cells without an
+ * explicit Macro format; other inferred formats stay general.
+ */
+function inferredFormat(numberFormat: string): 'date' | 'time' | undefined {
+  const tokens = numberFormat.replace(/"[^"]*"|\\.|\[[^\]]*\]/g, '');
+  if (/[dy]/i.test(tokens)) return 'date';
+  if (/[hs]/i.test(tokens)) return 'time';
+}
+
+/**
+ * Whether the engine's own number format may decide how a general cell shows.
+ * Plain numeric literals never become dates; dates and formulas may.
+ */
+function canInferFormat(
+  cell: SpreadsheetCell,
+  value: string,
+  isDate: boolean
+): boolean {
+  return (
+    (!cell.format || cell.format === 'general') &&
+    !cell.numberFormat &&
+    (isDate || !numericLiteral.test(value))
+  );
+}
+
+/**
+ * IronCalc infers a formula's date format from the cells it references when
+ * the formula is entered, so plain values go first and formulas follow in
+ * grid order, which chained schedules usually read in.
+ */
+function entryOrder(cells: SpreadsheetCells): string[] {
+  const isFormula = (address: string) =>
+    cells[address].value.startsWith('=') && cells[address].format !== 'text';
+  const addresses = Object.keys(cells).sort((a, b) => {
+    const first = parseCellAddress(a);
+    const second = parseCellAddress(b);
+    if (!first || !second) return first ? -1 : second ? 1 : 0;
+    return first.row - second.row || first.column - second.column;
+  });
+  return [
+    ...addresses.filter((address) => !isFormula(address)),
+    ...addresses.filter(isFormula),
+  ];
+}
 
 function displayNumber(number: number, cell?: SpreadsheetCell): string {
   const format = cell?.format ?? 'general';
@@ -236,15 +301,28 @@ export function createInitializedSpreadsheetCalculator(): SpreadsheetCalculator 
           }
         }
       }
+      const inferableBySheet: string[][] = [];
       for (const [sheetIndex, { id, cells, rowCount }] of bounded.entries()) {
         const unsupported: Record<string, string> = {};
         unsupportedBySheet[id] = unsupported;
-        for (const address of Object.keys(cells).sort()) {
+        const inferable: string[] = [];
+        inferableBySheet.push(inferable);
+        for (const address of entryOrder(cells)) {
           const position = parseCellAddress(address);
           const cell = cells[address];
-          const value = cellPlainText(cell.value);
-          const literal = cell.format === 'text' || value !== cell.value;
+          const dateMention =
+            cell.format === 'text' ? undefined : cellDateMention(cell.value);
+          const value = dateMention
+            ? String(dateMentionSerial(dateMention.date))
+            : cellPlainText(cell.value);
+          const literal =
+            !dateMention && (cell.format === 'text' || value !== cell.value);
           if (!position || position.row >= rowCount || value === '') continue;
+          if (
+            !literal &&
+            canInferFormat(cell, value, dateMention !== undefined)
+          )
+            inferable.push(address);
           const fn = literal ? undefined : unsupportedFunction(value);
           if (fn) {
             unsupported[address] =
@@ -311,10 +389,38 @@ export function createInitializedSpreadsheetCalculator(): SpreadsheetCalculator 
             position.column + 1,
             input
           );
+          // A date pill is a date value: formulas referencing it inherit the format.
+          if (dateMention)
+            model.updateRangeStyle(
+              {
+                sheet: sheetIndex,
+                row: position.row + 1,
+                column: position.column + 1,
+                width: 1,
+                height: 1,
+              },
+              'num_fmt',
+              'm/d/yyyy'
+            );
+        }
+      }
+      model.resumeEvaluation();
+      model.evaluate();
+      const inferredBySheet = inferableBySheet.map((inferable, sheetIndex) => {
+        const inferred: Record<string, 'date' | 'time'> = {};
+        for (const address of inferable) {
+          const position = parseCellAddress(address)!;
+          const row = position.row + 1;
+          const column = position.column + 1;
+          if (model.getCellType(sheetIndex, row, column) !== 1) continue;
+          const format = inferredFormat(
+            model.getCellStyle(sheetIndex, row, column).style.num_fmt
+          );
+          if (format) inferred[address] = format;
         }
         // The WASM binding exposes numeric values through its formatter. Read
-        // sufficient significant digits in a fixed locale, before display
-        // formatting, so sums and percentages do not use rounded UI strings.
+        // sufficient significant digits in a fixed locale, after inspecting the
+        // engine's own formats, so sums and percentages do not use rounded UI strings.
         model.updateRangeStyle(
           {
             sheet: sheetIndex,
@@ -326,11 +432,11 @@ export function createInitializedSpreadsheetCalculator(): SpreadsheetCalculator 
           'num_fmt',
           '0.###############E+00'
         );
-      }
-      model.resumeEvaluation();
-      model.evaluate();
+        return inferred;
+      });
       for (const [sheetIndex, { id, cells, rowCount }] of bounded.entries()) {
         const unsupported = unsupportedBySheet[id];
+        const inferred = inferredBySheet[sheetIndex];
         const results: SpreadsheetCalculation = {};
         // Include array spill results, which have no persisted source cell.
         for (let row = 0; row < rowCount; row++) {
@@ -369,7 +475,20 @@ export function createInitializedSpreadsheetCalculator(): SpreadsheetCalculator 
               const number = Number(display);
               const customFormat = cells[address]?.numberFormat;
 
-              let formatted = displayNumber(number, cells[address]);
+              const engineFormat = inferred[address];
+              // IronCalc also formats a difference of two dates as a date, so
+              // formula results only count as dates from 2000 onwards; a day
+              // count or a negative number stays a plain number.
+              const dateLike =
+                engineFormat !== 'date' ||
+                !cells[address].value.startsWith('=') ||
+                number >= MIN_FORMULA_DATE_SERIAL;
+              let formatted = displayNumber(
+                number,
+                engineFormat && dateLike
+                  ? { ...cells[address], format: engineFormat }
+                  : cells[address]
+              );
               let warning: string | undefined;
               if (customFormat) {
                 try {

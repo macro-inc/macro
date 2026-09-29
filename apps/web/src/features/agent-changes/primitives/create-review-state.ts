@@ -11,6 +11,7 @@ import { type Accessor, createMemo, createSignal } from 'solid-js';
 import type { Changeset } from '../core/changeset';
 import {
   type NoteAnchor,
+  type NoteDraft,
   noteAnchorKey,
   queuedNotes,
   type ReviewNote,
@@ -32,8 +33,12 @@ export type ReviewController = {
 
   notes: Accessor<ReviewNote[]>;
   queued: Accessor<ReviewNote[]>;
-  /** Where a note is being written, if one is. */
-  composing: Accessor<NoteAnchor | undefined>;
+  /**
+   * The note being written, text included, so it survives the diff view
+   * re-creating the editor.
+   */
+  draft: Accessor<NoteDraft | undefined>;
+  setDraft: (draft: NoteDraft | undefined) => void;
   openNote: (anchor: NoteAnchor) => void;
   cancelNote: () => void;
   addNote: (anchor: NoteAnchor, text: string) => void;
@@ -60,6 +65,8 @@ function isNote(raw: unknown): raw is ReviewNote {
     typeof note.path === 'string' &&
     typeof note.side === 'string' &&
     SIDES.has(note.side) &&
+    (note.startSide === undefined ||
+      (typeof note.startSide === 'string' && SIDES.has(note.startSide))) &&
     typeof note.lineNumber === 'number' &&
     typeof note.endLineNumber === 'number' &&
     typeof note.text === 'string' &&
@@ -118,7 +125,7 @@ export function createReviewState(options: {
     storage: options.storage,
   });
   const [active, setActive] = createSignal<string | undefined>();
-  const [composing, setComposing] = createSignal<NoteAnchor | undefined>();
+  const [draft, setDraft] = createSignal<NoteDraft | undefined>();
 
   const changesetId = () => options.changeset()?.id;
   const paths = createMemo(
@@ -164,14 +171,15 @@ export function createReviewState(options: {
 
     notes,
     queued: () => queuedNotes(notes()),
-    composing,
-    openNote: (anchor) => setComposing(anchor),
-    cancelNote: () => setComposing(undefined),
+    draft,
+    setDraft,
+    openNote: (anchor) => setDraft({ range: anchor, text: '' }),
+    cancelNote: () => setDraft(undefined),
     addNote: (anchor, text) => {
       const trimmed = text.trim();
-      const current = composing();
-      if (current && noteAnchorKey(current) === noteAnchorKey(anchor)) {
-        setComposing(undefined);
+      const current = draft();
+      if (current && noteAnchorKey(current.range) === noteAnchorKey(anchor)) {
+        setDraft(undefined);
       }
       if (trimmed === '') return;
       setStored((previous) => ({

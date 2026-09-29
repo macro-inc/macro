@@ -307,15 +307,30 @@ async fn reactions_attachments_and_resolution_use_shared_message_data(pool: PgPo
     });
     let root = repo.create(create).await.unwrap();
     assert_eq!(root.attachments.len(), 1);
-    repo.react(&root.parent, root.id, USER, "👍", true)
+    let added = repo
+        .react(&root.parent, root.id, USER, "👍", true)
         .await
         .unwrap();
+    assert!(added.changed);
     let reacted = repo
         .react(&root.parent, root.id, USER, "👍", true)
         .await
         .unwrap();
-    assert_eq!(reacted.reactions.len(), 1);
-    assert_eq!(reacted.reactions[0].users, vec![USER]);
+    assert!(!reacted.changed);
+    assert_eq!(reacted.message.reactions.len(), 1);
+    assert_eq!(reacted.message.reactions[0].users, vec![USER]);
+    let removed = repo
+        .react(&root.parent, root.id, USER, "👍", false)
+        .await
+        .unwrap();
+    assert!(removed.changed);
+    assert!(removed.message.reactions.is_empty());
+    let removed_again = repo
+        .react(&root.parent, root.id, USER, "👍", false)
+        .await
+        .unwrap();
+    assert!(!removed_again.changed);
+    assert!(removed_again.message.reactions.is_empty());
     assert!(
         repo.patch_thread(
             &root.parent,
@@ -678,7 +693,7 @@ async fn discussion_delivery_context_reads_document_assignees_and_thread_authors
         .await
         .unwrap();
     assert!(context.is_task);
-    assert_eq!(context.owner, USER);
+    assert_eq!(context.owner.as_deref(), Some(USER));
     assert_eq!(context.assignees, vec![USER]);
     assert_eq!(context.participants, vec![USER]);
 }
@@ -1250,4 +1265,27 @@ async fn highlight_threads_read_the_text_the_highlight_covers(pool: PgPool) {
         .await
         .unwrap();
     assert_eq!(patched.anchor, anchor(covered, Some("edited words")));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn parent_of_names_only_a_live_message_parent(pool: PgPool) {
+    setup(&pool).await;
+    let repo = PgMessageRepository::new(pool.clone());
+    let parent = MessageParent::parse("document", "message-doc-a").unwrap();
+    let root = repo
+        .create(command("message-doc-a", None, "root"))
+        .await
+        .unwrap();
+    let reply = repo
+        .create(command("message-doc-a", Some(root.id), "reply"))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        repo.parent_of(reply.id).await.unwrap(),
+        Some(parent.clone())
+    );
+    repo.delete(&parent, reply.id).await.unwrap();
+    assert_eq!(repo.parent_of(reply.id).await.unwrap(), None);
+    assert_eq!(repo.parent_of(Uuid::now_v7()).await.unwrap(), None);
 }

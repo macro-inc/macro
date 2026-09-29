@@ -104,9 +104,10 @@ export function getActionVerb(type: NotificationType): string {
       .with('mentioned_in_document_comment', () => 'mentioned you in a comment')
       .with('replied_to_document_comment_thread', () => 'replied to a comment')
       .with('initiative_discussion', () => 'commented')
-      .with('commented_on_document', () => 'commented')
+      .with('commented_on_document', 'crm_discussion', () => 'commented')
       .with('channel_message_reply', () => 'replied')
       .with('channel_message_send', () => 'sent a message')
+      .with('channel_message_reaction', () => 'reacted to your message')
       .with('ai_response', () => 'AI responded')
       .with('new_email', () => 'sent an email')
       .with('channel_invite', () => 'invited you')
@@ -138,6 +139,9 @@ export function getTypeNoun(type: NotificationType, count: number): string {
   return match(type)
     .with('channel_message_reply', () => (count === 1 ? 'reply' : 'replies'))
     .with('channel_message_send', () => (count === 1 ? 'message' : 'messages'))
+    .with('channel_message_reaction', () =>
+      count === 1 ? 'reaction' : 'reactions'
+    )
     .with('ai_response', () => (count === 1 ? 'response' : 'responses'))
     .with('channel_mention', () => (count === 1 ? 'mention' : 'mentions'))
     .with('document_mention', () =>
@@ -150,7 +154,9 @@ export function getTypeNoun(type: NotificationType, count: number): string {
       count === 1 ? 'reply' : 'replies'
     )
     .with('initiative_discussion', () => (count === 1 ? 'comment' : 'comments'))
-    .with('commented_on_document', () => (count === 1 ? 'comment' : 'comments'))
+    .with('commented_on_document', 'crm_discussion', () =>
+      count === 1 ? 'comment' : 'comments'
+    )
     .with('new_email', () => (count === 1 ? 'email' : 'emails'))
     .with('channel_invite', () => (count === 1 ? 'invite' : 'invites'))
     .with('invite_to_team', () => (count === 1 ? 'invite' : 'invites'))

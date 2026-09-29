@@ -10,6 +10,7 @@
 
 import type { Accessor } from 'solid-js';
 import type { SessionChanges } from '../core/changeset';
+import type { DiffStyle, PaneLayout } from '../core/layout';
 
 export type QueryStatus = 'idle' | 'pending' | 'error' | 'success';
 
@@ -65,6 +66,14 @@ export type ChangesHost = {
   openExternal: (url: string) => void;
   copyText: (text: string) => Promise<boolean>;
   notify: (message: string, tone: 'success' | 'failure') => void;
+};
+
+/** Which layout the pane is in, and how its diffs are drawn. */
+export type PaneViewState = {
+  layout: Accessor<PaneLayout>;
+  setLayout: (layout: PaneLayout) => void;
+  diffStyle: Accessor<DiffStyle>;
+  setDiffStyle: (style: DiffStyle) => void;
 };
 
 export type AgentChangesContext = {

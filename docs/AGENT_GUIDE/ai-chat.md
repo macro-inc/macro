@@ -5,6 +5,20 @@ User-sent messages in chat and agent transcripts use an ink-colored bubble with
 lighter bubble with the normal text palette. Preview Markdown and controls at
 `/app/debug/ui?ui=invert-util` under **User-sent AI message**.
 
+## Working with projects
+
+Project tools can list, read, create, update, delete, and share projects; set or
+clear task associations; and read project activity. Backend tool names use
+`Initiative`. These operate on the native Projects views in Tasks.
+
+Each completed tool row has an expandable result toggle, including empty results
+and per-task failures. Project chips open the native project. Shift-click opens
+another split. **Result data** reveals the complete returned response. Successful
+mutations refresh the project views.
+Deleting a project shows its result without a link to the deleted project.
+Failed project deletions show `Not deleted`. Clearing projects from several tasks
+reports each task's outcome, including partial failures.
+
 ## Uploading files with AI
 
 `UploadFile` accepts a filename and standard padded base64 contents, up to 25 MiB
@@ -20,6 +34,12 @@ indexing may finish asynchronously. Invalid contents, oversized files, and folde
 permission failures should display a failed tool call without a successful result.
 
 ## Where chats live
+
+The Agents conversation list shows row skeletons after a short delay on first
+load. Fetching another page appends three placeholders while existing sessions
+remain usable. Wait for named conversation buttons before selecting a session;
+the placeholders are decorative and cannot be focused. Reduced motion disables
+the shimmer.
 
 - If session creation fails, the session view shows **Unable to start this agent**
   with the service's reason. Repository access requires a GitHub connection to
@@ -65,19 +85,23 @@ permission failures should display a failed tool call without a successful resul
   Direct model selections show only the model name and provider icon in the input.
   Saved and coding agents show their identity beside the current model. There is
   no Chat/Code switch or separate model button.
-- The agent dropdown includes every saved agent regardless of runtime, plus Cursor,
-  grouped in **Models**, **Agents**, and **Coding agents** sections. **Models** lists
-  Macro’s available models with readable names (for example, **Sonnet 5**) and
-  provider or model icons aligned with the agent icons. The in-memory catalog
-  offers the closed Anthropic and OpenAI chat models, Fireworks-hosted
-  **Kimi K3**, **DeepSeek V4 Pro**, and **Muse Glimmer**, and Google's
-  **Gemini 3.8 Flash**; older Sonnet and Opus versions are not offered.
+- The agent dropdown includes every saved agent regardless of runtime, plus Cursor.
+  Macro's models use the same searchable catalog as running sessions: a short
+  **Recommended** list and a **More models** submenu grouped by model family,
+  followed by **Agents** and **Coding agents** sections. Models have readable
+  names (for example, **Sonnet 5**) and provider or model icons aligned with the
+  agent icons. The in-memory catalog offers the closed Anthropic and OpenAI chat
+  models; Kimi, DeepSeek, Muse, GLM, Qwen, MiniMax, GPT OSS, and Nemotron
+  open-weight models; and Google's **Gemini 3.8 Flash**. Older Sonnet and Opus
+  versions are not offered.
   Selecting a model here selects
   the default runtime and applies that model to the next send, retracting the repository drawer.
-  A model chosen from that **Models** list is remembered in local storage as the
-  default for Macro's in-memory agent until another Models entry is picked.
+  A model chosen from that catalog is remembered in local storage as the
+  default for Macro's in-memory agent until another model entry is picked.
   The built-in Macro agent is the only agent excluded from these sections; its models remain available.
-  Unavailable paired agents stay visible with a reason. Model discovery uses the
+  Unavailable paired agents stay visible with a reason.
+  If Macro is unavailable, its catalog stays searchable but
+  model choices are disabled in every list. Model discovery uses the
   selected runtime, including Claude Cloud. Every coding agent opens the repository
   drawer; chat agents hide it. Repository/branch overrides are currently applied
   only to Cursor sessions by the create-session API.
@@ -85,6 +109,7 @@ permission failures should display a failed tool call without a successful resul
   available agent is selected initially; otherwise Macro is selected.
   Hover an agent (or use the right arrow key) to open its model submenu, with
   the searchable Settings catalog, provider icons, and scrollable **More models**.
+  The submenu focuses the `Search models` field so you can type immediately.
   Clicking an agent directly uses its default; choosing a submenu model selects
   both the agent and that model. A checkmark identifies the selected model,
   including when it is the agent’s configured default; there is no separate default row.
@@ -92,7 +117,14 @@ permission failures should display a failed tool call without a successful resul
   The built-in sandbox and paired macrod runtimes are not offered here.
 - Selecting an agent changes the heading: **What should we work on?** for chat
   agents and **What should we build?** for coding agents. The draft stays intact
-  when changing agents. **Create agent** stays pinned at the bottom of the dropdown
+  when changing agents. Unsent New conversation text and attachments also come
+  back after opening a session and returning, the same way channel replies persist
+  when switching channels. Home's agent input also restores unsent text, under a
+  separate key from Agents → New conversation. Check the Home path explicitly:
+  type a prompt on Home, visit an agent session, then return using the Home sidebar
+  button or Back. The Home prompt should remain after returning and after a reload.
+  Sending or clearing the input removes only that surface's saved text draft.
+  **Create agent** stays pinned at the bottom of the dropdown
   while the agent and model lists scroll. It opens the roster on the selected kind's
   tab, where either kind can be created.
 - On Home and New conversation, selecting a coding agent expands the input even
@@ -514,6 +546,9 @@ to open the PR entity in a split; until GitHub has synced the entity the
 chip is a GitHub link instead. The icon and status word follow open /
 merged / closed.
 
+Tool rows show the tool's own name without an MCP server or workspace prefix.
+Chat MCP rows retain their service icon.
+
 Individual tools appear as bare rows with an icon, tool name, optional detail,
 and a right-aligned result summary. The caret on the right opens the results;
 it points right when collapsed and down when expanded. Individual results start
@@ -650,19 +685,29 @@ toggle (`aria-pressed`) with green additions and red deletions (`+N −M`); it o
 Chat sessions on Macro's in-memory harness have no repository, so they show
 none of this: no **Changes** toggle, pane, hand-off card, or review-notes chip,
 and the title menu offers **Open repository** only when the session has one.
-The URL's `diff` query parameter stores each session's pane state and diff
-layout (`session-id:split:unified`, or `changes-only` / `agent-only` and
-`split` for side-by-side diffs). Copying the URL preserves that view; reload
-and Back/Forward restore it. A plain session URL starts with Changes closed.
-Divider width, collapsed files, and review notes stay local.
-The pane header shows a `head → base` branch pill, a **Unified / Split**
-segmented control (`aria-label="Diff layout"`), a refresh button, the
-**View pull request** button (opens GitHub), and **Expand changes to the full width**
-(spotlight; **Bring the session back** returns to the split) and **Close the
-changes pane**. Below it is a **Collapse all / Expand all** button.
-The body is a file tree (`nav[aria-label="Changed files"]`, directories
-compressed along single-child chains, status letters A/M/D/R and +/− counts)
-next to a scrollable stack of file cards. Expanded cards keep their full height;
+The session's split stores the pane in its own search params:
+`s<N>.changes.pane` (`split`, or `full` when spotlit) and `s<N>.changes.style=split`
+for side-by-side diffs, where `<N>` is the split's index; defaults are left out.
+Copying the URL preserves that view, and reload restores it. Opening and closing
+the pane are Back/Forward steps; switching the diff layout is not. A plain
+session URL starts with Changes closed, and leaving the session or closing its
+split drops the state.
+Divider width, whether the file tree shows, collapsed files, and review notes
+stay local.
+The pane (`[role="region"][aria-label="Changes"]`) has a title row and a
+toolbar. The title row shows **Changes**, the linked pull request's number
+(**View pull request #N** opens GitHub), and the `head → base` range, with only
+the pane's own controls on the right: **Expand changes to the full width**
+(pressed while spotlit; its label becomes **Back to the split**) and **Close the
+changes pane**. The toolbar, shown once there are files, has **Hide file tree /
+Show file tree** and the file count on the left, and on the right the
+**Unified / Split** segmented control (`aria-label="Diff layout"`), **Collapse
+all / Expand all**, and **Refresh pull request changes**.
+The body is a file tree (`[role="group"][aria-label="Changed files"]`, rows
+styled like Drive's folder tree, directories compressed along single-child
+chains with **Collapse / Expand** buttons, each file's +/− counts and status
+letter A/M/D/R; the arrow keys move between rows and Left/Right close and open a
+directory) next to a scrollable stack of file cards. Expanded cards keep their full height;
 **Collapse all / Expand all** hides or restores their bodies. Each card's header has a disclosure
 caret, the path, `+adds −dels`, and **Copy path**. Diffs render with Pierre; hover a
 line and click the accent **+** in the gutter (drag for a range) to leave a
@@ -694,6 +739,26 @@ with `set_pull_request`, then use **Refresh changes**. An unavailable or
 oversized PR is explained in the pane; there is no branch or container fallback.
 Refresh request failures show a retry banner while keeping the last diff visible.
 The pane does not create PRs or generate their descriptions.
+### Live development previews
+
+Coding agents can call the internal **SharePreview** tool with their local HTTP
+server port and execute the returned SSH script in that same environment. Keep
+the server running while editing; ordinary HTTP and WebSocket HMR traffic are
+forwarded. Never paste the script or its credentials into a final chat message.
+
+In an agent session (`/app/coders/<uuid>` for a coding session), the banner
+above the transcript moves from **Agent is
+connecting a preview…** to **Agent is sharing a preview** once HTTP is reachable.
+Click **View preview ↗** to open a new tab. Any viewer of the agent-session entity
+can open it; a copied preview URL alone does not authenticate another browser.
+Allow popups if opening is blocked. The destination is an isolated HTTPS origin
+with normal root paths and no authorization query parameters.
+
+The owner can click **Stop sharing** in the banner; open preview connections
+close. Disconnection and expiry leave a banner asking the agent to share again.
+Leases last up to one hour and expire after 15 minutes without browser requests.
+Continue prompting in the agent session while the preview tab stays open; page
+edits should arrive through the app's own HMR connection.
 
 ### Transcript navigation
 
@@ -851,3 +916,18 @@ webhook sync completes; its chip should then appear without a page refresh.
 Verify status changes (open/merged/closed) while the chip stays mounted, and
 verify that reconnecting the gateway catches up changes missed while disconnected.
 There is no periodic PR lookup polling.
+
+
+## Reading skills
+
+Agents in Macro and connected MCP harnesses can discover saved skill documents
+and built-in skills with `ListSkills`, then load the full instructions with
+`ReadSkill` using the returned `documentId`. `ListSkills` returns the 100 most
+recently updated visible skill documents plus built-ins; `SearchSkills` finds a
+skill by name, including older skills outside that list. A skill mention's id can
+also be passed directly to `ReadSkill`.
+
+The chat's **Read skill** tool row expands to show the full instructions. When
+verifying this flow, invoke a saved skill by name, confirm the agent reads it,
+and expand the row to inspect the returned content. Document access permissions
+apply; ordinary documents and deleted skills cannot be read as skills.

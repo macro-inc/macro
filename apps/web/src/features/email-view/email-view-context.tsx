@@ -6,6 +6,7 @@ import {
   listOwnedSlotName,
 } from '@app/components/list';
 import { setSidebarSectionCollapsed } from '@app/components/view-shell';
+import { useMobileSearchText } from '@app/features/command/mobile/use-mobile-search-text';
 import { registerInboxFilterSplit } from '@app/features/next-soup/soup-view/inbox-filter-controllers';
 import { normalizeFacetSelection } from '@app/features/soup';
 import { registerListNavigationSource } from '@app/features/soup/collection/list-navigation-source';
@@ -30,6 +31,7 @@ import {
   type Accessor,
   createEffect,
   createMemo,
+  mergeProps,
   on,
   onCleanup,
 } from 'solid-js';
@@ -122,7 +124,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
   const tagSetsReady = useTagSetsReady();
   const initial = props.initialState ?? {};
 
-  const [state, setState] = makePersistedState(
+  const [persistedState, setState] = makePersistedState(
     createStore<EmailViewState>({
       tab: initial.tab ?? DEFAULT_EMAIL_TAB,
       search: initial.search ?? '',
@@ -140,6 +142,15 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
       restorePreferences: initial.collapsedSidebarSectionIds === undefined,
     })
   );
+  const searchText = useMobileSearchText(
+    () => persistedState.search,
+    panel.handle.isActive
+  );
+  const state = mergeProps(persistedState, {
+    get search() {
+      return searchText();
+    },
+  });
 
   createEffect(
     on(

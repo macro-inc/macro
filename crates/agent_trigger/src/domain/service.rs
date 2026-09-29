@@ -262,7 +262,10 @@ where
                         .bot_active_in_channel(*channel_id, bot_id)
                         .await
                 }
-                MessageParent::Document(_) | MessageParent::Initiative(_) => {
+                MessageParent::Document(_)
+                | MessageParent::Initiative(_)
+                | MessageParent::CrmCompany(_)
+                | MessageParent::CrmContact(_) => {
                     self.owner_allows(&caller, bot.owner.as_ref()).await
                 }
             },

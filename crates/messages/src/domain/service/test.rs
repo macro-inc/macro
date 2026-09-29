@@ -14,6 +14,7 @@ struct Repo {
     thread_deletes: Arc<Mutex<Vec<Uuid>>>,
     creates: Arc<Mutex<Vec<CreateMessage>>>,
     edits: Arc<Mutex<Vec<EditMessage>>>,
+    reaction_changed: bool,
 }
 
 impl Repo {
@@ -140,8 +141,11 @@ impl MessageRepository for Repo {
         _: &str,
         _: &str,
         _: bool,
-    ) -> Result<Message, MessageError> {
-        unimplemented!()
+    ) -> Result<ReactionResult, MessageError> {
+        Ok(ReactionResult {
+            message: self.message.clone(),
+            changed: self.reaction_changed,
+        })
     }
     async fn patch_thread(
         &self,
@@ -232,6 +236,7 @@ fn fixture() -> Repo {
         thread_deletes: Arc::default(),
         creates: Arc::default(),
         edits: Arc::default(),
+        reaction_changed: true,
     }
 }
 
@@ -911,12 +916,17 @@ async fn human_can_post_canonical_agent_mentions_on_documents_and_channels() {
         MessageParent::parse("document", "doc").unwrap(),
         MessageParent::Channel(Uuid::from_u128(20)),
         MessageParent::Initiative(Uuid::from_u128(21)),
+        MessageParent::CrmCompany(Uuid::from_u128(22)),
+        MessageParent::CrmContact(Uuid::from_u128(23)),
     ] {
         let repo = fixture();
         let events = Events::default();
         let service = MessageService::new(repo.clone(), events.clone());
         let (entity_type, permission) = match parent {
-            MessageParent::Document(_) | MessageParent::Initiative(_) => (
+            MessageParent::Document(_)
+            | MessageParent::Initiative(_)
+            | MessageParent::CrmCompany(_)
+            | MessageParent::CrmContact(_) => (
                 parent.access_entity_type(),
                 EntityPermission::AccessLevel {
                     access_level: AccessLevel::Comment,
@@ -1117,7 +1127,7 @@ impl MessageRepository for StrictRepo {
         user: &str,
         emoji: &str,
         add: bool,
-    ) -> Result<Message, MessageError> {
+    ) -> Result<ReactionResult, MessageError> {
         self.inner.react(parent, id, user, emoji, add).await
     }
     async fn patch_thread(
@@ -1368,4 +1378,34 @@ fn client_ids_must_be_recent_uuid_v7() {
         validate_client_id(Uuid::new_v4(), now),
         Err(MessageError::Invalid(_))
     ));
+}
+
+#[tokio::test]
+async fn reaction_retries_return_the_message_without_publishing_another_change() {
+    for add in [true, false] {
+        for changed in [true, false] {
+            let mut repo = fixture();
+            repo.reaction_changed = changed;
+            let events = Events::default();
+            let service = MessageService::new(repo.clone(), events.clone());
+            let message = service
+                .react(
+                    access("macro|author@example.com", "doc", AccessLevel::Comment),
+                    repo.message.id,
+                    "👍".into(),
+                    add,
+                    Some("reaction-request".into()),
+                )
+                .await
+                .unwrap();
+            assert_eq!(message.id, repo.message.id);
+            let events = events.0.lock().unwrap();
+            assert_eq!(events.len(), usize::from(changed));
+            if changed {
+                assert!(
+                    matches!(&events[0].change, MessageChange::ReactionChanged { added, emoji, .. } if *added == add && emoji == "👍")
+                );
+            }
+        }
+    }
 }

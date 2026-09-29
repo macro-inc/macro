@@ -197,7 +197,18 @@ export function createLivekitJsCallController(
     }
 
     const targetRoom = new Room({
-      audioCaptureDefaults: options.currentMicrophoneCaptureOptions(),
+      audioCaptureDefaults: {
+        ...options.currentMicrophoneCaptureOptions(),
+        ...(preferences?.microphoneDeviceId
+          ? { deviceId: { exact: preferences.microphoneDeviceId } }
+          : {}),
+      },
+      videoCaptureDefaults: preferences?.cameraDeviceId
+        ? { deviceId: { exact: preferences.cameraDeviceId } }
+        : undefined,
+      audioOutput: preferences?.speakerDeviceId
+        ? { deviceId: preferences.speakerDeviceId }
+        : undefined,
       publishDefaults: {
         // Noise-suppressed audio has a near-silent noise floor, which makes
         // Opus DTX (on by default) misread quiet speech onsets as silence and

@@ -22,6 +22,7 @@ type KnownNotificationMetadata =
 const CHANNEL_NOTIFICATION_TYPES = [
   'channel_mention',
   'channel_message_send',
+  'channel_message_reaction',
   'channel_message_reply',
   'document_mention',
 ] as const;
@@ -74,6 +75,8 @@ const MUTEABLE_ITEM_TYPES = new Set([
   'project',
   'reminder',
   'initiative',
+  'crm_company',
+  'crm_contact',
 ]);
 
 /**
@@ -234,12 +237,13 @@ export function getNotificationActionText(n: Notification): string {
   return match(tag)
     .with('channel_mention', () => 'mentioned')
     .with('channel_message_send', () => 'sent')
+    .with('channel_message_reaction', () => 'reacted')
     .with('channel_message_reply', () => 'replied')
     .with('document_mention', () => 'mentioned')
     .with('mentioned_in_document_comment', () => 'mentioned')
     .with('replied_to_document_comment_thread', () => 'replied')
     .with('initiative_discussion', () => 'commented')
-    .with('commented_on_document', () => 'commented')
+    .with('commented_on_document', 'crm_discussion', () => 'commented')
     .with('channel_invite', () => 'invited')
     .with('new_email', () => 'emailed')
     .with('invite_to_team', () => 'invited')
@@ -282,6 +286,10 @@ export function extractMessageContent(notification: Notification): string {
       (m) => m.content.messageContent || ''
     )
     .with(
+      { tag: 'channel_message_reaction' },
+      (m) => m.content.messageContent || ''
+    )
+    .with(
       { tag: 'channel_message_reply' },
       (m) => m.content.messageContent || ''
     )
@@ -293,6 +301,7 @@ export function extractMessageContent(notification: Notification): string {
     )
     .with({ tag: 'initiative_discussion' }, (m) => m.content.text || '')
     .with({ tag: 'commented_on_document' }, (m) => m.content.text || '')
+    .with({ tag: 'crm_discussion' }, (m) => m.content.text || '')
     .with({ tag: 'new_email' }, (m) => m.content.subject || '')
     .with({ tag: 'task_assigned' }, (m) => m.content.taskName ?? '')
     .with({ tag: 'ai_response' }, (m) => m.content.summary || '')

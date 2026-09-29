@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { buildGraphqlEntitiesSoupInput } from './entity-input';
+import {
+  buildGraphqlEntitiesSoupInput,
+  buildGraphqlEntitySoupInput,
+} from './entity-input';
 
 const nil = '00000000-0000-0000-0000-000000000000';
 
@@ -12,6 +15,7 @@ describe('batched entity Soup inputs', () => {
       { entityType: 'CHANNEL', entityId: 'channel-1' },
       { entityType: 'THREAD', entityId: 'email-1' },
     ]);
+    expect(input?.initial?.filters).not.toHaveProperty('initiativeFilter');
     expect(input).toMatchObject({
       initial: {
         limit: 4,
@@ -51,6 +55,34 @@ describe('batched entity Soup inputs', () => {
         : 1 + Math.max(0, ...Object.values(value).map(depth));
     expect(depth(input)).toBeLessThan(64);
     expect(input?.initial?.limit).toBe(50);
+  });
+
+  it('hydrates initiatives by their own identity without selecting folders or tasks', () => {
+    expect(
+      buildGraphqlEntitySoupInput('INITIATIVE', 'initiative')
+    ).toMatchObject({
+      initial: {
+        filters: {
+          initiativeFilter: { literal: { id: 'initiative' } },
+          projectFilter: { literal: { projectIdSelf: nil } },
+          documentFilter: { literal: { id: nil } },
+        },
+      },
+    });
+    expect(
+      buildGraphqlEntitiesSoupInput([
+        { entityType: 'INITIATIVE', entityId: 'initiative' },
+        { entityType: 'TASK', entityId: 'task' },
+      ])
+    ).toMatchObject({
+      initial: {
+        limit: 2,
+        filters: {
+          initiativeFilter: { literal: { id: 'initiative' } },
+          documentFilter: { literal: { id: 'task' } },
+        },
+      },
+    });
   });
 
   it('does not issue empty or unsupported lookups', () => {

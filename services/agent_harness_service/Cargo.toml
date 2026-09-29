@@ -18,6 +18,7 @@ path = "src/doppler_config.rs"
 
 [dependencies]
 initiative = { path = "../../crates/initiative", default-features = false, features = ["postgres"] }
+crm = { path = "../../crates/crm", default-features = false, features = ["lookup"] }
 codex_cloud_agents = { path = "../../crates/codex_cloud_agents" }
 codex_connection = { path = "../../crates/codex_connection" }
 agent_changes = { path = "../../crates/agent_changes" }

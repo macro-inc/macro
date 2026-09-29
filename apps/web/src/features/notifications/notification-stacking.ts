@@ -1,6 +1,7 @@
 import type { NotificationType } from '@core/types';
 import { compareDateDesc } from '@core/util/date';
 import { match } from 'ts-pattern';
+import { isEntityDiscussionEvent } from './entity-discussion';
 import {
   isChannelNotification,
   isDocumentCommentNotification,
@@ -61,6 +62,7 @@ export function getThreadId(group: NotificationStack): string {
       .with({ tag: 'commented_on_document' }, (m) =>
         m.content.threadId.toString()
       )
+      .with({ tag: 'crm_discussion' }, (m) => m.content.threadId)
       .otherwise(() => '');
     if (threadId) return threadId;
   }
@@ -84,8 +86,15 @@ export function getThreadId(group: NotificationStack): string {
 export function stackNotifications(
   notifications: UnifiedNotification[]
 ): NotificationStack[] {
+  const channelReactions = notifications.filter(
+    (n) => n.notification_metadata.tag === 'channel_message_reaction'
+  );
   const channelViews = notifications
-    .filter(isChannelNotification)
+    .filter(
+      (n) =>
+        isChannelNotification(n) &&
+        n.notification_metadata.tag !== 'channel_message_reaction'
+    )
     .map(toChannelView)
     .filter((v): v is NormalizedView => v !== null);
 
@@ -104,13 +113,16 @@ export function stackNotifications(
   const docMentions = notifications.filter(
     (n) => n.notification_metadata.tag === 'document_mention'
   );
-  const initiativeThreads = groupBy(
-    notifications.filter(
-      (n) => n.notification_metadata.tag === 'initiative_discussion'
+  // One stack per discussion thread on a project, company or contact.
+  const entityDiscussionThreads = groupBy(
+    notifications.filter((n) =>
+      isEntityDiscussionEvent(n.notification_metadata)
     ),
     (n) => {
       const meta = n.notification_metadata;
-      return `${n.entity_id}:${meta.tag === 'initiative_discussion' ? meta.content.threadId : n.id}`;
+      return isEntityDiscussionEvent(meta)
+        ? `${meta.tag}:${n.entity_id}:${meta.content.threadId}`
+        : n.id;
     }
   );
   const others = notifications.filter(
@@ -118,14 +130,15 @@ export function stackNotifications(
       !isChannelNotification(n) &&
       !isDocumentCommentNotification(n) &&
       n.notification_metadata.tag !== 'document_mention' &&
-      n.notification_metadata.tag !== 'initiative_discussion'
+      !isEntityDiscussionEvent(n.notification_metadata)
   );
 
   const groups: NotificationStack[] = [
-    ...[...initiativeThreads.values()].flatMap((items) =>
-      makeStack('initiative_discussion', items)
+    ...[...entityDiscussionThreads.values()].flatMap((items) =>
+      makeStack(items[0].notification_metadata.tag, items)
     ),
     ...channelStacks,
+    ...makeStack('channel_message_reaction', channelReactions),
     ...docCommentStacks,
     ...makeStack('document_mention', docMentions),
     ...others.flatMap((n) => makeStack(n.notification_metadata.tag, [n])),

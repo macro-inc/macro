@@ -282,6 +282,32 @@ export type ChannelMentionMetadata = CommonChannelMetadata & {
     threadId?: string | null;
 };
 
+/**
+ * Metadata for a reaction added to one of the recipient's channel messages.
+ */
+export type ChannelMessageReactionMetadata = CommonChannelMetadata & {
+    /**
+     * The emoji added by the reactor.
+     */
+    emoji: string;
+    /**
+     * The reacted-to message content.
+     */
+    messageContent: string;
+    /**
+     * The reacted-to message id.
+     */
+    messageId: string;
+    /**
+     * Optional reactor profile picture URL.
+     */
+    senderProfilePictureUrl?: string | null;
+    /**
+     * The thread root id when the reacted-to message is a reply.
+     */
+    threadId?: string | null;
+};
+
 export type ChannelMessageSendMetadata = CommonChannelMetadata & {
     /**
      * The content of the message
@@ -405,6 +431,46 @@ export type CreateNotification = Entity & {
      */
     service_sender: string;
 };
+
+/**
+ * CRM discussion metadata. The notification entity identifies the company or
+ * contact; message and thread UUIDs select the discussion inside it.
+ */
+export type CrmDiscussionMetadata = {
+    /**
+     * Canonical shared message UUID.
+     */
+    messageId: string;
+    /**
+     * Semantic reason selected by the message delivery domain.
+     */
+    reason: CrmDiscussionReason;
+    /**
+     * Company or contact display name.
+     */
+    recordName: string;
+    /**
+     * Public display name for a bot author.
+     */
+    senderDisplayName?: string | null;
+    /**
+     * Optional avatar for push notification attachments.
+     */
+    senderProfilePictureUrl?: string | null;
+    /**
+     * Posted Markdown content.
+     */
+    text: string;
+    /**
+     * Canonical discussion root UUID.
+     */
+    threadId: string;
+};
+
+/**
+ * Why a CRM discussion notification was delivered.
+ */
+export type CrmDiscussionReason = 'mention' | 'reply' | 'owner';
 
 /**
  * Request to register or unregister a device for push notifications.
@@ -936,6 +1002,12 @@ export type NotifEvent = {
     tag: 'initiative_discussion';
 } | {
     /**
+     * Someone commented, replied, or mentioned the recipient on a CRM company or contact.
+     */
+    content: CrmDiscussionMetadata;
+    tag: 'crm_discussion';
+} | {
+    /**
      * The user was invited to a channel.
      */
     content: ChannelInviteMetadata;
@@ -1060,6 +1132,12 @@ export type NotifEvent = {
      */
     content: AgentSessionMentionedMetadata;
     tag: 'agent_session_mentioned';
+} | {
+    /**
+     * Someone reacted to one of the user's channel messages.
+     */
+    content: ChannelMessageReactionMetadata;
+    tag: 'channel_message_reaction';
 };
 
 /**

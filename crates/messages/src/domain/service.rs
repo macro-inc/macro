@@ -376,16 +376,23 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         if emoji.is_empty() || emoji.chars().count() > 32 || emoji.chars().any(char::is_control) {
             return Err(MessageError::Invalid("invalid reaction"));
         }
-        let message = self
+        let ReactionResult { message, changed } = self
             .repo
             .react(&parent, id, actor.as_ref(), &emoji, add)
             .await?;
+        // Idempotent retries still return the current message to the caller,
+        // but must not publish another change or notify the author again.
+        if !changed {
+            return Ok(message);
+        }
         self.publish_message(
             actor,
             nonce,
             &message,
             MessageChange::ReactionChanged {
                 message: message.clone(),
+                emoji,
+                added: add,
             },
         )
         .await;
@@ -487,6 +494,13 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         })
         .await;
         Ok(state)
+    }
+
+    /// The parent a live message belongs to, so an adapter addressed only by
+    /// message id can mint that parent's receipt. Grants nothing on its own.
+    #[tracing::instrument(err, skip(self))]
+    pub async fn parent_of(&self, id: Uuid) -> Result<Option<MessageParent>, MessageError> {
+        self.repo.parent_of(id).await
     }
 
     /// Resolve an old link through the sole message store under current parent access.
@@ -709,6 +723,8 @@ fn parent_from_receipt<P: RequiredPermission>(
         EntityType::Channel => "channel",
         EntityType::Document => "document",
         EntityType::Initiative => "initiative",
+        EntityType::CrmCompany => "crm_company",
+        EntityType::CrmContact => "crm_contact",
         _ => return Err(MessageError::Forbidden),
     };
     MessageParent::parse(kind, &entity.entity_id)

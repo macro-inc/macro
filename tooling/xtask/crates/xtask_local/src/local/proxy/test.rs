@@ -127,7 +127,11 @@ fn document_content_services_are_available_through_the_proxy() {
 /// fan-out locally, the dev-pointed service in dev.
 #[test]
 fn static_file_block_is_mode_specific() {
-    assert!(caddyfile(Mode::Local, false).contains("/static-file-storage"));
+    let local = caddyfile(Mode::Local, false);
+    assert!(local.contains("/static-file-storage"));
+    // A route at site scope sorts after the Vite catch-all handle and loops.
+    assert!(local.contains("handle_path /static-file/*"));
+    assert!(!local.contains("route /static-file/*"));
     assert!(caddyfile(Mode::Dev, false).contains("handle_path /static-file/*"));
     assert!(!caddyfile(Mode::Dev, false).contains("/static-file-storage"));
 }
@@ -158,7 +162,7 @@ fn frontend_wires_every_inventory_prefix() {
 
 /// The static-frontend block only appears in headless mode, and serves the
 /// mounted bundle under `/app` with an SPA fallback. Attached `run_local` keeps
-/// the dev server as the frontend origin and must not grow the block.
+/// forwards frontend requests to Vite instead of serving a bundle.
 #[test]
 fn static_frontend_block_is_opt_in() {
     let headless = caddyfile(Mode::Local, true);
@@ -170,9 +174,56 @@ fn static_frontend_block_is_opt_in() {
 
     let attached = caddyfile(Mode::Local, false);
     assert!(!attached.contains("/srv/frontend"));
+    assert!(attached.contains("reverse_proxy host.docker.internal:{$VITE_PORT}"));
+    assert!(attached.contains(&format!(
+        "@backend_root path {}",
+        frontend_path_prefixes().join(" ")
+    )));
+    assert!(attached.contains("respond @backend_root 404"));
+    assert!(!headless.contains("host.docker.internal"));
     assert!(!attached.contains("redir / /app/ 302"));
     assert!(!attached.contains("handle /mailpit/*"));
 
     let headless_dev = caddyfile(Mode::Dev, true);
     assert!(!headless_dev.contains("handle /mailpit/*"));
+}
+
+/// Local Caddy speaks HTTPS with a machine certificate and stamps wildcard CORS
+/// on every response. Dev still uses TLS (same proxy) but does not overlay
+/// CORS, because it fans out to the shared-dev gateway.
+#[test]
+fn local_proxy_uses_tls_and_wildcard_cors() {
+    let local = caddyfile(Mode::Local, false);
+    assert!(local.contains("tls /etc/caddy/certs/server.pem /etc/caddy/certs/server-key.pem"));
+    // Keep main's internal certificates for the separate preview listener.
+    assert!(local.contains("auto_https disable_redirects"));
+    assert!(local.contains("https://*.preview.localhost:8443"));
+    assert!(local.contains("@cors header Origin *"));
+    assert!(local.contains("@cors_preflight"));
+    assert!(local.contains("Access-Control-Allow-Origin \"{http.request.header.Origin}\""));
+    assert!(
+        local.contains("defer"),
+        "CORS overlay must defer so reverse_proxy cannot overwrite the reflected Origin"
+    );
+    assert!(
+        !local.contains("-Access-Control-Allow-Origin"),
+        "deferred -Access-Control-* deletes strip the CORS headers this overlay sets"
+    );
+
+    let dev = caddyfile(Mode::Dev, false);
+    assert!(dev.contains("tls /etc/caddy/certs/server.pem /etc/caddy/certs/server-key.pem"));
+    assert!(!dev.contains("@cors header Origin *"));
+    assert!(!dev.contains("@cors_preflight"));
+}
+
+#[test]
+fn proxy_origin_is_https() {
+    let instance = crate::local::instance::Instance::derive(None, None).unwrap();
+    assert_eq!(url(&instance), "https://localhost:8090");
+    assert_eq!(ws_url(&instance), "wss://localhost:8090");
+    assert!(
+        ca_pem().is_file(),
+        "checked-in CA is missing at {}",
+        ca_pem().display()
+    );
 }

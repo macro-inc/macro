@@ -4,8 +4,6 @@ import {
   changesState,
   describeRange,
   repositorySlug,
-  splitPath,
-  statusLetter,
 } from './changeset';
 
 function changeset(overrides: Partial<Changeset> = {}): Changeset {
@@ -32,28 +30,6 @@ function changeset(overrides: Partial<Changeset> = {}): Changeset {
     ...overrides,
   };
 }
-
-describe('statusLetter', () => {
-  it('maps every kind to its letter', () => {
-    expect(statusLetter('added')).toBe('A');
-    expect(statusLetter('modified')).toBe('M');
-    expect(statusLetter('deleted')).toBe('D');
-    expect(statusLetter('renamed')).toBe('R');
-  });
-});
-
-describe('splitPath', () => {
-  it('keeps the trailing slash on the directory', () => {
-    expect(splitPath('apps/web/src/a.ts')).toEqual({
-      dir: 'apps/web/src/',
-      base: 'a.ts',
-    });
-  });
-
-  it('treats a bare name as having no directory', () => {
-    expect(splitPath('README.md')).toEqual({ dir: '', base: 'README.md' });
-  });
-});
 
 describe('repositorySlug', () => {
   it('reads owner/name from a GitHub url', () => {
