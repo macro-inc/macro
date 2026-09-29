@@ -106,6 +106,8 @@ use connection_gateway_client::ConnectionGatewayClient;
 use containers::{InMemRuntime, RoutedContainers};
 use cursor_api_key::cipher::{AwsKmsCiphertexts, KmsCursorApiKeyCipher};
 use cursor_cloud_agents::api::cursor_api_base_url;
+use entity_registry::OwnerGrantPolicy;
+use entity_registry_db_utils::OwnedEntityRegistrar;
 use github::domain::service::{
     InstallationTokenConfig, InstallationTokenService, ReachableRepositoriesService,
 };
@@ -246,7 +248,9 @@ async fn run() -> anyhow::Result<()> {
     // as in the `document_storage_service` root - a session's actor writes its
     // log and pushes each frame at the channel's participants so a viewer sees
     // it happen.
-    let session_repo = PgAgentSessionRepo::new(pool.clone());
+    let session_registrar =
+        OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(pool.clone())));
+    let session_repo = PgAgentSessionRepo::new(pool.clone(), session_registrar.clone());
     let entity_access = Arc::new(
         entity_access::domain::service::EntityAccessServiceImpl::new(
             entity_access::outbound::PgAccessRepository::new(pool.clone()),
@@ -405,7 +409,10 @@ async fn run() -> anyhow::Result<()> {
     // through that listener.
     let egress = Arc::new(
         EgressServiceImpl::new(
-            StoredTokenSessionAuthority::new(PgAgentSessionRepo::new(pool.clone())),
+            StoredTokenSessionAuthority::new(PgAgentSessionRepo::new(
+                pool.clone(),
+                session_registrar,
+            )),
             mcp_credentials,
             GithubAppTokens::new(InstallationTokenService::new(
                 InstallationTokenConfig {

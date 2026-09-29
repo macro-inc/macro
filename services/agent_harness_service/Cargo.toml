@@ -45,6 +45,8 @@ cursor_cloud_agents = { path = "../../crates/cursor_cloud_agents" }
 claude_cloud_agents = { path = "../../crates/claude_cloud_agents" }
 database_env_vars = { path = "../../crates/database_env_vars" }
 entity_access = { path = "../../crates/entity_access" }
+entity_registry = { path = "../../crates/entity_registry/entity_registry", default-features = false }
+entity_registry_db_utils = { path = "../../crates/entity_registry/entity_registry_db_utils" }
 futures = { workspace = true }
 github = { path = "../../crates/github", default-features = false, features = [
   "outbound",

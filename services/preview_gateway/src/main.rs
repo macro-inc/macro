@@ -81,7 +81,14 @@ async fn run() -> Result<(), rootcause::Report> {
             app_origin: config.preview_app_origin,
         },
         Arc::new(adapters::MacroAuthority {
-            sessions: agent_session::outbound::postgres::PgAgentSessionRepo::new(pool),
+            sessions: agent_session::outbound::postgres::PgAgentSessionRepo::new(
+                pool.clone(),
+                entity_registry_db_utils::OwnedEntityRegistrar::new(
+                    entity_registry::OwnerGrantPolicy::new(
+                        bots::outbound::pg_bots_repo::PgBotsRepo::new(pool),
+                    ),
+                ),
+            ),
             access: access.clone(),
         }),
         Arc::new(adapters::Realtime(
