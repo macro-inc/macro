@@ -7,6 +7,7 @@ let originalTimezone: string | undefined;
 beforeEach(() => {
   originalTimezone = process.env.TZ;
   process.env.TZ = 'UTC';
+  vi.stubGlobal('scrollTo', vi.fn());
   vi.useFakeTimers();
   vi.setSystemTime(new Date('2026-09-21T12:00:00.000Z'));
 });
@@ -14,6 +15,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+  vi.unstubAllGlobals();
   if (originalTimezone === undefined) delete process.env.TZ;
   else process.env.TZ = originalTimezone;
 });
@@ -36,6 +38,26 @@ function renderForm(
   return { onSubmit, onCancel };
 }
 
+function chooseRepeat(
+  value: 'once' | 'daily' | 'weekdays' | 'weekly' | 'monthly'
+) {
+  const labels = {
+    once: 'Does not repeat',
+    daily: 'Daily',
+    weekdays: 'Weekdays',
+    weekly: 'Weekly',
+    monthly: 'Monthly',
+  } as const;
+  fireEvent.keyDown(screen.getByRole('button', { name: /^Repeat,/ }), {
+    key: 'Enter',
+  });
+  fireEvent.keyDown(
+    screen.getByRole('menuitemradio', { name: labels[value] }),
+    { key: 'Enter' }
+  );
+  fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+}
+
 describe('one-shot scheduling', () => {
   it('parses natural date language and previews the exact timezone', () => {
     const { onSubmit } = renderForm({ initialDescription: 'Follow up' });
@@ -45,6 +67,11 @@ describe('one-shot scheduling', () => {
       { target: { value: 'in 30 minutes' } }
     );
 
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /in 30 minutes.*Today, 12:30 PM/,
+      })
+    );
     const preview = screen.getByText(/Scheduled:/).closest('p');
     expect(preview?.textContent).toContain('12:30 PM');
     expect(preview?.textContent).toMatch(/\([A-Z]+\)/);
@@ -70,6 +97,8 @@ describe('one-shot scheduling', () => {
     });
     expect(inThirty).not.toBeNull();
     expect(tomorrow).not.toBeNull();
+    expect(inThirty.textContent).toContain('Mon 12:30 PM');
+    expect(tomorrow.textContent).toContain('Tue 9:00 AM');
 
     fireEvent.click(inThirty);
     fireEvent.click(screen.getByRole('button', { name: 'Set reminder' }));
@@ -86,14 +115,14 @@ describe('one-shot scheduling', () => {
       screen.getByPlaceholderText('Try “tomorrow 9am” or “in 30 minutes”'),
       { target: { value: 'in 30 minutes' } }
     );
-    fireEvent.click(screen.getByRole('button', { name: /Custom/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Choose date & time' }));
 
     expect(
-      (screen.getByLabelText('Custom reminder date') as HTMLInputElement).value
-    ).toBe('2026-09-21');
-    expect(
-      (screen.getByLabelText('Custom reminder time') as HTMLInputElement).value
-    ).toBe('12:30');
+      screen.getByLabelText('Custom reminder date').getAttribute('title')
+    ).toContain('Sep 21, 2026');
+    expect((screen.getByLabelText('Time') as HTMLInputElement).value).toBe(
+      '12:30'
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Set reminder' }));
     expect(onSubmit.mock.calls[0]?.[0].schedule).toEqual({
       type: 'once',
@@ -182,11 +211,10 @@ describe('one-shot scheduling', () => {
       vi.setSystemTime(new Date('2026-03-07T12:00:00-05:00'));
       const { onSubmit } = renderForm({ initialDescription: 'Follow up' });
 
-      fireEvent.click(screen.getByRole('button', { name: /Custom/ }));
-      fireEvent.input(screen.getByLabelText('Custom reminder date'), {
-        target: { value: '2026-03-08' },
-      });
-      fireEvent.input(screen.getByLabelText('Custom reminder time'), {
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Choose date & time' })
+      );
+      fireEvent.input(screen.getByLabelText('Time'), {
         target: { value: '02:30' },
       });
 
@@ -226,15 +254,15 @@ describe('one-shot scheduling', () => {
         ).disabled
       ).toBe(true);
 
-      fireEvent.click(screen.getByRole('button', { name: /Custom/ }));
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Choose date & time' })
+      );
       expect(
-        (screen.getByLabelText('Custom reminder date') as HTMLInputElement)
-          .value
-      ).toBe('2026-03-08');
-      expect(
-        (screen.getByLabelText('Custom reminder time') as HTMLInputElement)
-          .value
-      ).toBe('02:30');
+        screen.getByLabelText('Custom reminder date').getAttribute('title')
+      ).toContain('Mar 8, 2026');
+      expect((screen.getByLabelText('Time') as HTMLInputElement).value).toBe(
+        '02:30'
+      );
       expect(
         screen.getByText(/local time doesn’t exist because the clocks change/)
       ).not.toBeNull();
@@ -248,15 +276,14 @@ describe('one-shot scheduling', () => {
 
 describe('recurrence', () => {
   it.each([
-    ['Daily', '0 0 9 * * 1,2,3,4,5,6,7'],
-    ['Weekdays', '0 0 9 * * 2,3,4,5,6'],
+    ['Daily', 'daily', '0 0 9 * * 1,2,3,4,5,6,7'],
+    ['Weekdays', 'weekdays', '0 0 9 * * 2,3,4,5,6'],
   ])(
     'round-trips the %s preset through the existing cron model',
-    (label, cron) => {
+    (_label, value, cron) => {
       const { onSubmit } = renderForm({ initialDescription: 'Standup' });
 
-      fireEvent.click(screen.getByText('Repeat'));
-      fireEvent.click(screen.getByRole('button', { name: label }));
+      chooseRepeat(value);
       fireEvent.click(screen.getByRole('button', { name: 'Set reminder' }));
 
       expect(onSubmit.mock.calls[0]?.[0].schedule).toMatchObject({
@@ -279,7 +306,9 @@ describe('recurrence', () => {
       submitLabel: 'Save',
     });
 
-    expect(screen.getByText('Custom schedule')).not.toBeNull();
+    expect(
+      screen.getByRole('button', { name: 'Repeat, Custom schedule' })
+    ).not.toBeNull();
     expect(
       screen.getByText(/will stay unchanged unless you choose a replacement/)
     ).not.toBeNull();
@@ -306,8 +335,7 @@ describe('recurrence', () => {
       submitLabel: 'Save',
     });
 
-    fireEvent.click(screen.getByText('Repeat'));
-    fireEvent.click(screen.getByRole('button', { name: 'Weekly' }));
+    chooseRepeat('weekly');
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     expect(onSubmit.mock.calls[0]?.[0].schedule).toEqual({
@@ -329,8 +357,7 @@ describe('recurrence', () => {
       submitLabel: 'Save',
     });
 
-    fireEvent.click(screen.getByText('Repeat'));
-    fireEvent.click(screen.getByRole('button', { name: 'Monthly' }));
+    chooseRepeat('monthly');
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     expect(onSubmit.mock.calls[0]?.[0].schedule).toEqual({
@@ -343,9 +370,8 @@ describe('recurrence', () => {
   it('seeds an explicitly chosen Weekly schedule with one weekday', () => {
     const { onSubmit } = renderForm({ initialDescription: 'Weekly review' });
 
-    fireEvent.click(screen.getByText('Repeat'));
-    fireEvent.click(screen.getByRole('button', { name: 'Daily' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Weekly' }));
+    chooseRepeat('daily');
+    chooseRepeat('weekly');
     fireEvent.click(screen.getByRole('button', { name: 'Set reminder' }));
 
     expect(onSubmit.mock.calls[0]?.[0].schedule).toEqual({
@@ -367,7 +393,6 @@ describe('recurrence', () => {
       submitLabel: 'Save',
     });
 
-    fireEvent.click(screen.getByText('Repeat'));
     fireEvent.input(screen.getByLabelText('Day'), {
       target: { value: '20' },
     });
@@ -375,20 +400,20 @@ describe('recurrence', () => {
       target: { value: '16:45' },
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Weekly' }));
+    chooseRepeat('weekly');
     expect((screen.getByLabelText('At') as HTMLInputElement).value).toBe(
       '16:45'
     );
     fireEvent.click(screen.getByRole('button', { name: 'Friday' }));
     fireEvent.click(screen.getByRole('button', { name: 'Thursday' }));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Monthly' }));
+    chooseRepeat('monthly');
     expect((screen.getByLabelText('Day') as HTMLInputElement).value).toBe('20');
     expect((screen.getByLabelText('At') as HTMLInputElement).value).toBe(
       '16:45'
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Weekly' }));
+    chooseRepeat('weekly');
     expect(
       screen
         .getByRole('button', { name: 'Friday' })
