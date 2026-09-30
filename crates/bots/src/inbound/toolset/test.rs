@@ -6,8 +6,8 @@ use super::{
     manage_bot_channel_access::{BotChannelAccessAction, ManageBotChannelAccess},
 };
 use crate::domain::models::{
-    Agent, AuthenticatedBot, BotChannel, BotChannelListCaller, BotChannelType, BotToken,
-    CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest, CreateBotTokenResponse,
+    Agent, AuthenticatedBot, BotChannel, BotChannelListCaller, BotChannelType, BotOwnerProfile,
+    BotToken, CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest, CreateBotTokenResponse,
     CreateChannelScopedBotRequest, CreateChannelScopedBotResponse, PatchBotRequest,
     UpdateAgentRequest,
 };
@@ -142,6 +142,10 @@ impl BotService for ToolTestBotService {
         let mut bot = sample_bot("build-bot");
         bot.id = bot_id;
         Ok(bot)
+    }
+
+    async fn get_owner_profiles(&self, _ids: &[BotId]) -> Result<Vec<BotOwnerProfile>, BotError> {
+        Ok(Vec::new())
     }
 
     async fn get_self(&self, _bot_id: BotId) -> Result<Bot, BotError> {

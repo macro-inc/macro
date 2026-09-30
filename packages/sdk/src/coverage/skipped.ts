@@ -306,6 +306,7 @@ export const storageExcluded = [
   'getBatchPreviewHandler',
   'getActiveCalls',
   'getBatchProjectPreview',
+  'getBotOwnerProfiles',
   'getCollabSurface',
   'getDocumentListHandler',
   'getDocumentLocationV3',

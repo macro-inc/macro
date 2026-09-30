@@ -27,6 +27,7 @@ import AgentIcon from '@phosphor/sparkle.svg';
 import TrayIcon from '@phosphor/tray.svg';
 import { Key } from '@solid-primitives/keyed';
 import { cn } from '@ui';
+import { tourTarget } from '@ui/components/Tour';
 import { createSignal, type JSX, Show } from 'solid-js';
 import { compactAge } from '../core/format-age';
 import type { AgentsMode } from '../core/mode';
@@ -35,6 +36,7 @@ import {
   type AgentConversationEntity,
   conversationTimestamp,
 } from '../core/recent-conversations';
+import { AGENTS_TOUR } from '../tour';
 import { AgentSessionListItem } from '../views/AgentSessionListItem';
 import { AgentSessionListSkeleton } from './AgentSessionListSkeleton';
 
@@ -227,6 +229,7 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
           <SidebarCreateButton
             label="New conversation"
             onCreate={props.onNewConversation}
+            ref={tourTarget(AGENTS_TOUR.newChat)}
           />
         </ViewSidebar.Primary>
 
@@ -235,6 +238,7 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
             <ViewSidebar.Item
               active={props.activePage === 'agents'}
               onClick={() => props.onOpenPage('agents')}
+              ref={tourTarget(AGENTS_TOUR.rosterNav)}
             >
               <ViewSidebar.Icon>
                 <AgentIcon />

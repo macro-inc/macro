@@ -1,3 +1,4 @@
+import { ViewTour } from '@app/features/tours/ViewTour';
 import { usePosthog } from '@app/lib/analytics/posthog';
 import { defineRoute } from '@app/lib/split-router';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -11,6 +12,7 @@ import { lazy, Show } from 'solid-js';
 import type { SetPredicatesInput } from './filters/filter-store/predicates-store';
 import type { Query } from './filters/filter-store/types';
 import { getViewPreset } from './sidebar/soup-filter-presets';
+import { callsTour, foldersTour } from './tour';
 import { useRecentViewFlag } from './use-recent-view-flag';
 
 const SoupView = lazy(async () => ({
@@ -57,6 +59,7 @@ export const CallsRouteView = withAuth(() => {
       initialFilters={preset?.filters}
       initialClientFilters={preset?.clientFilters}
       initialGroupBy={preset?.groupBy}
+      tour={<ViewTour tour={callsTour} />}
     />
   );
 });
@@ -74,6 +77,7 @@ export const FoldersRouteView = withAuth(() => {
       initialFilters={preset?.filters}
       initialClientFilters={preset?.clientFilters}
       initialGroupBy={preset?.groupBy}
+      tour={<ViewTour tour={foldersTour} />}
     />
   );
 });

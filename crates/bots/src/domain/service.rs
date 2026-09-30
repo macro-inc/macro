@@ -4,10 +4,10 @@ use super::{
     events::{BotCreatedMetadata, BotDeletedMetadata, BotMacroEvent, BotUpdatedMetadata},
     models::{
         Agent, AgentChannelScope, AgentMcpServers, AuthenticatedBot, Bot, BotChannel,
-        BotChannelListCaller, BotId, BotKind, BotOwner, BotToken, BotTokenCandidate,
-        CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest, CreateChannelScopedBotRequest,
-        CreateChannelScopedBotResponse, HarnessId, HarnessOwner, PatchBotRequest,
-        UpdateAgentRequest,
+        BotChannelListCaller, BotId, BotKind, BotOwner, BotOwnerProfile, BotToken,
+        BotTokenCandidate, CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest,
+        CreateChannelScopedBotRequest, CreateChannelScopedBotResponse, HarnessId, HarnessOwner,
+        MAX_BOT_OWNER_PROFILE_IDS, PatchBotRequest, UpdateAgentRequest,
     },
     ports::{BotError, BotRepo, BotService},
     tokens,
@@ -630,6 +630,29 @@ where
         bot_id: BotId,
     ) -> Result<Bot, BotError> {
         self.ensure_manageable(caller, bot_id).await
+    }
+
+    async fn get_owner_profiles(&self, ids: &[BotId]) -> Result<Vec<BotOwnerProfile>, BotError> {
+        if ids.len() > MAX_BOT_OWNER_PROFILE_IDS {
+            return Err(BotError::BadRequest(format!(
+                "at most {MAX_BOT_OWNER_PROFILE_IDS} bot profile ids may be requested"
+            )));
+        }
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let found = self
+            .repo
+            .get_owner_profiles(ids)
+            .await
+            .map_err(|err| BotError::Repo(err.into()))?;
+        let mut seen = std::collections::HashSet::new();
+        Ok(ids
+            .iter()
+            .filter(|id| seen.insert(**id))
+            .filter_map(|id| found.get(id).cloned())
+            .collect())
     }
 
     async fn get_self(&self, bot_id: BotId) -> Result<Bot, BotError> {

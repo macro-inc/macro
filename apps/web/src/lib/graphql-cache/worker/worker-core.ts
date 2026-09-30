@@ -1040,6 +1040,9 @@ export class CacheWorkerCore {
       this.push({
         kind: 'cache-changed',
         revision: result.revision,
+        ...(!result.reset && result.searchChangedBuckets !== undefined
+          ? { searchChangedBuckets: result.searchChangedBuckets }
+          : {}),
         ...(result.reset ? { reset: true } : {}),
       });
     }

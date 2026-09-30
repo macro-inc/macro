@@ -53,6 +53,8 @@ export default defineConfig(({ command }) => ({
           'cache-recovery.html',
           'notification-projection.html',
           'mail-projection.html',
+          'query-write-scope.html',
+          'search-buckets.html',
         ].map((name) => [name.replace('.html', ''), resolve(directory, name)])
       ),
     },

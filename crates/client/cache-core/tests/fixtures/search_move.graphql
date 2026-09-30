@@ -1,0 +1,17 @@
+mutation MoveFixture {
+  renameEntities {
+    results {
+      ... on GraphqlMutationSuccess {
+        effects {
+          ... on SoupUpdated {
+            item {
+              __typename
+              id
+              ... on GraphqlSoupDocument { name fileType }
+            }
+          }
+        }
+      }
+    }
+  }
+}
