@@ -226,9 +226,7 @@ export function DiscussionThreadView(props: {
   const replies = () => comments().slice(1);
   const hasReplies = () => replies().length > 0;
   const replyMetaById = createMemo(() =>
-    buildThreadReplyListMeta(
-      replies().map(discussionCommentToChannelMessage)
-    )
+    buildThreadReplyListMeta(replies().map(discussionCommentToChannelMessage))
   );
   const threadId = () => props.thread.id;
 

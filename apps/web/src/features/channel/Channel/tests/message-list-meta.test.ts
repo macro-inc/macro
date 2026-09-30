@@ -1,6 +1,5 @@
 import { senderFromStorageId } from '@queries/messages/message-sender';
-import type { MessageSender } from '@service-storage/messages';
-import type { MessageListItem } from '@service-storage/messages';
+import type { MessageListItem, MessageSender } from '@service-storage/messages';
 import { describe, expect, it } from 'vitest';
 import { buildChannelMessageListMeta } from '../message-list-meta';
 

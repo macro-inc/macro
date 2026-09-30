@@ -1,8 +1,8 @@
-import type { MessageSender } from '@service-storage/messages';
 import type { Bot } from '@service-storage/generated/schemas/bot';
 import type {
   Message as EntityMessage,
   MessageListItem,
+  MessageSender,
   MessageThread,
   MessageTimelinePage,
 } from '@service-storage/messages';
