@@ -18,23 +18,28 @@ import Trash from '@phosphor/trash.svg';
 import { Button, SendButton } from '@ui';
 import { FORMAT_TEXT_COMMAND, type LexicalEditor } from 'lexical';
 import { createSignal, Show } from 'solid-js';
+import { AttachButtonDropdown } from '../components/attach-button-dropdown';
 import { EmailDateSelector } from '../components/email-date-selector';
 import { EmailScheduleSummary } from '../components/email-schedule-summary';
 import { useCompose } from '../context/compose-context';
+import type { DraftFormAttachment } from '../primitives/email-form-state';
 
 export function EmailComposeToolbar(props: {
   editor?: () => LexicalEditor | undefined;
 }) {
   const ctx = useCompose();
   const [showFormatRibbon, setShowFormatRibbon] = createSignal(false);
-  const handleAddAttachments = (files: File[]) => {
+  const handleAddAttachments = (attachments: DraftFormAttachment[]) => {
     const currentAttachments = ctx.attachments();
 
-    const attachmentsToAddByteSize = files.reduce((sum, f) => sum + f.size, 0);
+    const attachmentsToAddByteSize = attachments.reduce(
+      (sum, a) => sum + (a.type === 'local' ? a.file.size : a.fileSize),
+      0
+    );
 
     if (attachmentsToAddByteSize >= MAX_ATTACHMENTS_BYTES_SIZE) {
       ctx.attachmentFailure(
-        `${plural('Attachment', files.length)} exceed 18MB`
+        `${plural('Attachment', attachments.length)} exceed 18MB`
       );
       return;
     }
@@ -54,18 +59,17 @@ export function EmailComposeToolbar(props: {
       return;
     }
 
-    ctx.onAddAttachments(
-      files.map((file) => ({
-        type: 'local',
-        file,
-      }))
-    );
+    ctx.onAddAttachments(attachments);
+  };
+
+  const handleAddFiles = (files: File[]) => {
+    handleAddAttachments(files.map((file) => ({ type: 'local', file })));
   };
 
   return (
     <Show
       when={!ctx.isMobile()}
-      fallback={<MobileToolbar handleAddAttachments={handleAddAttachments} />}
+      fallback={<MobileToolbar handleAddAttachments={handleAddFiles} />}
     >
       <Show when={showFormatRibbon()}>
         <div class="flex flex-row w-full gap-2 items-center p-2 -ml-3">
@@ -93,19 +97,11 @@ export function EmailComposeToolbar(props: {
             </Button>
           </Show>
           <Show when={!ctx.hideAttachments}>
-            <Button
-              ref={(el) =>
-                fileSelector(el, () => ({
-                  multiple: true,
-                  onSelect: handleAddAttachments,
-                }))
-              }
-              tooltip="Attach"
-              size="icon-composer"
+            <AttachButtonDropdown
+              onAddAttachments={handleAddAttachments}
+              onFailure={ctx.attachmentFailure}
               disabled={ctx.disabled()}
-            >
-              <PaperclipIcon />
-            </Button>
+            />
           </Show>
           <Button
             tooltip="Format"

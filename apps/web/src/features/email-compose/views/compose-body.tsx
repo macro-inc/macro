@@ -21,6 +21,7 @@ import {
 import { createAttachmentViewer } from '../components/attachment-viewer';
 import { MacroSignatureButton } from '../components/macro-signature-button';
 import { useCompose } from '../context/compose-context';
+import { DocumentAttachmentContextProvider } from '../context/document-attachment-context';
 import type { DraftFormAttachment } from '../primitives/email-form-state';
 import { addUserMentionToCc } from '../primitives/mention-to-cc';
 
@@ -128,62 +129,67 @@ export function ComposeBody(props: {
             <FileDropOverlay>Drop file(s) to attach</FileDropOverlay>
           </div>
 
-          <Scroll>
-            <MarkdownTextarea
-              resolveAppLink={resolveAppLink}
-              autoLinkMatchMode="common-tlds"
-              floatingFormatMenu
-              domRef={props.inputRef}
-              captureEditor={captureEditor}
-              onInitialized={ctx.onEditorInitialized}
-              scrollRef={props.mobileScrollRef}
-              initialHtml={ctx.initialHtml()}
-              initialValue={ctx.initialMarkdown?.()}
-              class="text-base wrap-break-word text-ink h-auto overflow-visible"
-              editable={() => !ctx.disabled()}
-              placeholder="Use `@` to reference files"
-              watermark={
-                !ctx.hasPaidAccess() ? (
-                  <MacroSignatureButton
-                    visible={!ctx.viewerLoading?.()}
-                    onUpgrade={ctx.onUpgrade}
-                  />
-                ) : undefined
-              }
-              onChange={ctx.onContentChange}
-              onUserMention={(mention) => {
-                addUserMentionToCc({
-                  mention,
-                  recipientOptions: ctx.recipientOptions(),
-                  toRecipients: ctx.recipients().to,
-                  ccRecipients: ctx.recipients().cc,
-                  bccRecipients: ctx.recipients().bcc,
-                  onRecipientAdded: ctx.bodyActions.recipientAdded,
-                  setCc: (next) => ctx.setRecipients('cc', next),
-                });
-              }}
-              onFocusLeaveStart={(e) => {
-                if (!ctx.bodyActions.focusSibling) return;
-                e.preventDefault();
-                ctx.bodyActions.focusSibling('prev');
-              }}
-              onFocusLeaveEnd={(e) => {
-                if (!ctx.bodyActions.focusSibling) return;
-                e.preventDefault();
-                ctx.bodyActions.focusSibling('next');
-              }}
-              portalScope="local"
-              onPasteFilesAndDirs={(files, directories) => {
-                const ed = editor();
-                if (!ed) return;
-                ctx.bodyActions.insertFiles(ed, {
-                  files,
-                  directories,
-                  onVideos: props.onAddFiles,
-                });
-              }}
-            />
-          </Scroll>
+          <DocumentAttachmentContextProvider
+            onAddAttachments={ctx.onAddAttachments}
+            onFailure={ctx.attachmentFailure}
+          >
+            <Scroll>
+              <MarkdownTextarea
+                resolveAppLink={resolveAppLink}
+                autoLinkMatchMode="common-tlds"
+                floatingFormatMenu
+                domRef={props.inputRef}
+                captureEditor={captureEditor}
+                onInitialized={ctx.onEditorInitialized}
+                scrollRef={props.mobileScrollRef}
+                initialHtml={ctx.initialHtml()}
+                initialValue={ctx.initialMarkdown?.()}
+                class="text-base wrap-break-word text-ink h-auto overflow-visible"
+                editable={() => !ctx.disabled()}
+                placeholder="Use `@` to reference files"
+                watermark={
+                  !ctx.hasPaidAccess() ? (
+                    <MacroSignatureButton
+                      visible={!ctx.viewerLoading?.()}
+                      onUpgrade={ctx.onUpgrade}
+                    />
+                  ) : undefined
+                }
+                onChange={ctx.onContentChange}
+                onUserMention={(mention) => {
+                  addUserMentionToCc({
+                    mention,
+                    recipientOptions: ctx.recipientOptions(),
+                    toRecipients: ctx.recipients().to,
+                    ccRecipients: ctx.recipients().cc,
+                    bccRecipients: ctx.recipients().bcc,
+                    onRecipientAdded: ctx.bodyActions.recipientAdded,
+                    setCc: (next) => ctx.setRecipients('cc', next),
+                  });
+                }}
+                onFocusLeaveStart={(e) => {
+                  if (!ctx.bodyActions.focusSibling) return;
+                  e.preventDefault();
+                  ctx.bodyActions.focusSibling('prev');
+                }}
+                onFocusLeaveEnd={(e) => {
+                  if (!ctx.bodyActions.focusSibling) return;
+                  e.preventDefault();
+                  ctx.bodyActions.focusSibling('next');
+                }}
+                portalScope="local"
+                onPasteFilesAndDirs={(files, directories) => {
+                  const ed = editor();
+                  if (!ed) return;
+                  ctx.bodyActions.insertFiles(ed, {
+                    files,
+                    directories,
+                    onVideos: props.onAddFiles,
+                  });
+                }}
+              />
+            </Scroll>
+          </DocumentAttachmentContextProvider>
         </div>
         {ctx.signaturePreview?.()}
         <div class="flex flex-wrap items-center gap-2">

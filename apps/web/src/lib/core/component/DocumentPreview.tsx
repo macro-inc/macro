@@ -11,6 +11,7 @@ import { calendarMentionOpen } from '@app/features/calendar-view/mention-open-ta
 import { openCalendarEventSplit } from '@app/features/calendar-view/open-calendar-event';
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
 import { openChatWithAgent } from '@app/features/chat/ChatWithAgentButton';
+import { useDocumentAttachment } from '@app/features/email-compose/context/document-attachment-context';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { URL_PARAMS as URL_PARAMS_CANVAS } from '@block-canvas/constants';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
@@ -48,6 +49,7 @@ import GitBranchIcon from '@phosphor/git-branch.svg';
 import HighlightIcon from '@phosphor/highlighter-circle.svg';
 import Link from '@phosphor/link.svg';
 import MapPinIcon from '@phosphor/map-pin-simple.svg';
+import PaperclipIcon from '@phosphor/paperclip.svg';
 import SparkleIcon from '@phosphor/sparkle.svg';
 import LoadingSpinner from '@phosphor/spinner.svg';
 import TextAlignLeftIcon from '@phosphor/text-align-left.svg';
@@ -125,6 +127,22 @@ function Spinner() {
  */
 function Loading() {
   return <MentionContainer icon={<Spinner />} text="Loading" />;
+}
+
+const ATTACHABLE_FILE_TYPES = new Set([
+  'pdf',
+  'image',
+  'video',
+  'audio',
+  'unknown',
+  'code',
+  'spreadsheet',
+  'file',
+]);
+
+function canAttachDocumentType(blockName: BlockName | BlockAlias): boolean {
+  const resolved = resolveBlockAlias(blockName);
+  return ATTACHABLE_FILE_TYPES.has(resolved);
 }
 
 /**
@@ -500,6 +518,7 @@ export type DocumentPreviewContentProps = {
 export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
   // Hooks
   const navigate = useNavigate();
+  const documentAttachment = useDocumentAttachment();
 
   const blockName = useMaybeBlockName();
   const itemPreviewEntity = () => {
@@ -546,6 +565,13 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
     ];
     return validChatInputTypes.includes(props.documentInfo.type);
   });
+
+  const canAttachAsFile = () =>
+    documentAttachment && canAttachDocumentType(props.documentInfo.type);
+
+  const handleAttachAsFile = () => {
+    documentAttachment?.attachDocument(props.documentInfo.id);
+  };
 
   // Handle collapse toggle
   const handleToggleCollapse = () => {
@@ -799,6 +825,12 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
               <Dropdown.Item onSelect={handleOpenInChat}>
                 <SparkleIcon class="size-4" />
                 Ask Macro
+              </Dropdown.Item>
+            </Show>
+            <Show when={canAttachAsFile()}>
+              <Dropdown.Item onSelect={handleAttachAsFile}>
+                <PaperclipIcon class="size-4" />
+                Attach as File
               </Dropdown.Item>
             </Show>
             <Dropdown.Item onSelect={handleCopy}>
