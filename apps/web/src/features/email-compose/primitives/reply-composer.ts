@@ -264,7 +264,10 @@ export function createReplyComposer(
   );
   const savedDraftId = session.draftId;
   const savedDraftThreadId = session.threadId;
-  observeDraftIdentity(props.drafts, session, props.notices.reportError);
+  observeDraftIdentity(props.drafts, session, props.notices, () => {
+    if (scheduleBlocked() || schedule.state().type === 'scheduled') return;
+    detachFromObsoleteDraft('Saving your edits as a new draft.');
+  });
   const persistedInboxId = session.inboxId;
   const [movingInbox, setMovingInbox] = createSignal(false);
   let identityVersion = 0;

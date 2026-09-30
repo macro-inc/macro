@@ -122,4 +122,7 @@ fragment EmailThreadMessageFields on GraphqlSoupEmailMessage {
 }
 
 # Explicit identity read follows durable redirects without requiring a cached page.
-fragment EmailThreadIdentityFields on GraphqlSoupEmailThread { id }
+fragment EmailThreadIdentityFields on GraphqlSoupEmailThread {
+    id
+    cacheProjection @cacheOnly
+}

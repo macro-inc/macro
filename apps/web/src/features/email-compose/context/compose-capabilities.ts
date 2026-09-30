@@ -214,7 +214,10 @@ export interface EmailComposeFeedback {
       message: string,
       options?: ComposeNoticeOptions
     ): number | undefined;
-    failure(message: string, options?: ComposeNoticeOptions): void;
+    failure(
+      message: string,
+      options?: ComposeNoticeOptions
+    ): number | undefined;
     alert(message: string, options?: ComposeNoticeOptions): void;
     dismiss(id: number): void;
   };
@@ -282,6 +285,7 @@ export interface EmailComposeContext {
 export interface ComposeNoticeOptions {
   subtext?: string;
   duration?: number;
+  persistent?: boolean;
   /** `kind` picks the action's icon; actions default to undo. */
   actions?: { label: string; onClick: () => void; kind?: 'undo' | 'open' }[];
 }

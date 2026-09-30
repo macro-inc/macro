@@ -181,7 +181,7 @@ it('editing an older draft keeps the later received preview and discarding resto
   };
   const sent = { ...received, id: 'sent', subject: 'Sent' };
   const edited = updateDraftThread(
-    { ...thread, mailSentPreview: sent },
+    { ...thread, isRead: false, mailSentPreview: sent },
     older,
     true
   );
@@ -227,4 +227,39 @@ it('discards a standalone draft with the original coalescing key and bindings fo
       (binding) => binding.responsePath.length === 0
     )
   ).toBe(true);
+});
+
+it.each([false, true])(
+  'preserves a newer read intent through repeated draft saves and discard (read=%s)',
+  async (isRead) => {
+    const { draft, thread } = await standalone();
+    const state = thread.mailDraftState!;
+    state.baseline = {
+      ...state.baseline,
+      messageCount: 1,
+      isRead: !isRead,
+    };
+    // Read/unread mutations patch the thread while the server's aggregate
+    // remains unchanged until the queue is replayed and revalidated.
+    thread.isRead = isRead;
+    const first = updateDraftThread(thread, draft, true);
+    const second = updateDraftThread(
+      first,
+      { ...draft, subject: 'Edited' },
+      true
+    );
+    expect(first.isRead).toBe(isRead);
+    expect(second.isRead).toBe(isRead);
+    expect(removeDraftFromThread(second, draft.id)?.isRead).toBe(isRead);
+  }
+);
+
+it('marks a conversation read when its only unread draft is edited or discarded', async () => {
+  const { draft, thread } = await standalone();
+  const state = thread.mailDraftState!;
+  state.baseline.messageCount = 1;
+  state.drafts[0].facts.isRead = false;
+  thread.isRead = false;
+  expect(updateDraftThread(thread, draft, true).isRead).toBe(true);
+  expect(removeDraftFromThread(thread, draft.id)?.isRead).toBe(true);
 });

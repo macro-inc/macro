@@ -186,7 +186,7 @@ document.querySelector('#create-draft')!.addEventListener('click', async () => {
       createdAt: now,
       updatedAt: now,
     };
-    await host.enqueueOptimisticMutation(
+    const enqueued = await host.enqueueOptimisticMutation(
       {
         uuid: id(8001),
         query: stringifyDocument(SaveEmailDraftDocument),
@@ -224,6 +224,19 @@ document.querySelector('#create-draft')!.addEventListener('click', async () => {
         leaseExpiresAtMs: Date.now() + 1000,
       }
     );
+    // Model a failed offline attempt explicitly rather than depending on the
+    // reload taking longer than its lease. Replay must be runnable on resume.
+    if (enqueued.initialClaim.kind === 'claimed') {
+      await host.deferOptimisticWrite(
+        enqueued.initialClaim.mutation.transactionId,
+        {
+          owner: 'offline-draft-test',
+          generation: enqueued.initialClaim.mutation.leaseGeneration,
+        },
+        Date.now(),
+        'offline test attempt'
+      );
+    }
     draftStatus.textContent = 'Draft queued';
     await refresh();
   } catch (error) {

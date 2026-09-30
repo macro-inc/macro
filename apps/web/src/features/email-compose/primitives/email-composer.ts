@@ -185,7 +185,10 @@ export function createEmailComposer(props: EmailComposerOptions) {
   );
   const currentDraftId = session.draftId;
   const currentThreadId = session.threadId;
-  observeDraftIdentity(props.drafts, session, props.notices.reportError);
+  observeDraftIdentity(props.drafts, session, props.notices, () => {
+    if (persistencePaused()) return;
+    detachFromObsoleteDraft('Saving your edits as a new draft.');
+  });
   const persistedInboxId = session.inboxId;
   const [movingInbox, setMovingInbox] = createSignal(false);
   let identityVersion = 0;

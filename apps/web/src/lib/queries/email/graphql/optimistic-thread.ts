@@ -163,6 +163,16 @@ function applyDraftState(
     emptyAggregate()
   );
   const all = mergeAggregate(state.baseline, drafts);
+  // Read/unread mutations can update the canonical thread before the message
+  // aggregate is refreshed. Preserve that newer intent across draft edits;
+  // otherwise deleting the sole unread draft still recomputes the read state.
+  const previousState = existing.mailDraftState;
+  const previousIsRead =
+    previousState &&
+    previousState.baseline.isRead &&
+    previousState.drafts.every((entry) => entry.facts.isRead);
+  const hasNewerReadIntent =
+    previousState !== null && existing.isRead !== previousIsRead;
   return {
     ...existing,
     mailDraftState: state,
@@ -171,7 +181,7 @@ function applyDraftState(
     latestInboundMessageTs: all.latestInboundMessageTs,
     inboxVisible: all.inboxVisible,
     isDraft: drafts.preview !== null,
-    isRead: all.isRead,
+    isRead: hasNewerReadIntent ? existing.isRead : all.isRead,
     isSignal: all.isSignal,
     isImportant: all.isSignal,
     displayName: all.preview?.subject ?? null,

@@ -572,6 +572,14 @@ An internal draft-save failure, including a failed response read after the save
 commits, stays queued and retries with backoff. It must not permanently disable
 autosave; Send stays blocked until a save is confirmed. Invalid or unauthorized
 writes still stop retrying.
+If an offline save is permanently rejected after reconnect, a persistent
+**Draft could not be saved** notice offers **Save as new draft**. The editor keeps
+the latest text and stops autosaving until that action is chosen. Recovery saves
+the current content under a new draft identity; a reply stays in its conversation.
+Previously saved attachments that cannot be copied require reattachment, with a
+separate notice. Verify that further typing alone does not retry the rejected
+write, recovery uses the newest text, and closing or resetting the composer
+removes its recovery notice. Other transient notices must not hide that action.
 Test this with a previously saved draft as well as a new one: a queued edit must
 block Send and scheduling until a save commits. Reopening a cached draft while
 offline must retain its uploaded attachments and confirmed scheduled time.

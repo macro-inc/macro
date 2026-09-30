@@ -87,15 +87,19 @@ pub(super) async fn thread_mail_projections_by_ids(
                 m.is_draft AND m.provider_id IS NULL AS macro_draft,
                 (('INBOX' = ANY(labels.provider_names) AND NOT 'SENT' = ANY(labels.provider_names))
                     OR (m.is_draft AND m.provider_id IS NULL)) AS inbox_visible,
-                NOT 'TRASH' = ANY(labels.names) AND (
+                NOT 'TRASH' = ANY(labels.names)
+                AND LOWER(SPLIT_PART(c.email_address, '@', 2)) IS DISTINCT FROM $3
+                AND (
                     rules.address_true OR (rules.domain_true AND NOT rules.address_false)
                     OR (NOT (rules.address_false OR (rules.domain_false AND NOT rules.address_true))
                         AND (m.is_draft OR labels.names && ARRAY['CATEGORY_PERSONAL','SENT','DRAFT']
                             OR NOT labels.names && ARRAY['CATEGORY_UPDATES','CATEGORY_PROMOTIONS','CATEGORY_SOCIAL','CATEGORY_FORUMS']))
                 ) AS is_signal,
-                EXISTS (SELECT 1 FROM email_attachments a WHERE a.message_id = m.id
+                (EXISTS (SELECT 1 FROM email_attachments a WHERE a.message_id = m.id
                     AND (a.filename ILIKE '%.ics' OR a.mime_type IN ('text/calendar','application/ics'))
-                ) AS has_calendar_attachment,
+                ) OR EXISTS (
+                    SELECT 1 FROM email_message_calendar_invites i WHERE i.message_id = m.id
+                )) AS has_calendar_attachment,
                 GREATEST(
                     CASE WHEN 'INBOX' = ANY(labels.provider_names) AND (
                         NOT (m.is_draft OR m.is_sent) OR EXISTS (
@@ -201,7 +205,7 @@ pub(super) async fn thread_mail_projections_by_ids(
         LEFT JOIN email_contacts sc ON sc.id = sm.from_contact_id
         WHERE t.id = ANY($1)
         "#,
-        thread_ids, viewer.as_ref(),
+        thread_ids, viewer.as_ref(), email_utils::MACRO_NOTIFICATION_SENDER_DOMAIN,
     ).fetch_all(pool).await?;
     Ok(rows
         .into_iter()

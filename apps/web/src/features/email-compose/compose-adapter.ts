@@ -271,7 +271,15 @@ export function createEmailComposeContext(
     notices: {
       feedback: {
         success: (message, options) => toast.success(message, notice(options)),
-        failure: (message, options) => toast.failure(message, notice(options)),
+        failure: (message, options) => {
+          if (options?.persistent)
+            return toast.failure(message, {
+              ...notice(options),
+              persistent: true,
+            });
+          toast.failure(message, notice(options));
+          return undefined;
+        },
         alert: (message, options) => toast.alert(message, notice(options)),
         dismiss: toast.dismiss,
       },

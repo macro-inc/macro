@@ -139,6 +139,8 @@ function rejection(
   return code;
 }
 
+const SNAPSHOT_READ_ATTEMPTS = 3;
+
 /** The draft and thread records a queued write rebases onto, when cached. */
 async function readCachedDraftAndThread(
   draftId: string,
@@ -146,26 +148,40 @@ async function readCachedDraftAndThread(
 ): Promise<
   Pick<
     GraphqlSaveEmailDraftArgs,
-    'existingDraft' | 'existingThread' | 'mutationUuid'
+    | 'draftId'
+    | 'threadDbId'
+    | 'existingDraft'
+    | 'existingThread'
+    | 'mutationUuid'
   >
 > {
   const host = getGraphqlCacheHost();
-  if (!host) return {};
-  const draft = await readRecordsByKeys(
-    host,
-    selectRecords(EmailThreadMessageFieldsFragmentDoc),
-    [`GraphqlSoupEmailMessage:${draftId}`]
-  );
-  const thread = await readRecordsByKeys(
-    host,
-    selectRecords(EmailDraftThreadFieldsFragmentDoc),
-    [`GraphqlSoupEmailThread:${threadId}`]
-  );
-  return {
-    existingDraft: draft.records[0]?.record,
-    existingThread: thread.records[0]?.record,
-    mutationUuid: draft.records[0]?.identity?.mutationUuid ?? undefined,
-  };
+  if (!host) return { draftId, threadDbId: threadId };
+  // Settlement can land between these reads. Compose from one revision so a
+  // local draft is never combined with a thread already using its server ID.
+  for (let attempt = 0; attempt < SNAPSHOT_READ_ATTEMPTS; attempt++) {
+    const [draft, thread] = await Promise.all([
+      readRecordsByKeys(
+        host,
+        selectRecords(EmailThreadMessageFieldsFragmentDoc),
+        [`GraphqlSoupEmailMessage:${draftId}`]
+      ),
+      readRecordsByKeys(
+        host,
+        selectRecords(EmailDraftThreadFieldsFragmentDoc),
+        [`GraphqlSoupEmailThread:${threadId}`]
+      ),
+    ]);
+    if (draft.revision !== thread.revision) continue;
+    return {
+      draftId: draft.records[0]?.record.id ?? draftId,
+      threadDbId: thread.records[0]?.record.id ?? threadId,
+      existingDraft: draft.records[0]?.record,
+      existingThread: thread.records[0]?.record,
+      mutationUuid: draft.records[0]?.identity?.mutationUuid ?? undefined,
+    };
+  }
+  throw new Error('Email draft cache kept changing; retry the draft write');
 }
 
 /** Saves over the queue; a commit mirrors useSaveDraftMutation's cache effects. */
@@ -181,7 +197,10 @@ export async function saveEmailDraftQueued(input: {
   const outcome = await executeGraphqlSaveEmailDraft(getGraphqlSoupClient(), {
     ...input.args,
     ...cached,
-    mutationUuid: cached.mutationUuid ?? input.args.mutationUuid,
+    mutationUuid:
+      cached.mutationUuid ??
+      input.args.mutationUuid ??
+      String(input.args.draftId),
   });
   if (outcome.kind === 'failed') {
     return {
@@ -231,9 +250,9 @@ export async function deleteEmailDraftQueued(input: {
   const cached = await readCachedDraftAndThread(input.draftId, input.threadId);
   const outcome = await executeGraphqlDeleteEmailDraft(getGraphqlSoupClient(), {
     existingThread: cached.existingThread,
-    mutationUuid: cached.mutationUuid,
-    draftId: input.draftId,
-    threadDbId: input.threadId,
+    mutationUuid: cached.mutationUuid ?? input.draftId,
+    draftId: String(cached.draftId),
+    threadDbId: cached.threadDbId,
   });
   if (outcome.kind === 'failed') {
     return {

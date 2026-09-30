@@ -1,19 +1,23 @@
 import { createEffect, createMemo, on, onCleanup } from 'solid-js';
-import type { EmailDraftStorage } from '../context/compose-capabilities';
+import type {
+  EmailComposeFeedback,
+  EmailDraftStorage,
+} from '../context/compose-capabilities';
 import type { DraftSession } from './draft-session';
 
 /** Refresh identity only: a cache settlement must never reseed a dirty editor. */
 export function observeDraftIdentity(
   storage: EmailDraftStorage,
   session: DraftSession,
-  reportError: (error: unknown) => void
+  notices: Pick<EmailComposeFeedback, 'feedback' | 'reportError'>,
+  recover: () => void
 ) {
   createEffect(
     on(
       () => [storage.readDraft, storage.watchDrafts] as const,
       ([read, watch]) => {
         if (read && watch)
-          observeAvailableDraftIdentity(read, watch, session, reportError);
+          observeAvailableDraftIdentity(read, watch, session, notices, recover);
       }
     )
   );
@@ -23,11 +27,18 @@ function observeAvailableDraftIdentity(
   read: NonNullable<EmailDraftStorage['readDraft']>,
   watch: NonNullable<EmailDraftStorage['watchDrafts']>,
   session: DraftSession,
-  reportError: (error: unknown) => void
+  notices: Pick<EmailComposeFeedback, 'feedback' | 'reportError'>,
+  recover: () => void
 ) {
   let generation = 0;
   let mutationUuid: string | undefined;
   let disposed = false;
+  let rejectionNotice: number | undefined;
+  const dismissRejectionNotice = () => {
+    if (rejectionNotice === undefined) return;
+    notices.feedback.dismiss(rejectionNotice);
+    rejectionNotice = undefined;
+  };
   let lastRefresh: Promise<void> = Promise.resolve();
   const refresh = () => (lastRefresh = readIdentity());
   const readIdentity = async () => {
@@ -67,7 +78,7 @@ function observeAvailableDraftIdentity(
         },
       });
     } catch (error) {
-      reportError(error);
+      notices.reportError(error);
     }
   };
   const rejected = async (settlement: { mutationUuid?: string }) => {
@@ -78,20 +89,45 @@ function observeAvailableDraftIdentity(
     return settlement.mutationUuid === (mutationUuid ?? session.draftId());
   };
   const unsubscribe = watch((settlement) => {
+    const epoch = session.epoch();
     void (async () => {
       if (
         settlement?.failed &&
         settlement.mutationUuid &&
         (await rejected(settlement))
       ) {
+        if (disposed || session.isStale(epoch) || !session.autosaveAllowed())
+          return;
         session.dispatch({
           type: 'rejected',
-          epoch: session.epoch(),
+          epoch,
           code: 'INTERNAL',
         });
-        reportError(new Error('The server rejected the queued draft save'));
+        notices.reportError(
+          new Error('The server rejected the queued draft save')
+        );
+        rejectionNotice = notices.feedback.failure('Draft could not be saved', {
+          subtext:
+            'Your edits are still in this editor. Save them as a new draft before closing.',
+          persistent: true,
+          actions: [
+            {
+              label: 'Save as new draft',
+              onClick: () => {
+                if (
+                  disposed ||
+                  session.isStale(epoch) ||
+                  session.autosaveAllowed()
+                )
+                  return;
+                recover();
+              },
+            },
+          ],
+        });
         return;
       }
+      if (disposed || session.isStale(epoch)) return;
       await refresh();
     })();
   });
@@ -100,6 +136,7 @@ function observeAvailableDraftIdentity(
   createEffect(
     on(createMemo(session.epoch), () => {
       mutationUuid = undefined;
+      dismissRejectionNotice();
     })
   );
   createEffect(
@@ -109,6 +146,7 @@ function observeAvailableDraftIdentity(
   );
   onCleanup(() => {
     disposed = true;
+    dismissRejectionNotice();
     unsubscribe();
   });
 }

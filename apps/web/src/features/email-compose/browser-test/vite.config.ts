@@ -24,6 +24,7 @@ export default defineConfig({
     dedupe: ['solid-js'],
     alias: {
       '@ui': fileURLToPath(new URL('./ui-shim.ts', import.meta.url)),
+      'loro-crdt': 'loro-crdt/base64',
     },
   },
   server: {

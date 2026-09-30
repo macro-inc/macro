@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { message } from '../../email-message/tests/messages';
-import type { PersistedEmailIdentity } from '../context/compose-capabilities';
+import type {
+  EmailDraftStorage,
+  PersistedEmailIdentity,
+} from '../context/compose-capabilities';
 import { decodeBase64Utf8 } from '../core/decode-base64';
 import { createComposeContext } from '../tests/capabilities';
 import { mountEmailComposer } from '../tests/composer';
@@ -987,6 +990,64 @@ it.each(['standalone', 'reply'] as const)(
       expect(context.notices.reportError).toHaveBeenCalledExactlyOnceWith(
         error
       );
+    } finally {
+      root.dispose();
+    }
+  }
+);
+
+it.each(['standalone', 'reply'] as const)(
+  'keeps rejected %s edits unsaved until explicit recovery creates a fresh draft',
+  async (surface) => {
+    const context = createComposeContext();
+    let changed!: Parameters<NonNullable<EmailDraftStorage['watchDrafts']>>[0];
+    context.drafts.watchDrafts = (callback) => {
+      changed = callback;
+      return () => {};
+    };
+    context.drafts.readDraft = vi.fn(async () => undefined);
+    vi.mocked(context.drafts.saveDraft).mockImplementation(
+      async ({ clientHandles }) => ({
+        draftId: clientHandles?.draftId,
+        threadId: clientHandles?.threadId,
+        inboxId: 'inbox',
+        persistence: 'queued',
+      })
+    );
+    const root =
+      surface === 'standalone'
+        ? mountEmailComposer(context)
+        : mountReplyComposer(context);
+    try {
+      root.edit('Queued text');
+      await vi.advanceTimersByTimeAsync(600);
+      const original = vi.mocked(context.drafts.saveDraft).mock.calls[0][0];
+      expect(original.clientHandles?.draftId).toBeTruthy();
+      changed({ mutationUuid: original.clientHandles?.draftId, failed: true });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(context.notices.feedback.failure).toHaveBeenCalledOnce();
+      root.edit('Newest unsaved text');
+      await vi.advanceTimersByTimeAsync(600);
+      expect(context.drafts.saveDraft).toHaveBeenCalledOnce();
+      const action = vi.mocked(context.notices.feedback.failure).mock
+        .calls[0][1]?.actions?.[0];
+      expect(action?.label).toBe('Save as new draft');
+      action?.onClick();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(context.drafts.saveDraft).toHaveBeenCalledTimes(2);
+      const recovered = vi.mocked(context.drafts.saveDraft).mock.calls[1][0];
+      expect(recovered.draft.db_id).toBeUndefined();
+      expect(recovered.clientHandles?.draftId).not.toBe(
+        original.clientHandles?.draftId
+      );
+      expect(decodeBase64Utf8(recovered.draft.body_html ?? '')).toContain(
+        'Newest unsaved text'
+      );
+      if (surface === 'reply')
+        expect(recovered.draft.thread_db_id).toBe('thread');
+      action?.onClick();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(context.drafts.saveDraft).toHaveBeenCalledTimes(2);
     } finally {
       root.dispose();
     }

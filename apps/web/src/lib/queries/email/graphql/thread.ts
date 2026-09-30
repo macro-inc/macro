@@ -115,7 +115,13 @@ async function cachedThreadIdentity(
   return {
     requested: threadId,
     canonical: selected?.record.id ?? threadId,
-    queued: selected?.identity?.pending ?? false,
+    // Pending edits do not make an existing server identity local again.
+    // Every authoritative Mail thread carries a projection capsule; only a
+    // newly created optimistic thread has no server capsule yet.
+    localOnly:
+      selected?.identity?.pending === true &&
+      selected.record.id === threadId &&
+      selected.record.cacheProjection === null,
   };
 }
 
@@ -142,7 +148,7 @@ export async function fetchGraphqlEmailThread(
     .query<EmailThreadPageQuery, EmailThreadPageQueryVariables>(
       EmailThreadPageDocument,
       variables,
-      { requestPolicy: identity.queued ? 'cache-only' : 'cache-and-network' }
+      { requestPolicy: identity.localOnly ? 'cache-only' : 'cache-and-network' }
     )
     .toPromise();
 
@@ -202,18 +208,18 @@ export function createGraphqlEmailThreadQuery<TData = GraphqlEmailThreadPages>(
       setIdentity((previous) =>
         previous?.requested === result.requested &&
         previous.canonical === result.canonical &&
-        previous.queued === result.queued
+        previous.localOnly === result.localOnly
           ? previous
           : result
       );
     } catch {
-      // An unreadable identity may still be a local draft. Keep its last known
-      // handle and read only the cache until a later cache event resolves it.
+      // An initially unreadable identity may still be a local draft. Preserve
+      // any known identity and policy; otherwise wait for resolution in cache.
       if (!disposed && generation === request && id === threadId())
         setIdentity((previous) => ({
           requested: id,
           canonical: previous?.requested === id ? previous.canonical : id,
-          queued: true,
+          localOnly: previous?.requested === id ? previous.localOnly : true,
         }));
     }
   };
@@ -259,7 +265,7 @@ export function createGraphqlEmailThreadQuery<TData = GraphqlEmailThreadPages>(
       (!cacheRequired || !!host) &&
       threadId().length > 0 &&
       identity()?.requested === threadId(),
-    requestPolicy: identity()?.queued ? 'cache-only' : 'cache-and-network',
+    requestPolicy: identity()?.localOnly ? 'cache-only' : 'cache-and-network',
     keepPreviousData: false,
     select: ({ pages, pageParams }) => {
       const mapped = {

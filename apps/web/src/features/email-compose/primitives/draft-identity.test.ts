@@ -24,6 +24,8 @@ function mount(
   let changed!: (settlement?: Settlement) => void;
   const unsubscribe = vi.fn();
   const report = vi.fn();
+  const recover = vi.fn();
+  const notices = { ...createComposeContext().notices, reportError: report };
   const root = createRoot((dispose) => {
     const session = createDraftSession(seed);
     observeDraftIdentity(
@@ -36,7 +38,8 @@ function mount(
         },
       },
       session,
-      report
+      notices,
+      recover
     );
     return { dispose, session };
   });
@@ -45,6 +48,8 @@ function mount(
     changed: (settlement?: Settlement) => changed(settlement),
     unsubscribe,
     report,
+    recover,
+    notices,
   };
 }
 
@@ -81,6 +86,7 @@ describe('durable draft identity', () => {
           },
         },
         session,
+        createComposeContext().notices,
         vi.fn()
       );
       return { dispose, session };
@@ -209,3 +215,80 @@ describe('durable draft identity', () => {
     root.dispose();
   });
 });
+
+it('offers one explicit recovery and dismisses it when the session resets', async () => {
+  const root = mount(async () => ({
+    draft: message('local', { is_draft: true }),
+    persistence: 'queued',
+    mutationUuid: 'local',
+  }));
+  vi.mocked(root.notices.feedback.failure).mockReturnValue(42);
+  root.recover.mockImplementation(() =>
+    root.session.dispatch({ type: 'reset' })
+  );
+  try {
+    await Promise.resolve();
+    root.changed({ mutationUuid: 'local', failed: true });
+    await vi.waitFor(() =>
+      expect(root.notices.feedback.failure).toHaveBeenCalledOnce()
+    );
+    expect(root.session.autosaveAllowed()).toBe(false);
+    expect(root.recover).not.toHaveBeenCalled();
+    root.changed({ mutationUuid: 'local', failed: true });
+    await Promise.resolve();
+    expect(root.notices.feedback.failure).toHaveBeenCalledOnce();
+    const [, notice] = vi.mocked(root.notices.feedback.failure).mock.calls[0];
+    expect(notice?.persistent).toBe(true);
+    const action = notice?.actions?.[0];
+    expect(action?.label).toBe('Save as new draft');
+    action?.onClick();
+    expect(root.recover).toHaveBeenCalledOnce();
+    expect(root.session.autosaveAllowed()).toBe(true);
+    expect(root.notices.feedback.dismiss).toHaveBeenCalledWith(42);
+    action?.onClick();
+    expect(root.recover).toHaveBeenCalledOnce();
+  } finally {
+    root.dispose();
+  }
+});
+
+it('dismisses recovery on disposal and ignores its stale action', async () => {
+  const root = mount(async () => ({
+    draft: message('local'),
+    persistence: 'queued',
+  }));
+  vi.mocked(root.notices.feedback.failure).mockReturnValue(42);
+  root.changed({ mutationUuid: 'local', failed: true });
+  await vi.waitFor(() =>
+    expect(root.notices.feedback.failure).toHaveBeenCalledOnce()
+  );
+  const action = vi.mocked(root.notices.feedback.failure).mock.calls[0][1]
+    ?.actions?.[0];
+  root.dispose();
+  expect(root.notices.feedback.dismiss).toHaveBeenCalledWith(42);
+  action?.onClick();
+  expect(root.recover).not.toHaveBeenCalled();
+});
+
+it.each(['reset', 'dispose'] as const)(
+  'ignores a failed settlement waiting for identity after %s',
+  async (action) => {
+    const pending = Promise.withResolvers<ReadResult>();
+    const root = mount(() => pending.promise);
+    root.changed({ mutationUuid: 'local', failed: true });
+    if (action === 'reset') root.session.dispatch({ type: 'reset' });
+    else root.dispose();
+    pending.resolve({
+      draft: message('local'),
+      persistence: 'queued',
+      mutationUuid: 'local',
+    });
+    await pending.promise;
+    await Promise.resolve();
+    expect(root.notices.feedback.failure).not.toHaveBeenCalled();
+    if (action === 'reset') {
+      expect(root.session.autosaveAllowed()).toBe(true);
+      root.dispose();
+    }
+  }
+);

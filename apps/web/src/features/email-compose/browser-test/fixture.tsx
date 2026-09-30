@@ -17,6 +17,7 @@ import {
   EmailScheduleSummary,
 } from '../components/email-schedule-summary';
 import type { EmailScheduleState } from '../primitives/email-send-schedule';
+import { DraftRecoveryFixture } from './draft-recovery-fixture';
 
 type ScheduledItem = {
   id: string;
@@ -330,4 +331,12 @@ function Fixture() {
 
 const root = document.getElementById('root');
 if (!root) throw new Error('Fixture root missing');
-render(() => <Fixture />, root);
+render(
+  () =>
+    new URLSearchParams(location.search).has('recovery') ? (
+      <DraftRecoveryFixture />
+    ) : (
+      <Fixture />
+    ),
+  root
+);

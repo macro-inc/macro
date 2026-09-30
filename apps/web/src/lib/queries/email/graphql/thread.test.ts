@@ -103,7 +103,7 @@ describe('fetchGraphqlEmailThread', () => {
           records: [
             {
               recordKey: 'GraphqlSoupEmailThread:local-thread',
-              record: { id: 'thread-1' },
+              record: { id: 'thread-1', cacheProjection: 'server-capsule' },
               identity: { pending, mutationUuid: 'draft' },
             },
           ],
@@ -118,9 +118,44 @@ describe('fetchGraphqlEmailThread', () => {
       expect(queryMock).toHaveBeenCalledWith(
         EmailThreadPageDocument,
         { threadId: 'thread-1', offset: 0, limit: 20 },
-        { requestPolicy: pending ? 'cache-only' : 'cache-and-network' }
+        { requestPolicy: 'cache-and-network' }
       );
       expect(queryMock).toHaveBeenCalledOnce();
+    }
+  );
+
+  it.each([
+    { canonical: 'local-thread', capsule: null, policy: 'cache-only' },
+    { canonical: 'thread-1', capsule: null, policy: 'cache-and-network' },
+    {
+      canonical: 'local-thread',
+      capsule: undefined,
+      policy: 'cache-and-network',
+    },
+  ])(
+    'uses $policy for pending identity $canonical with capsule $capsule',
+    async ({ canonical, capsule, policy }) => {
+      hostMock.mockReturnValue({
+        readRecordsByKeys: vi.fn(async () => ({
+          revision: '1',
+          records: [
+            {
+              recordKey: 'GraphqlSoupEmailThread:local-thread',
+              record: { id: canonical, cacheProjection: capsule },
+              identity: { pending: true, mutationUuid: 'draft' },
+            },
+          ],
+        })),
+      });
+      queryMock.mockReturnValue({
+        toPromise: async () => ({ data: cachedPage }),
+      });
+      await fetchGraphqlEmailThread('local-thread');
+      expect(queryMock).toHaveBeenCalledWith(
+        EmailThreadPageDocument,
+        { threadId: canonical, offset: 0, limit: 20 },
+        { requestPolicy: policy }
+      );
     }
   );
 
@@ -209,7 +244,11 @@ it('exposes the resolved identity across queue settlement without confusing a di
         records: [
           {
             recordKey: `GraphqlSoupEmailThread:${canonical}`,
-            record: { id: canonical },
+            record: {
+              id: canonical,
+              cacheProjection:
+                canonical === 'local-thread' ? null : 'server-capsule',
+            },
             identity: {
               pending: canonical === 'local-thread',
               mutationUuid: 'draft',
@@ -323,7 +362,7 @@ it('keeps identity-read failures cache-only and recovers on a cache change', asy
       records: [
         {
           recordKey: 'GraphqlSoupEmailThread:local-thread',
-          record: { id: 'server-thread' },
+          record: { id: 'server-thread', cacheProjection: 'server-capsule' },
           identity: { pending: false },
         },
       ],
@@ -364,6 +403,133 @@ it('does not query a local route when cache initialization fails', async () => {
       'identity is unknown'
     );
     expect(queryMock).not.toHaveBeenCalled();
+  } finally {
+    root.dispose();
+  }
+});
+
+it('preserves loaded older pages while saving a reply to an existing server thread', async () => {
+  initializeClientMock.mockReset();
+  executeQueryMock.mockReset();
+  cacheEnabledMock.mockReturnValue(true);
+  let pending = false;
+  let changed = () => {};
+  hostMock.mockReturnValue({
+    readRecordsByKeys: vi.fn(async () => ({
+      revision: '1',
+      records: [
+        {
+          recordKey: 'GraphqlSoupEmailThread:thread-1',
+          record: { id: 'thread-1', cacheProjection: 'server-capsule' },
+          identity: { pending, mutationUuid: 'draft' },
+        },
+      ],
+    })),
+    onCacheChanged: (callback: () => void) => {
+      changed = callback;
+      return () => {};
+    },
+  });
+  const executions: Array<{
+    offset: number;
+    policy: string | undefined;
+    emit(): void;
+  }> = [];
+  executeQueryMock.mockImplementation(
+    (
+      request: GraphQLRequest<
+        EmailThreadPageQuery,
+        EmailThreadPageQueryVariables
+      >,
+      context: Partial<OperationContext>
+    ) => {
+      const stream = makeSubject<OperationResult<EmailThreadPageQuery>>();
+      const operation = makeOperation('query', request, {
+        url: '/graphql',
+        requestPolicy: 'cache-first',
+        ...context,
+      });
+      executions.push({
+        offset: request.variables.offset,
+        policy: context.requestPolicy,
+        emit() {
+          stream.next({
+            operation,
+            stale: false,
+            hasNext: false,
+            data: {
+              user: {
+                ...cachedPage.user,
+                emailThread: {
+                  ...cachedPage.user.emailThread!,
+                  messages: Array.from({ length: 20 }, (_, i) => ({
+                    __typename: 'GraphqlSoupEmailMessage' as const,
+                    id: `message-${request.variables.offset + i}`,
+                    threadId: 'thread-1',
+                    linkId: 'link-1',
+                    providerId: null,
+                    replyingToId: null,
+                    subject: 'Subject',
+                    snippet: null,
+                    internalDateTs: null,
+                    sentAt: null,
+                    isRead: true,
+                    isStarred: false,
+                    isSent: false,
+                    isDraft: false,
+                    hasAttachments: false,
+                    scheduledSendTime: null,
+                    from: null,
+                    to: [],
+                    cc: [],
+                    bcc: [],
+                    labels: [],
+                    bodyText: null,
+                    bodyHtmlSanitized: null,
+                    bodyMacro: null,
+                    calendarInvitations: [],
+                    bodyReplyless: null,
+                    attachments: [],
+                    attachmentsDraft: [],
+                    attachmentsForwarded: [],
+                    createdAt: '2026-09-01T00:00:00Z',
+                    updatedAt: '2026-09-01T00:00:00Z',
+                  })),
+                },
+              },
+            },
+          });
+        },
+      });
+      return stream.source;
+    }
+  );
+  const root = createRoot((dispose) => ({
+    dispose,
+    ...createGraphqlEmailThreadQuery(
+      () => 'thread-1',
+      () => ({ enabled: true })
+    ),
+  }));
+  try {
+    await vi.waitFor(() => expect(executions).toHaveLength(1));
+    executions[0].emit();
+    const fetchNext = root.query.fetchNextPage();
+    await vi.waitFor(() => expect(executions).toHaveLength(2));
+    expect(executions[1].offset).toBe(20);
+    executions[1].emit();
+    await fetchNext;
+    expect(root.query.data?.pages).toHaveLength(2);
+    pending = true;
+    changed();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(executions).toHaveLength(2);
+    expect(root.query.data?.pages).toHaveLength(2);
+    pending = false;
+    changed();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(executions).toHaveLength(2);
+    expect(root.query.data?.pages).toHaveLength(2);
   } finally {
     root.dispose();
   }
