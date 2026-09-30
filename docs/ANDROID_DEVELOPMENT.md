@@ -96,8 +96,8 @@ its fingerprint to production associations before testing Play-installed links.
 
 ## Firebase
 
-Debug builds work without Firebase configuration for auth/navigation development.
-Remote notifications require the matching Firebase configuration and Google Play
+The launcher fetches Firebase configuration before both development and release
+builds. Remote notifications require the matching configuration and Google Play
 services on the device. Notification permission alone does not register the
 device: sign in to Macro and enable notifications in Settings. Android 13 and
 newer show a runtime permission prompt; older versions use the app's system
@@ -125,22 +125,83 @@ The launcher requires package **com.macro.app.prod** and validates these project
 | `android-dev` | `macro-app-dev-12ae0` |
 | `android-build` (including `--debug`) | `macro-app-955f1` |
 
-Download `google-services.json` for that package from the matching Firebase
-project's settings. Keep local copies in ignored
-`tauri/src-tauri/firebase/dev/google-services.json` and
-`tauri/src-tauri/firebase/prod/google-services.json`; the launcher selects the
-matching file automatically. Alternatively, inject a downloaded configuration:
+### Reproducible configuration
+
+Install the Doppler CLI and run `doppler login` with access to the `android-release`
+project. A fresh checkout then needs no manually downloaded Firebase files:
+
+```sh
+just android-dev
+just android-build
+```
+
+The launcher reads `scripts/android-firebase.lock.json`, fetches only its named
+Doppler key (`dev` for development, `prd` for production), and checks the SHA-256
+of the UTF-8 value with leading/trailing whitespace removed. It validates the
+Firebase project and Android package before atomically writing the ignored
+`tauri/src-tauri/gen/android/app/google-services.json` consumed by Gradle.
+
+Each config has a versioned key, initially `GOOGLE_SERVICES_JSON_V1`. Missing
+authentication, a missing key, a checksum mismatch, or an invalid config stops
+the build before Cargo starts. Existing local config files are not a fallback:
+they cannot silently change which Firebase configuration a commit builds with.
+The config is fetched on each invocation, so the default path requires network
+access. The lock file pins Firebase configuration, not every input needed for
+byte-identical APKs; the toolchain, dependencies, frontend configuration, and
+release signing must also be supplied consistently.
+
+For CI, install the Doppler CLI and provide a read-only Doppler service token for
+`android-release/prd` as the CI secret `DOPPLER_TOKEN` (`android-release/dev` for
+development). Run the same `just android-build` command. The CLI uses this token
+without an interactive login. Never expose the production token to builds of
+untrusted fork PRs. This setup retrieves Firebase configuration only; release
+signing still uses the credentials described above.
+
+### Custom builds and forks
+
+To build without Doppler, explicitly supply a config downloaded from Firebase:
 
 ```sh
 just android-dev --firebase-config /absolute/path/google-services.json
 just android-build --firebase-config /absolute/path/google-services.json
 ```
 
-The launcher validates both the package and Firebase project before copying the
-file to ignored `gen/android/app/google-services.json`. It also validates an
-existing destination when no source is supplied, so switching build modes cannot
-silently reuse the wrong environment. Do not commit these files. Release builds
-fail with an explicit error if configuration is absent.
+An explicit file bypasses the Doppler fetch and checksum pin. It still must
+contain `com.macro.app.prod`, the current Android package. Other Firebase project
+IDs are allowed for forks; Macro's known dev/prod projects are still rejected
+when used with the opposite build command. Forks changing the Android package
+must also update the package validation in `scripts/android-firebase.ts` and
+configure their own backend. Local files under `firebase/dev` or `firebase/prod`
+are used only if passed explicitly with `--firebase-config`.
+
+Do not commit Firebase config files or Doppler tokens. Only the lock file belongs
+in Git; keeping the actual configs outside this public repository lets forks use
+their own Firebase resources.
+
+### Updating the pinned configuration
+
+1. Download the updated Android config from the intended Firebase project and
+   validate its package and project ID.
+2. Store it under a **new** key in the matching `android-release` Doppler config
+   (for example, `GOOGLE_SERVICES_JSON_V2`). Keep every older pinned key unchanged
+   so older commits remain buildable. Pass the value through stdin, not a command
+   argument, and suppress command output to avoid printing it:
+
+   ```sh
+   doppler secrets set GOOGLE_SERVICES_JSON_V2 --project android-release --config prd < /path/google-services.json > /dev/null
+   ```
+
+3. Update that environment's key and SHA-256 in `scripts/android-firebase.lock.json`.
+   Compute the checksum using the same whitespace normalization as the downloader:
+
+   ```sh
+   bun -e 'const text = (await Bun.file(process.argv[1]).text()).trim(); console.log(new Bun.CryptoHasher("sha256").update(text).digest("hex"));' /path/google-services.json
+   ```
+
+4. Test retrieval into a new temporary destination with
+   `bun scripts/android-firebase.ts build --doppler /tmp/android-firebase-check/google-services.json`
+   (use `dev` for development). Review and commit the lock-file change; never
+   replace the checksum just to silence an unexpected mismatch.
 
 ## Browser authentication
 
