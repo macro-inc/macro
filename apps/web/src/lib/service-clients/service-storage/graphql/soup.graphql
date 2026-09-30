@@ -98,6 +98,7 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 	...SoupEntityIdentityFields
 	... on GraphqlSoupAgentSession {
 		sessionName: name
+		isArchived
 		ownerId
 		botId
 		harness
@@ -123,6 +124,15 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 		}
 	}
 	frecencyScore
+	... on GraphqlSoupInitiative {
+		descriptionDocumentId
+		metadata { ownerId createdAt updatedAt viewedAt }
+		viewerPermission {
+			__typename
+			... on GraphqlAccessLevelPermission { accessLevel }
+		}
+		properties { ...SoupPropertyFields }
+	}
 	... on GraphqlSoupDocument {
 		documentName: name
 		ownerId
@@ -505,6 +515,25 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 		commentedOnDocumentSenderProfilePictureUrl: senderProfilePictureUrl
 		commentedOnDocumentSenderDisplayName: senderDisplayName
 	}
+	... on GraphqlInitiativeDiscussionMetadata {
+		initiativeDiscussionProjectName: projectName
+		initiativeDiscussionOwner: owner
+		initiativeDiscussionReason: reason
+		initiativeDiscussionMessageId: messageId
+		initiativeDiscussionThreadId: threadId
+		initiativeDiscussionText: text
+		initiativeDiscussionSenderDisplayName: senderDisplayName
+		initiativeDiscussionSenderProfilePictureUrl: senderProfilePictureUrl
+	}
+	... on GraphqlCrmDiscussionMetadata {
+		crmDiscussionRecordName: recordName
+		crmDiscussionReason: reason
+		crmDiscussionMessageId: messageId
+		crmDiscussionThreadId: threadId
+		crmDiscussionText: text
+		crmDiscussionSenderDisplayName: senderDisplayName
+		crmDiscussionSenderProfilePictureUrl: senderProfilePictureUrl
+	}
 	... on GraphqlChannelInviteMetadata {
 		channelInviteInvitedBy: invitedBy
 		channelInviteChannelName: channelName
@@ -515,6 +544,15 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 		channelMessageSendSender: sender
 		channelMessageSendMessageId: messageId
 		channelMessageSendChannelType: channelType
+	}
+	... on GraphqlChannelMessageReactionMetadata {
+		channelMessageReactionMessageId: messageId
+		channelMessageReactionThreadId: threadId
+		channelMessageReactionMessageContent: messageContent
+		channelMessageReactionEmoji: emoji
+		channelMessageReactionChannelType: channelType
+		channelMessageReactionChannelName: channelName
+		channelMessageReactionSenderProfilePictureUrl: senderProfilePictureUrl
 	}
 	... on GraphqlChannelReplyMetadata {
 		channelReplyThreadId: threadId
@@ -556,6 +594,7 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 	... on GraphqlReminderMetadata {
 		reminderReminderId: reminderId
 		reminderDescription: description
+		reminderScheduledFor: scheduledFor
 	}
 	... on GraphqlCalendarEventReminderMetadata {
 		calendarEventReminderEventId: eventId

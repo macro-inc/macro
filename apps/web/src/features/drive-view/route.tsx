@@ -1,23 +1,25 @@
+import { SPREADSHEET_COMMENT_PARAMS } from '@app/features/block-spreadsheet/core/spreadsheet-comments';
 import {
+  createSearchParams,
   defineRoute,
   routeParams,
   type SplitRouterEntry,
+  useRouteParams,
 } from '@app/lib/split-router';
+import { callDetailSearch } from '@block-call/call-route';
+import { URL_PARAMS as CALL_URL_PARAMS } from '@block-call/constants';
 import { URL_PARAMS as MARKDOWN_URL_PARAMS } from '@block-md/constants';
+import { markdownDetailSearch } from '@block-md/markdown-route';
 import { URL_PARAMS as PDF_URL_PARAMS } from '@block-pdf/constants';
+import { pdfDetailSearch } from '@block-pdf/pdf-route';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import {
-  NewAppView,
+  AppView,
   withAuth,
 } from '@components/app/split-layout/split-router/app-route-shell';
-import { useUserContext } from '@core/context/user';
+import { uuidRouteReference } from '@components/app/split-layout/split-router/mention-links';
 import { lazy } from 'solid-js';
 import { z } from 'zod';
-import { queryStateFrom } from '../next-soup/filters/filter-store';
-import type { SetPredicatesInput } from '../next-soup/filters/filter-store/predicates-store';
-import { mergeQuery } from '../next-soup/filters/filter-store/query-store';
-import type { Query } from '../next-soup/filters/filter-store/types';
-import { getViewPreset } from '../next-soup/sidebar/soup-filter-presets';
 import { DriveDetailView } from './components/DriveDetailView';
 import { DriveView, type DriveViewProps } from './drive-view';
 import { driveDetailTrailSchema } from './primitives/drive-detail-trail';
@@ -26,69 +28,47 @@ import {
   driveDocumentBlockType,
 } from './primitives/drive-route-schema';
 
-const SoupView = lazy(async () => ({
-  default: (await import('../next-soup/soup-view/soup-view')).SoupView,
+const DriveCallDetail = lazy(async () => ({
+  default: (await import('./views/DriveCallDetail')).DriveCallDetail,
 }));
-
-type DriveRouteViewProps = DriveViewProps & {
-  initialFilters?: Query;
-  initialClientFilters?: SetPredicatesInput<string>;
-};
 
 export const DriveRouteView = withAuth(() => {
   const panel = useSplitPanelOrThrow();
-  const props = (): DriveRouteViewProps => {
+  const props = (): DriveViewProps => {
     const content = panel.handle.content();
     return content.type === 'component'
-      ? ((content.params ?? {}) as DriveRouteViewProps)
+      ? ((content.params ?? {}) as DriveViewProps)
       : {};
   };
-  const user = useUserContext();
-  const preset = getViewPreset('documents', undefined, {
-    userId: user.userId(),
-    isTeamAdmin: false,
-  });
-  const initialFilters = () => {
-    const requested = props().initialFilters;
-    return preset?.filters && requested
-      ? mergeQuery(queryStateFrom(preset.filters), requested)
-      : (requested ?? preset?.filters);
-  };
-  const initialClientFilters = () =>
-    preset?.clientFilters && props().initialClientFilters
-      ? {
-          and: [
-            ...new Set([
-              ...(preset.clientFilters.and ?? []),
-              ...(props().initialClientFilters?.and ?? []),
-            ]),
-          ],
-          or: [
-            ...new Set([
-              ...(preset.clientFilters.or ?? []),
-              ...(props().initialClientFilters?.or ?? []),
-            ]),
-          ],
-        }
-      : (props().initialClientFilters ?? preset?.clientFilters);
   return (
-    <NewAppView
-      id="documents"
-      composableOnTouch
-      fallback={
-        <SoupView
-          viewName="Files"
-          initialFilters={initialFilters()}
-          initialClientFilters={initialClientFilters()}
-          initialGroupBy={preset?.groupBy}
-        />
-      }
-    >
+    <AppView id="documents">
       <DriveView initialFacets={props().initialFacets} />
-    </NewAppView>
+    </AppView>
   );
 });
 
+function DriveCallRouteView() {
+  const params = useRouteParams(driveCallRoute);
+  const [search] = createSearchParams(callDetailSearch);
+  return (
+    <DriveCallDetail
+      callId={params.callId}
+      transcriptId={search.transcriptId}
+      seek={search.seek}
+    />
+  );
+}
+
+export const driveCallRoute = defineRoute({
+  id: 'drive-call',
+  path: 'call/:callId',
+  params: z.object({ callId: z.string().min(1) }),
+  search: [callDetailSearch.namespace],
+  component: DriveCallRouteView,
+  remountKey: ({ callId }) => callId,
+  claim: ({ callId }) => ({ namespace: 'block', id: `call:${callId}` }),
+  toReference: ({ callId }) => uuidRouteReference(callId, 'call'),
+});
 const driveDocumentParams = z.object({
   documentType: z.enum(DRIVE_DOCUMENT_TYPES),
   documentId: z.string().min(1),
@@ -102,6 +82,7 @@ const documentRemountKey = ({
 
 export const driveRootDocumentRoute = defineRoute({
   id: 'drive-document',
+  search: [markdownDetailSearch.namespace, pdfDetailSearch.namespace],
   path: ':documentType/:documentId',
   params: driveDocumentParams,
   state: driveDetailTrailSchema,
@@ -111,10 +92,13 @@ export const driveRootDocumentRoute = defineRoute({
     namespace: 'block',
     id: `${driveDocumentBlockType(documentType)}:${documentId}`,
   }),
+  toReference: ({ documentId, documentType }) =>
+    uuidRouteReference(documentId, documentType),
 });
 
 export const driveFolderDocumentRoute = defineRoute({
   id: 'drive-folder-document',
+  search: [markdownDetailSearch.namespace, pdfDetailSearch.namespace],
   path: ':documentType/:documentId',
   params: driveDocumentParams,
   state: driveDetailTrailSchema,
@@ -124,10 +108,13 @@ export const driveFolderDocumentRoute = defineRoute({
     namespace: 'block',
     id: `${driveDocumentBlockType(documentType)}:${documentId}`,
   }),
+  toReference: ({ documentId, documentType }) =>
+    uuidRouteReference(documentId, documentType),
 });
 
 export const driveTabDocumentRoute = defineRoute({
   id: 'drive-tab-document',
+  search: [markdownDetailSearch.namespace, pdfDetailSearch.namespace],
   path: ':documentType/:documentId',
   params: driveDocumentParams,
   state: driveDetailTrailSchema,
@@ -137,6 +124,8 @@ export const driveTabDocumentRoute = defineRoute({
     namespace: 'block',
     id: `${driveDocumentBlockType(documentType)}:${documentId}`,
   }),
+  toReference: ({ documentId, documentType }) =>
+    uuidRouteReference(documentId, documentType),
 });
 
 export const driveFolderRoute = defineRoute({
@@ -181,7 +170,19 @@ export const driveSplitRoute = defineRoute({
       return Object.values(MARKDOWN_URL_PARAMS);
     }
     if (type === 'pdf') return Object.values(PDF_URL_PARAMS);
+    if (type === 'spreadsheet')
+      return Object.values(SPREADSHEET_COMMENT_PARAMS);
+    if (
+      typeof routeParams<{ callId?: string }>(entry.location.route).callId ===
+      'string'
+    )
+      return [CALL_URL_PARAMS.transcriptId];
     return [];
   },
-  children: [driveFolderRoute, driveTabRoute, driveRootDocumentRoute],
+  children: [
+    driveFolderRoute,
+    driveTabRoute,
+    driveCallRoute,
+    driveRootDocumentRoute,
+  ],
 });

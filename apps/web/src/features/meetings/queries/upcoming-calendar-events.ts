@@ -89,6 +89,7 @@ export function useUpcomingCalendarEventsSource(options: SourceOptions) {
         (event): UpcomingCalendarEvent => ({
           id: event.id,
           title: event.title,
+          color: event.calendar.color,
           url:
             calendarMacroCallUrl(event) ??
             safeConferenceUrl(event.conferenceUrl),

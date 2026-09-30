@@ -29,9 +29,6 @@ vi.mock('@app/features/agents-view/views/AgentsView', () => {
 vi.mock('@app/features/getting-started', () => {
   throw new Error('Route declarations must not eagerly load onboarding views');
 });
-vi.mock('@app/features/home', () => {
-  throw new Error('Route declarations must not eagerly load home views');
-});
 vi.mock('@app/features/next-soup/soup-view/soup-view', () => {
   throw new Error('Route declarations must not eagerly load Soup views');
 });

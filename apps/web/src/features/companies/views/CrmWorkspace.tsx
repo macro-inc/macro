@@ -4,6 +4,7 @@ import {
   useViewShell,
   ViewShell,
 } from '@app/components/view-shell';
+import { VIEW_SHELL_TOUR } from '@app/components/view-shell/tour';
 import { NO_ASSIGNEE } from '@app/features/next-soup/filters/configs';
 import { NIL_UUID } from '@app/features/next-soup/filters/filter-store';
 import { getViewPreset } from '@app/features/next-soup/sidebar/soup-filter-presets';
@@ -32,6 +33,7 @@ import { useCrmLists } from '@queries/crm/lists';
 import { useQuickAccessCrmCompaniesQuery } from '@queries/soup/quick-access-crm-companies';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import { Button, Dropdown, Tooltip } from '@ui';
+import { tourTarget } from '@ui/components/Tour';
 import { createSignal, type JSX, onMount, Show, Suspense } from 'solid-js';
 import { openCreateCompanyModal } from '../CreateCompanyModal';
 import { CrmListDialog } from '../components/CrmListDialog';
@@ -52,6 +54,8 @@ function NavigationToggle(props: {
 }) {
   const shell = useViewShell();
   const [open, setOpen] = createSignal(false);
+  // CRM collapses its own sidebar, so its toggle stands in for the shell's.
+  const toggleTarget = tourTarget(VIEW_SHELL_TOUR.sidebarToggle);
   return (
     <Show when={shell.aside.isCollapsed()}>
       <Show
@@ -62,6 +66,7 @@ function NavigationToggle(props: {
               variant="ghost"
               size="icon-sm"
               label="Expand CRM sidebar"
+              ref={toggleTarget}
               onClick={props.onExpand}
             >
               <ListIcon class="size-4" />
@@ -75,8 +80,9 @@ function NavigationToggle(props: {
               variant="ghost"
               size="icon-sm"
               depth={isTouchDevice() ? 3 : undefined}
-              class="touch:island touch:pointer-events-auto touch:size-10 touch:shrink-0 touch:rounded-full touch:bg-chrome"
+              class="touch:island touch:pointer-events-auto touch:size-10 touch:shrink-0 touch:bg-chrome"
               aria-label="Show CRM navigation"
+              ref={toggleTarget}
             >
               <ListIcon class="size-4 touch:size-6" />
             </Dropdown.Trigger>

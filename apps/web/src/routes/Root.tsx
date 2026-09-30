@@ -90,7 +90,10 @@ import {
 import { useChatRenameWebsocketSync } from '@queries/chat';
 import { QuerySyncProvider } from '@queries/sync/SyncProvider';
 import { MutationUndoProvider } from '@queries/undo';
-import { useReopenTrackedEntitiesOnReconnect } from '@service-connection/client';
+import {
+  useRefreshTrackedEntitiesOnFocus,
+  useReopenTrackedEntitiesOnReconnect,
+} from '@service-connection/client';
 import { ws as connectionGatewayWebsocket } from '@service-connection/websocket';
 import { MetaProvider, Title } from '@solidjs/meta';
 import {
@@ -121,6 +124,7 @@ import {
   type ParentProps,
   Show,
 } from 'solid-js';
+import { useReminderAlerts } from '../features/reminders/reminder-alerts';
 import { BasePathComponent } from './BasePath';
 import { TaskRoute } from './TaskRoute';
 
@@ -344,6 +348,7 @@ function ConfiguredGlobalAppStateProvider(props: ParentProps) {
   const notifInterface = usePlatformNotificationState();
   useChatRenameWebsocketSync();
   useReopenTrackedEntitiesOnReconnect();
+  useRefreshTrackedEntitiesOnFocus();
 
   if (isNativeMobilePlatform()) {
     useInvalidateQueriesOnReconnect();
@@ -364,6 +369,7 @@ function ConfiguredGlobalAppStateProvider(props: ParentProps) {
     onNotification
   );
   useNotificationUpdates(notificationSource);
+  useReminderAlerts(notificationSource);
 
   const blockOrchestrator = createBlockOrchestrator();
   usePendingNotificationNavigationEffect(notificationSource);

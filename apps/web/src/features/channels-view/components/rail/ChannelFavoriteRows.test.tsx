@@ -28,6 +28,7 @@ vi.mock('./hooks/useChannelRailState', () => ({
     domId: 'rail-favorite-row',
     selected: false,
     focused: false,
+    muted: false,
   }),
   useChannelRailFavoritesState: () => () => ({
     items: [],

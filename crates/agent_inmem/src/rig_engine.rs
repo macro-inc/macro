@@ -104,12 +104,13 @@ impl TurnEngine for RigTurnEngine {
         let (parts, receiver) = mpsc::channel(PART_BUFFER);
         let db = self.db.clone();
         let tool_context = self.tool_context.clone();
+        let metering = agent::MeteringContext::current();
         tokio::spawn(
-            async move {
+            agent::MeteringContext::carry(metering, async move {
                 if let Err(error) = drive_turn(db, tool_context, request, &parts).await {
                     let _ = parts.send(Err(error)).await;
                 }
-            }
+            })
             .in_current_span(),
         );
         receiver
@@ -125,6 +126,7 @@ async fn drive_turn(
     let TurnRequest {
         owner,
         model,
+        reasoning_effort,
         identity,
         instructions,
         messages,
@@ -171,6 +173,13 @@ async fn drive_turn(
     // Carry the feature on the context so tool-spawned subagents attribute to it.
     let mut tool_context = base_context.clone();
     tool_context.usage_context = usage_ctx.clone();
+    // The tools act as the session's bot, delegated for the owner: its writes
+    // are attributed to it and presented under its name, not Macro's.
+    if let Some(identity) = &identity {
+        tool_context = tool_context
+            .with_actor(identity.bot)
+            .with_actor_name(&identity.name);
+    }
     let tool_context = InMemToolContext {
         base: tool_context,
         ask_user: AskUserContext {
@@ -184,6 +193,7 @@ async fn drive_turn(
     // rig's spans too would report each turn twice.
     let mut agent_loop = AgentLoop::new(base_context.recorder.clone())
         .with_model(&model)
+        .with_reasoning_effort(reasoning_effort)
         .with_genai_telemetry(false);
     if let Some(reviewer) = reviewer {
         agent_loop = agent_loop.with_user_tool_finisher(user_tool_finisher(

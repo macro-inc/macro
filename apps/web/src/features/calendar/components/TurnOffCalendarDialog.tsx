@@ -56,10 +56,10 @@ export function TurnOffCalendarDialog(props: {
             calendar back on means granting access again.
           </Dialog.Description>
           <div class="pt-3 justify-end items-center gap-3 inline-flex">
-            <Button variant="outline" depth={3} onClick={props.onClose}>
+            <Button variant="ghost" depth={3} onClick={props.onClose}>
               Cancel
             </Button>
-            <Button variant="danger" depth={3} onClick={confirm}>
+            <Button variant="strong" depth={3} onClick={confirm}>
               Turn off
             </Button>
           </div>

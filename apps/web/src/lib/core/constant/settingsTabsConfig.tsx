@@ -16,6 +16,7 @@ import UserIconPhosphor from '@phosphor/user.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
 import { type Component, createMemo } from 'solid-js';
 import { useHasPermission } from '../context/user';
+import { isMobile } from '../mobile/isMobile';
 import { isNativeMobilePlatform } from '../mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '../mobile/isTouchDevice';
 import {
@@ -83,9 +84,6 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
   },
 ];
 
-/** Flattened view of {@link SETTINGS_TAB_GROUPS} for direct tab lookups. */
-const SETTINGS_TAB_ITEMS = SETTINGS_TAB_GROUPS.flatMap((group) => group.items);
-
 /**
  * URL slugs for each settings tab, used to build the settings page path
  * (`/settings/<slug>`, and the `settings/<slug>` pair when docked in a split).
@@ -138,18 +136,6 @@ export const settingsSlugToTab = (
   slug ? SETTINGS_SLUG_TO_TAB.get(slug) : undefined;
 
 /**
- * Look up a single tab's presentation (label + icon). Lets consumers that
- * surface individual tabs (e.g. the sidebar's quick links) reuse the config's
- * label/icon instead of hardcoding their own.
- */
-export const getSettingsTabItem = (
-  tab: SettingsTab
-): SettingsTabItem | undefined =>
-  tab === 'Harness'
-    ? { tab: 'Harness', label: 'Agents', icon: AgentIcon }
-    : SETTINGS_TAB_ITEMS.find((item) => item.tab === tab);
-
-/**
  * Returns a predicate gating which settings tabs are available given feature
  * flags and platform. This is the single gate that the settings panel and the
  * app sidebar both rely on — keep tab rendering guarded by it so we never
@@ -166,9 +152,12 @@ export const useSettingsTabAvailable = () => {
     switch (tab) {
       case 'Appearance':
       case 'Account':
-      case 'API Keys':
       case 'Billing':
         return true;
+      // Issuing and copying a key is desk work, and the mobile sheet has no
+      // good place for a one-time secret.
+      case 'API Keys':
+        return !isMobile();
       case 'Notifications':
         return notificationSettingsFlag().enabled;
       case 'Team':

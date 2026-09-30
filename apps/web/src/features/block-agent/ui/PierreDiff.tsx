@@ -20,6 +20,10 @@
  */
 
 import {
+  createThemeType,
+  PIERRE_STYLE_VARIABLES,
+} from '@app/components/diff-view/pierre/theme';
+import {
   type FileDiffOptions,
   FileDiff as PierreFileDiffInstance,
   type ThemeTypes,
@@ -55,40 +59,6 @@ const DIFF_OPTIONS = {
   lineDiffType: 'none',
   expansionLineCount: 20,
 } satisfies FileDiffOptions<undefined>;
-
-/**
- * CSS variables pierre reads inside its shadow DOM, pointed at Macro's
- * typography tokens so the diff matches surrounding font-mono text-xs UI.
- */
-const DIFF_STYLE_VARIABLES: JSX.CSSProperties = {
-  '--diffs-font-family': 'var(--font-mono)',
-  '--diffs-font-size': '0.75rem',
-  '--diffs-line-height': '18px',
-  '--diffs-tab-size': '2',
-  '--diffs-gap-block': '0',
-  '--diffs-min-number-column-width': '4ch',
-};
-
-function currentThemeType(): 'light' | 'dark' {
-  return document.documentElement.dataset.themeLight === 'false'
-    ? 'dark'
-    : 'light';
-}
-
-/**
- * Macro's light/dark state as a signal, tracked off the
- * `data-theme-light` attribute the theme feature keeps on `<html>`.
- */
-function createThemeType(): () => 'light' | 'dark' {
-  const [themeType, setThemeType] = createSignal(currentThemeType());
-  const observer = new MutationObserver(() => setThemeType(currentThemeType()));
-  observer.observe(document.documentElement, {
-    attributes: true,
-    attributeFilter: ['data-theme-light'],
-  });
-  onCleanup(() => observer.disconnect());
-  return themeType;
-}
 
 function lineCount(text: string): number {
   if (text.length === 0) return 0;
@@ -174,7 +144,7 @@ function PierreFileView(props: {
       <div
         ref={container}
         class="overflow-hidden rounded border border-edge-muted"
-        style={DIFF_STYLE_VARIABLES}
+        style={PIERRE_STYLE_VARIABLES}
       />
     </Show>
   );

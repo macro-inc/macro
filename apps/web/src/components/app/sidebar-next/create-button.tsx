@@ -10,7 +10,7 @@ const RailCreateTrigger = (props: ButtonProps) => (
   <Button
     {...props}
     variant="ghost"
-    class="size-10 rounded-xl [&_svg]:size-5"
+    class="size-10 [&_svg]:size-5"
     size="icon-md"
     label="Create"
     tooltipPlacement="right"

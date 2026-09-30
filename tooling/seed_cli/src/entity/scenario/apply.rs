@@ -746,11 +746,11 @@ async fn seed_tasks(ctx: &SeedCliContext, spec: &ScenarioSpec) -> anyhow::Result
             && let Some(team) = spec.team_of(&task.owner)
         {
             // Mirrors the app's share-with-team toggle on tasks: the owner's
-            // team gets comment access.
+            // team gets edit access.
             rows.push(AccessRow {
                 source_id: spec.team_id(team).to_string(),
                 source_type: EntityAccessSourceType::Team,
-                access_level: AccessLevel::Comment,
+                access_level: AccessLevel::Edit,
                 granted_from_project_id: None,
             });
         }

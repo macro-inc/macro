@@ -59,6 +59,30 @@ const CELL_LINE_HEIGHT = 1.2;
 const MAX_ROW_HEIGHT = 160;
 const TOUCH_SLOP = 8;
 
+export function renderedSelectionCell(
+  root: ParentNode | undefined,
+  selection: CellSelection
+) {
+  if (!root) return;
+  const anchor = root.querySelector<HTMLElement>(
+    `[data-address="${cellAddress(selection.anchor)}"]`
+  );
+  if (anchor) return anchor;
+  const area = selectionBounds(selection);
+  return [...root.querySelectorAll<HTMLElement>('[data-address]')].find(
+    (element) => {
+      const position = parseCellAddress(element.dataset.address ?? '');
+      return (
+        position &&
+        position.row >= area.top &&
+        position.row <= area.bottom &&
+        position.column >= area.left &&
+        position.column <= area.right
+      );
+    }
+  );
+}
+
 function fontPixels(cell?: SpreadsheetCell) {
   return ((cell?.fontSize ?? 10) * 4) / 3;
 }
@@ -780,11 +804,7 @@ export function SpreadsheetGrid(props: {
     props.onSelectRange(cellMenuSelection.anchor, cellMenuSelection.focus);
     if (action === 'comment') {
       if (props.comments?.canComment())
-        props.comments.add(
-          grid.querySelector<HTMLElement>(
-            `[data-address="${cellAddress(cellMenuSelection.anchor)}"]`
-          ) ?? undefined
-        );
+        props.comments.add(renderedSelectionCell(grid, cellMenuSelection));
     } else if (action === 'copy' || !props.readonly)
       props.onCellAction?.(action);
   }
@@ -1237,7 +1257,7 @@ export function SpreadsheetGrid(props: {
                           cell()?.value.startsWith('=') &&
                           cell()?.format !== 'text'
                         ) &&
-                        /<m-(?:user|document)-mention>|https?:\/\/|www\.|[^\s@]+@[^\s@]+\.[^\s@]+/i.test(
+                        /<m-(?:user|document|date)-mention>|https?:\/\/|www\.|[^\s@]+@[^\s@]+\.[^\s@]+/i.test(
                           cell()?.value ?? ''
                         );
                       return (

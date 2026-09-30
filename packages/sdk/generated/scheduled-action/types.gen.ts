@@ -17,6 +17,25 @@ export type ActionConfiguration = {
     trigger: ActionTrigger;
 };
 
+/**
+ * Canonical configuration replacement. Activation has its own endpoint, so
+ * omitting `enabled` keeps the stored value.
+ */
+export type ActionConfigurationUpdate = {
+    /**
+     * Still sent by clients deployed before the activation endpoint.
+     *
+     * @deprecated
+     */
+    enabled?: boolean | null;
+    kind: ActionKind;
+    name: string;
+    task: {
+        [key: string]: unknown;
+    };
+    trigger: ActionTrigger;
+};
+
 export type ActionExecutionRecord = {
     action_id: string;
     created_at: string;
@@ -24,8 +43,8 @@ export type ActionExecutionRecord = {
     id?: string | null;
     is_success: boolean;
     /**
-     * ID of the primary resource produced by this run (e.g. a chat thread).
-     * Opaque to the scheduler; the UI interprets it based on the action kind.
+     * ID of the primary resource produced by this run. Its type is recorded in
+     * `result`, independently of the routine's current configuration.
      */
     resource_id?: string | null;
     result: {
@@ -49,9 +68,17 @@ export type ActionTrigger = {
 };
 
 export type AgentTask = {
-    model: string;
+    agent?: null | AgentTaskAgent;
+    model?: null | RoutineModelId;
     prompt: string;
     user_prompt: string;
+};
+
+/**
+ * A persona selection, independent of its runtime and current default model.
+ */
+export type AgentTaskAgent = {
+    bot_id: string;
 };
 
 /**
@@ -85,9 +112,33 @@ export type EventFilters = Array<EventFilter>;
  */
 export type EventName = 'document.created' | 'document.updated' | 'channel.created' | 'channel.message_posted' | 'channel.mentioned' | 'channel.message_patched' | 'channel.message_attachment_created';
 
+/**
+ * Transcript resource created by a run. Never infer this from current task configuration.
+ */
+export type ExecutionResource = {
+    id: string;
+    type: ExecutionResourceType;
+};
+
+/**
+ * Closed set of transcript destinations understood by routine clients.
+ */
+export type ExecutionResourceType = 'chat' | 'agent';
+
+/**
+ * Version 1 execution metadata stored in the existing JSON result column.
+ * Null/string column values predate this envelope and refer to legacy chats.
+ */
+export type ExecutionResult = {
+    error?: string | null;
+    resource?: null | ExecutionResource;
+    version: number;
+};
+
 export type InProgressExecution = {
     action_id: string;
     chat_id?: string | null;
+    resource?: null | ExecutionResource;
 };
 
 /**
@@ -103,6 +154,11 @@ export type LegacyActionConfiguration = {
     };
     timezone: string;
 };
+
+/**
+ * A nonblank model identifier. Runtime catalogs, not the scheduler, own availability.
+ */
+export type RoutineModelId = string;
 
 export type Schedule = string;
 
@@ -164,29 +220,36 @@ export type ScheduledActionResponse = ScheduledAction & {
 
 /**
  * Live status update for a scheduled-action run, broadcast via the connection
- * gateway to the owner. Clients use the `chat_id` to navigate to the run
- * transcript and the variant tag to toggle the running indicator.
+ * gateway to the owner. Clients use the typed resource to navigate to the run
+ * transcript and the variant tag to toggle the running indicator. `chat_id`
+ * remains populated only for chat runs, for older clients.
  *
  * Serialized with a `type` tag (`started`/`stopped`) and delivered over the
  * single `scheduled_action_update` message type on the gateway.
  */
 export type ScheduledActionUpdate = {
     action_id: string;
-    chat_id: string;
+    chat_id?: string | null;
     owner: string;
+    resource?: null | ExecutionResource;
     type: 'started';
 } | {
     action_id: string;
-    chat_id: string;
+    chat_id?: string | null;
     is_success: boolean;
     owner: string;
+    resource?: null | ExecutionResource;
     type: 'stopped';
+};
+
+export type SetScheduledActionEnabled = {
+    enabled: boolean;
 };
 
 /**
  * Full replacement of client configuration, not of server-owned action state.
  */
-export type UpdateScheduledAction = ActionConfiguration | LegacyActionConfiguration;
+export type UpdateScheduledAction = ActionConfigurationUpdate | LegacyActionConfiguration;
 
 export type ScheduledActionHealthData = {
     body?: never;
@@ -240,6 +303,7 @@ export type CreateScheduledActionData = {
 export type CreateScheduledActionErrors = {
     400: string;
     401: string;
+    403: string;
     500: string;
 };
 
@@ -307,6 +371,37 @@ export type UpdateScheduledActionResponses = {
 };
 
 export type UpdateScheduledActionResponse = UpdateScheduledActionResponses[keyof UpdateScheduledActionResponses];
+
+export type SetScheduledActionEnabledData = {
+    body: SetScheduledActionEnabled;
+    path: {
+        /**
+         * ID of the scheduled action
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/{id}/enabled';
+};
+
+export type SetScheduledActionEnabledErrors = {
+    400: string;
+    401: string;
+    404: string;
+    /**
+     * Configuration changed or execution is active
+     */
+    409: string;
+    500: string;
+};
+
+export type SetScheduledActionEnabledError = SetScheduledActionEnabledErrors[keyof SetScheduledActionEnabledErrors];
+
+export type SetScheduledActionEnabledResponses = {
+    200: ScheduledActionResponse;
+};
+
+export type SetScheduledActionEnabledResponse = SetScheduledActionEnabledResponses[keyof SetScheduledActionEnabledResponses];
 
 export type ExecuteScheduledActionNowData = {
     body?: never;

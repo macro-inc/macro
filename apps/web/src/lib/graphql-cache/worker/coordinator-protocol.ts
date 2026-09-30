@@ -20,8 +20,23 @@ import {
 export { isCachePush, isCacheResponse, isWorkerMessage };
 
 /** Version of the topology envelope and routed cache RPC surface. */
-export const CACHE_COORDINATOR_PROTOCOL_VERSION = 4 as const;
-export type EngineStartupPhase = 'loading-assets' | 'opening-database';
+export const CACHE_COORDINATOR_PROTOCOL_VERSION = 6 as const;
+/**
+ * Startup phases in order. The engine may touch storage only in
+ * `opening-database`, which begins once it holds the database owner lock. It
+ * never queues for that lock: while another context holds it, the engine
+ * retries briefly and then gives up without touching storage.
+ */
+export type EngineStartupPhase =
+  | 'loading-assets'
+  | 'awaiting-owner-lock'
+  | 'opening-database';
+
+export const ENGINE_STARTUP_PHASES: readonly EngineStartupPhase[] = [
+  'loading-assets',
+  'awaiting-owner-lock',
+  'opening-database',
+];
 
 export type OwnerEpoch = number;
 export type RouteId = number;
@@ -34,54 +49,61 @@ export type EngineOpenOutcome =
   | 'reset-corrupt'
   | 'reset-storage-uncertain';
 export type EngineFatalCode = 'storage-reset-required' | 'runtime-failure';
+/** `storage-busy`: another context kept the database files open through the
+ * engine's bounded wait. An open changed nothing; a wipe may have removed one
+ * file, so the coordinator keeps the attempt's database action. */
 export type ActivationFailureCode =
   | 'initialization-failed'
-  | 'recovery-open-failed';
+  | 'recovery-open-failed'
+  | 'storage-busy';
 
 export type TabToCoordinatorEnvelope =
   | {
-      coordinatorVersion: 4;
+      coordinatorVersion: 6;
       kind: 'register-tab';
       scope: string;
       tabId: string;
       livenessLockName: string;
       hotCapacity?: number;
+      /** When the page's app build was made, in ms since the epoch; 0 if
+       * unstamped. A newer build takes the database over from an older one. */
+      buildTime: number;
     }
   | {
-      coordinatorVersion: 4;
+      coordinatorVersion: 6;
       kind: 'cache-request';
       tabId: string;
       request: CacheRequest;
     }
   | {
-      coordinatorVersion: 4;
+      coordinatorVersion: 6;
       kind: 'attach-engine-port';
       tabId: string;
       ownerEpoch: OwnerEpoch;
       enginePort: MessagePort;
     }
   | {
-      coordinatorVersion: 4;
+      coordinatorVersion: 6;
       kind: 'graceful-departure';
       tabId: string;
       ownerEpoch: OwnerEpoch;
     }
   | {
-      coordinatorVersion: 4;
+      coordinatorVersion: 6;
       kind: 'navigation-departure';
       tabId: string;
       ownerEpoch: OwnerEpoch;
       reason: string;
     }
   | {
-      coordinatorVersion: 4;
+      coordinatorVersion: 6;
       kind: 'engine-lost';
       tabId: string;
       ownerEpoch: OwnerEpoch;
       reason: string;
     }
   | {
-      coordinatorVersion: 4;
+      coordinatorVersion: 6;
       kind: 'disconnect-tab';
       tabId: string;
       reason: string;
@@ -89,12 +111,12 @@ export type TabToCoordinatorEnvelope =
 
 export type CoordinatorToTabEnvelope =
   | {
-      coordinatorVersion: 4;
+      coordinatorVersion: 6;
       kind: 'registered';
       tabId: string;
     }
   | {
-      coordinatorVersion: 4;
+      coordinatorVersion: 6;
       kind: 'become-owner';
       scope: string;
       tabId: string;
@@ -104,25 +126,25 @@ export type CoordinatorToTabEnvelope =
       hotCapacity?: number;
     }
   | {
-      coordinatorVersion: 4;
+      coordinatorVersion: 6;
       kind: 'cache-message';
       message: WorkerMessage;
     }
   | {
-      coordinatorVersion: 4;
+      coordinatorVersion: 6;
       kind: 'terminate-engine';
       tabId: string;
       ownerEpoch: OwnerEpoch;
       reason: string;
     }
   | {
-      coordinatorVersion: 4;
+      coordinatorVersion: 6;
       kind: 'retire-complete';
       tabId: string;
       ownerEpoch: OwnerEpoch;
     }
   | {
-      coordinatorVersion: 4;
+      coordinatorVersion: 6;
       kind: 'engine-startup';
       ownerEpoch: OwnerEpoch;
       phase: EngineStartupPhase;
@@ -130,26 +152,46 @@ export type CoordinatorToTabEnvelope =
       timeoutMs: number;
     }
   | {
-      coordinatorVersion: 4;
+      coordinatorVersion: 6;
       kind: 'engine-replaced';
       ownerEpoch: OwnerEpoch;
       /** Whether this engine reopened durable data or created/reset it. */
       openOutcome: EngineOpenOutcome;
     }
   | {
-      coordinatorVersion: 4;
+      coordinatorVersion: 6;
       kind: 'protocol-error';
       error: string;
     }
   | {
-      coordinatorVersion: 4;
+      coordinatorVersion: 6;
       kind: 'terminal-error';
       error: string;
       storageUntouched?: true;
+    }
+  | {
+      /** Another context holds the database; stop using the cache until reload. */
+      coordinatorVersion: 6;
+      kind: 'cache-unavailable';
+      reason: string;
+    }
+  | {
+      /** A newer app build took the database over. The page stops using the
+       * cache and reloads into that build. */
+      coordinatorVersion: 6;
+      kind: 'cache-superseded';
+      reason: string;
+    }
+  | {
+      /** No other build has live tabs, so the owner may delete stale databases. */
+      coordinatorVersion: 6;
+      kind: 'remove-stale-databases';
+      tabId: string;
+      ownerEpoch: OwnerEpoch;
     };
 
 export type PageToEngineEnvelope = {
-  coordinatorVersion: 4;
+  coordinatorVersion: 6;
   kind: 'activate-engine';
   scope: string;
   tabId: string;
@@ -161,24 +203,25 @@ export type PageToEngineEnvelope = {
 
 export type CoordinatorToEngineEnvelope =
   | {
-      coordinatorVersion: 4;
+      /** Storage grant, sent only after `owner-lock-acquired`. */
+      coordinatorVersion: 6;
       kind: 'open-engine';
       ownerEpoch: OwnerEpoch;
     }
   | {
-      coordinatorVersion: 4;
+      coordinatorVersion: 6;
       kind: 'engine-request';
       ownerEpoch: OwnerEpoch;
       routeId: RouteId;
       request: CacheRequest;
     }
   | {
-      coordinatorVersion: 4;
+      coordinatorVersion: 6;
       kind: 'drain-engine';
       ownerEpoch: OwnerEpoch;
     }
   | {
-      coordinatorVersion: 4;
+      coordinatorVersion: 6;
       kind: 'heartbeat';
       ownerEpoch: OwnerEpoch;
       heartbeatId: number;
@@ -186,13 +229,34 @@ export type CoordinatorToEngineEnvelope =
 
 export type EngineToCoordinatorEnvelope =
   | {
-      coordinatorVersion: 4;
+      coordinatorVersion: 6;
       kind: 'engine-assets-ready';
       tabId: string;
       ownerEpoch: OwnerEpoch;
     }
   | {
-      coordinatorVersion: 4;
+      /** Holds the owner lock, has not touched storage, awaits `open-engine`. */
+      coordinatorVersion: 6;
+      kind: 'owner-lock-acquired';
+      tabId: string;
+      ownerEpoch: OwnerEpoch;
+    }
+  | {
+      /** The owner lock was held elsewhere on this attempt; retrying. */
+      coordinatorVersion: 6;
+      kind: 'owner-lock-busy';
+      tabId: string;
+      ownerEpoch: OwnerEpoch;
+    }
+  | {
+      /** Gave up on the owner lock without touching storage. */
+      coordinatorVersion: 6;
+      kind: 'owner-lock-unavailable';
+      tabId: string;
+      ownerEpoch: OwnerEpoch;
+    }
+  | {
+      coordinatorVersion: 6;
       kind: 'engine-ready';
       tabId: string;
       ownerEpoch: OwnerEpoch;
@@ -202,26 +266,26 @@ export type EngineToCoordinatorEnvelope =
       openOutcome: EngineOpenOutcome;
     }
   | {
-      coordinatorVersion: 4;
+      coordinatorVersion: 6;
       kind: 'engine-response';
       ownerEpoch: OwnerEpoch;
       routeId: RouteId;
       response: CacheResponse;
     }
   | {
-      coordinatorVersion: 4;
+      coordinatorVersion: 6;
       kind: 'engine-push';
       ownerEpoch: OwnerEpoch;
       push: CachePush;
     }
   | {
-      coordinatorVersion: 4;
+      coordinatorVersion: 6;
       kind: 'engine-drained';
       tabId: string;
       ownerEpoch: OwnerEpoch;
     }
   | {
-      coordinatorVersion: 4;
+      coordinatorVersion: 6;
       kind: 'engine-fatal';
       tabId: string;
       ownerEpoch: OwnerEpoch;
@@ -229,7 +293,7 @@ export type EngineToCoordinatorEnvelope =
       fatalCode: EngineFatalCode;
     }
   | {
-      coordinatorVersion: 4;
+      coordinatorVersion: 6;
       kind: 'activation-failed';
       tabId: string;
       ownerEpoch: OwnerEpoch;
@@ -237,11 +301,29 @@ export type EngineToCoordinatorEnvelope =
       failureCode: ActivationFailureCode;
     }
   | {
-      coordinatorVersion: 4;
+      coordinatorVersion: 6;
       kind: 'heartbeat-ack';
       ownerEpoch: OwnerEpoch;
       heartbeatId: number;
     };
+
+/** Starts a disposable worker that deletes this scope's stale databases. */
+export type PageToCleanupEnvelope = {
+  coordinatorVersion: 6;
+  kind: 'remove-stale-databases';
+  scope: string;
+};
+
+/** Tally from a stale-database cleanup worker. */
+export type CleanupToPageEnvelope = {
+  coordinatorVersion: 6;
+  kind: 'stale-databases-removed';
+  removed: number;
+  inUse: number;
+  keptWithQueuedMutations: number;
+  /** Cleanup stopped at an error; remaining databases wait for a later run. */
+  failed: boolean;
+};
 
 export type EnvelopeValidation<T> =
   | { ok: true; value: T }
@@ -296,6 +378,9 @@ const hasVersion = (record: UnknownRecord): boolean =>
 const isDatabaseAction = (value: unknown): value is DatabaseAction =>
   value === 'open-existing' || value === 'wipe-before-open';
 
+const isEngineStartupPhase = (value: unknown): value is EngineStartupPhase =>
+  ENGINE_STARTUP_PHASES.includes(value as EngineStartupPhase);
+
 const isDatabaseActionProof = (value: unknown): value is DatabaseActionProof =>
   value === 'opened-existing' || value === 'wiped-before-open';
 
@@ -315,7 +400,9 @@ const isEngineFatalCode = (value: unknown): value is EngineFatalCode =>
 const isActivationFailureCode = (
   value: unknown
 ): value is ActivationFailureCode =>
-  value === 'initialization-failed' || value === 'recovery-open-failed';
+  value === 'initialization-failed' ||
+  value === 'recovery-open-failed' ||
+  value === 'storage-busy';
 
 const isOptionalRecord = (
   value: unknown
@@ -395,6 +482,7 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
         isOptionalPositiveInteger(value.hotCapacity)
       );
     case 'current-revision':
+    case 'current-storage-generation':
       return hasOnlyKeys(value, ['id', 'kind']);
     case 'read':
       return (
@@ -674,10 +762,12 @@ export function validateTabToCoordinatorEnvelope(
           'tabId',
           'livenessLockName',
           'hotCapacity',
+          'buildTime',
         ]) &&
         isNonEmptyString(value.scope) &&
         isNonEmptyString(value.livenessLockName) &&
-        isOptionalPositiveInteger(value.hotCapacity)
+        isOptionalPositiveInteger(value.hotCapacity) &&
+        isSafeNonNegativeInteger(value.buildTime)
       ) {
         return pass(value as TabToCoordinatorEnvelope);
       }
@@ -852,8 +942,7 @@ export function validateCoordinatorToTabEnvelope(
           'timeoutMs',
         ]) &&
         isPositiveInteger(value.ownerEpoch) &&
-        (value.phase === 'loading-assets' ||
-          value.phase === 'opening-database') &&
+        isEngineStartupPhase(value.phase) &&
         isDatabaseAction(value.databaseAction) &&
         isPositiveInteger(value.timeoutMs)
       ) {
@@ -896,8 +985,73 @@ export function validateCoordinatorToTabEnvelope(
         return pass(value as CoordinatorToTabEnvelope);
       }
       break;
+    case 'cache-unavailable':
+    case 'cache-superseded':
+      if (
+        hasOnlyKeys(value, ['coordinatorVersion', 'kind', 'reason']) &&
+        isNonEmptyString(value.reason)
+      ) {
+        return pass(value as CoordinatorToTabEnvelope);
+      }
+      break;
+    case 'remove-stale-databases':
+      if (
+        hasOnlyKeys(value, [
+          'coordinatorVersion',
+          'kind',
+          'tabId',
+          'ownerEpoch',
+        ]) &&
+        isNonEmptyString(value.tabId) &&
+        isPositiveInteger(value.ownerEpoch)
+      ) {
+        return pass(value as CoordinatorToTabEnvelope);
+      }
+      break;
   }
   return fail(`invalid ${value.kind} coordinator envelope`);
+}
+
+/** Validates the page's message starting a stale-database cleanup worker. */
+export function validatePageToCleanupEnvelope(
+  value: unknown
+): EnvelopeValidation<PageToCleanupEnvelope> {
+  if (
+    isRecord(value) &&
+    hasVersion(value) &&
+    value.kind === 'remove-stale-databases' &&
+    hasOnlyKeys(value, ['coordinatorVersion', 'kind', 'scope']) &&
+    isNonEmptyString(value.scope)
+  ) {
+    return pass(value as PageToCleanupEnvelope);
+  }
+  return fail('invalid remove-stale-databases envelope');
+}
+
+/** Validates a cleanup worker's tally. */
+export function validateCleanupToPageEnvelope(
+  value: unknown
+): EnvelopeValidation<CleanupToPageEnvelope> {
+  if (
+    isRecord(value) &&
+    hasVersion(value) &&
+    value.kind === 'stale-databases-removed' &&
+    hasOnlyKeys(value, [
+      'coordinatorVersion',
+      'kind',
+      'removed',
+      'inUse',
+      'keptWithQueuedMutations',
+      'failed',
+    ]) &&
+    isSafeNonNegativeInteger(value.removed) &&
+    isSafeNonNegativeInteger(value.inUse) &&
+    isSafeNonNegativeInteger(value.keptWithQueuedMutations) &&
+    typeof value.failed === 'boolean'
+  ) {
+    return pass(value as CleanupToPageEnvelope);
+  }
+  return fail('invalid stale-databases-removed envelope');
 }
 
 /** Validates the page's one-time DedicatedWorker activation message. */
@@ -1045,6 +1199,9 @@ export function validateEngineToCoordinatorEnvelope(
       }
       break;
     case 'engine-assets-ready':
+    case 'owner-lock-acquired':
+    case 'owner-lock-busy':
+    case 'owner-lock-unavailable':
     case 'engine-drained':
       if (
         hasOnlyKeys(value, [
@@ -1113,12 +1270,123 @@ export function validateEngineToCoordinatorEnvelope(
   return fail(`invalid ${value.kind} coordinator envelope`);
 }
 
+const TAB_LIVENESS_LOCK_PREFIX = 'graphql-cache-tab:';
+
 export const tabLivenessLockName = (scope: string, tabId: string): string =>
-  `graphql-cache-tab:${scope}:${tabId}`;
+  `${TAB_LIVENESS_LOCK_PREFIX}${scope}:${tabId}`;
+
+/** The tab id in a liveness lock name for `scope`, if it is one. */
+export function tabIdFromLivenessLockName(
+  scope: string,
+  lockName: string
+): string | undefined {
+  const prefix = `${TAB_LIVENESS_LOCK_PREFIX}${scope}:`;
+  if (!lockName.startsWith(prefix)) return;
+  const tabId = lockName.slice(prefix.length);
+  return tabId.length > 0 ? tabId : undefined;
+}
+
+/**
+ * Storage versions embedded in the physical database name. Mirrors
+ * `CACHE_SCHEMA_COMPATIBILITY_EPOCH`, `CACHE_FORMAT_VERSION` and
+ * `STORAGE_SCHEMA_VERSION` in the Rust crates: a parity test compares them,
+ * and the engine checks its WASM before touching storage.
+ */
+export const CACHE_STORAGE_VERSION = {
+  schemaCompatibilityEpoch: 3,
+  formatVersion: 3,
+  storageSchemaVersion: 11,
+} as const;
+
+/**
+ * Storage versions in use when database names began to embed versions; a
+ * build at exactly these keeps the unversioned name. Mirrors
+ * `UNVERSIONED_STORAGE_VERSIONS` in cache-core.
+ */
+export const UNVERSIONED_STORAGE_VERSION = {
+  schemaCompatibilityEpoch: 3,
+  formatVersion: 3,
+  storageSchemaVersion: 11,
+} as const;
+
+const DATABASE_PREFIX = 'graphql-cache:';
+
+type StorageVersionTuple = readonly [number, number, number];
+
+const versionTuple = (
+  version: typeof CACHE_STORAGE_VERSION | typeof UNVERSIONED_STORAGE_VERSION
+): StorageVersionTuple => [
+  version.schemaCompatibilityEpoch,
+  version.formatVersion,
+  version.storageSchemaVersion,
+];
+
+/** Compared as a tuple, like the WASM: the first version that differs decides. */
+const compareVersions = (
+  left: StorageVersionTuple,
+  right: StorageVersionTuple
+): number => {
+  const index = left.findIndex((version, at) => version !== right[at]);
+  return index < 0 ? 0 : (left[index] ?? 0) - (right[index] ?? 0);
+};
+
+/** Mirrors `cache_database_name`: the physical database this build opens. */
+export function cacheDatabaseIdentity(scope: string): string {
+  const unversioned = `${DATABASE_PREFIX}${scope}`;
+  const own = versionTuple(CACHE_STORAGE_VERSION);
+  if (compareVersions(own, versionTuple(UNVERSIONED_STORAGE_VERSION)) === 0) {
+    return unversioned;
+  }
+  return `${unversioned}:s${own[0]}.v${own[1]}.t${own[2]}`;
+}
+
+/**
+ * Whether `identity` is one of this scope's databases that this build does
+ * not open and that no newer build could want: the unversioned name once this
+ * build's versions have moved past it, or another name for versions no newer
+ * than this build's. A newer version belongs to a build that may come back,
+ * for example after a rollback. Mirrors the WASM's own check.
+ */
+export function isStaleCacheDatabaseIdentity(
+  scope: string,
+  identity: string
+): boolean {
+  const unversioned = `${DATABASE_PREFIX}${scope}`;
+  const version =
+    identity === unversioned
+      ? versionTuple(UNVERSIONED_STORAGE_VERSION)
+      : storageVersion(unversioned, identity);
+  return (
+    identity !== cacheDatabaseIdentity(scope) &&
+    version !== undefined &&
+    compareVersions(version, versionTuple(CACHE_STORAGE_VERSION)) <= 0
+  );
+}
+
+/** The `[epoch, format, storage]` versions embedded in a database name. */
+function storageVersion(
+  unversioned: string,
+  identity: string
+): StorageVersionTuple | undefined {
+  if (!identity.startsWith(unversioned)) return;
+  const match = /^:s(\d+)\.v(\d+)\.t(\d+)$/.exec(
+    identity.slice(unversioned.length)
+  );
+  if (!match) return;
+  const [epoch, format, storage] = match.slice(1).map(Number);
+  if (
+    !Number.isSafeInteger(epoch) ||
+    !Number.isSafeInteger(format) ||
+    !Number.isSafeInteger(storage)
+  ) {
+    return;
+  }
+  return [epoch ?? 0, format ?? 0, storage ?? 0];
+}
 
 /** Mirrors turso-opfs's canonical lock derivation without exposing a new lock. */
 export function databaseOwnerLockName(scope: string): string {
-  const databaseIdentity = `graphql-cache:${scope}`;
+  const databaseIdentity = cacheDatabaseIdentity(scope);
   const byteLength = new TextEncoder().encode(databaseIdentity).byteLength;
   return `macro:turso-opfs:v1:${byteLength}:${databaseIdentity}`;
 }

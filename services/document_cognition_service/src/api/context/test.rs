@@ -206,7 +206,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     });
 
     let notification_reader_queue = SqsQueue::new(
-        aws_sdk_sqs::Client::from_conf(sqs_config),
+        aws_sdk_sqs::Client::from_conf(sqs_config.clone()),
         "test-notification-queue".to_string(),
     );
     let notification_reader_service = NotificationReaderService {
@@ -233,7 +233,15 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         "test-bucket",
         "test-docx-bucket",
     );
-    let document_repo = documents::outbound::pg_document_repo::PgDocumentRepo::new(pool.clone());
+    let owned_entity_registrar = entity_registry_db_utils::OwnedEntityRegistrar::new(
+        entity_registry::OwnerGrantPolicy::new(bots::outbound::pg_bots_repo::PgBotsRepo::new(
+            pool.clone(),
+        )),
+    );
+    let document_repo = documents::outbound::pg_document_repo::PgDocumentRepo::new(
+        pool.clone(),
+        owned_entity_registrar.clone(),
+    );
     let cloudfront_config = documents::domain::models::CloudFrontConfig {
         distribution_url: "https://test.cloudfront.net".to_string(),
         signer_public_key_id: "test-key-id".to_string(),
@@ -339,7 +347,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
 
     let chat_tool_context = chat::inbound::toolset::ChatToolContext::new(
         chat::domain::service::ChatServiceImpl::new(
-            chat::outbound::postgres::PgChatRepo::new(pool.clone()),
+            chat::outbound::postgres::PgChatRepo::new(pool.clone(), owned_entity_registrar.clone()),
             Arc::new(ai_toolset::AsyncToolCollection::new()),
             (),
             entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
@@ -358,6 +366,15 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         user_email_service,
     );
 
+    let initiative_tool_context = ai_tools::build_initiative_tool_context(
+        pool.clone(),
+        &document_tool_context,
+        properties_service.clone(),
+        entity_access_service.clone(),
+        aws_sdk_sqs::Client::from_conf(sqs_config.clone()),
+        macro_event_broker.clone(),
+    );
+
     let tool_service_context = ai_tools::ToolServiceContext {
         search_service_client: search_service_client.clone(),
         email_service_client: email_service_client_external.clone(),
@@ -367,6 +384,9 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             pool.clone(),
             properties_service.clone(),
             entity_access_service.clone(),
+        ),
+        image_generation_tool_context: ai_tools::build_image_generation_tool_context_test(
+            &document_tool_context,
         ),
         document_tool_context: document_tool_context.clone(),
         properties_tool_context: properties_tool_context.clone(),
@@ -395,11 +415,13 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             "http://localhost:8086".to_string(),
         ),
         project_tool_context,
+        initiative_tool_context,
         team_tool_context: ai_tools::build_team_tool_context(pool.clone()),
         crm_tool_context: ai_tools::build_crm_tool_context(pool.clone()),
         skill_tool_context: ai_tools::build_skill_tool_context(
             search_service_client.clone(),
             soup_service.clone(),
+            &document_tool_context,
         ),
         schedule_tool_context: ai_tools::no_op_schedule_context(),
         anthropic_tool_context: ai_tools::build_anthropic_tool_context_test(),
@@ -530,6 +552,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             macro_env::Environment::Local,
         )),
         user_permissions_service,
+        non_user_owners: NonUserOwners::Disabled,
         config: Arc::new(Config::new_empty_for_test()),
         internal_api_key: InternalApiKey::Comptime("testing"),
         notification_ingress_service,
@@ -556,7 +579,10 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         entity_access_service: entity_access_service.clone(),
         message_service: Arc::new(
             chat::domain::service::MessageServiceImpl::new(
-                chat::outbound::postgres::PgChatRepo::new(pool.clone()),
+                chat::outbound::postgres::PgChatRepo::new(
+                    pool.clone(),
+                    owned_entity_registrar.clone(),
+                ),
                 attachment::provider::AttachmentProvider {
                     document: documents::inbound::attachment::DocumentAttachmentService::new(
                         document_tool_context.service.clone(),
@@ -568,7 +594,10 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
                         entity_access_service.clone(),
                     ),
                     chat: chat::inbound::attachment::ChatAttachmentService::new(
-                        Arc::new(chat::outbound::postgres::PgChatRepo::new(pool.clone())),
+                        Arc::new(chat::outbound::postgres::PgChatRepo::new(
+                            pool.clone(),
+                            owned_entity_registrar.clone(),
+                        )),
                         entity_access_service.clone(),
                     ),
                     channel: channels::inbound::attachment::ChannelAttachmentService::new(

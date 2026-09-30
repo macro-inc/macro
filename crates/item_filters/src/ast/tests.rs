@@ -1631,3 +1631,26 @@ fn requests_crm_scope_reflects_email_crm_scope_tag() {
     ast.email_filter.crm_scope = Some(CrmScope::Domains(vec!["example.com".into()]));
     assert!(ast.requests_crm_scope());
 }
+
+#[test]
+fn initiatives_expand_with_properties_without_enabling_legacy_queries() {
+    let empty = EntityFilterAst::new_from_filters(EntityFilters::default()).unwrap();
+    assert!(empty.is_none());
+    let filter = EntityFilters {
+        initiative_filters: crate::InitiativeFilters {
+            include: true,
+            name: Some("Launch".into()),
+            ..Default::default()
+        },
+        property_filters: vec![crate::PropertyFilter {
+            property_definition_id: "00000001-0000-0000-0000-000000000002".into(),
+            entity_type: Some("INITIATIVE".into()),
+            option_ids: vec!["00000000-0000-0000-0000-000000000001".into()],
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+    let ast = EntityFilterAst::new_from_filters(filter).unwrap().unwrap();
+    assert!(ast.initiative_filter.is_some());
+    assert!(ast.properties_filter.is_some());
+}

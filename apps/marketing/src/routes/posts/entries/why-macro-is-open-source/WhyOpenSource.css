@@ -1,0 +1,38 @@
+.wos-post {
+  color: var(--c4);
+  font-family: 'cyberreader', system-ui, sans-serif;
+}
+
+.wos-post,
+.wos-post * {
+  box-sizing: border-box;
+}
+
+.wos-post a {
+  color: var(--a0);
+  text-decoration: none;
+}
+
+.wos-post a:hover {
+  color: var(--c1);
+}
+
+/* The thesis of the essay, emphasized inside its paragraph */
+.wos-highlight {
+  color: var(--c0);
+  font-weight: 600;
+}
+
+/* The essay is one long run of paragraphs, so give them a little more air */
+.wos-post p {
+  line-height: 1.75;
+}
+
+/* Pointer to the repo the post is about */
+.wos-post p.wos-repo {
+  background: color-mix(in srgb, var(--b1) 72%, var(--b0));
+  border: 1px solid color-mix(in srgb, var(--b4) 22%, transparent);
+  border-radius: 10px;
+  margin: 30px 0 24px;
+  padding: 18px 20px;
+}

@@ -11,6 +11,12 @@ note: |-
   with fake clients and controllers with fake capabilities; neither imports
   rendering code, including block-agent’s `ui/` and `component/` layers.
 files:
+  - apps/web/src/features/channels-view/queries/channel-detail-source*
+  - apps/web/src/features/channels-view/primitives/create-channel-detail*
+  - apps/web/src/features/channel/queries/channel-invite*
+  - apps/web/src/features/channel/primitives/create-channel-invites*
+  - apps/web/src/features/projects/queries/**
+  - apps/web/src/features/projects/primitives/**
   - apps/web/src/features/block-agent/queries/**
   - apps/web/src/features/block-agent/primitives/**
   - apps/web/src/features/meetings/queries/**

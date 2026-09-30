@@ -109,6 +109,7 @@ import {
   registerInternalLayoutShiftListener,
 } from '@core/component/LexicalMarkdown/plugins/shared/utils';
 import { snippetsPlugin } from '@core/component/LexicalMarkdown/plugins/snippets';
+import type { MentionLinkResolver } from '@core/component/LexicalMarkdown/plugins/text-paste/textPastePlugin';
 import { createMenuOperations } from '@core/component/LexicalMarkdown/shared/inlineMenu';
 import {
   editorFocusSignal,
@@ -206,6 +207,7 @@ export function MarkdownEditor(props: {
   loroManager: LoroManager;
   showLexicalStateDebugger?: boolean;
   onLexicalStateDebuggerClose?: () => void;
+  resolveAppLink?: MentionLinkResolver;
 }) {
   const {
     documentId,
@@ -625,7 +627,7 @@ export function MarkdownEditor(props: {
         dragListenerRef: editorContainerRef,
       })
     )
-    .use(textPastePlugin())
+    .use(textPastePlugin(props.resolveAppLink))
     .use(restoreFocusPlugin())
     .use(markdownPastePlugin())
     .use(normalizeEnterPlugin())
@@ -997,6 +999,10 @@ export function MarkdownEditor(props: {
             });
           }}
           contentEditable={isContentEditable()}
+          role="textbox"
+          aria-multiline="true"
+          aria-readonly={!isContentEditable()}
+          aria-label="Document content"
           class="ph-no-capture w-full max-w-full min-h-52"
           classList={{
             'select-auto': !canEdit(),

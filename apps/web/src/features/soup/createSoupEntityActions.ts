@@ -32,14 +32,17 @@ import {
   openEntityInSplitFromUnifiedList,
 } from '@app/features/next-soup/utils';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import type { SplitHandle } from '@components/app/split-layout/layoutManager';
 import { itemToBlockName } from '@core/constant/allBlocks';
+import { enableProjects, isFeatureEnabled } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import type { EntityData } from '@entity';
+import { isEmailEntity, isTaskEntity } from '@entity';
 import { useSetCompanyHiddenMutation } from '@queries/crm/companies';
 import type { Component, JSX } from 'solid-js';
 
@@ -68,6 +71,7 @@ type BuildActionGroups = (
     // Provided only where the menu host can anchor a tag picker for the
     // right-clicked row.
     openTagPicker?: () => void;
+    openProjectPicker?: () => void;
     /**
      * The split hosting the list. Open actions route through it so they match
      * their click/hotkey equivalents.
@@ -91,8 +95,10 @@ export const viewedProjectIdFromContent = (content: {
 
 export function createSoupEntityActions(): {
   buildActionGroups: BuildActionGroups;
+  isFavorited: (entity: EntityData) => boolean;
 } {
   const analytics = useAnalytics();
+  const projectsFlag = useFeatureFlag(enableProjects);
   const userId = useUserId();
   const notificationSource = useGlobalNotificationSource();
   const hiddenMutation = useSetCompanyHiddenMutation();
@@ -153,6 +159,7 @@ export function createSoupEntityActions(): {
       viewContext,
       viewedProjectId,
       openTagPicker,
+      openProjectPicker,
       splitHandle,
       createActionNavigationHandler,
     }
@@ -246,17 +253,8 @@ export function createSoupEntityActions(): {
       if (!entity || entity.type === 'foreign') return undefined;
       const splitManager = globalSplitManager();
       if (!splitManager) return undefined;
-      // A reminder opens its own editor — a `reminder-view` component split —
-      // not what it references, so a standalone reminder is openable too and
-      // the dedup check is against that editor split, not the reference.
-      if (entity.type === 'reminder') {
-        const open = splitManager.getSplitByContent(
-          'component',
-          `reminder-view~${entity.id}`
-        );
-        if (open) return undefined;
-        return entity;
-      }
+      // Reminder route claims perform identity reuse when the action runs.
+      if (entity.type === 'reminder') return entity;
       const contentId =
         entity.type === 'channel_message' || entity.type === 'channel_thread'
           ? entity.channelId
@@ -342,6 +340,11 @@ export function createSoupEntityActions(): {
     }
 
     if (canExecuteAll(muteAction.canExecute)) {
+      middleItems.push({
+        id: 'snooze',
+        label: 'Snooze notifications…',
+        onClick: () => muteAction.snooze(entities),
+      });
       const allMuted = entities.every((entity) => muteAction.isMuted(entity));
       middleItems.push({
         id: 'mute',
@@ -373,6 +376,20 @@ export function createSoupEntityActions(): {
         id: 'add-tag',
         label: 'Add tag',
         onClick: openTagPicker,
+      });
+    }
+
+    if (
+      projectsFlag().enabled &&
+      openProjectPicker &&
+      canExecuteAll(isTaskEntity)
+    ) {
+      middleItems.push({
+        id: 'set-initiative',
+        label: 'Set project',
+        onClick: () => {
+          if (isFeatureEnabled(enableProjects)) openProjectPicker();
+        },
       });
     }
 
@@ -510,7 +527,9 @@ export function createSoupEntityActions(): {
       deleteItems.push({
         id: 'delete',
         label: 'Delete',
-        hotkeyToken: TOKENS.entity.action.delete,
+        hotkeyToken: entities.every(isEmailEntity)
+          ? TOKENS.email.trash
+          : TOKENS.entity.action.delete,
         onClick: handle(deleteAction.executeWithSoup),
         destructive: true,
       });
@@ -521,5 +540,5 @@ export function createSoupEntityActions(): {
       .map((items) => ({ items }));
   };
 
-  return { buildActionGroups };
+  return { buildActionGroups, isFavorited: favoriteAction.isFavorited };
 }

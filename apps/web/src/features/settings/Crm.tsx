@@ -90,15 +90,13 @@ function ConfirmDialog(props: {
           <div class="flex justify-end gap-1 pt-2">
             <Button
               variant="ghost"
-              class="rounded-xs"
               disabled={props.pending}
               onClick={props.onClose}
             >
               Cancel
             </Button>
             <Button
-              variant="danger"
-              class="rounded-xs"
+              variant="strong"
               disabled={props.pending || props.confirmDisabled}
               onClick={props.onConfirm}
             >
@@ -202,12 +200,7 @@ function CrmEnablementSection() {
             fallback={
               <Tooltip label="Only team admins can change CRM settings.">
                 <span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    class="rounded-xs"
-                    disabled
-                  >
+                  <Button variant="outline" size="sm" disabled>
                     Admins only
                   </Button>
                 </span>
@@ -221,7 +214,6 @@ function CrmEnablementSection() {
               <Button
                 variant={crmEnabled() ? 'danger' : 'accent'}
                 size="sm"
-                class="rounded-xs"
                 disabled={patchCrmMutation.isPending}
                 onClick={() => handleToggle(!crmEnabled())}
               >
@@ -253,7 +245,6 @@ function CrmEnablementSection() {
             <div class="flex justify-end gap-1 pt-2">
               <Button
                 variant="ghost"
-                class="rounded-xs"
                 disabled={patchCrmMutation.isPending}
                 onClick={() => setShowEnableModal(false)}
               >
@@ -261,7 +252,6 @@ function CrmEnablementSection() {
               </Button>
               <Button
                 variant="outline"
-                class="rounded-xs"
                 disabled={patchCrmMutation.isPending}
                 onClick={() => handleEnable(false)}
               >
@@ -275,8 +265,7 @@ function CrmEnablementSection() {
                 </Show>
               </Button>
               <Button
-                variant="accent"
-                class="rounded-xs"
+                variant="strong"
                 disabled={patchCrmMutation.isPending}
                 onClick={() => handleEnable(true)}
               >
@@ -436,7 +425,7 @@ function StageEditorRow(props: {
             aria-label={`Reorder ${props.label}. Press the up or down arrow keys to move it.`}
             variant="ghost"
             size="icon-sm"
-            class="rounded-xs -ml-1.5 cursor-grab touch-none active:cursor-grabbing"
+            class="-ml-1.5 cursor-grab touch-none active:cursor-grabbing"
             onKeyDown={handleKeyDown}
           >
             <DotsSixVerticalIcon class="size-4" />
@@ -465,7 +454,7 @@ function StageEditorRow(props: {
             aria-label="Save stage name"
             variant="accent"
             size="icon-sm"
-            class="rounded-xs shrink-0"
+            class="shrink-0"
             disabled={props.pending || !hasChanged()}
             onClick={commit}
           >
@@ -479,7 +468,7 @@ function StageEditorRow(props: {
             aria-label="Cancel rename"
             variant="ghost"
             size="icon-sm"
-            class="rounded-xs shrink-0"
+            class="shrink-0"
             disabled={props.pending}
             onClick={cancel}
           >
@@ -494,7 +483,6 @@ function StageEditorRow(props: {
               aria-label={`Move ${props.label} up`}
               variant="ghost"
               size="icon-sm"
-              class="rounded-xs"
               disabled={!canMove() || isFirst()}
               onClick={() => props.onMove(-1)}
             >
@@ -506,7 +494,6 @@ function StageEditorRow(props: {
               aria-label={`Move ${props.label} down`}
               variant="ghost"
               size="icon-sm"
-              class="rounded-xs"
               disabled={!canMove() || isLast()}
               onClick={() => props.onMove(1)}
             >
@@ -523,7 +510,6 @@ function StageEditorRow(props: {
             aria-label={`Delete ${props.label}`}
             variant="ghost"
             size="icon-sm"
-            class="rounded-xs"
             disabled={props.disabled || props.pending || isLastStage()}
             onClick={() => props.onDelete()}
           >
@@ -718,7 +704,6 @@ function DealStagesSection() {
           <Button
             variant="outline"
             size="sm"
-            class="rounded-xs"
             disabled={blocked()}
             onClick={() => setShowResetModal(true)}
           >
@@ -766,7 +751,7 @@ function DealStagesSection() {
                   <Button
                     variant="outline"
                     size="sm"
-                    class="rounded-xs shrink-0"
+                    class="shrink-0"
                     disabled={busy()}
                     onClick={handleCustomize}
                   >
@@ -815,7 +800,7 @@ function DealStagesSection() {
                 <Button
                   variant="outline"
                   size="sm"
-                  class="rounded-xs shrink-0"
+                  class="shrink-0"
                   disabled={newStageName().trim() === '' || busy()}
                   onClick={handleAddStage}
                 >

@@ -13,6 +13,8 @@ import type {
   ControlResponse,
   CreateAgentSessionRequest,
   CreateAgentSessionResponse,
+  DiscoverAgentCapabilitiesRequest,
+  DiscoverAgentCapabilitiesResponse,
   LoadAgentModelsRequest,
   LoadAgentModelsResponse,
   PreviewAgentSessionsResponse,
@@ -56,6 +58,21 @@ export const agentHarnessServiceClient = {
   loadAgentModels(request: LoadAgentModelsRequest, signal?: AbortSignal) {
     return fetchWithToken<LoadAgentModelsResponse>(
       `${agentHarnessHost}/agent-models/load`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+        signal,
+      }
+    );
+  },
+
+  discoverAgentCapabilities(
+    request: DiscoverAgentCapabilitiesRequest,
+    signal?: AbortSignal
+  ) {
+    return fetchWithToken<DiscoverAgentCapabilitiesResponse>(
+      `${agentHarnessHost}/agent-capabilities/discover`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -144,6 +161,18 @@ export const agentHarnessServiceClient = {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name }),
+      }
+    ).then((result) => result.map(() => undefined));
+  },
+
+  setArchived(sessionId: string, isArchived: boolean) {
+    return fetchWithToken<Record<string, never>>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/archived`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isArchived }),
+        errorResponseHandler: sessionError,
       }
     ).then((result) => result.map(() => undefined));
   },

@@ -81,7 +81,7 @@ function setup(location: 'preview' | 'split' | 'closed') {
       location === 'split'
         ? { type: 'channel', id: 'channel' }
         : { type: 'component', id: 'channels' },
-      { type: 'component', id: 'inbox' },
+      { type: 'component', id: 'home' },
     ]);
   });
   const [first, other] = layout.splits();
@@ -157,6 +157,26 @@ it.each(['channel_invite', 'call_started'] as const)(
     expect(navigate).not.toHaveBeenCalled();
   }
 );
+
+it('reports an ordinary channel notification applied after preview activation', async () => {
+  const { layout, activate } = setup('preview');
+  const onApplied = vi.fn();
+
+  await openNotification(
+    {
+      entity_id: 'channel',
+      notification_metadata: { tag: 'channel_invite', content: {} },
+    } as UnifiedNotification,
+    layout,
+    false,
+    undefined,
+    undefined,
+    { onApplied }
+  );
+
+  expect(activate).toHaveBeenCalledOnce();
+  expect(onApplied).toHaveBeenCalledOnce();
+});
 
 it.each(['split', 'closed'] as const)(
   'preserves notification navigation when the channel is %s',

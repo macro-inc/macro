@@ -163,7 +163,7 @@ describe('ToolCallPart routing', () => {
     );
   });
 
-  it('shows an MCP tool by its own name, with the server beside it', () => {
+  it('shows an MCP tool by its own name without the server label', () => {
     const rendered = render(() => (
       <ToolCallPart
         part={{
@@ -180,7 +180,7 @@ describe('ToolCallPart routing', () => {
       />
     ));
     expect(rendered.getByTestId('title').textContent).toBe('ask');
-    expect(rendered.getByTestId('subtitle').textContent).toBe('deepwiki');
+    expect(rendered.getByTestId('subtitle').textContent).toBe('');
   });
 
   it('reuses a known renderer for calls from the explicit Macro MCP server', () => {
@@ -223,7 +223,7 @@ describe('ToolCallPart routing', () => {
       />
     ));
     expect(rendered.getByTestId('tool-card').dataset.muted).toBe('true');
-    expect(rendered.getByTestId('subtitle').textContent).toBe('ops');
+    expect(rendered.getByTestId('subtitle').textContent).toBe('');
     expect(rendered.getByTestId('trailing').textContent).toBe('Failed');
     expect(rendered.getByTestId('tool-card').dataset.expandable).toBe('false');
     expect(rendered.getByTestId('body').textContent).toBe('');
@@ -246,7 +246,7 @@ describe('ToolCallPart routing', () => {
       />
     ));
     expect(rendered.queryByTestId('macro-tool')).toBeNull();
-    expect(rendered.getByTestId('subtitle').textContent).toBe('external');
+    expect(rendered.getByTestId('subtitle').textContent).toBe('');
     expect(rendered.getByTestId('tool-card').dataset.expandable).toBe('false');
     expect(rendered.getByTestId('body').textContent).toBe('');
   });
@@ -1223,4 +1223,46 @@ describe('ToolCallPart result summaries', () => {
     ));
     expect(rendered.getByTestId('trailing').textContent).toBe('');
   });
+});
+
+describe('generated image dispatch', () => {
+  it.each(['native', 'mcp'] as const)(
+    'uses the image result renderer for %s calls outside group chrome',
+    (kind) => {
+      const input = { prompt: 'A frog under a leaf' };
+      const output = {
+        documentId: '01a0eecf-1162-7bea-9ba9-925769372a8a',
+        fileName: 'frog.png',
+        mimeType: 'image/png',
+        sizeBytes: 132421,
+      };
+      const part: ToolUsePart = {
+        kind: 'tool_use',
+        id: 'image-call',
+        status: 'completed',
+        name:
+          kind === 'native'
+            ? { kind, name: 'GenerateImage' }
+            : { kind, server: 'macro', tool: 'GenerateImage' },
+        detail:
+          kind === 'native'
+            ? { kind: 'macro', input, output, error: null }
+            : {
+                kind: 'other',
+                acpKind: 'other',
+                input,
+                output: null,
+                result: output,
+                error: null,
+              },
+      };
+      const view = render(() => <ToolCallPart part={part} />);
+      const image = view.getByTestId('macro-tool');
+      expect(image.textContent).toBe('GenerateImage');
+      expect(image.dataset.grouped).toBe('false');
+      expect(JSON.parse(image.dataset.response ?? '')).toEqual(output);
+      expect(view.queryByTestId('dashboard-view')).toBeNull();
+      expect(view.queryByTestId('tool-card')).toBeNull();
+    }
+  );
 });

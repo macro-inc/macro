@@ -59,6 +59,9 @@ pub struct WriteResultWire {
     pub revision: String,
     /// Whether this write advanced `revision`.
     pub revision_advanced: bool,
+    /// Known search changes for query responses; absent for conservative refreshes.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub search_changed_buckets: Option<std::collections::BTreeSet<String>>,
     /// Entity keys whose records changed.
     pub changed: Vec<String>,
     /// Registered operation ids affected by the change (origin excluded).
@@ -73,6 +76,8 @@ pub struct WriteResultWire {
 /// Internal hydration result used to fan out changes before returning only
 /// the caller-visible projection across IPC.
 pub struct HydrationWriteResultWire {
+    /// Quick Access buckets changed by hydration.
+    pub search_changed_buckets: std::collections::BTreeSet<String>,
     /// Cache changes required for host notifications.
     pub write_result: WriteResultWire,
     /// Fields not marked `@cacheOnly`, or `None` when there are none.
@@ -363,6 +368,7 @@ fn wire_write_result(ops: &OpInterner, result: WriteResult) -> WriteResultWire {
     WriteResultWire {
         revision: result.revision.to_string(),
         revision_advanced: result.revision_advanced,
+        search_changed_buckets: result.search_changed_buckets,
         changed: result
             .changed
             .into_iter()
@@ -421,6 +427,18 @@ impl EngineHandle {
     /// Returns the current in-memory cache revision.
     pub async fn current_revision(&self) -> CacheRevision {
         self.inner.lock().await.engine.current_revision()
+    }
+
+    /// Returns the durable cache generation, initializing it when absent.
+    pub async fn current_storage_generation(&self) -> Result<String, String> {
+        self.inner
+            .lock()
+            .await
+            .engine
+            .current_storage_generation()
+            .await
+            .map(|generation| generation.to_string())
+            .map_err(|error| error.to_string())
     }
 
     /// Cache read; registers `op_id` as active when given.
@@ -619,6 +637,7 @@ impl EngineHandle {
             )
             .await
             .map(|result| HydrationWriteResultWire {
+                search_changed_buckets: result.search_changed_buckets,
                 write_result: wire_write_result(ops, result.write_result),
                 data: result.data,
             })

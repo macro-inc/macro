@@ -96,7 +96,7 @@ export async function prefetchUserInfo() {
 }
 
 /** Fetch user info and return the data. Use when you need the result. */
-async function _fetchUserInfo() {
+export async function fetchUserInfo() {
   return queryClient.fetchQuery({
     queryKey: authKeys.userInfo.queryKey,
     queryFn: async () =>

@@ -82,6 +82,24 @@ function createMentionNotification(
   });
 }
 
+function createReactionNotification(
+  id: string,
+  messageId: string,
+  createdAt: number,
+  threadId?: string
+): UnifiedNotification {
+  return createBaseNotification(id, createdAt, {
+    tag: 'channel_message_reaction',
+    content: {
+      messageId,
+      messageContent: `Message ${id}`,
+      emoji: '👍',
+      threadId,
+      channelType: 'private',
+    },
+  });
+}
+
 function createDocCommentNotification(
   id: string,
   commentId: string,
@@ -144,7 +162,8 @@ describe('channel notification scoping', () => {
         .filter(
           (stack) =>
             stack.type === 'channel_message_reply' ||
-            stack.type === 'channel_mention'
+            stack.type === 'channel_mention' ||
+            stack.type === 'channel_message_reaction'
         )
         .flatMap((stack) => stack.notifications.map((n) => n.id))
     );
@@ -168,6 +187,13 @@ describe('channel notification scoping', () => {
         'other'
       ),
       createDocCommentNotification('document-comment', '1', '2', 7000),
+      createReactionNotification('root-reaction', 'root', 9000),
+      createReactionNotification(
+        'reply-reaction',
+        'reply-message',
+        10000,
+        'root'
+      ),
     ];
     for (let mask = 0; mask < 2 ** candidates.length; mask++) {
       const notifications = candidates.filter((_, i) => mask & (1 << i));
@@ -234,6 +260,40 @@ describe('channel notification scoping', () => {
     ).toBe(notifications);
   });
 
+  it('scopes reactions on roots and replies to their thread row', () => {
+    const root = createReactionNotification('root-reaction', 'root', 1000);
+    const reply = createReactionNotification(
+      'reply-reaction',
+      'reply',
+      2000,
+      'root'
+    );
+    const other = createReactionNotification('other-reaction', 'other', 3000);
+    const notifications = [root, reply, other];
+
+    expect(
+      scopeChannelNotificationsForEntity({ type: 'channel' }, notifications)
+    ).toEqual([]);
+    expect(
+      scopeChannelNotificationsForEntity(
+        { type: 'channel_thread', messageId: 'root' },
+        notifications
+      )
+    ).toEqual([root, reply]);
+    expect(
+      scopeChannelNotificationsForEntity(
+        { type: 'channel_thread', messageId: 'other' },
+        notifications
+      )
+    ).toEqual([other]);
+    expect(
+      scopeChannelNotificationsForEntity(
+        { type: 'channel_thread', messageId: 'reply' },
+        notifications
+      )
+    ).toEqual([]);
+  });
+
   it('recomputes membership when an existing notification array changes', () => {
     const notifications = [createNewMessageNotification('root', 'root', 1000)];
     const entity = { type: 'channel' } as const;
@@ -254,6 +314,19 @@ describe('channel notification scoping', () => {
 });
 
 describe('stackNotifications', () => {
+  it('keeps reactions visible in their own stack', () => {
+    const reaction = createReactionNotification('reaction-1', 'message-1', 2);
+    const send = createNewMessageNotification('send-1', 'message-2', 1);
+
+    const stacks = stackNotifications([reaction, send]);
+
+    expect(stacks).toHaveLength(2);
+    expect(stacks[0]).toMatchObject({
+      type: 'channel_message_reaction',
+      notifications: [reaction],
+    });
+  });
+
   describe('basic stacking', () => {
     it('stacks multiple new messages into a single group', () => {
       const notifications = [
@@ -695,5 +768,47 @@ describe('stackNotifications — entity discussions', () => {
       'commented_on_document',
       'channel_message_send',
     ]);
+  });
+});
+
+describe('CRM discussion notifications', () => {
+  function crmNotification(
+    id: string,
+    recordId: string,
+    threadId: string,
+    createdAt: number
+  ): UnifiedNotification {
+    return {
+      ...createBaseNotification(id, createdAt, {
+        tag: 'crm_discussion',
+        content: {
+          recordName: 'Acme',
+          reason: 'owner',
+          messageId: `${id}-message`,
+          threadId,
+          text: `Comment ${id}`,
+        },
+      }),
+      entity_id: recordId,
+      entity_type: 'crm_company',
+    };
+  }
+
+  it('stacks one group per record thread', () => {
+    const groups = stackNotifications([
+      crmNotification('a', 'company-1', 'thread-1', 1000),
+      crmNotification('b', 'company-1', 'thread-1', 2000),
+      crmNotification('c', 'company-1', 'thread-2', 3000),
+      crmNotification('d', 'company-2', 'thread-1', 4000),
+    ]);
+    expect(groups.map((group) => group.type)).toEqual([
+      'crm_discussion',
+      'crm_discussion',
+      'crm_discussion',
+    ]);
+    expect(
+      groups.map((group) => group.notifications.map((n) => n.id).sort())
+    ).toEqual([['d'], ['c'], ['a', 'b']]);
+    expect(getThreadId(groups[2])).toBe('thread-1');
   });
 });

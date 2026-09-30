@@ -31,6 +31,7 @@ export const agentHarnessExcluded = [
   'start',
   'status',
   'loadAgentModelsHandler',
+  'discoverAgentCapabilitiesHandler',
   'previewAgentSessions',
 ] as const satisfies readonly (keyof AgentHarnessSdk)[];
 
@@ -221,6 +222,7 @@ export const emailBacklog = [
   'deleteEmailFilter',
   'deleteScheduledDraft',
   'getScheduledMessages',
+  'getThreadCalendarInvitations',
   'listContacts',
   'listEmailFilters',
   'removeDraftAttachment',
@@ -263,6 +265,7 @@ export const scheduledActionBacklog = [
   'executeScheduledActionNow',
   'listScheduledActionHistory',
   'listScheduledActions',
+  'setScheduledActionEnabled',
   'updateScheduledAction',
 ] as const satisfies readonly (keyof ScheduledActionSdk)[];
 
@@ -303,6 +306,7 @@ export const storageExcluded = [
   'getBatchPreviewHandler',
   'getActiveCalls',
   'getBatchProjectPreview',
+  'getBotOwnerProfiles',
   'getCollabSurface',
   'getDocumentListHandler',
   'getDocumentLocationV3',

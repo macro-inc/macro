@@ -32,6 +32,32 @@ fn request() -> SoupFlatRequest {
     }
 }
 
+#[test]
+fn favorite_filter_requires_current_projection_and_constrains_each_partition() {
+    let mut ast = excluded_deferred_partitions();
+    ast.favorites_only = Some(true);
+    assert!(matches!(
+        compile_soup_flat_v4(&ast, request()).unwrap(),
+        LocalCompileOutcome::Unsupported(_)
+    ));
+    let LocalCompileOutcome::Supported(query) = properties::compile_soup(&ast, request()).unwrap()
+    else {
+        panic!("current compiler must support favorites");
+    };
+    fn requires_favorite(predicate: &PredicateExpr) -> bool {
+        predicate == &PredicateExpr::None
+            || predicate == &mail::boolean("is-favorited", true)
+            || matches!(predicate, PredicateExpr::And(a, b) if requires_favorite(a) || requires_favorite(b))
+    }
+    for partition in &query.as_query().partitions {
+        assert!(
+            requires_favorite(&partition.predicate),
+            "{:?}",
+            partition.predicate
+        );
+    }
+}
+
 fn excluded_deferred_partitions() -> EntityFilterAst {
     let mut ast = EntityFilterAst {
         calendar_event_filter: Some(Arc::new(Expr::val(CalendarEventLiteral::Id(Uuid::nil())))),
@@ -395,5 +421,22 @@ fn invalid_limit_is_a_validation_error_not_unsupported() {
             }
         ),
         Err(CompileError::Validation(ValidationError::Limit(0)))
+    );
+}
+
+#[test]
+fn initiative_queries_use_server_instead_of_incomplete_local_index() {
+    let mut ast = excluded_deferred_partitions();
+    ast.initiative_filter = Some(Arc::new(Expr::val(
+        item_filters::ast::initiative::InitiativeLiteral::Include,
+    )));
+    assert_eq!(
+        check_soup_flat_v3(&ast, request()),
+        Eligibility::Unsupported(UnsupportedReason::Partition("initiative"))
+    );
+    ast.favorites_only = Some(true);
+    assert_eq!(
+        properties::compile_soup(&ast, request()).unwrap(),
+        LocalCompileOutcome::Unsupported(UnsupportedReason::Partition("initiative"))
     );
 }

@@ -2,6 +2,7 @@ import { ViewSidebar } from '@app/components/view-shell';
 import { FavoriteContextMenu } from '@app/features/favorites/FavoriteContextMenu';
 import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
 import { useFavoriteDisplayName } from '@app/util/favorites';
+import { ChannelMutedIndicator } from '@channel/components/ChannelMutedIndicator';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
@@ -64,6 +65,7 @@ export function ChannelFavoriteRow(props: { favorite: Favorite }) {
         <FavoriteIcon favorite={props.favorite} class="size-4" />
       </ViewSidebar.Icon>
       <span class="min-w-0 flex-1 truncate">{displayName()}</span>
+      <ChannelMutedIndicator muted={item().muted} />
     </ViewSidebar.Item>
   );
 

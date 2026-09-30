@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE ai_financial_invocation SET finalization = NULL, finalized_at = NULL WHERE invocation_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "74476621882c558774449b191be0247686be4cbf3abf133b48bfd6ca1f4ea9a8"
+}

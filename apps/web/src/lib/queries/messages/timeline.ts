@@ -260,6 +260,11 @@ export function messageTimelineQueryOptions(
         });
         return page;
       }
+      // Rejoining a project must recover missed edits, reactions and deletions
+      // on existing discussions. A created-at delta only includes new roots.
+      if (parent.type === 'initiative') {
+        return fetchMessageTimelinePage(parent, null, null);
+      }
       const watermark = readMessageTimelineWatermark(parent);
       if (watermark.kind !== 'ready') {
         const page = await fetchMessageTimelinePage(parent, null, null);

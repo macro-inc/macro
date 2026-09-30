@@ -7,10 +7,14 @@ const state = vi.hoisted(() => ({
   authenticated: (): boolean => true,
   enabled: (): boolean => false,
   flagsLoaded: (): boolean => true,
+  touch: (): boolean => false,
   replace: vi.fn(),
   pageView: vi.fn(),
   track: vi.fn(),
   mountActivity: vi.fn(),
+  mountProjects: vi.fn(),
+  isPopover: false,
+  close: vi.fn(),
 }));
 
 vi.mock('@service-storage/websocket', () => ({
@@ -23,18 +27,31 @@ vi.mock('@service-connection/websocket', () => ({
   createConnectionBlockWebsocketEffect: vi.fn(),
   createConnectionWebsocketEffect: vi.fn(),
 }));
+vi.mock('@app/lib/split-router', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@app/lib/split-router')>()),
+  useSplitRouter: () => ({ location: () => undefined }),
+}));
 vi.mock('@core/auth', () => ({
   useIsAuthenticated: () => () => state.authenticated(),
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
   usePosthog: () => ({ flagsLoaded: () => state.flagsLoaded() }),
-  useFeatureFlag: () => () => ({ enabled: state.enabled() }),
+  useFeatureFlag: () => () => ({
+    enabled: state.enabled(),
+    loading: !state.flagsLoaded(),
+  }),
 }));
 vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => ({ pageView: state.pageView, track: state.track }),
 }));
 vi.mock('../layoutUtils', () => ({
-  useSplitPanelOrThrow: () => ({ handle: { replace: state.replace } }),
+  useSplitPanelOrThrow: () => ({
+    handle: {
+      replace: state.replace,
+      isPopover: () => state.isPopover,
+      close: state.close,
+    },
+  }),
 }));
 vi.mock('@core/component/LoadingBlock', () => ({
   LoadingBlock: () => <div>Authenticating</div>,
@@ -53,15 +70,28 @@ vi.mock('@app/features/activity/views/my-activity-view', () => ({
 vi.mock('@app/features/activity/open-entity-in-split', () => ({
   openEntityInSplit: vi.fn(),
 }));
+vi.mock('@app/features/projects/project-view', () => ({
+  ProjectsListView: () => {
+    state.mountProjects();
+    return <div>Project collection</div>;
+  },
+  ProjectView: () => {
+    state.mountProjects();
+    return <div>Project detail</div>;
+  },
+  CreateProjectView: () => {
+    state.mountProjects();
+    return <div>Project composer</div>;
+  },
+}));
 
-vi.mock(
-  '@app/features/inbox-view/components/InboxEntityDetailRouteView',
-  () => ({ InboxEntityDetailRouteView: () => null })
-);
+vi.mock('@app/features/home/components/HomeEntityDetailRouteView', () => ({
+  HomeEntityDetailRouteView: () => null,
+}));
 
 // Quarantine unrelated registered views and their module-load side effects.
 // Route/preview codecs otherwise pull the full block-definition graph into this test.
-vi.mock('@app/features/inbox-view/inbox-route', () => ({}));
+vi.mock('@app/features/home/home-route', () => ({}));
 vi.mock('@app/features/agents-view/views/AgentsView', () => ({}));
 vi.mock('@app/features/channels-view/channels-view', () => ({
   ChannelDetailRouteView: () => null,
@@ -76,10 +106,9 @@ vi.mock('@app/features/email-view/components/EmailDetailView', () => ({
   EmailDetailRouteView: () => null,
 }));
 vi.mock('@app/features/getting-started', () => ({}));
-vi.mock('@app/features/home', () => ({}));
-vi.mock('@app/features/inbox-view/inbox-view', () => ({
-  InboxDetailRouteView: () => null,
-  InboxCalendarRouteView: () => null,
+vi.mock('@app/features/home/home-view', () => ({
+  HomeDetailRouteView: () => null,
+  HomeCalendarRouteView: () => null,
 }));
 vi.mock('@app/features/next-soup/filters/filter-store', () => ({}));
 vi.mock('@app/features/next-soup/filters/filter-store/query-store', () => ({}));
@@ -103,7 +132,7 @@ vi.mock('@block-md/component/ComposeTask', () => ({}));
 vi.mock('@companies/crm/saved-views', () => ({}));
 vi.mock('@core/context/user', () => ({}));
 vi.mock('@core/mobile/isTouchDevice', () => ({
-  isTouchDevice: () => false,
+  isTouchDevice: () => state.touch(),
 }));
 vi.mock('@queries/agent-schedule/entities', () => ({}));
 vi.mock('@ui', () => ({
@@ -112,9 +141,11 @@ vi.mock('@ui', () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  state.isPopover = false;
   state.authenticated = () => true;
   state.enabled = () => false;
   state.flagsLoaded = () => true;
+  state.touch = () => false;
 });
 afterEach(cleanup);
 
@@ -122,13 +153,22 @@ function renderActivity() {
   const activity = resolveComponent('activity');
   return render(() => <Suspense>{activity.element()}</Suspense>);
 }
+describe('calendar layout registration', () => {
+  it('owns desktop chrome but keeps the floating split header on touch', () => {
+    expect(resolveComponent('calendar').initialMeta).toMatchObject({
+      splitPanelLayout: 'composable',
+    });
+    state.touch = () => true;
+    expect(resolveComponent('calendar').initialMeta).toBeUndefined();
+  });
+});
 
 describe('activity registration', () => {
   it('redirects a disabled feed to inbox without mounting or tracking it', () => {
     renderActivity();
 
     expect(state.replace).toHaveBeenCalledExactlyOnceWith({
-      next: { type: 'component', id: 'inbox' },
+      next: { type: 'component', id: 'home', entryMetadata: { search: {} } },
     });
     expect(state.mountActivity).not.toHaveBeenCalled();
     expect(state.pageView).not.toHaveBeenCalled();
@@ -156,7 +196,11 @@ describe('activity registration', () => {
         expect(state.pageView).toHaveBeenCalledExactlyOnceWith('activity');
       } else {
         expect(state.replace).toHaveBeenCalledExactlyOnceWith({
-          next: { type: 'component', id: 'inbox' },
+          next: {
+            type: 'component',
+            id: 'home',
+            entryMetadata: { search: {} },
+          },
         });
         expect(state.mountActivity).not.toHaveBeenCalled();
         expect(state.pageView).not.toHaveBeenCalled();
@@ -181,5 +225,63 @@ describe('activity registration', () => {
     expect(state.mountActivity).toHaveBeenCalledOnce();
     expect(state.pageView).toHaveBeenCalledExactlyOnceWith('activity');
     expect(state.replace).not.toHaveBeenCalled();
+  });
+});
+
+describe('project registration', () => {
+  const routes = [
+    ['tasks-projects', 'Project collection'],
+    ['new-project', 'Project composer'],
+    ['project-compose', 'Project composer'],
+    [
+      'initiative-view~01a0cf92-3101-7e21-9a20-6e21058d20e0~overview',
+      'Project detail',
+    ],
+  ] as const;
+
+  it.each(routes)(
+    'gates a restored %s route until PostHog enables Projects',
+    async (route, title) => {
+      const [enabled, setEnabled] = createSignal(false);
+      const [loaded, setLoaded] = createSignal(false);
+      state.enabled = enabled;
+      state.flagsLoaded = loaded;
+      const component = resolveComponent(route);
+      render(() => <Suspense>{component.element()}</Suspense>);
+      expect(state.mountProjects).not.toHaveBeenCalled();
+      expect(state.replace).not.toHaveBeenCalled();
+
+      setEnabled(true);
+      setLoaded(true);
+      expect(await screen.findByText(title)).toBeTruthy();
+      expect(state.replace).not.toHaveBeenCalled();
+
+      setEnabled(false);
+      expect(screen.queryByText(title)).toBeNull();
+      expect(state.replace).toHaveBeenCalledExactlyOnceWith({
+        next: { type: 'component', id: 'tasks' },
+      });
+    }
+  );
+
+  it.each(routes)(
+    'redirects disabled %s without mounting project data',
+    (route) => {
+      const component = resolveComponent(route);
+      render(() => <Suspense>{component.element()}</Suspense>);
+      expect(state.mountProjects).not.toHaveBeenCalled();
+      expect(state.replace).toHaveBeenCalledExactlyOnceWith({
+        next: { type: 'component', id: 'tasks' },
+      });
+    }
+  );
+
+  it('closes a disabled composer popover instead of replacing its background split', () => {
+    state.isPopover = true;
+    const component = resolveComponent('project-compose');
+    render(() => <Suspense>{component.element()}</Suspense>);
+    expect(state.mountProjects).not.toHaveBeenCalled();
+    expect(state.replace).not.toHaveBeenCalled();
+    expect(state.close).toHaveBeenCalledOnce();
   });
 });

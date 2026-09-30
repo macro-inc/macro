@@ -23,6 +23,7 @@ use models_soup::{
         SoupLabelType, SoupMessageListVisibility,
     },
     foreign_entity::SoupForeignEntity,
+    initiative::SoupInitiative,
     item::SoupItem,
     project::SoupProject,
     reminder::{SoupReminder, SoupReminderSchedule},
@@ -99,6 +100,12 @@ pub trait SoupEntityEdges: ObjectType + Clone + Send + Sync + 'static {
         ctx: &Context<'_>,
         email_thread_id: Uuid,
     ) -> impl Future<Output = async_graphql::Result<Option<String>>> + Send;
+
+    /// Additional fields attached only to initiative entities.
+    type InitiativeEdges: ObjectType + Clone + Send + Sync + 'static;
+
+    /// Construct initiative-specific detail fields without loading them.
+    fn initiative_edges(initiative_id: Uuid) -> Self::InitiativeEdges;
 
     /// Additional fields attached only to agent-session entities.
     type AgentSessionEdges: ObjectType + Clone + Send + Sync + 'static;
@@ -269,6 +276,7 @@ impl<E: SoupEntityEdges> GraphqlSoupEntity<E> {
             Self::Document(entity) => entity.2 = score,
             Self::Chat(entity) => entity.2 = score,
             Self::Project(entity) => entity.2 = score,
+            Self::Initiative(entity) => entity.2 = score,
             Self::EmailThread(entity) => entity.2 = score,
             Self::Channel(entity) => entity.2 = score,
             Self::ChannelMessage(entity) => entity.2 = score,
@@ -289,6 +297,7 @@ impl<E: SoupEntityEdges> GraphqlSoupEntity<E> {
             Self::Document(entity) => entity.3 = supplement,
             Self::Chat(_)
             | Self::Project(_)
+            | Self::Initiative(_)
             | Self::EmailThread(_)
             | Self::Channel(_)
             | Self::ChannelMessage(_)
@@ -407,6 +416,8 @@ pub enum GraphqlSoupEntity<E: SoupEntityEdges> {
     Chat(GraphqlSoupChat<E>),
     /// Project entity.
     Project(GraphqlSoupProject<E>),
+    /// Initiative entity, presented as a project in the frontend.
+    Initiative(GraphqlSoupInitiative<E>),
     /// Email thread entity.
     EmailThread(GraphqlSoupEmailThread<E>),
     /// Channel entity.
@@ -439,6 +450,7 @@ where
                 GraphqlSoupEntityType::Document => GraphqlSoupDocument::<E>::type_name(),
                 GraphqlSoupEntityType::Chat => GraphqlSoupChat::<E>::type_name(),
                 GraphqlSoupEntityType::Project => GraphqlSoupProject::<E>::type_name(),
+                GraphqlSoupEntityType::Initiative => GraphqlSoupInitiative::<E>::type_name(),
                 GraphqlSoupEntityType::EmailThread => GraphqlSoupEmailThread::<E>::type_name(),
                 GraphqlSoupEntityType::Channel => GraphqlSoupChannel::<E>::type_name(),
                 GraphqlSoupEntityType::ChannelMessage => {
@@ -494,6 +506,12 @@ where
                     model_entity::EntityType::Document.with_entity_string(item.id.to_string()),
                 );
                 Self::Document(GraphqlSoupDocument(item, edges, None, None))
+            }
+            SoupItem::Initiative(item) => {
+                let edges = E::from_entity(
+                    model_entity::EntityType::Initiative.with_entity_string(item.id.to_string()),
+                );
+                Self::Initiative(GraphqlSoupInitiative(item, edges, None))
             }
             SoupItem::Chat(item) => {
                 let edges = E::from_entity(
@@ -955,6 +973,68 @@ where
     }
 }
 
+/// GraphQL initiative entity, presented as a project in the frontend.
+pub struct GraphqlSoupInitiative<E: SoupEntityEdges>(SoupInitiative<()>, E, Option<f64>);
+
+/// GraphQL representation of a Soup initiative.
+#[Object(name = "GraphqlSoupInitiative")]
+impl<E: SoupEntityEdges> GraphqlSoupInitiative<E> {
+    /// The canonical initiative identifier.
+    async fn id(&self) -> ID {
+        ID(self.0.id.to_string())
+    }
+
+    /// Canonical entity kind.
+    async fn entity_type(&self) -> GraphqlSoupEntityType {
+        GraphqlSoupEntityType::Initiative
+    }
+
+    /// Opaque cache projection metadata, unavailable for this entity variant.
+    async fn cache_projection(&self) -> Option<SoupCacheProjection> {
+        None
+    }
+
+    /// User-visible project name.
+    async fn display_name(&self) -> Option<String> {
+        Some(self.0.name.clone())
+    }
+
+    /// Common initiative metadata.
+    async fn metadata(&self) -> GraphqlEntityMetadata {
+        GraphqlEntityMetadata {
+            owner_id: Some(self.0.owner_id.principal_id()),
+            owner_type: Some(self.0.owner_id.owner_type().into()),
+            parent: None,
+            created_at: Some(self.0.created_at.to_rfc3339()),
+            updated_at: Some(self.0.updated_at.to_rfc3339()),
+            viewed_at: self.0.viewed_at.map(|ts| ts.to_rfc3339()),
+            deleted_at: None,
+        }
+    }
+
+    /// Document backing the project's description, when one exists.
+    async fn description_document_id(&self) -> Option<ID> {
+        self.0.description_document_id.map(|id| ID(id.to_string()))
+    }
+
+    /// Common entity edges, including properties and viewer permissions.
+    #[graphql(flatten)]
+    async fn edges(&self) -> E {
+        self.1.clone()
+    }
+
+    /// Initiative-specific details supplied by the composition crate.
+    #[graphql(flatten)]
+    async fn initiative_edges(&self) -> E::InitiativeEdges {
+        E::initiative_edges(self.0.id)
+    }
+
+    /// The viewer's frecency score for this entity, when loaded.
+    async fn frecency_score(&self) -> Option<f64> {
+        self.2
+    }
+}
+
 /// GraphQL agent session entity.
 pub struct GraphqlSoupAgentSession<E: SoupEntityEdges>(SoupAgentSession<()>, E, Option<f64>);
 
@@ -1028,6 +1108,11 @@ where
     /// The name.
     async fn name(&self) -> &str {
         &self.0.name
+    }
+
+    /// Whether the session is archived and read-only.
+    async fn is_archived(&self) -> bool {
+        self.0.is_archived
     }
 
     /// The principal identifier of the owner.
@@ -2515,6 +2600,7 @@ impl_common_interface_edges!(
     GraphqlSoupDocument,
     GraphqlSoupChat,
     GraphqlSoupProject,
+    GraphqlSoupInitiative,
     GraphqlSoupEmailThread,
     GraphqlSoupChannel,
     GraphqlSoupChannelMessage,

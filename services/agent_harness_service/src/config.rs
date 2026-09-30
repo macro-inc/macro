@@ -7,12 +7,17 @@
 
 use anyhow::Context;
 use database_env_vars::{DatabaseUrl, RedisUri};
+use entity_registry::NonUserOwners;
 pub use macro_env::Environment;
 use macro_uuid::Uuid;
 
 use secretsmanager_client::LocalOrRemoteSecret;
 
 macro_env_var::env_vars!(
+    /// Browser-facing static file base, read only when using local AWS.
+    pub struct StaticFileServiceUrl;
+    /// Local static file bucket, read only when using local AWS.
+    pub struct StaticStorageBucket;
     /// Comma-separated Kafka bootstrap servers.
     #[derive(Clone)]
     pub struct KafkaBrokers;
@@ -40,6 +45,8 @@ macro_env_var::maybe_env_vars!(
     pub struct ClaudeOauthKmsKeyId;
     /// Dedicated KMS key for encrypted per-owner Codex OAuth state.
     pub struct CodexOauthKmsKeyId;
+    /// Rollout gate for sessions owned by a bot.
+    pub struct EnableNonUserOwners;
 );
 
 /// The Pipedream project environment matching this deployment: production in
@@ -156,6 +163,8 @@ pub struct Config {
     /// The egress router reads sandbox session tokens from `Authorization`.
     #[macro_config_default(8102)]
     pub egress_port: u16,
+    /// Optional host-reachable egress origin for external runtimes in local stacks.
+    pub external_egress_base_url: Option<String>,
     /// OAuth client ID for the Pipedream API.
     pub pipedream_client_id: PipedreamClientId,
     /// OAuth client secret for the Pipedream API.
@@ -184,6 +193,8 @@ pub struct Config {
     pub github_sync_app_client_id: String,
     /// PEM private key of that App.
     pub github_sync_app_pem_secret_key: LocalOrRemoteSecret<GithubSyncAppPemSecretKey>,
+    /// Lets a team-scoped bot with no acting user own the sessions it creates.
+    pub enable_non_user_owners: EnableNonUserOwners,
 }
 
 impl Config {
@@ -216,6 +227,12 @@ impl Config {
                 CodexOauthKmsKeyId::new().and_then(|value| value.value().map(str::to_owned))
             })
             .filter(|value| !value.trim().is_empty())
+    }
+
+    /// The parsed `ENABLE_NON_USER_OWNERS` gate. Missing is disabled.
+    pub fn non_user_owners(&self) -> anyhow::Result<NonUserOwners> {
+        NonUserOwners::from_config_value(self.enable_non_user_owners.value())
+            .context("ENABLE_NON_USER_OWNERS must be `true` or `false`")
     }
 
     /// Load the configuration from the environment.

@@ -10,13 +10,11 @@ import type {
   GroupHeaderProps,
   SoupRow,
 } from '@app/features/next-soup/create-soup-state';
-import { buildDocumentTypeQuery } from '@app/features/next-soup/filters/configs/document-type-query';
 import type { Query } from '@app/features/next-soup/filters/filter-store';
 import type { SetPredicatesInput } from '@app/features/next-soup/filters/filter-store/predicates-store';
 import { VIEW_TAB_PRESETS } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import { useSoup } from '@app/features/next-soup/soup-context';
 import { DateGroupHeader } from '@app/features/next-soup/soup-view/date-group-header';
-import { registerDocumentsFilterSplit } from '@app/features/next-soup/soup-view/documents-filter-controllers';
 import {
   EmptyState,
   shouldShowLoadError,
@@ -40,7 +38,7 @@ import {
   SoupViewTabs,
   useApplyPreset,
 } from '@app/features/next-soup/soup-view/soup-view-tabs';
-import { useIsInboxView } from '@app/features/next-soup/soup-view/use-is-inbox-view';
+import { useIsHomeView } from '@app/features/next-soup/soup-view/use-is-home-view';
 import { CompanyKanban } from '@app/features/next-soup/soup-view/views/companies/CompanyKanban';
 import { CompanyListEntity } from '@app/features/next-soup/soup-view/views/companies/CompanyListEntity';
 import { ResponsiveCompanyListHeader } from '@app/features/next-soup/soup-view/views/companies/CompanyListHeader';
@@ -111,6 +109,7 @@ import Spinner from '@phosphor/spinner.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { debounce } from '@solid-primitives/scheduled';
 import { Button, cn, Layer, Tooltip } from '@ui';
+import { tourTarget } from '@ui/components/Tour';
 import {
   type Accessor,
   batch,
@@ -122,7 +121,6 @@ import {
   Match,
   on,
   onCleanup,
-  onMount,
   Show,
   Suspense,
   Switch,
@@ -130,6 +128,7 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import type { CacheSnapshot } from 'virtua/unstable_core';
+import { SOUP_TOUR } from '../tour';
 import { SearchAskAiButton } from './search-ask-ai-button';
 import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
 import { useSoupNavigationHotkeys } from './use-soup-navigation-hotkeys';
@@ -278,13 +277,15 @@ interface SoupViewProps {
    * When set, its pieces win over persisted/preset state during init.
    */
   initialCrmView?: CrmViewConfig;
+  /** The view's tour, e.g. `<ViewTour tour={callsTour} />`. */
+  tour?: JSX.Element;
 }
 
 export const SoupView = (props: SoupViewProps) => {
   const soup = useSoup();
   const panel = useSplitPanelOrThrow();
   const soupView = useSoupView();
-  const isInboxView = useIsInboxView();
+  const isHomeView = useIsHomeView();
   const entryState = panel.handle.currentEntryState();
   const contentId = panel.handle.content().id;
 
@@ -367,7 +368,7 @@ export const SoupView = (props: SoupViewProps) => {
       // persisted back when the control was reachable: honoring it would pin
       // the list to an order the user can no longer change.
       let initialSortIds =
-        contentId === 'inbox'
+        contentId === 'home'
           ? ['updated_at']
           : (initialCrmView?.sort ?? sortPref());
       if (initialSortIds.length === 0) {
@@ -415,34 +416,6 @@ export const SoupView = (props: SoupViewProps) => {
         );
       }
     });
-  });
-
-  onMount(() => {
-    if (contentId !== 'documents') return;
-
-    const markdownQuery = buildDocumentTypeQuery(['doc-markdown']);
-    if (!markdownQuery) return;
-
-    const dispose = registerDocumentsFilterSplit(panel.handle.id, {
-      toggleMarkdownFilter: () => {
-        if (soup.predicates.isActive('doc-markdown')) {
-          soupView.queryFilters.remove(markdownQuery);
-          soup.predicates.set(({ andIds, orIds }) => ({
-            and: andIds,
-            or: orIds.filter((id) => id !== 'doc-markdown'),
-          }));
-          return;
-        }
-
-        soupView.queryFilters.add(markdownQuery);
-        soup.predicates.set(({ andIds, orIds }) => ({
-          and: andIds,
-          or: [...new Set([...orIds, 'doc-markdown'])],
-        }));
-      },
-    });
-
-    onCleanup(dispose);
   });
 
   createEffect(() => {
@@ -542,7 +515,7 @@ export const SoupView = (props: SoupViewProps) => {
                       <Button
                         size="icon-md"
                         variant="ghost"
-                        class="p-0.5 rounded-sm text-ink-extra-muted hover:text-ink-muted @max-[380px]/split-header:hidden"
+                        class="p-0.5 text-ink-extra-muted hover:text-ink-muted @max-[380px]/split-header:hidden"
                         label="View documentation"
                         onClick={() => openExternalUrl(url())}
                       >
@@ -643,7 +616,7 @@ export const SoupView = (props: SoupViewProps) => {
                             <Button
                               size="icon-md"
                               variant="outline"
-                              class="p-1 size-7 rounded-lg ml-2"
+                              class="p-1 size-7 ml-2"
                               onClick={() => setNarrowSearchExpanded(true)}
                               depth={2}
                             >
@@ -670,6 +643,7 @@ export const SoupView = (props: SoupViewProps) => {
         </div>
         <SoupFiltersBar variant={props.filterBarVariant} />
       </Show>
+      {props.tour}
       <Show when={soupView.source.cachedMail?.()}>
         <p role="status" class="px-4 py-1 text-xs text-ink-muted">
           Showing cached mail. Only synchronized messages are available.
@@ -696,7 +670,7 @@ export const SoupView = (props: SoupViewProps) => {
           when={
             !isTouchDevice() &&
             ENABLE_UNIFIED_LIST_AI_INPUT &&
-            !isInboxView() &&
+            !isHomeView() &&
             !isBoardRendered() &&
             !isComponentListView('search')
           }
@@ -922,7 +896,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
   // legacy block registry can import Soup while the entity barrel is loading.
   // Keeping component and geometry together prevents mismatched row layouts.
   const rowsByView: Partial<Record<ListView, SoupRowEntry>> = {
-    inbox: { component: InboxListEntity, family: 'card' },
+    home: { component: InboxListEntity, family: 'card' },
     tasks: { component: TaskListEntity, family: 'row' },
     companies: { component: CompanyListEntity, family: 'row' },
   };
@@ -1256,6 +1230,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
   };
 
   const featuredCount = createMemo(() => featuredIds().length);
+  const listTarget = tourTarget(SOUP_TOUR.list);
 
   return (
     <MaybeSoupEntityActionDrawerManager>
@@ -1263,6 +1238,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
         class="size-full"
         ref={(el) => {
           setSoupViewRef(el);
+          listTarget(el);
           attachHotkeys(el);
         }}
         tabIndex={-1}

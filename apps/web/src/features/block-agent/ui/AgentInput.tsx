@@ -19,6 +19,7 @@ import { createComposerDictation } from '@app/features/dictation/composer-dictat
 import { InputProvider } from '@channel/Input/context';
 import { Input } from '@channel/Input/Input';
 import type { InputAttachmentData, InputCommands } from '@channel/Input/types';
+import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { ComposerEditor } from '@core/component/LexicalMarkdown/component/ComposerEditor';
 import type { AgentCommandItem } from '@core/component/LexicalMarkdown/plugins';
@@ -71,7 +72,7 @@ export interface AgentInputProps {
   autofocus?: boolean;
   /**
    * Slash commands the harness advertises (ACP `available_commands_update`);
-   * typing `/` opens a typeahead over them. `/` stays plain text while empty.
+   * shown alongside skills and pull requests in the `/` menu.
    */
   commands?: () => AgentCommandItem[];
   /**
@@ -195,6 +196,7 @@ export function AgentInput(props: AgentInputProps) {
   };
 
   const editor = buildConfig('chat')
+    .withAppLinkResolver(useMacroMentionLinkResolver())
     .namespace('agent-input')
     .withMentions({
       showOpenTabs: true,
@@ -216,6 +218,9 @@ export function AgentInput(props: AgentInputProps) {
       },
     })
     .onEnter(() => {
+      // On a virtual keyboard Enter is a newline, as in channels; the send
+      // button is the only way to submit.
+      if (isTouchDevice()) return false;
       if (canSend()) send();
       else sendNext();
       return true;
@@ -407,7 +412,7 @@ export function AgentInput(props: AgentInputProps) {
                             onClick={() => props.onStop?.()}
                             class={
                               isTouchDevice()
-                                ? 'rounded-full size-7.5 text-ink-extra-muted not-disabled:bg-ink/5 not-disabled:hover:bg-ink/10'
+                                ? 'size-7.5 text-ink-extra-muted not-disabled:bg-ink/5 not-disabled:hover:bg-ink/10'
                                 : undefined
                             }
                           >

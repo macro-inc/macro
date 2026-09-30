@@ -51,6 +51,32 @@ describe('createTauriCacheHost', () => {
     });
   });
 
+  it('reads the database generation after native initialization', async () => {
+    const generation = '00000000-0000-4000-8000-000000000001';
+    invokeMock.mockImplementation(async (command: string) =>
+      command === 'graphql_cache_current_storage_generation' ? generation : null
+    );
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+    await expect(host.currentStorageGeneration()).resolves.toBe(generation);
+    expect(invokeMock.mock.calls.map(([command]) => command)).toEqual([
+      'graphql_cache_init',
+      'graphql_cache_current_storage_generation',
+    ]);
+    host.dispose();
+  });
+
+  it('reports logical storage resets to generation subscribers', () => {
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+    const changed = vi.fn();
+    host.onCacheGenerationChanged(changed);
+    const notify = eventCallbacks.get('graphql-cache://cache-changed')!;
+    notify({ payload: { revision: INITIAL_CACHE_REVISION } });
+    expect(changed).not.toHaveBeenCalled();
+    notify({ payload: { revision: INITIAL_CACHE_REVISION, reset: true } });
+    expect(changed).toHaveBeenCalledExactlyOnceWith({ storage: 'reset' });
+    host.dispose();
+  });
+
   it('initializes the native cache once and prefixes op ids', async () => {
     invokeMock.mockImplementation((command: string) =>
       Promise.resolve(
@@ -505,6 +531,54 @@ describe('createTauriCacheHost', () => {
       );
       await host.hydrateQuery({ query: '{ x }', data: { x: 1 } });
       expect(emitMock).not.toHaveBeenCalled();
+      host.dispose();
+    }
+  );
+
+  it.each(
+    [[], ['note']].map((searchChangedBuckets) => ({ searchChangedBuckets }))
+  )(
+    'forwards native bucket metadata $searchChangedBuckets across windows',
+    async ({ searchChangedBuckets }) => {
+      const host = createTauriCacheHost({ scope: 'scope-1' });
+      const listener = vi.fn();
+      host.onCacheChanged(listener, { includeHydration: true });
+      invokeMock.mockImplementation(async (command: string) =>
+        command === 'graphql_cache_hydrate'
+          ? {
+              kind: 'void',
+              revision: '7',
+              revisionAdvanced: true,
+              searchChangedBuckets,
+            }
+          : null
+      );
+      await host.hydrateQuery({ query: '{ x }', data: { x: 1 } });
+      expect(emitMock).toHaveBeenCalledWith('graphql-cache://cache-hydrated', {
+        revision: '7',
+        searchChangedBuckets,
+      });
+      eventCallbacks.get('graphql-cache://cache-hydrated')?.({
+        payload: { revision: '7', searchChangedBuckets },
+      });
+      expect(listener).toHaveBeenCalledWith('7', { searchChangedBuckets });
+      host.dispose();
+    }
+  );
+
+  it.each(
+    [[], ['note']].map((searchChangedBuckets) => ({ searchChangedBuckets }))
+  )(
+    'forwards ordinary native writes and keeps resets conservative: $searchChangedBuckets',
+    ({ searchChangedBuckets }) => {
+      const host = createTauriCacheHost({ scope: 'scope-1' });
+      const listener = vi.fn();
+      host.onCacheChanged(listener);
+      const notify = eventCallbacks.get('graphql-cache://cache-changed')!;
+      notify({ payload: { revision: '7', searchChangedBuckets } });
+      expect(listener).toHaveBeenLastCalledWith('7', { searchChangedBuckets });
+      notify({ payload: { revision: '8', searchChangedBuckets, reset: true } });
+      expect(listener).toHaveBeenLastCalledWith('8');
       host.dispose();
     }
   );

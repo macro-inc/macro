@@ -1,9 +1,9 @@
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import { Button, type ButtonProps, cn } from '@ui';
+import { CollapseTransition } from '@ui/components/CollapseTransition';
 import type { JSX } from 'solid-js';
 import { Show, splitProps } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { CollapseTransition } from './CollapseTransition';
 import { ViewSidebarCloseButton, ViewSidebarToggle } from './ViewShell';
 
 function Root(props: JSX.HTMLAttributes<HTMLElement>) {
@@ -93,10 +93,7 @@ function Control(props: ButtonProps) {
       variant="ghost"
       size="icon-sm"
       {...rest}
-      class={cn(
-        'size-(--sidebar-control-size) shrink-0 rounded-lg',
-        local.class
-      )}
+      class={cn('size-(--sidebar-control-size) shrink-0', local.class)}
       data-view-sidebar-control=""
     />
   );
@@ -226,6 +223,7 @@ function TreeItem(props: {
       <Show when={props.expanded !== undefined}>
         <span class="absolute right-(--sidebar-action-inset) top-1/2 flex -translate-y-1/2">
           <Control
+            class="rounded-md"
             label={`${props.expanded ? 'Collapse' : 'Expand'} ${props.label}`}
             aria-expanded={props.expanded}
             onClick={props.onToggle}

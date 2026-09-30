@@ -13,20 +13,19 @@ import {
 import { StaticSplitLabel } from '@components/app/split-layout/components/SplitLabel';
 import { ProviderIcon } from '@core/component/AI/component/ProviderIcon';
 import { Permissions } from '@core/component/SharePermissions';
-import {
-  ShareDialogContext,
-  ShareModal,
-  ShareTrigger,
-} from '@core/component/TopBar/ShareButton';
+import { ShareTrigger } from '@core/component/TopBar/ShareButton';
+import { useShareModal } from '@core/component/TopBar/shareModal';
 import { isMobile } from '@core/mobile/isMobile';
 import { openExternalUrl } from '@core/util/url';
 import type { AgentSessionEntity } from '@entity';
 import ShareIcon from '@icon/share.svg';
 import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
 import GitBranch from '@phosphor/git-branch.svg';
+import TrayIcon from '@phosphor/tray.svg';
 import type { AgentSessionResponse } from '@service-agent-harness/generated/schemas';
-import { createSignal, For, Show, Suspense } from 'solid-js';
+import { For, Show } from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';
+import { changeSessionArchiveState } from '../queries/change-session-archive-state';
 import { AgentPullRequestChip } from './AgentPullRequestChip';
 import {
   harnessTitle,
@@ -35,6 +34,36 @@ import {
 } from './compose-agent-session-options';
 
 export { harnessTitle, sessionRepositoryUrl };
+
+export function agentSessionFileOperations(
+  session: AgentSessionResponse | undefined,
+  permissions: Permissions,
+  setArchived: () => void
+): FileOperation[] {
+  const repositoryUrl = sessionRepositoryUrl(session);
+  return [
+    ...(!session?.isArchived ? [{ op: 'rename' } as const] : []),
+    ...(permissions === Permissions.OWNER
+      ? [
+          {
+            label: session?.isArchived ? 'Unarchive' : 'Archive',
+            icon: TrayIcon,
+            action: setArchived,
+          },
+        ]
+      : []),
+    { op: 'delete' },
+    ...(repositoryUrl
+      ? [
+          {
+            label: 'Open repository',
+            icon: GitBranch,
+            action: () => openExternalUrl(repositoryUrl),
+          },
+        ]
+      : []),
+  ];
+}
 
 /** Shared title precedence for standalone and workspace agent sessions. */
 export function agentSessionTitle(
@@ -80,6 +109,7 @@ export function AgentSplitHeader(props: {
       type: 'agent_session',
       id,
       name: title(),
+      isArchived: session.isArchived,
       ownerId: session.ownerId,
       botId: session.botId,
       status:
@@ -89,20 +119,28 @@ export function AgentSplitHeader(props: {
     };
   };
   useBlockEntityCommands({ resolveEntity: entity });
-  const [shareOpen, setShareOpen] = createSignal(false);
-  const shareContext = {
-    isOpen: shareOpen,
-    open: () => setShareOpen(true),
-    close: () => setShareOpen(false),
-  };
+  const openShare = useShareModal(() => {
+    const session = entity();
+    if (!session) return;
+    return {
+      id: session.id,
+      name: title(),
+      owner: session.ownerId,
+      itemType: 'agent_session',
+      blockAlias: 'agent',
+      userPermissions: permissions(),
+    };
+  });
 
   const shareTools: BlockTool[] = [
     {
       label: 'Share',
       icon: ShareIcon,
-      action: () => setShareOpen(true),
+      action: openShare,
       condition: () => Boolean(entity()),
-      buttonComponent: () => <ShareTrigger id={sessionId()} />,
+      buttonComponent: () => (
+        <ShareTrigger onClick={openShare} id={sessionId()} />
+      ),
     },
   ];
 
@@ -123,22 +161,16 @@ export function AgentSplitHeader(props: {
     },
   ];
 
-  const openRepository: FileOperation = {
-    label: 'Open repository',
-    icon: GitBranch,
-    action: () => {
-      const url = sessionRepositoryUrl(props.session);
-      if (url) openExternalUrl(url);
-    },
+  const setArchived = async () => {
+    const id = sessionId();
+    if (!id || !props.session) return;
+    await changeSessionArchiveState(id, !props.session.isArchived);
   };
-  const ops = (): FileOperation[] => [
-    { op: 'rename' },
-    { op: 'delete' },
-    ...(sessionRepositoryUrl(props.session) ? [openRepository] : []),
-  ];
+  const ops = () =>
+    agentSessionFileOperations(props.session, permissions(), setArchived);
 
   return (
-    <ShareDialogContext.Provider value={shareContext}>
+    <>
       <SplitHeaderLeft>
         <StaticSplitLabel
           icon={
@@ -173,23 +205,6 @@ export function AgentSplitHeader(props: {
         </div>
       </SplitHeaderRight>
 
-      <Show when={entity()}>
-        {(session) => (
-          <Suspense>
-            <ShareModal
-              id={session().id}
-              name={title()}
-              owner={session().ownerId}
-              itemType="agent_session"
-              blockAlias="agent"
-              userPermissions={permissions()}
-              isSharePermOpen={shareOpen()}
-              setIsSharePermOpen={setShareOpen}
-            />
-          </Suspense>
-        )}
-      </Show>
-
       <ResponsiveBlockToolbar
         tools={shareTools}
         menuTools={tools}
@@ -200,6 +215,6 @@ export function AgentSplitHeader(props: {
         permissions={permissions()}
         name={title()}
       />
-    </ShareDialogContext.Provider>
+    </>
   );
 }

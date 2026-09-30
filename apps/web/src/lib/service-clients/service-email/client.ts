@@ -45,6 +45,7 @@ import type {
   UpsertScheduledResponse,
 } from './generated/schemas';
 import type { EmptyResponse } from './generated/schemas/emptyResponse';
+import type { InvitationResolution } from './generated/schemas/invitationResolution';
 
 const emailHost: string = SERVER_HOSTS['email-service'];
 const calendarHost: string = SERVER_HOSTS['calendar-service'];
@@ -138,6 +139,11 @@ export const SIGNATURE_IMAGES_UNRESOLVED_CODE =
   'SIGNATURE_IMAGES_UNRESOLVED' as const;
 
 export const emailClient = {
+  async getCalendarInvitations(threadId: string) {
+    return emailFetch<Record<string, InvitationResolution>>(
+      `/email/threads/${threadId}/calendar-invitations`
+    );
+  },
   async init(args?: { linkId?: string; forceShare?: boolean }) {
     const params = new URLSearchParams();
     if (args?.linkId) params.set('link_id', args.linkId);

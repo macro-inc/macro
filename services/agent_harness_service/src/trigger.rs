@@ -8,17 +8,19 @@ use agent_trigger::domain::sources::{
 };
 use agent_trigger::outbound::{
     BotRepoAgentLookup, ChannelRepoTypeLookup, FastModelTriggerJudge,
-    LexicalExplicitReplyExtractor, MessageThreadHistory,
+    LexicalExplicitReplyExtractor, MessageThreadHistory, VisionImageCaptioner,
 };
 use bots::outbound::pg_bots_repo::PgBotsRepo;
 use channels::outbound::pg_channels_repo::PgChannelsRepo;
+use entity_registry::OwnerGrantPolicy;
+use entity_registry_db_utils::OwnedEntityRegistrar;
 use kafka_util::{GroupName, KafkaEventConsumer, consumer_span, record_span_error};
 use lexical_client::LexicalClient;
 use macro_event_broker::{
     KafkaConsumerAdapter, KafkaEventPublisher, MacroEventBrokerService, MacroEventCollection,
     MacroEventConsumerService,
 };
-use macro_service_urls::LexicalServiceUrl;
+use macro_service_urls::{LexicalServiceUrl, StaticFileServiceUrl};
 use messages::outbound::pg_message_repo::PgMessageRepository;
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message as _};
@@ -34,7 +36,7 @@ impl GroupName for AgentTriggerConsumerGroup {
 
 /// The concrete trigger service this binary composes.
 type Trigger = AgentTriggerService<
-    PgAgentSessionRepo,
+    PgAgentSessionRepo<PgBotsRepo>,
     BotRepoAgentLookup<PgBotsRepo>,
     BotRepoAgentLookup<PgBotsRepo>,
     BotRepoAgentLookup<PgBotsRepo>,
@@ -91,16 +93,28 @@ async fn run(
     source: TriggerEventSource,
 ) -> anyhow::Result<()> {
     let lexical = LexicalClient::new(internal_api_key, LexicalServiceUrl::new()?.to_string());
+    let recorder = ai_usage::pg_recorder(pool.clone());
+    let images = VisionImageCaptioner::new(
+        static_file::outbound::CdnStaticFileRepo::new(StaticFileServiceUrl::new()?.to_string()),
+        recorder.clone(),
+    );
     let trigger = AgentTriggerService::new(
-        PgAgentSessionRepo::new(pool.clone()),
+        PgAgentSessionRepo::new(
+            pool.clone(),
+            OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(pool.clone()))),
+        ),
         BotRepoAgentLookup::new(PgBotsRepo::new(pool.clone())),
         BotRepoAgentLookup::new(PgBotsRepo::new(pool.clone())),
         BotRepoAgentLookup::new(PgBotsRepo::new(pool.clone())),
         LexicalExplicitReplyExtractor::new(lexical),
-        FastModelTriggerJudge::new(ai_usage::pg_recorder(pool.clone())),
+        FastModelTriggerJudge::new(recorder, images),
         MessageThreadHistory::new(
             std::sync::Arc::new(messages::domain::service::MessageService::new(
-                PgMessageRepository::new(pool.clone()),
+                PgMessageRepository::new(pool.clone())
+                    .with_initiatives(initiative::domain::lookup::InitiativeLookup::new(
+                        initiative::outbound::PgInitiativeRepo::new(pool.clone()),
+                    ))
+                    .with_crm(crm::outbound::lookup::PgCrmParentReader::new(pool.clone())),
                 messages::domain::ports::NoMessageEventPublisher,
             )),
             entity_access::domain::service::EntityAccessServiceImpl::new(

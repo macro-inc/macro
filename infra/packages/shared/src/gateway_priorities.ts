@@ -3,6 +3,7 @@
  * Add a member when a service migrates onto the gateway.
  */
 export enum GatewayService {
+  PREVIEW_GATEWAY = 'PREVIEW_GATEWAY',
   DOCUMENT_STORAGE_SERVICE = 'DOCUMENT_STORAGE_SERVICE',
   UNFURL_SERVICE = 'UNFURL_SERVICE',
   CONVERT_SERVICE = 'CONVERT_SERVICE',
@@ -31,6 +32,7 @@ type GatewayPriorityMap = { [K in GatewayService]: number };
  * Values on this listener must be unique. A missing key is a compile error.
  */
 export const GATEWAY_PRIORITIES: GatewayPriorityMap = {
+  [GatewayService.PREVIEW_GATEWAY]: 150,
   [GatewayService.DOCUMENT_STORAGE_SERVICE]: 10,
   [GatewayService.UNFURL_SERVICE]: 20,
   [GatewayService.NOTIFICATION_SERVICE]: 30,

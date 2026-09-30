@@ -1,10 +1,11 @@
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use macro_uuid::{Uuid, generate_uuid_v7};
 use model_owner::{Owner, OwnerType};
 use serde_json::json;
 
 use super::{
-    ActionConfiguration, ActionKind, CreateScheduledAction, Schedule, ScheduledAction,
+    ActionConfiguration, ActionKind, AgentTask, CreateScheduledAction, MAX_ACTION_TIME,
+    ResolvedTaskTarget, RoutineModelId, Schedule, ScheduledAction, TaskTargetError,
     UpdateScheduledAction,
 };
 use crate::domain::event_runs::ConfigurationRevision;
@@ -20,10 +21,21 @@ fn both_request_representations_normalize_to_the_same_configuration() {
         let create: CreateScheduledAction = serde_json::from_value(input.clone()).unwrap();
         let update: UpdateScheduledAction = serde_json::from_value(input).unwrap();
         let create = serde_json::to_value(ActionConfiguration::from(create)).unwrap();
-        let update = serde_json::to_value(ActionConfiguration::from(update)).unwrap();
+        let update = serde_json::to_value(update.into_configuration(false)).unwrap();
         assert_eq!(create, update);
         assert_eq!(create["trigger"]["type"], "cron");
     }
+}
+
+#[test]
+fn updates_may_omit_activation_but_creates_may_not() {
+    let input = json!({"name":"routine", "kind":"Agent", "task":{},
+        "trigger":{"type":"cron", "schedule":"0 0 9 * * *", "timezone":"UTC"}});
+    for stored in [false, true] {
+        let update: UpdateScheduledAction = serde_json::from_value(input.clone()).unwrap();
+        assert_eq!(update.into_configuration(stored).enabled, stored);
+    }
+    assert!(serde_json::from_value::<CreateScheduledAction>(input).is_err());
 }
 
 #[test]
@@ -33,6 +45,124 @@ fn mixed_representations_are_rejected_even_when_the_values_agree() {
         "trigger":{"type":"cron", "schedule":"0 0 9 * * *", "timezone":"UTC"}});
     assert!(serde_json::from_value::<CreateScheduledAction>(input.clone()).is_err());
     assert!(serde_json::from_value::<UpdateScheduledAction>(input).is_err());
+}
+
+#[test]
+fn legacy_task_round_trips_without_changing_instructions() {
+    let payload = json!({
+        "model": "claude-sonnet-4-5",
+        "prompt": "stored system instructions",
+        "user_prompt": "stored user instructions",
+    });
+    let task: AgentTask = serde_json::from_value(payload.clone()).unwrap();
+    let ResolvedTaskTarget::Model { model } = task.resolve_target().unwrap() else {
+        panic!("expected a model target");
+    };
+    assert_eq!(model.as_str(), "claude-sonnet-4-5");
+    assert_eq!(task.prompt, "stored system instructions");
+    assert_eq!(task.user_prompt, "stored user instructions");
+    assert_eq!(serde_json::to_value(task).unwrap(), payload);
+    assert_eq!(serde_json::to_value(ActionKind::Agent).unwrap(), "Agent");
+}
+
+#[test]
+fn agent_task_resolves_persona_default_or_explicit_model_override() {
+    let bot_id = generate_uuid_v7();
+    for model in [None, Some("runtime-specific/unlisted-model")] {
+        let mut payload = json!({
+            "agent": { "bot_id": bot_id },
+            "prompt": "stored system instructions",
+            "user_prompt": "stored user instructions",
+        });
+        if let Some(model) = model {
+            payload["model"] = json!(model);
+        }
+        let task: AgentTask = serde_json::from_value(payload.clone()).unwrap();
+        let ResolvedTaskTarget::Agent {
+            bot_id: resolved_bot,
+            model: resolved_model,
+        } = task.resolve_target().unwrap()
+        else {
+            panic!("expected an agent target");
+        };
+        assert_eq!(resolved_bot.as_uuid(), bot_id);
+        assert_eq!(resolved_model.map(RoutineModelId::as_str), model);
+        assert_eq!(serde_json::to_value(task).unwrap(), payload);
+    }
+}
+
+#[test]
+fn null_model_uses_agent_default_and_null_agent_uses_model() {
+    let task: AgentTask = serde_json::from_value(json!({
+        "agent": { "bot_id": generate_uuid_v7() }, "model": null,
+        "prompt": "system", "user_prompt": "user",
+    }))
+    .unwrap();
+    assert!(matches!(
+        task.resolve_target().unwrap(),
+        ResolvedTaskTarget::Agent { model: None, .. }
+    ));
+
+    let task: AgentTask = serde_json::from_value(json!({
+        "agent": null, "model": "custom-model",
+        "prompt": "system", "user_prompt": "user",
+    }))
+    .unwrap();
+    assert!(matches!(
+        task.resolve_target().unwrap(),
+        ResolvedTaskTarget::Model { model } if model.as_str() == "custom-model"
+    ));
+}
+
+#[test]
+fn malformed_bot_ids_are_rejected_even_with_a_model() {
+    for agent in [
+        json!({ "bot_id": "not-a-uuid" }),
+        json!({ "bot_id": "" }),
+        json!({ "bot_id": format!("bot|{}", generate_uuid_v7()) }),
+        json!({ "bot_id": null }),
+        json!({}),
+    ] {
+        assert!(
+            serde_json::from_value::<AgentTask>(json!({
+                "agent": agent, "model": "valid-model",
+                "prompt": "system", "user_prompt": "user",
+            }))
+            .is_err()
+        );
+    }
+}
+
+#[test]
+fn supplied_model_must_be_nonblank_for_both_target_forms() {
+    for model in ["", " ", "\t\n", "\u{2003}"] {
+        assert_eq!(
+            RoutineModelId::try_from(model.to_string()),
+            Err(TaskTargetError::BlankModel)
+        );
+        for agent in [json!(null), json!({ "bot_id": generate_uuid_v7() })] {
+            assert!(
+                serde_json::from_value::<AgentTask>(json!({
+                    "agent": agent, "model": model,
+                    "prompt": "system", "user_prompt": "user",
+                }))
+                .is_err()
+            );
+        }
+    }
+    let model = RoutineModelId::try_from(" custom/model ".to_string()).unwrap();
+    assert_eq!(model.as_str(), " custom/model ", "do not rewrite model IDs");
+}
+
+#[test]
+fn missing_target_never_uses_stored_instructions_as_a_model() {
+    for fields in [json!({}), json!({ "agent": null, "model": null })] {
+        let mut payload = fields;
+        payload["prompt"] = json!("claude-sonnet-4-5");
+        payload["user_prompt"] = json!("instructions");
+        let task: AgentTask = serde_json::from_value(payload).unwrap();
+        assert_eq!(task.resolve_target(), Err(TaskTargetError::MissingTarget));
+    }
 }
 
 const DAILY_9AM: &str = "0 0 9 * * *";
@@ -156,4 +286,17 @@ fn event_action_round_trips_without_cron_fields() {
         decoded.configuration_revision,
         ConfigurationRevision::INITIAL
     );
+}
+
+#[test]
+fn claim_expires_at_is_claimed_plus_the_maximum_run_time() {
+    let mut action =
+        action_owned_by(Owner::from_principal_str(USER_PRINCIPAL).expect("user principal"));
+    assert_eq!(action.claim_expires_at(), None);
+
+    let claimed = DateTime::parse_from_rfc3339("2026-01-01T00:00:00Z")
+        .expect("timestamp")
+        .with_timezone(&Utc);
+    action.claimed = Some(claimed);
+    assert_eq!(action.claim_expires_at(), Some(claimed + MAX_ACTION_TIME));
 }

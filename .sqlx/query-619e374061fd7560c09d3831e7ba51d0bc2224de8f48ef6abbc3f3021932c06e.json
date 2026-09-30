@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT publication AS \"publication: Json<RateData>\"\n                   FROM ai_financial_rate\n                   WHERE provider = $1 AND model = $2 AND effective_at <= $3\n                   ORDER BY effective_at DESC LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "publication: Json<RateData>",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "619e374061fd7560c09d3831e7ba51d0bc2224de8f48ef6abbc3f3021932c06e"
+}

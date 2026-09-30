@@ -14,7 +14,12 @@ import { HotkeyTags } from '@core/hotkey/constants';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
-import { type EntityData, isDocumentEntity, isTaskEntity } from '@entity';
+import {
+  type EntityData,
+  isDocumentEntity,
+  isEmailEntity,
+  isTaskEntity,
+} from '@entity';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { Property, PropertyDefinitionDomain } from '@property/types';
 import { createEffect, onCleanup } from 'solid-js';
@@ -129,7 +134,7 @@ export const useBlockEntityCommands = (
   // use-soup-navigation-hotkeys.
   const canUseMarkDoneHotkey = () => {
     const referredFrom = splitPanel?.handle.referredFrom();
-    return referredFrom === 'inbox' || referredFrom === 'mail';
+    return referredFrom === 'home' || referredFrom === 'mail';
   };
 
   // The canvas block binds 'h' to its hand tool in this same scope
@@ -201,6 +206,14 @@ export const useBlockEntityCommands = (
     return true;
   };
 
+  const runDelete = () => {
+    const entity = getEntity();
+    if (!entity) return false;
+    if (!deleteAction.canExecute(entity)) return false;
+    deleteAction.execute([entity]);
+    return true;
+  };
+
   const runMarkDone = () => {
     const entity = getEntity();
     if (!entity) return false;
@@ -257,19 +270,41 @@ export const useBlockEntityCommands = (
       tags: [HotkeyTags.SelectionModification],
     }).withGroup(group);
 
+    // Delete without a keybinding: Backspace belongs to whatever editor the
+    // block hosts, so the command menu is the only way in.
     registerHotkey({
       scopeId,
       description: 'Delete item',
-      keyDownHandler: () => {
-        const entity = getEntity();
-        if (!entity) return false;
-        if (!deleteAction.canExecute(entity)) return false;
-        deleteAction.execute([entity]);
-        return true;
-      },
+      keyDownHandler: runDelete,
       condition: () => {
         const entity = getEntity();
-        return entity !== undefined && deleteAction.canExecute(entity);
+        return (
+          entity !== undefined &&
+          !isEmailEntity(entity) &&
+          deleteAction.canExecute(entity)
+        );
+      },
+      displayPriority: 10,
+      tags: [HotkeyTags.SelectionModification],
+    }).withGroup(group);
+
+    // An open email thread answers to '#' as its list does, so Trash is one
+    // keystroke whether the thread is a row or the thing being read. Unlike
+    // Backspace above, '#' costs an editor nothing: the reply composer is an
+    // editable input, where no hotkey runs.
+    registerHotkey({
+      hotkey: ['shift+3'],
+      hotkeyToken: TOKENS.email.trash,
+      scopeId,
+      description: 'Delete item',
+      keyDownHandler: runDelete,
+      condition: () => {
+        const entity = getEntity();
+        return (
+          entity !== undefined &&
+          isEmailEntity(entity) &&
+          deleteAction.canExecute(entity)
+        );
       },
       displayPriority: 10,
       tags: [HotkeyTags.SelectionModification],
@@ -322,6 +357,24 @@ export const useBlockEntityCommands = (
     }).withGroup(group);
 
     // Mute notifications (command menu only, no keybinding)
+    registerHotkey({
+      scopeId,
+      description: 'Snooze notifications…',
+      keywords: ['pause', 'morning', 'weekend', 'notifications'],
+      keyDownHandler: () => {
+        const entity = getEntity();
+        if (!entity || !muteAction.canExecute(entity)) return false;
+        muteAction.snooze([entity]);
+        return true;
+      },
+      condition: () => {
+        const entity = getEntity();
+        return entity !== undefined && muteAction.canExecute(entity);
+      },
+      displayPriority: 10,
+      tags: [HotkeyTags.SelectionModification],
+    }).withGroup(group);
+
     registerHotkey({
       hotkeyToken: TOKENS.entity.action.mute,
       scopeId,

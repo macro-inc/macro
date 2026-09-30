@@ -15,7 +15,10 @@ import {
 import { type Accessor, createEffect, onCleanup, type Setter } from 'solid-js';
 import { queryClient } from '../client';
 import { subscribeToVisibleCacheChanges } from '../subscribe-to-visible-cache-changes';
-import { readCachedGraphqlHistoryItems } from './graphql';
+import {
+  HISTORY_SEARCH_BUCKETS,
+  readCachedGraphqlHistoryItems,
+} from './graphql';
 import { historyKeys } from './keys';
 import { transformHistoryItem, transformHistoryResponse } from './transforms';
 import type { HistoryItem } from './types';
@@ -104,11 +107,14 @@ export function useHistoryQuery() {
     const host = graphqlCacheHost();
     if (!host) return;
     onCleanup(
-      subscribeToVisibleCacheChanges(host, () =>
-        activeQueryClient.invalidateQueries(
-          { queryKey: historyKeys.graphqlList.queryKey },
-          { cancelRefetch: false }
-        )
+      subscribeToVisibleCacheChanges(
+        host,
+        () =>
+          activeQueryClient.invalidateQueries(
+            { queryKey: historyKeys.graphqlList.queryKey },
+            { cancelRefetch: false }
+          ),
+        { searchBuckets: () => HISTORY_SEARCH_BUCKETS }
       )
     );
   });

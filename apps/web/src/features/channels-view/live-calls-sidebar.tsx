@@ -1,8 +1,9 @@
 import { getMeetingPath, getMeetingShareToken } from '@channel/Call/call-link';
+import { DebugSuspense } from '@channel/DebugSuspense';
 import { useUserId } from '@core/context/user';
 import { idToDisplayName } from '@core/user/util';
 import { useNavigate } from '@solidjs/router';
-import { Show, Suspense } from 'solid-js';
+import { Show } from 'solid-js';
 import { LiveCallsSidebar } from '../meetings/components/live-calls-sidebar';
 import { useActiveQuickCallsSource } from '../meetings/queries/active-quick-calls';
 import { useQuickCallsFlag } from '../meetings/use-quick-calls-flag';
@@ -36,9 +37,9 @@ export function ChannelsLiveCallsSidebar() {
   const flag = useQuickCallsFlag();
   return (
     <Show when={!flag().loading && flag().enabled}>
-      <Suspense>
+      <DebugSuspense name="ChannelsView.live-calls">
         <ChannelsLiveCalls />
-      </Suspense>
+      </DebugSuspense>
     </Show>
   );
 }

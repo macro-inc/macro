@@ -1,6 +1,6 @@
 import type { PropertyDefinitionDomain } from '@property/types';
 import { describe, expect, it } from 'vitest';
-import { propertyValueLabel } from './property-value';
+import { propertyEntityReferences, propertyValueLabel } from './property-value';
 
 const definition = {
   id: 'def-1',
@@ -15,6 +15,29 @@ const definition = {
 } as unknown as PropertyDefinitionDomain;
 
 describe('propertyValueLabel', () => {
+  it('validates stored references before a host resolves their names', () => {
+    expect(
+      propertyEntityReferences({
+        type: 'EntityReference',
+        value: [{ entity_type: 'USER', entity_id: 'macro|bob@example.com' }],
+      })
+    ).toEqual([{ id: 'macro|bob@example.com', type: 'USER' }]);
+    expect(
+      propertyEntityReferences({ type: 'EntityReference', value: [null] })
+    ).toBeUndefined();
+    expect(
+      propertyEntityReferences({
+        type: 'EntityReference',
+        value: [{ entity_type: 'USER', entity_id: 123 }],
+      })
+    ).toBeUndefined();
+    expect(
+      propertyEntityReferences({
+        type: 'String',
+        value: 'macro|bob@example.com',
+      })
+    ).toBeUndefined();
+  });
   it('resolves select option ids to their option names', () => {
     expect(
       propertyValueLabel(

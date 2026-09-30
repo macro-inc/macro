@@ -41,6 +41,32 @@ fn spawn_handle() -> EngineHandle {
     EngineHandle::new(storage, None)
 }
 
+#[test]
+fn storage_generation_survives_native_reopening_and_rotates_after_clear() {
+    let dir = tempfile::tempdir().unwrap();
+    let database = cache_turso::TursoFileDatabase::new(dir.path().join("cache.turso")).unwrap();
+    let handle = EngineHandle::new(database.open_or_reset("scope-1").unwrap(), None);
+    let first = block_on(handle.current_storage_generation()).unwrap();
+    assert_eq!(
+        block_on(handle.clone().current_storage_generation()).unwrap(),
+        first
+    );
+    handle.shutdown().unwrap();
+    let handle = EngineHandle::new(database.open_or_reset("scope-1").unwrap(), None);
+    assert_eq!(
+        block_on(handle.current_storage_generation()).unwrap(),
+        first
+    );
+    block_on(handle.clear()).unwrap();
+    let replacement = block_on(handle.current_storage_generation()).unwrap();
+    assert_ne!(replacement, first);
+    assert_eq!(
+        block_on(handle.current_storage_generation()).unwrap(),
+        replacement
+    );
+    handle.shutdown().unwrap();
+}
+
 fn write(
     handle: &EngineHandle,
     origin: Option<&str>,
@@ -74,11 +100,46 @@ fn empty_write_result() -> WriteResultWire {
     WriteResultWire {
         revision: "0".to_string(),
         revision_advanced: false,
+        search_changed_buckets: None,
         changed: Vec::new(),
         affected_ops: Vec::new(),
         reset: false,
         revalidations: Vec::new(),
     }
+}
+
+#[test]
+fn query_writes_preserve_search_proof_and_viewer_field_scope_through_native_wire() {
+    let handle = spawn_handle();
+    write(&handle, None, soup_data(false), Some("viewer"));
+    read(&handle, Some("client:1"));
+    let mut other = variables();
+    other.insert("input".into(), serde_json::json!({"limit":2}));
+    let result = block_on(handle.write(WriteRequest {
+        origin_op_id: None,
+        registration: None,
+        query: QUERY.into(),
+        operation_name: Some("Soup".into()),
+        variables: other,
+        data: soup_data(false),
+        identity: Some("viewer".into()),
+    }))
+    .unwrap();
+    assert!(result.revision_advanced);
+    assert!(result.affected_ops.is_empty());
+    assert_eq!(
+        serde_json::to_value(result).unwrap()["searchChangedBuckets"],
+        serde_json::json!([])
+    );
+    let reset = write(&handle, None, soup_data(false), Some("new-viewer"));
+    assert!(reset.reset);
+    assert!(
+        serde_json::to_value(reset)
+            .unwrap()
+            .get("searchChangedBuckets")
+            .is_none()
+    );
+    handle.shutdown().unwrap();
 }
 
 #[test]

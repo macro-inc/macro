@@ -8,11 +8,13 @@ the staged rollout add.
 
 ## Identity and storage
 
-A message has one parent: `{type: "channel" | "document", id: string}`, stored in
+A message has one parent: `{type: "channel" | "document" | "crm_company" |
+"crm_contact", id: string}`, stored in
 `parent_entity_type` / `parent_entity_id`. A root message has no `thread_id`;
 replies point to their root. Historical document ids are plain strings, so
 `parent_entity_id` is text and document access for non-UUID ids is resolved from the
-document and share tables directly.
+document and share tables directly. CRM parents have generated columns with
+real foreign keys, so their discussions are deleted with the parent.
 
 `comms_message_threads` holds one row per root: owner, resolution, an optional anchor,
 import metadata, and whole-thread deletion. An anchor is a tagged Markdown mark, PDF

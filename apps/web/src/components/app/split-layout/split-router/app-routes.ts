@@ -5,21 +5,26 @@ import {
   agentsViewRoute,
   codersRoute,
 } from '@app/features/agents-view/route';
+import { callDetailRoute } from '@app/features/block-call/route';
+import { prDetailRoute } from '@app/features/block-pr/route';
 import { calendarSplitRoute } from '@app/features/calendar-view/route';
 import { channelsSplitRoute } from '@app/features/channels-view/route';
 import { companiesRoute } from '@app/features/companies/route';
 import { driveSplitRoute } from '@app/features/drive-view/route';
 import { emailSplitRoute } from '@app/features/email-view/route';
 import { gettingStartedRoute } from '@app/features/getting-started/route';
-import { homeRoute } from '@app/features/home/route';
-import { inboxSplitRoute } from '@app/features/inbox-view/route';
+import { homeSplitRoute } from '@app/features/home/route';
 import {
   callsRoute,
   foldersRoute,
   recentRoute,
   searchRoute,
 } from '@app/features/next-soup/route';
-import { remindersRoute } from '@app/features/reminders/route';
+import {
+  reminderDetailRoute,
+  remindersRoute,
+} from '@app/features/reminders/route';
+import { reviewsSplitRoute } from '@app/features/reviews-view/route';
 import { settingsRoute } from '@app/features/settings/route';
 import { tasksSplitRoute } from '@app/features/tasks-view/route';
 import { defineRoutes } from '@app/lib/split-router';
@@ -33,27 +38,30 @@ export const appSplitRoutes = defineRoutes({
     agentsRoute,
     codersRoute,
     agentChatsRoute,
-    homeRoute,
+    homeSplitRoute,
     gettingStartedRoute,
-    inboxSplitRoute,
     recentRoute,
     activityRoute,
+    reminderDetailRoute,
     remindersRoute,
     agentsViewRoute,
     emailSplitRoute,
     tasksSplitRoute,
+    reviewsSplitRoute,
     calendarSplitRoute,
     channelsSplitRoute,
     callsRoute,
+    callDetailRoute,
     companiesRoute,
     foldersRoute,
     searchRoute,
+    prDetailRoute,
     ...debugRoutes,
     legacySplitRoute,
   ],
   globalSearch: ['referral_code'],
   unmatchedPathHandlers: [handleLegacySplitPath],
   defaultEntry: () => ({
-    location: { route: { matches: [{ id: 'view-inbox', params: {} }] } },
+    location: { route: { matches: [{ id: 'view-home', params: {} }] } },
   }),
 });

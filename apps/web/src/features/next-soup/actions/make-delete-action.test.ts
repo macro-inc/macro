@@ -136,6 +136,59 @@ describe('makeDeleteAction.execute', () => {
       expect.objectContaining({ entities: [doc] })
     );
   });
+
+  // The confirmation modal deletes through the DSS mutation, which cannot
+  // touch email at all, so an email that reached it was simply never deleted.
+  describe('email', () => {
+    const email = entity('email', { id: 'thread-1', linkId: 'link-1' });
+
+    beforeEach(() => {
+      mocks.trashEmails.mockReturnValue({
+        done: Promise.resolve(),
+        undo: vi.fn(),
+      });
+    });
+
+    it('trashes without a confirmation step', async () => {
+      const onDeleted = vi.fn();
+      const action = makeDeleteAction({ userId: () => ME, onDeleted });
+
+      await action.execute([email]);
+
+      expect(mocks.trashEmails).toHaveBeenCalledWith([
+        { id: 'thread-1', linkId: 'link-1' },
+      ]);
+      expect(mocks.openBulkEditModal).not.toHaveBeenCalled();
+      expect(mocks.success).toHaveBeenCalledWith(
+        'Moved to Trash',
+        expect.anything()
+      );
+      expect(onDeleted).toHaveBeenCalledWith([email]);
+    });
+
+    it('drops trashed threads from split history', async () => {
+      mocks.splitManager = {};
+
+      await execute([email]);
+
+      const predicate = mocks.removeHistory.mock.calls[0][1] as (entry: {
+        id: string;
+      }) => boolean;
+      expect(predicate({ id: email.id })).toBe(true);
+      expect(predicate({ id: 'other' })).toBe(false);
+    });
+
+    it('still confirms the rest of a mixed selection', async () => {
+      const doc = entity('document', { id: 'doc-1' });
+
+      await execute([email, doc]);
+
+      expect(mocks.trashEmails).toHaveBeenCalledOnce();
+      expect(mocks.openBulkEditModal).toHaveBeenCalledWith(
+        expect.objectContaining({ entities: [doc] })
+      );
+    });
+  });
 });
 
 type DeleteModal = {

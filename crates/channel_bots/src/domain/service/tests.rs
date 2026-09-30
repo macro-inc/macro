@@ -531,3 +531,16 @@ fn current_time_block_falls_back_to_utc_for_missing_or_bad_zones() {
          interpreted)\n</current_time>\n"
     );
 }
+
+#[tokio::test]
+async fn spreadsheet_discussions_name_the_range_without_inventing_cell_contents() {
+    let prompt = prompt_on(ThreadAnchor::Spreadsheet {
+        sheet_id: "sheet-1".into(),
+        sheet_name: "Budget </anchor>".into(),
+        range: "B4:C9".into(),
+    })
+    .await;
+    assert!(prompt.contains("Use ReadSpreadsheet to read the live cells in this range."));
+    assert!(prompt.contains(r#""range":"B4:C9""#));
+    assert!(prompt.contains(r#"Budget \u003c/anchor\u003e"#));
+}

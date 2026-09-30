@@ -1,3 +1,6 @@
+#[path = "support/http.rs"]
+mod http;
+
 use std::time::Duration;
 
 use anyhow::{Context, ensure};
@@ -7,9 +10,11 @@ use local_e2e_test_support::{
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
+#[path = "support/websocket.rs"]
+mod websocket;
 use tokio::time::{Instant, timeout};
-use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::{Error as WebsocketError, Message as WebsocketMessage};
+use websocket::connect_async;
 
 const WEBSOCKET_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -39,7 +44,7 @@ async fn channel_message_posts_to_http_and_delivers_to_websocket() -> anyhow::Re
     let nonce = format!("rust-local-e2e-{}", uuid_like_nonce());
     let content = format!("Rust local E2E websocket delivery {nonce}");
 
-    let http = reqwest::Client::new();
+    let http = http::http_client()?;
     let post_response = http
         .post(services.post_channel_message_url(&channel.channel_id))
         .bearer_auth(&token)

@@ -34,12 +34,12 @@ import { getCompanyHandler, listCompaniesHandler } from './Crm';
 import { deleteTagHandler } from './DeleteTag';
 import { displayResultsHandler } from './DisplayResults';
 import {
-  commentOnDocumentTextHandler,
-  replyToDocumentCommentHandler,
+  commentOnDocumentHandler,
   resolveDocumentCommentHandler,
 } from './DocumentComments';
 import { editDocumentHandler } from './EditDocument';
 import { editTagHandler } from './EditTag';
+import { generateImageHandler } from './GenerateImage';
 import { getThreadHandler } from './GetThread';
 import {
   createImportEntityHandler,
@@ -47,6 +47,7 @@ import {
   importNotionPageHandler,
   listImportEntitiesHandler,
 } from './ImportTools';
+import { initiativeToolHandlers } from './Initiatives';
 import { listEntitiesHandler } from './ListEntities';
 import { listInboxesHandler } from './ListInboxes';
 import { listLabelsHandler } from './ListLabels';
@@ -75,6 +76,7 @@ import { readChatHandler } from './ReadChat';
 import { readContentHandler } from './ReadContent';
 import { readMetadataHandler } from './ReadMetadata';
 import { readProjectHandler } from './ReadProject';
+import { readSkillHandler } from './ReadSkill';
 import { readThreadHandler } from './ReadThread';
 import {
   createReminderHandler,
@@ -111,6 +113,7 @@ import { webFetchHandler } from './WebFetch';
 import { webSearchHandler } from './WebSearch';
 
 const toolHandlers: ToolHandlerMap<RenderContext> = {
+  ...initiativeToolHandlers,
   ReadSpreadsheet: readSpreadsheetHandler,
   CalculateSpreadsheet: calculateSpreadsheetHandler,
   EditSpreadsheet: editSpreadsheetHandler,
@@ -152,6 +155,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ContentSearch: contentSearchHandler,
   CreateDocument: createDocumentHandler,
   UploadFile: uploadFileHandler,
+  GenerateImage: generateImageHandler,
   CreateProject: createProjectHandler,
   CreateReminder: createReminderHandler,
   CreateTag: createTagHandler,
@@ -171,10 +175,10 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ReadContent: readContentHandler,
   ReadMetadata: readMetadataHandler,
   ReadProject: readProjectHandler,
+  ReadSkill: readSkillHandler,
   RenameChannel: renameChannelHandler,
   RenameDocument: renameDocumentHandler,
-  CommentOnDocumentText: commentOnDocumentTextHandler,
-  ReplyToDocumentComment: replyToDocumentCommentHandler,
+  CommentOnDocument: commentOnDocumentHandler,
   ResolveDocumentComment: resolveDocumentCommentHandler,
   SearchSkills: searchSkillsHandler,
   SearchTools: searchToolsHandler,

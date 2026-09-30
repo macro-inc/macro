@@ -1,3 +1,4 @@
+import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import type { CalendarUpdateScope } from '@service-email/client';
@@ -66,6 +67,7 @@ const RECURRING_EDIT_SCOPE_OPTIONS = [
 /** Create/edit event form laid out like the standalone task composer. */
 export function EventForm(props: EventFormProps) {
   const formId = createUniqueId();
+  const resolveAppLink = useMacroMentionLinkResolver();
 
   const dateRangeErrorId = `event-composer-date-range-error-${formId}`;
   const pastEventWarningId = `event-composer-past-event-warning-${formId}`;
@@ -197,6 +199,7 @@ export function EventForm(props: EventFormProps) {
             <Show when={!isOutOfOffice()}>
               <div class="h-12 overflow-y-auto">
                 <MarkdownTextarea
+                  resolveAppLink={resolveAppLink}
                   type="calendar"
                   initialHtml={calendarDescriptionToEditorHtml(
                     initialDescription
@@ -380,7 +383,6 @@ export function EventForm(props: EventFormProps) {
         <Button
           type="button"
           variant="ghost"
-          class="rounded-lg"
           disabled={formIsDisabled()}
           onClick={props.onCancel}
         >
@@ -388,9 +390,8 @@ export function EventForm(props: EventFormProps) {
         </Button>
         <Button
           type="submit"
-          variant={controller.canSave() ? 'accent' : 'ghost'}
+          variant="strong"
           depth={3}
-          class="rounded-lg border-0"
           disabled={!controller.canSave() || formIsDisabled()}
           aria-label={isEdit() ? 'Save' : 'Create event'}
         >

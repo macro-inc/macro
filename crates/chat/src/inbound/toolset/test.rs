@@ -43,7 +43,7 @@ mod self_read_guard {
     impl ChatService for UnreachableChatService {
         async fn create(
             &self,
-            _user_id: MacroUserIdStr<'static>,
+            _owner: model_owner::Owner,
             _args: CreateChatArgs,
         ) -> Result<String> {
             unreachable!("guard should short-circuit before calling the chat service")
@@ -280,7 +280,7 @@ mod self_read_guard {
     impl ChatService for StubChatService {
         async fn create(
             &self,
-            _user_id: MacroUserIdStr<'static>,
+            _owner: model_owner::Owner,
             _args: CreateChatArgs,
         ) -> Result<String> {
             Err(ChatErr::Unknown(anyhow::anyhow!("not used by this test")))

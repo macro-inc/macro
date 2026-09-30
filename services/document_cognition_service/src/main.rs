@@ -2,6 +2,7 @@
 use crate::api::context::ApiContext;
 use ai_tools::{NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress};
 use anyhow::Context;
+use bots::outbound::pg_bots_repo::PgBotsRepo;
 use call::domain::service::{CallRecordQueryServiceImpl, CallServiceImpl};
 use call::inbound::toolset::CallToolContext;
 use call::outbound::pg_call_repo::PgCallRepo;
@@ -21,6 +22,8 @@ use email::domain::service::EmailServiceImpl;
 use email::outbound::EmailPgRepo;
 use email_service_client::{EmailServiceClient, EmailServiceClientExternal};
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
+use entity_registry::OwnerGrantPolicy;
+use entity_registry_db_utils::OwnedEntityRegistrar;
 use foreign_entity::{
     domain::service::ForeignEntityServiceImpl,
     outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
@@ -74,6 +77,7 @@ async fn main() -> anyhow::Result<()> {
         .resolve_remote_secrets(Environment::new_or_prod(), &secretsmanager_client)
         .await
         .context("expected to be able to resolve config secrets")?;
+    let non_user_owners = config.non_user_owners()?;
 
     tracing::info!("initialized config");
 
@@ -270,7 +274,9 @@ async fn main() -> anyhow::Result<()> {
         config.document_storage_bucket.to_string(),
         config.docx_document_upload_bucket.to_string(),
     );
-    let document_repo = PgDocumentRepo::new(db.clone());
+    let owned_entity_registrar =
+        OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(db.clone())));
+    let document_repo = PgDocumentRepo::new(db.clone(), owned_entity_registrar.clone());
 
     let cloudfront_config = CloudFrontConfig {
         distribution_url: config
@@ -286,8 +292,17 @@ async fn main() -> anyhow::Result<()> {
         presigned_url_expiry_seconds: 3600,
         browser_cache_expiry_seconds: 86400,
     };
-    let properties_service =
-        ai_tools::build_properties_service(db.clone(), entity_access_service.clone());
+    let event_broker_tracker = TaskTracker::new();
+    let macro_event_broker = macro_event_broker::MacroEventBrokerService::new(
+        macro_event_broker::KafkaEventPublisher::new(config.kafka_brokers.as_ref())
+            .context("failed to create kafka event publisher")?,
+        event_broker_tracker.clone(),
+    );
+    let properties_service = ai_tools::build_properties_service_with_broker(
+        db.clone(),
+        entity_access_service.clone(),
+        macro_event_broker.clone(),
+    );
     let task_properties_service = ai_tools::build_task_properties_adapter(
         db.clone(),
         properties_service.clone(),
@@ -300,12 +315,6 @@ async fn main() -> anyhow::Result<()> {
         import::outbound::document_properties::DocumentPropertiesApplicator::new(
             properties_service.clone(),
         );
-    let event_broker_tracker = TaskTracker::new();
-    let macro_event_broker = macro_event_broker::MacroEventBrokerService::new(
-        macro_event_broker::KafkaEventPublisher::new(config.kafka_brokers.as_ref())
-            .context("failed to create kafka event publisher")?,
-        event_broker_tracker.clone(),
-    );
     let document_service = DocumentServiceImpl::new(
         document_repo,
         cloudfront_config,
@@ -363,7 +372,10 @@ async fn main() -> anyhow::Result<()> {
             entity_access_service.clone(),
         ),
         chat: chat::inbound::attachment::ChatAttachmentService::new(
-            Arc::new(chat::outbound::postgres::PgChatRepo::new(db.clone())),
+            Arc::new(chat::outbound::postgres::PgChatRepo::new(
+                db.clone(),
+                owned_entity_registrar.clone(),
+            )),
             entity_access_service.clone(),
         ),
         channel: channels::inbound::attachment::ChannelAttachmentService::new(
@@ -376,7 +388,7 @@ async fn main() -> anyhow::Result<()> {
     };
     let message_service = Arc::new(
         chat::domain::service::MessageServiceImpl::new(
-            chat::outbound::postgres::PgChatRepo::new(db.clone()),
+            chat::outbound::postgres::PgChatRepo::new(db.clone(), owned_entity_registrar.clone()),
             attachment_provider,
         )
         .with_event_broker(macro_event_broker.clone()),
@@ -436,7 +448,7 @@ async fn main() -> anyhow::Result<()> {
 
     let chat_tool_context = chat::inbound::toolset::ChatToolContext::new(
         chat::domain::service::ChatServiceImpl::new(
-            chat::outbound::postgres::PgChatRepo::new(db.clone()),
+            chat::outbound::postgres::PgChatRepo::new(db.clone(), owned_entity_registrar.clone()),
             Arc::new(ai_toolset::AsyncToolCollection::new()),
             (),
             entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
@@ -486,6 +498,10 @@ async fn main() -> anyhow::Result<()> {
             ai_billing::outbound::HttpSettlementTrigger::new(auth_service_client),
             config.environment,
         ));
+
+    // Keep existing analytics/legacy settlement unchanged. Per-attempt observations
+    // use a separate journal and never feed this settlement trigger.
+    let recorder = ai_usage::with_tracking(recorder, ai_usage::pg_tracking(db.clone()));
 
     // The import pipeline: staged/imported external items, gather jobs over
     // the user's connectors, and the Haiku import job. Built before the tool
@@ -622,6 +638,15 @@ async fn main() -> anyhow::Result<()> {
         user_email_service,
     );
 
+    let initiative_tool_context = ai_tools::build_initiative_tool_context(
+        db.clone(),
+        &document_tool_context,
+        properties_service.clone(),
+        entity_access_service.clone(),
+        aws_sdk_sqs::Client::new(&aws_config),
+        macro_event_broker.clone(),
+    );
+
     let tool_service_context = ai_tools::ToolServiceContext {
         search_service_client: search_service_client.clone(),
         email_service_client: email_service_client_external.clone(),
@@ -632,6 +657,10 @@ async fn main() -> anyhow::Result<()> {
             properties_service,
             entity_access_service.clone(),
         ),
+        image_generation_tool_context: ai_tools::build_image_generation_tool_context(
+            &document_tool_context,
+            ai_tools::build_image_generator_from_env(),
+        )?,
         document_tool_context: document_tool_context.clone(),
         properties_tool_context: properties_tool_context.clone(),
         email_tool_context: email_tool_context.clone(),
@@ -658,11 +687,13 @@ async fn main() -> anyhow::Result<()> {
             DocumentStorageServiceUrl::new()?.to_string(),
         ),
         project_tool_context,
+        initiative_tool_context,
         team_tool_context: ai_tools::build_team_tool_context(db.clone()),
         crm_tool_context: ai_tools::build_crm_tool_context(db.clone()),
         skill_tool_context: ai_tools::build_skill_tool_context(
             search_service_client.clone(),
             soup_service.clone(),
+            &document_tool_context,
         ),
         schedule_tool_context: ai_tools::NoOpScheduleContext,
         anthropic_tool_context: ai_tools::build_anthropic_tool_context(),
@@ -820,6 +851,7 @@ async fn main() -> anyhow::Result<()> {
         search_service_client,
         authorization_state,
         user_permissions_service,
+        non_user_owners,
         ai_billing,
         internal_api_key: config.internal_api_key.clone(),
         config: Arc::new(config),

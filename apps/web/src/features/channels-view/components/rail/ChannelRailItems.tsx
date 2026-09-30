@@ -5,6 +5,7 @@ import {
 } from '@app/features/next-soup/actions';
 import { SoupEntityContextMenu } from '@app/features/soup/SoupEntityContextMenu';
 import { joinChannelCall } from '@channel/Call/join-channel-call';
+import { ChannelMutedIndicator } from '@channel/components/ChannelMutedIndicator';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { inlineWrappingMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { toast } from '@core/component/Toast/Toast';
@@ -15,7 +16,6 @@ import type { MacroId } from '@core/user/macroId';
 import { type ChannelEntity, Entity } from '@entity';
 import ReplyIcon from '@phosphor/arrow-bend-up-left.svg';
 import AtIcon from '@phosphor/at.svg';
-import BellSlashIcon from '@phosphor/bell-slash.svg';
 import XIcon from '@phosphor/x.svg';
 import PhoneCallIcon from '@phosphor-fill/phone-call-fill.svg';
 import PhoneIncomingIcon from '@phosphor-fill/phone-incoming-fill.svg';
@@ -131,32 +131,6 @@ export function ChannelCallIndicator(props: {
   );
 }
 
-export function ChannelMutedIndicator(props: {
-  muted: boolean;
-  class?: string;
-}) {
-  return (
-    <Show when={props.muted}>
-      <Tooltip
-        as="span"
-        label="Notifications are muted"
-        placement="top"
-        class={cn(
-          'size-4 shrink-0 justify-center text-ink-extra-muted',
-          props.class
-        )}
-      >
-        <span
-          aria-label="Notifications muted"
-          class="flex size-full items-center justify-center"
-        >
-          <BellSlashIcon class="size-full" />
-        </span>
-      </Tooltip>
-    </Show>
-  );
-}
-
 export function IncomingCallActions(props: {
   callId: string | undefined;
   channelId: string;
@@ -179,7 +153,7 @@ export function IncomingCallActions(props: {
             variant="danger"
             size={isWide() ? 'sm' : 'icon-xs'}
             fullWidth={isWide()}
-            class={cn('rounded-md', isWide() && 'h-7 flex-1')}
+            class={cn(isWide() && 'h-7 flex-1')}
             label="Decline incoming call"
             tooltipDisabled={isWide()}
             onPointerDown={(event) => event.stopPropagation()}
@@ -197,7 +171,7 @@ export function IncomingCallActions(props: {
             variant="success"
             size={isWide() ? 'sm' : 'icon-xs'}
             fullWidth={isWide()}
-            class={cn('rounded-md', isWide() && 'h-7 flex-1')}
+            class={cn(isWide() && 'h-7 flex-1')}
             label="Accept incoming call"
             tooltipDisabled={isWide()}
             onPointerDown={(event) => event.stopPropagation()}

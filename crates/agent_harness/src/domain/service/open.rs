@@ -2,6 +2,7 @@
 //! external runtime that dials in. Each creates the row, provisions egress
 //! where there is a sandbox to give it to, and attaches the runtime.
 
+use agent_session::domain::model::session_owner_user;
 use agent_session::domain::ports::SelectedManagedPersona;
 use agent_session::domain::repository_branch::RepositoryBranch;
 use model_owner::Owner;
@@ -56,15 +57,7 @@ where
         &self,
         request: agent_session::domain::ports::OpenExternalAgentSession,
     ) -> agent_session::domain::error::Result<AgentSession> {
-        // An external session is opened as a person: the thread it claims is
-        // checked against what they may post in, and the announcement is
-        // made in their name. Any other kind of owner is refused before a
-        // row exists for it.
-        let owner_user = request
-            .owner
-            .as_user()
-            .cloned()
-            .ok_or_else(|| AgentSessionError::OwnerNotUser(request.owner.owner_type()))?;
+        let owner_user = session_owner_user(&request.owner)?;
         // The thread linkage is the caller's claim: it is honoured only when
         // the owner can write to that parent and the message sits in it.
         if let Some(thread) = &request.thread {
@@ -89,9 +82,13 @@ where
                 })?;
         }
         let defaults = self.inner.defaults.for_bot(request.bot_id);
-        let (model, harness) = match request.profile {
-            Some(profile) => (profile.model, profile.harness),
-            None => (defaults.model.clone(), defaults.harness.clone()),
+        let (model, harness, profile_instructions) = match request.profile {
+            Some(profile) => (
+                profile.model,
+                profile.harness,
+                Some(profile.instructions).filter(|value| !value.trim().is_empty()),
+            ),
+            None => (defaults.model.clone(), defaults.harness.clone(), None),
         };
         let session = self
             .inner
@@ -108,7 +105,7 @@ where
                 repo_url: request.repo_url,
                 workspace: request.workspace,
                 sandbox_size: SandboxSize::Default,
-                instructions: request.instructions,
+                instructions: request.instructions.or(profile_instructions),
                 // No egress, so no MCP servers of ours to select from.
                 mcp_servers: AgentMcpServers::OwnerConnections,
                 // Mint the internal-tool credential when an authenticated
@@ -205,16 +202,7 @@ where
                 servers: Vec::new(),
             };
         }
-        // A managed session runs as its owner: its egress spends their
-        // connected apps, the repositories it may pick are the ones they
-        // reach, and its sandbox size is their preference. Only a person has
-        // those, so any other kind of owner is refused before anything is
-        // provisioned.
-        let owner_user = request
-            .owner
-            .as_user()
-            .cloned()
-            .ok_or_else(|| AgentSessionError::OwnerNotUser(request.owner.owner_type()))?;
+        let owner_user = session_owner_user(&request.owner)?;
         // Explicit source choices are a domain decision, before any session or egress grant exists.
         let selected_repo = if let Some(url) = request.repo_url.as_deref() {
             if kind != AgentKind::Cursor {
@@ -486,6 +474,12 @@ where
 
         let defaults = self.defaults.for_bot(bot_id);
         let sandbox_size = self.sessions.user_sandbox_size(&origin.sender).await?;
+        // The same profile the create menu snapshots: a mention states nothing
+        // about how the runtime should work, so the bot's configured
+        // instructions are what it opens with, exactly as a dedicated session
+        // would. Blank instructions are "none" stated clumsily.
+        let instructions =
+            Some(runtime.instructions.clone()).filter(|text| !text.trim().is_empty());
 
         // Provisioned before the session exists, because the row is what makes
         // the token mean anything: it carries the hash the proxy recognises.
@@ -519,10 +513,7 @@ where
                 // Managed sandboxes run in the path baked into their image.
                 workspace: agent_session::MANAGED_CONTAINER_WORKSPACE.to_owned(),
                 sandbox_size,
-                // A mention carries no instructions: the prompt is whatever
-                // was said in the channel, and nothing there states how the
-                // runtime should work.
-                instructions: None,
+                instructions,
                 // Snapshotted so the proxy enforces exactly what this attach
                 // advertised, for as long as the session lives.
                 mcp_servers: runtime.mcp_servers.clone(),

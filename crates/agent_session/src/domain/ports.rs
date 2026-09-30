@@ -12,7 +12,7 @@ use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessa
 use bots::domain::models::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
-use model_owner::Owner;
+use model_owner::{Owner, OwnerType};
 use std::num::NonZeroUsize;
 
 /// A bidirectional connection to an agent runtime.
@@ -149,9 +149,10 @@ pub enum ManagedPersonaError {
     /// operator to ask and no owner to authorize against, so it is nobody's
     /// to start - a misconfiguration rather than a policy answer.
     UnmanagedSystemBot,
-    /// The owner does not own or belong to the persona's owner, or is not
-    /// a user at all.
+    /// The owner does not own or belong to the persona's owner.
     Forbidden,
+    /// The owner is not a user, so no persona rule applies.
+    OwnerNotUser(OwnerType),
     /// Looking up the persona or its owner failed.
     Lookup(AgentSessionError),
 }
@@ -174,7 +175,12 @@ pub async fn persona_for_owner<Bots: BotDirectory>(
     bot_id: BotId,
     owner: &Owner,
 ) -> std::result::Result<SelectedPersona, ManagedPersonaError> {
-    let user = owner.as_user().ok_or(ManagedPersonaError::Forbidden)?;
+    let user = session_owner_user(owner).map_err(|error| match error {
+        AgentSessionError::OwnerNotUser(owner_type) => {
+            ManagedPersonaError::OwnerNotUser(owner_type)
+        }
+        other => ManagedPersonaError::Lookup(other),
+    })?;
     let facts = bots
         .bot_facts(bot_id)
         .await
@@ -454,7 +460,15 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
     /// Persist the user-facing session name. Idempotent.
     fn set_name(&self, id: AgentSessionId, name: &str) -> impl Future<Output = Result<()>> + Send;
 
-    /// Persist an automatically generated name only while the default remains.
+    /// Archive or unarchive a session. Idempotent.
+    fn set_archived(
+        &self,
+        id: AgentSessionId,
+        is_archived: bool,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Persist an automatically generated name only while the default remains
+    /// and the session is not archived.
     fn set_name_if_default(
         &self,
         id: AgentSessionId,
@@ -485,6 +499,19 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
 
     /// Delete an agent session by id.
     fn delete(&self, id: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
+
+    /// The session's waiting actions, oldest first. Missing row is empty.
+    fn list_queued_actions(
+        &self,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<Vec<StoredQueuedAction>>> + Send;
+
+    /// Replace the session's waiting actions. An empty slice deletes the row.
+    fn replace_queued_actions(
+        &self,
+        id: AgentSessionId,
+        entries: &[StoredQueuedAction],
+    ) -> impl Future<Output = Result<()>> + Send;
 }
 
 /// The durable record of which provider-side agent an externally-served
@@ -565,13 +592,24 @@ pub trait SessionOwnership: Send + Sync + 'static {
         address: Option<&ReplicaAddress>,
     ) -> impl Future<Output = Result<()>> + Send;
 
-    /// The live manager of a session, if a replica with a fresh heartbeat
-    /// holds its lease. `None` covers both an unclaimed session and one whose
-    /// holder has gone stale - either way the session is claimable.
-    fn manager_of(
+    /// What the lease says about a session, from `replica`'s viewpoint: who
+    /// holds it (when a replica with a fresh heartbeat does - an absent
+    /// holder covers both an unclaimed session and one whose holder has gone
+    /// stale, either way claimable) and whether `replica` is itself draining.
+    fn lease_view(
         &self,
         session: AgentSessionId,
-    ) -> impl Future<Output = Result<Option<SessionManager>>> + Send;
+        replica: ReplicaId,
+    ) -> impl Future<Output = Result<LeaseView>> + Send;
+
+    /// Publish that `replica` is shutting down, so nothing new is routed to
+    /// it while it drains.
+    ///
+    /// A deploy's old task keeps heartbeating for its whole drain window, so
+    /// liveness alone cannot tell a replica that is serving from one that is
+    /// leaving; this is the replica saying which it is. Idempotent: the first
+    /// drain wins, and a replica never un-drains.
+    fn begin_draining(&self, replica: ReplicaId) -> impl Future<Output = Result<()>> + Send;
 }
 
 #[cfg_attr(feature = "test-utils", mockall::automock)]

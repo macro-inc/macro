@@ -1,3 +1,4 @@
+import { ViewTour } from '@app/features/tours/ViewTour';
 import { defineRoute } from '@app/lib/split-router';
 import {
   CRM_VIEW_URL_PARAM,
@@ -11,6 +12,7 @@ import {
 import { enableCrm, isFeatureEnabled } from '@core/constant/featureFlags';
 import { lazy } from 'solid-js';
 import { getViewPreset } from '../next-soup/sidebar/soup-filter-presets';
+import { companiesTour } from './tour';
 
 const SoupView = lazy(async () => ({
   default: (await import('../next-soup/soup-view/soup-view')).SoupView,
@@ -18,7 +20,7 @@ const SoupView = lazy(async () => ({
 
 export const CompaniesRouteView = withAuth(() => {
   if (!isFeatureEnabled(enableCrm))
-    return <RedirectSplit to={{ type: 'component', id: 'inbox' }} />;
+    return <RedirectSplit to={{ type: 'component', id: 'home' }} />;
   usePageViewTracking('companies');
   const preset = getViewPreset('companies');
   const crmView = new URLSearchParams(window.location.search).get(
@@ -31,6 +33,7 @@ export const CompaniesRouteView = withAuth(() => {
       initialClientFilters={preset?.clientFilters}
       initialGroupBy={preset?.groupBy}
       initialCrmView={crmView ? decodeCrmViewParam(crmView) : undefined}
+      tour={<ViewTour tour={companiesTour} />}
     />
   );
 });

@@ -5,6 +5,7 @@ import {
 import type { EmailMessage } from '@app/features/email-message/core/email-message';
 import type { UserMentionRecord } from '@core/component/LexicalMarkdown/utils/mentionsUtils';
 import { setEditorStateFromHtml } from '@core/component/LexicalMarkdown/utils/setEditorStateFromHtml';
+import { getUploadFileSize } from '@core/mobile/nativeStagedUpload';
 import { plural } from '@core/util/string';
 import { $generateHtmlFromNodes } from '@lexical/html';
 import {
@@ -1127,7 +1128,10 @@ export function createReplyComposer(
       return;
     const currentAttachments = form.attachments.list();
 
-    const attachmentsToAddByteSize = files.reduce((sum, f) => sum + f.size, 0);
+    const attachmentsToAddByteSize = files.reduce(
+      (sum, f) => sum + getUploadFileSize(f),
+      0
+    );
 
     if (attachmentsToAddByteSize >= MAX_ATTACHMENTS_BYTES_SIZE) {
       props.notices.feedback.failure(
@@ -1137,7 +1141,8 @@ export function createReplyComposer(
     }
 
     const currentAttachmentsByteSize = currentAttachments.reduce(
-      (sum, a) => sum + (a.type === 'local' ? a.file.size : a.fileSize),
+      (sum, a) =>
+        sum + (a.type === 'local' ? getUploadFileSize(a.file) : a.fileSize),
       0
     );
 

@@ -4,14 +4,20 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { InboxReauthRequiredMetadata } from './inboxReauthRequiredMetadata';
+import type { CallStartedMetadata } from './callStartedMetadata';
 import type { NotifEventOneOfTwooneTag } from './notifEventOneOfTwooneTag';
 
 /**
- * A linked inbox's grant died and must be reconnected.
+ * A call has started in a channel the user is a member of.
+
+The `call-started` alias keeps rows persisted before the type name
+was normalized to snake_case (`call_started`) deserializable.
  */
 export type NotifEventOneOfTwoone = {
-  /** A linked inbox's grant died and must be reconnected. */
-  content: InboxReauthRequiredMetadata;
+  /** A call has started in a channel the user is a member of.
+
+The `call-started` alias keeps rows persisted before the type name
+was normalized to snake_case (`call_started`) deserializable. */
+  content: CallStartedMetadata;
   tag: NotifEventOneOfTwooneTag;
 };

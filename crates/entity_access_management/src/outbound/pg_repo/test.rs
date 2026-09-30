@@ -387,6 +387,71 @@ async fn add_entity_to_project_inserts_access_for_all_ancestor_shares(pool: Pool
     );
 }
 
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("bot_owned_child_project_test_data")
+    )
+)]
+async fn add_bot_owned_child_project_keeps_its_owner_grants_and_inherits_the_parents(
+    pool: Pool<Postgres>,
+) {
+    let repo = PgRepository::new(pool.clone());
+    let parent = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa").unwrap();
+    let child = Uuid::parse_str("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb").unwrap();
+
+    repo.add_entity_to_project(&child, EntityType::Project, &parent)
+        .await
+        .unwrap();
+
+    let rows = sqlx::query!(
+        r#"
+        SELECT source_type::text AS "source_type!", source_id,
+            access_level::text AS "access_level!", granted_from_project_id
+        FROM entity_access
+        WHERE entity_id = $1 AND entity_type = 'project'
+        ORDER BY source_type::text, source_id, granted_from_project_id NULLS FIRST
+        "#,
+        child,
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    let parent_id = parent.to_string();
+    assert_eq!(
+        rows.iter()
+            .map(|row| (
+                row.source_type.as_str(),
+                row.source_id.as_str(),
+                row.access_level.as_str(),
+                row.granted_from_project_id.as_deref(),
+            ))
+            .collect::<Vec<_>>(),
+        [
+            (
+                "bot",
+                "bot|00000000-0000-0000-0000-00000000b07a",
+                "owner",
+                None
+            ),
+            (
+                "team",
+                "b2222222-2222-2222-2222-222222222222",
+                "comment",
+                Some(parent_id.as_str()),
+            ),
+            ("user", "macro|owner@test.com", "owner", None),
+            (
+                "user",
+                "macro|owner@test.com",
+                "owner",
+                Some(parent_id.as_str())
+            ),
+        ]
+    );
+}
+
 /// Adds a document to PROJECT_C then removes it, verifying that all 6
 /// inherited access rows are deleted while the pre-existing project
 /// access rows remain untouched.

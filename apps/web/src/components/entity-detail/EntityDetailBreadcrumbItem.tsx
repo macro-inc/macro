@@ -1,4 +1,5 @@
 import { ViewBreadcrumbs } from '@app/components/view-shell';
+import { useSplitDisplayName } from '@components/app/split-layout/layoutUtils';
 import {
   EntityIcon,
   type EntityIconSelector,
@@ -8,9 +9,9 @@ import { useItemRawName } from '@queries/preview';
 import type { ItemEntity } from '@queries/preview/types';
 import { Show } from 'solid-js';
 import type {
-  EntityDetailNavigationStackEntry,
+  EntityDetailNavigationEntry,
   EntityDetailTarget,
-} from './EntityDetailNavigationStack';
+} from './entity-detail-target';
 
 function breadcrumbIcon(target: EntityDetailTarget): EntityIconSelector {
   if (target.type === 'document') {
@@ -44,11 +45,20 @@ function fallbackBreadcrumbName(target: EntityDetailTarget) {
   return 'Untitled';
 }
 
+function isReminderTarget(target: { type: string }) {
+  return target.type === 'reminder';
+}
+
 function BreadcrumbItem(props: {
-  entry: EntityDetailNavigationStackEntry;
+  entry: EntityDetailNavigationEntry;
   order: number;
   name: string;
+  setsSplitDisplayName?: boolean;
 }) {
+  useSplitDisplayName(() =>
+    props.setsSplitDisplayName ? props.name : undefined
+  );
+
   return (
     <ViewBreadcrumbs.Item
       value={props.entry.value}
@@ -75,9 +85,10 @@ function BreadcrumbItem(props: {
 }
 
 function LiveBreadcrumbItem(props: {
-  entry: EntityDetailNavigationStackEntry;
+  entry: EntityDetailNavigationEntry;
   order: number;
   previewItem: ItemEntity;
+  setsSplitDisplayName?: boolean;
 }) {
   const currentName = useItemRawName(() => props.previewItem);
   const name = () => {
@@ -88,18 +99,24 @@ function LiveBreadcrumbItem(props: {
   };
 
   return (
-    <BreadcrumbItem entry={props.entry} order={props.order} name={name()} />
+    <BreadcrumbItem
+      entry={props.entry}
+      order={props.order}
+      name={name()}
+      setsSplitDisplayName={props.setsSplitDisplayName ?? false}
+    />
   );
 }
 
 export function EntityDetailBreadcrumbItem(props: {
-  entry: EntityDetailNavigationStackEntry;
+  entry: EntityDetailNavigationEntry;
   order: number;
+  setsSplitDisplayName?: boolean;
 }) {
   return (
     <Show
       when={
-        props.entry.data.type === 'reminder'
+        isReminderTarget(props.entry.data)
           ? undefined
           : ({
               id: props.entry.data.id,
@@ -111,6 +128,7 @@ export function EntityDetailBreadcrumbItem(props: {
           entry={props.entry}
           order={props.order}
           name={fallbackBreadcrumbName(props.entry.data)}
+          setsSplitDisplayName={props.setsSplitDisplayName ?? false}
         />
       }
     >
@@ -119,6 +137,7 @@ export function EntityDetailBreadcrumbItem(props: {
           entry={props.entry}
           order={props.order}
           previewItem={previewItem()}
+          setsSplitDisplayName={props.setsSplitDisplayName ?? false}
         />
       )}
     </Show>

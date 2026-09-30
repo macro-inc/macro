@@ -36,6 +36,7 @@ function renderGrid(
     | 'showGridlines'
     | 'showFormulas'
     | 'columnWidths'
+    | 'hiddenColumns'
     | 'rowCount'
     | 'sheetId'
     | 'onFill'
@@ -104,6 +105,7 @@ function renderGrid(
           showGridlines={options.showGridlines}
           showFormulas={options.showFormulas}
           columnWidths={options.columnWidths}
+          hiddenColumns={options.hiddenColumns}
           onFill={options.onFill}
           onResizeColumn={options.onResizeColumn}
           values={options.values ?? {}}
@@ -997,6 +999,27 @@ describe('cell context menu', () => {
     });
     await waitFor(() => expect(comments.add).toHaveBeenCalledWith(cell));
     expect(onCellAction).not.toHaveBeenCalled();
+  });
+
+  it('anchors a range comment to a rendered cell when its selection anchor is hidden', async () => {
+    const comments = {
+      canComment: () => true,
+      add: vi.fn(),
+      hasComment: () => false,
+      enter: vi.fn(),
+      leave: vi.fn(),
+      show: vi.fn(),
+    };
+    const view = renderGrid({}, { comments, hiddenColumns: [0] });
+    view.controller.selectRange({ row: 1, column: 0 }, { row: 1, column: 25 });
+    fireEvent.keyDown(view.element, { key: 'ContextMenu' });
+    const comment = await screen.findByRole('menuitem', { name: 'Comment' });
+    fireEvent.keyDown(comment, { key: 'Enter' });
+    await waitFor(() =>
+      expect(comments.add).toHaveBeenCalledWith(
+        view.getByRole('gridcell', { name: 'B2' })
+      )
+    );
   });
 
   it('keeps the native text editing menu and does not open the cell menu over headers', async () => {

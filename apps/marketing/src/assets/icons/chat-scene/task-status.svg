@@ -1,0 +1,10 @@
+<svg overflow="visible" style="display: block;" viewBox="0 0 8 8" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="square-task-created-circle 1" clip-path="url(#clip0_0_80)">
+<path id="Vector" fill-rule="evenodd" clip-rule="evenodd" d="M4 0C6.20667 0 8 1.79333 8 4C8 6.20667 6.20667 8 4 8C1.79333 8 0 6.20667 0 4C0 1.79333 1.79333 0 4 0ZM4 1.2C5.54667 1.2 6.8 2.45333 6.8 4C6.8 5.54667 5.54667 6.8 4 6.8C2.45333 6.8 1.2 5.54667 1.2 4C1.2 2.45333 2.45333 1.2 4 1.2Z" fill="#15DA43"/>
+</g>
+<defs>
+<clipPath id="clip0_0_80">
+<rect width="8" height="8" fill="white"/>
+</clipPath>
+</defs>
+</svg>

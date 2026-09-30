@@ -1,0 +1,441 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/ios_preview.rs
+name: iOS Preview
+'on':
+  pull_request:
+    types:
+    - labeled
+    - synchronize
+    - reopened
+    - closed
+  workflow_dispatch: {}
+jobs:
+  preview:
+    if: github.event_name == 'workflow_dispatch' || (github.event.action != 'closed' && contains(github.event.pull_request.labels.*.name, 'ios-preview') && github.event.pull_request.draft == false)
+    name: Build iOS simulator app and publish to Appetize
+    runs-on: nscloud-macos-sequoia-arm64-6x14
+    permissions:
+      contents: read
+      pull-requests: write
+    timeout-minutes: 40
+    steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+        persist-credentials: 'false'
+    - name: Install Nix
+      run: |
+        set -euo pipefail
+        if ! command -v nix >/dev/null 2>&1; then
+          curl --http1.1 --retry 5 --retry-delay 5 --retry-all-errors \
+            --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | \
+            sh -s -- install macos --no-confirm \
+            --extra-conf "experimental-features = nix-command flakes" \
+            --extra-conf "sandbox = false" \
+            --extra-conf "trusted-users = root runner"
+        fi
+        echo "/nix/var/nix/profiles/default/bin" >> "$GITHUB_PATH"
+        echo "NIX_REMOTE=daemon" >> "$GITHUB_ENV"
+        export PATH="/nix/var/nix/profiles/default/bin:$PATH"
+        export NIX_REMOTE=daemon
+        nix --version
+      shell: bash
+    - id: build
+      name: Build iOS simulator app
+      run: |
+        set -euo pipefail
+
+        # Appetize streams iOS *Simulator* builds only (a device .ipa cannot be run), so
+        # this produces an unsigned arm64 simulator .app rather than anything
+        # installable on hardware.
+
+        # Probe before the ~6 minutes of frontend build, so a runner missing its iOS
+        # bits fails in seconds instead of at the very last step.
+        #
+        # The SDK is the check that matters, and it is not implied by the others: since
+        # Xcode 16 platforms are downloaded separately, so `xcodebuild -version` and
+        # even `simctl` can look healthy on a runner with no iPhoneSimulator SDK. Tauri
+        # then dies reading SDKSettings.plist out of it.
+        xcodebuild -version
+        echo "Developer dir: $(xcode-select -p)"
+
+        SIMULATOR_SDK="$(xcrun --sdk iphonesimulator --show-sdk-path 2>/dev/null || true)"
+        if [ -z "$SIMULATOR_SDK" ] || [ ! -f "$SIMULATOR_SDK/SDKSettings.plist" ]; then
+          echo "No iPhoneSimulator SDK on this runner." >&2
+          echo "Install it with: xcodebuild -downloadPlatform iOS" >&2
+          echo "--- installed SDKs ---" >&2
+          xcodebuild -showsdks >&2 || true
+          echo "--- platforms ---" >&2
+          ls -1 "$(xcode-select -p)/Platforms" >&2 || true
+          exit 1
+        fi
+        echo "iPhoneSimulator SDK: $SIMULATOR_SDK"
+
+        if ! xcrun simctl list runtimes --json | grep -q '"isAvailable" : true'; then
+          echo "No available iOS simulator runtime on this runner." >&2
+          echo "Install one with: xcodebuild -downloadPlatform iOS" >&2
+          xcrun simctl list runtimes >&2
+          exit 1
+        fi
+
+        # cargo-mobile2 locates the SDK by shelling out to `xcode-select -p`, which
+        # returns $DEVELOPER_DIR whenever that is set — and nix's Darwin stdenv sets it
+        # to nix's own Apple SDK, which has no Platforms/iPhoneSimulator.platform. So
+        # the SDK is genuinely there for every command run out here, and genuinely
+        # absent for anything run inside `nix develop`, which is what made tauri report
+        # a bare NotFound for a file this script can see.
+        #
+        # Carry the real developer dir in under a name nix has no opinion about, and
+        # restore DEVELOPER_DIR once inside the shell.
+        MACRO_DEVELOPER_DIR="$(xcode-select -p)"
+        export MACRO_DEVELOPER_DIR
+
+        # cargo-tauri, bun, just, wasm-pack and the pinned toolchain (which carries
+        # aarch64-apple-ios-sim, see rust-toolchain.toml) all come from the dev shell.
+        # Phase 1 — the web and wasm build, in the dev shell exactly as it comes. It
+        # needs nix's bun, wasm-pack and cc wrapper, and must not see Apple's.
+        nix develop --command bash -euo pipefail -c '
+          bun install --frozen-lockfile
+          cd apps/web
+          just build-tauri-dev
+        '
+
+        # Phase 2 — everything Xcode drives, with Apple's toolchain in front.
+        #
+        # The dev shell ships its own: DEVELOPER_DIR points at nix's apple-sdk and
+        # `xcodebuild` is the xcbuild reimplementation, which rejects real flags. But
+        # swapping only those two desyncs nix's cc wrapper from its SDK and host
+        # proc-macro links then fail on -liconv, so the compiler and linker have to
+        # come from Apple too. Hence one dir at the front of PATH rather than a couple
+        # of overrides — and hence phase 1 being a separate shell, since the wasm build
+        # wants the nix cc it was configured against.
+        nix develop --command bash -euo pipefail -c '
+          echo "before: DEVELOPER_DIR=$(xcode-select -p 2>&1), xcodebuild=$(command -v xcodebuild || echo none)"
+
+          export DEVELOPER_DIR="$MACRO_DEVELOPER_DIR"
+          APPLE_TOOLS="$(mktemp -d)"
+          for tool in xcodebuild xcrun xcode-select simctl actool ibtool plutil ditto \
+                      clang clang++ cc c++ ld ar ranlib libtool lipo strip nm \
+                      install_name_tool codesign dsymutil; do
+            [ -x "/usr/bin/$tool" ] && ln -sf "/usr/bin/$tool" "$APPLE_TOOLS/$tool"
+          done
+          export PATH="$APPLE_TOOLS:$PATH"
+
+          # nix'"'"'s wrapper flags name its own sysroot; Apple'"'"'s clang would either
+          # ignore them or trip over them.
+          unset NIX_CFLAGS_COMPILE NIX_LDFLAGS SDKROOT || true
+
+          echo "after:  DEVELOPER_DIR=$(xcode-select -p 2>&1), xcodebuild=$(command -v xcodebuild), cc=$(command -v cc)"
+          xcodebuild -version
+
+          cd apps/web
+          # Positional: `prebuilt=true` would be passed as the literal argument
+          # "prebuilt=true", silently rebuilding the frontend a second time here.
+          just ios-build-sim true
+        '
+
+        APP="apps/web/tauri/src-tauri/gen/apple/build/arm64-sim/macro.app"
+        if [ ! -d "$APP" ]; then
+          echo "Expected a simulator .app at $APP" >&2
+          find apps/web/tauri/src-tauri/gen/apple/build -maxdepth 3 -name '*.app' >&2 || true
+          exit 1
+        fi
+
+        # An iPhoneOS build would upload fine and then refuse to boot, so prove the SDK
+        # before handing it to Appetize.
+        if ! plutil -extract DTPlatformName raw "$APP/Info.plist" | grep -q iphonesimulator; then
+          echo "Built against the device SDK, not the simulator SDK:" >&2
+          plutil -extract DTPlatformName raw "$APP/Info.plist" >&2
+          exit 1
+        fi
+
+        # Everything above can pass on an app that launches to a black screen: the
+        # frontend is embedded in the binary by generate_context!(), so there is no
+        # file whose absence gives it away, and build/link/zip/upload all succeed
+        # regardless. The only honest check is to run it.
+        #
+        # Boot the same simulator Appetize would, launch the app, and photograph it.
+        # The screenshot is uploaded either way — it is the single most useful artifact
+        # when a preview misbehaves.
+        mkdir -p artifacts
+
+        # Zip first, then smoke-test what comes *back out* of the zip. Appetize never
+        # sees the build directory — it installs the archive — so testing $APP directly
+        # would leave the round-trip itself unverified, which is precisely where a
+        # preview can differ from a build that looked fine in CI.
+        ditto -c -k --sequesterRsrc --keepParent "$APP" artifacts/macro-sim.zip
+        rm -rf artifacts/roundtrip
+        ditto -x -k artifacts/macro-sim.zip artifacts/roundtrip
+        ROUNDTRIP_APP="artifacts/roundtrip/$(basename "$APP")"
+        test -d "$ROUNDTRIP_APP" || { echo "zip round-trip produced no .app" >&2; exit 1; }
+
+        DEVICE="$(xcrun simctl create ios-preview-smoke com.apple.CoreSimulator.SimDeviceType.iPhone-15-Pro)"
+        trap 'xcrun simctl delete "$DEVICE" >/dev/null 2>&1 || true' EXIT
+        xcrun simctl boot "$DEVICE"
+        xcrun simctl bootstatus "$DEVICE" -b
+
+        xcrun simctl install "$DEVICE" "$ROUNDTRIP_APP"
+        xcrun simctl launch "$DEVICE" com.macro.app.prod
+
+        # The webview needs a moment to load and paint before the shot is worth taking.
+        sleep 25
+        xcrun simctl io "$DEVICE" screenshot artifacts/launch.png
+
+        # The app's own log, filtered by process name as AGENTS.md prescribes for
+        # diagnosing iOS freezes. Kept whether or not the shot looks right — it is what
+        # says *why* a screen was blank.
+        xcrun simctl spawn "$DEVICE" log show --predicate 'process == "macro"' \
+          --last 3m --style compact >artifacts/launch.log 2>&1 || true
+        echo "--- last 40 app log lines ---"
+        tail -40 artifacts/launch.log || true
+
+        if [ ! -f artifacts/launch.png ]; then
+          echo "simctl produced no screenshot." >&2
+          exit 1
+        fi
+
+        # A blank screen compresses to almost nothing, while any real UI carries
+        # detail. This is a coarse signal deliberately: it cannot say the app is
+        # correct, only that it painted something other than a void.
+        SHOT_BYTES="$(stat -f%z artifacts/launch.png)"
+        echo "Launch screenshot: ${SHOT_BYTES} bytes"
+        if [ "$SHOT_BYTES" -lt 40000 ]; then
+          echo "The app launched to a blank screen (${SHOT_BYTES}-byte screenshot)." >&2
+          echo "See the launch.png artifact; the log archive is beside it." >&2
+          exit 1
+        fi
+
+        # The archive was built before the smoke test so the test could run against it;
+        # drop the unpacked copy so it does not bloat the artifact upload.
+        rm -rf artifacts/roundtrip
+      shell: bash
+    - name: Upload macro-ios-simulator-app artifact
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: macro-ios-simulator-app
+        path: artifacts/*
+        if-no-files-found: warn
+        retention-days: '30'
+    - name: Publish to Appetize and comment
+      if: github.event_name == 'pull_request'
+      run: |
+        set -euo pipefail
+
+        # Publish the simulator build to Appetize and post the preview comment.
+        #
+        # The comment is the only store of the Appetize key: recovering it from there
+        # is what lets a PR keep one app across pushes, and lets the cleanup job find
+        # it on close. `gh` and `jq` both ship in Namespace's runner image (see
+        # cancel_stuck_cloud_storage_deploys).
+
+        MARKER='<!-- appetize-ios-preview -->'
+        API='https://api.appetize.io/v1/apps'
+
+        bot_comments() {
+          gh api "repos/$REPO/issues/$PR_NUMBER/comments" --paginate \
+            --jq '.[] | select(.user.type == "Bot")'
+        }
+
+        # Only our comment carries an appetize.io link, so this cannot pick up the web
+        # preview's comment by accident.
+        existing_key() {
+          bot_comments | jq -r 'select(.body | contains("appetize.io/app/")) | .body' |
+            grep -oE 'appetize\.io/app/[A-Za-z0-9_-]+' | head -1 | sed 's|.*/||'
+        }
+
+        PUBLIC_KEY="$(existing_key || true)"
+
+        if [ "${CLEANUP:-0}" = "1" ]; then
+          if [ -z "$PUBLIC_KEY" ]; then
+            echo "No Appetize app recorded on this PR; nothing to clean."
+            exit 0
+          fi
+          # 404 means someone already removed it, which is the desired end state.
+          STATUS="$(curl -sS -o /dev/null -w '%{http_code}' -X DELETE "$API/$PUBLIC_KEY" \
+            -H "X-API-KEY: $APPETIZE_API_TOKEN")"
+          case "$STATUS" in
+            2* | 404) echo "Deleted Appetize app $PUBLIC_KEY ($STATUS)" ;;
+            *) echo "Appetize delete failed with $STATUS" >&2; exit 1 ;;
+          esac
+          exit 0
+        fi
+
+        # Session caps, not access restrictions, are what keep a leaked link cheap: a
+        # 3-minute idle timeout, a 30-minute ceiling and two concurrent sessions, on an
+        # app that still needs a Macro login to show anything. `run=authenticated`
+        # would demand an Appetize account and `referrerHostnamesRestricted` would
+        # reject the click outright (GitHub sends no referrer on external links), so
+        # both would lock out the reviewer this exists for.
+        if [ -n "$PUBLIC_KEY" ]; then TARGET="$API/$PUBLIC_KEY"; else TARGET="$API"; fi
+        RESPONSE="$(curl -sS -X POST "$TARGET" \
+          -H "X-API-KEY: $APPETIZE_API_TOKEN" \
+          -F "file=@$ARCHIVE_PATH" -F 'platform=ios' -F 'fileType=zip' \
+          -F 'timeout=180' -F 'timeLimit=1800' -F 'maxConcurrent=2' \
+          -F "note=PR #$PR_NUMBER $SHA $BRANCH" \
+          -F 'appPermissions.run=public' -F 'appPermissions.debugLog=public' \
+          -F 'appPermissions.networkIntercept=public' \
+          -F 'appPermissions.networkProxy=public')"
+
+        PUBLIC_KEY="$(jq -er '.publicKey' <<<"$RESPONSE")" || {
+          echo "Appetize upload carried no publicKey: $RESPONSE" >&2
+          exit 1
+        }
+        echo "Appetize app $PUBLIC_KEY"
+
+        link() { printf '[%s](https://appetize.io/app/%s?device=%s&autoplay=false)' "$1" "$PUBLIC_KEY" "$2"; }
+
+        # `device` is a query parameter over one uploaded build, so extra sizes cost
+        # nothing: no rebuild, no second upload. osVersion is deliberately omitted so
+        # links keep working when Appetize retires a runtime.
+        BODY="$MARKER
+        **iOS preview** — \`$BRANCH\` @ \`${SHA:0:7}\`
+
+        $(link 'iPhone 15 Pro' iphone15pro) · $(link 'iPhone 16 Pro Max' iphone16promax) · $(link 'iPad Pro 12.9"' ipadpro129inch5thgeneration)
+
+        Boots on click; nothing streams until then. You will need to sign in inside the simulator."
+
+        # get-or-create-id.ts finds the *web* preview comment by this substring and
+        # scrapes the preview id out of its body, so our comment must never contain it.
+        case "$BODY" in
+          *preview.macro.com*)
+            echo "The iOS comment contains preview.macro.com, which would break web previews." >&2
+            exit 1
+            ;;
+        esac
+
+        COMMENT_ID="$(bot_comments | jq -r "select(.body | contains(\"$MARKER\")) | .id" | head -1)"
+        if [ -n "$COMMENT_ID" ]; then
+          gh api -X PATCH "repos/$REPO/issues/comments/$COMMENT_ID" -f "body=$BODY" >/dev/null
+          echo "Updated existing iOS preview comment"
+        else
+          gh api -X POST "repos/$REPO/issues/$PR_NUMBER/comments" -f "body=$BODY" >/dev/null
+          echo "Created iOS preview comment"
+        fi
+      shell: bash
+      env:
+        APPETIZE_API_TOKEN: ${{ secrets.APPETIZE_API_TOKEN }}
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        REPO: ${{ github.repository }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        ARCHIVE_PATH: artifacts/macro-sim.zip
+        BRANCH: ${{ github.head_ref }}
+        SHA: ${{ github.event.pull_request.head.sha }}
+  cleanup:
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    name: Delete the PR's Appetize app
+    runs-on: namespace-profile-linux-tiny-no-cache
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+        persist-credentials: 'false'
+    - name: Delete Appetize app
+      run: |
+        set -euo pipefail
+
+        # Publish the simulator build to Appetize and post the preview comment.
+        #
+        # The comment is the only store of the Appetize key: recovering it from there
+        # is what lets a PR keep one app across pushes, and lets the cleanup job find
+        # it on close. `gh` and `jq` both ship in Namespace's runner image (see
+        # cancel_stuck_cloud_storage_deploys).
+
+        MARKER='<!-- appetize-ios-preview -->'
+        API='https://api.appetize.io/v1/apps'
+
+        bot_comments() {
+          gh api "repos/$REPO/issues/$PR_NUMBER/comments" --paginate \
+            --jq '.[] | select(.user.type == "Bot")'
+        }
+
+        # Only our comment carries an appetize.io link, so this cannot pick up the web
+        # preview's comment by accident.
+        existing_key() {
+          bot_comments | jq -r 'select(.body | contains("appetize.io/app/")) | .body' |
+            grep -oE 'appetize\.io/app/[A-Za-z0-9_-]+' | head -1 | sed 's|.*/||'
+        }
+
+        PUBLIC_KEY="$(existing_key || true)"
+
+        if [ "${CLEANUP:-0}" = "1" ]; then
+          if [ -z "$PUBLIC_KEY" ]; then
+            echo "No Appetize app recorded on this PR; nothing to clean."
+            exit 0
+          fi
+          # 404 means someone already removed it, which is the desired end state.
+          STATUS="$(curl -sS -o /dev/null -w '%{http_code}' -X DELETE "$API/$PUBLIC_KEY" \
+            -H "X-API-KEY: $APPETIZE_API_TOKEN")"
+          case "$STATUS" in
+            2* | 404) echo "Deleted Appetize app $PUBLIC_KEY ($STATUS)" ;;
+            *) echo "Appetize delete failed with $STATUS" >&2; exit 1 ;;
+          esac
+          exit 0
+        fi
+
+        # Session caps, not access restrictions, are what keep a leaked link cheap: a
+        # 3-minute idle timeout, a 30-minute ceiling and two concurrent sessions, on an
+        # app that still needs a Macro login to show anything. `run=authenticated`
+        # would demand an Appetize account and `referrerHostnamesRestricted` would
+        # reject the click outright (GitHub sends no referrer on external links), so
+        # both would lock out the reviewer this exists for.
+        if [ -n "$PUBLIC_KEY" ]; then TARGET="$API/$PUBLIC_KEY"; else TARGET="$API"; fi
+        RESPONSE="$(curl -sS -X POST "$TARGET" \
+          -H "X-API-KEY: $APPETIZE_API_TOKEN" \
+          -F "file=@$ARCHIVE_PATH" -F 'platform=ios' -F 'fileType=zip' \
+          -F 'timeout=180' -F 'timeLimit=1800' -F 'maxConcurrent=2' \
+          -F "note=PR #$PR_NUMBER $SHA $BRANCH" \
+          -F 'appPermissions.run=public' -F 'appPermissions.debugLog=public' \
+          -F 'appPermissions.networkIntercept=public' \
+          -F 'appPermissions.networkProxy=public')"
+
+        PUBLIC_KEY="$(jq -er '.publicKey' <<<"$RESPONSE")" || {
+          echo "Appetize upload carried no publicKey: $RESPONSE" >&2
+          exit 1
+        }
+        echo "Appetize app $PUBLIC_KEY"
+
+        link() { printf '[%s](https://appetize.io/app/%s?device=%s&autoplay=false)' "$1" "$PUBLIC_KEY" "$2"; }
+
+        # `device` is a query parameter over one uploaded build, so extra sizes cost
+        # nothing: no rebuild, no second upload. osVersion is deliberately omitted so
+        # links keep working when Appetize retires a runtime.
+        BODY="$MARKER
+        **iOS preview** — \`$BRANCH\` @ \`${SHA:0:7}\`
+
+        $(link 'iPhone 15 Pro' iphone15pro) · $(link 'iPhone 16 Pro Max' iphone16promax) · $(link 'iPad Pro 12.9"' ipadpro129inch5thgeneration)
+
+        Boots on click; nothing streams until then. You will need to sign in inside the simulator."
+
+        # get-or-create-id.ts finds the *web* preview comment by this substring and
+        # scrapes the preview id out of its body, so our comment must never contain it.
+        case "$BODY" in
+          *preview.macro.com*)
+            echo "The iOS comment contains preview.macro.com, which would break web previews." >&2
+            exit 1
+            ;;
+        esac
+
+        COMMENT_ID="$(bot_comments | jq -r "select(.body | contains(\"$MARKER\")) | .id" | head -1)"
+        if [ -n "$COMMENT_ID" ]; then
+          gh api -X PATCH "repos/$REPO/issues/comments/$COMMENT_ID" -f "body=$BODY" >/dev/null
+          echo "Updated existing iOS preview comment"
+        else
+          gh api -X POST "repos/$REPO/issues/$PR_NUMBER/comments" -f "body=$BODY" >/dev/null
+          echo "Created iOS preview comment"
+        fi
+      shell: bash
+      env:
+        APPETIZE_API_TOKEN: ${{ secrets.APPETIZE_API_TOKEN }}
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        REPO: ${{ github.repository }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        CLEANUP: '1'
+concurrency:
+  group: ios-preview-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true

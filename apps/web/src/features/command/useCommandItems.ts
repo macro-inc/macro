@@ -1,4 +1,6 @@
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { enableProjects } from '@core/constant/featureFlags';
 import {
   type Bucket,
   type EntityItem,
@@ -16,14 +18,18 @@ import {
   getActiveCommandsFromScope,
 } from '@core/hotkey/getCommands';
 import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
+import { TOKENS } from '@core/hotkey/tokens';
 import type { HotkeyCommand } from '@core/hotkey/types';
-import {
-  createFreshSearch,
-  type FreshSortConfig,
-  type TimestampedItem,
-} from '@core/util/freshSort';
+import type { TimestampedItem } from '@core/util/freshSort';
 import { mergeSortedArrays } from '@core/util/list';
 import { type Accessor, createMemo } from 'solid-js';
+import {
+  type CreateProjectCommandItem,
+  newProjectCommand,
+  type ProjectCommandItem,
+  useProjectCommandItems,
+} from './project-items';
+import { rankCommandSearchItems } from './rank-command-search-items';
 import { getCommandLastUsedAt } from './recency';
 import { CommandState } from './state';
 import type { CategoryFilter, DisplayHotkeyStep } from './types';
@@ -65,7 +71,13 @@ type AskAiItem = {
 };
 
 /** Combined item type for command menu (quickAccess items + commands) */
-type CommandMenuItem = QuickAccessItem | CommandItem | SearchItem | AskAiItem;
+type CommandMenuItem =
+  | QuickAccessItem
+  | CommandItem
+  | SearchItem
+  | AskAiItem
+  | ProjectCommandItem
+  | CreateProjectCommandItem;
 
 export type PaginationControls = {
   hasMore: Accessor<boolean>;
@@ -114,7 +126,6 @@ const SEARCHABLE_CATEGORIES: ReadonlySet<CategoryFilter> = new Set([
   'documents',
   'tasks',
   'chats',
-  'projects',
 ]);
 
 function makeSearchItem(query: string, category: CategoryFilter): SearchItem {
@@ -139,17 +150,6 @@ function makeAskAiItem(query: string): AskAiItem {
     sortTimestamp: 0,
     timestamps: { viewedAt: undefined, updatedAt: undefined },
     query,
-  };
-}
-
-function createSearchConfig(hasQuery: boolean): FreshSortConfig {
-  return {
-    useViewedAt: true,
-    dmBoost: hasQuery ? 1.8 : 1.0,
-    fuzzyWeight: hasQuery ? 0.7 : 0.0,
-    timeWeight: hasQuery ? 0.7 : 0.9,
-    minFuzzyThreshold: hasQuery ? 0.1 : 0,
-    commaSeparatedChannelMatch: true,
   };
 }
 
@@ -263,6 +263,19 @@ function getSurfacedNestedCommands(commands: CommandWithInfo[]) {
 function useCommandsList(
   commandScopeCommands: Accessor<CommandWithInfo[]>
 ): () => CommandItem[] {
+  const projectsFlag = useFeatureFlag(enableProjects);
+  const availableItems = (
+    commands: CommandWithInfo[],
+    options?: Parameters<typeof commandsToItems>[1]
+  ) =>
+    commandsToItems(
+      commands.filter(
+        (command) =>
+          command.hotkeyToken !== TOKENS.create.initiative ||
+          projectsFlag().enabled
+      ),
+      options
+    );
   const scopeId = activeScope() ?? '';
   const capturedCommands = getActiveCommandsFromScope(scopeId, {
     sortByScopeLevel: false,
@@ -279,10 +292,11 @@ function useCommandsList(
   });
 
   return createMemo(() => {
+    projectsFlag();
     // If we're in a command scope (multi-stage command), show those commands instead
     const scopeCommands = commandScopeCommands();
     if (scopeCommands.length > 0) {
-      return commandsToItems(scopeCommands, {
+      return availableItems(scopeCommands, {
         displayHotkeySequence: nestedCommandScopeDisplaySequence,
       });
     }
@@ -292,7 +306,7 @@ function useCommandsList(
       const selectionCommands = capturedCommands.filter((command) =>
         command.tags?.includes(HotkeyTags.SelectionModification)
       );
-      return commandsToItems(selectionCommands);
+      return availableItems(selectionCommands);
     }
 
     // Include sidebar go-to commands in the main command menu with their
@@ -306,7 +320,7 @@ function useCommandsList(
     );
 
     return [
-      ...commandsToItems(
+      ...availableItems(
         [
           ...capturedCommands,
           ...surfacedNestedCommands.map((item) => item.command),
@@ -316,7 +330,7 @@ function useCommandsList(
             surfacedHotkeySequences.get(command),
         }
       ),
-      ...commandsToItems(goToCommands, {
+      ...availableItems(goToCommands, {
         displayHotkeySequence: (command) => {
           const hotkey = command.hotkeys?.[0];
           return hotkey
@@ -337,7 +351,7 @@ const QUICK_ACCESS_BUCKETS_BY_CATEGORY: Partial<
   documents: ['note', 'document', 'snippet', 'project'],
   tasks: ['task'],
   chats: ['chat'],
-  projects: ['project'],
+
   people: ['person'],
 };
 
@@ -422,45 +436,31 @@ export function useCommandItems(
     scopedSearchTerm,
     searchActive
   );
-  const categoryItems = category.items;
-
-  const search = createMemo(() => {
-    const q = query();
-    const hasQuery = q.trim().length > 0;
-    return createFreshSearch<CommandMenuItem>({
-      config: createSearchConfig(hasQuery),
-      getName: (item) => item.searchText,
-      isDmItem: (item) => item.bucket === 'dm',
-      getTimestamp: (item) => item.timestamps,
-    });
-  });
+  const projectEnabled = () =>
+    searchActive() &&
+    commandScopeCommands().length === 0 &&
+    !CommandState.isEntityActionMode() &&
+    (categoryFilter() === 'all' || categoryFilter() === 'projects');
+  const projects = useProjectCommandItems(scopedSearchTerm, projectEnabled);
+  const categoryItems = () => [
+    ...category.items(),
+    ...projects.items(),
+    // All/Commands already include the registered Create project command.
+    // The Projects category excludes general commands, so keep its shortcut.
+    ...(projects.enabled() && categoryFilter() === 'projects'
+      ? [newProjectCommand]
+      : []),
+  ];
 
   const rankItems = (
     items: CommandMenuItem[],
     queryText: string
   ): CommandMenuItem[] => {
     if (!queryText.trim()) return items.filter(showInRecencyList);
-    if (
-      !quickAccess.usesRecordSelection() &&
-      !quickAccess.usesSearchProjection()
-    ) {
-      return search()(items, queryText).map((result) => result.item);
-    }
-
-    const entities = items.filter(isEntityItem);
-    const localItems = items.filter((item) => !isEntityItem(item));
-    const rankedLocalItems = search()(localItems, queryText).map(
-      (result) => result.item
-    );
-    if (entities.length === 0) return rankedLocalItems;
-
-    const topCommands = rankedLocalItems.filter(isCommandItem).slice(0, 3);
-    const topCommandIds = new Set(topCommands.map((item) => item.id));
-    return [
-      ...topCommands,
-      ...entities,
-      ...rankedLocalItems.filter((item) => !topCommandIds.has(item.id)),
-    ];
+    return rankCommandSearchItems(items, queryText, {
+      preserveAdditionalEntityMatches:
+        quickAccess.usesRecordSelection() || quickAccess.usesSearchProjection(),
+    });
   };
 
   const shouldShowSearchRow = (q: string) => {
@@ -515,8 +515,19 @@ export function useCommandItems(
 
   return {
     items: filteredItems,
-    isLoadingEntities: category.isLoadingEntities,
-    pagination: category.pagination,
+    isLoadingEntities: () =>
+      category.isLoadingEntities() || projects.isLoading(),
+    pagination: {
+      hasMore: () => category.pagination.hasMore() || projects.hasMore(),
+      isLoadingMore: () =>
+        category.pagination.isLoadingMore() || projects.isLoadingMore(),
+      loadMore: async () => {
+        await Promise.all([
+          category.pagination.loadMore(),
+          projects.loadMore(),
+        ]);
+      },
+    },
   };
 }
 

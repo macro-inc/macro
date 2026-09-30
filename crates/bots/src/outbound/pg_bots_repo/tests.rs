@@ -414,6 +414,97 @@ async fn create_user_owned_bot_records_user_owner(pool: PgPool) -> anyhow::Resul
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn get_owner_profiles_returns_persisted_system_deleted_and_missing(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let service = service(&pool);
+    let mut request = create_req("owner-profile-batch");
+    request.avatar_url = Some("https://static.example/owner-profile.png".to_string());
+    let bot = service.create_bot(user_id(USER_OWNER), request).await?;
+    let missing = BotId::new_from_uuid(Uuid::new_v4());
+    let repo = PgBotsRepo::new(pool);
+
+    let profiles = repo
+        .get_owner_profiles(&[bot.id, bot_id::MACRO_NEW_BOT_ID, missing])
+        .await?;
+    let profile = profiles.get(&bot.id).expect("persisted bot owner profile");
+    assert_eq!(profile.id, bot.id);
+    assert_eq!(profile.name, "Datadog Alerts");
+    assert_eq!(
+        profile.avatar_url.as_deref(),
+        Some("https://static.example/owner-profile.png")
+    );
+    assert_eq!(profile.deleted_at, None);
+    assert_eq!(
+        profile.owner,
+        Some(BotOwner::User {
+            user_id: USER_OWNER.to_string(),
+        })
+    );
+    let system = profiles
+        .get(&bot_id::MACRO_NEW_BOT_ID)
+        .expect("system bot owner profile");
+    assert_eq!(system.name, bot_id::MACRO_AI_NAME);
+    assert_eq!(system.avatar_url, None);
+    assert_eq!(system.deleted_at, None);
+    assert_eq!(system.owner, None);
+    assert!(!profiles.contains_key(&missing));
+
+    let ordered = service
+        .get_owner_profiles(&[bot.id, bot.id, bot_id::MACRO_NEW_BOT_ID])
+        .await?;
+    assert_eq!(ordered.len(), 2);
+    assert_eq!(ordered[0].id, bot.id);
+    assert_eq!(ordered[0].name, "Datadog Alerts");
+    assert_eq!(
+        ordered[0].owner,
+        Some(BotOwner::User {
+            user_id: USER_OWNER.to_string(),
+        })
+    );
+    assert_eq!(ordered[1].id, bot_id::MACRO_NEW_BOT_ID);
+    assert_eq!(ordered[1].name, bot_id::MACRO_AI_NAME);
+    assert_eq!(ordered[1].avatar_url, None);
+    assert_eq!(ordered[1].deleted_at, None);
+    assert_eq!(ordered[1].owner, None);
+
+    service.delete_bot(user_id(USER_OWNER), bot.id).await?;
+    assert!(repo.get_bot(bot.id).await?.is_none());
+    let deleted = repo.get_owner_profiles(&[bot.id]).await?;
+    let deleted = deleted.get(&bot.id).expect("soft-deleted owner profile");
+    assert!(deleted.deleted_at.is_some());
+    assert_eq!(
+        deleted.owner,
+        Some(BotOwner::User {
+            user_id: USER_OWNER.to_string(),
+        })
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn get_owner_profiles_rejects_more_than_100_ids(pool: PgPool) -> anyhow::Result<()> {
+    let service = service(&pool);
+    let id = BotId::new_from_uuid(Uuid::new_v4());
+    let ids = vec![id; 101];
+
+    let error = service
+        .get_owner_profiles(&ids)
+        .await
+        .expect_err("101 ids exceed the cap");
+
+    match error {
+        BotError::BadRequest(message) => {
+            assert_eq!(message, "at most 100 bot profile ids may be requested");
+        }
+        other => panic!("expected BadRequest, got {other:?}"),
+    }
+
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn bot_profiles_batch_persisted_system_deleted_and_missing_bots(
     pool: PgPool,
 ) -> anyhow::Result<()> {

@@ -4,7 +4,7 @@ import type {
   MessageParent,
   MessageThread,
 } from '@service-storage/messages';
-import { cleanup, render } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, waitFor } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -40,6 +40,7 @@ import { getThreadRepliesQueryKey } from '../thread-replies';
 import {
   getMessageTimelineQueryKey,
   type MessageTimelineData,
+  useMessageTimelineQuery,
 } from '../timeline';
 
 const time = '2026-09-09T00:00:00Z';
@@ -73,6 +74,86 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   testQueryClient.clear();
+});
+
+it('reopens a resolved project discussion through the real mutation and shared timeline cache', async () => {
+  const parent: MessageParent = { type: 'initiative', id: 'project' };
+  const state = {
+    root_id: 'root',
+    user_id: 'macro|a@example.com',
+    resolved: true,
+    anchor: null,
+    created_at: time,
+    updated_at: time,
+  };
+  const root: MessageListItem = {
+    ...message(parent, 'root'),
+    state,
+    thread: { reply_count: 0, preview: [] },
+  };
+  const timelineKey = getMessageTimelineQueryKey(parent);
+  const threadKey = getThreadRepliesQueryKey(parent, 'root');
+  testQueryClient.setQueryData<MessageTimelineData>(timelineKey, {
+    pageParams: [null],
+    pages: [{ items: [root], next_cursor: null, previous_cursor: null }],
+  });
+  testQueryClient.setQueryData<MessageThread>(threadKey, {
+    root,
+    state,
+    replies: [],
+  });
+  mocks.patchThread.mockResolvedValue({
+    ...state,
+    resolved: false,
+    updated_at: '2026-09-09T01:00:00Z',
+  });
+  function Harness() {
+    const timeline = useMessageTimelineQuery(
+      () => parent,
+      () => null
+    );
+    const mutation = usePatchThreadMutation();
+    const resolved = () => timeline.data?.pages[0].items[0].state.resolved;
+    return (
+      <>
+        <span>{resolved() ? 'Resolved' : 'Open'}</span>
+        <button
+          disabled={mutation.isPending}
+          onClick={() =>
+            mutation.mutate({
+              parent,
+              rootId: 'root',
+              patch: { resolved: !resolved() },
+            })
+          }
+        >
+          {resolved() ? 'Reopen discussion' : 'Resolve discussion'}
+        </button>
+      </>
+    );
+  }
+  const view = render(() => (
+    <QueryClientProvider client={testQueryClient}>
+      <Harness />
+    </QueryClientProvider>
+  ));
+  fireEvent.click(view.getByRole('button', { name: 'Reopen discussion' }));
+  await waitFor(() =>
+    expect(
+      view.getByRole('button', { name: 'Resolve discussion' })
+    ).toBeTruthy()
+  );
+  expect(mocks.patchThread).toHaveBeenCalledWith(parent, 'root', {
+    resolved: false,
+  });
+  expect(view.getByText('Open')).toBeTruthy();
+  expect(
+    testQueryClient.getQueryData<MessageThread>(threadKey)?.state.resolved
+  ).toBe(false);
+  expect(
+    testQueryClient.getQueryData<MessageTimelineData>(timelineKey)?.pages[0]
+      .items[0].state.resolved
+  ).toBe(false);
 });
 
 describe.each(['channel', 'document'] as const)('%s reply deletion', (type) => {
@@ -382,7 +463,15 @@ describe('thread resolution', () => {
 });
 
 describe('sending', () => {
-  it('posts the optimistic id as the message id, so it never changes', async () => {
+  it.each([
+    undefined,
+    {
+      type: 'spreadsheet' as const,
+      sheetId: 'sheet-1',
+      sheetName: 'Budget',
+      range: 'B4:C9',
+    },
+  ])('keeps root identity and anchor across posting (%j)', async (anchor) => {
     const parent: MessageParent = { type: 'document', id: 'doc' };
     const timelineKey = getMessageTimelineQueryKey(parent);
     testQueryClient.setQueryData<MessageTimelineData>(timelineKey, {
@@ -415,7 +504,7 @@ describe('sending', () => {
     expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-7/);
     const pending = mutation.mutateAsync({
       parent,
-      message: { content: '2+2=?' },
+      message: { content: '2+2=?', anchor },
       senderId: 'macro|a@example.com',
       optimisticId: id,
     });
@@ -427,6 +516,10 @@ describe('sending', () => {
     respond();
     await pending;
     expect(rootIds()).toEqual([[id, id]]);
+    expect(
+      testQueryClient.getQueryData<MessageTimelineData>(timelineKey)!.pages[0]
+        .items[0].state.anchor
+    ).toEqual(anchor ?? null);
   });
 
   it('adopts the server id when the server ignores the client id', async () => {

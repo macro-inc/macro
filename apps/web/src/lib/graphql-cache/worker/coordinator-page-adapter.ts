@@ -1,4 +1,5 @@
 import * as Effect from 'effect/Effect';
+import { APP_BUILD_TIME } from '../app-build';
 import type { CacheRequest, WorkerMessage } from '../protocol';
 import {
   type CacheTelemetryRecorderLike,
@@ -7,18 +8,26 @@ import {
 } from '../telemetry';
 import {
   CACHE_COORDINATOR_PROTOCOL_VERSION,
+  type CleanupToPageEnvelope,
   type CoordinatorToTabEnvelope,
+  ENGINE_STARTUP_PHASES,
   type EngineOpenOutcome,
   isCacheRequest,
+  type PageToCleanupEnvelope,
   type PageToEngineEnvelope,
   type TabToCoordinatorEnvelope,
   tabLivenessLockName,
+  validateCleanupToPageEnvelope,
   validateCoordinatorToTabEnvelope,
 } from './coordinator-protocol';
 import {
   createEffectWorkerTransport,
   type EffectWorkerTransport,
 } from './effect-worker-transport';
+import {
+  listOpfsRootNames,
+  staleCacheDatabaseIdentities,
+} from './stale-databases';
 import { CacheBootstrapExhaustedError } from './startup';
 
 export interface SharedWorkerLike {
@@ -51,6 +60,17 @@ export interface CacheCoordinatorPageAdapterOptions {
     progress: Extract<CoordinatorToTabEnvelope, { kind: 'engine-startup' }>
   ) => void;
   onOwnerChanged?: (ownerEpoch: number | undefined) => void;
+  /** Another context holds the database, so the cache stays off until reload. */
+  onCacheUnavailable?: (reason: string) => void;
+  /** A newer app build took the database over; this page should reload. */
+  onCacheSuperseded?: (reason: string) => void;
+  /** When this page's app build was made, in ms since the epoch. Defaults to
+   * the bundler's stamp; a newer build takes the database over. */
+  buildTime?: number;
+  /** Disposable worker, running the engine script, that deletes stale databases. */
+  createCleanupWorker?: (scope: string) => DedicatedWorkerLike;
+  listOpfsRootNames?: () => Promise<string[]>;
+  cleanupTimeoutMs?: number;
   onWorkerCreated?: (worker: DedicatedWorkerLike, ownerEpoch: number) => void;
   onWorkerTerminated?: (ownerEpoch: number, reason: string) => void;
   /** Advisory coordinator diagnostic after successful registration. */
@@ -74,8 +94,9 @@ interface CoordinatorConnection {
 }
 
 const DEFAULT_GRACEFUL_TIMEOUT_MS = 10_000;
+const DEFAULT_CLEANUP_TIMEOUT_MS = 30_000;
 
-const withVersion = <T extends { coordinatorVersion: 4 }>(
+const withVersion = <T extends { coordinatorVersion: 6 }>(
   value: T extends unknown ? Omit<T, 'coordinatorVersion'> : never
 ): T =>
   ({
@@ -96,6 +117,12 @@ const defaultDedicatedWorkerFactory = (
   new Worker(new URL('./cache.engine-worker.ts', import.meta.url), {
     type: 'module',
     name: `graphql-cache-engine:${scope}:${ownerEpoch}`,
+  });
+
+const defaultCleanupWorkerFactory = (scope: string): DedicatedWorkerLike =>
+  new Worker(new URL('./cache.engine-worker.ts', import.meta.url), {
+    type: 'module',
+    name: `graphql-cache-cleanup:${scope}`,
   });
 
 /**
@@ -136,6 +163,8 @@ export class CacheCoordinatorPageAdapter {
     | Extract<CoordinatorToTabEnvelope, { kind: 'engine-startup' }>
     | undefined;
   private closed = false;
+  private staleCleanupStarted = false;
+  private cleanupWorker: DedicatedWorkerLike | undefined;
   private readonly telemetry: CacheTelemetryRecorderLike;
   private readonly now = (): number =>
     globalThis.performance?.now() ?? Date.now();
@@ -461,6 +490,7 @@ export class CacheCoordinatorPageAdapter {
         tabId: this.tabId,
         livenessLockName,
         hotCapacity: this.options.hotCapacity,
+        buildTime: this.options.buildTime ?? APP_BUILD_TIME,
       })
     );
   }
@@ -561,7 +591,8 @@ export class CacheCoordinatorPageAdapter {
           return;
         if (
           previous?.ownerEpoch === message.ownerEpoch &&
-          previous.phase === 'opening-database'
+          ENGINE_STARTUP_PHASES.indexOf(message.phase) <
+            ENGINE_STARTUP_PHASES.indexOf(previous.phase)
         ) {
           this.failTerminal(new Error('engine startup phase moved backwards'));
           return;
@@ -595,6 +626,125 @@ export class CacheCoordinatorPageAdapter {
             : new Error(message.error)
         );
         break;
+      case 'cache-unavailable':
+        this.options.onCacheUnavailable?.(message.reason);
+        break;
+      case 'cache-superseded':
+        this.options.onCacheSuperseded?.(message.reason);
+        break;
+      case 'remove-stale-databases':
+        // Only the engine's current owner cleans up, once per page.
+        if (
+          message.tabId === this.tabId &&
+          message.ownerEpoch === this.ownerEpoch
+        ) {
+          void this.removeStaleDatabases();
+        }
+        break;
+    }
+  }
+
+  /** Lists OPFS first so the second WASM instance starts only when needed. */
+  private async removeStaleDatabases(): Promise<void> {
+    if (this.staleCleanupStarted || this.closed) return;
+    this.staleCleanupStarted = true;
+    const scope = this.options.scope;
+    let stale: string[];
+    try {
+      stale = staleCacheDatabaseIdentities(
+        scope,
+        await (this.options.listOpfsRootNames ?? listOpfsRootNames)()
+      );
+    } catch {
+      return;
+    }
+    if (stale.length === 0 || this.closed) return;
+    let worker: DedicatedWorkerLike;
+    try {
+      worker = (
+        this.options.createCleanupWorker ?? defaultCleanupWorkerFactory
+      )(scope);
+    } catch {
+      this.recordStaleCleanup(undefined);
+      return;
+    }
+    this.cleanupWorker = worker;
+    const channel = new MessageChannel();
+    const result = await new Promise<CleanupToPageEnvelope | undefined>(
+      (resolve) => {
+        const timer = setTimeout(
+          () => resolve(undefined),
+          this.options.cleanupTimeoutMs ?? DEFAULT_CLEANUP_TIMEOUT_MS
+        );
+        const settle = (value: CleanupToPageEnvelope | undefined) => {
+          clearTimeout(timer);
+          resolve(value);
+        };
+        channel.port1.onmessage = (event) => {
+          const parsed = validateCleanupToPageEnvelope(event.data);
+          settle(parsed.ok ? parsed.value : undefined);
+        };
+        worker.onerror = (event) => {
+          event.preventDefault();
+          settle(undefined);
+        };
+        try {
+          worker.postMessage(
+            withVersion<PageToCleanupEnvelope>({
+              kind: 'remove-stale-databases',
+              scope,
+            }),
+            [channel.port2]
+          );
+        } catch {
+          settle(undefined);
+        }
+      }
+    );
+    this.closePort(channel.port1);
+    this.terminateCleanupWorker();
+    this.recordStaleCleanup(result);
+  }
+
+  private recordStaleCleanup(result: CleanupToPageEnvelope | undefined): void {
+    if (!result || result.failed) {
+      this.telemetry.record({
+        name: 'graphql_cache.owner',
+        operationCategory: 'storage',
+        outcome: 'error',
+        ownerEvent: 'stale-databases-removed',
+        errorCode: result ? 'opfs-io' : 'timeout',
+        count: result?.removed ?? 0,
+      });
+    } else if (result.removed > 0) {
+      this.telemetry.record({
+        name: 'graphql_cache.owner',
+        operationCategory: 'storage',
+        outcome: 'success',
+        ownerEvent: 'stale-databases-removed',
+        count: result.removed,
+      });
+    }
+    if (result && result.keptWithQueuedMutations > 0) {
+      this.telemetry.record({
+        name: 'graphql_cache.owner',
+        operationCategory: 'storage',
+        outcome: 'success',
+        ownerEvent: 'stale-database-kept',
+        count: result.keptWithQueuedMutations,
+      });
+    }
+  }
+
+  private terminateCleanupWorker(): void {
+    const worker = this.cleanupWorker;
+    this.cleanupWorker = undefined;
+    if (!worker) return;
+    try {
+      worker.onerror = null;
+      worker.terminate();
+    } catch {
+      // A failed cleanup worker only delays deletion to a later owner.
     }
   }
 
@@ -773,6 +923,7 @@ export class CacheCoordinatorPageAdapter {
     this.terminalErrorReported = true;
     this.closed = true;
     this.registered = false;
+    this.terminateCleanupWorker();
     this.clearGracefulTimeout();
     if (this.ownerEpoch !== undefined) {
       this.terminateEngine(this.ownerEpoch, error.message, false);
@@ -791,6 +942,7 @@ export class CacheCoordinatorPageAdapter {
   private finishDispose(): void {
     this.closed = true;
     this.registered = false;
+    this.terminateCleanupWorker();
     this.clearGracefulTimeout();
     this.closeCoordinatorPort();
     this.releaseLiveness();
