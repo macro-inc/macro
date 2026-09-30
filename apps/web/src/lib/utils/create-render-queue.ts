@@ -1,8 +1,8 @@
 import { scheduleIdle, throttle } from '@solid-primitives/scheduled';
 import { onCleanup } from 'solid-js';
 
-/** Coalesces imperative grid work and yields between calendar instances. */
-export function createCalendarRenderQueue() {
+/** Coalesces keyed render work and yields between jobs. */
+export function createRenderQueue() {
   const jobs = new Map<string, { run: () => void; urgent: boolean }>();
   const runNext = () => {
     const next =

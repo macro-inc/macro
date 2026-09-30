@@ -1,3 +1,4 @@
+import { createRenderQueue } from '@app/lib/utils/create-render-queue';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import type { Calendar, DatesSetArg } from '@fullcalendar/core';
 import { createPager, type PagerController } from '@ui/components/Pager';
@@ -12,7 +13,6 @@ import {
   type ParentProps,
 } from 'solid-js';
 import type { CalendarOccurrenceData } from '../hooks/use-calendar-occurrence-data';
-import { createCalendarRenderQueue } from '../primitives/create-calendar-render-queue';
 import type { CalendarEvent, CalendarPeriodView } from '../types';
 import { timeGridScroller } from '../utils/time-grid-scroller';
 
@@ -85,7 +85,7 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
   const activePage = createMemo(() => pageHandle(activePageId()));
   const activeData = createMemo(() => activePage()?.data);
   const activeDateInfo = createMemo(() => activePage()?.dateInfo());
-  const renderQueue = createCalendarRenderQueue();
+  const renderQueue = createRenderQueue();
   const [buffersPending, setBuffersPending] = createSignal(false);
   // Arrow clicks accumulate against the requested date, not the last grid that
   // finished rendering. A newer request can replace an unfinished transition.

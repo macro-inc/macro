@@ -92,6 +92,53 @@ describe('calendar loading transition', () => {
     dispose();
   });
 
+  it('ignores duplicate loading updates without restarting state timers', () => {
+    const { transition, dispose } = setup();
+    transition.setLoading(true);
+    vi.advanceTimersByTime(80);
+    transition.setLoading(true);
+    vi.advanceTimersByTime(40);
+    expect(transition.phase()).toBe('visible');
+    transition.setLoading(false);
+    vi.advanceTimersByTime(100);
+    transition.setLoading(false);
+    vi.advanceTimersByTime(140);
+    expect(transition.phase()).toBe('leaving');
+    dispose();
+  });
+
+  it('notifies phase changes synchronously without repeating the visible phase', () => {
+    const onPhaseChange = vi.fn();
+    const { transition, dispose } = createRoot((dispose) => ({
+      transition: createCalendarLoadingTransition(onPhaseChange),
+      dispose,
+    }));
+    transition.setLoading(true);
+    expect(onPhaseChange).toHaveBeenLastCalledWith('waiting');
+    vi.advanceTimersByTime(120);
+    expect(onPhaseChange).toHaveBeenLastCalledWith('visible');
+    transition.setLoading(false);
+    expect(onPhaseChange.mock.calls.map(([phase]) => phase)).toEqual([
+      'waiting',
+      'visible',
+    ]);
+    vi.advanceTimersByTime(240);
+    expect(transition.phase()).toBe('leaving');
+    expect(onPhaseChange).toHaveBeenLastCalledWith('leaving');
+    vi.advanceTimersByTime(180);
+    expect(onPhaseChange).toHaveBeenLastCalledWith('hidden');
+    dispose();
+  });
+
+  it('ignores loading updates after owner disposal', () => {
+    const { transition, dispose } = setup();
+    transition.setLoading(true);
+    dispose();
+    transition.setLoading(true);
+    expect(transition.phase()).toBe('hidden');
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it.each(['waiting', 'visible', 'leaving'] as const)(
     'reset hides immediately and cancels timers during %s',
     (state) => {

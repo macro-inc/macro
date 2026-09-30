@@ -1,15 +1,15 @@
 import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createCalendarRenderQueue } from './create-calendar-render-queue';
+import { createRenderQueue } from './create-render-queue';
 
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
-describe('calendar render queue', () => {
-  it('defers grid work, coalesces changes, and prioritizes the visible page', async () => {
+describe('render queue', () => {
+  it('defers work, coalesces keyed changes, and prioritizes urgent jobs', async () => {
     const calls: string[] = [];
     const { queue, dispose } = createRoot((dispose) => ({
-      queue: createCalendarRenderQueue(),
+      queue: createRenderQueue(),
       dispose,
     }));
     queue.enqueue('buffer', () => calls.push('buffer'));
@@ -23,10 +23,10 @@ describe('calendar render queue', () => {
     dispose();
   });
 
-  it('cancels obsolete navigation and pending work on disposal', async () => {
+  it('cancels queued jobs and pending work on disposal', async () => {
     const run = vi.fn();
     const { queue, dispose } = createRoot((dispose) => ({
-      queue: createCalendarRenderQueue(),
+      queue: createRenderQueue(),
       dispose,
     }));
     queue.enqueue('view', run);
@@ -42,7 +42,7 @@ describe('calendar render queue', () => {
   it('services work queued by another job in a separate task', async () => {
     const calls: string[] = [];
     const { queue, dispose } = createRoot((dispose) => ({
-      queue: createCalendarRenderQueue(),
+      queue: createRenderQueue(),
       dispose,
     }));
     queue.enqueue('view', () => {
