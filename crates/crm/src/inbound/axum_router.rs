@@ -37,8 +37,6 @@ pub mod create_company;
 /// Manually create a contact (name + email) under a CRM company.
 pub mod create_contact;
 
-/// Comment threads on a `crm_companies` / `crm_contacts` row.
-
 /// Team-level CRM configuration (permission thresholds, closed stages,
 /// team saved views).
 pub mod team_settings;
