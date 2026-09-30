@@ -326,26 +326,20 @@ function createFullCalendarController(
     const nextOptions = buildOptions();
     const next = nextOptions.options as Record<string, unknown>;
     const previous = (appliedOptions ?? {}) as Record<string, unknown>;
-    const changedOptionNames = [
-      ...new Set([...Object.keys(previous), ...Object.keys(next)]),
-    ].filter((name) => !Object.is(previous[name], next[name]));
-    const removedOptionNames = Object.keys(previous).filter(
+    const changedOptionNames = Object.keys(next).filter(
+      (name) => !Object.is(previous[name], next[name])
+    );
+    const hasRemovedOption = Object.keys(previous).some(
       (name) => !(name in next)
     );
-    if (changedOptionNames.length === 0 && removedOptionNames.length === 0)
-      return;
+    if (changedOptionNames.length === 0 && !hasRemovedOption) return;
     appliedOptions = nextOptions.options;
     customRenderingManager.retainGeneratorNames(nextOptions.contentOptionNames);
-    // FullCalendar merges deltas over existing overrides. Removing a prop needs
-    // a full replacement to restore defaults, not an explicit undefined value.
-    if (removedOptionNames.length > 0) {
-      calendarInstance.resetOptions(nextOptions.options);
-      return;
-    }
-    // Event-only updates must not refine every option or remount content slots.
+    // FullCalendar merges partial updates over existing overrides. Removing a prop
+    // needs a full replacement to restore defaults; otherwise refine only changes.
     calendarInstance.resetOptions(
-      Object.fromEntries(changedOptionNames.map((name) => [name, next[name]])),
-      changedOptionNames
+      nextOptions.options,
+      hasRemovedOption ? undefined : changedOptionNames
     );
   };
 

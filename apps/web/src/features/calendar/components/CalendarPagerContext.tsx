@@ -48,6 +48,11 @@ const shiftedDateForView = (
   return shifted;
 };
 
+const navigateCalendar = (api: Calendar, view: string, date?: Date) => {
+  if (api.view.type !== view) api.changeView(view, date);
+  else if (date) api.gotoDate(date);
+};
+
 interface CalendarPagerContextProps extends ParentProps {
   [key: string]: unknown;
   initialView: CalendarPeriodView;
@@ -86,7 +91,6 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
   const activeData = createMemo(() => activePage()?.data);
   const activeDateInfo = createMemo(() => activePage()?.dateInfo());
   const renderQueue = createRenderQueue();
-  const [buffersPending, setBuffersPending] = createSignal(false);
   // Arrow clicks accumulate against the requested date, not the last grid that
   // finished rendering. A newer request can replace an unfinished transition.
   const [requestedDate, setRequestedDate] = createSignal<Date>();
@@ -130,14 +134,8 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
     const sourceApi = source?.api();
     if (!api || !sourceApi) return;
 
-    const date = sourceApi.getDate();
-    const view = sourceApi.view.type;
     api.batchRendering(() => {
-      if (api.view.type === view) {
-        api.gotoDate(date);
-      } else {
-        api.changeView(view, date);
-      }
+      navigateCalendar(api, sourceApi.view.type, sourceApi.getDate());
 
       if (direction === 'previous') {
         api.prev();
@@ -147,25 +145,24 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
     });
   };
 
+  const queueBuffer = (id: CalendarPageId, direction: 'previous' | 'next') => {
+    const source = activePage();
+    renderQueue.enqueue(`buffer:${id}`, () => {
+      synchronizePage(pageHandle(id), source, direction);
+      copyActiveScrollPosition();
+    });
+  };
+
   const synchronizeBuffers = () => {
     const order = pageOrder();
     const activeIndex = order.indexOf(activePageId());
-    const current = activePage();
     const neighbors = [
       [order[activeIndex - 1], 'previous'],
       [order[activeIndex + 1], 'next'],
     ] as const;
-    setBuffersPending(true);
-    let remaining = neighbors.filter(([id]) => id !== undefined).length;
     for (const [id, direction] of neighbors) {
-      if (!id) continue;
-      renderQueue.enqueue(`buffer:${id}`, () => {
-        synchronizePage(pageHandle(id), current, direction);
-        copyActiveScrollPosition();
-        if (--remaining === 0) setBuffersPending(false);
-      });
+      if (id) queueBuffer(id, direction);
     }
-    if (remaining === 0) setBuffersPending(false);
   };
 
   const rotatePages = (
@@ -186,13 +183,7 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
       setActivePageId(() => destination);
     });
 
-    const current = pageHandle(destination);
-    setBuffersPending(true);
-    renderQueue.enqueue(`buffer:${recycledId}`, () => {
-      synchronizePage(pageHandle(recycledId), current, direction);
-      copyActiveScrollPosition();
-      setBuffersPending(false);
-    });
+    if (recycledId) queueBuffer(recycledId, direction);
   };
 
   const pager: PagerController<CalendarPageId> = createPager({
@@ -200,7 +191,7 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
     activePage: activePageId,
     canChangePage: ({ to }) =>
       !isChangingView() &&
-      !buffersPending() &&
+      !renderQueue.hasPending() &&
       pageHandle(to)?.api() !== undefined,
     onDragStart: copyActiveScrollPosition,
     onTransitionStart: () => {
@@ -252,23 +243,27 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
     }
   };
 
-  const gotoDate = (date: Date) => {
-    setRequestedDate(date);
+  const scheduleActiveUpdate = () => {
     pager.cancel();
-    props.onNavigate();
     renderQueue.clear();
     renderQueue.enqueue(
-      'navigate',
+      'active',
       () => {
         const api = activePage()?.api();
         if (!api) return;
-        if (api.view.type === periodView()) api.gotoDate(date);
-        else api.changeView(periodView(), date);
-        clearRequestedDate(date);
+        const date = requestedDate();
+        navigateCalendar(api, periodView(), date);
+        if (date) clearRequestedDate(date);
         synchronizeBuffers();
       },
       true
     );
+  };
+
+  const gotoDate = (date: Date) => {
+    setRequestedDate(date);
+    props.onNavigate();
+    scheduleActiveUpdate();
   };
 
   const finishDateNavigation = async (
@@ -300,7 +295,7 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
       requestedDate() ||
       pager.phase() !== 'idle' ||
       isChangingView() ||
-      buffersPending()
+      renderQueue.hasPending()
     ) {
       gotoDate(target);
       return;
@@ -314,7 +309,7 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
   const navigateToDate = (date: Date) => {
     // A date aim can arrive before a period's hidden buffers are ready. Page
     // transitions reject that destination; aim the active grid directly instead.
-    if (requestedDate() || isChangingView() || buffersPending()) {
+    if (requestedDate() || isChangingView() || renderQueue.hasPending()) {
       gotoDate(date);
       return;
     }
@@ -351,13 +346,9 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
     }
 
     setRequestedDate(date);
-    destinationApi.batchRendering(() => {
-      if (destinationApi.view.type === sourceApi.view.type) {
-        destinationApi.gotoDate(date);
-      } else {
-        destinationApi.changeView(sourceApi.view.type, date);
-      }
-    });
+    destinationApi.batchRendering(() =>
+      navigateCalendar(destinationApi, sourceApi.view.type, date)
+    );
 
     const transition =
       direction === 'previous' ? pager.previous() : pager.next();
@@ -371,33 +362,12 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
     props.onViewChange(view);
   };
 
-  // Route changes update the selector immediately, then redraw only the active
-  // grid after paint. Hidden buffers follow in separate idle tasks. Coalescing
-  // cancels intermediate views when the user switches periods quickly.
+  // Route changes and date jumps share one coalesced active-grid update.
   createEffect(
     on([periodView, () => activePage()?.api()], ([view, api], previous) => {
       if (!api) return;
-      if (api.view.type === view && previous?.[0] === view) return;
-      renderQueue.clear();
-      if (api.view.type === view && !requestedDate()) {
-        if (previous) synchronizeBuffers();
-        return;
-      }
-      pager.cancel();
-      renderQueue.enqueue(
-        'view',
-        () => {
-          const date = requestedDate();
-          if (api.view.type === view) {
-            if (date) api.gotoDate(date);
-          } else {
-            api.changeView(view, date);
-          }
-          if (date) clearRequestedDate(date);
-          synchronizeBuffers();
-        },
-        true
-      );
+      if (api.view.type === view && (!previous || previous[0] === view)) return;
+      scheduleActiveUpdate();
     })
   );
 

@@ -1,22 +1,14 @@
 import type { DatesSetArg } from '@fullcalendar/core';
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  For,
-  on,
-  onCleanup,
-  Show,
-} from 'solid-js';
+import { createEffect, createMemo, For, on, onCleanup, Show } from 'solid-js';
+import { createStore, reconcile } from 'solid-js/store';
 import { Portal } from 'solid-js/web';
 import { createCalendarLoadingTransition } from '../../calendar/primitives/create-calendar-loading-transition';
 
 type SkeletonPlacement = {
-  kind: 'timed' | 'bar' | 'dot';
+  kind: 'timed' | 'bar' | 'text';
   top: number;
   height: number;
   titleWidth: number;
-  time?: string;
 };
 
 type SkeletonTarget = {
@@ -25,104 +17,61 @@ type SkeletonTarget = {
   placements: SkeletonPlacement[];
 };
 
-/** Keep representative event shapes stable through loading, resizing, and paging. */
-function dateSeed(date: string) {
-  let seed = 2166136261;
-  for (const character of date) {
-    seed = Math.imul(seed ^ character.charCodeAt(0), 16777619);
-  }
-  return seed >>> 0;
-}
-
-/** Place decorations in the real grid without inserting synthetic calendar events. */
+/** A small, date-stable sample of event shapes, positioned in the live grid. */
 function skeletonTargets(element: HTMLElement): SkeletonTarget[] {
   const slots = Array.from(
-    element.querySelectorAll<HTMLElement>('.fc-timegrid-slot-lane[data-time]')
+    element.querySelectorAll<HTMLElement>('.fc-timegrid-slot-lane[data-time]'),
+    (slot) => slot.getBoundingClientRect()
   );
-  const origin = slots[0]?.getBoundingClientRect().top ?? 0;
-  const rows = slots.map((slot) => {
-    const bounds = slot.getBoundingClientRect();
-    const time = slot.dataset.time ?? '';
-    const [hour, minute] = time.split(':').map(Number);
-    return {
-      time,
-      minute: hour * 60 + minute,
-      top: bounds.top - origin,
-      height: bounds.height,
-    };
-  });
+  const origin = slots[0]?.top ?? 0;
   const timed = Array.from(
     element.querySelectorAll<HTMLElement>(
       '.fc-timegrid-col[data-date]:not(.fc-day-disabled) .fc-timegrid-col-frame'
     )
   ).map((frame): SkeletonTarget => {
     const date = frame.closest<HTMLElement>('[data-date]')?.dataset.date ?? '';
-    const seed = dateSeed(date);
-    const windows = [
-      { start: 540 + (seed % 4) * 30, duration: 30 + ((seed >>> 2) % 3) * 30 },
-      {
-        start: 780 + ((seed >>> 5) % 3) * 30,
-        duration: 30 + ((seed >>> 7) % 3) * 30,
-      },
-      ...(seed % 3 === 0
-        ? []
-        : [{ start: 960 + ((seed >>> 10) % 2) * 30, duration: 60 }]),
-    ];
-    const placements = windows.flatMap((window, index): SkeletonPlacement[] => {
-      const coveredRows = rows.filter(
-        (row) =>
-          row.minute >= window.start &&
-          row.minute < window.start + window.duration
-      );
-      const first = coveredRows[0];
-      const last = coveredRows.at(-1);
-      if (!first || !last) return [];
-      return [
-        {
-          kind: 'timed',
-          time: first.time,
-          top: first.top + 2,
-          height: Math.max(12, last.top + last.height - first.top - 4),
-          titleWidth: 50 + ((seed >>> (index * 3)) % 30),
-        },
-      ];
-    });
-    // Restricted time grids still get feedback when the sample hours are outside the range.
-    if (placements.length === 0 && rows.length > 0) {
-      const first = rows[Math.floor(rows.length / 3)]!;
+    const variant = Number(date.slice(-2)) % 3;
+    const samples = variant === 0 ? [0.375, 0.55] : [0.375, 0.55, 0.69];
+    const starts = slots.length
+      ? [
+          ...new Set(
+            samples.map((fraction) =>
+              Math.min(
+                slots.length - 1,
+                Math.floor(slots.length * fraction) + variant
+              )
+            )
+          ),
+        ]
+      : [];
+    const placements = starts.map((start, index): SkeletonPlacement => {
+      const first = slots[start]!;
       const last =
-        rows[Math.min(rows.length - 1, Math.floor(rows.length / 3) + 1)]!;
-      placements.push({
+        slots[Math.min(slots.length - 1, start + ((index + variant) % 3))]!;
+      return {
         kind: 'timed',
-        time: first.time,
-        top: first.top + 2,
-        height: Math.max(12, last.top + last.height - first.top - 4),
-        titleWidth: 65,
-      });
-    }
+        top: first.top - origin + 2,
+        height: Math.max(12, last.bottom - first.top - 4),
+        titleWidth: 50 + ((index + variant) % 3) * 10,
+      };
+    });
     return { element: frame, kind: 'timed', placements };
   });
   const month = element.querySelector('.fc-dayGridMonth-view') !== null;
   const days = Array.from(
     element.querySelectorAll<HTMLElement>(
-      '.fc-daygrid-day[data-date]:not(.fc-day-disabled) .fc-daygrid-day-frame'
+      '.fc-daygrid-day[data-date]:not(.fc-day-disabled)'
     )
-  ).map((frame): SkeletonTarget => {
-    // The cell remains positioned even when FullCalendar makes its frame display: contents.
-    const cell = frame.closest<HTMLElement>('.fc-daygrid-day')!;
-    const seed = dateSeed(cell.dataset.date ?? '');
+  ).map((cell): SkeletonTarget => {
+    const variant = Number(cell.dataset.date?.slice(-2)) % 3;
     const bounds = cell.getBoundingClientRect();
-    const header = frame
+    const header = cell
       .querySelector('.fc-daygrid-day-top')
       ?.getBoundingClientRect();
     const top = month
       ? (header && header.height > 0 ? header.bottom - bounds.top : 28) + 4
       : 4;
-    const requestedCount = month
-      ? 1 + ((seed >>> 3) % 3)
-      : seed % 3 === 0
-        ? 0
-        : 1;
+    const requestedCount = month ? 1 + variant : variant === 0 ? 0 : 1;
     const count =
       bounds.height > 0
         ? Math.min(
@@ -133,11 +82,10 @@ function skeletonTargets(element: HTMLElement): SkeletonTarget[] {
     const placements = Array.from(
       { length: count },
       (_, index): SkeletonPlacement => ({
-        // All-day/multi-day entries use bars. Single-day timed entries use dot rows in Month.
-        kind: month && (index > 0 || seed % 3 !== 0) ? 'dot' : 'bar',
+        kind: month && (index > 0 || variant !== 0) ? 'text' : 'bar',
         top: top + index * 24,
         height: 20,
-        titleWidth: 50 + ((seed >>> (index * 3)) % 30),
+        titleWidth: 50 + ((index + variant) % 3) * 10,
       })
     );
     return { element: cell, kind: month ? 'month' : 'all-day', placements };
@@ -145,36 +93,10 @@ function skeletonTargets(element: HTMLElement): SkeletonTarget[] {
   return [...timed, ...days].filter((target) => target.placements.length > 0);
 }
 
-/** Keep portal nodes stable when an observer reports unchanged geometry. */
-function sameTargets(previous: SkeletonTarget[], next: SkeletonTarget[]) {
-  return (
-    previous.length === next.length &&
-    previous.every((target, index) => {
-      const other = next[index];
-      return (
-        target.element === other.element &&
-        target.kind === other.kind &&
-        target.placements.length === other.placements.length &&
-        target.placements.every((placement, placementIndex) => {
-          const nextPlacement = other.placements[placementIndex];
-          return (
-            placement.kind === nextPlacement.kind &&
-            placement.time === nextPlacement.time &&
-            placement.top === nextPlacement.top &&
-            placement.height === nextPlacement.height &&
-            placement.titleWidth === nextPlacement.titleWidth
-          );
-        })
-      );
-    })
-  );
-}
-
 function EventSkeleton(props: { placement: SkeletonPlacement }) {
   return (
     <div
       data-calendar-loading-placeholder={props.placement.kind}
-      data-calendar-loading-time={props.placement.time}
       class="absolute inset-x-1.5 overflow-hidden"
       style={{
         top: `${props.placement.top}px`,
@@ -182,7 +104,7 @@ function EventSkeleton(props: { placement: SkeletonPlacement }) {
       }}
     >
       <Show
-        when={props.placement.kind === 'dot'}
+        when={props.placement.kind === 'text'}
         fallback={
           <div class="flex size-full flex-col justify-center gap-1.5 rounded-md bg-skeleton px-1.5 py-1">
             <div
@@ -210,7 +132,6 @@ function EventSkeleton(props: { placement: SkeletonPlacement }) {
   );
 }
 
-/** Representative skeletons only: query readiness still owns the real event content. */
 export function CalendarLoadingSkeleton(props: {
   element: HTMLElement | undefined;
   dateInfo: DatesSetArg | undefined;
@@ -221,8 +142,7 @@ export function CalendarLoadingSkeleton(props: {
   const transition = createCalendarLoadingTransition((phase) =>
     props.onBlockingChange?.(phase === 'waiting' || phase === 'visible')
   );
-  const [targets, setTargets] = createSignal<SkeletonTarget[]>([]);
-  // Stable presence keeps the same portal nodes through the fade-out phase.
+  const [targets, setTargets] = createStore<SkeletonTarget[]>([]);
   const mounted = createMemo(
     () => transition.phase() === 'visible' || transition.phase() === 'leaving'
   );
@@ -233,23 +153,17 @@ export function CalendarLoadingSkeleton(props: {
       ([loading, disabled]) => {
         if (disabled) {
           transition.reset();
-          return;
-        }
-        if (loading) {
+        } else if (loading) {
           transition.setLoading(true);
-          return;
+        } else {
+          // Let FullCalendar finish laying out events before revealing them.
+          const timer = setTimeout(() => transition.setLoading(false), 0);
+          onCleanup(() => clearTimeout(timer));
         }
-        // Commit real event layout before starting the skeleton-to-events handoff.
-        const completionTimer = setTimeout(
-          () => transition.setLoading(false),
-          0
-        );
-        onCleanup(() => clearTimeout(completionTimer));
       }
     )
   );
 
-  // FullCalendar owns these DOM cells. Follow its columns, headers, and scroll position.
   createEffect(
     on(
       () => [props.element, props.dateInfo, mounted()] as const,
@@ -259,23 +173,21 @@ export function CalendarLoadingSkeleton(props: {
           return;
         }
         const refresh = () => {
-          // Keep the outgoing nodes intact if real events resize Month rows during the fade.
           if (transition.phase() === 'leaving') return;
-          const next = skeletonTargets(element);
-          setTargets((previous) =>
-            sameTargets(previous, next) ? previous : next
+          // Reconcile by DOM cell and update placements in place, without remounting portals.
+          setTargets(
+            reconcile(skeletonTargets(element), { key: 'element', merge: true })
           );
         };
         refresh();
-        let resizeTimer: ReturnType<typeof setTimeout> | undefined;
+        let timer: ReturnType<typeof setTimeout> | undefined;
         const observer = new ResizeObserver(() => {
-          clearTimeout(resizeTimer);
-          resizeTimer = setTimeout(refresh, 0);
+          clearTimeout(timer);
+          timer = setTimeout(refresh, 0);
         });
         observer.observe(element);
         const slots = element.querySelector('.fc-timegrid-slots');
         if (slots) observer.observe(slots);
-        // Event layout can resize Month rows without changing the host dimensions.
         for (const cell of element.querySelectorAll(
           '.fc-daygrid-day[data-date]:not(.fc-day-disabled)'
         )) {
@@ -283,11 +195,12 @@ export function CalendarLoadingSkeleton(props: {
         }
         onCleanup(() => {
           observer.disconnect();
-          clearTimeout(resizeTimer);
+          clearTimeout(timer);
         });
       }
     )
   );
+
   createEffect(
     on(
       () => [props.element, transition.phase()] as const,
@@ -301,7 +214,7 @@ export function CalendarLoadingSkeleton(props: {
   );
 
   return (
-    <For each={targets()}>
+    <For each={targets}>
       {(target) => (
         <Portal mount={target.element}>
           <div

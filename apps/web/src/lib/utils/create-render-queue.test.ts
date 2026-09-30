@@ -16,10 +16,13 @@ describe('render queue', () => {
     queue.enqueue('view', () => calls.push('month'), true);
     queue.enqueue('view', () => calls.push('day'), true);
     expect(calls).toEqual([]);
+    expect(queue.hasPending()).toBe(true);
     await vi.advanceTimersByTimeAsync(16);
     expect(calls).toEqual(['day']);
+    expect(queue.hasPending()).toBe(true);
     await vi.advanceTimersByTimeAsync(16);
     expect(calls).toEqual(['day', 'buffer']);
+    expect(queue.hasPending()).toBe(false);
     dispose();
   });
 
@@ -31,6 +34,7 @@ describe('render queue', () => {
     }));
     queue.enqueue('view', run);
     queue.clear();
+    expect(queue.hasPending()).toBe(false);
     await vi.runAllTimersAsync();
     expect(run).not.toHaveBeenCalled();
     queue.enqueue('view', run);

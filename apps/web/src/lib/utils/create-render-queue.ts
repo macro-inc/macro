@@ -37,6 +37,8 @@ export function createRenderQueue() {
       jobs.set(key, { run, urgent });
       schedule();
     },
+    /** Imperative status for deciding whether another interaction can use queued work. */
+    hasPending: () => jobs.size > 0,
     clear,
   };
 }
