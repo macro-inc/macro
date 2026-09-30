@@ -126,6 +126,33 @@ pub trait ChannelAttachmentRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<RecentChannelMessage>, Self::Err>> + Send;
 }
 
+/// Silent persistence for already-authorized archive targets.
+/// Import authorization and durable provenance belong to the importing domain.
+pub trait HistoricalChannelRepo: Send + Sync + 'static {
+    /// Create an explicit-ID Team/Private channel with its initial members, or return
+    /// the existing compatible target without changing any of its settings or members.
+    fn create_historical_channel(
+        &self,
+        channel: &super::historical::HistoricalChannel,
+    ) -> impl Future<Output = anyhow::Result<super::historical::EnsuredChannel>> + Send;
+
+    /// Insert missing members silently. Never demote roles or reactivate leavers.
+    /// Reject DMs so this operation cannot introduce a third member.
+    fn insert_historical_participants(
+        &self,
+        channel_id: Uuid,
+        participants: &[MacroUserIdStr<'static>],
+        joined_at: DateTime<Utc>,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+
+    /// Advance channel activity monotonically without creating ordinary activity rows.
+    fn advance_historical_activity(
+        &self,
+        channel_id: Uuid,
+        activity_at: DateTime<Utc>,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+}
+
 /// Repository for channel persistence and query data.
 #[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
 pub trait ChannelRepo: Send + Sync + 'static {
@@ -318,7 +345,16 @@ pub trait ChannelRepo: Send + Sync + 'static {
         channel_ids: &[Uuid],
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Fetch an existing direct message channel.
+    /// Atomically find or create an exact two-member DM under a normalized pair lock.
+    /// Reuse preserves all settings, roles and timestamps, including historical leavers.
+    /// Historical callers must authorize reuse before writing history into the target.
+    fn ensure_dm(
+        &self,
+        pair: super::dm::DmPair,
+        creation: super::historical::DmCreation,
+    ) -> impl Future<Output = Result<super::historical::EnsuredChannel, Self::Err>> + Send;
+
+    /// Fetch an existing exact two-member DM, deterministically choosing the oldest.
     fn maybe_get_dm<'a>(
         &self,
         user_id: MacroUserIdStr<'a>,

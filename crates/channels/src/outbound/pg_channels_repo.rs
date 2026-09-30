@@ -1,3 +1,6 @@
+/// Silent historical persistence and transaction-aware activity updates.
+pub mod historical;
+
 #[cfg(test)]
 mod tests;
 
@@ -3057,37 +3060,21 @@ impl ChannelRepo for PgChannelsRepo {
         Ok(())
     }
 
+    async fn ensure_dm(
+        &self,
+        pair: crate::domain::dm::DmPair,
+        creation: crate::domain::historical::DmCreation,
+    ) -> Result<crate::domain::historical::EnsuredChannel, Self::Err> {
+        historical::ensure_dm(self, pair, creation).await
+    }
+
     async fn maybe_get_dm(
         &self,
         user_id: MacroUserIdStr<'_>,
         recipient_id: MacroUserIdStr<'_>,
     ) -> Result<Option<Uuid>, Self::Err> {
-        let row = sqlx::query_as!(
-            ChannelIdRow,
-            r#"
-            SELECT id
-            FROM comms_channels
-            WHERE channel_type = 'direct_message'::comms_channel_type
-              AND EXISTS (
-                  SELECT 1
-                  FROM comms_channel_participants cp
-                  WHERE cp.channel_id = comms_channels.id
-                    AND cp.user_id = $1
-              )
-              AND EXISTS (
-                  SELECT 1
-                  FROM comms_channel_participants cp
-                  WHERE cp.channel_id = comms_channels.id
-                    AND cp.user_id = $2
-              )
-            "#,
-            user_id.as_ref(),
-            recipient_id.as_ref(),
-        )
-        .fetch_optional(&self.pool)
-        .await
-        .context("unable to get direct message channel")?;
-        Ok(row.map(|row| row.id))
+        let pair = crate::domain::dm::DmPair::new(user_id, recipient_id)?;
+        historical::find_dm(&mut *self.pool.acquire().await?, &pair).await
     }
 
     async fn maybe_get_private_channel(

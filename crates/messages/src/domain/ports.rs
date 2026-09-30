@@ -333,6 +333,22 @@ pub trait MessageRepository: Send + Sync + 'static {
     }
 }
 
+/// Silent historical persistence for trusted import compositions. Implementations
+/// atomically persist only messages, thread structure, reactions and user mentions:
+/// no activity, sharing, notifications, bots, contacts, broker or realtime effects.
+/// The caller authorizes the channel and owns source deduplication. Importers that
+/// also commit mappings/checkpoints must compose owning-crate transaction helpers
+/// instead of calling this standalone transaction boundary.
+pub trait HistoricalMessageRepository: Send + Sync + 'static {
+    /// Insert a bounded batch. Existing message IDs reject the whole batch; source
+    /// mappings must be resolved before calling. Roots may precede replies in an
+    /// earlier batch or appear anywhere in this one.
+    fn insert_historical(
+        &self,
+        batch: &super::historical::HistoricalBatch,
+    ) -> impl Future<Output = Result<(), MessageError>> + Send;
+}
+
 /// Publish committed changes, deriving delivery policy from the persisted parent.
 pub trait MessageEventPublisher: Send + Sync + 'static {
     /// Deliver a change through realtime and contextual notification adapters.

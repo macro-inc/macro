@@ -1403,25 +1403,30 @@ where
         pair: DmPair,
         owner: MacroUserIdStr<'static>,
     ) -> Result<GetOrCreateChannelResponse, ChannelMutationErr> {
-        let existing_channel_id = self
+        let participant_user_ids = vec![pair.lo().clone(), pair.hi().clone()];
+        let ensured = self
             .repo
-            .maybe_get_dm(pair.lo().clone(), pair.hi().clone())
+            .ensure_dm(pair, super::historical::DmCreation::Live(owner.clone()))
             .await
             .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
 
-        self.get_or_create_channel(
-            existing_channel_id,
-            owner,
-            None,
-            crate::domain::models::CreateChannelRequest {
-                name: None,
+        let action = if ensured.created {
+            self.events.dispatch(ChannelEvent::ChannelCreated {
+                channel_id: ensured.id,
+                actor: ChannelSender::new_from_user(owner),
+                on_behalf_of: None,
                 channel_type: ChannelType::DirectMessage,
-                team_id: None,
-                auto_join_team: false,
-                participants: HashSet::from([pair.lo().clone(), pair.hi().clone()]),
-            },
-        )
-        .await
+                channel_name: None,
+                participant_user_ids,
+            });
+            GetOrCreateAction::Create
+        } else {
+            GetOrCreateAction::Get
+        };
+        Ok(GetOrCreateChannelResponse {
+            channel_id: ensured.id.to_string(),
+            action,
+        })
     }
 
     async fn create_channel_record<'a>(

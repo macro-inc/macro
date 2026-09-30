@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT channel_id, parent_entity_type, parent_entity_id, import_metadata, import_order FROM comms_messages WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "channel_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "parent_entity_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "parent_entity_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "import_metadata",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
+        "name": "import_order",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "e8716b5ae331e16652de2e4691250b6060db0e4e7c4c744c9f157ab32f6d9224"
+}
