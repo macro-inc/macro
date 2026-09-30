@@ -125,16 +125,15 @@ function ViewTourHint(props: { tour: ViewTourDefinition }) {
   const tour = useTour<ViewTourStep>();
   return (
     <>
-      <p class="flex items-center gap-1.5 text-xs text-ink-muted">
-        <span class="font-medium">{props.tour.title}</span>
-        <span aria-hidden="true">·</span>
+      <div class="flex items-center gap-2 text-xs text-ink-muted">
+        <p class="mr-auto font-medium">{props.tour.title}</p>
         <Tour.Progress />
-      </p>
+      </div>
       <p class="mt-1.5 text-sm leading-5">
         {tour.current().entryLabel ?? `Continue with ${props.tour.title}`}
       </p>
       <div class="mt-3">
-        <Tour.Next variant="outline" size="sm" doneLabel="Done">
+        <Tour.Next variant="outline" size="md" doneLabel="Done">
           Skip
         </Tour.Next>
       </div>
