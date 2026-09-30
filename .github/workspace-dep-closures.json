@@ -5878,6 +5878,7 @@
       "crates/graphql_email",
       "crates/graphql_initiative",
       "crates/graphql_permission",
+      "crates/graphql_properties",
       "crates/graphql_soup",
       "crates/graphql_soup_filter_input",
       "crates/harness_id",
