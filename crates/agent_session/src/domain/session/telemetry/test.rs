@@ -344,6 +344,33 @@ fn a_refused_prompt_ends_the_turn_in_error() {
         string_array_attribute(agent[0], attr::RESPONSE_FINISH_REASONS),
         Some(vec!["error".to_owned()])
     );
+    assert_eq!(
+        int_attribute(agent[0], attr::MACRO_TIME_TO_FIRST_OUTPUT_MS),
+        None,
+        "a turn that streamed nothing has no time to first output"
+    );
+}
+
+#[test]
+fn time_to_first_output_dates_the_first_streamed_chunk() {
+    let (exporter, provider, _guard) = otel_test_pipeline();
+    let mut projector = projector(ContentPolicy::enabled());
+    replay(&mut projector, fixtures::TURN);
+    let spans = finished(&exporter, &provider);
+
+    let agent = spans_named(&spans, "invoke_agent");
+    assert_eq!(agent.len(), 1);
+    let ttfo = int_attribute(agent[0], attr::MACRO_TIME_TO_FIRST_OUTPUT_MS)
+        .expect("a turn with output records its time to first output");
+    // A replay streams instantly; what matters is the value is a sane,
+    // non-negative duration recorded once on the turn span.
+    assert!((0..1_000).contains(&ttfo), "replay is instant: {ttfo}ms");
+    let tools = spans_named(&spans, "execute_tool Bash");
+    assert_eq!(
+        int_attribute(tools[0], attr::MACRO_TIME_TO_FIRST_OUTPUT_MS),
+        None,
+        "tool spans do not carry the turn's time to first output"
+    );
 }
 
 #[test]

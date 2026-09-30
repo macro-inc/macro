@@ -72,6 +72,10 @@ pub const MACRO_CONTEXT_USED_TOKENS: &str = "macro.genai.context.used_tokens";
 /// Macro-specific: the agent's context window size in tokens (ACP
 /// `usage_update.size`).
 pub const MACRO_CONTEXT_SIZE_TOKENS: &str = "macro.genai.context.size_tokens";
+/// Macro-specific: milliseconds from sending `session/prompt` to the first
+/// output the harness streamed back (prose, reasoning or a tool call), as the
+/// session actor observed it. Absent when the turn ended without output.
+pub const MACRO_TIME_TO_FIRST_OUTPUT_MS: &str = "macro.genai.turn.time_to_first_output_ms";
 /// Macro-specific: the coarse ACP tool kind (`execute`, `edit`, `read`, …).
 pub const MACRO_TOOL_KIND: &str = "macro.genai.tool.kind";
 /// Macro-specific: the human-readable title the harness gave a tool call.
