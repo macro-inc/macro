@@ -9,7 +9,7 @@ import { callDetailRoute } from '@app/features/block-call/route';
 import { prDetailRoute } from '@app/features/block-pr/route';
 import { calendarSplitRoute } from '@app/features/calendar-view/route';
 import { channelsSplitRoute } from '@app/features/channels-view/route';
-import { companiesRoute } from '@app/features/companies/route';
+import { companiesRoute } from '@app/features/crm/route';
 import { driveSplitRoute } from '@app/features/drive-view/route';
 import { emailSplitRoute } from '@app/features/email-view/route';
 import { gettingStartedRoute } from '@app/features/getting-started/route';

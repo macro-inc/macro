@@ -1,3 +1,4 @@
+import { createCrmEntityActionItems } from '@app/features/crm/crm-action-items';
 import {
   type EntityActionListState,
   type EntityActionNavigationHandler,
@@ -11,7 +12,6 @@ import {
   makeDeleteAction,
   makeEditReminderAction,
   makeFavoriteAction,
-  makeHideCompanyAction,
   makeMarkDoneAction,
   makeMarkNotDoneAction,
   makeMarkNotificationsReadAction,
@@ -23,7 +23,6 @@ import {
   makeMuteAction,
   makeRemoveFromProjectAction,
   makeRenameAction,
-  makeSetCompanyPropertyAction,
   makeShareAction,
   markReminderTargetDone,
 } from '@app/features/next-soup/actions';
@@ -43,7 +42,6 @@ import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import type { EntityData } from '@entity';
 import { isTaskEntity } from '@entity';
-import { useSetCompanyHiddenMutation } from '@queries/crm/companies';
 import type { Component, JSX } from 'solid-js';
 
 type SoupEntityActionItem = {
@@ -101,7 +99,7 @@ export function createSoupEntityActions(): {
   const projectsFlag = useFeatureFlag(enableProjects);
   const userId = useUserId();
   const notificationSource = useGlobalNotificationSource();
-  const hiddenMutation = useSetCompanyHiddenMutation();
+  const crmActions = createCrmEntityActionItems();
 
   const markDone = makeMarkDoneAction({
     userId: () => userId(),
@@ -146,11 +144,6 @@ export function createSoupEntityActions(): {
   const blockSenderAction = makeBlockSenderAction();
   const markSenderSignalAction = makeMarkSenderSignalAction();
   const markSenderNoiseAction = makeMarkSenderNoiseAction();
-  const hideCompanyAction = makeHideCompanyAction({
-    setHidden: (companyId, hidden) =>
-      hiddenMutation.mutateAsync({ companyId, hidden }),
-  });
-  const setCompanyPropertyAction = makeSetCompanyPropertyAction();
 
   const buildActionGroups: BuildActionGroups = (
     soup,
@@ -486,39 +479,7 @@ export function createSoupEntityActions(): {
       });
     }
 
-    // CRM group: Set stage/owner/revenue on the whole company
-    // selection, Hide / Unhide for a single company.
-    const crmItems: SoupEntityActionItem[] = [];
-
-    for (const [field, label] of [
-      ['stage', 'Set stage'],
-      ['owner', 'Set owner'],
-      ['revenue', 'Set revenue'],
-    ] as const) {
-      if (
-        !canExecuteAll((entity) =>
-          setCompanyPropertyAction.canExecute(entity, field)
-        )
-      )
-        continue;
-      crmItems.push({
-        id: `set-${field}`,
-        label,
-        onClick: () => setCompanyPropertyAction.execute(entities, field),
-      });
-    }
-
-    const singleEntity = entities.length === 1 ? entities[0] : undefined;
-    if (
-      singleEntity?.type === 'crm_company' &&
-      hideCompanyAction.canExecute(singleEntity)
-    ) {
-      crmItems.push({
-        id: 'hide-company',
-        label: singleEntity.hidden ? 'Unhide' : 'Hide',
-        onClick: handle(hideCompanyAction.executeWithSoup),
-      });
-    }
+    const crmItems = crmActions(entities, soup);
 
     // Delete group
     const deleteItems: SoupEntityActionItem[] = [];
