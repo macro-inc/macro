@@ -1120,6 +1120,7 @@ dependencies = [
  "futures",
  "lazy_static",
  "macro_env_var",
+ "macro_user_id",
  "rand 0.9.4",
  "regex",
  "reqwest 0.13.4",

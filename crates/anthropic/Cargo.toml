@@ -10,6 +10,7 @@ openai = ["dep:async-openai"]
 toolset = ["dep:ai_billing", "dep:ai_toolset", "dep:async-trait", "dep:anyhow", "dep:ai_usage"]
 
 [dev-dependencies]
+macro_user_id = { path = "../macro_user_id" }
 rand = { workspace = true }
 tokio = { workspace = true, features = ["test-util"] }
 

@@ -486,6 +486,7 @@ pub async fn build_tool_service_context_from_env(
         skill_tool_context,
         schedule_tool_context: crate::NoOpScheduleContext,
         anthropic_tool_context,
+        admission: Arc::new(ai_billing::domain::admission::DisabledAiAdmissionService),
         recorder: ai_usage::pg_recorder(pool.clone()),
         usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
     })
