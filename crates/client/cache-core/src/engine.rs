@@ -48,8 +48,8 @@ use crate::record_selection::{
 };
 use crate::revision::{CacheRevision, Revisioned};
 use crate::search::{
-    SearchCursor, SearchDocument, SearchError, SearchPage, SearchProfile, SearchRequest,
-    collect_search_changes, compare_recent, fuzzy_freshness_score, project_search_documents,
+    SearchCatalogs, SearchCursor, SearchDocument, SearchError, SearchPage, SearchProfile,
+    SearchRequest, collect_search_changes, project_search_documents, rank_documents,
     snapshot_search_fields, validate_search_request,
 };
 use crate::store::{QueueDiagnostics, Storage};
@@ -324,7 +324,7 @@ pub struct Engine<S: Storage> {
     optimistic_hydrated: bool,
     /// Compact durable catalogs are loaded lazily for text search. Empty
     /// queries use the storage index directly and do not populate this map.
-    search_catalogs: HashMap<SearchProfile, HashMap<EntityKey<'static>, SearchDocument>>,
+    search_catalogs: SearchCatalogs,
 }
 
 impl<S: Storage> Engine<S> {
@@ -342,7 +342,7 @@ impl<S: Storage> Engine<S> {
             identity: IdentityState::NotHydrated,
             optimistic: Vec::new(),
             optimistic_hydrated: false,
-            search_catalogs: HashMap::new(),
+            search_catalogs: SearchCatalogs::default(),
         }
     }
 
@@ -906,7 +906,7 @@ impl<S: Storage> Engine<S> {
     /// decoding normalized-record payloads.
     ///
     /// Empty queries fan out over the per-profile/per-bucket timestamp index.
-    /// Text queries lazily load one compact catalog and rank it in memory.
+    /// Text queries lazily load only requested buckets and rank borrowed entries.
     /// Active optimistic layers are projected from their fully composed record
     /// values and overlaid explicitly on either durable path.
     pub async fn search(
@@ -929,7 +929,7 @@ impl<S: Storage> Engine<S> {
         let overlay = self.optimistic_search_overlay(request.profile).await?;
         let trimmed_query = request.query.trim();
 
-        let mut candidates: HashMap<EntityKey<'static>, SearchDocument> =
+        let browse_candidates: HashMap<EntityKey<'static>, SearchDocument> =
             if trimmed_query.is_empty() {
                 // Fetch enough extra durable rows to compensate for optimistic
                 // replacements/removals without turning this into a record scan.
@@ -955,71 +955,40 @@ impl<S: Storage> Engine<S> {
                 }
                 candidates
             } else {
-                if !self.search_catalogs.contains_key(&request.profile) {
-                    let documents = self
-                        .storage
-                        .load_search_documents(request.profile)
-                        .await
-                        .map_err(EngineError::Storage)?;
-                    self.search_catalogs.insert(
-                        request.profile,
-                        documents
-                            .into_iter()
-                            .map(|document| (document.record_key.clone(), document))
-                            .collect(),
-                    );
+                for bucket in &buckets {
+                    // Unknown (but syntactically valid) buckets have no projection.
+                    // Do not grow the catalog map with arbitrary empty names.
+                    if !request.profile.buckets().contains(&bucket.as_str()) {
+                        continue;
+                    }
+                    if self.search_catalogs.get(request.profile, bucket).is_none() {
+                        let documents = self
+                            .storage
+                            .load_search_documents(request.profile, bucket)
+                            .await
+                            .map_err(EngineError::Storage)?;
+                        self.search_catalogs
+                            .insert(request.profile, bucket.clone(), documents);
+                    }
                 }
-                self.search_catalogs[&request.profile].clone()
+                HashMap::new()
             };
 
-        for (key, document) in overlay {
-            candidates.remove(&key);
-            if let Some(document) = document
-                && bucket_set.contains(document.bucket.as_str())
-                && cursor_allows(request.cursor.as_ref(), &document)
-            {
-                candidates.insert(key, document);
-            }
-        }
-
-        let mut scored: Vec<(SearchDocument, f64)> = candidates
-            .into_values()
+        let cached = buckets
+            .iter()
+            .filter(|_| !trimmed_query.is_empty())
+            .filter_map(|bucket| self.search_catalogs.get(request.profile, bucket))
+            .flat_map(|catalog| catalog.values());
+        // A shadow removes its durable counterpart even when the optimistic
+        // value is deleted, moved to another bucket, or excluded by the cursor.
+        let candidates = browse_candidates
+            .values()
+            .chain(cached)
+            .filter(|document| !overlay.contains_key(&document.record_key))
+            .chain(overlay.values().filter_map(Option::as_ref))
             .filter(|document| bucket_set.contains(document.bucket.as_str()))
-            .filter(|document| cursor_allows(request.cursor.as_ref(), document))
-            .filter_map(|document| {
-                let score = if trimmed_query.is_empty() {
-                    Some(0.0)
-                } else {
-                    fuzzy_freshness_score(&document, trimmed_query, request.now_ms)
-                }?;
-                Some((document, score))
-            })
-            .collect();
-        if trimmed_query.is_empty() {
-            scored.sort_by(|(left, _), (right, _)| compare_recent(left, right));
-        } else {
-            scored.sort_by(|(left, left_score), (right, right_score)| {
-                right_score
-                    .total_cmp(left_score)
-                    .then_with(|| compare_recent(left, right))
-            });
-        }
-        let has_more = scored.len() > request.limit;
-        scored.truncate(request.limit);
-        let documents: Vec<_> = scored.into_iter().map(|(document, _)| document).collect();
-        let next_cursor = (trimmed_query.is_empty() && has_more).then(|| {
-            let last = documents
-                .last()
-                .expect("a truncated search page contains a document");
-            SearchCursor {
-                timestamp_ms: last.timestamp_ms,
-                record_key: last.record_key.clone(),
-            }
-        });
-        Ok(SearchPage {
-            documents,
-            next_cursor,
-        })
+            .filter(|document| cursor_allows(request.cursor.as_ref(), document));
+        Ok(rank_documents(request, candidates))
     }
 
     async fn optimistic_search_overlay(
@@ -1045,19 +1014,7 @@ impl<S: Storage> Engine<S> {
     }
 
     fn update_loaded_search_catalogs(&mut self, entries: &[(EntityKey<'static>, Record)]) {
-        if self.search_catalogs.is_empty() {
-            return;
-        }
-        for (key, record) in entries {
-            for catalog in self.search_catalogs.values_mut() {
-                catalog.remove(key);
-            }
-            for document in project_search_documents(key, record) {
-                if let Some(catalog) = self.search_catalogs.get_mut(&document.profile) {
-                    catalog.insert(key.clone(), document);
-                }
-            }
-        }
+        self.search_catalogs.update(entries);
     }
 
     /// Normalizes and stores a network response. Returns changed records and
@@ -2446,9 +2403,7 @@ impl<S: Storage> Engine<S> {
             .map_err(EngineError::Storage)?;
         for key in keys {
             self.hot.pop(key);
-            for catalog in self.search_catalogs.values_mut() {
-                catalog.remove(key);
-            }
+            self.search_catalogs.remove(key);
         }
         self.advance_revision()?;
         Ok(self.revisioned(affected))
@@ -2604,9 +2559,7 @@ impl<S: PredicateIndexStorage> Engine<S> {
             .map_err(EngineError::Storage)?;
         for key in keys {
             self.hot.pop(key);
-            for catalog in self.search_catalogs.values_mut() {
-                catalog.remove(key);
-            }
+            self.search_catalogs.remove(key);
         }
         self.advance_revision()?;
         Ok(self.revisioned(affected))
