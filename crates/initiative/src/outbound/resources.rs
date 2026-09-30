@@ -87,8 +87,26 @@ impl<P: PropertiesService, S: SystemPropertiesService, A: EntityAccessService> I
                     .await
                 {
                     // The caller deletes the initiative; values already written go with it.
-                    if let Err(cleanup) = self.properties.delete_entity_properties(&receipt).await {
-                        tracing::error!(error = ?cleanup, %id, "failed to remove initial properties");
+                    // Like the delete path, the cleanup is internal rather than an owner
+                    // edit, so a rejected create records no activity.
+                    let cleanup = EntityAccessReceipt::<EditAccessLevel>::try_new(
+                        EntityAccessAuth::Internal,
+                        receipt.entity().clone(),
+                        EntityPermission::AccessLevel {
+                            access_level: AccessLevel::Owner,
+                        },
+                    );
+                    match cleanup {
+                        Ok(cleanup) => {
+                            if let Err(cleanup) =
+                                self.properties.delete_entity_properties(&cleanup).await
+                            {
+                                tracing::error!(error = ?cleanup, %id, "failed to remove initial properties");
+                            }
+                        }
+                        Err(cleanup) => {
+                            tracing::error!(error = ?cleanup, %id, "failed to remove initial properties");
+                        }
                     }
                     return Err(initial_property_error(error));
                 }
