@@ -15875,6 +15875,21 @@
           },
           {
             "type": "object",
+            "description": "An accepted command was refused before runtime execution.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["agent_session.command_rejected"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/CommandRejectedMetadata",
+                "description": "An accepted command was refused before runtime execution."
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "A turn ended with nothing queued behind it.",
             "required": ["metadata", "event_type"],
             "properties": {
@@ -20097,6 +20112,60 @@
           "token": {
             "type": "string",
             "description": "The signed JWT to pass to the sync-service websocket connect."
+          }
+        }
+      },
+      "CommandFailure": {
+        "type": "object",
+        "description": "Sanitized public details of a command refused before runtime execution.",
+        "required": ["code", "message", "retryable"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Stable public denial or unavailability code."
+          },
+          "message": {
+            "type": "string",
+            "description": "Public explanation, never an internal error report."
+          },
+          "retryable": {
+            "type": "boolean",
+            "description": "Whether retrying later may succeed without a policy change."
+          }
+        }
+      },
+      "CommandRejectedMetadata": {
+        "type": "object",
+        "description": "An accepted command was refused before it could start a runtime turn.",
+        "required": ["identity", "action_id", "failure"],
+        "properties": {
+          "action_id": {
+            "$ref": "#/components/schemas/AgentActionId",
+            "description": "The command that will not execute."
+          },
+          "actor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "Who submitted the command, if acting on a user's behalf."
+              }
+            ]
+          },
+          "announcement_message_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The command's thread announcement, when one was created."
+          },
+          "failure": {
+            "$ref": "#/components/schemas/CommandFailure",
+            "description": "Safe details for clients and downstream consumers."
+          },
+          "identity": {
+            "$ref": "#/components/schemas/SessionIdentity",
+            "description": "The session."
           }
         }
       },

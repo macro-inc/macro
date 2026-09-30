@@ -386,7 +386,27 @@ Automatic chat naming is admitted independently. If naming is denied or validati
 is unavailable, the successful chat continues with its existing/default title.
 Usage meters, credit controls, out-of-credit dialogs, and model usage multipliers
 are hidden outside frontend development mode. Normal paid-model access rules
-still apply everywhere.
+still apply everywhere. Backend enforcement does not depend on those frontend
+controls, and enabling it does not enable production credit collection. There is
+no new upgrade prompt in this rollout.
+
+Session creation and spending controls also return 402/503 for admission failures.
+Waiting prompts are checked again before execution: exhaustion removes rejected
+work from the queue and resolves its announced reply as failed, publishing
+`agent_session.command_rejected` with the action ID and safe failure details.
+Billing unavailability retains waiting work for a later queue-driving event rather
+than retrying continuously. Already-running turns are not retroactively cancelled;
+Stop/cancel and non-spending controls remain usable. Direct ACP requests receive a
+protocol error with a stable `code` and `retryable` flag, not an HTTP status.
+
+A direct AI tool/MCP or AI-edit refusal is a failed tool result even if the outer
+transport succeeds. No worker/provider edit should happen after refusal. Ordinary
+manual editing, deterministic tools/imports, and the exempt Memory, AiProjection,
+CallSummary, and Dictation features are not blocked by quota. Optional naming or
+trigger inference may be skipped without blocking successful primary work; it
+must not make a fallback model call. Managed sessions use their persisted owner
+for quota, not a collaborating sender. Externally funded runtimes skip session
+quota, but Macro-funded tools and helpers still check independently.
 
 In dev, paid plans include a monthly AI allowance (Premium $40, Max $200, at Macro's
 usage rates). When it is used up and no credits or usage billing cover the
@@ -399,6 +419,35 @@ members who are not the payer see a note to ask the team owner to add credits
 or turn on usage billing.
 Each team seat has its own allowance; unused allowance never moves between
 members. The team owner's prepaid credits and usage-billing cap are shared.
+
+### Quota manual checks
+
+Use an isolated local backend with local billing fixtures, not real hosted
+accounts. See [quota rollout and coverage](../AI_QUOTA_ENFORCEMENT.md) for setup
+and the full matrix. Record both browser behavior and the Network/protocol result;
+existing UI does not promise a dedicated quota dialog outside development mode.
+
+1. With the flag absent/false across all hosts, send a legacy chat and a managed
+   session prompt. Confirm ordinary behavior and new uncounted usage rows.
+2. With enforcement true and an exhausted paid fixture, select a Macro-funded
+   model and send from Home, a legacy chat, and a doc-scoped chat. Confirm 402 with
+   a stable denial code, no new orphaned session/chat/message/stream, no provider
+   work, and usable retry/cancel controls.
+   Repeat with unavailable billing: expect 503 `ai_billing_unavailable`, not success
+   or repeated automatic sends. Existing permission/model-access errors still win.
+3. Start a managed turn while allowed, queue a follow-up, then exhaust the owner
+   before dispatch. Check queue removal, the failed announced reply (when present),
+   and the matching `agent_session.command_rejected` action ID. Do not expect a
+   completed runtime turn for rejected work. During an outage, check that waiting
+   work remains without a retry loop and that Stop still works.
+4. Invoke AI editing on an editable document and an independent AI tool with the
+   exhausted fixture. Confirm failed results and unchanged document content. Check
+   manual editing and dictation still work. A successful chat whose optional rename
+   is refused keeps its existing/default title rather than failing the chat.
+5. Set false consistently and restart/redeploy all local processes. Retry refused
+   work explicitly and confirm recovery, new uncounted rows, and unchanged counted
+   history. Do not erase history to simulate rollback or claim that rollback is a
+   quota reset. Check cancellation in both flag states.
 
 ## Start a doc-scoped chat
 

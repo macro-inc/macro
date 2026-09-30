@@ -49,6 +49,30 @@ async fn admission_maps_to_shared_public_http_contract_on_create_and_control() {
     }
 }
 
+#[test]
+fn openapi_documents_session_admission_failures() {
+    #[derive(utoipa::OpenApi)]
+    #[openapi(paths(create_agent_session_handler, control_agent_session_handler))]
+    struct ApiDoc;
+
+    let schema = serde_json::to_value(<ApiDoc as utoipa::OpenApi>::openapi()).unwrap();
+    for path in ["/agent-sessions", "/agent-sessions/{session_id}/control"] {
+        let responses = &schema["paths"][path]["post"]["responses"];
+        for status in ["402", "503"] {
+            assert_eq!(
+                responses[status]["content"]["application/json"]["schema"]["$ref"],
+                "#/components/schemas/AiAdmissionErrorBody"
+            );
+        }
+    }
+    assert_eq!(
+        schema["paths"]["/agent-sessions/{session_id}/control"]["post"]["responses"]["503"]["content"]
+            ["text/plain"]["schema"]["type"],
+        "string"
+    );
+    assert!(schema["components"]["schemas"]["AiAdmissionErrorBody"].is_object());
+}
+
 const BOT_TOKEN: &str = "mbot_self_test";
 const HARNESS_TOKEN: &str = "mhns_self_test";
 const OWNER: &str = "macro|owner@example.com";
