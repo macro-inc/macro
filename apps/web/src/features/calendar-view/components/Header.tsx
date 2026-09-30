@@ -29,6 +29,7 @@ import PlusIcon from '@phosphor/plus.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, cn } from '@ui';
 import { usePager } from '@ui/components/Pager';
+import { tourTarget } from '@ui/components/Tour';
 import {
   createMemo,
   createSignal,
@@ -37,6 +38,7 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { CALENDAR_TOUR } from '../tour';
 import {
   CalendarCreateCallItem,
   CalendarCreateEventItem,
@@ -44,8 +46,6 @@ import {
 } from './CalendarCreateItems';
 import { CalendarCreateMenu } from './CalendarCreateMenu';
 import { CalendarSearch } from './CalendarSearch';
-import { tourTarget } from '@ui/components/Tour';
-import { CALENDAR_TOUR } from '../tour';
 
 const formatMonthTitle = new Intl.DateTimeFormat(undefined, {
   month: 'long',
