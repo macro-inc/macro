@@ -89,14 +89,14 @@ where
     /// A hit is the tool list from the last handshake, so the caller can
     /// start the model without another round trip. Concurrent callers for
     /// the same server share one dial.
-    async fn cached_server(&self, server: McpServerHttp) -> Option<ListedServer> {
+    async fn cached_server(&self, server: McpServerHttp) -> Lookup {
         let (key, config) = prepare(&server);
         let client = self.client.clone();
         let pool = Arc::clone(&self.pool);
         let wait = {
             let mut state = pool.lock();
             if let Some(listed) = take_ready(&mut state, &key) {
-                return Some(listed);
+                return Lookup::Pooled(listed);
             }
             if let Some(Entry::Pending { fut, .. }) = state.entries.get(&key) {
                 fut.clone()
@@ -123,26 +123,67 @@ where
                 fut
             }
         };
-        let cached = wait.await?;
-        Some(listed_from(&cached))
+        match wait.await {
+            Some(cached) => Lookup::Dialed(listed_from(&cached)),
+            None => Lookup::Failed,
+        }
     }
+}
+
+/// How one server's session was obtained, so a connect can say how much of
+/// its time went to handshakes rather than the pool.
+enum Lookup {
+    Pooled(ListedServer),
+    Dialed(ListedServer),
+    Failed,
 }
 
 impl<Client> McpToolConnector for AcpMcpConnector<Client>
 where
     Client: StreamableHttpClient + Send + Sync,
 {
-    #[tracing::instrument(skip_all, fields(servers = servers.len()))]
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            servers = servers.len(),
+            pooled = tracing::field::Empty,
+            dialed = tracing::field::Empty,
+            failed = tracing::field::Empty,
+            elapsed_ms = tracing::field::Empty,
+        )
+    )]
     async fn connect(&self, servers: Vec<McpServerHttp>) -> Option<RemoteMcpToolSet> {
         if servers.is_empty() {
             return None;
         }
-        let listed: Vec<ListedServer> =
+        let started = std::time::Instant::now();
+        let mut pooled = 0usize;
+        let mut dialed = 0usize;
+        let mut failed = 0usize;
+        let mut listed = Vec::with_capacity(servers.len());
+        for lookup in
             futures::future::join_all(servers.into_iter().map(|server| self.cached_server(server)))
                 .await
-                .into_iter()
-                .flatten()
-                .collect();
+        {
+            match lookup {
+                Lookup::Pooled(server) => {
+                    pooled += 1;
+                    listed.push(server);
+                }
+                Lookup::Dialed(server) => {
+                    dialed += 1;
+                    listed.push(server);
+                }
+                Lookup::Failed => failed += 1,
+            }
+        }
+        let elapsed_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
+        let span = tracing::Span::current();
+        span.record("pooled", pooled);
+        span.record("dialed", dialed);
+        span.record("failed", failed);
+        span.record("elapsed_ms", elapsed_ms);
+        tracing::info!(pooled, dialed, failed, elapsed_ms, "resolved MCP sessions");
         if listed.is_empty() {
             return None;
         }

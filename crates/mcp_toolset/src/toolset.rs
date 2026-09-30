@@ -150,6 +150,11 @@ impl RemoteMcpToolSet {
         self.0.tools.is_empty()
     }
 
+    /// How many tools were discovered across every connected server.
+    pub fn len(&self) -> usize {
+        self.0.tools.len()
+    }
+
     /// The full catalog of MCP tools (mangled name + description + input
     /// schema) for on-demand loading via tool search.
     pub fn searchable_catalog(&self) -> Vec<SearchableTool> {

@@ -36,6 +36,7 @@ mod test;
 
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, OnceLock};
+use std::time::Instant;
 
 use agent_client_protocol::schema::v1::{
     ContentBlock, EmbeddedResourceResource, InitializeRequest, InitializeResponse,
@@ -114,6 +115,10 @@ pub(crate) struct GenAiProjector {
 struct Turn {
     request_id: RequestId,
     span: tracing::Span,
+    /// When the prompt went out, so the first output back dates the turn's
+    /// time to first output.
+    started: Instant,
+    first_output_recorded: bool,
     /// The agent's output, in order: prose, reasoning and tool calls.
     parts: Vec<OutputPart>,
     /// Facts recorded at open so they are not recorded twice at close. Each
@@ -310,9 +315,18 @@ impl GenAiProjector {
 
     fn on_update(&mut self, update: SessionUpdate) {
         match update {
-            SessionUpdate::AgentMessageChunk(chunk) => self.append_output(&chunk.content, false),
-            SessionUpdate::AgentThoughtChunk(chunk) => self.append_output(&chunk.content, true),
-            SessionUpdate::ToolCall(call) => self.open_tool(call),
+            SessionUpdate::AgentMessageChunk(chunk) => {
+                self.note_first_output();
+                self.append_output(&chunk.content, false);
+            }
+            SessionUpdate::AgentThoughtChunk(chunk) => {
+                self.note_first_output();
+                self.append_output(&chunk.content, true);
+            }
+            SessionUpdate::ToolCall(call) => {
+                self.note_first_output();
+                self.open_tool(call);
+            }
             SessionUpdate::ToolCallUpdate(update) => self.patch_tool(update),
             SessionUpdate::ConfigOptionUpdate(update) => {
                 self.apply_config_options(update.config_options);
@@ -329,6 +343,21 @@ impl GenAiProjector {
             // chunks: nothing a judge of the turn needs.
             _ => {}
         }
+    }
+
+    /// Date the turn's first streamed output once; later chunks are the
+    /// model talking, not the harness waking up.
+    fn note_first_output(&mut self) {
+        let Some(turn) = &mut self.turn else {
+            return;
+        };
+        if turn.first_output_recorded {
+            return;
+        }
+        turn.first_output_recorded = true;
+        let elapsed_ms = u64::try_from(turn.started.elapsed().as_millis()).unwrap_or(u64::MAX);
+        turn.span
+            .set_u64(attr::MACRO_TIME_TO_FIRST_OUTPUT_MS, elapsed_ms);
     }
 
     fn apply_config_options(&mut self, options: Vec<SessionConfigOption>) {
@@ -373,6 +402,8 @@ impl GenAiProjector {
         let mut turn = Turn {
             request_id,
             span,
+            started: Instant::now(),
+            first_output_recorded: false,
             parts: Vec::new(),
             agent_name_recorded: false,
             model_recorded: false,
