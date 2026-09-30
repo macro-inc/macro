@@ -72,6 +72,8 @@ use agent_session::{
     outbound::postgres::PgAgentSessionRepo,
 };
 use collab_surface::inbound::axum_router::CollabSurfaceRouterState;
+use entity_registry::OwnerGrantPolicy;
+use entity_registry_db_utils::OwnedEntityRegistrar;
 use foreign_entity::{
     domain::service::ForeignEntityServiceImpl, inbound::axum_router::ForeignEntityRouterState,
     outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
@@ -680,7 +682,12 @@ impl From<&ApiContext> for SearchHandlerState {
             entity_access_service: ctx.entity_access_service.clone(),
             authorization_state: ctx.authorization_state.clone(),
             agent_session_search_metadata: Arc::new(AgentSessionSearchMetadataServiceImpl::new(
-                PgAgentSessionRepo::new(ctx.db.clone()),
+                PgAgentSessionRepo::new(
+                    ctx.db.clone(),
+                    OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(
+                        ctx.db.clone(),
+                    ))),
+                ),
             ))
                 as Arc<dyn AgentSessionSearchMetadataService>,
             calendar_search_enabled: ctx.config.calendar_search_enabled,

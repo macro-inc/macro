@@ -25,6 +25,7 @@ import {
   type MutationClaim,
   type MutationSettlement,
   OWNER_EPOCH_LOST_ERROR_CODE,
+  OWNER_LOCK_UNAVAILABLE_ERROR_CODE,
   parseStorageGeneration,
   type ReadRecordsByKeysArgs,
   type ReadRecordsByKeysResult,
@@ -52,6 +53,7 @@ import {
   createCacheCoordinatorPageAdapter,
 } from '../worker/coordinator-page-adapter';
 import type { EngineOpenOutcome } from '../worker/coordinator-protocol';
+import { isUnambiguousCacheScope } from '../worker/stale-databases';
 import {
   CacheBootstrapExhaustedError,
   COORDINATOR_CONNECT_ATTEMPTS,
@@ -61,6 +63,7 @@ import {
 import { CacheNavigationError } from './navigation-error';
 import { createNoopCacheHost } from './noop-host';
 import type {
+  CacheChangeListener,
   CacheChangeOptions,
   CacheGenerationChange,
   CacheHost,
@@ -114,6 +117,9 @@ export interface WorkerHostOptions {
   initializationTimeoutMs?: number;
   /** Reports terminal initialization or coordinator-transport failure. */
   onInitializationError?: (error: Error) => void;
+  /** A newer app build took the local cache over. The host has already
+   * retired to the network; the app should reload the page into that build. */
+  onSuperseded?: () => void;
   /** Allowlisted rollout cohort attached to browser-cache telemetry. */
   rolloutCohort?: CacheRolloutCohort;
   /** Injectable recorder for deterministic tests or alternate exporters. */
@@ -177,6 +183,10 @@ const isOwnerEpochLoss = (error: unknown): error is CacheResponseError =>
   error instanceof CacheResponseError &&
   error.errorCode === OWNER_EPOCH_LOST_ERROR_CODE;
 
+const isOwnerLockUnavailable = (error: unknown): error is CacheResponseError =>
+  error instanceof CacheResponseError &&
+  error.errorCode === OWNER_LOCK_UNAVAILABLE_ERROR_CODE;
+
 export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   let pageTelemetry = options.telemetry
     ? undefined
@@ -188,7 +198,11 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     options.telemetry ?? pageTelemetry?.recorder
   );
   const now = (): number => globalThis.performance?.now() ?? Date.now();
-  const unsupportedReason = unsupportedBrowserReason();
+  const unsupportedReason =
+    unsupportedBrowserReason() ??
+    (isUnambiguousCacheScope(options.scope)
+      ? undefined
+      : 'cache scope must not end with -wal');
   if (unsupportedReason) {
     telemetry?.record({
       name: 'graphql_cache.host_ready',
@@ -197,7 +211,8 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       errorCode: 'unsupported',
     });
     telemetry?.flush();
-    return createNoopCacheHost(unsupportedReason);
+    console.warn(`[graphql-cache] disabled: ${unsupportedReason}`);
+    return createNoopCacheHost();
   }
 
   const clientId = crypto.randomUUID();
@@ -207,8 +222,8 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   const lostRegisteredOpKeys = new Set<number>();
   const replacementReadOpKeys = new Set<number>();
   const affectedSubscribers = new Set<(opKeys: number[]) => void>();
-  const cacheChangeSubscribers = new Set<(revision: CacheRevision) => void>();
-  const hydrationSubscribers = new Set<(revision: CacheRevision) => void>();
+  const cacheChangeSubscribers = new Set<CacheChangeListener>();
+  const hydrationSubscribers = new Set<CacheChangeListener>();
   const generationChangeSubscribers = new Set<
     (change: CacheGenerationChange) => void
   >();
@@ -233,6 +248,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   let latestReplacementEpoch = 0;
   let failureReported = false;
   let terminalFailureHandled = false;
+  let superseded = false;
   let adapter: CacheCoordinatorPageAdapter | undefined;
   let registeredAdapter: CacheCoordinatorPageAdapter | undefined;
   let adapterDisposePromise: Promise<void> | undefined;
@@ -275,7 +291,13 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     const msg = event.data;
     if (isCachePush(msg)) {
       if (msg.kind === 'cache-hydrated') {
-        for (const cb of hydrationSubscribers) cb(msg.revision);
+        for (const cb of hydrationSubscribers) {
+          if (msg.searchChangedBuckets === undefined) cb(msg.revision);
+          else
+            cb(msg.revision, {
+              searchChangedBuckets: msg.searchChangedBuckets,
+            });
+        }
         return;
       }
       if (msg.kind === 'cache-changed') {
@@ -318,6 +340,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       if (entry.timer !== undefined) clearTimeout(entry.timer);
       recordRequestOutcome(entry, 'error', error);
       entry.reject(error);
+      if (isOwnerLockUnavailable(error)) retireUnavailable(msg.error);
       finishGracefulDisposeIfDrained();
       return;
     }
@@ -449,6 +472,15 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         // reporting a terminal failure or quarantining any cache scope.
         if (adapter === created && !registrationInProgress && !suspension)
           failTransport(error);
+      },
+      onCacheUnavailable: (reason) => {
+        if (adapter === created) retireUnavailable(reason);
+      },
+      onCacheSuperseded: (reason) => {
+        if (adapter !== created || superseded) return;
+        superseded = true;
+        retireUnavailable(reason, true);
+        options.onSuperseded?.();
       },
       telemetry,
     });
@@ -605,13 +637,66 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       durationMs:
         initializationStartedAt > 0 ? now() - initializationStartedAt : 0,
     });
+    stopForSession(error);
+    reportFailure(error);
+  }
+
+  /**
+   * Fails this host for the rest of the page session: pending requests reject
+   * (an admitted enqueue as uncertain when `uncertain`), subscribers are
+   * dropped, and the coordinator connection closes.
+   */
+  function stopForSession(
+    error: Error,
+    { uncertain = false, preserveDatabase = false } = {}
+  ): void {
     state = 'failed';
     initialization = undefined;
     initializationError = error;
-    rejectPending(error);
+    rejectPending(error, uncertain);
     clearSubscribers();
     unregisterPagehide();
-    void disposeAdapter(false).then(finishTelemetry);
+    void disposeAdapter(false, preserveDatabase).then(finishTelemetry);
+  }
+
+  /**
+   * Another context, usually a tab on another deployed build, holds the
+   * database, and the coordinator touched no storage. Nothing is quarantined:
+   * this page stops using the cache until it reloads, and a later page load
+   * tries again. A page handing the database to a newer build leaves like a
+   * navigating page: its engine stops without counting as a lost owner, and
+   * an enqueue already sent may have reached the durable queue, so it is
+   * reported uncertain rather than sent again.
+   */
+  function retireUnavailable(reason: string, leaveForNewerBuild = false): void {
+    if (
+      terminalFailureHandled ||
+      state === 'failed' ||
+      state === 'suspended' ||
+      state === 'disposing' ||
+      state === 'disposed'
+    )
+      return;
+    terminalFailureHandled = true;
+    const error = new CacheResponseError(
+      reason,
+      OWNER_LOCK_UNAVAILABLE_ERROR_CODE
+    );
+    if (state === 'initializing') {
+      telemetry?.record({
+        name: 'graphql_cache.host_ready',
+        operationCategory: 'initialization',
+        outcome: 'error',
+        errorCode: 'lock',
+        durationMs:
+          initializationStartedAt > 0 ? now() - initializationStartedAt : 0,
+      });
+    }
+    stopStorageHealthSampling();
+    stopForSession(error, {
+      uncertain: leaveForNewerBuild,
+      preserveDatabase: leaveForNewerBuild,
+    });
     reportFailure(error);
   }
 
@@ -630,13 +715,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     );
     if (state === 'disposed' && !admittedWorkIsUncertain) return;
     terminalFailureHandled = true;
-    state = 'failed';
-    initialization = undefined;
-    initializationError = error;
-    rejectPending(error, true);
-    clearSubscribers();
-    unregisterPagehide();
-    void disposeAdapter(false).then(finishTelemetry);
+    stopForSession(error, { uncertain: true });
     // Product failure handling may immediately construct another host. Make
     // the matching old scope unreachable before invoking that callback.
     const quarantine = storageWasUntouched
@@ -1325,7 +1404,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     },
 
     onCacheChanged(
-      cb: (revision: CacheRevision) => void,
+      cb: CacheChangeListener,
       options?: CacheChangeOptions
     ): () => void {
       cacheChangeSubscribers.add(cb);

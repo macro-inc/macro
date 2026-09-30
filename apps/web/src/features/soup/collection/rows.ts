@@ -182,6 +182,17 @@ export function getUniqueSoupRowEntities<TEntity extends SoupEntityIdentity>(
   return deduplicateSoupEntities(getSoupRowEntities(rows));
 }
 
+/** A row's menu acts on the selection that includes it, else on the row alone. */
+export function getSoupMenuEntities<TEntity extends SoupEntityIdentity>(
+  entity: TEntity,
+  selected: TEntity[]
+): TEntity[] {
+  return selected.length > 1 &&
+    selected.some((candidate) => candidate.id === entity.id)
+    ? selected
+    : [entity];
+}
+
 export const isSoupRowVisible = <TEntity extends SoupEntityIdentity>(
   row: SoupRow<TEntity>,
   isGroupExpanded: (groupId: string) => boolean

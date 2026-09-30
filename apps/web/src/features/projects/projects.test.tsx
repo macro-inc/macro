@@ -29,6 +29,8 @@ vi.mock('@app/lib/analytics/posthog', () => ({
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'viewer' }));
 // The list and assignment hosts are outside this provider/query lifecycle test.
 vi.mock('@app/components/list/owned-slots', () => ({}));
+vi.mock('@app/features/next-soup/actions', () => ({}));
+vi.mock('@app/signal/splitLayout', () => ({}));
 vi.mock('@components/app/split-layout/layout', () => ({}));
 vi.mock('@components/app/split-layout/layoutUtils', () => ({}));
 vi.mock('@ui', () => ({
@@ -36,6 +38,7 @@ vi.mock('@ui', () => ({
 }));
 vi.mock('./primitives/project-collection', () => ({}));
 vi.mock('./project-collection-persistence', () => ({}));
+vi.mock('./project-share', () => ({}));
 vi.mock('./views/project-assignment', () => ({}));
 vi.mock('./views/projects-collection', () => ({}));
 vi.mock('@queries/activity/push-registry', () => ({

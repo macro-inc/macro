@@ -5,7 +5,7 @@
  * replace the first call's host in the middle of its animation.
  * Subagents and user tools stay outside groups so delegated work and user
  * interactions remain visible regardless of the surrounding tool traffic.
- * DisplayResults is inline answer content and always breaks the run, including
+ * DisplayResults and GenerateImage are answer content and always break the run, including
  * while its arguments are still arriving.
  *
  * A thought at the tail of a run stays out of the group only when the run
@@ -30,13 +30,17 @@ export type PartSegment = {
 /**
  * Macro tools whose call renders the answer itself rather than a card about
  * it: `DisplayResults` renders the dynamic-UI view the model composed, the
- * same full-width dashboard the chat shows.
+ * same full-width dashboard the chat shows. `GenerateImage` shows the generated
+ * image document.
  *
  * Folding one of these into a group would put the answer behind a closed
  * caret, indented inside a row of muted tool chips — so they break the run
  * and stand on their own, like a paragraph of the reply.
  */
-const SELF_RENDERING_TOOLS: ReadonlySet<string> = new Set(['DisplayResults']);
+const SELF_RENDERING_TOOLS: ReadonlySet<string> = new Set([
+  'DisplayResults',
+  'GenerateImage',
+]);
 
 /**
  * Whether a part is a tool call that renders its own view (see

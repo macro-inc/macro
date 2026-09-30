@@ -16,13 +16,12 @@ const emptyWriteResult = (): WriteResult => ({
 });
 
 /**
- * CacheHost used when the platform cannot run the shared cache engine.
- * It never stores data. Its disabled marker makes the exchange bypass
- * optimistic persistence and forward mutations directly.
+ * CacheHost used when the platform cannot run the shared cache engine, or
+ * after a page stops using it. It never stores data. Its disabled marker
+ * makes the exchange bypass optimistic persistence and forward mutations
+ * directly.
  */
-export function createNoopCacheHost(reason: string): CacheHost {
-  console.warn(`[graphql-cache] disabled: ${reason}`);
-
+export function createNoopCacheHost(): CacheHost {
   return {
     clientId: 'noop',
     disabled: true,

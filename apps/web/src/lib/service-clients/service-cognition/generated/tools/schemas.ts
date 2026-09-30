@@ -2552,6 +2552,60 @@ export const EditTagResponse = z.object({
   summary: z.string(),
 });
 
+export const GenerateImage = z.object({
+  prompt: z.string(),
+  fileName: z.union([z.string(), z.null()]).optional(),
+  aspectRatio: z
+    .union([
+      z.enum(['square', 'landscape', 'portrait', 'widescreen', 'tall']),
+      z.null(),
+    ])
+    .optional(),
+  projectId: z.union([z.string().uuid(), z.null()]).optional(),
+  referenceImages: z
+    .union([
+      z
+        .array(
+          z.any().superRefine((x, ctx) => {
+            const schemas = [
+              z.object({ id: z.string().uuid(), type: z.literal('document') }),
+              z.object({
+                id: z.string().uuid(),
+                type: z.literal('staticFile'),
+              }),
+            ];
+            const errors = schemas.reduce<z.ZodError[]>(
+              (errors, schema) =>
+                ((result) =>
+                  result.error ? [...errors, result.error] : errors)(
+                  schema.safeParse(x)
+                ),
+              []
+            );
+            if (schemas.length - errors.length !== 1) {
+              ctx.addIssue({
+                path: ctx.path,
+                code: 'invalid_union',
+                unionErrors: errors,
+                message: 'Invalid input: Should pass single schema',
+              });
+            }
+          })
+        )
+        .max(3),
+      z.null(),
+    ])
+    .optional(),
+});
+
+export const GenerateImageResponse = z.object({
+  documentId: z.string(),
+  fileName: z.string(),
+  mimeType: z.string(),
+  sizeBytes: z.number().int().gte(0),
+  note: z.union([z.string(), z.null()]).optional(),
+});
+
 export const GetBotWebhooks = z.object({ botId: z.string().uuid() });
 
 export const GetBotWebhooksResponse = z.object({

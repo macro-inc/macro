@@ -481,7 +481,7 @@ fn scheduled_actions_hang_off_the_authenticated_user() {
         &sdl,
         "union GraphqlScheduledActionTrigger = GraphqlScheduledActionCronTrigger | GraphqlScheduledActionEventsTrigger",
     );
-    assert!(sdl.contains("AI routines owned by the authenticated user."));
+    assert!(sdl.contains("AI routines the authenticated user can access."));
     for value in [
         "DOCUMENT_CREATED",
         "DOCUMENT_UPDATED",

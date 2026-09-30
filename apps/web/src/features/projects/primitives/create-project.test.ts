@@ -24,6 +24,8 @@ function commands() {
     setMembers: vi.fn(async () => {}),
     assignTasks: vi.fn(async () => []),
     delete: vi.fn(async () => {}),
+    deleteMany: vi.fn(async (): Promise<string[]> => []),
+    saveProperties: vi.fn(async () => {}),
     saveProperty: vi.fn(async () => {}),
   } satisfies ReturnType<ProjectsContext['createCommands']>;
 }

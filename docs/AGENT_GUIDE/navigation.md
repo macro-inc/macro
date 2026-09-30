@@ -20,7 +20,7 @@ Switching tabs or navigating an in-app route is not a back/forward-cache restore
 | `/app/invite?token=<token>` | GTM invite welcome page ("Welcome, <first name>", Continue → signup). Links come from the staff portal, last 48h, and grant the first month of Premium free once the account is created |
 | `/app/internal/invite-links` | Macro staff only (`@macro.com`): create GTM invite links and track opens, signups, and subscriptions |
 | `/app/home` | Desktop: Home (notifications + recent activity); mobile: Notifications soup |
-| `/app/home/<block-type>/<uuid>` | Home with an item opened inline; `<block-type>` may be an alias such as `task`; a targeted channel message uses `sN.channels.messageId` (and optionally `sN.channels.threadId`) and a document comment `sN.drive.commentId`; a calendar row renders the Calendar view inline at `/app/home/calendar/<month-or-week-or-day>` with the event, occurrence, and locator range in `sN.calendar.*` |
+| `/app/home/<block-type>/<uuid>` | Home with an item opened inline; `<block-type>` may be an alias such as `task`; a targeted channel message uses `sN.channels.messageId` (and optionally `sN.channels.threadId`) and a document comment `sN.drive.commentId`; a calendar row renders the Calendar view inline at `/app/home/calendar/<month-or-week-or-day>` with the event, occurrence, and locator range in `sN.calendar.*`; reminders use `/app/home/reminder/<uuid>` |
 | `/app/mail` | Email client |
 | `/app/mail/<uuid>` | Email with a thread opened inline; a targeted message uses `sN.email-detail.messageId` |
 | `/app/channels` | Channels list |
@@ -42,6 +42,8 @@ Switching tabs or navigating an in-app route is not a back/forward-cache restore
 | `/app/coders/<uuid>` | Code session with the Agents sidebar |
 | `/app/agents/chat/<uuid>` | Legacy AI chat opened in the Agents workspace (`/app/agent-chats/<uuid>` remains a compatibility alias) |
 | `/app/calls` | Calls list |
+| `/app/reminders` | Reminders list (requires the Reminders flag) |
+| `/app/reminder/<uuid>` | Lightweight reminder details; the same reminder opened from Home or another split reuses its existing route owner |
 | `/app/companies` | Customers (CRM; needs a team) |
 | `/app/activity` | Activity heatmap + feed |
 | `/app/calendar/<month-or-week-or-day>` | Calendar; the focused event, its occurrence, and the locator range use `sN.calendar.*` |
@@ -66,6 +68,14 @@ Channel-message @mentions and AI-generated channel mentions also preserve their
 message/thread target when opening a channel or reusing its existing pane.
 Returning to Home's list clears the prior target, so reopening an item without
 a specific location does not replay the previous search hit.
+
+Reminder navigation is native-route only: list, Home, notifications, commands,
+copied links, and new browser tabs use `/app/reminders`,
+`/app/home/reminder/<uuid>`, or `/app/reminder/<uuid>`. Imperative callers use
+`openReminderDetail` so Split Manager sends the typed destination through the
+app content navigator. The standalone and Home routes claim the same reminder
+identity, and callers must never treat a reminder ID as a document ID. Startup
+notification intents are consumed only by the destination's applied callback.
 
 When an event opens inline from Home, changing the Calendar period stays under
 `/app/home/calendar/`, updates the period segment, and re-focuses that event.
@@ -229,8 +239,9 @@ The outer sidebar is an icon rail; labels appear in tooltips.
   global search. Hold Shift while selecting `Search everything` to open it in a
   new split, including when Search is already active. This left-click menu shares
   its surface and item styling with the sidebar right-click menus.
-- Nav: `Home`, `Drive`, `Email`, `Chat`, `Tasks`, `Calendar`, `Agents`,
-  `Customers`. Calendar and Customers appear only when their features are enabled.
+- Nav: `Home`, `Drive`, `Email`, `Chat`, `Tasks`, `Reminders`, `Calendar`,
+  `Agents`, `Customers`. Reminders, Calendar, and Customers appear only when
+  their features are enabled.
 - Bottom: button named after the user (their name, or email when unset) — menu
   with `Command menu (Ctrl K)`, `Settings (Ctrl ;)`, `Log out`.
 
@@ -467,7 +478,11 @@ category, Esc closes. The category strip and footer have transparent backgrounds
 
 With the local GraphQL cache enabled, Cmd+K and document/channel `@` mentions
 search cached entities without waiting for a server search. Background hydration
-updates an already-open menu. For an empty search, scroll toward the end (or use
+updates an already-open menu only when a bucket it uses changes. Email/body/tag-only
+hydration must not reread History or the cached channel list; a newly hydrated note
+refreshes History and matching menus, and a channel/DM refreshes channel consumers.
+Renames, ownership/recency changes, and moves between buckets must still appear
+without retyping. Older cache runtimes without bucket metadata refresh conservatively. For an empty search, scroll toward the end (or use
 Down); mentions offer **View all** for a category and then load more local pages.
 Counts describe loaded results, not the full server corpus. Scans through
 incomplete or already-visible cache hits are bounded per action; continue
@@ -487,10 +502,11 @@ the cache or reopening the menu with unchanged data does not reorder the results
 
 Pending or failed Quick Access history, recently-viewed, and cached-channel lookups
 must not hide the app shell. Verify a cold lookup with Cmd/Ctrl+K: navigation stays
-mounted and usable while the optional source loads or fails. When no entity rows
-are available yet, the menu shows **Loading results…** while keeping commands
-usable; a settled empty category shows **No results found**. Background history
-or channel refetches alone must not switch settled empty results back to loading,
+mounted and usable while the optional source loads or fails. The menu shows no
+loading text: while entity rows are still loading, an empty list stays blank and
+commands remain usable; a settled empty category shows **No results found**.
+Background history or channel refetches alone must not blank a settled empty
+category back to its loading state,
 including when the active category does not use that source. Cache-update bursts
 must let in-flight history, channel, and menu-search reads publish their results,
 then catch up with one coalesced refresh. Verify with cache reads slower than the

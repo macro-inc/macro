@@ -94,6 +94,10 @@ type ToolParserMap = {
     response: types.SpreadsheetResponse;
   };
   EditTag: { call: types.EditTag; response: types.EditTagResponse };
+  GenerateImage: {
+    call: types.GenerateImage;
+    response: types.GenerateImageResponse;
+  };
   GetBotWebhooks: {
     call: types.GetBotWebhooks;
     response: types.GetBotWebhooksResponse;
@@ -386,6 +390,10 @@ const toolParserMap = {
     response: schemas.SpreadsheetResponse,
   },
   EditTag: { call: schemas.EditTag, response: schemas.EditTagResponse },
+  GenerateImage: {
+    call: schemas.GenerateImage,
+    response: schemas.GenerateImageResponse,
+  },
   GetBotWebhooks: {
     call: schemas.GetBotWebhooks,
     response: schemas.GetBotWebhooksResponse,
@@ -713,6 +721,10 @@ type ToolDataMap = {
     response: types.SpreadsheetResponse;
   };
   EditTag: { call: types.EditTag; response: types.EditTagResponse };
+  GenerateImage: {
+    call: types.GenerateImage;
+    response: types.GenerateImageResponse;
+  };
   GetBotWebhooks: {
     call: types.GetBotWebhooks;
     response: types.GetBotWebhooksResponse;

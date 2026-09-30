@@ -4,7 +4,11 @@ import {
   makeAddTagAction,
 } from '@app/features/next-soup/actions';
 import { ProjectPickerPopover } from '@app/features/projects/project-property';
-import { ContextMenuContent, MenuSeparator } from '@core/component/ContextMenu';
+import {
+  ContextMenuContent,
+  ContextMenuTrigger,
+  MenuSeparator,
+} from '@core/component/ContextMenu';
 import { touchHandler } from '@core/directive/touchHandler';
 import { isMobile } from '@core/mobile/isMobile';
 import type { EntityData } from '@entity';
@@ -26,6 +30,7 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { getSoupMenuEntities } from './collection/rows';
 import { useSoupEntityActionDrawer } from './SoupEntityActionDrawerContext';
 import { SoupEntityActionsMenu } from './SoupEntityActionsMenu';
 
@@ -83,16 +88,8 @@ export const SoupEntityContextMenu: FlowComponent<
     y: number;
   }>();
 
-  const menuEntities = () => {
-    const selected = props.selectedEntities();
-    if (
-      selected.length > 1 &&
-      selected.some((entity) => entity.id === props.entity.id)
-    ) {
-      return selected;
-    }
-    return [props.entity];
-  };
+  const menuEntities = () =>
+    getSoupMenuEntities(props.entity, props.selectedEntities());
 
   const canEditTags = () => addTagAction.canExecute(props.entity);
 
@@ -120,7 +117,7 @@ export const SoupEntityContextMenu: FlowComponent<
       </Match>
       <Match when={true}>
         <ContextMenu onOpenChange={props.onOpenChange}>
-          <ContextMenu.Trigger
+          <ContextMenuTrigger
             as={props.as}
             class={cn('h-full w-full group/cm-trigger', props.class)}
             on:contextmenu={(event: MouseEvent) =>
@@ -128,7 +125,7 @@ export const SoupEntityContextMenu: FlowComponent<
             }
           >
             {props.children}
-          </ContextMenu.Trigger>
+          </ContextMenuTrigger>
           <ContextMenu.Portal>
             <Show when={props.entity}>
               <ContextMenuContent class="w-64 text-xs text-ink-muted">

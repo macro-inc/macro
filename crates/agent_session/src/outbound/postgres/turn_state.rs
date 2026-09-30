@@ -2,7 +2,7 @@ use super::*;
 use crate::domain::turn_state::SessionTurnProjectionRepo;
 use agent_fold::domain::model::TurnState;
 
-impl SessionTurnProjectionRepo for PgAgentSessionRepo {
+impl<B: BotFacts + 'static> SessionTurnProjectionRepo for PgAgentSessionRepo<B> {
     async fn unprojected_sessions(&self, limit: NonZeroUsize) -> Result<Vec<AgentSessionId>> {
         let ids = sqlx::query_scalar!(
             "SELECT id FROM agent_session WHERE turn_state IS NULL ORDER BY id LIMIT $1",

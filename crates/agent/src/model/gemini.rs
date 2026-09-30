@@ -33,11 +33,19 @@ impl<'a, H: HttpClientExt + Clone + 'static> GeminiModel<'a, H> {
     /// Ask Gemini to include thought summaries so reasoning deltas reach the
     /// stream. Thinking itself is on by default for Gemini 3; this only asks
     /// for the summarized thoughts, not a thinking-level override.
+    ///
+    /// Keys are the camelCase names rig deserializes into
+    /// `AdditionalParameters`. A snake_case `generation_config` is not that
+    /// field: it is left on the body as an unknown key, and rig then skips
+    /// `maxOutputTokens` because it only copies `max_tokens` when
+    /// `generationConfig` parsed. The request goes out with thinking on, no
+    /// output cap, and no streamed thoughts, so the turn sits silent until
+    /// the idle timeout.
     pub fn thinking_params(&self) -> Option<serde_json::Value> {
         Some(serde_json::json!({
-            "generation_config": {
-                "thinking_config": {
-                    "include_thoughts": true
+            "generationConfig": {
+                "thinkingConfig": {
+                    "includeThoughts": true
                 }
             }
         }))
