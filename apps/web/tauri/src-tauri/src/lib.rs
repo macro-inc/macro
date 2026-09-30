@@ -223,9 +223,7 @@ pub fn run() {
     #[cfg(mobile)]
     {
         // register mobile specific plugins
-        builder = builder
-            .plugin(tauri_plugin_haptics::init())
-            .plugin(tauri_plugin_safe_area_insets::init());
+        builder = builder.plugin(tauri_plugin_haptics::init());
     }
 
     // Window origin differs by platform:

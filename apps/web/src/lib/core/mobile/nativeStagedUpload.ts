@@ -85,7 +85,11 @@ export function getUploadFileSize(file: File): number {
   return getNativeStagedUpload(file)?.size ?? file.size;
 }
 
-/** Older iOS staging plugins expose the original bytes but no digest. */
+/**
+ * Android staging supplies a digest. The iOS plugins stage the original bytes
+ * but no digest, so hash them through the asset protocol; this pulls the file
+ * into JS memory once and caches the result for retries.
+ */
 export async function getNativeStagedUploadChecksum(
   file: NativeStagedUpload
 ): Promise<string> {
@@ -101,14 +105,35 @@ export async function getNativeStagedUploadChecksum(
   return file.sha256;
 }
 
+/** Either JS bytes or a native staged file, with the fields uploads need. */
+export type UploadSource =
+  | { kind: 'bytes'; buffer: ArrayBuffer; sha: string; size: number }
+  | { kind: 'staged'; staged: NativeStagedUpload; sha: string; size: number };
+
+export async function resolveUploadSource(file: File): Promise<UploadSource> {
+  const staged = getNativeStagedUpload(file);
+  if (staged) {
+    const sha = await getNativeStagedUploadChecksum(staged);
+    return { kind: 'staged', staged, sha, size: staged.size };
+  }
+  const buffer = await file.arrayBuffer();
+  return {
+    kind: 'bytes',
+    buffer,
+    sha: await contentHash(buffer),
+    size: file.size,
+  };
+}
+
 /** S3 expects the native SHA-256 digest as base64 rather than hexadecimal. */
 export function nativeUploadChecksum(sha256: string): string {
   if (!/^[a-f0-9]{64}$/i.test(sha256))
     throw new Error('Invalid staged file checksum');
-  return btoa(
-    sha256
-      .match(/../g)!
-      .map((byte) => String.fromCharCode(Number.parseInt(byte, 16)))
-      .join('')
-  );
+  let binary = '';
+  for (let index = 0; index < sha256.length; index += 2) {
+    binary += String.fromCharCode(
+      Number.parseInt(sha256.slice(index, index + 2), 16)
+    );
+  }
+  return btoa(binary);
 }

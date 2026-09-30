@@ -3,8 +3,6 @@ package com.macro.mobile
 import android.app.Activity
 import android.content.Intent
 import android.content.res.Configuration
-import android.os.Build
-import android.view.ViewGroup
 import android.webkit.WebView
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
@@ -27,6 +25,12 @@ class MobilePlugin(private val activity: Activity) : Plugin(activity) {
     private val exports = MobileExports(activity)
     private var insets = JSObject()
     private var backPending = false
+    // A page that reloads mid-dispatch never answers; let the next press through.
+    private val releaseBack = Runnable { backPending = false }
+
+    private companion object {
+        const val BACK_ANSWER_TIMEOUT_MS = 2_000L
+    }
 
     override fun load(webView: WebView) {
         this.webView = webView
@@ -51,13 +55,16 @@ class MobilePlugin(private val activity: Activity) : Plugin(activity) {
                     }
                     if (backPending) return
                     backPending = true
+                    webView.postDelayed(releaseBack, BACK_ANSWER_TIMEOUT_MS)
                     // Only a committed Back reaches JS. Canceled predictive gestures
                     // must never dismiss a sheet or navigate away from a draft.
                     webView.evaluateJavascript(
                         "window.dispatchEvent(new Event('android-back', {cancelable:true}))"
                     ) { unhandled ->
+                        webView.removeCallbacks(releaseBack)
                         backPending = false
-                        if (unhandled == "true") activity.moveTaskToBack(true)
+                        // "false" means JS claimed it; "null" means no page is loaded yet.
+                        if (unhandled != "false") activity.moveTaskToBack(true)
                     }
                 }
             }
@@ -72,33 +79,20 @@ class MobilePlugin(private val activity: Activity) : Plugin(activity) {
         )
         val imeVisible = value.isVisible(WindowInsetsCompat.Type.ime())
         val ime = value.getInsets(WindowInsetsCompat.Type.ime())
-        // Edge-to-edge windows receive IME insets without adjustResize shrinking
-        // their content. Resize the native WebView so fixed elements and the
-        // browser's caret scrolling use the same unobscured viewport as CSS.
-        val location = IntArray(2)
-        webView.getLocationInWindow(location)
-        val windowHeight = if (Build.VERSION.SDK_INT >= 30) {
-            activity.windowManager.currentWindowMetrics.bounds.height()
-        } else activity.window.decorView.height
-        val params = webView.layoutParams as? ViewGroup.MarginLayoutParams
-        if (params != null && webView.height > 0) {
-            val hostGap = (windowHeight - location[1] - webView.height - params.bottomMargin)
-                .coerceAtLeast(0)
-            val margin = (ime.bottom - hostGap).coerceAtLeast(0)
-            if (params.bottomMargin != margin) {
-                params.bottomMargin = margin
-                webView.layoutParams = params
-                return // The layout callback publishes the new measured height.
-            }
-        }
+        // The WebView keeps its full edge-to-edge size under the keyboard, as on
+        // iOS. Resizing it here made Chromium relayout the whole document on top
+        // of the CSS work; instead JS shrinks the layout root through --dvh and
+        // lifts fixed sheets by the published keyboard height.
         val next = JSObject().apply {
             put("top", bars.top / scale)
             put("right", bars.right / scale)
+            // The keyboard covers the navigation bar, so its inset no longer applies.
             put("bottom", if (ime.bottom > 0) 0 else bars.bottom / scale)
             put("left", bars.left / scale)
             put("imeVisible", imeVisible)
             put("imeHeight", if (imeVisible) ime.bottom / scale else 0)
-            // Actual laid-out height already excludes any occluding IME.
+            // Width is what JS scales by: a keyboard never changes it, a density change does.
+            put("viewportWidth", webView.width / scale)
             put("viewportHeight", webView.height / scale)
         }
         if (next.toString() != insets.toString()) {

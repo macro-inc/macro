@@ -8,8 +8,21 @@ declare global {
   }
 }
 
-/** Use the same Escape handlers as touch sheets, menus and editor popups. */
-export function dismissAndroidBackOverlay(): boolean {
+function isEditable(element: Element | null): boolean {
+  return (
+    element?.closest(
+      'input, textarea, [contenteditable]:not([contenteditable="false"])'
+    ) != null
+  );
+}
+
+/**
+ * Use the same Escape handlers as touch sheets, menus and editor popups.
+ * Editor popups carry no top-layer marker, so a focused editor also receives
+ * Escape; nothing else does, keeping Back away from unrelated Escape hotkeys.
+ */
+function dismissAndroidBackOverlay(): boolean {
+  // Kobalte and corvu mark their top layers with these library attributes.
   const overlay = [
     ...document.querySelectorAll(
       '[data-kb-top-layer], [data-corvu-dialog-content][data-open], [data-corvu-drawer-content][data-open]'
@@ -20,13 +33,15 @@ export function dismissAndroidBackOverlay(): boolean {
     const style = getComputedStyle(element);
     return style.display !== 'none' && style.visibility !== 'hidden';
   });
+  const target = document.activeElement;
+  if (!overlay && !isEditable(target)) return false;
   const escapeEvent = new KeyboardEvent('keydown', {
     key: 'Escape',
     code: 'Escape',
     bubbles: true,
     cancelable: true,
   });
-  (document.activeElement ?? document.body).dispatchEvent(escapeEvent);
+  (target ?? document.body).dispatchEvent(escapeEvent);
   // A non-dismissible/pending dialog also owns Back: do not navigate underneath it.
   return !!overlay || escapeEvent.defaultPrevented;
 }

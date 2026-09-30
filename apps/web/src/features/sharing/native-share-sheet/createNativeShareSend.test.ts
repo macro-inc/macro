@@ -27,12 +27,14 @@ describe('native share sending', () => {
   });
 
   it('keeps a delivered batch locked when native acknowledgement fails', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
     const post = vi.fn().mockResolvedValue(undefined);
     const share = createNativeShareSend({
       send: post,
       clear: vi.fn().mockRejectedValue(new Error('Unable to clear')),
     });
-    await expect(share.send('draft')).rejects.toThrow('Unable to clear');
+    // The message was delivered, so the composer must not see a send error.
+    await expect(share.send('draft')).resolves.toBeUndefined();
     expect(share.canSend()).toBe(false);
     await share.send('second tap');
     expect(post).toHaveBeenCalledOnce();

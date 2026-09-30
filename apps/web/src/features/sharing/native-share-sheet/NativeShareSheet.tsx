@@ -150,14 +150,14 @@ function NativeShareSheetComposer(props: { handleCancel: () => void }) {
     // Bound simultaneous native uploads and retain failures for an explicit retry.
     for (const file of files) {
       if (!active) break;
-      const success = await uploadPendingShareAttachment({
+      const result = await uploadPendingShareAttachment({
         file,
         tracker: attachmentTracker,
         prepareMedia: prepareMedia.mutateAsync,
         uploadPendingShareFile: shareTarget?.uploadPendingShareFile,
         isActive: () => active,
       });
-      if (!success) failed.push(file);
+      if (result === 'failed') failed.push(file);
     }
     if (active) {
       setFailedFiles(failed);

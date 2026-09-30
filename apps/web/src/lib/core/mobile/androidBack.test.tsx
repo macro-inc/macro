@@ -5,12 +5,15 @@ vi.mock('@core/util/platform', () => ({ isPlatform: () => true }));
 
 import { useAndroidBack, useAndroidBackNavigation } from './androidBack';
 
+// Dispose here too, so a failing test cannot leak its listeners into the next.
+let dispose = () => {};
 afterEach(() => {
+  dispose();
+  dispose = () => {};
   document.body.innerHTML = '';
 });
 
 async function mountBack(navigate: () => boolean) {
-  let dispose = () => {};
   createRoot((cleanup) => {
     dispose = cleanup;
     useAndroidBack();
@@ -58,6 +61,41 @@ describe('Android committed Back', () => {
       dispose();
     }
   );
+
+  it('sends Escape to a focused editor so its popups can claim Back', async () => {
+    const editor = document.createElement('div');
+    editor.setAttribute('contenteditable', 'true');
+    editor.tabIndex = 0;
+    document.body.append(editor);
+    editor.focus();
+    const onEscape = vi.fn((event: KeyboardEvent) => {
+      if (event.key === 'Escape') event.preventDefault();
+    });
+    editor.addEventListener('keydown', onEscape);
+    const navigate = vi.fn(() => true);
+    const dispose = await mountBack(navigate);
+    expect(
+      window.dispatchEvent(new Event('android-back', { cancelable: true }))
+    ).toBe(false);
+    expect(onEscape).toHaveBeenCalledOnce();
+    expect(navigate).not.toHaveBeenCalled();
+    dispose();
+  });
+
+  it('does not send Escape when nothing dismissible is open or focused', async () => {
+    const button = document.createElement('button');
+    document.body.append(button);
+    button.focus();
+    const onEscape = vi.fn();
+    document.addEventListener('keydown', onEscape);
+    const navigate = vi.fn(() => true);
+    const dispose = await mountBack(navigate);
+    window.dispatchEvent(new Event('android-back', { cancelable: true }));
+    expect(onEscape).not.toHaveBeenCalled();
+    expect(navigate).toHaveBeenCalledOnce();
+    document.removeEventListener('keydown', onEscape);
+    dispose();
+  });
 
   it('leaves root Back to Android and removes listeners on cleanup', async () => {
     const toasts = document.createElement('div');

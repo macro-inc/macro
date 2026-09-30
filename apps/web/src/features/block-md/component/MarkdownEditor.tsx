@@ -142,9 +142,9 @@ import {
 import { IS_MAC } from '@core/constant/isMac';
 import { useUserId } from '@core/context/user';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { trackMention } from '@core/signal/mention';
-import { isPlatform } from '@core/util/platform';
 import { bufToString } from '@core/util/string';
 import { handleFileFolderDrop } from '@core/util/upload';
 import { type EntityDragEvent, isEntityDragEvent } from '@entity';
@@ -666,7 +666,7 @@ export function MarkdownEditor(props: {
     .use(pinnedPropertiesPlugin())
     .use(awaitPlugin());
 
-  if (isIOS || isPlatform('ios')) {
+  if (isIOS || isNativeMobilePlatform()) {
     plugins.use(
       iosCursorScrollPlugin({ scrollContainer: () => md.scrollContainer })
     );

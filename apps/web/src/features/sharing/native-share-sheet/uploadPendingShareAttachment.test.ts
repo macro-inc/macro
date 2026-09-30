@@ -1,13 +1,17 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
-const { uploadFile, makePresignedUrl } = vi.hoisted(() => ({
+const { uploadFile, makePresignedUrl, toastFailure } = vi.hoisted(() => ({
   uploadFile: vi.fn(),
   makePresignedUrl: vi.fn(),
+  toastFailure: vi.fn(),
 }));
 vi.mock('@core/constant/allBlocks', () => ({
   fileTypeToBlockName: (type: string) => type,
 }));
 vi.mock('@core/util/upload', () => ({ uploadFile, chatRuleset: {} }));
+vi.mock('@core/component/Toast/Toast', () => ({
+  toast: { failure: toastFailure },
+}));
 
 import { createInputAttachmentTracker } from '@channel/Input/attachment-tracker';
 import { getNativeStagedUpload } from '@core/mobile/nativeStagedUpload';
@@ -45,9 +49,9 @@ it('reports a failed native upload and can retry it without duplicate attachment
     uploadPendingShareFile: nativeUpload,
     isActive: () => true,
   };
-  expect(await uploadPendingShareAttachment(options)).toBe(false);
+  expect(await uploadPendingShareAttachment(options)).toBe('failed');
   expect(tracker.attachments()).toEqual([]);
-  expect(await uploadPendingShareAttachment(options)).toBe(true);
+  expect(await uploadPendingShareAttachment(options)).toBe('uploaded');
   expect(tracker.attachments()).toEqual([
     expect.objectContaining({
       id: 'static-fixture',
@@ -76,7 +80,7 @@ it('keeps the file pending until native bytes finish uploading', async () => {
   await vi.waitFor(() => expect(nativeUpload).toHaveBeenCalledOnce());
   expect(tracker.hasPending()).toBe(true);
   finish?.();
-  expect(await result).toBe(true);
+  expect(await result).toBe('uploaded');
   expect(tracker.hasPending()).toBe(false);
 });
 
@@ -97,7 +101,7 @@ it('preserves document staging metadata instead of uploading an empty placeholde
       uploadPendingShareFile: vi.fn(),
       isActive: () => true,
     })
-  ).toBe(true);
+  ).toBe('uploaded');
   const uploaded = uploadFile.mock.calls[0][0];
   expect(getNativeStagedUpload(uploaded)).toMatchObject({
     token: file.token,
@@ -111,4 +115,27 @@ it('preserves document staging metadata instead of uploading an empty placeholde
       size: file.size,
     }),
   ]);
+});
+
+it('skips an iOS document without a staged digest instead of failing the share', async () => {
+  const tracker = createInputAttachmentTracker();
+  expect(
+    await uploadPendingShareAttachment({
+      file: {
+        ...file,
+        name: 'manual.pdf',
+        mimeType: 'application/pdf',
+        sha256: undefined,
+      },
+      tracker,
+      prepareMedia: makePresignedUrl,
+      uploadPendingShareFile: vi.fn(),
+      isActive: () => true,
+    })
+  ).toBe('skipped');
+  expect(uploadFile).not.toHaveBeenCalled();
+  expect(tracker.attachments()).toEqual([]);
+  expect(toastFailure).toHaveBeenCalledWith(
+    "Can't share manual.pdf from iOS yet"
+  );
 });

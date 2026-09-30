@@ -199,7 +199,7 @@ describe('useUploadDraftAttachmentsMutation', () => {
   });
 
   it.each(['pasteboard', 'photo-library'] as const)(
-    'hashes the real staged %s bytes when an older iOS plugin supplies no digest',
+    'hashes the real staged %s bytes when the iOS plugin supplies no digest',
     async (source) => {
       const bytes = new Uint8Array([1, 2, 3]).buffer;
       fetchMock.mockResolvedValue({ ok: true, arrayBuffer: async () => bytes });

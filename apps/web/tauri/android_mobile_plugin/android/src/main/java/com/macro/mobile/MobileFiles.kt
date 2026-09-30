@@ -36,7 +36,9 @@ class MobileFiles(private val activity: Activity) {
 
     companion object {
         private const val TAG = "MacroMobile"
+        // One budget for a whole share batch, a single export or a pasted image.
         const val MAX_FILE_BYTES = 500L * 1024 * 1024
+        const val SIZE_LIMIT_MESSAGE = "Attachments exceed the 500 MB limit"
         private const val MAX_TEXT_CHARS = 1024 * 1024
         private const val MAX_FILES = 100
         private const val TTL_MS = 24L * 60 * 60 * 1000
@@ -69,7 +71,7 @@ class MobileFiles(private val activity: Activity) {
                         val count = input.read(buffer)
                         if (count < 0) break
                         total += count
-                        require(total <= maxBytes) { "Shared attachments exceed 500 MB" }
+                        require(total <= maxBytes) { SIZE_LIMIT_MESSAGE }
                         output.write(buffer, 0, count)
                     }
                 }
@@ -149,6 +151,7 @@ class MobileFiles(private val activity: Activity) {
                 check(temporary.renameTo(File(inbox, "$batch.json")))
                 done(null)
             } catch (error: Exception) {
+                Log.w(TAG, "Unable to receive share", error)
                 staged.forEach { item -> stagedPath(item)?.delete() }
                 val message = error.message ?: "Unable to read shared attachments"
                 // A cold-start failure can precede the JS listener or login.
@@ -156,7 +159,10 @@ class MobileFiles(private val activity: Activity) {
                 try {
                     recordError(message)
                     done(null)
-                } catch (_: Exception) { done(message) }
+                } catch (persistError: Exception) {
+                    Log.w(TAG, "Unable to record share error", persistError)
+                    done(message)
+                }
             }
         }
     }
@@ -198,8 +204,9 @@ class MobileFiles(private val activity: Activity) {
                 }
                 files = items
                 break
-            } catch (_: Exception) {
+            } catch (error: Exception) {
                 // Cache eviction or an interrupted write must not strand later shares.
+                Log.w(TAG, "Discarding unreadable share manifest ${manifest.name}", error)
                 manifest.delete()
                 items?.let { batch ->
                     for (index in 0 until batch.length()) {
@@ -228,7 +235,8 @@ class MobileFiles(private val activity: Activity) {
 
     internal fun acknowledge(tokens: Set<String>) {
         for (manifest in manifests()) {
-            val items = try { JSONArray(manifest.readText()) } catch (_: Exception) {
+            val items = try { JSONArray(manifest.readText()) } catch (error: Exception) {
+                Log.w(TAG, "Discarding unreadable share manifest ${manifest.name}", error)
                 manifest.delete()
                 continue
             }

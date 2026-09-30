@@ -231,7 +231,7 @@ try {
   let shown;
   for (let attempt = 0; attempt < 40; attempt++) {
     shown = await invoke('getInsets');
-    if (shown.imeVisible && shown.viewportHeight < start.viewportHeight) break;
+    if (shown.imeVisible && shown.imeHeight > 0) break;
     await pause(500);
   }
   await writeFile(
@@ -240,8 +240,8 @@ try {
   );
   assert.equal(shown.imeVisible, true);
   assert.ok(
-    shown.viewportHeight < start.viewportHeight,
-    'IME must resize the WebView'
+    Math.abs(shown.viewportHeight - start.viewportHeight) < 1,
+    'IME must not resize the WebView; the layout root shrinks through --dvh'
   );
   const css = await evaluate(
     `(() => {
@@ -254,13 +254,12 @@ try {
     })()`
   );
   assert.ok(
-    Math.abs(css.dvh - shown.viewportHeight) < 1,
-    'Do not subtract keyboard height twice'
+    Math.abs(css.dvh - (shown.viewportHeight - shown.imeHeight)) < 1,
+    'The layout root must shrink by exactly the keyboard height'
   );
-  assert.equal(
-    css.offset,
-    '0px',
-    'Resized fixed sheets need no additional offset'
+  assert.ok(
+    Math.abs(Number.parseFloat(css.offset) - shown.imeHeight) < 1,
+    'Fixed sheets lift by the keyboard height'
   );
   await adbRun('shell', 'input', 'keyevent', '4');
   for (let attempt = 0; attempt < 40; attempt++) {
@@ -273,7 +272,7 @@ try {
     'Unsent Android draft'
   );
   results.keyboard = { start, shown, css, backPreservedDraft: true };
-  console.log('Keyboard resize and Back passed');
+  console.log('Keyboard overlay and Back passed');
 
   // Font/display settings previously recreated the Activity while the native
   // plugin retained the old WebView, stranding its insets and the open draft.
@@ -361,6 +360,7 @@ try {
   const { token } = await invoke('beginExport', {
     name: imageName,
     mimeType: 'image/png',
+    size: 68,
   });
   exportToken = token;
   await invoke('appendExport', { token, data: png });

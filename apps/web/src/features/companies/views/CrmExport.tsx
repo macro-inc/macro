@@ -151,14 +151,15 @@ export function CrmExport(props: {
       if (!signal.aborted) setPending(false);
     }
   }
-  function download() {
+  async function download() {
     const data = rows();
     if (!data || !selectedColumns().length) return;
     const blob = new Blob([createCrmCsv(selectedColumns(), data)], {
       type: 'text/csv;charset=utf-8',
     });
-    downloadFile(blob, filename());
-    props.onClose();
+    // Keep the dialog open when the Android save dialog is canceled.
+    const { saved } = await downloadFile(blob, filename());
+    if (saved) props.onClose();
   }
   return (
     <Dialog
@@ -395,7 +396,7 @@ export function CrmExport(props: {
                   metadataLoading() ||
                   metadataError()
                 }
-                onClick={() => (rows() ? download() : void prepare())}
+                onClick={() => void (rows() ? download() : prepare())}
               >
                 {pending()
                   ? 'Preparing…'

@@ -1,6 +1,6 @@
 import type { PortalScope } from '@core/component/ScopedPortal';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import type { ChannelWithParticipants } from '@core/user';
-import { isPlatform } from '@core/util/platform';
 import type { EditorType } from '@macro-inc/lexical-core';
 import type { HistoryItem } from '@queries/history/types';
 import { onElementConnect } from '@solid-primitives/lifecycle';
@@ -256,7 +256,7 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
     );
   }
 
-  if (isIOS || isPlatform('ios')) {
+  if (isIOS || isNativeMobilePlatform()) {
     plugins.use(
       iosCursorScrollPlugin({
         scrollContainer: props.scrollRef ?? (() => scrollContainerRef),

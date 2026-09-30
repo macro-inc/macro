@@ -19,6 +19,7 @@ import java.util.concurrent.Executors
 @InvokeArg class BeginExportArgs {
     var name: String = "download"
     var mimeType: String = "application/octet-stream"
+    var size: Long = 0
 }
 @InvokeArg class ExportTokenArgs { lateinit var token: String }
 @InvokeArg class AppendExportArgs {
@@ -32,7 +33,12 @@ import java.util.concurrent.Executors
 
 /** Chunked JS Blob transfer keeps large exports out of a single IPC message. */
 class MobileExports(private val activity: Activity) {
-    private companion object { const val TAG = "MacroMobile" }
+    private companion object {
+        const val TAG = "MacroMobile"
+        // JS sends 256 KiB Blob slices; this is that slice base64-encoded.
+        const val EXPORT_CHUNK_BYTES = 256 * 1024
+        const val MAX_CHUNK_BASE64_CHARS = (EXPORT_CHUNK_BYTES + 2) / 3 * 4
+    }
     private data class Export(val file: File, val mimeType: String)
     private val worker = Executors.newSingleThreadExecutor()
     private val active = mutableMapOf<String, Export>()
@@ -43,6 +49,7 @@ class MobileExports(private val activity: Activity) {
         val args = invoke.parseArgs(BeginExportArgs::class.java)
         worker.execute {
             try {
+                require(args.size <= MobileFiles.MAX_FILE_BYTES) { MobileFiles.SIZE_LIMIT_MESSAGE }
                 directory.mkdirs()
                 val cutoff = System.currentTimeMillis() - 24L * 60 * 60 * 1000
                 directory.listFiles()?.filter { it.isDirectory && it.lastModified() < cutoff }
@@ -53,6 +60,9 @@ class MobileExports(private val activity: Activity) {
                 file.createNewFile()
                 active[token] = Export(file, args.mimeType.ifBlank { "application/octet-stream" })
                 invoke.resolve(JSObject().apply { put("token", token) })
+            } catch (error: IllegalArgumentException) {
+                Log.w(TAG, "Rejected export", error)
+                invoke.reject(error.message ?: "Unable to create export")
             } catch (error: Exception) {
                 Log.w(TAG, "Unable to create export", error)
                 invoke.reject("Unable to create export")
@@ -65,11 +75,16 @@ class MobileExports(private val activity: Activity) {
         worker.execute {
             try {
                 val export = active[args.token] ?: error("Unknown export")
-                require(args.data.length <= 400_000) { "Export chunk is too large" }
+                require(args.data.length <= MAX_CHUNK_BASE64_CHARS) { "Export chunk is too large" }
                 val bytes = Base64.decode(args.data, Base64.DEFAULT)
-                require(export.file.length() + bytes.size <= MobileFiles.MAX_FILE_BYTES)
+                require(export.file.length() + bytes.size <= MobileFiles.MAX_FILE_BYTES) {
+                    MobileFiles.SIZE_LIMIT_MESSAGE
+                }
                 export.file.appendBytes(bytes)
                 invoke.resolve()
+            } catch (error: IllegalArgumentException) {
+                Log.w(TAG, "Rejected export chunk", error)
+                invoke.reject(error.message ?: "Unable to write export")
             } catch (error: Exception) {
                 Log.w(TAG, "Unable to write export", error)
                 invoke.reject("Unable to write export")
@@ -107,12 +122,10 @@ class MobileExports(private val activity: Activity) {
                             val clipboard = activity.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                             clipboard.setPrimaryClip(clip)
                         } else {
-                            require(args.action == "share" || args.action == "open")
-                            val intent = Intent(if (args.action == "share") Intent.ACTION_SEND else Intent.ACTION_VIEW).apply {
-                                if (args.action == "share") {
-                                    type = export.mimeType
-                                    putExtra(Intent.EXTRA_STREAM, uri)
-                                } else setDataAndType(uri, export.mimeType)
+                            require(args.action == "share") { "Unknown file action ${args.action}" }
+                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                type = export.mimeType
+                                putExtra(Intent.EXTRA_STREAM, uri)
                                 clipData = clip
                                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                             }

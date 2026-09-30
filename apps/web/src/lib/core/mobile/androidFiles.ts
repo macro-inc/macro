@@ -2,9 +2,12 @@ import { invoke } from '@tauri-apps/api/core';
 
 const EXPORT_CHUNK_BYTES = 256 * 1024;
 
-export type AndroidFileAction = 'save' | 'share' | 'open' | 'copy';
+export type AndroidFileAction = 'save' | 'share' | 'copy';
 
-/** Exports already-fetched bytes, including authenticated downloads and Blob URLs. */
+/**
+ * Exports already-fetched bytes, including authenticated downloads and Blob
+ * URLs. The native side owns the size limit and rejects at `beginExport`.
+ */
 export async function exportAndroidFile(
   blob: Blob,
   name: string,
@@ -12,13 +15,12 @@ export async function exportAndroidFile(
   options?: { signal?: AbortSignal; onProgress?: (fraction: number) => void }
 ): Promise<{ canceled: boolean }> {
   options?.signal?.throwIfAborted();
-  if (blob.size > 500 * 1024 * 1024)
-    throw new Error('Files must be 500 MB or smaller');
   const { token } = await invoke<{ token: string }>(
     'plugin:android-mobile|beginExport',
     {
       name,
       mimeType: blob.type || 'application/octet-stream',
+      size: blob.size,
     }
   );
   try {
@@ -38,7 +40,6 @@ export async function exportAndroidFile(
       );
     }
     options?.signal?.throwIfAborted();
-    options?.onProgress?.(1);
     return await invoke('plugin:android-mobile|finishExport', {
       token,
       action,

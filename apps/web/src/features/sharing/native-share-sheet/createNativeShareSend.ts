@@ -19,9 +19,14 @@ export function createNativeShareSend<T>(options: {
         setState('idle');
         throw error;
       }
-      // A failed acknowledgement must never make a delivered message sendable.
+      // A failed acknowledgement must never make a delivered message sendable,
+      // nor report the delivered message as a failed send.
       setState('sent');
-      await options.clear();
+      try {
+        await options.clear();
+      } catch (error) {
+        console.error('Unable to acknowledge the shared batch', error);
+      }
     })().finally(() => {
       pending = undefined;
     });

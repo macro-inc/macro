@@ -66,7 +66,7 @@ function shouldShowNativeAppUpdateRequiredDialog(status: BundleUpdateStatus) {
 }
 
 function TauriProvider(props: { children: JSX.Element }) {
-  if (isPlatform('android')) useAndroidWindowInsets();
+  useAndroidWindowInsets();
   useAndroidBack();
   const [bundleUpdateStatus, setBundleUpdateStatus] =
     createSignal<BundleUpdateStatus>({ status: 'Idle' });

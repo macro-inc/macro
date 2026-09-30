@@ -25,6 +25,7 @@ export async function exportAndroidFileWithProgress(
       signal: controller.signal,
       onProgress: (fraction) => {
         setProgress(fraction);
+        // The transfer is done before the native chooser opens over the app.
         if (fraction === 1) toast.dismiss(id);
       },
     });

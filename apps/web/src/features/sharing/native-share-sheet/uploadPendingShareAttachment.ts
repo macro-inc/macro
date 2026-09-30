@@ -1,12 +1,12 @@
 import type {
   InputAttachmentData,
-  InputAttachmentKind,
   InputAttachmentTracker,
 } from '@channel/Input';
 import {
   buildUploadedAttachment as buildInputUploadedAttachment,
   getAttachmentKindFromFile,
 } from '@channel/Input/utils/file-helpers';
+import { toast } from '@core/component/Toast/Toast';
 import { createNativeStagedUploadFile } from '@core/mobile/nativeStagedUpload';
 import { chatRuleset, uploadFile } from '@core/util/upload';
 import type {
@@ -14,28 +14,21 @@ import type {
   UploadPendingShareFileArgs,
 } from '@macro/tauri';
 
-function getPendingShareAttachmentKind(
-  file: Pick<PendingShareFile, 'name' | 'mimeType'>
-): InputAttachmentKind {
-  return getAttachmentKindFromFile({
-    name: file.name,
-    type: file.mimeType,
+export type PendingShareUploadResult = 'uploaded' | 'skipped' | 'failed';
+
+async function uploadDocument(file: PendingShareFile) {
+  const staged = createNativeStagedUploadFile('share', {
+    ...file,
+    previewPath: null,
   });
-}
-
-type ShareSheetAttachmentKind = Extract<InputAttachmentKind, 'image' | 'video'>;
-
-function buildMediaAttachment(
-  file: PendingShareFile,
-  staticFileId: string,
-  kind: ShareSheetAttachmentKind
-): InputAttachmentData {
-  return {
-    id: staticFileId,
-    name: file.name,
-    kind,
-    previewSrc: file.previewSrc,
-  };
+  if (!staged) throw new Error('This shared document is unavailable');
+  const result = await uploadFile(staged, chatRuleset, {
+    hideProgressIndicator: true,
+  });
+  if (result.failed) throw result.error;
+  const attachment = buildInputUploadedAttachment(staged, 'document', result);
+  if (!attachment) throw new Error('Unable to prepare shared attachment');
+  return attachment;
 }
 
 export async function uploadPendingShareAttachment(options: {
@@ -49,55 +42,59 @@ export async function uploadPendingShareAttachment(options: {
     | ((args: UploadPendingShareFileArgs) => Promise<void>)
     | undefined;
   isActive: () => boolean;
-}): Promise<boolean> {
-  const kind = getPendingShareAttachmentKind(options.file);
-  const pendingId = `pending-share:${options.file.token}`;
-  options.tracker.addAttachment({
+}): Promise<PendingShareUploadResult> {
+  const { file, tracker } = options;
+  const kind = getAttachmentKindFromFile({
+    name: file.name,
+    type: file.mimeType,
+  });
+  // Documents stream from native staging, which needs the staged digest. The
+  // iOS share extension does not supply one, so skip the file and keep the
+  // rest of the share sendable.
+  if (kind === 'document' && !file.sha256) {
+    toast.failure(`Can't share ${file.name} from iOS yet`);
+    return 'skipped';
+  }
+  const pendingId = `pending-share:${file.token}`;
+  tracker.addAttachment({
     id: pendingId,
-    name: options.file.name,
+    name: file.name,
     kind,
     pending: true,
-    previewSrc: kind === 'image' ? options.file.previewSrc : undefined,
+    previewSrc: kind === 'image' ? file.previewSrc : undefined,
   });
   try {
-    let attachment: InputAttachmentData | undefined;
+    let attachment: InputAttachmentData;
     if (kind === 'document') {
-      const file = options.file.sha256
-        ? createNativeStagedUploadFile('share', {
-            ...options.file,
-            previewPath: null,
-          })
-        : null;
-      if (!file) throw new Error('This shared document is unavailable');
-      const result = await uploadFile(file, chatRuleset, {
-        hideProgressIndicator: true,
-      });
-      if (result.failed) throw result.error;
-      attachment = buildInputUploadedAttachment(file, kind, result);
+      attachment = await uploadDocument(file);
     } else {
-      const result = await options.prepareMedia(options.file);
+      const result = await options.prepareMedia(file);
       if (!options.uploadPendingShareFile)
         throw new Error('Missing native shared file uploader');
       await options.uploadPendingShareFile({
-        token: options.file.token,
+        token: file.token,
         uploadUrl: result.upload_url,
-        mimeType: options.file.mimeType,
+        mimeType: file.mimeType,
       });
-      attachment = buildMediaAttachment(options.file, result.id, kind);
+      attachment = {
+        id: result.id,
+        name: file.name,
+        kind,
+        previewSrc: file.previewSrc,
+      };
     }
-    if (!attachment) throw new Error('Unable to prepare shared attachment');
-    if (!options.isActive()) return false;
-    options.tracker.removeAttachment(pendingId);
-    options.tracker.addAttachment({
+    if (!options.isActive()) return 'failed';
+    tracker.removeAttachment(pendingId);
+    tracker.addAttachment({
       ...attachment,
-      mimeType: options.file.mimeType,
-      size: options.file.size,
+      mimeType: file.mimeType,
+      size: file.size,
     });
-    return true;
+    return 'uploaded';
   } catch (error) {
-    if (!options.isActive()) return false;
-    options.tracker.removeAttachment(pendingId);
+    if (!options.isActive()) return 'failed';
+    tracker.removeAttachment(pendingId);
     console.error('Failed to upload shared attachment', error);
-    return false;
+    return 'failed';
   }
 }

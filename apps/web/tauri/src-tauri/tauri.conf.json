@@ -66,20 +66,29 @@
         },
         {
           "host": "macro.com",
-          "pathPrefix": [
+          "path": [
             "/app"
+          ],
+          "pathPrefix": [
+            "/app/"
           ]
         },
         {
           "host": "dev.macro.com",
-          "pathPrefix": [
+          "path": [
             "/app"
+          ],
+          "pathPrefix": [
+            "/app/"
           ]
         },
         {
           "host": "staging.macro.com",
-          "pathPrefix": [
+          "path": [
             "/app"
+          ],
+          "pathPrefix": [
+            "/app/"
           ]
         }
       ],

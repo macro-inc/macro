@@ -40,6 +40,28 @@ describe('Android Blob export', () => {
     });
   });
 
+  it('declares the total size up front so native can reject oversized exports before streaming', async () => {
+    invoke.mockImplementation(async (command: string) => {
+      if (command.endsWith('beginExport'))
+        throw new Error('Attachments exceed the 500 MB limit');
+    });
+    const { Blob } = await import('node:buffer');
+    await expect(
+      exportAndroidFile(
+        new Blob([new Uint8Array(600_000)], {
+          type: 'video/mp4',
+        }) as unknown as globalThis.Blob,
+        'video.mp4'
+      )
+    ).rejects.toThrow('500 MB');
+    expect(invoke).toHaveBeenCalledWith('plugin:android-mobile|beginExport', {
+      name: 'video.mp4',
+      mimeType: 'video/mp4',
+      size: 600_000,
+    });
+    expect(invoke).toHaveBeenCalledOnce();
+  });
+
   it('discards partial staging after an IPC failure without opening a chooser', async () => {
     invoke.mockImplementation(async (command: string) => {
       if (command.endsWith('beginExport')) return { token: 'test-token' };

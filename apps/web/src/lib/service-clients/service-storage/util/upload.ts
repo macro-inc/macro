@@ -4,11 +4,12 @@ import { createUploadToast, toast } from '@core/component/Toast/Toast';
 import { blockAcceptedMimetypeToFileExtension } from '@core/constant/allBlocks';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import {
-  getNativeStagedUpload,
+  getUploadFileSize,
   nativeUploadChecksum,
+  resolveUploadSource,
+  type UploadSource,
   uploadNativeStagedFileToPresignedUrl,
 } from '@core/mobile/nativeStagedUpload';
-import { contentHash } from '@core/util/hash';
 import type { ResultError } from '@core/util/result';
 import { toaster } from '@kobalte/core/toast';
 import { waitForDocumentContentReady } from '@queries/storage/document-location';
@@ -133,13 +134,12 @@ export async function upload(
     fileTypeOrExtension = fileExtension ?? '';
   }
   const isZip = fileTypeOrExtension === 'zip';
-  const staged = getNativeStagedUpload(file);
 
   if (!options?.skipAnalytics) {
     analytics.track('upload_file', {
       fileType: fileTypeOrExtension,
       fileName: file.name,
-      fileSize: staged?.size ?? file.size,
+      fileSize: getUploadFileSize(file),
       destination: 'dss',
       folder: isZip,
     });
@@ -152,25 +152,36 @@ export async function upload(
     ? createUploadToast(`Uploading ${name}`)
     : null;
 
-  const buffer = staged ? undefined : await file.arrayBuffer();
-  const sha =
-    staged?.sha256 ?? (buffer ? await contentHash(buffer) : undefined);
-  if (!sha) return handleUploadError('Missing staged file checksum', toastId);
+  let source: UploadSource;
+  try {
+    source = await resolveUploadSource(file);
+  } catch (error) {
+    return handleUploadError(
+      error instanceof Error ? error : String(error),
+      toastId
+    );
+  }
+  const { sha } = source;
   const putFile = async (presignedUrl: string, type: MimeType) => {
-    if (staged) {
-      try {
-        await uploadNativeStagedFileToPresignedUrl(
-          { ...staged, mimeType: type },
-          presignedUrl,
-          nativeUploadChecksum(sha)
-        );
-        return true;
-      } catch (error) {
-        console.error('Native staged upload failed', error);
-        return false;
-      }
+    if (source.kind === 'bytes') {
+      return uploadWithPresignedUrl({
+        presignedUrl,
+        buffer: source.buffer,
+        sha,
+        type,
+      });
     }
-    return uploadWithPresignedUrl({ presignedUrl, buffer: buffer!, sha, type });
+    try {
+      await uploadNativeStagedFileToPresignedUrl(
+        { ...source.staged, mimeType: type },
+        presignedUrl,
+        nativeUploadChecksum(sha)
+      );
+      return true;
+    } catch (error) {
+      console.error('Native staged upload failed', error);
+      return false;
+    }
   };
 
   if (isZip && options?.unzipFolder) {
