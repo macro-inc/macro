@@ -55,6 +55,9 @@ pub enum ReadResultWire {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WriteResultWire {
+    /// Bindings omitted while preserving a normalizable server response.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub identity_errors: Vec<String>,
     /// Effective-view revision installed by this logical mutation.
     pub revision: String,
     /// Whether this write advanced `revision`.
@@ -227,6 +230,17 @@ pub enum DeferOptimisticWriteResultWire {
     rename_all_fields = "camelCase"
 )]
 pub enum CommitOptimisticWriteResultWire {
+    /// Invalid response identity data permanently failed this attempt.
+    Failed {
+        /// Diagnostic for the cache error handler.
+        error: String,
+        /// Newer intent preserved when this attempt was superseded.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        replacement_transaction_id: Option<String>,
+        /// Cache changes caused by discarding the failed layer.
+        #[serde(flatten)]
+        result: WriteResultWire,
+    },
     /// The current mutation committed normally.
     Committed {
         /// Cache changes caused by commit.
@@ -368,6 +382,7 @@ pub struct EngineHandle {
 
 fn wire_write_result(ops: &OpInterner, result: WriteResult) -> WriteResultWire {
     WriteResultWire {
+        identity_errors: result.identity_errors,
         revision: result.revision.to_string(),
         revision_advanced: result.revision_advanced,
         changed: result
@@ -808,6 +823,15 @@ impl EngineHandle {
             .await
             .map_err(|e| e.to_string())?
         {
+            CommitOptimisticWriteResult::Failed(result) => {
+                Ok(CommitOptimisticWriteResultWire::Failed {
+                    error: result.error,
+                    replacement_transaction_id: result
+                        .replacement_transaction_id
+                        .map(|id| id.to_string()),
+                    result: wire_write_result(ops, result.write_result),
+                })
+            }
             CommitOptimisticWriteResult::Committed(result) => {
                 Ok(CommitOptimisticWriteResultWire::Committed {
                     result: wire_write_result(ops, result),

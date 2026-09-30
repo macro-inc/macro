@@ -3359,6 +3359,84 @@ describe('normalizedCacheExchange', () => {
       });
     });
 
+    it.each([false, true])(
+      'preserves a committed response when identity diagnostics are reported (callback throws=%s)',
+      async (callbackThrows) => {
+        const commit = host.commitOptimisticWrite.bind(host);
+        host.commitOptimisticWrite = async (transactionId, claim, args) => ({
+          ...(await commit(transactionId, claim, args)),
+          identityErrors: ['missing identity response object'],
+        });
+        const onCacheError = vi.fn(() => {
+          if (callbackThrows) throw new Error('diagnostic failed');
+        });
+        const { ops, results, forwarded } = harness(host, undefined, {
+          onCacheError,
+        });
+        ops.next(makeMutationOp(1, optimistic));
+        await tick();
+
+        expect(onCacheError).toHaveBeenCalledWith(
+          expect.objectContaining({
+            message: 'missing identity response object',
+          }),
+          expect.anything()
+        );
+        expect(host.commits).toHaveLength(1);
+        expect(host.rollbacks).toHaveLength(0);
+        expect(host.defers).toHaveLength(0);
+        expect(forwarded).toHaveLength(1);
+        expect(results[0]?.error).toBeUndefined();
+        expect(optimisticMutationDispositionOf(results[0])).toEqual({
+          kind: 'committed',
+          data: results[0]?.data,
+        });
+        expect(results[0]?.data).toBeDefined();
+      }
+    );
+
+    it.each([undefined, 'txn-2'])(
+      'settles an identity failure without replaying the failed attempt (replacement %s)',
+      async (replacementTransactionId) => {
+        const commit = host.commitOptimisticWrite.bind(host);
+        host.commitOptimisticWrite = async (transactionId, claim, args) => ({
+          ...(await commit(transactionId, claim, args)),
+          kind: 'failed',
+          error: 'missing identity response id',
+          replacementTransactionId,
+        });
+        const onCacheError = vi.fn();
+        const { ops, results, client, forwarded } = harness(host, undefined, {
+          onCacheError,
+        });
+        ops.next(makeMutationOp(1, optimistic));
+        await tick();
+
+        expect(onCacheError).toHaveBeenCalledWith(
+          expect.objectContaining({ message: 'missing identity response id' }),
+          expect.anything()
+        );
+        expect(host.commits).toHaveLength(1);
+        expect(host.defers).toHaveLength(0);
+        expect(forwarded).toHaveLength(1);
+        expect(vi.mocked(client.query)).not.toHaveBeenCalled();
+        expect(results[0]?.data).toBeUndefined();
+        if (replacementTransactionId) {
+          expect(optimisticMutationDispositionOf(results[0])).toEqual({
+            kind: 'queued',
+            transactionId: replacementTransactionId,
+          });
+        } else {
+          expect(optimisticMutationDispositionOf(results[0])).toEqual({
+            kind: 'permanently-failed',
+            error: expect.objectContaining({
+              message: expect.stringContaining('missing identity response id'),
+            }),
+          });
+        }
+      }
+    );
+
     it('fires commit revalidations with network-only policy', async () => {
       const commit = host.commitOptimisticWrite.bind(host);
       host.commitOptimisticWrite = async (transactionId, claim, args) => ({

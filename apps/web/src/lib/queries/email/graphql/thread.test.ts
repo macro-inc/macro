@@ -18,15 +18,21 @@ const executeQueryMock = vi.hoisted(() => vi.fn());
 const hostMock = vi.hoisted(() => vi.fn(() => undefined as unknown));
 const cacheEnabledMock = vi.hoisted(() => vi.fn(() => true));
 const initializeClientMock = vi.hoisted(() => vi.fn());
+const activeClientMock = vi.hoisted(() => vi.fn());
 
-vi.mock('@service-storage/graphql-soup', () => ({
-  getGraphqlSoupClient: () => {
-    initializeClientMock();
-    return { query: queryMock, executeQuery: executeQueryMock };
-  },
-  graphqlCacheEnabled: cacheEnabledMock,
-  getGraphqlCacheHost: hostMock,
-}));
+vi.mock('@service-storage/graphql-soup', () => {
+  const client = { query: queryMock, executeQuery: executeQueryMock };
+  return {
+    getGraphqlSoupClient: () => {
+      initializeClientMock();
+      return activeClientMock() ?? client;
+    },
+    graphqlCacheEnabled: cacheEnabledMock,
+    getGraphqlCacheHost: hostMock,
+  };
+});
+
+beforeEach(() => activeClientMock.mockReset());
 
 import { EmailThreadPageDocument } from '@service-storage/graphql/generated/graphql';
 import {
@@ -83,6 +89,30 @@ const cachedPage: EmailThreadPageQuery = {
   },
 };
 
+function failCacheInitialization(asynchronously: boolean) {
+  const retiredClient = { query: vi.fn(), executeQuery: vi.fn() };
+  const fallbackClient = { query: queryMock, executeQuery: executeQueryMock };
+  const fallback = () => {
+    cacheEnabledMock.mockReturnValue(false);
+    hostMock.mockReturnValue(undefined);
+    activeClientMock.mockReturnValue(fallbackClient);
+  };
+  cacheEnabledMock.mockReturnValue(true);
+  activeClientMock.mockReturnValue(retiredClient);
+  initializeClientMock.mockReset();
+  initializeClientMock.mockImplementationOnce(() => {
+    if (!asynchronously) fallback();
+  });
+  hostMock.mockReturnValue({
+    readRecordsByKeys: vi.fn(async () => {
+      fallback();
+      throw new Error('cache initialization failed');
+    }),
+    onCacheChanged: () => () => {},
+  });
+  return retiredClient;
+}
+
 describe('fetchGraphqlEmailThread', () => {
   beforeEach(() => {
     queryMock.mockReset();
@@ -93,6 +123,26 @@ describe('fetchGraphqlEmailThread', () => {
     cacheEnabledMock.mockReset();
     cacheEnabledMock.mockReturnValue(true);
   });
+
+  it.each([false, true])(
+    'loads through the fallback client after cache initialization fails (async=%s)',
+    async (asynchronously) => {
+      const retiredClient = failCacheInitialization(asynchronously);
+      queryMock.mockReturnValue({
+        toPromise: async () => ({ data: cachedPage }),
+      });
+
+      await expect(fetchGraphqlEmailThread('thread-1')).resolves.toMatchObject({
+        db_id: 'thread-1',
+      });
+      expect(retiredClient.query).not.toHaveBeenCalled();
+      expect(queryMock).toHaveBeenCalledExactlyOnceWith(
+        EmailThreadPageDocument,
+        { threadId: 'thread-1', offset: 0, limit: 20 },
+        { requestPolicy: 'cache-and-network' }
+      );
+    }
+  );
 
   it.each([false, true])(
     'resolves the durable local route before querying (queued=%s)',
@@ -230,6 +280,42 @@ describe('fetchGraphqlEmailThread', () => {
     );
   });
 });
+
+it.each([false, true])(
+  'enables live thread queries after cache initialization fails (async=%s)',
+  async (asynchronously) => {
+    executeQueryMock.mockReset();
+    const retiredClient = failCacheInitialization(asynchronously);
+    const stream = makeSubject<OperationResult<EmailThreadPageQuery>>();
+    executeQueryMock.mockReturnValue(stream.source);
+    const root = createRoot((dispose) => ({
+      dispose,
+      ...createGraphqlEmailThreadQuery(
+        () => 'thread-1',
+        () => ({ enabled: true })
+      ),
+    }));
+    try {
+      await vi.waitFor(() => expect(executeQueryMock).toHaveBeenCalledOnce());
+      expect(retiredClient.executeQuery).not.toHaveBeenCalled();
+      const [request, context] = executeQueryMock.mock.calls[0];
+      expect(request.variables.threadId).toBe('thread-1');
+      expect(context.requestPolicy).toBe('cache-and-network');
+      stream.next({
+        operation: makeOperation('query', request, {
+          url: '/graphql',
+          ...context,
+        }),
+        stale: false,
+        hasNext: false,
+        data: cachedPage,
+      });
+      expect(root.query.data?.pages[0].db_id).toBe('thread-1');
+    } finally {
+      root.dispose();
+    }
+  }
+);
 
 it('exposes the resolved identity across queue settlement without confusing a different route', async () => {
   let canonical = 'local-thread';

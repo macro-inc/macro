@@ -356,6 +356,8 @@ resolve. Verify a cold open and switching directly between threads with delayed
 cache reads: neither should flash "Sorry, an unexpected error has occurred" or
 show the previous email. A failed load must still show its error and Retry action;
 reconciling an already-open offline draft must preserve its composer and text.
+If local cache initialization fails, ordinary server threads must still load
+through the session's uncached GraphQL client, including the thread being opened.
 
 If a saved inbox selection references an unlinked account, successfully loading
 linked accounts resets the filter to All inboxes while preserving an open or
@@ -572,6 +574,10 @@ An internal draft-save failure, including a failed response read after the save
 commits, stays queued and retries with backoff. It must not permanently disable
 autosave; Send stays blocked until a save is confirmed. Invalid or unauthorized
 writes still stop retrying.
+A successful save response with an invalid cache identity binding still commits
+its normalizable server data and reports a cache diagnostic without replaying
+the mutation or asking the user to save again. If that response also cannot be
+normalized, the attempt stops retrying and reports a permanent cache failure.
 If an offline save is permanently rejected after reconnect, a persistent
 **Draft could not be saved** notice offers **Save as new draft**. The editor keeps
 the latest text and stops autosaving until that action is chosen. Recovery saves

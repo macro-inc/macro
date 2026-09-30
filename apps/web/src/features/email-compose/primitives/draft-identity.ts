@@ -131,16 +131,19 @@ function observeAvailableDraftIdentity(
       await refresh();
     })();
   });
-  // `on` re-runs whenever the session state changes; the memos limit that to
-  // changes of the epoch and draft id values themselves.
+  // Session accessors read the whole state signal. Compare their values so
+  // unrelated updates do not dismiss rejection notices or reread storage.
+  const epoch = createMemo(session.epoch);
+  const draftId = createMemo(session.draftId);
+
   createEffect(
-    on(createMemo(session.epoch), () => {
+    on(epoch, () => {
       mutationUuid = undefined;
       dismissRejectionNotice();
     })
   );
   createEffect(
-    on(createMemo(session.draftId), () => {
+    on(draftId, () => {
       void refresh();
     })
   );

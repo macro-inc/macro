@@ -211,6 +211,7 @@ async fn resolved(promise: js_sys::Promise) -> JsValue {
 
 fn empty_js_write_result() -> JsWriteResult {
     JsWriteResult {
+        identity_errors: Vec::new(),
         mutation_uuid: None,
         revision: "0".to_string(),
         revision_advanced: false,
@@ -223,6 +224,18 @@ fn empty_js_write_result() -> JsWriteResult {
 
 #[wasm_bindgen_test]
 fn tagged_wire_enum_fields_are_camel_case() {
+    let mut committed = empty_js_write_result();
+    committed
+        .identity_errors
+        .push("missing identity response object".into());
+    let value =
+        serde_json::to_value(JsCommitOptimisticWriteResult::Committed { result: committed })
+            .unwrap();
+    assert_eq!(value["kind"], "committed");
+    assert_eq!(
+        value["identityErrors"],
+        serde_json::json!(["missing identity response object"])
+    );
     assert_eq!(
         serde_json::to_value(JsMutationUpsertKind::ReplacedPending {
             removed_transaction_id: "1".to_string(),

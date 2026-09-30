@@ -450,12 +450,21 @@ pub async fn graphql_cache_commit_optimistic_write<R: Runtime>(
             data,
         )
         .await?;
-    let (write_result, replacement_transaction_id) = match &result {
-        CommitOptimisticWriteResultWire::Committed { result } => (result, None),
+    let (write_result, replacement_transaction_id, error) = match &result {
+        CommitOptimisticWriteResultWire::Failed {
+            result,
+            replacement_transaction_id,
+            error,
+        } => (
+            result,
+            replacement_transaction_id.clone(),
+            Some(error.clone()),
+        ),
+        CommitOptimisticWriteResultWire::Committed { result } => (result, None, None),
         CommitOptimisticWriteResultWire::CommittedSuperseded {
             replacement_transaction_id,
             result,
-        } => (result, Some(replacement_transaction_id.clone())),
+        } => (result, Some(replacement_transaction_id.clone()), None),
     };
     emit_ops_affected(&app, &write_result.affected_ops, &write_result.changed);
     if write_result.revision_advanced {
@@ -467,10 +476,12 @@ pub async fn graphql_cache_commit_optimistic_write<R: Runtime>(
         write_result.mutation_uuid.clone(),
         if replacement_transaction_id.is_some() {
             "superseded"
+        } else if error.is_some() {
+            "permanently-failed"
         } else {
             "committed"
         },
-        None,
+        error,
         replacement_transaction_id,
     );
     Ok(result)

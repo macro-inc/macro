@@ -119,8 +119,6 @@ interface ToastAction {
  */
 interface ToastOptions {
   subtext?: string;
-  /** Keep actionable failures visible until dismissed, independently of transient notices. */
-  persistent?: boolean;
   /** Auto-dismiss duration in ms. When omitted, the toast uses a default 3s timer. */
   duration?: number;
   /** When true, don't render this toast on mobile. */
@@ -257,18 +255,10 @@ function dismiss(toastId: number) {
 // Tell users that an action has failed, because of us
 function failure(
   message: string,
-  options: ToastOptions & { persistent: true; actions?: ToastAction[] }
-): number | undefined;
-function failure(
-  message: string,
-  options?: ToastOptions & { actions?: ToastAction[] }
-): void;
-function failure(
-  message: string,
   options?: ToastOptions & { actions?: ToastAction[] }
 ) {
-  if (!options?.persistent) dismissIfRecent(message, ToastType.FAILURE);
-  return createToast(message, ToastType.FAILURE, options);
+  dismissIfRecent(message, ToastType.FAILURE);
+  createToast(message, ToastType.FAILURE, options);
 }
 
 // Tell users that an action has failed, because of them
@@ -349,8 +339,7 @@ function ToastContent(props: {
   const styles = () => (props.toastType ? TOAST_STYLES[props.toastType] : null);
   // Two actions beside the title squeeze it to a few characters; like the
   // stacked custom layout, they get their own row under the description.
-  const stackActions = () =>
-    (props.actions?.length ?? 0) > 1 || (props.mobile && props.persistent);
+  const stackActions = () => (props.actions?.length ?? 0) > 1;
 
   const accentColor = () => {
     if (props.custom?.color) return props.custom.color;
@@ -547,7 +536,7 @@ function ToastContent(props: {
                       mobile={props.mobile}
                     />
                   </Show>
-                  <Show when={!props.mobile || props.persistent}>
+                  <Show when={!props.mobile}>
                     <Toast.CloseButton>
                       <Button variant="ghost" size="icon-sm">
                         <XIcon />
@@ -667,12 +656,11 @@ function createToast(
   toastType: ToastType,
   options?: ToastSuccessOptions
 ) {
-  const { subtext, actions, duration, stack, hideOnMobile, persistent } =
-    options ?? {};
+  const { subtext, actions, duration, stack, hideOnMobile } = options ?? {};
 
   if (isMobile() && hideOnMobile) return undefined;
 
-  if (!stack && !persistent) {
+  if (!stack) {
     const key = createToastKey(message, toastType);
     const existingToast = recentToasts.get(key);
     if (existingToast?.timeoutId) {
@@ -682,7 +670,7 @@ function createToast(
 
   const useMobile = isMobile();
   const region = useMobile ? 'mobile-toast-region' : 'toast-region';
-  const skipOpenAnimation = replaceActiveToast(region, persistent);
+  const skipOpenAnimation = dismissActiveToast(region);
 
   const toastId = toaster.show(
     (props) => (
@@ -692,7 +680,6 @@ function createToast(
         message={message}
         subtext={subtext}
         actions={actions}
-        persistent={persistent}
         // Pass duration only when explicitly provided — this is what gates the progress bar.
         // When undefined, ToastContent falls back to its own default dismiss timing internally.
         duration={duration}
@@ -706,9 +693,9 @@ function createToast(
     { region }
   );
 
-  trackActiveToast(region, toastId, persistent);
+  setActiveToastId(region, toastId);
 
-  if (!stack && !persistent) {
+  if (!stack) {
     const key = createToastKey(message, toastType);
     const timeoutId = setTimeout(() => {
       recentToasts.delete(key);

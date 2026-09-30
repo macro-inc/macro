@@ -1457,11 +1457,31 @@ export function normalizedCacheExchange(
                     data: result.data,
                   }
                 );
-                await deleteReportedRecords(result);
-                if (committed.kind === 'committed-superseded') {
+                for (const error of committed.identityErrors ?? []) {
+                  try {
+                    options.onCacheError?.(new Error(error), op);
+                  } catch {
+                    // A diagnostic callback cannot undo confirmed settlement.
+                  }
+                }
+                if (committed.kind === 'failed') {
+                  const error = new Error(committed.error);
+                  options.onCacheError?.(error, op);
+                  result = {
+                    ...result,
+                    data: undefined,
+                    error: new CombinedError({ networkError: error }),
+                  };
+                  replacementTransactionId = committed.replacementTransactionId;
+                  disposition = replacementTransactionId
+                    ? 'superseded'
+                    : 'permanently-failed';
+                } else if (committed.kind === 'committed-superseded') {
+                  await deleteReportedRecords(result);
                   replacementTransactionId = committed.replacementTransactionId;
                   disposition = 'superseded';
                 } else {
+                  await deleteReportedRecords(result);
                   const effects = operationCacheEffects(result.data);
                   if (effects.some((effect) => effect.kind === 'delete')) {
                     // Commit already normalized the complete result. Replay only

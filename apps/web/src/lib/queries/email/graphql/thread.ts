@@ -96,10 +96,8 @@ export function mapGraphqlThreadError(error: CombinedError): ThrownResultError {
 }
 
 /** Resolve a durable local route before contacting the server with its ID. */
-async function cachedThreadIdentity(
-  threadId: string,
-  cacheRequired = graphqlCacheEnabled()
-) {
+async function cachedThreadIdentity(threadId: string) {
+  const cacheRequired = graphqlCacheEnabled();
   const host = cacheRequired ? getGraphqlCacheHost() : undefined;
   if (cacheRequired && !host) {
     throw new Error('Email cache is unavailable; thread identity is unknown');
@@ -109,7 +107,12 @@ async function cachedThreadIdentity(
         host,
         selectRecords(EmailThreadIdentityFieldsFragmentDoc),
         [`GraphqlSoupEmailThread:${threadId}`]
-      )
+      ).catch((error) => {
+        // Initialization may retire the host while this first read is pending.
+        // Only session-wide fallback makes an unresolved route safe to fetch.
+        if (graphqlCacheEnabled()) throw error;
+        return undefined;
+      })
     : undefined;
   const selected = result?.records[0];
   return {
@@ -136,9 +139,11 @@ export async function fetchGraphqlEmailThread(
   threadId: string,
   offset = 0
 ): Promise<ApiThread> {
-  const cacheRequired = graphqlCacheEnabled();
+  getGraphqlSoupClient();
+  const identity = await cachedThreadIdentity(threadId);
+  // An asynchronous cache initialization failure can replace the client while
+  // resolving identity. Use the session's current transport after that read.
   const client = getGraphqlSoupClient();
-  const identity = await cachedThreadIdentity(threadId, cacheRequired);
   const variables: EmailThreadPageQueryVariables = {
     threadId: identity.canonical,
     offset,
@@ -192,8 +197,7 @@ export function createGraphqlEmailThreadQuery<TData = GraphqlEmailThreadPages>(
 } {
   // Client construction installs the host. Subscribe before the first read so
   // settlement cannot leave a reopened local thread stuck on cache-only.
-  const cacheRequired = graphqlCacheEnabled();
-  const client = getGraphqlSoupClient();
+  getGraphqlSoupClient();
   const host = getGraphqlCacheHost();
   const [identity, setIdentity] =
     createSignal<Awaited<ReturnType<typeof cachedThreadIdentity>>>();
@@ -203,7 +207,7 @@ export function createGraphqlEmailThreadQuery<TData = GraphqlEmailThreadPages>(
     const id = threadId();
     const generation = ++request;
     try {
-      const result = await cachedThreadIdentity(id, cacheRequired);
+      const result = await cachedThreadIdentity(id);
       if (disposed || generation !== request || id !== threadId()) return;
       setIdentity((previous) =>
         previous?.requested === result.requested &&
@@ -246,7 +250,7 @@ export function createGraphqlEmailThreadQuery<TData = GraphqlEmailThreadPages>(
     TData
   >(() => ({
     query: EmailThreadPageDocument,
-    client,
+    client: getGraphqlSoupClient(),
     initialPageParam: 0,
     variables: (offset) => ({
       threadId: resolvedThreadId(),
@@ -262,7 +266,7 @@ export function createGraphqlEmailThreadQuery<TData = GraphqlEmailThreadPages>(
     },
     enabled:
       options().enabled &&
-      (!cacheRequired || !!host) &&
+      (!graphqlCacheEnabled() || !!getGraphqlCacheHost()) &&
       threadId().length > 0 &&
       identity()?.requested === threadId(),
     requestPolicy: identity()?.localOnly ? 'cache-only' : 'cache-and-network',

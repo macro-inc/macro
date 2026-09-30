@@ -98,6 +98,7 @@ fn read(handle: &EngineHandle, op_id: Option<&str>) -> ReadResultWire {
 
 fn empty_write_result() -> WriteResultWire {
     WriteResultWire {
+        identity_errors: Vec::new(),
         mutation_uuid: None,
         revision: "0".to_string(),
         revision_advanced: false,
@@ -110,6 +111,18 @@ fn empty_write_result() -> WriteResultWire {
 
 #[test]
 fn tagged_wire_enum_fields_are_camel_case() {
+    let mut committed = empty_write_result();
+    committed
+        .identity_errors
+        .push("missing identity response object".into());
+    let value =
+        serde_json::to_value(CommitOptimisticWriteResultWire::Committed { result: committed })
+            .unwrap();
+    assert_eq!(value["kind"], "committed");
+    assert_eq!(
+        value["identityErrors"],
+        serde_json::json!(["missing identity response object"])
+    );
     assert_eq!(
         serde_json::to_value(MutationUpsertKindWire::ReplacedPending {
             removed_transaction_id: "1".to_string(),
@@ -140,6 +153,22 @@ fn tagged_wire_enum_fields_are_camel_case() {
         .unwrap()["replacementTransactionId"],
         "4"
     );
+    for replacement_transaction_id in [None, Some("4".to_string())] {
+        let value = serde_json::to_value(CommitOptimisticWriteResultWire::Failed {
+            error: "missing identity response id".to_string(),
+            replacement_transaction_id: replacement_transaction_id.clone(),
+            result: empty_write_result(),
+        })
+        .unwrap();
+        assert_eq!(value["kind"], "failed");
+        assert_eq!(value["error"], "missing identity response id");
+        assert_eq!(
+            value
+                .get("replacementTransactionId")
+                .and_then(serde_json::Value::as_str),
+            replacement_transaction_id.as_deref()
+        );
+    }
     assert_eq!(
         serde_json::to_value(RollbackOptimisticWriteResultWire::DiscardedSuperseded {
             replacement_transaction_id: "5".to_string(),

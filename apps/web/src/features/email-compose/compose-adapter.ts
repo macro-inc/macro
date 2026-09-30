@@ -24,6 +24,7 @@ import { handleFileFolderDrop } from '@core/util/upload';
 import { Telemetry } from '@macro-inc/observability';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import ArrowSquareOut from '@phosphor-icons/core/regular/arrow-square-out.svg?component-solid';
+import ExclamationIcon from '@phosphor-icons/core/regular/exclamation-mark.svg?component-solid';
 import { queryClient } from '@queries/client';
 import {
   useAddForwardedAttachmentsMutation,
@@ -183,42 +184,45 @@ export function createEmailComposeContext(
     draft: EmailDraft,
     handles: DraftClientHandles & { threadId: string },
     senderLinkId: string
-  ): GraphqlSaveEmailDraftArgs => ({
-    senderIsSignal: (() => {
-      const link = accounts.isSuccess
-        ? accounts.data?.links.find((link) => link.id === senderLinkId)
+  ): GraphqlSaveEmailDraftArgs => {
+    const senderAccount = accounts.isSuccess
+      ? accounts.data?.links.find((link) => link.id === senderLinkId)
+      : undefined;
+    const senderIsSignal =
+      senderAccount && 'draft_is_signal' in senderAccount
+        ? senderAccount.draft_is_signal
         : undefined;
-      return link && 'draft_is_signal' in link
-        ? link.draft_is_signal
-        : undefined;
-    })(),
-    newThreadOwnerId:
-      !draft.thread_db_id && !draft.replying_to_id ? viewerId() : undefined,
-    draftId: handles.draftId,
-    threadDbId: handles.threadId,
-    // Persist the selected inbox itself: the primary inbox can change before replay.
-    linkId: senderLinkId || undefined,
-    replyingToId: draft.replying_to_id ?? undefined,
-    providerId: draft.provider_id ?? undefined,
-    providerThreadId: draft.provider_thread_id ?? undefined,
-    subject: draft.subject,
-    to: (draft.to ?? []).map(draftContactInput),
-    cc: (draft.cc ?? []).map(draftContactInput),
-    bcc: (draft.bcc ?? []).map(draftContactInput),
-    bodyHtml: draft.body_html ?? undefined,
-    bodyText: draft.body_text ?? undefined,
-    bodyMacro: draft.body_macro ?? undefined,
-    // Client-only, for the optimistic entity: responses carry the body unencoded.
-    senderLinkId,
-    senderEmail:
-      inboxSource.inboxes().find((inbox) => inbox.id === senderLinkId)
-        ?.email_address ??
-      viewerEmail() ??
-      '',
-    optimisticBodyHtml: draft.body_html
-      ? decodeBase64Utf8(draft.body_html)
-      : null,
-  });
+    const isNewThread = !draft.thread_db_id && !draft.replying_to_id;
+
+    return {
+      senderIsSignal,
+      newThreadOwnerId: isNewThread ? viewerId() : undefined,
+      draftId: handles.draftId,
+      threadDbId: handles.threadId,
+      // Persist the selected inbox itself: the primary inbox can change before replay.
+      linkId: senderLinkId || undefined,
+      replyingToId: draft.replying_to_id ?? undefined,
+      providerId: draft.provider_id ?? undefined,
+      providerThreadId: draft.provider_thread_id ?? undefined,
+      subject: draft.subject,
+      to: (draft.to ?? []).map(draftContactInput),
+      cc: (draft.cc ?? []).map(draftContactInput),
+      bcc: (draft.bcc ?? []).map(draftContactInput),
+      bodyHtml: draft.body_html ?? undefined,
+      bodyText: draft.body_text ?? undefined,
+      bodyMacro: draft.body_macro ?? undefined,
+      // Client-only, for the optimistic entity: responses carry the body unencoded.
+      senderLinkId,
+      senderEmail:
+        inboxSource.inboxes().find((inbox) => inbox.id === senderLinkId)
+          ?.email_address ??
+        viewerEmail() ??
+        '',
+      optimisticBodyHtml: draft.body_html
+        ? decodeBase64Utf8(draft.body_html)
+        : null,
+    };
+  };
 
   return {
     draftLifecycle: emailDraftLifecycleSource,
@@ -273,10 +277,16 @@ export function createEmailComposeContext(
         success: (message, options) => toast.success(message, notice(options)),
         failure: (message, options) => {
           if (options?.persistent)
-            return toast.failure(message, {
-              ...notice(options),
-              persistent: true,
-            });
+            return toast.custom(
+              {
+                title: message,
+                content: () => options.subtext,
+                icon: ExclamationIcon,
+                color: 'var(--color-failure)',
+                actions: notice(options).actions,
+              },
+              { persistent: true }
+            );
           toast.failure(message, notice(options));
           return undefined;
         },

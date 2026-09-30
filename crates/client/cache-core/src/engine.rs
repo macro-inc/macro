@@ -91,6 +91,9 @@ pub enum EngineError<S: std::error::Error + 'static> {
     },
     #[error("invalid optimistic projection: {0}")]
     InvalidOptimisticProjection(String),
+    /// Identity resolution and normalization failed; the mutation was durably discarded.
+    #[error("invalid optimistic identity: {}", .0.error)]
+    IdentityResolutionFailed(Box<FailedMutationResult>),
     #[error("invalid optimistic mutation UUID `{0}`")]
     InvalidMutationUuid(String),
     #[error("durable optimistic queue changed while staging UUID upsert")]
@@ -137,6 +140,8 @@ pub struct QueryRegistration<'a> {
 /// Result of writing a network response.
 #[derive(Debug)]
 pub struct WriteResult {
+    /// Identity bindings omitted while committing otherwise normalizable server data.
+    pub identity_errors: Vec<String>,
     /// Revision installed after this logical cache mutation.
     pub revision: CacheRevision,
     /// Whether this write advanced [`Self::revision`].
@@ -208,6 +213,19 @@ pub enum CommitOptimisticWriteResult {
     Committed(WriteResult),
     /// The response committed beneath a newer optimistic replacement.
     CommittedSuperseded(SupersededMutationResult),
+    /// Invalid identity data and an unnormalizable response permanently failed this attempt.
+    Failed(FailedMutationResult),
+}
+
+/// Cache changes and diagnostics from a permanently failed commit attempt.
+#[derive(Debug)]
+pub struct FailedMutationResult {
+    /// Changes caused by removing the failed optimistic layer.
+    pub write_result: WriteResult,
+    /// Identity-resolution diagnostic for the host's cache error handler.
+    pub error: String,
+    /// Newer intent preserved when the failed attempt was superseded.
+    pub replacement_transaction_id: Option<OptimisticTransactionId>,
 }
 
 /// Result of attempting to defer a failed queue attempt.
@@ -445,6 +463,7 @@ impl<S: Storage> Engine<S> {
         let affected_ops = self.deps.ops_for_keys(changed.iter());
         let revision = self.advance_revision()?;
         Ok(WriteResult {
+            identity_errors: Vec::new(),
             revision,
             revision_advanced: true,
             changed,
@@ -1333,6 +1352,7 @@ impl<S: Storage> Engine<S> {
             }
         }
         Ok(WriteResult {
+            identity_errors: Vec::new(),
             revision,
             revision_advanced,
             changed,
@@ -1754,6 +1774,7 @@ impl<S: Storage> Engine<S> {
             transaction_id: upsert.id,
             upsert_kind: upsert.kind,
             write_result: WriteResult {
+                identity_errors: Vec::new(),
                 revision,
                 revision_advanced: true,
                 changed,
@@ -2028,6 +2049,9 @@ impl<S: Storage> Engine<S> {
     /// Replaces the claimed head's optimistic contribution with the real
     /// network response without flickering through the pre-mutation value.
     /// Real records and queue deletion commit in one storage transaction.
+    /// Invalid response identities are reported in [`WriteResult::identity_errors`].
+    /// If that response also cannot normalize, the attempt is discarded and
+    /// [`EngineError::IdentityResolutionFailed`] carries the rollback changes.
     pub async fn commit_optimistic_write(
         &mut self,
         transaction: OptimisticTransactionId,
@@ -2101,7 +2125,7 @@ impl<S: Storage> Engine<S> {
         } else {
             None
         };
-        let write_result = self
+        let write_result = match self
             .commit_optimistic_write_with_projections(
                 transaction,
                 claim,
@@ -2111,7 +2135,14 @@ impl<S: Storage> Engine<S> {
                 data,
                 projections,
             )
-            .await?;
+            .await
+        {
+            Ok(result) => result,
+            Err(EngineError::IdentityResolutionFailed(result)) => {
+                return Ok(CommitOptimisticWriteResult::Failed(*result));
+            }
+            Err(error) => return Err(error),
+        };
         match replacement_transaction_id {
             Some(replacement_transaction_id) => Ok(
                 CommitOptimisticWriteResult::CommittedSuperseded(SupersededMutationResult {
@@ -2143,20 +2174,71 @@ impl<S: Storage> Engine<S> {
             .position(|layer| layer.id == transaction)
             .ok_or(EngineError::UnknownTransaction(transaction))?;
         let mutation_uuid = Some(self.optimistic[index].uuid.to_string());
-        let bindings = self.optimistic[index].identity_bindings.clone();
-        let identities =
-            identity::resolve(&bindings, data).map_err(EngineError::InvalidOptimisticProjection)?;
-        let mut recipes = self.optimistic[index].link_patches.clone();
+        let mut bindings = self.optimistic[index].identity_bindings.clone();
+        let mut identity_errors = Vec::new();
+        let identities = match identity::resolve(&bindings, data) {
+            Ok(identities) => identities,
+            Err(_) => {
+                // Salvage valid bindings without guessing targets for failed ones.
+                let mut identities = IdentityMap::new();
+                bindings.retain(|binding| {
+                    match identity::resolve(std::slice::from_ref(binding), data) {
+                        Ok(resolved) => {
+                            identities.extend(resolved);
+                            true
+                        }
+                        Err(error) => {
+                            identity_errors.push(error);
+                            false
+                        }
+                    }
+                });
+                identities
+            }
+        };
+        let doc = Self::document(&mut self.docs, query)?;
+        let op = doc.operation(operation_name)?;
+        let mut updates = match normalize(op, variables, data) {
+            Ok(updates) => updates,
+            Err(error) if identity_errors.is_empty() => return Err(error.into()),
+            Err(error) => {
+                // No safe authoritative write is possible. Retire this attempt
+                // rather than replaying an already successful server mutation.
+                let error = format!("{}; {error}", identity_errors.join("; "));
+                let rollback = self
+                    .rollback_optimistic_write_with_outcome(transaction, claim)
+                    .await?;
+                let (write_result, replacement_transaction_id) = match rollback {
+                    RollbackOptimisticWriteResult::RolledBack(result) => (result, None),
+                    RollbackOptimisticWriteResult::DiscardedSuperseded(result) => {
+                        (result.write_result, Some(result.replacement_transaction_id))
+                    }
+                };
+                return Err(EngineError::IdentityResolutionFailed(Box::new(
+                    FailedMutationResult {
+                        write_result,
+                        error,
+                        replacement_transaction_id,
+                    },
+                )));
+            }
+        };
+        // Recipes and revalidation variables may contain unresolved local IDs.
+        // On a binding error, commit only authoritative data and valid aliases.
+        let (mut recipes, mut revalidations) = if identity_errors.is_empty() {
+            (
+                self.optimistic[index].link_patches.clone(),
+                self.optimistic[index].revalidations.clone(),
+            )
+        } else {
+            (Vec::new(), Vec::new())
+        };
         for patch in &mut recipes {
             identity::remap_patch(patch, &bindings, &identities);
         }
-        let mut revalidations = self.optimistic[index].revalidations.clone();
         for revalidation in &mut revalidations {
             identity::remap_variables(&mut revalidation.variables_json, &bindings, &identities);
         }
-        let doc = Self::document(&mut self.docs, query)?;
-        let op = doc.operation(operation_name)?;
-        let mut updates = normalize(op, variables, data)?;
         for (local, target) in &identities {
             if !updates.contains_key(target) {
                 if bindings.iter().any(|binding| &binding.local_key == local) {
@@ -2233,6 +2315,7 @@ impl<S: Storage> Engine<S> {
             .collect();
         let affected_ops = self.deps.ops_for_keys(visible_changed.iter());
         Ok(WriteResult {
+            identity_errors,
             revision,
             revision_advanced: true,
             changed: durable_changed,
@@ -2327,6 +2410,7 @@ impl<S: Storage> Engine<S> {
             .collect();
         let affected_ops = self.deps.ops_for_keys(visible_changed.iter());
         Ok(WriteResult {
+            identity_errors: Vec::new(),
             revision,
             revision_advanced: true,
             changed: BTreeSet::new(),
@@ -2633,6 +2717,7 @@ impl<S: PredicateIndexStorage> Engine<S> {
             affected_ops.remove(&origin_op);
         }
         Ok(WriteResult {
+            identity_errors: Vec::new(),
             revision,
             revision_advanced,
             changed,

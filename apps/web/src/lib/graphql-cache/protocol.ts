@@ -357,6 +357,8 @@ export type HydrationResult =
   | { kind: 'void'; revision: CacheRevision };
 
 export type WriteResult = {
+  /** Bindings omitted while committing an otherwise normalizable response. */
+  identityErrors?: string[];
   mutationUuid?: string;
   /** Effective-view revision installed by this logical mutation. */
   revision: CacheRevision;
@@ -436,6 +438,11 @@ export type DeferOptimisticWriteResult =
 
 /** Result of committing a current or superseded attempt. */
 export type CommitOptimisticWriteResult =
+  | (WriteResult & {
+      kind: 'failed';
+      error: string;
+      replacementTransactionId?: string;
+    })
   | (WriteResult & { kind: 'committed' })
   | (WriteResult & {
       kind: 'committed-superseded';

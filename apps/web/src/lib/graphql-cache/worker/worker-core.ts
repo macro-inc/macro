@@ -608,21 +608,32 @@ export class CacheWorkerCore {
         );
         result.revision = parseCacheRevision(result.revision);
         this.fanOut(result, true);
+        const replacementTransactionId =
+          result.kind === 'committed'
+            ? undefined
+            : result.replacementTransactionId;
         this.push({
           kind: 'mutation-settled',
           settlement:
-            result.kind === 'committed-superseded'
+            replacementTransactionId !== undefined
               ? {
                   transactionId: request.transactionId,
                   mutationUuid: result.mutationUuid,
                   status: 'superseded',
-                  replacementTransactionId: result.replacementTransactionId,
+                  replacementTransactionId,
                 }
-              : {
-                  transactionId: request.transactionId,
-                  mutationUuid: result.mutationUuid,
-                  status: 'committed',
-                },
+              : result.kind === 'failed'
+                ? {
+                    transactionId: request.transactionId,
+                    mutationUuid: result.mutationUuid,
+                    status: 'permanently-failed',
+                    error: result.error,
+                  }
+                : {
+                    transactionId: request.transactionId,
+                    mutationUuid: result.mutationUuid,
+                    status: 'committed',
+                  },
         });
         return result;
       })

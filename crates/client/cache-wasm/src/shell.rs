@@ -146,6 +146,8 @@ struct JsQueryRegistration {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct JsWriteResult {
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    identity_errors: Vec<String>,
     revision: String,
     revision_advanced: bool,
     changed: Vec<String>,
@@ -388,6 +390,13 @@ enum JsDeferOptimisticWriteResult {
     rename_all_fields = "camelCase"
 )]
 enum JsCommitOptimisticWriteResult {
+    Failed {
+        error: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        replacement_transaction_id: Option<String>,
+        #[serde(flatten)]
+        result: JsWriteResult,
+    },
     Committed {
         #[serde(flatten)]
         result: JsWriteResult,
@@ -419,6 +428,7 @@ enum JsRollbackOptimisticWriteResult {
 
 fn js_write_result(result: WriteResult, ops: &OpInterner) -> JsWriteResult {
     JsWriteResult {
+        identity_errors: result.identity_errors,
         revision: result.revision.to_string(),
         revision_advanced: result.revision_advanced,
         changed: result
@@ -1676,6 +1686,15 @@ impl CacheEngine {
                 )
                 .await;
             let result = match state.engine_result(result)? {
+                CommitOptimisticWriteResult::Failed(result) => {
+                    JsCommitOptimisticWriteResult::Failed {
+                        error: result.error,
+                        replacement_transaction_id: result
+                            .replacement_transaction_id
+                            .map(|id| id.to_string()),
+                        result: js_write_result(result.write_result, &ops.borrow()),
+                    }
+                }
                 CommitOptimisticWriteResult::Committed(result) => {
                     JsCommitOptimisticWriteResult::Committed {
                         result: js_write_result(result, &ops.borrow()),
