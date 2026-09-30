@@ -132,3 +132,32 @@ export function matchTourTarget(
   }
   return undefined;
 }
+
+/** Why each element registered for `target` is or isn't usable. Dev aid. */
+export function explainTourTarget(
+  target: TourTarget,
+  boundary: HTMLElement | undefined
+) {
+  const registered = [...(elements.get(target.id) ?? [])];
+  if (!registered.length) return { id: target.id, registered: 0 };
+  return {
+    id: target.id,
+    registered: registered.length,
+    elements: registered.map((element) => {
+      const rect = element.getBoundingClientRect();
+      const hiddenBy = element.closest<HTMLElement>(
+        '[hidden], [inert], [aria-hidden="true"]'
+      );
+      return {
+        element,
+        connected: element.isConnected,
+        size: `${Math.round(rect.width)}x${Math.round(rect.height)}`,
+        hiddenBy: hiddenBy
+          ? `${hiddenBy.tagName.toLowerCase()}${hiddenBy.hasAttribute('inert') ? '[inert]' : ''}${hiddenBy.getAttribute('aria-hidden') === 'true' ? '[aria-hidden]' : ''}${hiddenBy.hidden ? '[hidden]' : ''}`
+          : undefined,
+        outsideBoundary:
+          target.scope === 'view' && !!boundary && !boundary.contains(element),
+      };
+    }),
+  };
+}

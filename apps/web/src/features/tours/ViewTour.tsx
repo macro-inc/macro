@@ -106,6 +106,7 @@ function DismissibleTour(props: ViewTourProps & { userId: string }) {
         boundary={(root) => root.closest<HTMLElement>('[data-split-id]')}
         // Most hidden targets live in the view's collapsed sidebar.
         fallbackEntry={VIEW_SHELL_TOUR.sidebarToggle}
+        debugName={props.tour.id}
       >
         <Tour.Highlight class="view-tour-highlight" />
         <Tour.Beacon />
