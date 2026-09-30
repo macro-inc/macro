@@ -891,22 +891,30 @@ Reminder. Inline Calendar previews retain their host's chrome without adding
 another sidebar; their left header island has a compact New menu because the
 bottom New action follows the foreground host view.
 
-The in-view desktop Calendar header follows Drive's two-level layout: the slim
-top bar shows the viewed month and year and, when the sidebar is closed, a
-compact `New` menu. At wide widths, the row beneath puts `Search events` on
-the left and a labeled `Today` button followed by the rounded period selector
-and previous/next arrows on the right. The idle search field places its hotkey
-beside the placeholder. A query reveals the icon-only Exact-match toggle at
-wide widths; in narrow splits, Exact and Filters appear after focusing search.
-The filter button stays before Clear. The filter menu opens below the button,
-aligned to its right edge: Search in is single-select, while Status, Organizer,
-and Attendee allow multiple values. Organizer and Attendee virtualize their
-contact lists; selected contacts stay in place, while custom email addresses
-appear first. Adding a valid email clears the contact search. Filter selections
-apply immediately, and only these filters mark the filter button, not Exact
-mode. Clicking search opens a calendar-search hint until at least three
-characters are entered; searches show skeleton rows while loading. Empty
-results show an illustrated empty state. Result titles show a calendar-color
+The in-view desktop Calendar header uses one responsive top bar. The viewed
+month and year stay on the left in a heading that scales from 16px in narrow
+splits to a maximum of 24px, with a compact `New` menu when the sidebar is closed.
+An icon-only ghost `Search events` button sits on the right, before a slightly
+larger gap and the `Today`, period selector, and previous/next controls.
+Click Search or press Cmd/Ctrl+F to expand and focus the wider inline search field.
+The field slides out with a short width transition and focuses immediately.
+The results popup stays hidden until the field contains non-whitespace text,
+then fades and slides in once expansion is nearly complete. Clearing the field
+hides the popup without collapsing search. Reduced-motion preferences skip
+both transitions.
+Close search, Escape, selecting a result, or clicking outside collapses it back
+to the icon without clearing the query. Activating a period control also
+collapses search after the action runs. Escape and Close restore focus to the
+Search button. The expanded field exposes Filters and, after typing, the
+icon-only Exact-match toggle. The filter button stays before Close. The filter
+menu opens below the button, aligned to its right edge: Search in is
+single-select, while Status, Organizer, and Attendee allow multiple values.
+Organizer and Attendee virtualize their contact lists; selected contacts stay
+in place, while custom email addresses appear first. Adding a valid email clears
+the contact search. Filter selections apply immediately, and only these filters
+mark the filter button, not Exact mode. Search opens a calendar-search hint
+until at least three characters are entered; searches show skeleton rows while
+loading. Empty results show an illustrated empty state. Result titles show a calendar-color
 swatch when the event is loaded in the visible range, falling back to the
 default calendar color otherwise. A result shows its location after the
 date/time when available. Each result offers at most one rounded Join action:
@@ -920,14 +928,19 @@ occurrence details before showing Join. Selecting a result preserves the search
 text. Availability lives in the desktop sidebar's Upcoming events section and
 in the mobile header.
 
-Resizing the split keeps the same search field mounted in the fixed-height
-header row. At narrow widths the row hides `Today` and the period selector,
-then the navigation arrows when space becomes scarce; focusing search also
-hides the remaining controls to give the field room. Its clear button remains
-available when a query is present. The `New` menu stays in the desktop top
-bar. Touch devices keep the month selector and header controls without separate
-create or call buttons in the right island. The desktop sidebar's mini
-calendar remains navigable by date and month.
+The period controls move into a separate row below 600px of calendar-pane width,
+with `New` on the left and navigation on the right. With a docked sidebar, the
+header needs fewer controls and stays inline down to 480px. This avoids wrapping
+and immediately unwrapping when the sidebar hides. Expanded search does not
+force early wrapping; its results popup stays directly below the search field.
+Below 1040px, search slides over the month title without moving any controls or
+changing the header height. `New` stays outside the search overlay. Resizing the
+pane keeps the search field mounted and preserves its query and focus. Today
+and New retain their text labels until the controls row runs out of room, then
+become icon buttons.
+Touch devices keep the month selector and header controls without separate
+create or call buttons in the right island. Mobile header islands omit Search.
+The desktop sidebar's mini calendar remains navigable by date and month.
 
 Active Quick Calls you created, participated in, or were invited to appear above your
 next five events (including ones in progress), whether or not they have call links.
