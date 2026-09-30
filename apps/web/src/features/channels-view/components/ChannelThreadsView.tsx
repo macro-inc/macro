@@ -5,18 +5,8 @@ import type { ChannelEntity, ChannelThreadEntity } from '@entity';
 import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
 import { useMessageThreadQuery } from '@queries/messages/thread-replies';
 import { Button, cn, Scroll } from '@ui';
-import {
-  createMemo,
-  createSignal,
-  For,
-  Match,
-  onCleanup,
-  onMount,
-  Show,
-  Switch,
-} from 'solid-js';
+import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
-import type { MountQueue } from '../core/mount-queue';
 import { useChannelThreadsQuery } from '../queries/channel-threads';
 import { ChannelAvatar } from './rail/ChannelRailItems';
 
@@ -78,8 +68,6 @@ export type ChannelThreadsViewProps = {
   /** Channel metadata already loaded by the rail, for names and access. */
   resolveChannel: (channelId: string) => ChannelEntity | undefined;
   onOpenThread: (thread: ChannelThreadEntity) => void;
-  /** Staggers card bodies across tasks; without one, each mounts with its card. */
-  mountQueue?: MountQueue;
 };
 
 type ThreadQuery = ReturnType<typeof useMessageThreadQuery>;
@@ -116,22 +104,13 @@ function ThreadCard(props: {
   thread: ChannelThreadEntity;
   channel: ChannelEntity | undefined;
   showChannel: boolean;
-  /** Staggers mounting the thread body so a page of cards never blocks input. */
-  mountQueue?: MountQueue;
   onOpen: () => void;
 }) {
   const parent = () => ({
     type: 'channel' as const,
     id: props.thread.channelId,
   });
-  // The fetch starts now; only the heavy thread body waits for its turn.
   const query = useMessageThreadQuery(parent, () => props.thread.id);
-  // Without a queue the body mounts with the card.
-  const [bodyReady, setBodyReady] = createSignal(!props.mountQueue);
-  onMount(() => {
-    const queue = props.mountQueue;
-    if (queue) onCleanup(queue.enqueue(() => setBodyReady(true)));
-  });
 
   return (
     <article
@@ -160,9 +139,6 @@ function ThreadCard(props: {
               Try again
             </Button>
           </div>
-        </Match>
-        <Match when={!bodyReady()}>
-          <ThreadSkeleton />
         </Match>
         <Match when={true}>
           {/* A boundary per card: one around the virtualized list would blank
@@ -214,7 +190,6 @@ function ThreadList(props: {
   channelId: string | undefined;
   resolveChannel: ChannelThreadsViewProps['resolveChannel'];
   onOpenThread: ChannelThreadsViewProps['onOpenThread'];
-  mountQueue?: MountQueue;
 }) {
   const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
   const [virtualizer, setVirtualizer] = createSignal<VirtualizerHandle>();
@@ -292,7 +267,6 @@ function ThreadList(props: {
                     thread={thread}
                     channel={props.resolveChannel(thread.channelId)}
                     showChannel={props.channelId === undefined}
-                    mountQueue={props.mountQueue}
                     onOpen={() => props.onOpenThread(thread)}
                   />
                 </div>
@@ -355,7 +329,6 @@ export function ChannelThreadsView(props: ChannelThreadsViewProps) {
               channelId={props.channelId}
               resolveChannel={props.resolveChannel}
               onOpenThread={props.onOpenThread}
-              mountQueue={props.mountQueue}
             />
           )}
         </Show>
