@@ -47,9 +47,14 @@ export function useReminderAlerts(
     ),
     active: () => !!account() && isVisible(),
     acknowledgedKeys: dismissals.keys,
-    acknowledge: dismissals.acknowledge,
-    show: (items, acknowledge) =>
-      showReminderAlert(items, acknowledge, (reminderId, onApplied) => {
+    prepareAcknowledge: (keys) => {
+      const owner = account();
+      return () => {
+        if (owner && account() === owner) dismissals.acknowledge(keys);
+      };
+    },
+    show: (items, beginAcknowledge) =>
+      showReminderAlert(items, beginAcknowledge, (reminderId, onApplied) => {
         const manager = globalSplitManager();
         if (!manager) return;
         if (reminderId) {

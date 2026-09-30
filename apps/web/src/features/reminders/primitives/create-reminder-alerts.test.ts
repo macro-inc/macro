@@ -24,7 +24,7 @@ function mount(initial: ReminderAlert[] = [], focused = true) {
       items,
       active,
       acknowledgedKeys: acknowledged,
-      acknowledge,
+      prepareAcknowledge: (keys) => () => acknowledge(keys),
       show,
     });
     return {
@@ -56,11 +56,11 @@ describe('foreground reminder alerts', () => {
   it('updates one grouped alert as a burst arrives and keeps it until acknowledged', () => {
     const h = mount();
     h.setItems([first]);
-    const [visible, close] = h.show.mock.calls[0];
+    const [visible, beginClose] = h.show.mock.calls[0];
     h.setItems([first, tomorrow]);
     expect(h.show).toHaveBeenCalledTimes(1);
     expect(visible()).toEqual([first, tomorrow]);
-    close();
+    beginClose()();
     expect(h.acknowledge).toHaveBeenCalledWith([first.key, tomorrow.key]);
     h.setItems([{ ...first }, { ...tomorrow }]);
     expect(h.show).toHaveBeenCalledTimes(1);
@@ -69,7 +69,7 @@ describe('foreground reminder alerts', () => {
 
   it('remembers a dismissal through refetches but alerts for the next occurrence', () => {
     const h = mount([first]);
-    h.show.mock.calls[0][1]();
+    h.show.mock.calls[0][1]()();
     h.setItems([]);
     h.setItems([{ ...first }]);
     expect(h.show).toHaveBeenCalledTimes(1);
@@ -81,16 +81,45 @@ describe('foreground reminder alerts', () => {
 
   it('acknowledges only the occurrences present when a close gesture starts', () => {
     const h = mount([first]);
-    const [closingItems, close] = h.show.mock.calls[0];
-    close();
+    const [closingItems, beginClose] = h.show.mock.calls[0];
+    beginClose()();
     expect(closingItems()).toEqual([first]);
     h.setItems([first, tomorrow]);
     expect(closingItems()).toEqual([first]);
     expect(h.acknowledge).toHaveBeenCalledWith([first.key]);
     expect(h.show).toHaveBeenCalledTimes(2);
     expect(h.show.mock.calls[1][0]()).toEqual([tomorrow]);
-    close();
+    beginClose()();
     expect(h.acknowledge).toHaveBeenCalledTimes(1);
+    h.dispose();
+  });
+
+  it('keeps arrivals during navigation out of the applied open', () => {
+    const h = mount([first]);
+    const [closingItems, beginOpen] = h.show.mock.calls[0];
+    const onApplied = beginOpen();
+
+    h.setItems([first, tomorrow]);
+    onApplied();
+
+    expect(h.acknowledge).toHaveBeenCalledWith([first.key]);
+    expect(closingItems()).toEqual([first]);
+    expect(h.show).toHaveBeenCalledTimes(2);
+    expect(h.show.mock.calls[1][0]()).toEqual([tomorrow]);
+    h.dispose();
+  });
+
+  it('commits an applied open after the toast was retracted', () => {
+    const h = mount([first]);
+    const beginOpen = h.show.mock.calls[0][1];
+    const onApplied = beginOpen();
+
+    h.setActive(false);
+    onApplied();
+
+    expect(h.acknowledge).toHaveBeenCalledWith([first.key]);
+    h.setActive(true);
+    expect(h.show).toHaveBeenCalledTimes(1);
     h.dispose();
   });
 
@@ -114,11 +143,11 @@ describe('foreground reminder alerts', () => {
     h.setActive(false);
     h.setItems([tomorrow]);
     h.setActive(true);
-    oldUnmount();
+    oldUnmount()();
     expect(h.acknowledge).not.toHaveBeenCalled();
     expect(h.show.mock.calls[1][0]()).toEqual([tomorrow]);
     h.dispose();
-    h.show.mock.calls[1][1]();
+    h.show.mock.calls[1][1]()();
     expect(h.acknowledge).not.toHaveBeenCalled();
   });
 });

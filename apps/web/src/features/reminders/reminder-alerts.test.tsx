@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   flag: () => ({ enabled: false }),
+  userId: (() => 'test-user') as () => string,
   custom: vi.fn((_config: unknown, _options: unknown) => 1),
   dismiss: vi.fn(),
   open: vi.fn(),
@@ -21,7 +22,7 @@ vi.mock('@core/component/Toast/Toast', () => ({
 }));
 vi.mock('@core/constant/featureFlags', () => ({ enableReminders: {} }));
 vi.mock('@core/context/user', () => ({
-  useUserId: () => () => 'test-user',
+  useUserId: () => mocks.userId,
   useIsAuthenticated: () => () => true,
 }));
 vi.mock('./reminder-navigation', () => ({
@@ -55,6 +56,8 @@ const notification: UnifiedNotification = {
 describe('reminder alert app wiring', () => {
   afterEach(() => {
     localStorage.clear();
+    mocks.flag = () => ({ enabled: false });
+    mocks.userId = () => 'test-user';
     vi.restoreAllMocks();
     vi.clearAllMocks();
   });
@@ -130,6 +133,74 @@ describe('reminder alert app wiring', () => {
     mocks.open.mock.calls[0]?.[1].onApplied();
     expect(mocks.dismiss).toHaveBeenCalledWith(1);
     dispose();
+  });
+
+  it('keeps arrivals during detail navigation available for a new alert', () => {
+    mocks.flag = () => ({ enabled: true });
+    const secondNotification: UnifiedNotification = {
+      ...notification,
+      id: 'delivery-2',
+      entity_id: 'reminder-2',
+      notification_metadata: {
+        tag: 'reminder',
+        content: {
+          reminderId: 'reminder-2',
+          description: 'Send notes',
+          scheduledFor: '2026-09-21T10:01:00Z',
+        },
+      },
+    };
+    const h = createRoot((dispose) => {
+      const [notifications, setNotifications] = createSignal([notification]);
+      useReminderAlerts({
+        notifications,
+        isLoading: () => false,
+        _notificationsQuery: { isStarted: true },
+        mutedEntities: () => [],
+        subscribe: () => () => {},
+      });
+      return { dispose, setNotifications };
+    });
+
+    const config = mocks.custom.mock.calls[0][0] as CustomToastConfig;
+    config.actions?.[0].onClick();
+    h.setNotifications([notification, secondNotification]);
+    expect(mocks.custom).toHaveBeenCalledTimes(1);
+
+    mocks.openReminder.mock.calls[0]?.[1].onApplied();
+
+    expect(mocks.dismiss).toHaveBeenCalledWith(1);
+    expect(mocks.custom).toHaveBeenCalledTimes(2);
+    const replacement = mocks.custom.mock.calls[1][0] as CustomToastConfig;
+    expect(replacement.actions?.[0].label).toBe('Open reminder');
+    h.dispose();
+  });
+
+  it('does not acknowledge a delayed open in a replacement account', () => {
+    mocks.flag = () => ({ enabled: true });
+    const h = createRoot((dispose) => {
+      const [userId, setUserId] = createSignal('alice');
+      const [notifications, setNotifications] = createSignal([notification]);
+      mocks.userId = userId;
+      useReminderAlerts({
+        notifications,
+        isLoading: () => false,
+        _notificationsQuery: { isStarted: true },
+        mutedEntities: () => [],
+        subscribe: () => () => {},
+      });
+      return { dispose, setNotifications, setUserId };
+    });
+
+    const config = mocks.custom.mock.calls[0][0] as CustomToastConfig;
+    config.actions?.[0].onClick();
+    h.setNotifications([]);
+    h.setUserId('bob');
+    mocks.openReminder.mock.calls[0]?.[1].onApplied();
+
+    expect(localStorage.getItem('macro:reminder-alerts:alice')).toBeNull();
+    expect(localStorage.getItem('macro:reminder-alerts:bob')).toBeNull();
+    h.dispose();
   });
 
   it('adopts notification state overrides when their transport flag hydrates', () => {

@@ -7,7 +7,7 @@ import type { ReminderAlert } from '../core/reminder-alert';
 
 export function showReminderAlert(
   items: Accessor<readonly ReminderAlert[]>,
-  acknowledge: () => void,
+  beginAcknowledge: () => () => void,
   open: (reminderId: string | undefined, onApplied: () => void) => void
 ): () => void {
   const id = toast.custom(
@@ -54,11 +54,13 @@ export function showReminderAlert(
           {
             label: items().length === 1 ? 'Open reminder' : 'View reminders',
             onClick: () => {
-              const item = items()[0];
+              const opened = items();
+              const item = opened[0];
               if (!item) return;
+              const onApplied = beginAcknowledge();
               open(
-                items().length === 1 ? item.reminderId : undefined,
-                acknowledge
+                opened.length === 1 ? item.reminderId : undefined,
+                onApplied
               );
             },
           },
@@ -68,7 +70,7 @@ export function showReminderAlert(
     {
       persistent: true,
       region: isMobile() ? 'mobile-reminder-region' : 'reminder-region',
-      onUserDismiss: acknowledge,
+      onUserDismiss: () => beginAcknowledge()(),
     }
   );
   return () => toast.dismiss(id);
