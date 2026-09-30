@@ -752,8 +752,14 @@ In the Chat workspace — and wherever a channel opens inline inside another
 view's detail stack (a channel mention followed from the email view, say) — the
 conversation renders an inline detail whose top bar holds the channel avatar
 and name, the same tab strip, live viewer avatars, and the `Call` and
-`Ask Macro` buttons. The title `...` menu (rename, channel picture) is not
-offered there; open the channel as a split (shift-click a rail row) to use it.
+`Ask Macro` buttons. In Chat the avatar and name are a menu button carrying a
+caret: clicking them opens the same entity actions as right-clicking the
+conversation's rail row — `Open in new split`, `Rename`, `Favorite`/`Unfavorite`,
+`Snooze notifications…`, `Mute notifications`, `Remind me`, `Copy Link`, `Copy ID` —
+so a channel can be favorited without finding its row. A channel inlined in
+another view's detail stack keeps a plain title. Channel-picture actions live
+only in the split's title `...` menu; open the channel as a split (shift-click
+a rail row) to reach them.
 
 `Calls` tab: recordings, transcriptions, and summaries for this channel. Click a
 row to open the call. The search field above the list matches call names and

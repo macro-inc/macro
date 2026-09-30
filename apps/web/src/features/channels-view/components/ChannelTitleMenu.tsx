@@ -20,7 +20,9 @@ export function ChannelTitleMenu(props: { channel: ChannelEntity }) {
       viewContext={CHANNEL_ACTION_VIEW_CONTEXT}
       // No aria-label: the conversation's name is the button's own content,
       // and Kobalte's trigger already announces that it opens a menu.
-      triggerProps={{ class: 'min-w-0 shrink gap-1.5 px-2' }}
+      // text-ink: the conversation's name keeps a title's weight rather than
+      // the muted ink a ghost button paints its label in.
+      triggerProps={{ class: 'min-w-0 shrink gap-1.5 px-2 text-ink' }}
     >
       <ChannelDetailTitle
         channelId={props.channel.id}
