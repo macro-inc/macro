@@ -23,6 +23,10 @@ describe('email soup entities', () => {
         data: {
           id: 'email',
           ownerId: 'owner',
+          properties: [],
+          attachments: [],
+          labels: [],
+          participants: [],
           createdAt: '2026-09-01T00:00:00Z',
           updatedAt: '2026-09-01T00:00:00Z',
           sortTs: '2026-09-01T00:00:00Z',
