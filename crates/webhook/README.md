@@ -106,11 +106,11 @@ so one person or team is considered only once.
 `message.mentioned` is emitted once per distinct entity `@`-mentioned in a
 message — users (`macro|<email>`), bots (`bot|<uuid>`), documents, and
 any future mentionable kind. Bot mentions only emit when the bot is an active
-channel participant; the author may itself be a bot. Like every channel
-event, access and `ids` filtering are by channel: the entity is the channel
-containing the message, and the mentioned entity travels in the payload's
-`mentioned` field for consumers to filter on (e.g. the SDK's
-`events.onSelfMention`).
+channel participant; the author may itself be a bot. Like every message
+event, access and `ids` filtering are by the message's parent: the entity is
+the channel or document containing the message, and the mentioned entity
+travels in the payload's `mentioned` field for consumers to filter on (e.g.
+the SDK's `events.onSelfMention`).
 
 Agent trigger events use `entity_type = "bot"`: a filter's `ids` selects one
 bot's whole trigger stream. Access is gated by the channel the mention sits in
@@ -152,9 +152,11 @@ matches every entity ID for that filter's events:
 ```
 
 For document events, IDs always mean the event's `document_id`. For every
-channel event, IDs mean `channel_id`. This includes message, attachment, and
-participant events: their message, attachment, and participant IDs are not used
-for webhook filtering. For webhook events, IDs mean the subject `webhook_id`;
+channel event, IDs mean `channel_id`. This includes attachment and participant
+events: their attachment and participant IDs are not used for webhook filtering.
+For message events, IDs mean the parent's id (`metadata.parent.id`, a channel
+or document); message ids are not used for webhook filtering. For webhook
+events, IDs mean the subject `webhook_id`;
 an absent or `null` `ids` field matches every webhook ID in the strict owner
 workspace.
 
@@ -194,7 +196,8 @@ reuse the same delivery record.
 
 FIFO preserves the order in which the current consumer enqueues events for one
 webhook. It does not create a global order across Kafka partitions or across the
-`macro.documents`, `macro.channels`, and `macro.webhooks` topics. Consumers must
+`macro.documents`, `macro.channels`, `macro.messages`, and `macro.webhooks`
+topics. Consumers must
 therefore treat the order as observed order, not total event order.
 
 ## HTTP delivery contract
