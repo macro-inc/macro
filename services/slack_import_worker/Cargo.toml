@@ -1,0 +1,9 @@
+[package]
+edition = "2024"
+name = "slack_import_worker"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+slack_integration = { path = "../../crates/slack_integration", features = ["worker"] }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }

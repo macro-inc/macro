@@ -17065,6 +17065,38 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 
 [[package]]
+name = "slack_import_worker"
+version = "0.1.0"
+dependencies = [
+ "slack_integration",
+ "workspace-hack",
+]
+
+[[package]]
+name = "slack_integration"
+version = "0.1.0"
+dependencies = [
+ "aws-sdk-s3",
+ "aws-sdk-sqs",
+ "axum",
+ "chrono",
+ "entity_access",
+ "futures",
+ "macro_user_id",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "smallvec"
 version = "1.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
