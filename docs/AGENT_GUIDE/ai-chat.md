@@ -33,6 +33,34 @@ bytes reached storage; previews, DOCX conversion, Markdown initialization, and
 indexing may finish asynchronously. Invalid contents, oversized files, and folder
 permission failures should display a failed tool call without a successful result.
 
+## Generating images with AI
+
+`GenerateImage` takes a text prompt, renders it with Google's Nano Banana image
+model, and saves the result as an image document. Optional arguments: a short file
+name (otherwise the opening words of the prompt name the document), an aspect ratio
+(`square`, `landscape`, `portrait`, `widescreen`, `tall`), and a project ID (edit
+access required). The file extension comes from the generated format, so
+`fileName: "lighthouse"` yields `lighthouse.png`.
+
+For edits or variations, attach photos with the existing paperclip or use Macro
+image documents the user can view. Pass up to three references in `referenceImages`,
+for example `[{"type":"staticFile","id":"<UUID>"},{"type":"document","id":"<UUID>"}]`.
+For an uploaded photo, use the UUID from `/file/<id>` in its attachment URL;
+for a document, use its document ID. Describe the edit in `prompt`, referring to
+image 1, image 2, and image 3 in array order. A description alone does not send
+the photo to the image model. The result is saved as a new document.
+
+The result appears as a standalone image card outside grouped tool calls. A
+rounded header shows the filename above the image preview; clicking the card
+opens the image document in a new app split. The card fits the image's scaled
+width without side padding, preserves its aspect ratio, and truncates long
+filenames in the header. The preview loads once the upload
+is ready, with a placeholder while it is being prepared. Any commentary the
+model added appears below the image.
+Refused prompts, provider failures, and hosts without a Google Generative AI key
+display a failed tool call; the error tells the agent whether to rephrase, retry,
+or stop.
+
 ## Where chats live
 
 The Agents conversation list shows row skeletons after a short delay on first
@@ -268,6 +296,7 @@ is available, the AI composer returns with its draft intact, including in
 documents without a comment composer. Type a
 prompt, optionally choose a model or
 attach context, and tap **Send** to create the chat and send its first message.
+Enter on the virtual keyboard adds a line to the draft rather than sending it.
 The paperclip (**Attach files**) opens the device file chooser directly, including
 in the native iPhone app; it does not open a Macro file browser. Select supported
 files to upload and attach them, or cancel to return to the unchanged draft.
@@ -561,6 +590,11 @@ agent or opening repository settings; sending clears the attachment previews.
 Expanded queued prompts
 list their attached file names under the text; editing a queued prompt keeps them.
 
+On a local stack, the in-memory agent reads uploaded image attachments from local
+storage and sends their bytes to the model. The provider does not need access to
+the stack's private hostname. This also applies to images in earlier turns when
+resuming a conversation after a service restart.
+
 Cursor walkthrough files the run re-hosts appear in the transcript after the
 answer: screenshots as images, recordings as video players, and `.txt` / `.log`
 files as an inline `txt` code block (not a download link). Larger or non-UTF-8
@@ -570,7 +604,11 @@ On mobile the composer (and any queued prompts above it) floats in the bottom
 accessory region above the dock — same placement as channel and AI chat — so it
 stays tappable and clear of the home indicator. The box is full width; the text
 sits on top and a footer row holds the model (left, as a provider logo and
-name, e.g. `✳ Sonnet 5 ⌄`) and **Send** (right). Tapping the model opens a
+name, e.g. `✳ Sonnet 5 ⌄`) and **Send** (right). On touch devices Enter on the
+virtual keyboard inserts a newline and never sends; only **Send** submits, the
+same as channel composers. This also applies to the Agents workspace session
+and new-conversation inputs and to the mobile **Ask AI** composer. On desktop
+Enter still sends and Shift+Enter inserts a newline. Tapping the model opens a
 bottom sheet listing every model the same way, with a check on the current one
 — pick a row to switch. Models read as names even when the runtime reports
 only ids: Macro Agent's `anthropic/claude-sonnet-5` shows as **Sonnet 5**. On desktop the
@@ -966,6 +1004,29 @@ Verify status changes (open/merged/closed) while the chip stays mounted, and
 verify that reconnecting the gateway catches up changes missed while disconnected.
 There is no periodic PR lookup polling.
 
+### Agent reasoning effort
+
+Open the model selector and hover a model to choose its reasoning effort in the
+submenu. Keyboard users open it with Right Arrow; touch users tap the model.
+Cursor and Macro's in-memory agent load the hovered model's own advertised
+choices. The selected label includes the effort, such as `Sonnet 5 · High`;
+there is no separate effort control in the input box. Models without effort
+support remain selectable through `Use <model>` (or a desktop click/Enter).
+Default keeps the model's existing behavior.
+
+In an open session, choosing a different model's effort confirms the model first,
+then validates and applies effort. Wait for the selector to become available
+again. If the model succeeds but effort is rejected, the new model remains
+selected with its confirmed effort; the error is shown and no unsupported
+setting is presented as accepted.
+
+New conversations confirm selected model and effort settings before sending the
+first message. If startup reports a rejected setting or timeout, the first prompt
+has not been sent. See [effort capabilities](../AGENT_EFFORT.md) for the harness
+contracts and test coverage.
+
+Routine model/agent pickers retain model-only selection: they do not offer effort
+choices, because routine targets do not save an effort setting.
 
 ## Reading skills
 

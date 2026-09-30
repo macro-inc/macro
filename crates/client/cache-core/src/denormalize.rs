@@ -7,6 +7,7 @@
 //! field is a cache miss (Phase 1: no partial results — nullability-based
 //! partials are a later phase; the metadata is already generated).
 
+use crate::deps::DependencyTracker;
 use crate::document::{
     FieldNode, MissingVariable, Operation, Selection, resolve_args, resolved_args_key,
 };
@@ -65,7 +66,7 @@ pub fn denormalize(
     op: &Operation,
     variables: &serde_json::Map<String, Json>,
     source: &impl RecordSource,
-    deps: &mut BTreeSet<EntityKey<'static>>,
+    deps: &mut impl DependencyTracker,
 ) -> Result<ReadOutcome, DenormalizeError> {
     denormalize_with_entity_resolvers(
         op,
@@ -81,7 +82,7 @@ pub fn denormalize_with_entity_resolvers(
     op: &Operation,
     variables: &serde_json::Map<String, Json>,
     source: &impl RecordSource,
-    deps: &mut BTreeSet<EntityKey<'static>>,
+    deps: &mut impl DependencyTracker,
     entity_resolvers: &EntityResolverLookup,
 ) -> Result<ReadOutcome, DenormalizeError> {
     denormalize_record_with_entity_resolvers(
@@ -102,7 +103,7 @@ pub fn denormalize_record(
     selections: &[Selection],
     variables: &serde_json::Map<String, Json>,
     source: &impl RecordSource,
-    deps: &mut BTreeSet<EntityKey<'static>>,
+    deps: &mut impl DependencyTracker,
 ) -> Result<ReadOutcome, DenormalizeError> {
     denormalize_record_with_entity_resolvers(
         key,
@@ -121,7 +122,7 @@ fn denormalize_record_with_entity_resolvers(
     selections: &[Selection],
     variables: &serde_json::Map<String, Json>,
     source: &impl RecordSource,
-    deps: &mut BTreeSet<EntityKey<'static>>,
+    deps: &mut impl DependencyTracker,
     entity_resolvers: &EntityResolverLookup,
 ) -> Result<ReadOutcome, DenormalizeError> {
     let mut walk = Walk {
@@ -149,17 +150,17 @@ fn denormalize_record_with_entity_resolvers(
     }
 }
 
-struct Walk<'a, S: RecordSource> {
+struct Walk<'a, S: RecordSource, D: DependencyTracker> {
     variables: &'a serde_json::Map<String, Json>,
     source: &'a S,
-    deps: &'a mut BTreeSet<EntityKey<'static>>,
+    deps: &'a mut D,
     entity_resolvers: &'a EntityResolverLookup,
     missing_records: BTreeSet<EntityKey<'static>>,
     /// First field-level miss encountered.
     miss: Option<(EntityKey<'static>, String)>,
 }
 
-impl<'a, S: RecordSource> Walk<'a, S> {
+impl<'a, S: RecordSource, D: DependencyTracker> Walk<'a, S, D> {
     /// Reads a full record by key. Returns `None` when the outcome is
     /// already determined to be incomplete (missing record / miss noted).
     fn read_record(
@@ -168,7 +169,7 @@ impl<'a, S: RecordSource> Walk<'a, S> {
         type_name: &str,
         selections: &[Selection],
     ) -> Result<Option<Json>, DenormalizeError> {
-        self.deps.insert(key.clone());
+        self.deps.record(key);
         let Some(record) = self.source.get(key) else {
             self.missing_records.insert(key.clone());
             return Ok(None);
@@ -176,6 +177,7 @@ impl<'a, S: RecordSource> Walk<'a, S> {
         // Clone is cheap relative to the walk; keeps borrows simple.
         let record = record.clone();
         let concrete = record.typename().unwrap_or(type_name).to_string();
+        self.deps.field(key, &concrete, "__typename");
         self.read_fields(key, &record.fields, &concrete, selections)
     }
 
@@ -214,6 +216,7 @@ impl<'a, S: RecordSource> Walk<'a, S> {
             };
             let args_key = resolved_args_key(f, &arguments);
             let storage_key = field_key(&f.name, args_key.as_deref());
+            self.deps.field(owner, concrete, &storage_key);
 
             if let Some(entity_resolver) = entity_resolver {
                 let Some(target_key) = entity_resolver.entity_key(&arguments) else {

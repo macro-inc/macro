@@ -1,0 +1,22 @@
+query HydrationChanges {
+  user {
+    id
+    soup(input: { initial: { limit: 10 } }) {
+      items @cacheOnly {
+        __typename
+        id
+        ... on GraphqlSoupDocument {
+          name
+          fileType
+          subType {
+            __typename
+            ... on GraphqlTaskSubType { isCompleted }
+          }
+          ownerId
+          properties { id }
+        }
+        ... on GraphqlSoupEmailThread { name }
+      }
+    }
+  }
+}

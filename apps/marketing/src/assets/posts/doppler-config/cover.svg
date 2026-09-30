@@ -1,0 +1,40 @@
+<svg viewBox="0 0 760 270" xmlns="http://www.w3.org/2000/svg" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <rect x="0" y="0" width="760" height="270" fill="none"/>
+  <defs>
+    <linearGradient id="dpl-cover-sheen" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="oklch(from var(--a0) calc(l + 0.06) calc(c * 0.9) h)"/>
+      <stop offset="52%" stop-color="oklch(from var(--a0) calc(l + 0.01) calc(c * 0.9) h)"/>
+      <stop offset="100%" stop-color="oklch(from var(--a0) calc(l - 0.04) calc(c * 0.9) h)"/>
+    </linearGradient>
+  </defs>
+
+  <!-- One source of truth for config values -->
+  <rect x="96" y="50" width="140" height="140" rx="32" fill="#121212" stroke="#2e2e2e"/>
+  <g stroke="url(#dpl-cover-sheen)" stroke-width="3" stroke-linecap="round" fill="none">
+    <path d="M144,102 a22,9 0 1 0 44,0 a22,9 0 1 0 -44,0"/>
+    <path d="M144,102 v36 a22,9 0 0 0 44,0 v-36"/>
+    <path d="M144,120 a22,9 0 0 0 44,0"/>
+  </g>
+  <text x="166" y="222" fill="#6f6f6f" font-size="14" text-anchor="middle">One source</text>
+
+  <path d="M254,120 H298 M290,113 l8,7 -8,7" stroke="#4a4a4a" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Injected as a single JSON blob at deploy time -->
+  <rect x="310" y="50" width="140" height="140" rx="32" fill="#121212" stroke="#2e2e2e"/>
+  <g stroke="url(#dpl-cover-sheen)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M362,92 a12,12 0 0 0 -12,12 v8 a10,10 0 0 1 -10,8 a10,10 0 0 1 10,8 v8 a12,12 0 0 0 12,12"/>
+    <path d="M398,92 a12,12 0 0 1 12,12 v8 a10,10 0 0 0 10,8 a10,10 0 0 0 -10,8 v8 a12,12 0 0 1 -12,12"/>
+    <path d="M372,120 h0.1 M380,120 h0.1 M388,120 h0.1"/>
+  </g>
+  <text x="380" y="222" fill="#6f6f6f" font-size="14" text-anchor="middle">APP_SECRETS_JSON</text>
+
+  <path d="M468,120 H512 M504,113 l8,7 -8,7" stroke="#4a4a4a" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Deserialized into one typed Config, validated in CI -->
+  <rect x="524" y="50" width="140" height="140" rx="32" fill="#121212" stroke="#2e2e2e"/>
+  <g stroke="url(#dpl-cover-sheen)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M570,96 h32 a6,6 0 0 1 6,6 v36 a6,6 0 0 1 -6,6 h-32 a6,6 0 0 1 -6,-6 v-36 a6,6 0 0 1 6,-6 Z"/>
+    <path d="M574,132 l8,8 16,-20"/>
+  </g>
+  <text x="594" y="222" fill="#6f6f6f" font-size="14" text-anchor="middle">Typed config</text>
+</svg>

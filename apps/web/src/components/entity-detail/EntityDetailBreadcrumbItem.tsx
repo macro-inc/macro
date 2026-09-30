@@ -45,6 +45,10 @@ function fallbackBreadcrumbName(target: EntityDetailTarget) {
   return 'Untitled';
 }
 
+function isReminderTarget(target: { type: string }) {
+  return target.type === 'reminder';
+}
+
 function BreadcrumbItem(props: {
   entry: EntityDetailNavigationEntry;
   order: number;
@@ -112,7 +116,7 @@ export function EntityDetailBreadcrumbItem(props: {
   return (
     <Show
       when={
-        props.entry.data.type === 'reminder'
+        isReminderTarget(props.entry.data)
           ? undefined
           : ({
               id: props.entry.data.id,

@@ -21,6 +21,7 @@ import type {
   EntityFilterCacheArgs,
   EntityFilterCacheResult,
   HydrationResult,
+  HydrationSearchChanges,
   MutationClaim,
   MutationSettlement,
   ReadRecordsByKeysArgs,
@@ -38,6 +39,7 @@ import {
   validateRecordSelectionKeys,
 } from '../protocol';
 import type {
+  CacheChangeListener,
   CacheChangeOptions,
   CacheGenerationChange,
   CacheHost,
@@ -64,7 +66,10 @@ type OpsAffectedPayload = {
   keys: string[];
 };
 
-type CacheChangedPayload = { revision: string; reset?: boolean };
+type CacheChangedPayload = {
+  revision: string;
+  reset?: boolean;
+} & HydrationSearchChanges;
 
 // Older native binaries omit the advancement bit and still receive OTA JS.
 type NativeHydrationResult = HydrationResult & { revisionAdvanced?: boolean };
@@ -88,8 +93,8 @@ const ENTITY_FILTER_COMMAND = 'graphql_cache_entity_filter';
 export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
   const clientId = crypto.randomUUID();
   const affectedSubscribers = new Set<(opKeys: number[]) => void>();
-  const cacheChangeSubscribers = new Set<(revision: CacheRevision) => void>();
-  const hydrationSubscribers = new Set<(revision: CacheRevision) => void>();
+  const cacheChangeSubscribers = new Set<CacheChangeListener>();
+  const hydrationSubscribers = new Set<CacheChangeListener>();
   const generationChangeSubscribers = new Set<
     (change: CacheGenerationChange) => void
   >();
@@ -172,7 +177,17 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       if (event.payload.reset) {
         for (const cb of generationChangeSubscribers) cb({ storage: 'reset' });
       }
-      for (const cb of cacheChangeSubscribers) cb(revision);
+      for (const cb of cacheChangeSubscribers) {
+        if (
+          event.payload.reset ||
+          event.payload.searchChangedBuckets === undefined
+        )
+          cb(revision);
+        else
+          cb(revision, {
+            searchChangedBuckets: event.payload.searchChangedBuckets,
+          });
+      }
     }).catch((error) => {
       console.warn('graphql cache change listener failed', error);
       return undefined;
@@ -185,7 +200,13 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
         (event) => {
           const revision = parseCacheRevision(event.payload.revision);
           observeRevision(revision);
-          for (const cb of hydrationSubscribers) cb(revision);
+          for (const cb of hydrationSubscribers) {
+            if (event.payload.searchChangedBuckets === undefined) cb(revision);
+            else
+              cb(revision, {
+                searchChangedBuckets: event.payload.searchChangedBuckets,
+              });
+          }
         }
       );
     } catch (error) {
@@ -328,7 +349,12 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       );
       if (result.revisionAdvanced === false || !newlyObserved) return result;
       try {
-        await emit(CACHE_HYDRATED_EVENT, { revision: result.revision });
+        await emit(CACHE_HYDRATED_EVENT, {
+          revision: result.revision,
+          ...(result.searchChangedBuckets !== undefined
+            ? { searchChangedBuckets: result.searchChangedBuckets }
+            : {}),
+        });
       } catch (error) {
         // Notification failure must not turn a committed hydration into a retry.
         console.warn('graphql cache hydration notification failed', error);
@@ -494,7 +520,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     },
 
     onCacheChanged(
-      cb: (revision: CacheRevision) => void,
+      cb: CacheChangeListener,
       options?: CacheChangeOptions
     ): () => void {
       cacheChangeSubscribers.add(cb);

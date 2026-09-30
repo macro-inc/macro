@@ -9,6 +9,7 @@ import { AgentComposer } from './AgentComposer';
 const mocks = vi.hoisted(() => ({
   session: () => ({ canEdit: false as boolean | undefined }),
   issue: vi.fn(),
+  selectModel: vi.fn(),
   sendNext: vi.fn(),
   editQueued: vi.fn(),
   removeQueued: vi.fn(),
@@ -39,6 +40,7 @@ vi.mock('../context/AgentSessionContext', () => ({
     userId: () => 'viewer',
     interactions: { pending: () => [], canAnswer: () => false },
     issue: mocks.issue,
+    selectModel: mocks.selectModel,
     loadFailed: () => false,
     messages: () => [],
     metadata: () => undefined,
@@ -100,6 +102,7 @@ describe('view-only session controls', () => {
     mocks.queued?.onRemove('queued-1');
 
     expect(mocks.issue).not.toHaveBeenCalled();
+    expect(mocks.selectModel).not.toHaveBeenCalled();
     expect(mocks.sendNext).not.toHaveBeenCalled();
     expect(mocks.upload).not.toHaveBeenCalled();
     expect(mocks.consumeNotes).not.toHaveBeenCalled();
@@ -121,6 +124,7 @@ describe('view-only session controls', () => {
     expect(mocks.queued?.disabled).toBe(true);
     mocks.input?.onSend('Cannot send now', []);
     expect(mocks.issue).not.toHaveBeenCalled();
+    expect(mocks.selectModel).not.toHaveBeenCalled();
   });
 
   it.each([true, undefined])(

@@ -10,6 +10,9 @@ pub struct EntityNotificationQuery {
     pub states: Vec<NotificationState>,
     /// Event names to include; an empty list includes every event type.
     pub event_types: Vec<String>,
+    /// Only notifications about channel messages outside a thread, including mentions
+    /// but excluding reactions. Apply before limiting so replies cannot hide unread roots.
+    pub top_level_messages_only: bool,
     /// Maximum records per entity, newest first. None preserves the full edge.
     pub limit: Option<u32>,
 }
@@ -19,6 +22,7 @@ impl Default for EntityNotificationQuery {
         Self {
             states: NotificationState::ACTIVE.to_vec(),
             event_types: Vec::new(),
+            top_level_messages_only: false,
             limit: None,
         }
     }

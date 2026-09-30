@@ -13,6 +13,7 @@ import type { Property, PropertyApiValues } from '@property/types';
 import { cn } from '@ui';
 import { For, Show, Suspense } from 'solid-js';
 import type { ProjectRow as ProjectRowData } from '../context/projects-context';
+import { canEditProject } from '../core/project';
 
 // Projects reuse the task grid; its project column holds the due date.
 const gridStyle = taskGridTemplate({ indicator: true, project: true });
@@ -65,8 +66,7 @@ export function ProjectRow(props: {
   onChecked(selected: boolean, shiftKey: boolean): void;
   onSave(property: Property, value: PropertyApiValues): Promise<void>;
 }) {
-  const canEdit = () =>
-    props.row.project.access === 'edit' || props.row.project.access === 'owner';
+  const canEdit = () => canEditProject(props.row.project);
   const properties = () => [...props.row.properties];
   const propertyFor = (id: string) =>
     props.row.properties.find(

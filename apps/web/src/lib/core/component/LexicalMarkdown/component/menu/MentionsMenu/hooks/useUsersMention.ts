@@ -41,6 +41,7 @@ export function useUsersMention(
 ): UseUsersMentionResult {
   const { users: customUsers, searchTerm, isChannelBlock, blockId } = options;
   const quickAccess = useQuickAccess();
+  const workspaceUsers = quickAccess.useList('person').items;
   const currentUserEmail = useEmail();
 
   const currentUserDomain = () => {
@@ -48,26 +49,27 @@ export function useUsersMention(
     return email ? email.split('@')[1] : undefined;
   };
 
-  const usersList = createLazyMemo(() => {
-    if (customUsers) {
-      const users = customUsers;
-      return () =>
-        users().map(
-          (user) =>
-            ({
-              id: user.id,
-              data: user,
-              kind: 'user' as const,
-              bucket: 'person' as const,
-              sortTimestamp: 0,
-              timestamps: {},
-              searchText: user.name
-                ? user.name + ' | ' + user.email
-                : user.email + ' | ' + user.email,
-            }) as UserItem
-        );
-    }
-    return quickAccess.useList('person').items;
+  const usersList = createLazyMemo((): UserItem[] => {
+    if (!customUsers) return workspaceUsers();
+
+    // Custom lists scope who can be mentioned, but should retain the same
+    // interaction ranking as the document body's workspace list.
+    const workspaceUsersById = new Map(
+      workspaceUsers().map((item) => [item.id, item])
+    );
+    return customUsers().map((user) => ({
+      id: user.id,
+      data: user,
+      kind: 'user',
+      bucket: 'person',
+      sortTimestamp: workspaceUsersById.get(user.id)?.sortTimestamp ?? 0,
+      timestamps: {
+        lastInteraction:
+          workspaceUsersById.get(user.id)?.timestamps.lastInteraction ??
+          user.lastInteraction,
+      },
+      searchText: `${user.name || user.email} | ${user.email}`,
+    }));
   });
 
   const userSearch = () => {
@@ -92,7 +94,7 @@ export function useUsersMention(
 
   const users = createLazyMemo(() => {
     const term = searchTerm();
-    const list = usersList()();
+    const list = usersList();
     return userSearch()(list, term).map(({ item }) => item);
   });
 

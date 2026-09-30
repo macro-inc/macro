@@ -114,7 +114,7 @@ const SEARCH_UPSERT_PREFIX: &str = "INSERT INTO search_documents (profile, __typ
 const SEARCH_UPSERT_ROW: &str = "(?, ?, ?, ?, ?, ?, ?)";
 const SEARCH_UPSERT_SUFFIX: &str = " ON CONFLICT (profile, __typename, id) DO UPDATE SET bucket = excluded.bucket, search_text = excluded.search_text, timestamp_ms = excluded.timestamp_ms, source_hash = excluded.source_hash";
 const SEARCH_WRITE_BATCH_SIZE: usize = 100;
-const SEARCH_LOAD: &str = "SELECT __typename, id, bucket, search_text, timestamp_ms, source_hash FROM search_documents WHERE profile = ?1";
+const SEARCH_LOAD: &str = "SELECT __typename, id, bucket, search_text, timestamp_ms, source_hash FROM search_documents INDEXED BY search_documents_browse_idx WHERE profile = ?1 AND bucket = ?2";
 const SEARCH_BROWSE: &str = "SELECT __typename, id, bucket, search_text, timestamp_ms, source_hash FROM search_documents INDEXED BY search_documents_browse_idx WHERE profile = ?1 AND bucket = ?2 ORDER BY timestamp_ms DESC, __typename ASC, id ASC LIMIT ?3";
 const SEARCH_BROWSE_AFTER: &str = "SELECT __typename, id, bucket, search_text, timestamp_ms, source_hash FROM search_documents INDEXED BY search_documents_browse_idx WHERE profile = ?1 AND bucket = ?2 AND (timestamp_ms < ?3 OR (timestamp_ms = ?3 AND (__typename > ?4 OR (__typename = ?4 AND id > ?5)))) ORDER BY timestamp_ms DESC, __typename ASC, id ASC LIMIT ?6";
 const INDEX_DOCUMENT_UPSERT: &str = "INSERT INTO index_documents (record_key, profile, partition, state) VALUES (?1, ?2, ?3, ?4) ON CONFLICT (record_key) DO UPDATE SET profile = excluded.profile, partition = excluded.partition, state = excluded.state RETURNING id";
@@ -329,6 +329,42 @@ impl TursoStorage {
     fn connection(&self) -> Arc<Connection> {
         self.session.connection()
     }
+}
+
+/// Mutations still queued in a database of any storage schema version.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum QueuedMutationCount {
+    /// The file has a mutation queue holding this many rows.
+    Queued(u64),
+    /// The file has no mutation queue, so it never held queued work.
+    NoQueue,
+}
+
+/// Counts queued mutations without validating or changing the metadata.
+///
+/// Every storage schema version keeps its queue in `mutation_queue` and
+/// deletes a row once the mutation settles, so this is safe to call on a
+/// database written by an older build before deciding whether to delete it.
+#[cfg(target_arch = "wasm32")]
+pub fn count_queued_mutations(
+    session: &ConnectedOpfsSession,
+) -> Result<QueuedMutationCount, TursoStorageError> {
+    let connection = session.connection();
+    let count = |sql: &str| -> Result<u64, TursoStorageError> {
+        let rows = driver::query(&connection, sql, Vec::new())?;
+        let [row] = rows.as_slice() else {
+            return Err(invariant());
+        };
+        u64::try_from(required_i64(row, 0)?).map_err(|_| invariant())
+    };
+    if count("SELECT COUNT(*) FROM sqlite_schema WHERE type = 'table' AND name = 'mutation_queue'")?
+        == 0
+    {
+        return Ok(QueuedMutationCount::NoQueue);
+    }
+    Ok(QueuedMutationCount::Queued(count(
+        "SELECT COUNT(*) FROM mutation_queue",
+    )?))
 }
 
 /// Result of consuming and gracefully closing a browser Turso storage.
@@ -907,11 +943,17 @@ impl Storage for TursoStorage {
     async fn load_search_documents(
         &self,
         profile: SearchProfile,
+        bucket: &str,
     ) -> Result<Vec<SearchDocument>, Self::Error> {
         self.require_healthy()?;
         let result = {
             let connection = self.connection();
-            driver::query(&connection, SEARCH_LOAD, vec![text(profile.as_str())]).and_then(|rows| {
+            driver::query(
+                &connection,
+                SEARCH_LOAD,
+                vec![text(profile.as_str()), text(bucket)],
+            )
+            .and_then(|rows| {
                 rows.into_iter()
                     .map(|row| parse_search_document(&row, profile))
                     .collect()

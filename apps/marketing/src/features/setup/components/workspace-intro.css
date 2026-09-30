@@ -1,0 +1,18 @@
+.workspace-intro-icon:focus-visible .macro-mark-left { transform: translateX(-11px) scale(1.06); }
+.workspace-intro-icon:focus-visible .macro-mark-mid { transform: scale(1.1); }
+.workspace-intro-icon:focus-visible .macro-mark-right { transform: translateX(11px) scale(1.06); }
+@media (prefers-reduced-motion: reduce) {
+  .workspace-intro-icon .macro-mark-part { transform: none !important; }
+}
+
+@property --intro-accent {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #65d8ac;
+}
+[data-workspace-intro] {
+  transition: --intro-accent 220ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-workspace-intro] { transition: none; }
+}

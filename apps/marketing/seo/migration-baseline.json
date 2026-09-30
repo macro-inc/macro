@@ -1,0 +1,349 @@
+{
+  "source": "https://macro.com/sitemap.xml",
+  "capturedAt": "2026-09-23",
+  "routes": [
+    {
+      "path": "/",
+      "title": "Macro \u2014 The ultimate workspace for startups",
+      "schemaTypes": [
+        "Offer",
+        "Organization",
+        "SoftwareApplication",
+        "WebSite"
+      ]
+    },
+    {
+      "path": "/jobs",
+      "title": "Jobs at Macro",
+      "schemaTypes": [
+        "BreadcrumbList",
+        "ListItem"
+      ]
+    },
+    {
+      "path": "/terms",
+      "title": "Terms of Service \u00b7 Macro",
+      "schemaTypes": [
+        "BreadcrumbList",
+        "ListItem"
+      ]
+    },
+    {
+      "path": "/privacy",
+      "title": "Privacy Policy \u00b7 Macro",
+      "schemaTypes": [
+        "BreadcrumbList",
+        "ListItem"
+      ]
+    },
+    {
+      "path": "/dpa",
+      "title": "Data Processing Agreement \u00b7 Macro",
+      "schemaTypes": [
+        "BreadcrumbList",
+        "ListItem"
+      ]
+    },
+    {
+      "path": "/posts",
+      "title": "Blog \u00b7 Macro",
+      "schemaTypes": [
+        "BreadcrumbList",
+        "ListItem"
+      ]
+    },
+    {
+      "path": "/startups",
+      "title": "Macro for Startups \u2014 Up to $10,000 in Credits",
+      "schemaTypes": [
+        "BreadcrumbList",
+        "ListItem"
+      ]
+    },
+    {
+      "path": "/tasks",
+      "title": "Macro Tasks \u2014 Task management that keeps up with your team",
+      "schemaTypes": [
+        "Answer",
+        "BreadcrumbList",
+        "FAQPage",
+        "ListItem",
+        "Offer",
+        "Organization",
+        "Question",
+        "SoftwareApplication"
+      ]
+    },
+    {
+      "path": "/email",
+      "title": "Macro Mail \u2014 The AI Email Client",
+      "schemaTypes": [
+        "Answer",
+        "BreadcrumbList",
+        "FAQPage",
+        "ListItem",
+        "Offer",
+        "Organization",
+        "Question",
+        "SoftwareApplication"
+      ]
+    },
+    {
+      "path": "/documents",
+      "title": "Macro Docs \u2014 Markdown Documents, Wired Into Everything",
+      "schemaTypes": [
+        "Answer",
+        "BreadcrumbList",
+        "FAQPage",
+        "ListItem",
+        "Offer",
+        "Organization",
+        "Question",
+        "SoftwareApplication"
+      ]
+    },
+    {
+      "path": "/channels",
+      "title": "Macro Chat \u2014 Team Chat Wired into Everything",
+      "schemaTypes": [
+        "Answer",
+        "BreadcrumbList",
+        "FAQPage",
+        "ListItem",
+        "Offer",
+        "Organization",
+        "Question",
+        "SoftwareApplication"
+      ]
+    },
+    {
+      "path": "/calls",
+      "title": "Macro Calls \u2014 Video Calls with Perfect Memory",
+      "schemaTypes": [
+        "BreadcrumbList",
+        "ListItem",
+        "Offer",
+        "Organization",
+        "SoftwareApplication"
+      ]
+    },
+    {
+      "path": "/crm",
+      "title": "Macro CRM \u2014 The Self-Building CRM",
+      "schemaTypes": [
+        "Answer",
+        "BreadcrumbList",
+        "FAQPage",
+        "ListItem",
+        "Offer",
+        "Organization",
+        "Question",
+        "SoftwareApplication"
+      ]
+    },
+    {
+      "path": "/agents",
+      "title": "Macro Agents \u2014 AI With Your Whole Workspace as Context",
+      "schemaTypes": [
+        "BreadcrumbList",
+        "ListItem"
+      ]
+    },
+    {
+      "path": "/github",
+      "title": "Macro Reviews \u2014 Review PRs in Your Inbox",
+      "schemaTypes": [
+        "BreadcrumbList",
+        "ListItem",
+        "Offer",
+        "Organization",
+        "SoftwareApplication"
+      ]
+    },
+    {
+      "path": "/pricing",
+      "title": "Pricing \u2014 Macro",
+      "schemaTypes": [
+        "Answer",
+        "BreadcrumbList",
+        "FAQPage",
+        "ListItem",
+        "Question"
+      ]
+    },
+    {
+      "path": "/partners",
+      "title": "Macro Partner Program \u2014 Refer, Implement, and Build on Macro",
+      "schemaTypes": [
+        "Answer",
+        "BreadcrumbList",
+        "FAQPage",
+        "ListItem",
+        "Question"
+      ]
+    },
+    {
+      "path": "/partners/terms",
+      "title": "Macro Partner Program Terms",
+      "schemaTypes": [
+        "BreadcrumbList",
+        "ListItem"
+      ]
+    },
+    {
+      "path": "/migrate",
+      "title": "Switch your startup to Macro | Migration guide",
+      "schemaTypes": [
+        "BreadcrumbList",
+        "ListItem"
+      ]
+    },
+    {
+      "path": "/posts/why-macro-is-open-source",
+      "title": "Why Macro Is Open Source \u00b7 Macro",
+      "schemaTypes": [
+        "BlogPosting",
+        "BreadcrumbList",
+        "ListItem",
+        "Organization",
+        "Person",
+        "WebPage"
+      ]
+    },
+    {
+      "path": "/posts/clickup-alternative",
+      "title": "Macro vs ClickUp \u2014 The Open-Source ClickUp Alternative \u00b7 Macro",
+      "schemaTypes": [
+        "Answer",
+        "BlogPosting",
+        "BreadcrumbList",
+        "FAQPage",
+        "ListItem",
+        "Organization",
+        "Person",
+        "Question",
+        "WebPage"
+      ]
+    },
+    {
+      "path": "/posts/doppler-config",
+      "title": "How We Migrated Macro to Doppler and Made Configuration Safer \u00b7 Macro",
+      "schemaTypes": [
+        "BlogPosting",
+        "BreadcrumbList",
+        "ListItem",
+        "Organization",
+        "Person",
+        "WebPage"
+      ]
+    },
+    {
+      "path": "/posts/ai-editing-agents",
+      "title": "Agents Attacking Documents with CRDTs \u2014 How Macro Does AI Document Editing \u00b7 Macro",
+      "schemaTypes": [
+        "BlogPosting",
+        "BreadcrumbList",
+        "ListItem",
+        "Organization",
+        "Person",
+        "WebPage"
+      ]
+    },
+    {
+      "path": "/posts/mfs-sharing",
+      "title": "The Macro Filesystem \u00b7 Macro",
+      "schemaTypes": [
+        "BlogPosting",
+        "BreadcrumbList",
+        "ListItem",
+        "Organization",
+        "Person",
+        "WebPage"
+      ]
+    },
+    {
+      "path": "/posts/graphql-cache",
+      "title": "Building a GraphQL Cache That Doesn\u2019t Have to Fit in Memory \u00b7 Macro",
+      "schemaTypes": [
+        "BlogPosting",
+        "BreadcrumbList",
+        "ListItem",
+        "Organization",
+        "Person",
+        "WebPage"
+      ]
+    },
+    {
+      "path": "/posts/gmail-rate-limits",
+      "title": "Getting Rate Limited for Fun and Profit \u2014 Working Within Gmail API Quotas \u00b7 Macro",
+      "schemaTypes": [
+        "BlogPosting",
+        "BreadcrumbList",
+        "ListItem",
+        "Organization",
+        "Person",
+        "WebPage"
+      ]
+    },
+    {
+      "path": "/posts/linear-alternative",
+      "title": "Macro vs Linear \u2014 The Open-Source Linear Alternative \u00b7 Macro",
+      "schemaTypes": [
+        "Answer",
+        "BlogPosting",
+        "BreadcrumbList",
+        "FAQPage",
+        "ListItem",
+        "Organization",
+        "Person",
+        "Question",
+        "WebPage"
+      ]
+    },
+    {
+      "path": "/posts/notion-alternative",
+      "title": "Macro vs Notion \u2014 The Open-Source Notion Alternative \u00b7 Macro",
+      "schemaTypes": [
+        "Answer",
+        "BlogPosting",
+        "BreadcrumbList",
+        "FAQPage",
+        "ListItem",
+        "Organization",
+        "Person",
+        "Question",
+        "WebPage"
+      ]
+    },
+    {
+      "path": "/posts/slack-alternative",
+      "title": "Macro vs Slack \u2014 The Open-Source Slack Alternative \u00b7 Macro",
+      "schemaTypes": [
+        "Answer",
+        "BlogPosting",
+        "BreadcrumbList",
+        "FAQPage",
+        "ListItem",
+        "Organization",
+        "Person",
+        "Question",
+        "WebPage"
+      ]
+    },
+    {
+      "path": "/posts/superhuman-alternative",
+      "title": "Macro vs Superhuman \u2014 The Open-Source Superhuman Alternative \u00b7 Macro",
+      "schemaTypes": [
+        "Answer",
+        "BlogPosting",
+        "BreadcrumbList",
+        "FAQPage",
+        "ListItem",
+        "Organization",
+        "Person",
+        "Question",
+        "WebPage"
+      ]
+    }
+  ]
+}

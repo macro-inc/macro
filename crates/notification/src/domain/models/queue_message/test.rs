@@ -48,6 +48,7 @@ fn test_apns_targets_deserializes_with_per_user_endpoints() {
     // Verify digest_state defaults to None when not present
     for user_endpoints in targets.ios_device_endpoints.values() {
         assert!(user_endpoints.digest_state.is_none());
+        assert!(user_endpoints.android_endpoints.is_empty());
     }
 }
 

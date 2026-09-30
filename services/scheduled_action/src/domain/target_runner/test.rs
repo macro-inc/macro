@@ -473,14 +473,13 @@ impl ScheduledActionRepo for UnusedRepo {
     async fn create_action(&self, _: ScheduledAction) -> Result<ScheduledAction> {
         unimplemented!()
     }
-    async fn get_actions(&self, _: MacroUserIdStr<'static>) -> Result<Vec<ScheduledAction>> {
+    async fn get_owned_actions(&self, _: &MacroUserIdStr<'static>) -> Result<Vec<ScheduledAction>> {
         unimplemented!()
     }
-    async fn get_action(
-        &self,
-        _: &Uuid,
-        _: MacroUserIdStr<'static>,
-    ) -> Result<Option<ScheduledAction>> {
+    async fn get_actions_by_ids(&self, _: &[Uuid]) -> Result<Vec<ScheduledAction>> {
+        unimplemented!()
+    }
+    async fn get_action(&self, _: &Uuid) -> Result<Option<ScheduledAction>> {
         unimplemented!()
     }
     async fn get_next_unclaimed_actions(&self, _: i64) -> Result<Vec<ScheduledAction>> {
@@ -489,7 +488,7 @@ impl ScheduledActionRepo for UnusedRepo {
     async fn update_action(&self, _: ScheduledAction) -> Result<ScheduledAction> {
         unimplemented!()
     }
-    async fn delete_action(&self, _: &Uuid, _: MacroUserIdStr<'static>) -> Result<()> {
+    async fn delete_action(&self, _: &Uuid) -> Result<()> {
         unimplemented!()
     }
     async fn claim_action(&self, _: &Uuid, _: ConfigurationRevision) -> Result<ClaimToken> {

@@ -344,11 +344,18 @@ export type CachedQueryInstanceWire = CachedQueryVariantWire & {
   value?: unknown;
 };
 
-export type HydrationResult =
-  | { kind: 'data'; data: unknown; revision: CacheRevision }
-  | { kind: 'void'; revision: CacheRevision };
+/** Missing metadata means unknown (older runtimes); [] proves no search change. */
+export type HydrationSearchChanges = {
+  searchChangedBuckets?: string[];
+};
 
-export type WriteResult = {
+export type HydrationResult = HydrationSearchChanges &
+  (
+    | { kind: 'data'; data: unknown; revision: CacheRevision }
+    | { kind: 'void'; revision: CacheRevision }
+  );
+
+export type WriteResult = HydrationSearchChanges & {
   /** Effective-view revision installed by this logical mutation. */
   revision: CacheRevision;
   /** Whether this write advanced `revision`. */
@@ -585,11 +592,20 @@ export type CacheRequest = { id: number } & (
 /** Stable machine-readable cache RPC rejection codes. */
 export type CacheResponseErrorCode =
   | 'owner-epoch-lost'
+  | 'owner-lock-unavailable'
   | 'admitted-enqueue-uncertain';
 
 /** Old-owner work was rejected after fenced engine loss and was not replayed. */
 export const OWNER_EPOCH_LOST_ERROR_CODE: CacheResponseErrorCode =
   'owner-epoch-lost';
+
+/**
+ * Another context holds the database, so this page's cache stays off until
+ * reload: typically another deployed build keeps its owner lock, or a closing
+ * tab's worker still has its files open. The request never reached an engine.
+ */
+export const OWNER_LOCK_UNAVAILABLE_ERROR_CODE: CacheResponseErrorCode =
+  'owner-lock-unavailable';
 
 /** An enqueue send was admitted before its unfenced transport became uncertain. */
 export const ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE: CacheResponseErrorCode =
@@ -616,8 +632,15 @@ export type CachePush =
       /** Changed entity keys, for diagnostics/advanced consumers. */
       keys: string[];
     }
-  | { kind: 'cache-changed'; revision: CacheRevision; reset?: boolean }
-  | { kind: 'cache-hydrated'; revision: CacheRevision }
+  | ({
+      kind: 'cache-changed';
+      revision: CacheRevision;
+      reset?: boolean;
+    } & HydrationSearchChanges)
+  | ({
+      kind: 'cache-hydrated';
+      revision: CacheRevision;
+    } & HydrationSearchChanges)
   | { kind: 'mutation-settled'; settlement: MutationSettlement };
 
 export type WorkerMessage = CacheResponse | CachePush;
@@ -640,6 +663,7 @@ export const isCacheResponseErrorCode = (
   value: unknown
 ): value is CacheResponseErrorCode =>
   value === OWNER_EPOCH_LOST_ERROR_CODE ||
+  value === OWNER_LOCK_UNAVAILABLE_ERROR_CODE ||
   value === ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE;
 
 /** Identifies a coordinator-fenced rejection from a lost owner epoch. */
@@ -649,6 +673,14 @@ export const isOwnerEpochLostError = (
   value instanceof Error &&
   'errorCode' in value &&
   value.errorCode === OWNER_EPOCH_LOST_ERROR_CODE;
+
+/** Identifies a request refused because another context holds the database. */
+export const isOwnerLockUnavailableError = (
+  value: unknown
+): value is Error & { errorCode: 'owner-lock-unavailable' } =>
+  value instanceof Error &&
+  'errorCode' in value &&
+  value.errorCode === OWNER_LOCK_UNAVAILABLE_ERROR_CODE;
 
 /** Identifies the host-only uncertainty result for an admitted enqueue send. */
 export const isAdmittedEnqueueUncertainError = (
@@ -693,14 +725,23 @@ export function isCachePush(value: unknown): value is CachePush {
       );
     case 'cache-changed':
       return (
-        hasOnlyWireKeys(value, ['kind', 'revision', 'reset']) &&
+        hasOnlyWireKeys(value, [
+          'kind',
+          'revision',
+          'reset',
+          'searchChangedBuckets',
+        ]) &&
         isCacheRevision(value.revision) &&
-        (value.reset === undefined || typeof value.reset === 'boolean')
+        (value.reset === undefined || typeof value.reset === 'boolean') &&
+        (value.searchChangedBuckets === undefined ||
+          isWireStringArray(value.searchChangedBuckets))
       );
     case 'cache-hydrated':
       return (
-        hasOnlyWireKeys(value, ['kind', 'revision']) &&
-        isCacheRevision(value.revision)
+        hasOnlyWireKeys(value, ['kind', 'revision', 'searchChangedBuckets']) &&
+        isCacheRevision(value.revision) &&
+        (value.searchChangedBuckets === undefined ||
+          isWireStringArray(value.searchChangedBuckets))
       );
     case 'mutation-settled': {
       const settlement = value.settlement;

@@ -4,6 +4,13 @@ The document header has separate Share, Copy Share Link, and Side Panel buttons.
 They are borderless with a soft rounded background on hover. Share opens the
 sharing dialog; copying a link is a separate action.
 
+On a local HTTPS stack, document and image downloads use `/local-storage/`
+on the app's HTTPS origin. A request to HTTP localhost indicates a stale
+storage URL or stack configuration; hard-refresh after updating the stack.
+Markdown also needs a successful `/sync/document/.../connect` WebSocket upgrade.
+A 403 there indicates the sync origin check, which the local proxy handles for
+HTTPS machine hostnames; verify the proxy configuration before retrying.
+
 ## Spreadsheets
 
 Spreadsheets are an internal pilot controlled by the `enable-spreadsheets` PostHog
@@ -562,6 +569,20 @@ retains the draft. The timeline initially loads a bounded page with up to three
 preview replies per thread. Expand a thread to load its replies;
 `Load earlier comments` pages backward. Live updates preserve unsent replies
 and edits while updating the surrounding thread.
+
+When verifying `@` mentions, compare the same person query in the document body
+and the Discussion composer: shared contacts use the same recent-interaction
+ranking. The desktop menu keeps up to three People results visible while other
+result categories load; use **View all** for the remaining matches. Check that a
+person stays clickable after document and email results arrive. Type and
+backspace through a query that keeps the same matches: existing rows should
+stay mounted and the menu should not collapse while cached results refresh.
+Check document titles and their order as well as People: type and backspace
+between a name's prefixes and verify the top document does not disappear and
+return while the result count briefly drops.
+Changing the total number of matches should not change a category's preview
+slots when it still has enough rows to fill them; use **View all** for the full list.
+Clear the unsent draft after testing.
 
 Select text and choose the comment action to create an anchored comment. These
 threads appear beside their text in the margin (or in the active thread drawer

@@ -184,6 +184,9 @@ function mount(search = '') {
         if (loading()) throw new Error('Read pending query data');
         return { entities: entities(), groups: undefined };
       },
+      get isPending() {
+        return loading();
+      },
       get isLoading() {
         return loading();
       },
@@ -220,6 +223,9 @@ function mount(search = '') {
         get data() {
           if (retentionLoading()) throw new Error('Read pending retained mail');
           return { entities: retainedEntities(), groups: undefined };
+        },
+        get isPending() {
+          return retentionLoading();
         },
         get isLoading() {
           return retentionLoading();

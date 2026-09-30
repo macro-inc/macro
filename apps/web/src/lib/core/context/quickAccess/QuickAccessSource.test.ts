@@ -1,11 +1,15 @@
 import type { CrmCompanyEntity } from '@entity';
-import type { CacheChangeOptions } from '@graphql-cache/host/types';
+import type {
+  CacheChangeListener,
+  CacheChangeOptions,
+} from '@graphql-cache/host/types';
 import type {
   SearchCacheArgs,
   SearchCachePage,
   SearchDocumentWire,
 } from '@graphql-cache/index';
 import { INITIAL_CACHE_REVISION } from '@graphql-cache/index';
+import type { HydrationSearchChanges } from '@graphql-cache/protocol';
 import type { CachedGraphqlChannel } from '@queries/channel/graphql';
 import type { HistoryItem } from '@queries/history/types';
 import { render } from '@solidjs/testing-library';
@@ -39,7 +43,9 @@ const mocks = vi.hoisted(() => ({
   channels: vi.fn(() => []),
   cachedChannels: (): CachedGraphqlChannel[] => [],
   projectedChannels: [] as CachedGraphqlChannel[],
-  changed: undefined as (() => void) | undefined,
+  changed: undefined as
+    | ((changes?: HydrationSearchChanges) => void)
+    | undefined,
   unsubscribe: vi.fn(),
   channelRefetch: vi.fn(),
   onCacheChanged: vi.fn(),
@@ -202,10 +208,17 @@ beforeEach(() => {
     ],
   });
   mocks.search.mockReset().mockResolvedValue(page(0, 0));
+  const listeners = new Set<CacheChangeListener>();
+  mocks.changed = (changes) => {
+    for (const callback of listeners) callback(INITIAL_CACHE_REVISION, changes);
+  };
   mocks.onCacheChanged.mockImplementation(
-    (callback: () => void, _options: CacheChangeOptions) => {
-      mocks.changed = callback;
-      return mocks.unsubscribe;
+    (callback: CacheChangeListener, _options: CacheChangeOptions) => {
+      listeners.add(callback);
+      return () => {
+        listeners.delete(callback);
+        mocks.unsubscribe();
+      };
     }
   );
 });
@@ -346,6 +359,60 @@ function renderRetainedList(
 }
 
 describe('Quick Access source integration', () => {
+  it('keeps cached document order and fuzzy matches stable across typing and backspacing', async () => {
+    const names = [
+      'Seamus snip',
+      'seamus todo',
+      'seamus@macro.com taskium',
+      'Some early afternoon music',
+    ];
+    mocks.history = names.map((name, index) => ({
+      id: `mention-${index}`,
+      name,
+      type: 'document',
+      fileType: 'md',
+      ownerId: 'owner',
+    }));
+    const results: SearchCachePage = {
+      documents: names.map((name, index) => ({
+        profile: 'quick-access-v1',
+        recordKey: `GraphqlSoupDocument:mention-${index}`,
+        bucket: 'note',
+        searchText: name.toLowerCase(),
+        timestampMs: 1,
+        sourceHash: 'hash',
+      })),
+      nextCursor: null,
+    };
+    mocks.search.mockResolvedValue(results);
+    const [query, setQuery] = createSignal('seam');
+    const snapshots: string[][] = [];
+    const list = setup((source) => {
+      const list = source.useList({ buckets: ['note'], searchTerm: query });
+      createRenderEffect(() => {
+        snapshots.push(list.items().map((item) => item.id));
+      });
+      return list;
+    });
+    await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+    const expected = mocks.history.map((item) => item.id);
+    expect(list.items().map((item) => item.id)).toEqual(expected);
+    snapshots.length = 0;
+
+    for (const term of ['seamu', 'seam', 'seamu']) {
+      const pending = Promise.withResolvers<SearchCachePage>();
+      mocks.search.mockReturnValueOnce(pending.promise);
+      setQuery(term);
+      expect(list.isLoading()).toBe(true);
+      expect(list.items().map((item) => item.id)).toEqual(expected);
+      pending.resolve(results);
+      await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+      expect(list.items().map((item) => item.id)).toEqual(expected);
+    }
+    expect(snapshots.length).toBeGreaterThan(0);
+    expect(snapshots.every((ids) => ids.join() === expected.join())).toBe(true);
+  });
+
   it('lets initially empty cached channels populate during hydration and replays the last change', async () => {
     const first = retainedQueryData.channels;
     const latest = [{ ...first[0], name: 'Updated channel' }];
@@ -982,6 +1049,40 @@ describe('Quick Access source integration', () => {
     ).toEqual(['folder', 'note', 'task']);
   });
 
+  it('ignores email hydration and refreshes only the affected open list and source', async () => {
+    const lists = setup((source) => ({
+      notes: source.useList({ buckets: ['note'] }),
+      channels: source.useList({ buckets: ['channel', 'dm'] }),
+    }));
+    await vi.waitFor(() =>
+      expect(lists.notes.isLoading() || lists.channels.isLoading()).toBe(false)
+    );
+    mocks.search.mockClear();
+    vi.useFakeTimers();
+    for (let i = 0; i < 13; i++)
+      mocks.changed?.({ searchChangedBuckets: ['email'] });
+    mocks.changed?.({ searchChangedBuckets: [] });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(mocks.search).not.toHaveBeenCalled();
+    expect(mocks.readRecordsByKeys).not.toHaveBeenCalled();
+    expect(mocks.channelRefetch).not.toHaveBeenCalled();
+
+    mocks.search.mockResolvedValue(page(0, 1));
+    mocks.changed?.({ searchChangedBuckets: ['note'] });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(mocks.search).toHaveBeenCalledOnce();
+    expect(mocks.search.mock.calls[0][0].buckets).toEqual(['note']);
+    expect(lists.notes.items()).toHaveLength(1);
+    expect(mocks.channelRefetch).not.toHaveBeenCalled();
+
+    mocks.search.mockClear();
+    mocks.changed?.({ searchChangedBuckets: ['channel'] });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(mocks.channelRefetch).toHaveBeenCalledOnce();
+    expect(mocks.search).toHaveBeenCalledOnce();
+    expect(mocks.search.mock.calls[0][0].buckets).toEqual(['channel', 'dm']);
+  });
+
   it('updates an open list on opted-in hydration notifications without changing its query', async () => {
     const list = setup((source) => source.useList({ buckets: ['note'] }));
     await vi.waitFor(() => expect(list.isLoading()).toBe(false));
@@ -994,7 +1095,7 @@ describe('Quick Access source integration', () => {
     await vi.waitFor(() => expect(list.items()).toHaveLength(1));
     expect(mocks.channelRefetch).toHaveBeenCalledOnce();
     dispose?.();
-    expect(mocks.unsubscribe).toHaveBeenCalledOnce();
+    expect(mocks.unsubscribe).toHaveBeenCalledTimes(2);
   });
 
   it('keeps hidden lists stable and refreshes their latest state once on visibility', async () => {

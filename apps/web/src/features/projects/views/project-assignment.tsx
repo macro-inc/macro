@@ -4,6 +4,7 @@ import StackIcon from '@phosphor/stack.svg';
 import { Button, Dialog } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { useProjectsContext } from '../context/projects-context';
+import { canEditProject } from '../core/project';
 
 export function ProjectAssignment(props: {
   taskIds: readonly string[];
@@ -76,21 +77,12 @@ export function ProjectAssignment(props: {
             {(row) => (
               <Button
                 class="w-full justify-start"
-                disabled={
-                  commands.pending() ||
-                  (row.project.access !== 'edit' &&
-                    row.project.access !== 'owner')
-                }
+                disabled={commands.pending() || !canEditProject(row.project)}
                 onClick={() => void assign(row.project.id)}
               >
                 <StackIcon class="size-4 shrink-0" />
                 <span class="truncate">{row.project.name}</span>
-                <Show
-                  when={
-                    row.project.access !== 'edit' &&
-                    row.project.access !== 'owner'
-                  }
-                >
+                <Show when={!canEditProject(row.project)}>
                   <span class="ml-auto text-xs text-ink-muted">Read only</span>
                 </Show>
               </Button>

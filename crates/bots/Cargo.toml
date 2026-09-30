@@ -16,6 +16,7 @@ ai_tools = [
 default = ["inbound", "outbound", "ports"]
 inbound = [
   "dep:axum",
+  "dep:axum-extra",
   "dep:channels",
   "dep:entity_access",
   "entity_access/inbound",
@@ -36,6 +37,7 @@ ai_toolset = { path = "../ai_toolset", optional = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
+axum-extra = { workspace = true, optional = true, features = ["query"] }
 bot_id = { path = "../bot_id", features = ["schema"] }
 bot_token = { path = "../bot_token" }
 harness_id = { path = "../harness_id", features = ["schema", "sqlx"] }

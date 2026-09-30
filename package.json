@@ -65,6 +65,7 @@
 	"workspaces": {
 		"packages": [
 			"apps/web",
+			"apps/marketing",
 			"packages/observability",
 			"packages/email-renderer",
 			"packages/collaboration",

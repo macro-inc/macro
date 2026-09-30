@@ -1,0 +1,24 @@
+<svg width="520" height="380" viewBox="0 0 520 380" fill="none" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="tasks-flex-mcp-pb" x1="0.5" y1="0" x2="0.5" y2="1">
+<stop stop-color="#818181"/>
+<stop offset="0.528846" stop-color="#2B2B2B"/>
+<stop offset="1" stop-color="#414141"/>
+</linearGradient>
+<linearGradient id="tasks-flex-mcp-pbw" x1="0.5" y1="0" x2="0.5" y2="1">
+<stop stop-color="#6D6D6D"/>
+<stop offset="0.528846" stop-color="#1D1C1C"/>
+<stop offset="1" stop-color="#7C4B0D"/>
+</linearGradient>
+<linearGradient id="tasks-flex-mcp-pbg" x1="0.5" y1="0" x2="0.5" y2="1">
+<stop stop-color="#6D6D6D"/>
+<stop offset="0.528846" stop-color="#1D1C1C"/>
+<stop offset="1" stop-color="#1E6B2E"/>
+</linearGradient>
+<linearGradient id="tasks-flex-mcp-sheen" x1="0.5" y1="0" x2="0.5" y2="1">
+<stop stop-color="white"/>
+<stop offset="1" stop-color="white" stop-opacity="0"/>
+</linearGradient>
+</defs>
+<path d="M26.5 19.5L28.71 23.79L33.0 26L28.71 28.21L26.5 32.5L24.29 28.21L20.0 26L24.29 23.79Z" fill="#FF8F00"/><text x="42" y="31" font-family="Inter" font-size="14.5" fill="white" font-weight="600" style="white-space: pre">claude</text><rect x="412.28499999999997" y="17" width="87.715" height="21" rx="10.5" fill="#20242C"/><circle cx="425.28499999999997" cy="27.5" r="4" fill="#15DA43"/><text x="435.28499999999997" y="31.46" font-family="Inter" font-size="11" fill="white" font-weight="500" style="white-space: pre">macro mcp</text><line x1="1" y1="48" x2="519" y2="48" stroke="#353535" stroke-width="0.5"/><text x="20" y="80" font-family="'SF Mono', ui-monospace, 'JetBrains Mono', 'Fira Code', Menlo, Consolas, monospace" font-size="11.5" style="white-space: pre"><tspan fill="#8B8B8B">&gt; </tspan><tspan fill="white">move the coupon fix to In Review and put Teo on it</tspan></text><circle cx="23.1" cy="110" r="3.1" fill="#15DA43"/><text x="34" y="114" font-family="'SF Mono', ui-monospace, 'JetBrains Mono', 'Fira Code', Menlo, Consolas, monospace" font-size="11.5" style="white-space: pre"><tspan fill="#FF8F00" font-weight="600">macro</tspan><tspan fill="#8B8B8B"> - </tspan><tspan fill="white">ListEntities</tspan><tspan fill="#8B8B8B">(type: "task")</tspan></text><path d="M25 122V129H32" stroke="#353535" stroke-width="1.1" fill="none" stroke-linecap="round"/><text x="40" y="134" font-family="'SF Mono', ui-monospace, 'JetBrains Mono', 'Fira Code', Menlo, Consolas, monospace" font-size="11.5" fill="#8B8B8B" style="white-space: pre">12 tasks</text><circle cx="23.1" cy="156" r="3.1" fill="#15DA43"/><text x="34" y="160" font-family="'SF Mono', ui-monospace, 'JetBrains Mono', 'Fira Code', Menlo, Consolas, monospace" font-size="11.5" style="white-space: pre"><tspan fill="#FF8F00" font-weight="600">macro</tspan><tspan fill="#8B8B8B"> - </tspan><tspan fill="white">SetEntityProperty</tspan><tspan fill="#8B8B8B">(status)</tspan></text><path d="M25 168V175H32" stroke="#353535" stroke-width="1.1" fill="none" stroke-linecap="round"/><text x="40" y="180" font-family="'SF Mono', ui-monospace, 'JetBrains Mono', 'Fira Code', Menlo, Consolas, monospace" font-size="11.5" fill="#8B8B8B" style="white-space: pre">Updated MAC-418</text><circle cx="23.1" cy="202" r="3.1" fill="#15DA43"/><text x="34" y="206" font-family="'SF Mono', ui-monospace, 'JetBrains Mono', 'Fira Code', Menlo, Consolas, monospace" font-size="11.5" style="white-space: pre"><tspan fill="#FF8F00" font-weight="600">macro</tspan><tspan fill="#8B8B8B"> - </tspan><tspan fill="white">SetEntityProperty</tspan><tspan fill="#8B8B8B">(assignee)</tspan></text><path d="M25 214V221H32" stroke="#353535" stroke-width="1.1" fill="none" stroke-linecap="round"/><text x="40" y="226" font-family="'SF Mono', ui-monospace, 'JetBrains Mono', 'Fira Code', Menlo, Consolas, monospace" font-size="11.5" fill="#8B8B8B" style="white-space: pre">Assigned Teo</text><circle cx="23.1" cy="250" r="3.1" fill="#BFBFBF"/><text x="34" y="254" font-family="'SF Mono', ui-monospace, 'JetBrains Mono', 'Fira Code', Menlo, Consolas, monospace" font-size="11.5" fill="#BFBFBF" style="white-space: pre">Moved "Fix coupon validation at pricing</text><text x="34" y="272" font-family="'SF Mono', ui-monospace, 'JetBrains Mono', 'Fira Code', Menlo, Consolas, monospace" font-size="11.5" fill="#BFBFBF" style="white-space: pre">step" to In Review and assigned Teo.</text><rect x="20" y="296" width="480" height="40" rx="11" fill="#0B0D11" stroke="#353535" stroke-width="0.75"/><text x="36" y="321" font-family="'SF Mono', ui-monospace, 'JetBrains Mono', 'Fira Code', Menlo, Consolas, monospace" font-size="11.5" fill="#8B8B8B" style="white-space: pre">&gt;</text><rect x="52" y="309" width="7" height="15" rx="1.5" fill="white" opacity="0.8"/><text x="20" y="358" font-family="'SF Mono', ui-monospace, 'JetBrains Mono', 'Fira Code', Menlo, Consolas, monospace" font-size="10.5" fill="#8B8B8B" style="white-space: pre">? for shortcuts</text>
+</svg>

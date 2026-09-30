@@ -53,7 +53,7 @@ struct FakeReader {
 }
 
 impl ScheduledActionReadService for FakeReader {
-    async fn list_owned(
+    async fn list_accessible(
         &self,
         user_id: MacroUserIdStr<'static>,
     ) -> Result<Vec<ScheduledAction>, Report> {

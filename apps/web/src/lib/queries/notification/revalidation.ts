@@ -7,6 +7,7 @@ import {
   SoupNotificationsDocument,
 } from '@service-storage/graphql/generated/graphql';
 import type { Client } from '@urql/core';
+import { delegateChannelNotificationRefresh } from '../channel/notification-refresh';
 import { getActiveGraphqlSoupRevalidations } from '../soup/graphql/active-queries';
 
 type NotificationReader = {
@@ -48,12 +49,14 @@ async function refreshSafely(refresh: () => Promise<unknown>): Promise<void> {
 export async function revalidateNotificationReaders(
   client: Client
 ): Promise<void> {
-  const pages = getActiveGraphqlSoupRevalidations().filter(({ document }) =>
-    notificationDocuments.has(document)
+  const pages = getActiveGraphqlSoupRevalidations(client).filter(
+    ({ document }) => notificationDocuments.has(document)
   );
   await Promise.all([
     ...pages.map(({ document, variables }) =>
       refreshSafely(async () => {
+        if (delegateChannelNotificationRefresh(client, { document, variables }))
+          return;
         const result = await client
           .query(document, variables, { requestPolicy: 'network-only' })
           .toPromise();

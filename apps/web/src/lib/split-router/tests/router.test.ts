@@ -206,6 +206,26 @@ describe('split router', () => {
     router.dispose();
   });
 
+  it('reports an already-current destination as applied', async () => {
+    const layout = createLayout();
+    const router = createSplitRouter({
+      layout,
+      routes,
+      location: createMemorySplitRouterLocation('/drive'),
+    });
+    await router.settled();
+    const source = layout.snapshot().entries[0].splitId;
+    const open = vi.fn(layout.open);
+    const onApplied = vi.fn();
+
+    router.navigate(source, '/drive', { open, onApplied });
+
+    expect(open).not.toHaveBeenCalled();
+    expect(onApplied).toHaveBeenCalledOnce();
+    expect(layout.snapshot().entries).toHaveLength(1);
+    router.dispose();
+  });
+
   it('does not report navigation applied when the host cannot open a pane', async () => {
     const layout = createLayout();
     const router = createSplitRouter({

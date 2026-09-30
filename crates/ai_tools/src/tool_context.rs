@@ -65,6 +65,11 @@ use teams::{inbound::toolset::TeamToolContext, outbound::team_repo::TeamReposito
 use tokio_util::task::TaskTracker;
 
 mod activity_metadata;
+mod images;
+#[cfg(any(test, feature = "test-support"))]
+pub use images::build_image_generation_tool_context_test;
+pub use images::{ToolImageGenerationToolContext, build_image_generation_tool_context};
+
 mod initiatives;
 pub use initiatives::{ToolInitiativeToolContext, build_initiative_tool_context};
 
@@ -1490,6 +1495,7 @@ pub struct ToolServiceContext {
     pub email_service: Arc<ToolEmailService>,
     pub activity_tool_context: ToolActivityToolContext,
     pub document_tool_context: ToolDocumentToolContext,
+    pub image_generation_tool_context: ToolImageGenerationToolContext,
     pub properties_tool_context: ToolPropertiesToolContext,
     pub email_tool_context: ToolEmailToolContext,
     pub call_tool_context: ToolCallToolContext,
@@ -1538,6 +1544,7 @@ impl ToolServiceContext {
     /// call this once when they build the context for that agent's session.
     pub fn with_actor(mut self, actor: bot_id::BotId) -> Self {
         self.document_tool_context = self.document_tool_context.with_actor(actor);
+        self.image_generation_tool_context = self.image_generation_tool_context.with_actor(actor);
         self.properties_tool_context = self.properties_tool_context.with_actor(actor);
         self.project_tool_context = self.project_tool_context.with_actor(actor);
         self.initiative_tool_context = self.initiative_tool_context.with_actor(actor);

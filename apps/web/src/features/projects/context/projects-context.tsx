@@ -73,10 +73,16 @@ export type ProjectsContext = {
       taskIds: readonly string[]
     ): Promise<ProjectAssignmentResult[]>;
     delete(id: string): Promise<void>;
+    /** Deletes each project and refreshes once; resolves with the ids that failed. */
+    deleteMany(ids: readonly string[]): Promise<string[]>;
     saveProperty(
       id: string,
       property: Property,
       value: PropertyApiValues
+    ): Promise<void>;
+    /** Saves every value as one batch; rejects when any of them fails. */
+    saveProperties(
+      updates: readonly (ProjectPropertyDraft & { id: string })[]
     ): Promise<void>;
   };
 };

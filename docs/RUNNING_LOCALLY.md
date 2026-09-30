@@ -131,15 +131,23 @@ This command:
 When startup finishes, the command prints the frontend URL and the important service URLs.
 
 The reverse proxy is HTTPS at `https://localhost:8090` (or the instance's proxy port) using a generated machine certificate signed by the checked-in development CA. Trust `infra/local/certs/ca.pem` once so the browser accepts it; see that directory's README. Local Caddy also reflects any `Origin` (wildcard CORS) so `https://` and `*.localhost` frontends can call the proxy.
+For document sync, local Caddy normalizes the upstream `Origin` to the worker's
+accepted localhost origin so HTTPS machine hostnames can open WebSockets.
+Sync's local Durable Object, KV, R2 and D1 state lives in the Compose `sync_state`
+volume so replacing its container preserves document content. When upgrading an
+existing stack without that mount, stop sync and copy `/app/.wrangler/state` into
+the volume before replacing the container. A restart alone does not rebuild its
+compiled worker; rebuild the sync image after backend protocol changes.
 
 Open the frontend URL in your browser.
 
 The local environment supplies both `LOCAL_AWS_URL` (the container endpoint)
-and `LOCAL_AWS_PUBLIC_URL` (the instance's published LocalStack port). SFS and
-other presigned uploads use the public endpoint in browser-facing URLs. If an
-upload attempts `localhost:4566` on a named instance, rebuild the service and
-reload its generated environment; named instances publish storage on their own
-port.
+and `LOCAL_AWS_PUBLIC_URL` (the app's HTTPS origin with `/local-storage`).
+Document downloads and presigned uploads use this storage proxy, so remote
+browsers do not need a separate localhost storage connection. Container clients
+translate that public endpoint back to LocalStack internally. If a download or
+upload still attempts HTTP localhost, rebuild the services, reload the generated
+environment and proxy, and hard-refresh the browser to discard cached URLs.
 
 If LocalStack loses its temporary resources after a restart, restore missing
 buckets, queues, tables, and keys without resetting Postgres or volumes:
