@@ -120,45 +120,23 @@ function DismissibleTour(props: ViewTourProps & { userId: string }) {
   );
 }
 
-const entryKey = (step: ViewTourStep) =>
-  [step.entry ?? []]
-    .flat()
-    .map((entry) => entry.id)
-    .join('|');
-
-/**
- * What to do to continue, shown beside the beacon while a step waits. After
- * one Skip, Skip all appears when more steps wait on the same action.
- */
+/** What to do to continue, shown beside the beacon while a step waits. */
 function ViewTourHint(props: { tour: ViewTourDefinition }) {
   const tour = useTour<ViewTourStep>();
-  const [skippedPath, setSkippedPath] = createSignal<string>();
-  const canSkipAll = () =>
-    skippedPath() === entryKey(tour.current()) && tour.pathEnd() > tour.index();
   return (
     <>
-      <p class="text-[10px] uppercase tracking-widest text-ink-muted">
-        {props.tour.title} · <Tour.Progress />
+      <p class="flex items-center gap-1.5 text-xs text-ink-muted">
+        <span class="font-medium">{props.tour.title}</span>
+        <span aria-hidden="true">·</span>
+        <Tour.Progress />
       </p>
       <p class="mt-1.5 text-sm leading-5">
         {tour.current().entryLabel ?? `Continue with ${props.tour.title}`}
       </p>
-      <div class="mt-3 flex items-center gap-1.5">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            setSkippedPath(entryKey(tour.current()));
-            tour.next();
-          }}
-        >
+      <div class="mt-3">
+        <Tour.Next variant="outline" size="sm" doneLabel="Done">
           Skip
-        </Button>
-        <Show when={canSkipAll()}>
-          <Button variant="ghost" size="sm" onClick={tour.skipPath}>
-            Skip all
-          </Button>
-        </Show>
+        </Tour.Next>
       </div>
     </>
   );
@@ -176,11 +154,9 @@ function ViewTourCard(props: ViewTourProps) {
   return (
     <>
       <div class="mb-5 flex items-center gap-1 text-ink-muted">
-        <p class="mr-auto text-[10px] uppercase tracking-widest">
-          {props.tour.title}
-        </p>
+        <p class="mr-auto text-xs font-medium">{props.tour.title}</p>
         <Tour.Previous />
-        <Tour.Progress class="min-w-8 text-center text-[10px]" />
+        <Tour.Progress class="min-w-10 text-center text-xs" />
         <Tour.Next disabled={tour.isLast()} />
       </div>
       <div aria-live="polite">

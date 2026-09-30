@@ -25,8 +25,7 @@ and highlights.
   conversation), the card hides and a pulsing dot marks the control that
   reveals it: the sidebar toggle, the Agents nav item, New conversation, or the
   top conversation row. A small card beside it says what to do ("Open a
-  channel or DM to continue"), with Skip below. After one Skip, Skip all
-  appears next to it when more steps wait on the same action. If that control is itself in a collapsed
+  channel or DM to continue"), with Skip below to move on. If that control is itself in a collapsed
   sidebar, the dot marks the sidebar toggle first, then moves once the
   sidebar opens. The dot stays until the feature itself is on screen, however
   you get there; then the card appears at it. Leaving again brings the dot back.

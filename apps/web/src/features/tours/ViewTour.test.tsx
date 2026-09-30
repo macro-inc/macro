@@ -215,7 +215,7 @@ describe('ViewTour waiting hint', () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
-  it('shows the action to take, then offers Skip all after one Skip', async () => {
+  it('shows the action to take, with Skip to move on', async () => {
     render(() => (
       <>
         <button type="button" ref={tourTarget(T.entry)}>
@@ -227,12 +227,10 @@ describe('ViewTour waiting hint', () => {
     await Promise.resolve();
     const hint = () => document.querySelector('[data-tour-hint]');
     expect(hint()?.textContent).toContain('Open the thing to continue');
-    expect(screen.queryByRole('button', { name: 'Skip all' })).toBeNull();
+    expect(hint()?.textContent).toContain('1 / 4');
     expect(screen.queryByRole('button', { name: 'Dismiss' })).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
     expect(hint()?.textContent).toContain('2 / 4');
-    fireEvent.click(screen.getByRole('button', { name: 'Skip all' }));
-    expect(screen.getByRole('dialog', { name: 'After' })).toBeTruthy();
   });
 });
