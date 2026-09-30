@@ -27,7 +27,6 @@ class TokensArgs { var tokens: List<String> = emptyList() }
 /** Copies granted content URIs while their grant is alive. Never resolves a URI
  * to an external filesystem path, nor trusts provider names or reported sizes. */
 class MobileFiles(private val activity: Activity) {
-    private companion object { const val TAG = "MacroMobile" }
     private val worker = Executors.newSingleThreadExecutor()
     private val inbox = File(activity.cacheDir, "android-share-inbox")
     // These directories/token prefixes are the existing Rust streaming-upload contract.
@@ -36,6 +35,7 @@ class MobileFiles(private val activity: Activity) {
     private val errorFile = File(inbox, "last-error.txt")
 
     companion object {
+        private const val TAG = "MacroMobile"
         const val MAX_FILE_BYTES = 500L * 1024 * 1024
         private const val MAX_TEXT_CHARS = 1024 * 1024
         private const val MAX_FILES = 100
