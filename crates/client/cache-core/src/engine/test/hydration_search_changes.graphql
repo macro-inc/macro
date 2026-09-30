@@ -8,6 +8,10 @@ query HydrationChanges {
         ... on GraphqlSoupDocument {
           name
           fileType
+          subType {
+            __typename
+            ... on GraphqlTaskSubType { isCompleted }
+          }
           ownerId
           properties { id }
         }
