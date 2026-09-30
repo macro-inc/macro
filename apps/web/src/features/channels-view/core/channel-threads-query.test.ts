@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { channelThreadsQueryArgs } from './channel-threads';
+import { channelThreadsQueryArgs } from './channel-threads-query';
 
 // Threads user-1 takes part in, minus their roots nobody has replied to.
 const INVOLVED = {

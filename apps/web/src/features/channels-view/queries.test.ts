@@ -148,3 +148,31 @@ describe('Threads rail source', () => {
     useSoupAstItemsQuery.mockReset();
   });
 });
+
+describe('Threads rail paging', () => {
+  it('keeps paging on its own while the list may be too short to scroll', () => {
+    const fetchNextPage = vi.fn(async () => {});
+    useSoupAstItemsQuery.mockImplementation(
+      () =>
+        ({
+          isEnabled: true,
+          isLoading: false,
+          isFetching: false,
+          error: null,
+          hasNextPage: true,
+          fetchNextPage,
+          data: { entities: [] },
+        }) as never
+    );
+    const dispose = createRoot((dispose) => {
+      useChannelsSources(
+        (scope) => scope === 'threads',
+        () => 'updated_at'
+      );
+      return dispose;
+    });
+    expect(fetchNextPage).toHaveBeenCalled();
+    dispose();
+    useSoupAstItemsQuery.mockReset();
+  });
+});

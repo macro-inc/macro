@@ -18,7 +18,7 @@ import {
   useSoupAstItemsQuery,
 } from '@queries/soup/items';
 import { type Accessor, createEffect, createMemo } from 'solid-js';
-import { channelThreadsQueryArgs } from './queries/channel-threads';
+import { channelThreadsQueryArgs } from './core/channel-threads-query';
 import type {
   ChannelListSort,
   ChannelsQueryScope,
@@ -28,6 +28,12 @@ import { channelHasMessages, isDirectMessage } from './utils';
 
 /** Threads per page the Threads rail reads to find their channels. */
 const THREAD_CHANNELS_PAGE_SIZE = 100;
+/**
+ * Pages the rail loads on its own. A few busy channels can fill the first
+ * page, leaving a list too short to scroll, so it keeps paging up to this cap;
+ * scrolling the rail loads the rest.
+ */
+const THREAD_CHANNELS_AUTO_PAGES = 5;
 
 const CHANNELS_QUERY_PARAMS = {
   limit: 100,
@@ -237,6 +243,21 @@ function useThreadChannelsDataSource(
     },
     () => ({ enabled: enabled() && Boolean(userId()), staleTime: 30_000 })
   );
+  // Drive the paginated query on its own until the cap, like
+  // `useChannelsByIdsQuery`, so later-page conversations appear without scroll.
+  createEffect(() => {
+    if (
+      !threadsQuery.isEnabled ||
+      threadsQuery.isLoading ||
+      threadsQuery.isFetching ||
+      threadsQuery.error ||
+      !threadsQuery.hasNextPage ||
+      (threadsQuery.data?.entities.length ?? 0) >=
+        THREAD_CHANNELS_PAGE_SIZE * THREAD_CHANNELS_AUTO_PAGES
+    )
+      return;
+    void threadsQuery.fetchNextPage();
+  });
   const channelIds = createMemo<string[]>((previous) => {
     if (!threadsQuery.isEnabled || threadsQuery.isLoading) return previous;
     const ids = new Set<string>();

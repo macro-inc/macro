@@ -385,12 +385,14 @@ reveals more. Selecting a row filters the main pane instead of opening the
 conversation. `All threads` clears the filter.
 
 The main pane is a virtualized list of channel threads the user takes part in,
-newest reply first; it loads more as it nears the end. Messages the user sent
-that have no replies are hidden. Each card shows the root message with its
-replies collapsed the same way as a channel timeline: the first reply groups,
-then a `N more replies` control that expands the rest in place. In
-`All threads`, each card is labelled with its conversation. The icon button at a card's top right (`View in channel`) switches
-back to `All` and opens the channel at that thread. Shift-clicking a
+newest reply first. It loads more as it nears the end and returns to the top
+when the selected conversation changes. Messages the user sent that have no
+replies are hidden. Each card shows the root message with its replies collapsed
+the same way as a channel timeline: the first reply groups, then a
+`N more replies` control that expands the rest in place. In `All threads`, each
+card is labelled with its conversation. An icon button (`View in channel`)
+appears at a card's top right on hover or focus, and always on touch; it
+switches back to `All` and opens the channel at that thread. Shift-clicking a
 conversation row opens it in a new split. The URL keeps the filter as
 `threadsChannel` in the `channels` search namespace.
 

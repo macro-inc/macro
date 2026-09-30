@@ -4,8 +4,19 @@ import type { ChannelEntity, ChannelThreadEntity } from '@entity';
 import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
 import { useMessageThreadQuery } from '@queries/messages/thread-replies';
 import { Button, cn, Scroll } from '@ui';
-import { createSignal, For, Match, Show, Switch } from 'solid-js';
+import {
+  createEffect,
+  createSignal,
+  For,
+  Match,
+  on,
+  onCleanup,
+  onMount,
+  Show,
+  Switch,
+} from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
+import { createMountQueue, type MountQueue } from '../core/mount-queue';
 import { useChannelThreadsQuery } from '../queries/channel-threads';
 import { ChannelAvatar } from './rail/ChannelRailItems';
 
@@ -73,16 +84,24 @@ function ThreadCard(props: {
   thread: ChannelThreadEntity;
   channel: ChannelEntity | undefined;
   showChannel: boolean;
+  /** Staggers mounting the thread body so a page of cards never blocks input. */
+  mountQueue: MountQueue;
   onOpen: () => void;
 }) {
   const parent = () => ({
     type: 'channel' as const,
     id: props.thread.channelId,
   });
+  // The fetch starts now; only the heavy thread body waits for its turn.
   const query = useMessageThreadQuery(parent, () => props.thread.id);
+  const [bodyReady, setBodyReady] = createSignal(false);
+  onMount(() => onCleanup(props.mountQueue.enqueue(() => setBodyReady(true))));
 
   return (
-    <article class={CARD_CLASS} data-channel-thread={props.thread.id}>
+    <article
+      class={cn(CARD_CLASS, 'group/thread-card')}
+      data-channel-thread={props.thread.id}
+    >
       <Show when={props.showChannel && props.channel}>
         {(channel) => (
           <header class="flex min-w-0 items-center gap-2 text-xs">
@@ -106,7 +125,7 @@ function ThreadCard(props: {
             </Button>
           </div>
         </Match>
-        <Match when={!query.isSuccess}>
+        <Match when={!query.isSuccess || !bodyReady()}>
           <ThreadSkeleton />
         </Match>
         <Match when={query.isSuccess && !query.data.state.deleted_at}>
@@ -122,8 +141,9 @@ function ThreadCard(props: {
         </Match>
       </Switch>
       {/* The wrapper carries the position: the button's tooltip anchors to
-          it, and the thread keeps the card's full width underneath. */}
-      <div class="absolute top-2 right-2">
+          it, and the thread keeps the card's full width underneath. It shows
+          on hover or keyboard focus, and always on touch, which cannot hover. */}
+      <div class="absolute top-2 right-2 opacity-0 transition-opacity group-hover/thread-card:opacity-100 group-focus-within/thread-card:opacity-100 touch:opacity-100 motion-reduce:transition-none">
         <Button
           variant="ghost"
           size="icon-md"
@@ -150,12 +170,27 @@ export function ChannelThreadsView(props: ChannelThreadsViewProps) {
   // A card being replied to stays mounted while scrolled away, so its draft
   // and focus survive virtualization.
   const [activeIndex, setActiveIndex] = createSignal<number>();
+  const mountQueue = createMountQueue();
+  onCleanup(() => mountQueue.dispose());
+  // A different conversation starts at the top of its threads.
+  createEffect(
+    on(
+      () => props.channelId,
+      () => {
+        setActiveIndex(undefined);
+        const root = scrollRoot();
+        if (root) root.scrollTop = 0;
+      },
+      { defer: true }
+    )
+  );
   const loadMoreNearEnd = (offset: number) => {
     const handle = virtualizer();
     if (
       !handle ||
       !query.hasNextPage ||
       query.isFetchingNextPage ||
+      query.error ||
       handle.scrollSize - handle.viewportSize - offset > LOAD_MORE_THRESHOLD
     )
       return;
@@ -178,7 +213,7 @@ export function ChannelThreadsView(props: ChannelThreadsViewProps) {
               <Match when={query.isLoading}>
                 <ThreadListSkeleton />
               </Match>
-              <Match when={query.error}>
+              <Match when={query.error && threads().length === 0}>
                 <div class="flex min-h-40 flex-col items-center justify-center gap-2 text-sm text-ink-muted">
                   <span>Couldn’t load threads.</span>
                   <Button
@@ -231,11 +266,25 @@ export function ChannelThreadsView(props: ChannelThreadsViewProps) {
                         thread={thread}
                         channel={props.resolveChannel(thread.channelId)}
                         showChannel={props.channelId === undefined}
+                        mountQueue={mountQueue}
                         onOpen={() => props.onOpenThread(thread)}
                       />
                     </div>
                   )}
                 </Virtualizer>
+                {/* A failed page or refetch keeps the loaded threads. */}
+                <Show when={query.error && !query.isFetchingNextPage}>
+                  <div class="flex items-center justify-center gap-2 py-3 text-xs text-ink-muted">
+                    <span>Couldn’t load more threads.</span>
+                    <Button
+                      variant="outline"
+                      size="xs"
+                      onClick={() => void query.refresh()}
+                    >
+                      Try again
+                    </Button>
+                  </div>
+                </Show>
                 <Show when={query.isFetchingNextPage}>
                   <div
                     role="status"
