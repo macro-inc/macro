@@ -167,6 +167,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         self.publish(MessageEvent {
             parent,
             actor: actor.as_ref().to_owned(),
+            acting_user: access.acting_user_id().cloned(),
             nonce,
             change: MessageChange::Typing {
                 thread_id: root_id,
@@ -229,6 +230,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         self.publish(MessageEvent {
             parent,
             actor: actor.as_ref().to_owned(),
+            acting_user: access.acting_user_id().cloned(),
             nonce,
             change: MessageChange::Posted {
                 notification_policy,
@@ -316,6 +318,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         self.publish(MessageEvent {
             parent,
             actor: actor.as_ref().to_owned(),
+            acting_user: access.acting_user_id().cloned(),
             nonce,
             change: MessageChange::Edited {
                 notification_policy,
@@ -360,6 +363,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         }
         let message = self.repo.delete(&parent, id).await?;
         self.publish_message(
+            &access,
             actor,
             nonce,
             &message,
@@ -398,6 +402,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             return Ok(message);
         }
         self.publish_message(
+            &access,
             actor,
             nonce,
             &message,
@@ -451,6 +456,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         self.publish(MessageEvent {
             parent,
             actor: actor.as_ref().to_owned(),
+            acting_user: access.acting_user_id().cloned(),
             nonce,
             change: MessageChange::ThreadUpdated {
                 state: state.clone(),
@@ -499,6 +505,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         self.publish(MessageEvent {
             parent: parent.clone(),
             actor: actor.as_ref().to_owned(),
+            acting_user: access.acting_user_id().cloned(),
             nonce,
             change: MessageChange::ThreadUpdated {
                 state: state.clone(),
@@ -700,6 +707,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
 
     async fn publish_message(
         &self,
+        access: &EntityAccessReceipt<MessageWrite>,
         actor: ChannelSender<'static>,
         nonce: Option<String>,
         message: &Message,
@@ -708,6 +716,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         self.publish(MessageEvent {
             parent: message.parent.clone(),
             actor: actor.as_ref().to_owned(),
+            acting_user: access.acting_user_id().cloned(),
             nonce,
             change,
         })

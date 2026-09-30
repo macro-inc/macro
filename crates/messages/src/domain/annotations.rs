@@ -8,7 +8,7 @@ use entity_access::domain::{
     models::{EntityAccessAuth, EntityAccessReceipt, EntityType, OwnerAccessLevel},
     ports::EntityAccessService,
 };
-use macro_user_id::user_id::MacroUserIdStr;
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model::annotations::{
     delete::{DeleteUnthreadedAnchorRequest, DeleteUnthreadedAnchorResponse},
     edit::{EditAnchorRequest, EditAnchorResponse},
@@ -181,6 +181,7 @@ impl<R: AnnotationRepository, A: EntityAccessService, P: MessageEventPublisher>
             let event = MessageEvent {
                 parent,
                 actor: user.as_ref().to_owned(),
+                acting_user: Some(user.copied().into_owned()),
                 nonce: None,
                 change: MessageChange::ThreadUpdated { state },
             };

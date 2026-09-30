@@ -1,6 +1,7 @@
 use super::models::*;
 use channel_sender::ChannelSender;
 use chrono::{DateTime, Utc};
+use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -164,6 +165,13 @@ pub struct MessageEvent {
     pub parent: MessageParent,
     /// User or bot who initiated the operation.
     pub actor: String,
+    /// User whose access authorized the operation: the actor itself, or the
+    /// user a bot acts for. Delivery shares a message's references with its
+    /// parent on this user's authority. Team- and channel-scoped bots act for
+    /// no one.
+    #[serde(skip)]
+    #[cfg_attr(feature = "schema", schema(ignore))]
+    pub acting_user: Option<MacroUserIdStr<'static>>,
     /// Mutation nonce for optimistic reconciliation.
     pub nonce: Option<String>,
     /// Persisted change.

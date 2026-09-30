@@ -148,7 +148,9 @@ where
             message, mentions, ..
         } = &event.change
         {
-            if let Some(user) = actor.as_user() {
+            // A bot's references are shared on the authority of the user it
+            // acts for, the same access that authorized them into the message.
+            if let Some(user) = &event.acting_user {
                 let items = message
                     .attachments
                     .iter()
@@ -177,9 +179,11 @@ where
                 {
                     side_effect_error = Some(repo_error(error));
                 }
-                if let Err(error) = self.repo.upsert_activity(actor.clone(), channel_id).await {
-                    side_effect_error = Some(repo_error(error));
-                }
+            }
+            if actor.as_user().is_some()
+                && let Err(error) = self.repo.upsert_activity(actor.clone(), channel_id).await
+            {
+                side_effect_error = Some(repo_error(error));
             }
             if let Err(error) = self.repo.touch_channel_updated_at(channel_id).await {
                 side_effect_error = Some(repo_error(error));

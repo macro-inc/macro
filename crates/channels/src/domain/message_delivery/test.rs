@@ -1,6 +1,8 @@
 use super::*;
 use crate::domain::{
-    models::{ChannelInfo, ChannelParticipant, ChannelType, ParticipantRole},
+    models::{
+        ChannelInfo, ChannelParticipant, ChannelType, ParticipantRole, ReferencedShareItemType,
+    },
     ports::MockChannelRepo,
 };
 use chrono::Utc;
@@ -14,7 +16,7 @@ use std::{
 struct Log {
     events: Arc<Mutex<Vec<ChannelEvent>>>,
     live: Arc<Mutex<Vec<(String, HashSet<String>)>>>,
-    shares: Arc<Mutex<usize>>,
+    shares: Arc<Mutex<Vec<(String, Vec<ReferencedShareItem>)>>>,
     fail_live: bool,
 }
 
@@ -49,11 +51,14 @@ impl ChannelReferenceSharePermissions for Log {
     type Err = anyhow::Error;
     async fn update_channel_share_permissions_for_referenced_items(
         &self,
-        _: MacroUserIdStr<'static>,
+        actor: MacroUserIdStr<'static>,
         _: Uuid,
-        _: Vec<ReferencedShareItem>,
+        items: Vec<ReferencedShareItem>,
     ) -> Result<(), Self::Err> {
-        *self.shares.lock().unwrap() += 1;
+        self.shares
+            .lock()
+            .unwrap()
+            .push((actor.as_ref().to_owned(), items));
         anyhow::bail!("sharing temporarily unavailable")
     }
 }
@@ -63,6 +68,10 @@ const MEMBER: &str = "macro|member@example.com";
 const SENDER: &str = "macro|sender@example.com";
 
 fn repo() -> MockChannelRepo {
+    repo_recording_activity(Arc::default())
+}
+
+fn repo_recording_activity(activity: Arc<Mutex<Vec<String>>>) -> MockChannelRepo {
     let mut repo = MockChannelRepo::new();
     repo.expect_get_participants().returning(|channel_id| {
         Box::pin(async move {
@@ -78,8 +87,10 @@ fn repo() -> MockChannelRepo {
                 .collect())
         })
     });
-    repo.expect_upsert_activity()
-        .returning(|_, _| Box::pin(async { Ok(()) }));
+    repo.expect_upsert_activity().returning(move |actor, _| {
+        activity.lock().unwrap().push(actor.as_ref().to_owned());
+        Box::pin(async { Ok(()) })
+    });
     repo.expect_touch_channel_updated_at()
         .returning(|_| Box::pin(async { Ok(()) }));
     repo.expect_get_channel_metadata().returning(|_, _| {
@@ -135,6 +146,7 @@ fn event(change: MessageChange) -> MessageEvent {
     MessageEvent {
         parent: MessageParent::Channel(CHANNEL),
         actor: SENDER.to_owned(),
+        acting_user: Some(SENDER.to_owned().try_into().unwrap()),
         nonce: Some("n1".into()),
         change,
     }
@@ -166,7 +178,15 @@ async fn a_post_emits_the_legacy_channel_event_and_the_common_payload() {
             .is_err(),
         "the sharing failure is reported after every other effect ran"
     );
-    assert_eq!(*log.shares.lock().unwrap(), 1);
+    assert_eq!(
+        log.shares
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(actor, _)| actor.as_str())
+            .collect::<Vec<_>>(),
+        [SENDER]
+    );
     let events = log.events.lock().unwrap();
     let [
         ChannelEvent::MessagePosted {
@@ -234,6 +254,65 @@ async fn edits_emit_attachment_changes_before_the_message_change() {
     assert_eq!(removed[0].id, Uuid::from_u128(5));
     assert!(posted_notification.is_some());
     assert_eq!(log.live.lock().unwrap()[0].0, "edited");
+}
+
+fn bot_reply(acting_user: Option<&str>) -> MessageEvent {
+    let mut message = message();
+    message.sender_id = Sender::new_from_bot(bot_id::MACRO_AI_BOT_ID);
+    message.attachments.clear();
+    MessageEvent {
+        acting_user: acting_user.map(|user| user.to_owned().try_into().unwrap()),
+        actor: message.sender_id.as_ref().to_owned(),
+        ..event(MessageChange::Edited {
+            notification_policy: PatchMessageNotificationPolicy::NotifyAsPostedMessage,
+            message,
+            mentions: vec![SimpleMention {
+                entity_type: "calendar_event".into(),
+                entity_id: Uuid::from_u128(7).to_string(),
+            }],
+            previous_attachments: vec![],
+        })
+    }
+}
+
+#[tokio::test]
+async fn a_bot_reply_shares_its_references_as_the_user_it_acts_for() {
+    let log = Log::default();
+    let activity = Arc::default();
+    let delivery = ChannelMessageDelivery::new(
+        repo_recording_activity(Arc::clone(&activity)),
+        log.clone(),
+        log.clone(),
+        log.clone(),
+    );
+    assert!(
+        delivery.publish(bot_reply(Some(SENDER))).await.is_err(),
+        "the stub sharer's failure surfaces, proving the share was attempted"
+    );
+    let shares = log.shares.lock().unwrap();
+    let [(actor, items)] = shares.as_slice() else {
+        panic!("expected one share, got {shares:?}");
+    };
+    assert_eq!(actor, SENDER);
+    assert_eq!(
+        items,
+        &[ReferencedShareItem::new(
+            Uuid::from_u128(7).to_string(),
+            ReferencedShareItemType::CalendarEvent,
+        )]
+    );
+    assert!(
+        activity.lock().unwrap().is_empty(),
+        "a bot has no channel activity of its own"
+    );
+}
+
+#[tokio::test]
+async fn a_bot_acting_for_no_one_shares_nothing() {
+    let log = Log::default();
+    let delivery = ChannelMessageDelivery::new(repo(), log.clone(), log.clone(), log.clone());
+    delivery.publish(bot_reply(None)).await.unwrap();
+    assert!(log.shares.lock().unwrap().is_empty());
 }
 
 #[tokio::test]

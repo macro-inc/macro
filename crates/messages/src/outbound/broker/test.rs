@@ -65,6 +65,7 @@ fn event(parent: MessageParent, change: MessageChange) -> MessageEvent {
     MessageEvent {
         parent,
         actor: SENDER.into(),
+        acting_user: None,
         nonce: None,
         change,
     }
