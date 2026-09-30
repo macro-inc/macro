@@ -932,24 +932,20 @@ async fn backfill_owner_grants_is_idempotent_and_fails_closed(pool: PgPool) {
     insert_user(&pool, USER_A).await;
     let legacy_id = macro_uuid::generate_uuid_v7();
     insert_legacy_action(&pool, legacy_id, USER_A).await;
-    assert_eq!(entity_row_count(&pool, legacy_id).await, 0);
+    sqlx::query!(
+        r#"
+        INSERT INTO entity (id, entity_type, owner_type, owner_id)
+        VALUES ($1, 'scheduled_action', 'user', $2)
+        "#,
+        legacy_id,
+        USER_A,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
     assert!(direct_grants(&pool, legacy_id).await.is_empty());
 
     run_backfill(&pool).await.unwrap();
-    let entity = sqlx::query!(
-        r#"
-        SELECT owner_type::text AS "owner_type!", owner_id, entity_type
-        FROM entity
-        WHERE id = $1
-        "#,
-        legacy_id,
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    assert_eq!(entity.entity_type, "scheduled_action");
-    assert_eq!(entity.owner_type, "user");
-    assert_eq!(entity.owner_id, USER_A);
     assert_eq!(
         direct_grants(&pool, legacy_id).await,
         vec![("user".to_owned(), USER_A.to_owned(), "owner".to_owned())]

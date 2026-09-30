@@ -1,7 +1,9 @@
--- Existing routines predate entity_access grants. Every routine written so far is
--- user-owned (the owner column carried a FK to "User" until 20260923183235), so a
--- non-user owner here is data this migration must not guess about. User source ids
--- are lowercase, so a mixed-case owner would never match its own grant.
+-- Existing routines predate entity_access grants. Their entity rows were
+-- registered out of band, so only the owner grant is written here. Every routine
+-- written so far is user-owned (the owner column carried a FK to "User" until
+-- 20260923183235), so a non-user owner here is data this migration must not
+-- guess about. User source ids are lowercase, so a mixed-case owner would never
+-- match its own grant.
 DO $$
 BEGIN
     IF EXISTS (
@@ -21,11 +23,6 @@ BEGIN
     END IF;
 END
 $$;
-
-INSERT INTO entity (id, entity_type, owner_type, owner_id, created_at, updated_at)
-SELECT id, 'scheduled_action', 'user', owner, created_at, updated_at
-FROM scheduled_action
-ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
 SELECT id, 'scheduled_action', owner, 'user', 'owner'
