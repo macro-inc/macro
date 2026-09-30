@@ -81,6 +81,7 @@ function createInitialState(
       direct_messages: initial.expandedGroups?.direct_messages ?? true,
     },
     collapsedLabels: initial.collapsedLabels ?? [],
+    threadsChannelId: initial.threadsChannelId,
     sortBy: {
       channels: initial.sortBy?.channels ?? CHANNELS_DEFAULT_SORT_BY.channels,
       direct_messages:
@@ -156,7 +157,6 @@ export const [ChannelsViewProvider, useChannelsView] =
           ...channelsSearch.defaults,
           tab: state.tab,
           mobileTab: state.mobileTab,
-          threadsChannel: search.threadsChannel,
           messageId: target?.kind === 'message' ? target.messageId : '',
           threadId: target?.kind === 'message' ? (target.threadId ?? '') : '',
         });
@@ -213,10 +213,10 @@ export const [ChannelsViewProvider, useChannelsView] =
         selectedChannel,
         threadsEnabled,
         tab: () => activeChannelsTab(state.tab, threadsEnabled()),
-        threadsChannelId: () => search.threadsChannel || undefined,
+        threadsChannelId: () => state.threadsChannelId,
         setThreadsChannelId: (channelId) => {
-          if ((search.threadsChannel || undefined) === channelId) return;
-          setSearch({ threadsChannel: channelId ?? '' });
+          if (state.threadsChannelId === channelId) return;
+          setState('threadsChannelId', channelId);
         },
         setTab: (tab) => {
           if (state.tab === tab) return;

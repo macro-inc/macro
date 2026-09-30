@@ -6,8 +6,6 @@ export const channelsSearch = {
   namespace: 'channels',
   schema: z.object({
     tab: z.enum(['browse', 'recents', 'threads']),
-    /** Threads tab: the conversation whose threads are shown; empty for all. */
-    threadsChannel: z.string(),
     mobileTab: z.enum(['channels', 'direct_messages', 'recents']),
     messageId: z.string(),
     threadId: z.string(),
@@ -15,7 +13,6 @@ export const channelsSearch = {
   }),
   defaults: {
     tab: 'browse' as ChannelsTab,
-    threadsChannel: '',
     mobileTab: 'channels' as ChannelsQueryScope,
     messageId: '',
     threadId: '',

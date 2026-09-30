@@ -21,6 +21,12 @@ export type ChannelsViewState = {
    * only the open/closed state is personal, so it is stored by label id.
    */
   collapsedLabels: string[];
+  /**
+   * Threads tab filter: the conversation whose threads are shown, or all.
+   * Kept in view state rather than the URL: a search-param change replaces the
+   * split's history entry, which is too costly for a per-click filter.
+   */
+  threadsChannelId: string | undefined;
   sortBy: Record<ChannelsSortGroup, ChannelListSort>;
   asideWidth: number;
 };

@@ -18,6 +18,7 @@ import {
   createMemo,
   createSignal,
   on,
+  onCleanup,
   onMount,
   Show,
   useContext,
@@ -27,6 +28,7 @@ import { ChannelDetailView } from './components/ChannelDetailView';
 import { ChannelsMobileView } from './components/ChannelsMobileView';
 import { ChannelThreadsView } from './components/ChannelThreadsView';
 import { ChannelsRail } from './components/rail/ChannelsRail';
+import { createMountQueue } from './core/mount-queue';
 import {
   type ChannelsSources,
   deduplicateChannels,
@@ -92,6 +94,8 @@ function DesktopChannelsRail(props: {
 
 function DesktopChannelThreads(props: { sources: ChannelsSources }) {
   const { threadsChannelId, setTab, setSelectedChannel } = useChannelsView();
+  const mountQueue = createMountQueue();
+  onCleanup(() => mountQueue.dispose());
   const channelsById = createMemo(
     () =>
       new Map(
@@ -108,6 +112,7 @@ function DesktopChannelThreads(props: { sources: ChannelsSources }) {
     <ChannelThreadsView
       channelId={threadsChannelId()}
       resolveChannel={(channelId) => channelsById().get(channelId)}
+      mountQueue={mountQueue}
       onOpenThread={(thread) => {
         setTab('browse');
         setSelectedChannel(thread);

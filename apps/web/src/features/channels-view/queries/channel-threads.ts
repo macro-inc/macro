@@ -13,9 +13,13 @@ export function useChannelThreadsQuery(
     () => channelThreadsQueryArgs(userId() ?? '', channelId()),
     () => ({ enabled: enabled() && Boolean(userId()), staleTime: 30_000 })
   );
+  // Soup's REST path keeps the previous filter's rows as placeholder data
+  // while a new filter loads. Another conversation's threads must never show
+  // under this one, so placeholder data counts as still loading.
+  const isPending = () => query.isLoading || query.isPlaceholderData;
   // Gate the data read on loading so a pending query never suspends the list.
   const threads = createMemo<ChannelThreadEntity[]>(() =>
-    query.isEnabled && !query.isLoading
+    query.isEnabled && !isPending()
       ? (query.data?.entities ?? []).filter(
           (entity): entity is ChannelThreadEntity =>
             isChannelThreadEntity(entity) && !entity.deletedAt
@@ -23,5 +27,5 @@ export function useChannelThreadsQuery(
       : []
   );
 
-  return { query, threads };
+  return { query, threads, isPending };
 }

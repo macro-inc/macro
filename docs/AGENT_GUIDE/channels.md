@@ -393,8 +393,9 @@ the same way as a channel timeline: the first reply groups, then a
 card is labelled with its conversation. An icon button (`View in channel`)
 appears at a card's top right on hover or focus, and always on touch; it
 switches back to `All` and opens the channel at that thread. Shift-clicking a
-conversation row opens it in a new split. The URL keeps the filter as
-`threadsChannel` in the `channels` search namespace.
+conversation row opens it in a new split. The filter lives in the view's state,
+not the URL: it survives back/forward within the split and reloads, but a
+copied link opens the Threads tab on `All threads`.
 
 ### Channel labels
 

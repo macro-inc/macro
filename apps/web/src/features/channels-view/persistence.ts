@@ -55,6 +55,7 @@ const channelsEntryStateSchemaWithDefaults = z.object({
     direct_messages: true,
   }),
   collapsedLabels: z.array(z.string()).default([]),
+  threadsChannelId: z.string().optional(),
 });
 
 type ChannelsEntryState = z.infer<typeof channelsEntryStateSchemaWithDefaults>;
@@ -69,6 +70,7 @@ const DEFAULT_CHANNELS_ENTRY_STATE = {
     direct_messages: true,
   },
   collapsedLabels: [],
+  threadsChannelId: undefined,
 } satisfies ChannelsEntryState;
 
 const channelsPreferencesSchema = z.object({
@@ -108,6 +110,7 @@ function selectEntryState(state: ChannelsViewState): ChannelsEntryState {
     mobileTab: state.mobileTab,
     expandedGroups: state.expandedGroups,
     collapsedLabels: state.collapsedLabels,
+    threadsChannelId: state.threadsChannelId,
   };
 }
 
@@ -124,6 +127,7 @@ function restoreChannelsEntryState(
     mobileTab: restored.mobileTab,
     expandedGroups: restored.expandedGroups,
     collapsedLabels: restored.collapsedLabels,
+    threadsChannelId: restored.threadsChannelId,
   };
 }
 

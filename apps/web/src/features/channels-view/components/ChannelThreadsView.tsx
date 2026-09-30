@@ -1,22 +1,22 @@
 import { ViewShell } from '@app/components/view-shell';
+import { DebugSuspense } from '@channel/DebugSuspense';
 import { MessageThread, threadListItem } from '@core/messages/MessageThread';
 import type { ChannelEntity, ChannelThreadEntity } from '@entity';
 import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
 import { useMessageThreadQuery } from '@queries/messages/thread-replies';
 import { Button, cn, Scroll } from '@ui';
 import {
-  createEffect,
+  createMemo,
   createSignal,
   For,
   Match,
-  on,
   onCleanup,
   onMount,
   Show,
   Switch,
 } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
-import { createMountQueue, type MountQueue } from '../core/mount-queue';
+import type { MountQueue } from '../core/mount-queue';
 import { useChannelThreadsQuery } from '../queries/channel-threads';
 import { ChannelAvatar } from './rail/ChannelRailItems';
 
@@ -78,14 +78,46 @@ export type ChannelThreadsViewProps = {
   /** Channel metadata already loaded by the rail, for names and access. */
   resolveChannel: (channelId: string) => ChannelEntity | undefined;
   onOpenThread: (thread: ChannelThreadEntity) => void;
+  /** Staggers card bodies across tasks; without one, each mounts with its card. */
+  mountQueue?: MountQueue;
 };
+
+type ThreadQuery = ReturnType<typeof useMessageThreadQuery>;
+
+/**
+ * Rendered inside the card's Suspense boundary, so reading the thread suspends
+ * only this card. The list item is memoized: as a JSX prop expression it would
+ * be rebuilt on every read of `data`, and the thread re-derives everything from
+ * each new object.
+ */
+function ThreadCardBody(props: { query: ThreadQuery; canWrite: boolean }) {
+  // A pending read suspends the card but still returns undefined to this
+  // read, so every use is guarded.
+  const item = createMemo(() => {
+    const data = props.query.data;
+    return data && !data.state.deleted_at ? threadListItem(data) : undefined;
+  });
+  return (
+    <Show when={item()}>
+      {(data) => (
+        <MessageThread
+          data={data()}
+          canWrite={props.canWrite}
+          // Collapsed like a channel timeline: the first replies, then a "more
+          // replies" control that expands the rest.
+          expanded={false}
+        />
+      )}
+    </Show>
+  );
+}
 
 function ThreadCard(props: {
   thread: ChannelThreadEntity;
   channel: ChannelEntity | undefined;
   showChannel: boolean;
   /** Staggers mounting the thread body so a page of cards never blocks input. */
-  mountQueue: MountQueue;
+  mountQueue?: MountQueue;
   onOpen: () => void;
 }) {
   const parent = () => ({
@@ -94,8 +126,12 @@ function ThreadCard(props: {
   });
   // The fetch starts now; only the heavy thread body waits for its turn.
   const query = useMessageThreadQuery(parent, () => props.thread.id);
-  const [bodyReady, setBodyReady] = createSignal(false);
-  onMount(() => onCleanup(props.mountQueue.enqueue(() => setBodyReady(true))));
+  // Without a queue the body mounts with the card.
+  const [bodyReady, setBodyReady] = createSignal(!props.mountQueue);
+  onMount(() => {
+    const queue = props.mountQueue;
+    if (queue) onCleanup(queue.enqueue(() => setBodyReady(true)));
+  });
 
   return (
     <article
@@ -125,19 +161,23 @@ function ThreadCard(props: {
             </Button>
           </div>
         </Match>
-        <Match when={!query.isSuccess || !bodyReady()}>
+        <Match when={!bodyReady()}>
           <ThreadSkeleton />
         </Match>
-        <Match when={query.isSuccess && !query.data.state.deleted_at}>
-          <MessageThread
-            data={threadListItem(query.data!)}
-            // Channels the rail knows about say whether the viewer can post;
-            // anything else is left to the server to refuse.
-            canWrite={props.channel?.isParticipant !== false}
-            // Collapsed like a channel timeline: the first replies, then a
-            // "more replies" control that expands the rest.
-            expanded={false}
-          />
+        <Match when={true}>
+          {/* A boundary per card: one around the virtualized list would blank
+              every card whenever a newly scrolled one fetched. */}
+          <DebugSuspense
+            name="ChannelThreadsView.card"
+            fallback={<ThreadSkeleton />}
+          >
+            <ThreadCardBody
+              query={query}
+              // Channels the rail knows about say whether the viewer can post;
+              // anything else is left to the server to refuse.
+              canWrite={props.channel?.isParticipant !== false}
+            />
+          </DebugSuspense>
         </Match>
       </Switch>
       {/* The wrapper carries the position: the button's tooltip anchors to
@@ -157,45 +197,144 @@ function ThreadCard(props: {
   );
 }
 
-/** Channel threads, newest reply first, each with its replies and reply input. */
-export function ChannelThreadsView(props: ChannelThreadsViewProps) {
-  const { query, threads } = useChannelThreadsQuery(
-    () => props.channelId,
-    () => true
-  );
-  const selectedChannel = () =>
-    props.channelId ? props.resolveChannel(props.channelId) : undefined;
+/** Keys the list body when every conversation's threads are shown. */
+const ALL_THREADS_KEY = 'all';
+
+type ThreadsQuery = ReturnType<typeof useChannelThreadsQuery>;
+
+/**
+ * The scrollable list for one filter. It is keyed by conversation, so a switch
+ * starts a fresh scroll container at the top instead of writing `scrollTop`
+ * after the DOM changed, which forced a synchronous layout on every click.
+ */
+function ThreadList(props: {
+  query: ThreadsQuery['query'];
+  threads: ThreadsQuery['threads'];
+  isPending: ThreadsQuery['isPending'];
+  channelId: string | undefined;
+  resolveChannel: ChannelThreadsViewProps['resolveChannel'];
+  onOpenThread: ChannelThreadsViewProps['onOpenThread'];
+  mountQueue?: MountQueue;
+}) {
   const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
   const [virtualizer, setVirtualizer] = createSignal<VirtualizerHandle>();
   // A card being replied to stays mounted while scrolled away, so its draft
   // and focus survive virtualization.
   const [activeIndex, setActiveIndex] = createSignal<number>();
-  const mountQueue = createMountQueue();
-  onCleanup(() => mountQueue.dispose());
-  // A different conversation starts at the top of its threads.
-  createEffect(
-    on(
-      () => props.channelId,
-      () => {
-        setActiveIndex(undefined);
-        const root = scrollRoot();
-        if (root) root.scrollTop = 0;
-      },
-      { defer: true }
-    )
-  );
   const loadMoreNearEnd = (offset: number) => {
     const handle = virtualizer();
     if (
       !handle ||
-      !query.hasNextPage ||
-      query.isFetchingNextPage ||
-      query.error ||
+      props.isPending() ||
+      !props.query.hasNextPage ||
+      props.query.isFetchingNextPage ||
+      props.query.error ||
       handle.scrollSize - handle.viewportSize - offset > LOAD_MORE_THRESHOLD
     )
       return;
-    void query.fetchNextPage();
+    void props.query.fetchNextPage();
   };
+
+  return (
+    <Scroll scrollRef={setScrollRoot}>
+      <div class="mx-auto flex w-full max-w-3xl flex-col px-4 py-4">
+        <Switch>
+          <Match when={props.isPending()}>
+            <ThreadListSkeleton />
+          </Match>
+          <Match when={props.query.error && props.threads().length === 0}>
+            <div class="flex min-h-40 flex-col items-center justify-center gap-2 text-sm text-ink-muted">
+              <span>Couldn’t load threads.</span>
+              <Button
+                variant="outline"
+                size="xs"
+                onClick={() => void props.query.refresh()}
+              >
+                Try again
+              </Button>
+            </div>
+          </Match>
+          <Match when={props.threads().length === 0}>
+            <div class="flex min-h-40 flex-col items-center justify-center gap-1 text-center">
+              <h2 class="text-base font-semibold text-ink">No threads yet</h2>
+              <p class="text-sm text-ink-muted">
+                {props.channelId
+                  ? 'Replies to messages in this conversation show up here.'
+                  : 'Replies to messages in your conversations show up here.'}
+              </p>
+            </div>
+          </Match>
+          <Match when={true}>
+            <Virtualizer
+              ref={setVirtualizer}
+              data={props.threads()}
+              scrollRef={scrollRoot()}
+              startMargin={16}
+              keepMounted={
+                activeIndex() === undefined ? undefined : [activeIndex()!]
+              }
+              onScroll={loadMoreNearEnd}
+            >
+              {(thread, index) => (
+                <div
+                  class="pb-6"
+                  onFocusIn={() => setActiveIndex(index())}
+                  onFocusOut={(event) => {
+                    const next = event.relatedTarget;
+                    if (
+                      !(next instanceof Node) ||
+                      !event.currentTarget.contains(next)
+                    )
+                      setActiveIndex(undefined);
+                  }}
+                >
+                  <ThreadCard
+                    thread={thread}
+                    channel={props.resolveChannel(thread.channelId)}
+                    showChannel={props.channelId === undefined}
+                    mountQueue={props.mountQueue}
+                    onOpen={() => props.onOpenThread(thread)}
+                  />
+                </div>
+              )}
+            </Virtualizer>
+            {/* A failed page or refetch keeps the loaded threads. */}
+            <Show when={props.query.error && !props.query.isFetchingNextPage}>
+              <div class="flex items-center justify-center gap-2 py-3 text-xs text-ink-muted">
+                <span>Couldn’t load more threads.</span>
+                <Button
+                  variant="outline"
+                  size="xs"
+                  onClick={() => void props.query.refresh()}
+                >
+                  Try again
+                </Button>
+              </div>
+            </Show>
+            <Show when={props.query.isFetchingNextPage}>
+              <div
+                role="status"
+                aria-label="Loading more threads"
+                class={CARD_CLASS}
+              >
+                <ThreadSkeleton />
+              </div>
+            </Show>
+          </Match>
+        </Switch>
+      </div>
+    </Scroll>
+  );
+}
+
+/** Channel threads, newest reply first, each with its replies and reply input. */
+export function ChannelThreadsView(props: ChannelThreadsViewProps) {
+  const { query, threads, isPending } = useChannelThreadsQuery(
+    () => props.channelId,
+    () => true
+  );
+  const selectedChannel = () =>
+    props.channelId ? props.resolveChannel(props.channelId) : undefined;
   const title = () =>
     props.channelId
       ? (selectedChannel()?.name ?? 'Conversation threads')
@@ -207,97 +346,19 @@ export function ChannelThreadsView(props: ChannelThreadsViewProps) {
         <span class="min-w-0 truncate text-sm font-semibold">{title()}</span>
       </ViewShell.TopBar>
       <div class="relative min-h-0 flex-1">
-        <Scroll scrollRef={setScrollRoot}>
-          <div class="mx-auto flex w-full max-w-3xl flex-col px-4 py-4">
-            <Switch>
-              <Match when={query.isLoading}>
-                <ThreadListSkeleton />
-              </Match>
-              <Match when={query.error && threads().length === 0}>
-                <div class="flex min-h-40 flex-col items-center justify-center gap-2 text-sm text-ink-muted">
-                  <span>Couldn’t load threads.</span>
-                  <Button
-                    variant="outline"
-                    size="xs"
-                    onClick={() => void query.refresh()}
-                  >
-                    Try again
-                  </Button>
-                </div>
-              </Match>
-              <Match when={threads().length === 0}>
-                <div class="flex min-h-40 flex-col items-center justify-center gap-1 text-center">
-                  <h2 class="text-base font-semibold text-ink">
-                    No threads yet
-                  </h2>
-                  <p class="text-sm text-ink-muted">
-                    {props.channelId
-                      ? 'Replies to messages in this conversation show up here.'
-                      : 'Replies to messages in your conversations show up here.'}
-                  </p>
-                </div>
-              </Match>
-              <Match when={true}>
-                <Virtualizer
-                  ref={setVirtualizer}
-                  data={threads()}
-                  scrollRef={scrollRoot()}
-                  startMargin={16}
-                  bufferSize={800}
-                  keepMounted={
-                    activeIndex() === undefined ? undefined : [activeIndex()!]
-                  }
-                  onScroll={loadMoreNearEnd}
-                >
-                  {(thread, index) => (
-                    <div
-                      class="pb-6"
-                      onFocusIn={() => setActiveIndex(index())}
-                      onFocusOut={(event) => {
-                        const next = event.relatedTarget;
-                        if (
-                          !(next instanceof Node) ||
-                          !event.currentTarget.contains(next)
-                        )
-                          setActiveIndex(undefined);
-                      }}
-                    >
-                      <ThreadCard
-                        thread={thread}
-                        channel={props.resolveChannel(thread.channelId)}
-                        showChannel={props.channelId === undefined}
-                        mountQueue={mountQueue}
-                        onOpen={() => props.onOpenThread(thread)}
-                      />
-                    </div>
-                  )}
-                </Virtualizer>
-                {/* A failed page or refetch keeps the loaded threads. */}
-                <Show when={query.error && !query.isFetchingNextPage}>
-                  <div class="flex items-center justify-center gap-2 py-3 text-xs text-ink-muted">
-                    <span>Couldn’t load more threads.</span>
-                    <Button
-                      variant="outline"
-                      size="xs"
-                      onClick={() => void query.refresh()}
-                    >
-                      Try again
-                    </Button>
-                  </div>
-                </Show>
-                <Show when={query.isFetchingNextPage}>
-                  <div
-                    role="status"
-                    aria-label="Loading more threads"
-                    class={CARD_CLASS}
-                  >
-                    <ThreadSkeleton />
-                  </div>
-                </Show>
-              </Match>
-            </Switch>
-          </div>
-        </Scroll>
+        <Show when={props.channelId ?? ALL_THREADS_KEY} keyed>
+          {(_key) => (
+            <ThreadList
+              query={query}
+              threads={threads}
+              isPending={isPending}
+              channelId={props.channelId}
+              resolveChannel={props.resolveChannel}
+              onOpenThread={props.onOpenThread}
+              mountQueue={props.mountQueue}
+            />
+          )}
+        </Show>
       </div>
     </>
   );
