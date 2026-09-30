@@ -115,7 +115,7 @@ pub struct ConfigureAgent {
     pub mcp_scope: Option<AgentMcpScopeSummary>,
     /// Replacement MCP server list.
     #[schemars(
-        description = "The complete list of connected apps for the `selected` MCP scope, each as its Pipedream app slug (e.g. `linear`) and display name. Forbidden with `owner_connections`."
+        description = "The complete list of connected apps for the `selected` MCP scope, each as its Pipedream app slug (e.g. `linear`) and display name. A slug Pipedream does not list as a connectable app is rejected and nothing is saved. Forbidden with `owner_connections`."
     )]
     #[serde(default)]
     pub mcp_servers: Option<Vec<AgentMcpServerSummary>>,

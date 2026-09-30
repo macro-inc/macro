@@ -432,6 +432,7 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
             ai_tools::ToolBotEventBroker::Real(macro_event_broker.clone()),
             entity_access_service.clone(),
             dss_url,
+            ai_tools::pipedream_client_from_env()?,
         ),
         project_tool_context,
         initiative_tool_context,

@@ -1100,7 +1100,9 @@ The built-in **Configure Agent** skill walks an agent through changing another
 agent's instructions or settings on the user's behalf. `ListAgents` returns every
 agent the user can manage with its current instructions, runtime, model, channel
 scope, connected apps, permission choice, and coding/chat mode; `ConfigureAgent`
-patches only the fields it is given. Instructions are replaced whole, so the skill
+patches only the fields it is given. A selected MCP app slug must be a real
+Pipedream app; an invented slug is rejected and the agent is left unchanged.
+Instructions are replaced whole, so the skill
 has the agent edit the current text and send the complete result. Changes reach
 sessions opened afterwards; running sessions keep the instructions they started
 with. Both tools render as expandable rows in chat, agent sessions, and channel

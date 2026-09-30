@@ -5,7 +5,7 @@ use crate::domain::{
         CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest, CreateChannelScopedBotRequest,
         PatchAgentRequest, PatchBotRequest, UpdateAgentRequest,
     },
-    ports::{BotError, BotService},
+    ports::{BotError, BotService, McpAppCatalog},
     service::BotServiceImpl,
 };
 use entity_access::domain::models::{
@@ -109,6 +109,15 @@ fn update_agent_req(handle: &str, channel_scope: AgentChannelScope) -> UpdateAge
 
 fn service(pool: &PgPool) -> BotServiceImpl<PgBotsRepo, NoopMacroEventBroker> {
     BotServiceImpl::new(PgBotsRepo::new(pool.clone()), NoopMacroEventBroker)
+}
+
+/// A directory that knows only the slugs it is given.
+struct KnownApps(&'static [&'static str]);
+
+impl McpAppCatalog for KnownApps {
+    async fn is_connectable_app(&self, slug: &str) -> Result<bool, BotError> {
+        Ok(self.0.contains(&slug))
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -797,6 +806,60 @@ async fn patched_agent_changes_only_what_the_patch_names(pool: PgPool) -> anyhow
     assert_eq!(
         active_channel_participant_count(&pool, channel_id, created.bot.id).await?,
         1
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn patch_agent_refuses_an_mcp_slug_the_directory_does_not_list(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let service = service(&pool).with_mcp_apps(KnownApps(&["linear"]));
+    let created = service
+        .create_agent(
+            user_id(USER_OWNER),
+            create_agent_req("bug-fixer", AgentChannelScope::All),
+        )
+        .await?;
+
+    let error = service
+        .patch_agent(
+            user_id(USER_OWNER),
+            created.bot.id,
+            PatchAgentRequest {
+                mcp: Some(AgentMcpServers::Selected {
+                    servers: vec![mcp_server("not-a-real-app", "Not real")],
+                }),
+                ..PatchAgentRequest::default()
+            },
+        )
+        .await
+        .expect_err("an invented Pipedream slug is refused");
+    assert!(matches!(error, BotError::BadRequest(_)));
+
+    let stored = PgBotsRepo::new(pool.clone())
+        .get_agent(created.bot.id)
+        .await?
+        .expect("the agent is unchanged");
+    assert_eq!(stored.mcp, AgentMcpServers::OwnerConnections);
+
+    let patched = service
+        .patch_agent(
+            user_id(USER_OWNER),
+            created.bot.id,
+            PatchAgentRequest {
+                mcp: Some(AgentMcpServers::Selected {
+                    servers: vec![mcp_server("linear", "Linear")],
+                }),
+                ..PatchAgentRequest::default()
+            },
+        )
+        .await?;
+    assert_eq!(
+        patched.mcp,
+        AgentMcpServers::Selected {
+            servers: vec![mcp_server("linear", "Linear")],
+        }
     );
     Ok(())
 }

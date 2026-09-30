@@ -3,13 +3,13 @@
 use super::{
     events::{BotCreatedMetadata, BotDeletedMetadata, BotMacroEvent, BotUpdatedMetadata},
     models::{
-        Agent, AgentChannelScope, AgentMcpServers, AuthenticatedBot, Bot, BotChannel,
-        BotChannelListCaller, BotId, BotKind, BotOwner, BotOwnerProfile, BotToken,
+        Agent, AgentChannelScope, AgentMcpServer, AgentMcpServers, AuthenticatedBot, Bot,
+        BotChannel, BotChannelListCaller, BotId, BotKind, BotOwner, BotOwnerProfile, BotToken,
         BotTokenCandidate, CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest,
         CreateChannelScopedBotRequest, CreateChannelScopedBotResponse, HarnessId, HarnessOwner,
         MAX_BOT_OWNER_PROFILE_IDS, PatchAgentRequest, PatchBotRequest, UpdateAgentRequest,
     },
-    ports::{BotError, BotRepo, BotService},
+    ports::{BotError, BotRepo, BotService, McpAppCatalog},
     tokens,
 };
 use bot_token::HashedBotToken;
@@ -23,16 +23,50 @@ use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 /// Bot service implementation.
+///
+/// `C` answers whether a Pipedream app slug is real. [`UncheckedMcpApps`]
+/// accepts every slug; hosts that configure agents from a conversation pass
+/// a directory-backed catalog instead.
 #[derive(Debug, Clone)]
-pub struct BotServiceImpl<R, B> {
+pub struct BotServiceImpl<R, B, C = UncheckedMcpApps> {
     repo: R,
     event_broker: B,
+    mcp_apps: C,
 }
 
-impl<R, B> BotServiceImpl<R, B> {
-    /// Create a bot service.
+/// Accepts every MCP app slug without asking Pipedream.
+///
+/// For hosts that have no app directory. A host that applies an agent's
+/// choice of apps must pass a directory-backed catalog, which refuses a slug
+/// it cannot confirm.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct UncheckedMcpApps;
+
+impl McpAppCatalog for UncheckedMcpApps {
+    async fn is_connectable_app(&self, _slug: &str) -> Result<bool, BotError> {
+        Ok(true)
+    }
+}
+
+impl<R, B, C> BotServiceImpl<R, B, C> {
+    /// Swap the MCP app directory this service consults.
+    pub fn with_mcp_apps<D>(self, mcp_apps: D) -> BotServiceImpl<R, B, D> {
+        BotServiceImpl {
+            repo: self.repo,
+            event_broker: self.event_broker,
+            mcp_apps,
+        }
+    }
+}
+
+impl<R, B> BotServiceImpl<R, B, UncheckedMcpApps> {
+    /// Create a bot service that does not check MCP app slugs against Pipedream.
     pub fn new(repo: R, event_broker: B) -> Self {
-        Self { repo, event_broker }
+        Self {
+            repo,
+            event_broker,
+            mcp_apps: UncheckedMcpApps,
+        }
     }
 }
 
@@ -218,7 +252,7 @@ struct ValidatedBotToken {
     token_id: Uuid,
 }
 
-impl<R, B> BotServiceImpl<R, B>
+impl<R, B, C> BotServiceImpl<R, B, C>
 where
     R: BotRepo,
     B: MacroEventBroker,
@@ -478,10 +512,11 @@ where
     }
 }
 
-impl<R, B> BotService for BotServiceImpl<R, B>
+impl<R, B, C> BotService for BotServiceImpl<R, B, C>
 where
     R: BotRepo,
     B: MacroEventBroker + Clone,
+    C: McpAppCatalog,
 {
     async fn create_agent(
         &self,
@@ -489,6 +524,7 @@ where
         req: CreateAgentRequest,
     ) -> Result<Agent, BotError> {
         validate_agent_request(&req)?;
+        reject_unknown_mcp_apps(&self.mcp_apps, &req.mcp, &[]).await?;
         if req.channel_scope == AgentChannelScope::Selected
             && !self
                 .repo
@@ -543,6 +579,14 @@ where
         req: UpdateAgentRequest,
     ) -> Result<Agent, BotError> {
         let current = self.ensure_manageable(caller.clone(), bot_id).await?;
+        let existing = self
+            .repo
+            .get_agent(bot_id)
+            .await
+            .map_err(|err| BotError::Repo(err.into()))?
+            .ok_or_else(|| BotError::NotFound("agent not found".to_string()))?;
+        validate_update_agent_request(&req)?;
+        reject_unknown_mcp_apps(&self.mcp_apps, &req.mcp, existing.mcp.servers()).await?;
         self.replace_agent(caller, &current, req).await
     }
 
@@ -559,8 +603,10 @@ where
             .await
             .map_err(|err| BotError::Repo(err.into()))?
             .ok_or_else(|| BotError::NotFound("agent not found".to_string()))?;
-        self.replace_agent(caller, &current, req.apply_to(&agent))
-            .await
+        let update = req.apply_to(&agent);
+        validate_update_agent_request(&update)?;
+        reject_unknown_mcp_apps(&self.mcp_apps, &update.mcp, agent.mcp.servers()).await?;
+        self.replace_agent(caller, &current, update).await
     }
 
     async fn list_agents(&self, caller: MacroUserIdStr<'static>) -> Result<Vec<Agent>, BotError> {
@@ -935,6 +981,31 @@ where
             .map_err(|err| BotError::Repo(err.into()))?;
         Ok(self.authenticate_candidate(candidate).await?.bot)
     }
+}
+
+/// Refuse a selected MCP app Pipedream does not list.
+///
+/// Slugs already stored on the agent are left alone, so editing instructions
+/// does not depend on the directory staying reachable. A newly named slug
+/// that the directory rejects is a bad request; a directory that cannot be
+/// asked fails the write rather than storing the slug unverified.
+async fn reject_unknown_mcp_apps<C: McpAppCatalog>(
+    catalog: &C,
+    mcp: &AgentMcpServers,
+    already: &[AgentMcpServer],
+) -> Result<(), BotError> {
+    for server in mcp.servers() {
+        if already.iter().any(|kept| kept.app_slug == server.app_slug) {
+            continue;
+        }
+        if !catalog.is_connectable_app(&server.app_slug).await? {
+            return Err(BotError::BadRequest(format!(
+                "MCP server slug {:?} is not a Pipedream app",
+                server.app_slug
+            )));
+        }
+    }
+    Ok(())
 }
 
 /// A persona cannot override its harness operator's permission policy.

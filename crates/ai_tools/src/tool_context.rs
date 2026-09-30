@@ -134,7 +134,8 @@ impl MacroEventBroker for ToolBotEventBroker {
 }
 
 /// Concrete bot domain service used by AI tools.
-pub type ToolBotService = BotServiceImpl<PgBotsRepo, ToolBotEventBroker>;
+pub type ToolBotService =
+    BotServiceImpl<PgBotsRepo, ToolBotEventBroker, crate::mcp_app_catalog::PipedreamMcpAppCatalog>;
 
 /// Bot-management AI tool context.
 pub type ToolBotToolContext = BotToolContext<ToolBotService, ToolEntityAccessService>;
@@ -146,9 +147,14 @@ pub fn build_bot_tool_context(
     event_broker: ToolBotEventBroker,
     entity_access_service: Arc<ToolEntityAccessService>,
     document_storage_service_url: String,
+    pipedream: Option<Arc<pipedream_mcp::outbound::api::PipedreamClient>>,
 ) -> ToolBotToolContext {
     BotToolContext {
-        service: Arc::new(BotServiceImpl::new(PgBotsRepo::new(pool), event_broker)),
+        service: Arc::new(
+            BotServiceImpl::new(PgBotsRepo::new(pool), event_broker).with_mcp_apps(
+                crate::mcp_app_catalog::PipedreamMcpAppCatalog::new(pipedream),
+            ),
+        ),
         entity_access_service,
         document_storage_service_url: document_storage_service_url
             .trim_end_matches('/')

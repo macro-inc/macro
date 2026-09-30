@@ -384,6 +384,16 @@ pub trait BotService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<AuthenticatedBot, BotError>> + Send;
 }
 
+/// Whether a Pipedream app slug is one an agent may pin.
+///
+/// The directory is Pipedream's. `Ok(false)` is a definite miss. `Err` means
+/// the directory could not be asked, and the slug must not be stored.
+pub trait McpAppCatalog: Send + Sync + 'static {
+    /// `true` when `slug` is a connectable Pipedream app.
+    fn is_connectable_app(&self, slug: &str)
+    -> impl Future<Output = Result<bool, BotError>> + Send;
+}
+
 /// Bot service error.
 #[derive(Debug, thiserror::Error)]
 pub enum BotError {
@@ -396,6 +406,9 @@ pub enum BotError {
     /// Unauthorized.
     #[error("unauthorized")]
     Unauthorized,
+    /// The MCP app directory could not answer, so a slug was not stored.
+    #[error("{0}")]
+    Unavailable(String),
     /// Repository error.
     #[error(transparent)]
     Repo(#[from] anyhow::Error),

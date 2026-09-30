@@ -126,7 +126,9 @@ fn channel_access_error(error: AccessError) -> ToolCallError {
 
 fn bot_tool_error(action: &'static str, error: BotError) -> ToolCallError {
     let description = match &error {
-        BotError::BadRequest(message) | BotError::NotFound(message) => message.clone(),
+        BotError::BadRequest(message)
+        | BotError::NotFound(message)
+        | BotError::Unavailable(message) => message.clone(),
         BotError::Unauthorized => {
             "you do not have permission to manage this bot or its owning team".to_string()
         }

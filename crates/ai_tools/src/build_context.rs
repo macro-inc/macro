@@ -479,6 +479,7 @@ pub async fn build_tool_service_context_from_env(
             crate::tool_context::ToolBotEventBroker::Real(macro_event_broker.clone()),
             entity_access_service.clone(),
             document_storage_service_url,
+            crate::mcp_app_catalog::pipedream_client_from_env()?,
         ),
         project_tool_context,
         initiative_tool_context,

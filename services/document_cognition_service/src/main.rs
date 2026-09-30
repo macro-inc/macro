@@ -697,6 +697,7 @@ async fn main() -> anyhow::Result<()> {
             ai_tools::ToolBotEventBroker::Real(macro_event_broker.clone()),
             entity_access_service.clone(),
             DocumentStorageServiceUrl::new()?.to_string(),
+            pipedream_client.clone(),
         ),
         project_tool_context,
         initiative_tool_context,
