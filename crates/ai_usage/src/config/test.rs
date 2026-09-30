@@ -23,7 +23,7 @@ fn explicit_boolean_values_select_policy() {
 #[test]
 fn malformed_present_values_are_errors_not_disabled_defaults() {
     for value in [
-        "", "TRUE", "False", "1", "0", "yes", " true", "false\n", "garbage",
+        "", "TRUE", "False", "1", "0", "yes", " true", "false\n", "garbage", "null",
     ] {
         let error = parse_enforcement(Some(value)).unwrap_err();
         assert!(

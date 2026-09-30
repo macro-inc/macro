@@ -75,11 +75,21 @@ impl UsageRecorder for TrackingRecorder {
 /// Build Postgres analytics with a separate awaited observational capability.
 /// Producers must bind that capability per operation; `record` remains analytics-only.
 ///
-/// Services construct one of these and thread it into their tool/service
-/// context (and into AI call sites) — there is no global recorder.
+/// Internal/evaluation callers may use this disabled default. Production hosts
+/// must use [`pg_recorder_with_enforcement`] with their startup configuration.
 pub fn pg_recorder(pool: sqlx::PgPool) -> Arc<dyn UsageRecorder> {
-    let analytics = Arc::new(domain::service::UsageServiceImpl::new(
-        outbound::PgUsageRepo::new(pool.clone()),
-    ));
+    pg_recorder_with_enforcement(pool, AiUsageEnforcement::Disabled)
+}
+
+/// Build configured prospective usage counting, retaining observational tracking.
+/// This does not enable financial accounting or settlement.
+pub fn pg_recorder_with_enforcement(
+    pool: sqlx::PgPool,
+    enforcement: AiUsageEnforcement,
+) -> Arc<dyn UsageRecorder> {
+    let analytics = Arc::new(
+        domain::service::UsageServiceImpl::new(outbound::PgUsageRepo::new(pool.clone()))
+            .with_enforcement(enforcement),
+    );
     with_tracking(analytics, pg_tracking(pool))
 }

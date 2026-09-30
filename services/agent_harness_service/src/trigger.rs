@@ -70,6 +70,8 @@ pub async fn supervise(
     kafka_brokers: String,
     internal_api_key: String,
     source: TriggerEventSource,
+    recorder: std::sync::Arc<dyn ai_usage::UsageRecorder>,
+    admission: std::sync::Arc<dyn ai_billing::AiAdmissionService>,
 ) {
     loop {
         if let Err(error) = run(
@@ -77,6 +79,8 @@ pub async fn supervise(
             kafka_brokers.clone(),
             internal_api_key.clone(),
             source,
+            recorder.clone(),
+            admission.clone(),
         )
         .await
         {
@@ -91,9 +95,10 @@ async fn run(
     kafka_brokers: String,
     internal_api_key: String,
     source: TriggerEventSource,
+    recorder: std::sync::Arc<dyn ai_usage::UsageRecorder>,
+    admission: std::sync::Arc<dyn ai_billing::AiAdmissionService>,
 ) -> anyhow::Result<()> {
     let lexical = LexicalClient::new(internal_api_key, LexicalServiceUrl::new()?.to_string());
-    let recorder = ai_usage::pg_recorder(pool.clone());
     let images = VisionImageCaptioner::new(
         static_file::outbound::CdnStaticFileRepo::new(StaticFileServiceUrl::new()?.to_string()),
         recorder.clone(),
@@ -121,7 +126,8 @@ async fn run(
                 entity_access::outbound::PgAccessRepository::new(pool.clone()),
             ),
         ),
-    );
+    )
+    .with_admission(admission);
     let channel_types = ChannelRepoTypeLookup::new(PgChannelsRepo::new(pool));
     let publisher = MacroEventBrokerService::new(
         KafkaEventPublisher::new(&kafka_brokers)?,

@@ -91,7 +91,13 @@ async fn run() -> anyhow::Result<()> {
         config.internal_api_key.clone(),
         LexicalServiceUrl::new()?.to_string(),
     );
-    let recorder = ai_usage::pg_recorder(pool.clone());
+    let recorder =
+        ai_usage::pg_recorder_with_enforcement(pool.clone(), config.enable_ai_usage_enforcement);
+    let admission = ai_billing::composition::pg_admission_service(
+        pool.clone(),
+        config.environment,
+        config.enable_ai_usage_enforcement,
+    );
     let images = VisionImageCaptioner::new(
         static_file::outbound::CdnStaticFileRepo::new(StaticFileServiceUrl::new()?.to_string()),
         recorder.clone(),
@@ -119,7 +125,8 @@ async fn run() -> anyhow::Result<()> {
                 entity_access::outbound::PgAccessRepository::new(pool.clone()),
             ),
         ),
-    );
+    )
+    .with_admission(admission);
     let channel_types = ChannelRepoTypeLookup::new(PgChannelsRepo::new(pool));
     let publisher = MacroEventBrokerService::new(
         KafkaEventPublisher::new(config.kafka_brokers.as_ref())?,

@@ -42,6 +42,12 @@ impl<Repo> UsageServiceImpl<Repo> {
         self.enforcement = enforcement;
         self
     }
+
+    /// Whether this recorder will persist the event as quota-counted usage.
+    /// Settlement wrappers use the same policy as persistence, never a second flag.
+    pub fn counts_usage(&self, event: &UsageEvent) -> bool {
+        self.enforcement.should_count(&event.user, event.feature)
+    }
 }
 
 impl<Repo> UsageServiceImpl<Repo>
