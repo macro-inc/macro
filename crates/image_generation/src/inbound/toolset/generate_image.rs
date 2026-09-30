@@ -13,17 +13,15 @@ use entity_access::domain::{
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use super::DocumentToolContext;
+use super::ImageGenerationToolContext;
 use crate::domain::{
-    create::generated_image::{GenerateImageError, NewGeneratedImage},
-    models::DocumentError,
-    ports::{
-        DocumentService,
-        create::DocumentCreationService,
-        editing::EditingWorkerService,
-        image_generation::{ImageAspectRatio, ImageGenerationError},
+    models::{
+        GenerateImageError, ImageAspectRatio, ImageGenerationError, ImageReference,
+        NewGeneratedImage, ReadImageError, SaveImageError,
     },
+    ports::ImageGenerationService,
 };
+use model_owner::CreationPrincipal;
 
 #[cfg(test)]
 mod test;
@@ -33,7 +31,7 @@ mod test;
 // schema enum into a named type, so the ratios stay a plain comment.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
-pub enum AspectRatio {
+enum AspectRatio {
     Square,
     Landscape,
     Portrait,
@@ -53,32 +51,64 @@ impl From<AspectRatio> for ImageAspectRatio {
     }
 }
 
+/// A reference photo already stored in Macro.
+#[derive(Debug, Clone, Copy, Deserialize, JsonSchema)]
+#[serde(tag = "type", rename_all = "camelCase")]
+enum ImageReferenceInput {
+    /// An image document the user can view, including a previously generated image.
+    Document {
+        /// The Macro document ID.
+        id: uuid::Uuid,
+    },
+    /// A photo uploaded with the conversation's attachment control.
+    StaticFile {
+        /// Uploaded file ID from the /file/<id> segment of its attachment URL.
+        id: uuid::Uuid,
+    },
+}
+
+impl From<ImageReferenceInput> for ImageReference {
+    fn from(value: ImageReferenceInput) -> Self {
+        match value {
+            ImageReferenceInput::Document { id } => Self::Document(id),
+            ImageReferenceInput::StaticFile { id } => Self::StaticFile(id),
+        }
+    }
+}
+
 #[derive(Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "GenerateImage",
-    description = "Generate an image from a text prompt with Google's Nano Banana image model and save it as an image document in Macro. Use when the user asks for a picture, illustration, diagram concept, logo idea, mockup, or any visual to be created; do not use to edit or fetch existing images. Describe the subject, style, composition, lighting, and any text to render in the prompt; only the prompt is required. Returns the new document ID, which you can cite so the user sees the image inline. Generation takes several seconds."
+    description = "Generate or edit an image with Google's Nano Banana image model and save the result as a new image document in Macro. Use for pictures, illustrations, diagram concepts, logo ideas, mockups, or edits based on reference photos. When the user supplies photos or asks to modify an existing image, pass them in referenceImages; describing a photo in the prompt alone does not send it to the image model. Describe the subject, style, composition, lighting, and any text to render; only the prompt is required. Refer to reference images by their order (image 1, image 2, image 3) when explaining how to use them. Returns the new document ID to cite inline. Generation takes several seconds."
 )]
+/// Generate an image and save it as a Macro document.
 pub struct GenerateImage {
     #[schemars(
         description = "Detailed description of the image to generate: subject, style (photo, illustration, flat vector...), composition, colours, mood, and any text that must appear."
     )]
-    pub prompt: String,
+    prompt: String,
     #[serde(default)]
     #[schemars(
         description = "Optional short descriptive name for the saved image, for example `sunset-lighthouse`. The file extension is added from the generated format. No directory path. Omit to name the image after the prompt."
     )]
-    pub file_name: Option<String>,
+    file_name: Option<String>,
     #[serde(default)]
     #[schemars(
         description = "Shape of the image. Omit for the model default (square). `widescreen` (16:9) suits banners and slides, `tall` (9:16) suits phone screens and stories."
     )]
-    pub aspect_ratio: Option<AspectRatio>,
+    aspect_ratio: Option<AspectRatio>,
     #[serde(default)]
     #[schemars(
         description = "Optional destination project (folder) ID. Requires edit access. Omit to save to the user's top-level files."
     )]
-    pub project_id: Option<uuid::Uuid>,
+    project_id: Option<uuid::Uuid>,
+    #[serde(default)]
+    #[schemars(
+        description = "Up to three reference photos, in the order used by the prompt. Use type document with a Macro image document ID, or type staticFile with the UUID from /file/<id> in an uploaded attachment's source URL. Use the actual IDs supplied in the conversation or by tools; do not invent IDs. Omit for text-only generation.",
+        length(max = 3)
+    )]
+    reference_images: Option<Vec<ImageReferenceInput>>,
 }
 
 /// Where the generated image landed. Does not echo the image bytes.
@@ -105,6 +135,11 @@ impl ToolAnnotated for GenerateImage {
 
 fn generate_error(error: GenerateImageError) -> ToolCallError {
     let description = match &error {
+        GenerateImageError::BadRequest(message) => message.clone(),
+        GenerateImageError::Reference(ReadImageError::Internal(_)) => {
+            "could not read a reference image; check its ID and access, then retry".to_string()
+        }
+        GenerateImageError::Reference(error) => error.to_string(),
         GenerateImageError::Generation(ImageGenerationError::Unavailable) => {
             "image generation is not available in this workspace".to_string()
         }
@@ -114,11 +149,11 @@ fn generate_error(error: GenerateImageError) -> ToolCallError {
         GenerateImageError::Generation(ImageGenerationError::Provider(_)) => {
             "the image model request failed; try again shortly".to_string()
         }
-        GenerateImageError::Document(DocumentError::BadRequest(message)) => message.clone(),
-        GenerateImageError::Document(DocumentError::NameTooLong { max }) => {
+        GenerateImageError::Document(SaveImageError::BadRequest(message)) => message.clone(),
+        GenerateImageError::Document(SaveImageError::NameTooLong { max }) => {
             format!("fileName is too long (maximum {max} characters)")
         }
-        GenerateImageError::Document(DocumentError::Unauthorized) => {
+        GenerateImageError::Document(SaveImageError::Unauthorized) => {
             "you need edit access to the destination project".to_string()
         }
         GenerateImageError::Document(_) => {
@@ -132,17 +167,16 @@ fn generate_error(error: GenerateImageError) -> ToolCallError {
 }
 
 #[async_trait]
-impl<DSvc, ESvc, EDSvc> AsyncTool<DocumentToolContext<DSvc, ESvc, EDSvc>> for GenerateImage
+impl<Svc, ESvc> AsyncTool<ImageGenerationToolContext<Svc, ESvc>> for GenerateImage
 where
-    DSvc: DocumentService + DocumentCreationService,
+    Svc: ImageGenerationService + 'static,
     ESvc: EntityAccessService,
-    EDSvc: EditingWorkerService,
 {
     type Output = GenerateImageResponse;
 
     async fn call(
         &self,
-        service_context: ServiceContext<DocumentToolContext<DSvc, ESvc, EDSvc>>,
+        service_context: ServiceContext<ImageGenerationToolContext<Svc, ESvc>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         let project = match self.project_id {
@@ -166,22 +200,31 @@ where
             None => None,
         };
         let created = service_context
-            .creator
+            .service
             .create_generated_image(
-                &service_context.creation_principal(request_context.user_id),
-                service_context.image_generator.as_ref(),
+                &CreationPrincipal::BotForUser {
+                    bot: service_context.actor,
+                    user: request_context.user_id,
+                },
                 NewGeneratedImage {
                     prompt: self.prompt.clone(),
                     aspect_ratio: self.aspect_ratio.map(Into::into),
                     file_name: self.file_name.clone(),
                     project,
+                    reference_images: self
+                        .reference_images
+                        .iter()
+                        .flatten()
+                        .copied()
+                        .map(Into::into)
+                        .collect(),
                 },
             )
             .await
             .map_err(generate_error)?;
 
         Ok(GenerateImageResponse {
-            document_id: created.document.document_id().to_string(),
+            document_id: created.document_id.to_string(),
             file_name: created.file_name,
             mime_type: created.mime_type,
             size_bytes: created.size_bytes,

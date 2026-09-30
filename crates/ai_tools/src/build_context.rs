@@ -15,10 +15,8 @@ use channels::domain::list_service::ChannelListServiceImpl;
 use channels::outbound::pg_channels_repo::PgChannelsRepo;
 use connection_gateway_client::ConnectionGatewayClient;
 use documents::domain::models::CloudFrontConfig;
-use documents::domain::ports::image_generation::{ImageGenerator, UnconfiguredImageGenerator};
 use documents::inbound::toolset::DocumentToolContext;
 use documents::outbound::editing_worker_client::ReqwestEditingWorkerClient;
-use documents::outbound::gemini_image_generator::GeminiImageGenerator;
 use documents::outbound::pg_document_repo::PgDocumentRepo;
 use documents::outbound::s3_upload_url::S3UploadUrlAdapter;
 use email::domain::ports::ReadonlyEmailPreviewAdapter;
@@ -35,6 +33,8 @@ use foreign_entity::{
 };
 use frecency::domain::services::FrecencyQueryServiceImpl;
 use frecency::outbound::postgres::FrecencyPgStorage;
+use image_generation::domain::ports::{ImageGenerator, UnconfiguredImageGenerator};
+use image_generation::outbound::gemini::GeminiImageGenerator;
 use lexical_client::LexicalClient;
 use macro_env::Environment;
 use macro_env_var::{env_var, maybe_env_var};
@@ -343,8 +343,7 @@ pub async fn build_tool_service_context_from_env(
             Arc::new(lexical_client.clone()),
             &side_effect_clients,
         ),
-    )
-    .with_image_generator(build_image_generator_from_env());
+    );
 
     let properties_tool_context = crate::tool_context::build_properties_tool_context(
         properties_service.clone(),
@@ -457,6 +456,10 @@ pub async fn build_tool_service_context_from_env(
             properties_service,
             entity_access_service.clone(),
         ),
+        image_generation_tool_context: crate::build_image_generation_tool_context(
+            &document_tool_context,
+            build_image_generator_from_env(),
+        )?,
         document_tool_context,
         properties_tool_context,
         email_tool_context,

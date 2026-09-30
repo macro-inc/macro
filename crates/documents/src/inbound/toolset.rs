@@ -3,7 +3,6 @@
 mod comment_on_document;
 mod create_document;
 mod edit_document;
-mod generate_image;
 mod read_content;
 mod read_metadata;
 mod rename_document;
@@ -22,13 +21,11 @@ use crate::{
     domain::ports::DocumentService,
     domain::ports::create::DocumentCreationService,
     domain::ports::editing::{EditingWorkerService, EditorName},
-    domain::ports::image_generation::{ImageGenerator, UnconfiguredImageGenerator},
     domain::ports::mentions::NoOpDocumentMentionTracker,
     inbound::toolset::{
         comment_on_document::CommentOnDocument,
         create_document::CreateDocument,
         edit_document::EditDocument,
-        generate_image::GenerateImage,
         read_content::ReadContent,
         read_metadata::ReadMetadata,
         rename_document::RenameDocument,
@@ -98,11 +95,6 @@ pub struct DocumentToolContext<
     /// JWT secret used to mint document permission tokens for the editing worker.
     pub document_permission_jwt_secret: String,
 
-    /// Text-to-image provider behind the GenerateImage tool. Defaults to
-    /// [`UnconfiguredImageGenerator`]; hosts with a provider key set it with
-    /// [`Self::with_image_generator`].
-    pub image_generator: Arc<dyn ImageGenerator>,
-
     /// Records the token usage the editing worker reports. Defaults to a no-op;
     /// the chat path injects the real (Postgres-backed) recorder per request.
     pub recorder: Arc<dyn ai_usage::UsageRecorder>,
@@ -137,7 +129,6 @@ impl<
             messages: self.messages.clone(),
             spreadsheet: self.spreadsheet.clone(),
             document_permission_jwt_secret: self.document_permission_jwt_secret.clone(),
-            image_generator: self.image_generator.clone(),
             recorder: self.recorder.clone(),
             actor: self.actor,
             actor_name: self.actor_name.clone(),
@@ -195,7 +186,6 @@ impl<
             messages,
             spreadsheet,
             document_permission_jwt_secret,
-            image_generator: Arc::new(UnconfiguredImageGenerator),
             recorder: Arc::new(ai_usage::NoOpUsageRecorder),
             actor: bot_id::MACRO_AI_BOT_ID,
             actor_name: None,
@@ -205,12 +195,6 @@ impl<
     /// Set the usage recorder the EditDocument tool logs worker token usage to.
     pub fn with_recorder(mut self, recorder: Arc<dyn ai_usage::UsageRecorder>) -> Self {
         self.recorder = recorder;
-        self
-    }
-
-    /// Set the text-to-image provider the GenerateImage tool renders with.
-    pub fn with_image_generator(mut self, image_generator: Arc<dyn ImageGenerator>) -> Self {
-        self.image_generator = image_generator;
         self
     }
 
@@ -277,7 +261,6 @@ where
         .add_tool::<ReadContent, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<CreateDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<UploadFile, DocumentToolContext<DSvc, ESvc, EDSvc>>()
-        .add_tool::<GenerateImage, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<RenameDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<EditDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<CommentOnDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()

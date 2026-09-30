@@ -42,12 +42,21 @@ name (otherwise the opening words of the prompt name the document), an aspect ra
 access required). The file extension comes from the generated format, so
 `fileName: "lighthouse"` yields `lighthouse.png`.
 
-The tool row displays **Generate image** with the file name, the aspect ratio when
-one was requested, and, on success, the document chip that opens the image plus a
-**Generated · \<size\>** toggle. The result opens expanded and shows a small
-thumbnail once the upload is ready (a **Preparing preview** placeholder until
-then); clicking the thumbnail opens the image document in a split. Any commentary
-the model added appears under the thumbnail.
+For edits or variations, attach photos with the existing paperclip or use Macro
+image documents the user can view. Pass up to three references in `referenceImages`,
+for example `[{"type":"staticFile","id":"<UUID>"},{"type":"document","id":"<UUID>"}]`.
+For an uploaded photo, use the UUID from `/file/<id>` in its attachment URL;
+for a document, use its document ID. Describe the edit in `prompt`, referring to
+image 1, image 2, and image 3 in array order. A description alone does not send
+the photo to the image model. The result is saved as a new document.
+
+The result appears as a standalone image card outside grouped tool calls. A
+rounded header shows the filename above the image preview; clicking the card
+opens the image document in a new app split. The card fits the image's scaled
+width without side padding, preserves its aspect ratio, and truncates long
+filenames in the header. The preview loads once the upload
+is ready, with a placeholder while it is being prepared. Any commentary the
+model added appears below the image.
 Refused prompts, provider failures, and hosts without a Google Generative AI key
 display a failed tool call; the error tells the agent whether to rephrase, retry,
 or stop.
@@ -580,6 +589,11 @@ first message in a new conversation. Uploading attachments survive switching the
 agent or opening repository settings; sending clears the attachment previews.
 Expanded queued prompts
 list their attached file names under the text; editing a queued prompt keeps them.
+
+On a local stack, the in-memory agent reads uploaded image attachments from local
+storage and sends their bytes to the model. The provider does not need access to
+the stack's private hostname. This also applies to images in earlier turns when
+resuming a conversation after a service restart.
 
 Cursor walkthrough files the run re-hosts appear in the transcript after the
 answer: screenshots as images, recordings as video players, and `.txt` / `.log`

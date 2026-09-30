@@ -14,6 +14,10 @@ use macro_uuid::Uuid;
 use secretsmanager_client::LocalOrRemoteSecret;
 
 macro_env_var::env_vars!(
+    /// Browser-facing static file base, read only when using local AWS.
+    pub struct StaticFileServiceUrl;
+    /// Local static file bucket, read only when using local AWS.
+    pub struct StaticStorageBucket;
     /// Comma-separated Kafka bootstrap servers.
     #[derive(Clone)]
     pub struct KafkaBrokers;

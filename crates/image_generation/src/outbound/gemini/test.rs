@@ -1,6 +1,6 @@
 use super::*;
-use crate::domain::ports::image_generation::ImageAspectRatio;
-use wiremock::matchers::{body_partial_json, header, method, path};
+use crate::domain::models::{ImageAspectRatio, ReferenceImage};
+use wiremock::matchers::{body_json, header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 const PNG: &[u8] = b"\x89PNG\r\n\x1a\nfake";
@@ -13,6 +13,7 @@ fn request(aspect_ratio: Option<ImageAspectRatio>) -> ImageGenerationRequest {
     ImageGenerationRequest {
         prompt: "a lighthouse at dusk".to_string(),
         aspect_ratio,
+        reference_images: Vec::new(),
     }
 }
 
@@ -29,7 +30,7 @@ async fn posts_the_prompt_and_decodes_the_first_inline_image() {
     Mock::given(method("POST"))
         .and(path(format!("/models/{NANO_BANANA_MODEL}:generateContent")))
         .and(header("x-goog-api-key", "test-key"))
-        .and(body_partial_json(serde_json::json!({
+        .and(body_json(serde_json::json!({
             "contents": [{ "role": "user", "parts": [{ "text": "a lighthouse at dusk" }] }],
             "generationConfig": {
                 "responseModalities": ["IMAGE"],
@@ -55,6 +56,76 @@ async fn posts_the_prompt_and_decodes_the_first_inline_image() {
     assert_eq!(image.bytes, PNG);
     assert_eq!(image.mime_type, "image/png");
     assert_eq!(image.note.as_deref(), Some("Here is your lighthouse."));
+}
+
+#[tokio::test]
+async fn posts_ordered_reference_images_with_their_mime_types_and_exact_bytes() {
+    let server = MockServer::start().await;
+    let jpeg = b"\xff\xd8\xff\xe0reference";
+    let prompt = "Draw the subject from image 1 in the style of image 2";
+    Mock::given(method("POST"))
+        .and(path(format!("/models/{NANO_BANANA_MODEL}:generateContent")))
+        .and(header("x-goog-api-key", "test-key"))
+        .and(body_json(serde_json::json!({
+            "contents": [{
+                "role": "user",
+                "parts": [
+                    { "text": prompt },
+                    {
+                        "inlineData": {
+                            "mimeType": "image/png",
+                            "data": base64::engine::general_purpose::STANDARD.encode(PNG),
+                        }
+                    },
+                    {
+                        "inlineData": {
+                            "mimeType": "image/jpeg",
+                            "data": base64::engine::general_purpose::STANDARD.encode(jpeg),
+                        }
+                    },
+                ]
+            }],
+            "generationConfig": {
+                "responseModalities": ["IMAGE"],
+                "imageConfig": { "aspectRatio": "3:4" },
+            }
+        })))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(image_response(serde_json::json!([
+                { "text": "Here is the edited image." },
+                {
+                    "inlineData": {
+                        "mimeType": "image/png",
+                        "data": base64::engine::general_purpose::STANDARD.encode(PNG),
+                    }
+                },
+            ]))),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let image = generator(&server)
+        .generate_image(&ImageGenerationRequest {
+            prompt: prompt.to_string(),
+            aspect_ratio: Some(ImageAspectRatio::Portrait),
+            reference_images: vec![
+                ReferenceImage {
+                    bytes: PNG.to_vec(),
+                    mime_type: "image/png".to_string(),
+                },
+                ReferenceImage {
+                    bytes: jpeg.to_vec(),
+                    mime_type: "image/jpeg".to_string(),
+                },
+            ],
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(image.bytes, PNG);
+    assert_eq!(image.mime_type, "image/png");
+    assert_eq!(image.note.as_deref(), Some("Here is the edited image."));
 }
 
 #[tokio::test]

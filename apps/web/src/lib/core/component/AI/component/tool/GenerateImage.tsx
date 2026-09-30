@@ -1,26 +1,52 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import { ItemPreview } from '@core/component/ItemPreview';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import LoadingSpinner from '@phosphor/spinner.svg';
 import Image from '@phosphor-icons/core/regular/image.svg';
 import { useBinaryDocumentQuery } from '@queries/storage/binary-document';
 import { createSignal, Show, Suspense } from 'solid-js';
-import { BaseTool } from './BaseTool';
-import { Tool } from './Tool';
-import { createToolRenderer } from './ToolRenderer';
+import { createToolRenderer, useToolError } from './ToolRenderer';
 
-/**
- * A thumbnail of the generated image that opens the document. The upload is
- * finalized by the storage pipeline after the tool returns, so the presigned
- * URL query waits for the document to become ready before the image shows.
- * Kept short: agent transcripts show tool results in a bounded window.
- */
-function GeneratedImage(props: { documentId: string; alt: string }) {
+function ImageHeader(props: { fileName: string }) {
+  return (
+    <div class="flex w-0 min-w-full items-center gap-2 rounded-t-xl border-b border-edge-muted bg-surface px-3 py-2 text-sm text-ink">
+      <Image class="size-4 shrink-0 text-ink-muted" />
+      <span class="min-w-0 truncate" title={props.fileName}>
+        {props.fileName}
+      </span>
+    </div>
+  );
+}
+
+function PreviewStatus(props: { failed?: boolean; generating?: boolean }) {
+  return (
+    <div
+      class="flex h-64 items-center justify-center gap-2 bg-surface text-sm text-ink-muted"
+      role="status"
+    >
+      <Show when={!props.failed}>
+        <LoadingSpinner class="size-4 animate-spin" />
+      </Show>
+      <span>
+        {props.failed
+          ? 'Preview unavailable'
+          : props.generating
+            ? 'Generating image'
+            : 'Preparing preview'}
+      </span>
+    </div>
+  );
+}
+
+/** Storage finishes the upload asynchronously; its query waits for a readable URL. */
+function GeneratedImage(props: { documentId: string; fileName: string }) {
   const query = useBinaryDocumentQuery(() => props.documentId);
-  // Gate on status: an unguarded `data` read suspends the whole tool card.
+  // A pending query must not suspend the surrounding transcript.
   const url = () => (query.isSuccess ? query.data : undefined);
-  const { replaceOrInsertSplit, insertSplit } = useSplitLayout();
+  const [failedUrl, setFailedUrl] = createSignal<string>();
+  const failed = () =>
+    query.isError || (url() !== undefined && failedUrl() === url());
+  const { insertSplit, replaceOrInsertSplit } = useSplitLayout();
   const open = useSplitNavigationHandler<HTMLButtonElement>((event) => {
     const split = { type: 'image' as const, id: props.documentId };
     const handle = openInNewSplitForMention(event.shiftKey, true)
@@ -30,109 +56,71 @@ function GeneratedImage(props: { documentId: string; alt: string }) {
   });
 
   return (
-    <Show
-      when={url()}
-      fallback={
-        <div class="flex h-24 w-40 items-center justify-center gap-2 rounded-lg border border-edge-muted bg-edge-muted text-ink-muted">
-          <Show
-            when={!query.isError}
-            fallback={<span>Preview unavailable</span>}
-          >
-            <LoadingSpinner class="size-4 animate-spin" />
-            <span>Preparing preview</span>
-          </Show>
-        </div>
-      }
+    <button
+      type="button"
+      aria-label={`Open ${props.fileName} in a new split`}
+      class="block w-fit max-w-full overflow-hidden rounded-xl border border-edge-muted text-left hover:border-accent hover-transition-border focus-visible:outline-2 focus-visible:outline-accent"
+      {...open}
     >
-      {(src) => (
-        <button
-          type="button"
-          class="block rounded-lg border border-edge-muted hover:border-accent hover-transition-border"
-          aria-label={`Open ${props.alt}`}
-          {...open}
+      <ImageHeader fileName={props.fileName} />
+      <Suspense fallback={<PreviewStatus />}>
+        <Show
+          when={url() && !failed()}
+          fallback={<PreviewStatus failed={failed()} />}
         >
           <img
-            src={src()}
-            alt={props.alt}
-            class="max-h-24 max-w-full rounded-lg object-contain"
+            src={url()}
+            alt={props.fileName}
+            class="block h-auto max-h-96 w-auto max-w-full"
+            onError={() => setFailedUrl(url())}
           />
-        </button>
-      )}
-    </Show>
+        </Show>
+      </Suspense>
+    </button>
   );
 }
 
 export const generateImageHandler = createToolRenderer({
   name: 'GenerateImage',
   render: (ctx) => {
-    // The image is the point of the call, so the result opens expanded.
-    const [isExpanded, setIsExpanded] = createSignal(true);
-    const label = () =>
-      ctx.response?.data.fileName ??
-      ctx.tool.data.fileName ??
-      ctx.tool.data.prompt;
+    const error = () => useToolError();
     return (
-      <BaseTool
-        icon={Image}
-        renderContext={ctx.renderContext}
-        type="call"
-        response={
-          <Show when={isExpanded() && ctx.response?.data}>
-            {(result) => (
-              <div class="space-y-1">
-                <GeneratedImage
-                  documentId={result().documentId}
-                  alt={result().fileName}
-                />
-                <Show when={result().note}>
-                  {(note) => <div class="whitespace-pre-wrap">{note()}</div>}
-                </Show>
-              </div>
-            )}
-          </Show>
+      <Show
+        when={ctx.response?.data}
+        fallback={
+          <div class="w-full max-w-md overflow-hidden rounded-xl border border-edge-muted">
+            <ImageHeader
+              fileName={ctx.tool.data.fileName ?? 'Generated image'}
+            />
+            <Show
+              when={!error()}
+              fallback={
+                <div class="px-3 py-4 text-sm text-ink-muted">
+                  Image generation failed
+                </div>
+              }
+            >
+              <PreviewStatus generating />
+            </Show>
+          </div>
         }
       >
-        <div class="flex items-center justify-between gap-2">
-          <span class="min-w-0 truncate">
-            Generate image <span class="text-ink">{label()}</span>
-            <Show when={ctx.tool.data.aspectRatio}>
-              {(ratio) => (
-                <span class="text-ink-placeholder"> · {ratio()}</span>
+        {(result) => (
+          <div class="my-2 max-w-md space-y-2">
+            <GeneratedImage
+              documentId={result().documentId}
+              fileName={result().fileName}
+            />
+            <Show when={result().note}>
+              {(note) => (
+                <div class="whitespace-pre-wrap text-sm text-ink-muted">
+                  {note()}
+                </div>
               )}
             </Show>
-            <Show when={ctx.response?.data}>
-              {(result) => (
-                <>
-                  {' '}
-                  <span class="text-ink-placeholder">·</span>{' '}
-                  <Suspense>
-                    <ItemPreview
-                      class="inline-flex align-middle ring-0"
-                      id={result().documentId}
-                      type="document"
-                    />
-                  </Suspense>
-                </>
-              )}
-            </Show>
-          </span>
-          <Show when={ctx.response?.data}>
-            {(result) => (
-              <Tool.ResultToggle
-                expanded={isExpanded()}
-                onToggle={() => setIsExpanded((value) => !value)}
-                status={`Generated · ${formatBytes(result().sizeBytes)}`}
-              />
-            )}
-          </Show>
-        </div>
-      </BaseTool>
+          </div>
+        )}
+      </Show>
     );
   },
 });
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}

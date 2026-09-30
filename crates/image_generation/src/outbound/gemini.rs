@@ -7,9 +7,8 @@ use anyhow::Context as _;
 use base64::Engine as _;
 use serde::Deserialize;
 
-use crate::domain::ports::image_generation::{
-    GeneratedImage, ImageGenerationError, ImageGenerationRequest, ImageGenerator,
-};
+use crate::domain::models::{GeneratedImage, ImageGenerationError, ImageGenerationRequest};
+use crate::domain::ports::ImageGenerator;
 
 #[cfg(test)]
 mod test;
@@ -55,13 +54,22 @@ impl GeminiImageGenerator {
     }
 
     fn request_body(&self, request: &ImageGenerationRequest) -> serde_json::Value {
+        let mut parts = vec![serde_json::json!({ "text": request.prompt })];
+        parts.extend(request.reference_images.iter().map(|image| {
+            serde_json::json!({
+                "inlineData": {
+                    "mimeType": image.mime_type,
+                    "data": base64::engine::general_purpose::STANDARD.encode(&image.bytes),
+                }
+            })
+        }));
         let mut generation_config = serde_json::json!({ "responseModalities": ["IMAGE"] });
         if let Some(aspect_ratio) = request.aspect_ratio {
             generation_config["imageConfig"] =
                 serde_json::json!({ "aspectRatio": aspect_ratio.as_ratio() });
         }
         serde_json::json!({
-            "contents": [{ "role": "user", "parts": [{ "text": request.prompt }] }],
+            "contents": [{ "role": "user", "parts": parts }],
             "generationConfig": generation_config,
         })
     }

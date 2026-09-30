@@ -357,8 +357,7 @@ async fn main() -> anyhow::Result<()> {
             lexical_client.clone(),
             &side_effect_clients,
         ),
-    )
-    .with_image_generator(ai_tools::build_image_generator_from_env());
+    );
 
     tracing::info!("initialized document tool context");
 
@@ -658,6 +657,10 @@ async fn main() -> anyhow::Result<()> {
             properties_service,
             entity_access_service.clone(),
         ),
+        image_generation_tool_context: ai_tools::build_image_generation_tool_context(
+            &document_tool_context,
+            ai_tools::build_image_generator_from_env(),
+        )?,
         document_tool_context: document_tool_context.clone(),
         properties_tool_context: properties_tool_context.clone(),
         email_tool_context: email_tool_context.clone(),

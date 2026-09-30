@@ -10,8 +10,6 @@ pub mod editing_activity;
 #[cfg(feature = "ai_tools")]
 pub mod editing_worker_client;
 #[cfg(feature = "ai_tools")]
-pub mod gemini_image_generator;
-#[cfg(feature = "ai_tools")]
 pub mod lexical_comment_marks;
 #[cfg(feature = "markdown_init")]
 pub mod markdown_init;

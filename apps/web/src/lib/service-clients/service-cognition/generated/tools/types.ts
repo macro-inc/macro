@@ -531,6 +531,24 @@ export type AspectRatio =
   | 'widescreen'
   | 'tall';
 /**
+ * A reference photo already stored in Macro.
+ */
+export type ImageReferenceInput =
+  | {
+      /**
+       * The Macro document ID.
+       */
+      id: string;
+      type: 'document';
+    }
+  | {
+      /**
+       * Uploaded file ID from the /file/<id> segment of its attachment URL.
+       */
+      id: string;
+      type: 'staticFile';
+    };
+/**
  * Entity types that can be returned by the list entities AI tool.
  */
 export type ItemType =
@@ -3516,7 +3534,7 @@ export interface EditTagResponse {
   summary: string;
 }
 /**
- * Generate an image from a text prompt with Google's Nano Banana image model and save it as an image document in Macro. Use when the user asks for a picture, illustration, diagram concept, logo idea, mockup, or any visual to be created; do not use to edit or fetch existing images. Describe the subject, style, composition, lighting, and any text to render in the prompt; only the prompt is required. Returns the new document ID, which you can cite so the user sees the image inline. Generation takes several seconds.
+ * Generate or edit an image with Google's Nano Banana image model and save the result as a new image document in Macro. Use for pictures, illustrations, diagram concepts, logo ideas, mockups, or edits based on reference photos. When the user supplies photos or asks to modify an existing image, pass them in referenceImages; describing a photo in the prompt alone does not send it to the image model. Describe the subject, style, composition, lighting, and any text to render; only the prompt is required. Refer to reference images by their order (image 1, image 2, image 3) when explaining how to use them. Returns the new document ID to cite inline. Generation takes several seconds.
  */
 export interface GenerateImage {
   /**
@@ -3535,6 +3553,17 @@ export interface GenerateImage {
    * Optional destination project (folder) ID. Requires edit access. Omit to save to the user's top-level files.
    */
   projectId?: string | null;
+  /**
+   * Up to three reference photos, in the order used by the prompt. Use type document with a Macro image document ID, or type staticFile with the UUID from /file/<id> in an uploaded attachment's source URL. Use the actual IDs supplied in the conversation or by tools; do not invent IDs. Omit for text-only generation.
+   *
+   * @maxItems 3
+   */
+  referenceImages?:
+    | []
+    | [ImageReferenceInput]
+    | [ImageReferenceInput, ImageReferenceInput]
+    | [ImageReferenceInput, ImageReferenceInput, ImageReferenceInput]
+    | null;
 }
 /**
  * Where the generated image landed. Does not echo the image bytes.
