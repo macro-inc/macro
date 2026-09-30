@@ -1106,6 +1106,50 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     }
   });
 
+  it('accepts a coherent Mail page at a newer revision without repeating the filter scan', async () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    getGraphqlSoupCacheHostMock.mockReturnValue({
+      // Background hydration can advance the engine without a foreground push.
+      currentRevision: vi
+        .fn()
+        .mockResolvedValueOnce(REVISION_0)
+        .mockResolvedValue(REVISION_2),
+      entityFilter: entityFilterMock,
+      onCacheChanged: () => () => {},
+      onCacheGenerationChanged: () => () => {},
+    });
+    makeGraphqlSoupInputMock.mockReturnValue({
+      initial: { emailView: 'ALL', sortMethod: 'UPDATED_AT', limit: 20 },
+    });
+    entityFilterMock.mockResolvedValue({
+      kind: 'mail-page',
+      revision: REVISION_2,
+      keys: [],
+      sortTimestamps: [],
+      nextCursor: null,
+      optimistic: false,
+    });
+    readRecordsByKeysMock.mockResolvedValue({
+      revision: REVISION_2,
+      records: [],
+    });
+    const { query, dispose } = createRoot((dispose) => ({
+      dispose,
+      query: createGraphqlSoupAstItemsQuery(
+        () => ({ params: {}, body: {} }),
+        () => ({ enabled: true })
+      ),
+    }));
+    try {
+      await vi.waitFor(() => expect(query.data()?.cachedMail).toBe(true));
+      expect(entityFilterMock).toHaveBeenCalledTimes(1);
+      expect(readRecordsByKeysMock).toHaveBeenCalledTimes(1);
+    } finally {
+      dispose();
+    }
+  });
+
   it('paginates never-visited Mail filters offline without a server cursor or stale preview timestamps', async () => {
     const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
     const fake = makeFakeClient();

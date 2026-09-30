@@ -1482,21 +1482,20 @@ impl PredicateIndexStorage for TursoStorage {
             let optimistic = optimistic_query_status(&connection, query)?;
             // Incomplete authority and unknown shadows are not candidates, but
             // they must not prevent unrelated known-good rows from updating.
-            let (sql, parameters) =
-                compile_predicate_selection(query, &optimistic.uncertain_ids, true);
-            let candidates = driver::query(&connection, &sql, parameters)?
-                .into_iter()
-                .map(|row| {
-                    if row.len() != 2 {
-                        return Err(invariant());
-                    }
-                    Ok(predicate_index::ReferenceHit {
-                        record_key: PredicateRecordKey::new(required_text(&row, 0)?)
-                            .map_err(|_| invariant())?,
-                        sort_value: required_i64(&row, 1)?,
+            let candidates =
+                bounded_selection::select(&connection, query, &optimistic.uncertain_ids, true)?
+                    .into_iter()
+                    .map(|row| {
+                        if row.len() != 2 {
+                            return Err(invariant());
+                        }
+                        Ok(predicate_index::ReferenceHit {
+                            record_key: PredicateRecordKey::new(required_text(&row, 0)?)
+                                .map_err(|_| invariant())?,
+                            sort_value: required_i64(&row, 1)?,
+                        })
                     })
-                })
-                .collect::<Result<Vec<_>, TursoStorageError>>()?;
+                    .collect::<Result<Vec<_>, TursoStorageError>>()?;
             let keys: Vec<_> = baseline
                 .iter()
                 .map(|entry| entry.record_key.clone())
@@ -1594,8 +1593,7 @@ impl PredicateIndexStorage for TursoStorage {
             if optimistic.incomplete {
                 return Ok(PredicateQueryResult::Incomplete);
             }
-            let (sql, parameters) = compile_predicate_sql(query);
-            let rows = driver::query(&connection, &sql, parameters)?;
+            let rows = bounded_selection::select(&connection, query, &[], false)?;
             let mut keys = Vec::with_capacity(rows.len());
             for row in rows {
                 if row.len() != 1 {
@@ -4966,6 +4964,7 @@ impl TursoStorage {
 }
 
 mod alternatives;
+mod bounded_selection;
 mod conjunction;
 mod integrity;
 mod page_retention;
