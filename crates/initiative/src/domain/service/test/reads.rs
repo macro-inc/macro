@@ -571,3 +571,159 @@ async fn renamed_name_cursor_anchor_requires_restarting_in_both_directions() {
         ));
     }
 }
+
+#[tokio::test]
+async fn previews_distinguish_missing_from_inaccessible_without_leaking_hidden_names() {
+    let visible = summary(1, "Visible").id;
+    let hidden = summary(2, "Secret").id;
+    let missing = summary(3, "Gone").id;
+    let mut repo = MockInitiativeRepo::new();
+    // One narrow read for every well-formed id; malformed ids never reach it.
+    repo.expect_get_basics()
+        .times(1)
+        .withf(move |ids| ids == &[visible, hidden, missing])
+        .return_once(move |ids| {
+            Box::pin(async move {
+                Ok(ids
+                    .into_iter()
+                    .filter(|id| *id != missing)
+                    .map(|id| InitiativeBasic {
+                        id,
+                        name: if id == visible { "Visible" } else { "Secret" }.into(),
+                        owner_id: user(OWNER),
+                    })
+                    .collect())
+            })
+        });
+    let svc = service_with_resources(
+        repo,
+        FakeResources {
+            denied: HashSet::from([hidden.to_string()]),
+            ..Default::default()
+        },
+    );
+    let response = svc
+        .previews(
+            &user(MEMBER),
+            InitiativePreviewsRequest {
+                initiative_ids: vec![
+                    visible.to_string(),
+                    hidden.to_string(),
+                    missing.to_string(),
+                    "not-a-uuid".into(),
+                    visible.to_string(),
+                ],
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.previews,
+        vec![
+            InitiativePreview::Access {
+                id: visible.to_string(),
+                name: "Visible".into(),
+                owner_id: user(OWNER),
+            },
+            InitiativePreview::NoAccess {
+                id: hidden.to_string(),
+            },
+            InitiativePreview::DoesNotExist {
+                id: missing.to_string(),
+            },
+            InitiativePreview::DoesNotExist {
+                id: "not-a-uuid".into(),
+            },
+        ]
+    );
+    assert!(!serde_json::to_string(&response).unwrap().contains("Secret"));
+}
+
+#[tokio::test]
+async fn previews_reject_oversized_batches_before_reading() {
+    let svc = service_with_resources(MockInitiativeRepo::new(), FakeResources::default());
+    let error = svc
+        .previews(
+            &user(OWNER),
+            InitiativePreviewsRequest {
+                initiative_ids: (0..=MAX_PREVIEW_IDS as u128)
+                    .map(|id| uuid::Uuid::from_u128(id).to_string())
+                    .collect(),
+            },
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        error,
+        InitiativeError::BadRequest(message) if message.contains("at most 100")
+    ));
+}
+
+#[tokio::test]
+async fn previews_bound_the_raw_payload_even_when_ids_repeat() {
+    let svc = service_with_resources(MockInitiativeRepo::new(), FakeResources::default());
+    let repeated = uuid::Uuid::from_u128(1).to_string();
+    let error = svc
+        .previews(
+            &user(OWNER),
+            InitiativePreviewsRequest {
+                initiative_ids: vec![repeated; MAX_PREVIEW_IDS + 1],
+            },
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        error,
+        InitiativeError::BadRequest(message) if message.contains("at most 100")
+    ));
+}
+
+#[tokio::test]
+async fn batch_reads_reject_empty_and_over_long_ids_before_reading() {
+    // The mocks carry no expectations: any repository or access read would panic.
+    let svc = service_with_resources(MockInitiativeRepo::new(), FakeResources::default());
+    for id in [String::new(), "x".repeat(129)] {
+        let preview = svc
+            .previews(
+                &user(OWNER),
+                InitiativePreviewsRequest {
+                    initiative_ids: vec![id.clone()],
+                },
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            preview,
+            InitiativeError::BadRequest(message) if message == "invalid initiative id"
+        ));
+        let references = svc
+            .task_references(
+                &user(OWNER),
+                TaskInitiativeReferencesRequest { task_ids: vec![id] },
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            references,
+            InitiativeError::BadRequest(message) if message == "invalid task id"
+        ));
+    }
+}
+
+#[tokio::test]
+async fn task_references_stop_at_the_distinct_id_limit() {
+    let svc = service_with_resources(MockInitiativeRepo::new(), FakeResources::default());
+    // Duplicates are fine; the first distinct id past the limit is not.
+    let mut task_ids: Vec<String> = (0..MAX_TASKS_PER_ASSIGN)
+        .flat_map(|index| [format!("task-{index}"), format!("task-{index}")])
+        .collect();
+    task_ids.push("one-too-many".into());
+    let error = svc
+        .task_references(&user(OWNER), TaskInitiativeReferencesRequest { task_ids })
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        error,
+        InitiativeError::BadRequest(message) if message == "at most 100 task ids are allowed"
+    ));
+}

@@ -40,6 +40,13 @@ impl InitiativeService for ReceiptService {
     ) -> Result<TaskInitiativeReferences, InitiativeError> {
         unreachable!("unexpected domain call")
     }
+    async fn previews(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        request: InitiativePreviewsRequest,
+    ) -> Result<InitiativePreviews, InitiativeError> {
+        unreachable!("unexpected domain call")
+    }
     async fn create(
         &self,
         user_id: &MacroUserIdStr<'_>,

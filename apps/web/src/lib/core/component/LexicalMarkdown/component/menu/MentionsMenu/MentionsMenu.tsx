@@ -50,11 +50,12 @@ import {
   useEntityMention,
   useEntityMentionFromList,
 } from './hooks/useEntityMention';
+import { useProjectMention } from './hooks/useProjectMention';
 import { useUsersMention } from './hooks/useUsersMention';
 import type { BucketConfig, MentionBucketId } from './MentionsMenuController';
 import { useMentionsMenuController } from './MentionsMenuController';
 import { createItemHandler } from './utils/mentionHandlers';
-import { sortMobileMentions } from './utils/mobileSort';
+import { mergeIntoDocuments, sortMobileMentions } from './utils/mobileSort';
 
 const TARGET_ITEMS = 8;
 const VIRTUAL_ITEM_HEIGHT = 36;
@@ -162,6 +163,21 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     });
   const docs = docsMention.entities;
 
+  // Projects share the documents section. `onPick` hosts (spreadsheet cells)
+  // cannot encode a project chip, so only editor hosts search them.
+  const projectMention = useProjectMention({
+    searchTerm: activeSearchTerm,
+    enabled: () =>
+      props.menu.isOpen() &&
+      !!props.editor &&
+      !hasCustomEntities() &&
+      (!props.sources || props.sources.includes('documents')),
+  });
+  const projects = projectMention.projects;
+  const docsAndProjects = createLazyMemo(() =>
+    mergeIntoDocuments(docs() ?? [], projects(), searchTerm())
+  );
+
   const channelsMention =
     customChannels ??
     useEntityMention({
@@ -261,6 +277,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     const combined: MentionItem[] = [
       ...users,
       ...(docs() ?? []),
+      ...projects(),
       ...(channels() ?? []),
       ...agentSessions(),
       ...(companies() ?? []),
@@ -280,6 +297,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
           getFullCount: () =>
             (usersAndGroups()?.length ?? 0) +
             docsMention.totalCount() +
+            projectMention.totalCount() +
             agentSessions().length +
             channelsMention.totalCount() +
             (companyMention?.totalCount() ?? 0) +
@@ -287,17 +305,20 @@ function MentionsMenuInner(props: MentionsMenuProps) {
             (dates()?.length ?? 0),
           hasMore: () =>
             docsMention.hasMore() ||
+            projectMention.hasMore() ||
             channelsMention.hasMore() ||
             (companyMention?.hasMore() ?? false) ||
             hasMoreEmails(),
           isLoadingMore: () =>
             docsMention.isLoadingMore() ||
+            projectMention.isLoadingMore() ||
             channelsMention.isLoadingMore() ||
             (companyMention?.isLoadingMore() ?? false) ||
             isLoadingMoreEmails(),
           loadMore: async () => {
             await Promise.all([
               docsMention.loadMore(),
+              projectMention.loadMore(),
               channelsMention.loadMore(),
               companyMention?.loadMore(),
               loadMoreEmails(),
@@ -317,11 +338,18 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       {
         id: 'documents',
         label: 'Documents, Agents, & Tasks',
-        getData: () => docs() ?? [],
-        getFullCount: docsMention.totalCount,
-        hasMore: docsMention.hasMore,
-        isLoadingMore: docsMention.isLoadingMore,
-        loadMore: docsMention.loadMore,
+        getData: docsAndProjects,
+        getFullCount: () =>
+          docsMention.totalCount() + projectMention.totalCount(),
+        hasMore: () => docsMention.hasMore() || projectMention.hasMore(),
+        isLoadingMore: () =>
+          docsMention.isLoadingMore() || projectMention.isLoadingMore(),
+        loadMore: async () => {
+          await Promise.all([
+            docsMention.loadMore(),
+            projectMention.loadMore(),
+          ]);
+        },
       },
       {
         id: 'channels',

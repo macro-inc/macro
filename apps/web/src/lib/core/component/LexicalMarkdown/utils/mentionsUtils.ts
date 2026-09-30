@@ -5,6 +5,7 @@ import { trackMention } from '@core/signal/mention';
 import type { ChannelWithParticipants, IUser } from '@core/user';
 import type { ParsedDate } from '@core/util/dateParser';
 import type { DateOption } from '@core/util/dateSearch/useDateSearch';
+import type { TimestampedItem } from '@core/util/freshSort';
 import type { AgentSessionEntity, EmailEntity } from '@entity';
 import type { HistoryItem as Item } from '@queries/history/history';
 import { waitBulkUploadStatus } from '@service-connection/bulkUpload';
@@ -389,11 +390,22 @@ export type AgentSessionMentionItem = Omit<
   'kind'
 > & { kind: 'agentSession' };
 
+/** A task project from the server-side project search, not quick access. */
+export type ProjectMentionItem = {
+  kind: 'project';
+  id: string;
+  searchText: string;
+  sortTimestamp: number;
+  timestamps: TimestampedItem;
+  data: { name: string };
+};
+
 export type MentionItem =
   | QuickAccessItem
   | DateMentionItem
   | GroupMentionItem
-  | AgentSessionMentionItem;
+  | AgentSessionMentionItem
+  | ProjectMentionItem;
 
 /**
  * Type guard for DateMentionItem.

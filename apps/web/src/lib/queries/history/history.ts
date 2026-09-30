@@ -2,7 +2,11 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableGraphqlSoup } from '@core/constant/featureFlags';
 import { catchToResult, throwOnErr } from '@core/util/result';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
-import { type ItemType, storageServiceClient } from '@service-storage/client';
+import {
+  type HistoryItemType,
+  type ItemType,
+  storageServiceClient,
+} from '@service-storage/client';
 import { getGraphqlSoupCacheHost } from '@service-storage/graphql-soup';
 import {
   type QueryClient,
@@ -161,7 +165,7 @@ export async function refetchHistory(): Promise<void> {
 
 type UpsertToHistoryParams = {
   itemId: string;
-  itemType: ItemType;
+  itemType: HistoryItemType;
 };
 
 type UpsertToHistoryContext = {
@@ -227,7 +231,7 @@ export function useUpsertToHistoryMutation(
  * Prefer `useUpsertToHistoryMutation` when inside a component.
  */
 export async function postNewHistoryItem(
-  itemType: ItemType,
+  itemType: HistoryItemType,
   itemId: string
 ): Promise<boolean> {
   const maybeAdded = await storageServiceClient.upsertItemToUserHistory({

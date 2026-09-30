@@ -52,6 +52,8 @@ export function getMentionItemName(item: MentionItem): string {
       ]
         .filter(Boolean)
         .join(' ');
+    case 'project':
+      return item.data.name || 'Project';
     case 'entity':
       return item.data.name ?? (item.bucket === 'email' ? 'No Subject' : '');
   }

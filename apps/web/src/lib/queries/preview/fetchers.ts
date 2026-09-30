@@ -85,6 +85,42 @@ async function fetchChannelPreviews(
   });
 }
 
+async function fetchInitiativePreviews(
+  initiativeIds: string[]
+): Promise<PreviewItem[]> {
+  const result = await storageServiceClient.getBatchInitiativePreviews({
+    initiativeIds,
+  });
+
+  if (result.isErr()) {
+    console.error('Failed to fetch initiative previews');
+    return [];
+  }
+
+  return result.value.previews.map((initiative) => {
+    const base = { id: initiative.id, type: 'initiative' } as const;
+
+    switch (initiative.type) {
+      case 'access':
+        return {
+          ...base,
+          access: 'access' as const,
+          loading: false,
+          rawName: initiative.name,
+          name: initiative.name,
+          owner: initiative.ownerId,
+        };
+      case 'no_access':
+      case 'does_not_exist':
+        return {
+          ...base,
+          access: initiative.type,
+          loading: false,
+        };
+    }
+  });
+}
+
 export async function fetchMessageContext(
   channelId: string,
   messageId: string,
@@ -443,6 +479,7 @@ export async function fetchRestPreviewBatch(
     doFetch(fetchChatPreviews, filterMapToId(items, 'chat')),
     doFetch(fetchCallPreviews, filterMapToId(items, 'call')),
     doFetch(fetchChannelPreviews, filterMapToId(items, 'channel')),
+    doFetch(fetchInitiativePreviews, filterMapToId(items, 'initiative')),
     doFetch(fetchDocumentPreviews, filterMapToId(items, 'document')),
     doFetch(fetchProjectPreviews, filterMapToId(items, 'project')),
     doFetch(fetchEmailPreviews, filterMapToId(items, 'email')),

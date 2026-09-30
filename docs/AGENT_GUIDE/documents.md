@@ -370,6 +370,31 @@ check that the inserted company mention points to the correct company. Also chec
 searching by domain and that an open picker updates when companies finish hydrating.
 Discard unsent test drafts rather than sending them.
 
+## Project mentions
+
+With Projects enabled, type `@` followed by a project name in an editor or
+composer. Projects (not folders) appear alongside documents and tasks in the
+**Documents, Agents, & Tasks** section, searched on the server like the command
+menu, and ranked in without reordering the documents. Spreadsheet cell mentions
+do not list projects. Selecting one inserts a document mention with the
+project's icon and current name, like a channel mention; clicking it or
+pressing Enter on it opens the project in a split (the `initiative` block,
+which shows the same project view as Tasks), and a project you cannot read
+shows **No Access**. Pasting `/app/initiative/<id>` or a Tasks project link
+inserts the same mention.
+
+The mention is stored as
+`<m-document-mention>{"documentId":"<initiative id>","blockName":"initiative",…}</m-document-mention>`
+(`project` is a folder). In a document it is tracked as a reference like other
+entity mentions. It is deliberately not a channel-message reference, so
+mentioning a project in a channel never shares the project with the channel's
+members.
+
+To verify, mention a project in a document and in a channel draft, check the
+mention opens the right project, rename the project and reload to see the name
+update, and delete the mention. Discard unsent test drafts rather than sending
+them.
+
 ## Native offline reopening
 
 On native mobile, previously opened Markdown documents/tasks can reopen after an

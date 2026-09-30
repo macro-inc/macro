@@ -11468,6 +11468,65 @@
         }
       }
     },
+    "/initiatives/preview": {
+      "post": {
+        "tags": ["initiative"],
+        "summary": "Preview a batch of initiatives for the caller, e.g. to render project mentions.",
+        "operationId": "get_batch_initiative_preview",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InitiativePreviewsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InitiativePreviews"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/initiatives/{initiative_id}": {
       "get": {
         "tags": ["initiative"],
@@ -25843,6 +25902,92 @@
               "$ref": "#/components/schemas/InitiativeSummary"
             },
             "description": "Initiatives the caller can view."
+          }
+        }
+      },
+      "InitiativePreview": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "The caller can view the initiative.",
+            "required": ["id", "name", "ownerId", "type"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Requested initiative id."
+              },
+              "name": {
+                "type": "string",
+                "description": "Display name."
+              },
+              "ownerId": {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "Owner of the initiative."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["access"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The initiative exists, but the caller cannot view it.",
+            "required": ["id", "type"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Requested initiative id."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["no_access"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "No initiative has the requested id.",
+            "required": ["id", "type"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Requested initiative id."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["does_not_exist"]
+              }
+            }
+          }
+        ],
+        "description": "Viewer-relative preview of one requested initiative. Only a viewable initiative\nexposes its name and owner."
+      },
+      "InitiativePreviews": {
+        "type": "object",
+        "description": "Previews in deduplicated request order.",
+        "required": ["previews"],
+        "properties": {
+          "previews": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InitiativePreview"
+            },
+            "description": "One preview per distinct requested id."
+          }
+        }
+      },
+      "InitiativePreviewsRequest": {
+        "type": "object",
+        "description": "Bounded batch of initiative ids to preview, such as the projects mentioned in a document.",
+        "required": ["initiativeIds"],
+        "properties": {
+          "initiativeIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "At most one hundred initiative ids, each one to 128 bytes long."
           }
         }
       },

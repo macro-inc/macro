@@ -9598,6 +9598,7 @@ dependencies = [
  "chrono",
  "entity_access",
  "entity_access_db_utils",
+ "futures",
  "http-body-util",
  "macro_authorization",
  "macro_db_migrator",

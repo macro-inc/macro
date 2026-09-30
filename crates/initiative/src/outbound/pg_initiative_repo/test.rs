@@ -486,6 +486,35 @@ async fn create_rejects_second_initiative_for_same_document(pool: PgPool) -> any
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn get_basics_reads_existing_identities_in_one_query(pool: PgPool) -> anyhow::Result<()> {
+    insert_user(&pool, OWNER).await?;
+    let repo = repo(pool.clone());
+    let mut created = Vec::new();
+    for name in ["Alpha", "Beta"] {
+        let args = create_args(&pool, OWNER, name, &[]).await?;
+        created.push(args.id);
+        repo.create(args, share_off(), TeamShareCreation::Unshared)
+            .await?;
+    }
+    let missing = InitiativeId::from_uuid(Uuid::now_v7());
+
+    let mut basics = repo
+        .get_basics(vec![created[1], missing, created[0]])
+        .await?;
+    basics.sort_by(|left, right| left.name.cmp(&right.name));
+
+    assert_eq!(
+        basics
+            .iter()
+            .map(|basic| (basic.id, basic.name.as_str(), basic.owner_id.as_ref()))
+            .collect::<Vec<_>>(),
+        vec![(created[0], "Alpha", OWNER), (created[1], "Beta", OWNER)]
+    );
+    assert!(repo.get_basics(Vec::new()).await?.is_empty());
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn get_detail_reports_each_channel_grant_once(pool: PgPool) -> anyhow::Result<()> {
     insert_user(&pool, OWNER).await?;
     insert_user(&pool, MEMBER).await?;

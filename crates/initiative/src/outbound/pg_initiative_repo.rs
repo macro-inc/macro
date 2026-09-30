@@ -73,6 +73,28 @@ impl InitiativeRepo for PgInitiativeRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
+    async fn get_basics(&self, ids: Vec<InitiativeId>) -> Result<Vec<InitiativeBasic>, Self::Err> {
+        let ids: Vec<uuid::Uuid> = ids.iter().map(|id| id.as_uuid()).collect();
+        let rows = sqlx::query!(
+            "SELECT id, name, owner_user_id FROM initiative WHERE id = ANY($1)",
+            &ids
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(AdapterError::Sqlx)
+        .map_err(map_sqlx)?;
+        rows.into_iter()
+            .map(|row| {
+                Ok(InitiativeBasic {
+                    id: InitiativeId::from_uuid(row.id),
+                    name: row.name,
+                    owner_id: parse_owner(&row.owner_user_id)?,
+                })
+            })
+            .collect()
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn get_detail(&self, id: InitiativeId) -> Result<Option<InitiativeDetail>, Self::Err> {
         load_record(&self.pool, id)
             .await

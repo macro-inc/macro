@@ -1,6 +1,7 @@
-//! Project collection and task-reference read contracts.
+//! Project collection, task-reference and preview read contracts.
 
 use chrono::{DateTime, Utc};
+use macro_user_id::user_id::MacroUserIdStr;
 use models_permissions::share_permission::access_level::AccessLevel;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -227,6 +228,54 @@ pub enum TaskInitiativeReference {
 pub struct TaskInitiativeReferences {
     /// Per-task visibility-aware references.
     pub references: Vec<TaskInitiativeReference>,
+}
+
+/// Most distinct initiative ids one preview request may resolve.
+pub const MAX_PREVIEW_IDS: usize = 100;
+
+/// Bounded batch of initiative ids to preview, such as the projects mentioned in a document.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct InitiativePreviewsRequest {
+    /// At most one hundred initiative ids, each one to 128 bytes long.
+    pub initiative_ids: Vec<String>,
+}
+
+/// Viewer-relative preview of one requested initiative. Only a viewable initiative
+/// exposes its name and owner.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum InitiativePreview {
+    /// The caller can view the initiative.
+    Access {
+        /// Requested initiative id.
+        id: String,
+        /// Display name.
+        name: String,
+        /// Owner of the initiative.
+        #[serde(rename = "ownerId")]
+        owner_id: MacroUserIdStr<'static>,
+    },
+    /// The initiative exists, but the caller cannot view it.
+    NoAccess {
+        /// Requested initiative id.
+        id: String,
+    },
+    /// No initiative has the requested id.
+    DoesNotExist {
+        /// Requested initiative id.
+        id: String,
+    },
+}
+
+/// Previews in deduplicated request order.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct InitiativePreviews {
+    /// One preview per distinct requested id.
+    pub previews: Vec<InitiativePreview>,
 }
 
 #[cfg(all(test, feature = "inbound"))]

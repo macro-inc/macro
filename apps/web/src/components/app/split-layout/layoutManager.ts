@@ -1417,7 +1417,10 @@ export function createSplitLayout(
     type: SplitContentType,
     id: string
   ): SplitHandle | undefined {
-    const instance = contentInstances.find(contentIdentity({ type, id }));
+    // A union of more than 25 content types no longer narrows per member.
+    const instance = contentInstances.find(
+      contentIdentity({ type, id } as SplitContent)
+    );
     const match = state.splits.find(
       (s) =>
         (s.id === instance?.owner ||

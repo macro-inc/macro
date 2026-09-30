@@ -8,6 +8,7 @@ pub mod create;
 pub mod delete;
 pub mod get;
 pub mod list;
+pub mod preview;
 pub mod unassign_task;
 pub mod update;
 
@@ -31,7 +32,8 @@ use serde::{Deserialize, Serialize};
 pub use self::{
     assign_tasks::assign_initiative_tasks_handler, create::create_initiative_handler,
     delete::delete_initiative_handler, get::get_initiative_handler, list::list_initiatives_handler,
-    unassign_task::unassign_initiative_task_handler, update::update_initiative_handler,
+    preview::get_initiative_previews_handler, unassign_task::unassign_initiative_task_handler,
+    update::update_initiative_handler,
 };
 use crate::domain::{
     models::{InitiativeBasic, InitiativeError, InitiativeId},
@@ -147,6 +149,10 @@ where
             "/",
             routing::get(list_initiatives_handler::<S, Eas, Auth>)
                 .post(create_initiative_handler::<S, Eas, Auth>),
+        )
+        .route(
+            "/preview",
+            routing::post(get_initiative_previews_handler::<S, Eas, Auth>),
         )
         .with_state(state)
 }

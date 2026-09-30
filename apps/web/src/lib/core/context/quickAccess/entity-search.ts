@@ -1,12 +1,31 @@
-import { createFreshSearch } from '@core/util/freshSort';
+import { createFreshSearch, type TimestampedItem } from '@core/util/freshSort';
 import type { EntityItem, QuickAccessItem } from './types';
 
-const quickAccessSearch = createFreshSearch<QuickAccessItem>({
-  config: { useViewedAt: true },
-  getName: (item) => item.searchText,
-  isChannelItem: (item) => item.bucket === 'channel',
-  getTimestamp: (item) => item.timestamps,
-});
+type Rankable = {
+  searchText: string;
+  timestamps: TimestampedItem;
+  bucket?: string;
+};
+
+const createQuickAccessSearch = <T extends Rankable>() =>
+  createFreshSearch<T>({
+    config: { useViewedAt: true },
+    getName: (item) => item.searchText,
+    isChannelItem: (item) => item.bucket === 'channel',
+    getTimestamp: (item) => item.timestamps,
+  });
+
+const quickAccessSearch = createQuickAccessSearch<QuickAccessItem>();
+const rankableSearch = createQuickAccessSearch<Rankable>();
+
+/** Ranks items quick access doesn't index with the same semantics as its own. */
+export function searchLikeQuickAccess<T extends Rankable>(
+  items: T[],
+  query: string
+): T[] {
+  if (!query.trim()) return items;
+  return rankableSearch(items, query).map(({ item }) => item as T);
+}
 
 /** Filter a pending cache search without replacing its established ranking.
  * Match tokens as ordered subsequences, as cache-core/search.rs does; uFuzzy's

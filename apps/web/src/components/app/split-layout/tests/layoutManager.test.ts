@@ -1014,15 +1014,12 @@ describe('layoutManager', () => {
         const onApplied = vi.fn();
         const source = manager.getSplit(manager.splits()[0].id)!;
         const sourceRoute = router.route(source.id);
-        manager.openWithSplit(
-          { type, id: 'entity' },
-          {
-            handle: source,
-            preferNewSplit: true,
-            search: searchLocationUpdates('entity', target),
-            onApplied,
-          }
-        );
+        manager.openWithSplit({ type, id: 'entity' } as SplitContent, {
+          handle: source,
+          preferNewSplit: true,
+          search: searchLocationUpdates('entity', target),
+          onApplied,
+        });
         await router.settled();
         expect(manager.splits()).toHaveLength(2);
         const owner = manager.splits().find((split) => split.id !== source.id)!;
@@ -1033,15 +1030,12 @@ describe('layoutManager', () => {
         expect(location.read().pathname).toContain(path);
         expect(onApplied).toHaveBeenCalledOnce();
         const firstRequest = router.search(owner.id, namespace)?.seek;
-        manager.openWithSplit(
-          { type, id: 'entity' },
-          {
-            handle: source,
-            preferNewSplit: true,
-            search: searchLocationUpdates('entity', target),
-            onApplied,
-          }
-        );
+        manager.openWithSplit({ type, id: 'entity' } as SplitContent, {
+          handle: source,
+          preferNewSplit: true,
+          search: searchLocationUpdates('entity', target),
+          onApplied,
+        });
         await router.settled();
         expect(manager.splits()).toHaveLength(2);
         expect(router.route(source.id)).toEqual(sourceRoute);

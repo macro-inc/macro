@@ -163,6 +163,15 @@ where
     ) -> Result<crate::domain::reads::TaskInitiativeReferences, InitiativeError> {
         self.read_task_references(user_id, request).await
     }
+
+    async fn previews(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        request: crate::domain::reads::InitiativePreviewsRequest,
+    ) -> Result<crate::domain::reads::InitiativePreviews, InitiativeError> {
+        self.read_previews(user_id, request).await
+    }
+
     /// Two commits with compensation. The documents side commits first. A failed
     /// initiative write purges the document so nothing orphaned survives an `Err`.
     #[tracing::instrument(err, skip_all)]

@@ -44,6 +44,15 @@ vi.mock('./utils/mentionHandlers', () => ({ createItemHandler: vi.fn() }));
 vi.mock('./hooks/useEmailSearchMention', () => ({
   useEmailSearchMention: vi.fn(),
 }));
+vi.mock('./hooks/useProjectMention', () => ({
+  useProjectMention: () => ({
+    projects: () => [],
+    totalCount: () => 0,
+    hasMore: () => false,
+    isLoadingMore: () => false,
+    loadMore: async () => {},
+  }),
+}));
 vi.mock('@core/component/EntityIcon', () => ({ EntityIcon: () => null }));
 vi.mock('@core/component/UserIcon', () => ({ UserIcon: () => null }));
 vi.mock('@ui', () => ({
