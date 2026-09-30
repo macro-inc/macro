@@ -38,7 +38,6 @@ pub mod create_company;
 pub mod create_contact;
 
 /// Comment threads on a `crm_companies` / `crm_contacts` row.
-pub mod comments;
 
 /// Team-level CRM configuration (permission thresholds, closed stages,
 /// team saved views).
@@ -54,7 +53,7 @@ use axum::{
     extract::FromRef,
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::{get, patch, post, put},
+    routing::{get, post, put},
 };
 use entity_access::domain::ports::EntityAccessService;
 use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
@@ -73,8 +72,6 @@ pub struct CrmRouterState<C, St, Eas, Auth> {
     pub entity_access_service: Arc<Eas>,
     /// State used to authorize direct users and internal service callers.
     pub authorization_state: MacroAuthorizationState<Auth>,
-    /// Shared message service that stores CRM discussions.
-    pub messages: Arc<dyn messages::domain::api::MessageServiceApi>,
 }
 
 impl<C, St, Eas, Auth> FromRef<CrmRouterState<C, St, Eas, Auth>> for Arc<Eas> {
@@ -110,17 +107,6 @@ impl<C, St, Eas, Auth> FromRef<CrmRouterState<C, St, Eas, Auth>> for CrmServiceR
     }
 }
 
-/// The shared message service, pulled from [`CrmRouterState`] by the comment
-/// extractor to find which record a comment belongs to.
-#[derive(Clone)]
-pub struct CrmMessagesRef(pub Arc<dyn messages::domain::api::MessageServiceApi>);
-
-impl<C, St, Eas, Auth> FromRef<CrmRouterState<C, St, Eas, Auth>> for CrmMessagesRef {
-    fn from_ref(state: &CrmRouterState<C, St, Eas, Auth>) -> Self {
-        CrmMessagesRef(state.messages.clone())
-    }
-}
-
 // Manual Clone so C, St, Eas, and Auth don't need Clone.
 impl<C, St, Eas, Auth> Clone for CrmRouterState<C, St, Eas, Auth> {
     fn clone(&self) -> Self {
@@ -129,7 +115,6 @@ impl<C, St, Eas, Auth> Clone for CrmRouterState<C, St, Eas, Auth> {
             stage_service: self.stage_service.clone(),
             entity_access_service: self.entity_access_service.clone(),
             authorization_state: self.authorization_state.clone(),
-            messages: self.messages.clone(),
         }
     }
 }
@@ -186,16 +171,6 @@ where
             put(set_contact_name::handler::<C, St, Eas, Auth>),
         )
         .route(
-            "/comments/{entity_type}/{entity_id}",
-            get(comments::list_handler::<C, St, Eas, Auth>)
-                .post(comments::create_handler::<C, St, Eas, Auth>),
-        )
-        .route(
-            "/comment/{comment_id}",
-            patch(comments::edit_handler::<C, St, Eas, Auth>)
-                .delete(comments::delete_handler::<C, St, Eas, Auth>),
-        )
-        .route(
             "/settings",
             get(team_settings::get_handler::<C, St, Eas, Auth>)
                 .put(team_settings::update_handler::<C, St, Eas, Auth>),
@@ -221,24 +196,6 @@ impl IntoResponse for CrmError {
                 StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
                     message: "crm contact not found for team".into(),
-                }),
-            ),
-            CrmError::ThreadNotFound => (
-                StatusCode::NOT_FOUND,
-                Json(ErrorResponse {
-                    message: "crm comment thread not found".into(),
-                }),
-            ),
-            CrmError::CommentNotFound => (
-                StatusCode::NOT_FOUND,
-                Json(ErrorResponse {
-                    message: "crm comment not found".into(),
-                }),
-            ),
-            CrmError::CommentNotOwned => (
-                StatusCode::FORBIDDEN,
-                Json(ErrorResponse {
-                    message: "you can only modify your own crm comments".into(),
                 }),
             ),
             CrmError::InvalidRequest(message) => (

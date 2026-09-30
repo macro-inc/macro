@@ -1784,7 +1784,6 @@ async fn run() -> anyhow::Result<()> {
             )),
             entity_access_service: entity_access_service.clone(),
             authorization_state: authorization_state.clone(),
-            messages: message_service.clone(),
         },
     };
 

@@ -4,8 +4,7 @@
 mod test;
 
 use crate::domain::{
-    auth::{CrmCommentReceipt, CrmCompanyReceipt, CrmContactReceipt, CrmTeamReceipt},
-    comment::{CrmComment, CrmCommentEntityType, CrmCommentThread, DeleteCrmCommentResult},
+    auth::{CrmCompanyReceipt, CrmContactReceipt, CrmTeamReceipt},
     companies_repo::{CompaniesRepository, CrmCompanyListSort, CrmCompanySoupCursor},
     company_metadata_resolver::CompanyMetadataResolver,
     generic_email_domains::is_generic_email_domain,
@@ -16,9 +15,8 @@ use crate::domain::{
 };
 use chrono::{DateTime, Utc};
 use entity_access::domain::models::{
-    AnyEntityPermission, EditAccessLevel, MemberTeamRole, ViewAccessLevel,
+    EditAccessLevel, MemberTeamRole, ViewAccessLevel,
 };
-use serde_json::Value;
 
 /// The CrmService exposes operations over CRM records (companies, their
 /// domains and contacts).
@@ -344,72 +342,6 @@ pub trait CrmService: Clone + Send + Sync + 'static {
         &self,
         access: &CrmCompanyReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<Option<CrmCompanyWithContacts>, CrmError>> + Send;
-
-    /// Create a comment on the CRM entity addressed by `access`,
-    /// optionally as a reply to an existing thread. The owning entity
-    /// (company or contact) and `include_hidden` are derived from the
-    /// receipt; the entity-ownership scoping is enforced in the
-    /// repository. See [`CompaniesRepository::create_crm_comment`].
-    #[allow(clippy::too_many_arguments)]
-    fn create_crm_comment(
-        &self,
-        access: &CrmCommentReceipt<AnyEntityPermission>,
-        owner: &str,
-        thread_id: Option<uuid::Uuid>,
-        thread_metadata: Option<Value>,
-        text: &str,
-        metadata: Option<Value>,
-    ) -> impl Future<Output = Result<CrmCommentThread, CrmError>> + Send;
-
-    /// List the comment threads on the CRM entity addressed by `access`.
-    /// The receipt's role decides whether a hidden parent entity is
-    /// reachable (admin/owner) or 404s (member). See
-    /// [`CompaniesRepository::get_crm_comment_threads`].
-    fn get_crm_comment_threads(
-        &self,
-        access: &CrmCommentReceipt<AnyEntityPermission>,
-    ) -> impl Future<Output = Result<Vec<CrmCommentThread>, CrmError>> + Send;
-
-    /// Edit the text of `comment_id`, scoped to the team in `access`
-    /// (the receipt for the comment's owning entity). A member's receipt
-    /// treats comments on hidden entities as not found. See
-    /// [`CompaniesRepository::edit_crm_comment`].
-    fn edit_crm_comment(
-        &self,
-        access: &CrmCommentReceipt<ViewAccessLevel>,
-        comment_id: &uuid::Uuid,
-        text: &str,
-    ) -> impl Future<Output = Result<CrmComment, CrmError>> + Send;
-
-    /// Soft-delete `comment_id`, scoped to the team in `access`. A
-    /// member's receipt treats comments on hidden entities as not found.
-    /// See [`CompaniesRepository::delete_crm_comment`].
-    fn delete_crm_comment(
-        &self,
-        access: &CrmCommentReceipt<ViewAccessLevel>,
-        comment_id: &uuid::Uuid,
-    ) -> impl Future<Output = Result<DeleteCrmCommentResult, CrmError>> + Send;
-
-    /// Resolve a comment to its owning CRM entity. `None` when the
-    /// comment doesn't exist or is soft-deleted. Takes a raw
-    /// `comment_id` (not a receipt) because it is the minting primitive
-    /// the comment access extractor calls *before* a receipt exists, to
-    /// dispatch the access check to the right entity type. See
-    /// [`CompaniesRepository::get_comment_entity`].
-    fn get_comment_entity(
-        &self,
-        comment_id: &uuid::Uuid,
-    ) -> impl Future<Output = Result<Option<(CrmCommentEntityType, uuid::Uuid)>, CrmError>> + Send;
-
-    /// The discussion root a legacy thread id maps to on the record addressed
-    /// by `access`. See [`CompaniesRepository::legacy_thread_root`].
-    fn legacy_thread_root(
-        &self,
-        _access: &CrmCommentReceipt<AnyEntityPermission>,
-        _thread_id: &uuid::Uuid,
-    ) -> impl Future<Output = Result<Option<uuid::Uuid>, CrmError>> + Send {
-        async { Ok(None) }
-    }
 
     /// Read the team's CRM configuration. Any team member may read;
     /// a team without a settings row gets the defaults. See
@@ -930,111 +862,6 @@ where
             .await
     }
 
-    #[tracing::instrument(skip(self, access, thread_metadata, text, metadata), err)]
-    #[allow(clippy::too_many_arguments)]
-    async fn create_crm_comment(
-        &self,
-        access: &CrmCommentReceipt<AnyEntityPermission>,
-        owner: &str,
-        thread_id: Option<uuid::Uuid>,
-        thread_metadata: Option<Value>,
-        text: &str,
-        metadata: Option<Value>,
-    ) -> Result<CrmCommentThread, CrmError> {
-        let (entity_type, entity_id) = access.comment_entity()?;
-        let team_id = access.team_id();
-        let include_hidden = access.include_hidden();
-        self.companies_repository
-            .create_crm_comment(
-                &team_id,
-                entity_type,
-                &entity_id,
-                owner,
-                thread_id,
-                thread_metadata,
-                text,
-                metadata,
-                include_hidden,
-            )
-            .await
-    }
-
-    #[tracing::instrument(skip(self, access), err)]
-    async fn get_crm_comment_threads(
-        &self,
-        access: &CrmCommentReceipt<AnyEntityPermission>,
-    ) -> Result<Vec<CrmCommentThread>, CrmError> {
-        let (entity_type, entity_id) = access.comment_entity()?;
-        let team_id = access.team_id();
-        let include_hidden = access.include_hidden();
-        self.companies_repository
-            .get_crm_comment_threads(&team_id, entity_type, &entity_id, include_hidden)
-            .await
-    }
-
-    #[tracing::instrument(skip(self, access, text), err)]
-    async fn edit_crm_comment(
-        &self,
-        access: &CrmCommentReceipt<ViewAccessLevel>,
-        comment_id: &uuid::Uuid,
-        text: &str,
-    ) -> Result<CrmComment, CrmError> {
-        let team_id = access.team_id();
-        let include_hidden = access.include_hidden();
-        let requester = access
-            .receipt()
-            .get_authenticated_user()
-            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-        self.companies_repository
-            .edit_crm_comment(
-                &team_id,
-                comment_id,
-                text,
-                include_hidden,
-                requester.as_ref(),
-            )
-            .await
-    }
-
-    #[tracing::instrument(skip(self, access), err)]
-    async fn delete_crm_comment(
-        &self,
-        access: &CrmCommentReceipt<ViewAccessLevel>,
-        comment_id: &uuid::Uuid,
-    ) -> Result<DeleteCrmCommentResult, CrmError> {
-        let team_id = access.team_id();
-        let include_hidden = access.include_hidden();
-        let requester = access
-            .receipt()
-            .get_authenticated_user()
-            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-        self.companies_repository
-            .delete_crm_comment(&team_id, comment_id, include_hidden, requester.as_ref())
-            .await
-    }
-
-    #[tracing::instrument(skip(self), err)]
-    async fn get_comment_entity(
-        &self,
-        comment_id: &uuid::Uuid,
-    ) -> Result<Option<(CrmCommentEntityType, uuid::Uuid)>, CrmError> {
-        self.companies_repository
-            .get_comment_entity(comment_id)
-            .await
-    }
-
-    #[tracing::instrument(skip(self, access), err)]
-    async fn legacy_thread_root(
-        &self,
-        access: &CrmCommentReceipt<AnyEntityPermission>,
-        thread_id: &uuid::Uuid,
-    ) -> Result<Option<uuid::Uuid>, CrmError> {
-        let (_, entity_id) = access.comment_entity()?;
-        self.companies_repository
-            .legacy_thread_root(&entity_id, thread_id)
-            .await
-    }
-
     #[tracing::instrument(skip(self, access), err)]
     async fn get_team_settings(
         &self,
@@ -1250,50 +1077,6 @@ impl CrmService for NoOpCrmService {
         &self,
         _access: &CrmCompanyReceipt<ViewAccessLevel>,
     ) -> Result<Option<CrmCompanyWithContacts>, CrmError> {
-        Ok(None)
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    async fn create_crm_comment(
-        &self,
-        _access: &CrmCommentReceipt<AnyEntityPermission>,
-        _owner: &str,
-        _thread_id: Option<uuid::Uuid>,
-        _thread_metadata: Option<Value>,
-        _text: &str,
-        _metadata: Option<Value>,
-    ) -> Result<CrmCommentThread, CrmError> {
-        unimplemented!("NoOpCrmService.create_crm_comment")
-    }
-
-    async fn get_crm_comment_threads(
-        &self,
-        _access: &CrmCommentReceipt<AnyEntityPermission>,
-    ) -> Result<Vec<CrmCommentThread>, CrmError> {
-        Ok(Vec::new())
-    }
-
-    async fn edit_crm_comment(
-        &self,
-        _access: &CrmCommentReceipt<ViewAccessLevel>,
-        _comment_id: &uuid::Uuid,
-        _text: &str,
-    ) -> Result<CrmComment, CrmError> {
-        unimplemented!("NoOpCrmService.edit_crm_comment")
-    }
-
-    async fn delete_crm_comment(
-        &self,
-        _access: &CrmCommentReceipt<ViewAccessLevel>,
-        _comment_id: &uuid::Uuid,
-    ) -> Result<DeleteCrmCommentResult, CrmError> {
-        unimplemented!("NoOpCrmService.delete_crm_comment")
-    }
-
-    async fn get_comment_entity(
-        &self,
-        _comment_id: &uuid::Uuid,
-    ) -> Result<Option<(CrmCommentEntityType, uuid::Uuid)>, CrmError> {
         Ok(None)
     }
 
