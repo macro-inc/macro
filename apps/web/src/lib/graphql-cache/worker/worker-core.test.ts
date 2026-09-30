@@ -1018,6 +1018,7 @@ describe('CacheWorkerCore', () => {
         reset: false,
         data: { cursor: 'next' },
         revisionAdvanced,
+        searchChangedBuckets: ['note'],
       });
       loadCacheWasmMock.mockResolvedValue({
         openCache: vi.fn().mockResolvedValue({ hydrateQuery }),
@@ -1057,7 +1058,13 @@ describe('CacheWorkerCore', () => {
         )
       ).toEqual(
         revisionAdvanced
-          ? [{ kind: 'cache-hydrated', revision: INITIAL_CACHE_REVISION }]
+          ? [
+              {
+                kind: 'cache-hydrated',
+                revision: INITIAL_CACHE_REVISION,
+                searchChangedBuckets: ['note'],
+              },
+            ]
           : []
       );
       expect(messages.at(-1)).toEqual({

@@ -1,0 +1,18 @@
+---
+title: GenerateImage
+description: "Generate or edit an image with Google's Nano Banana image model and save the result as a new image document in Macro. Use for pictures, illustrations, diagram concepts, logo ideas, mockups, or edits based on reference photos. When the user supplies photos or asks to modify an existing image, pass them in referenceImages; describing a photo in the prompt alone does not send it to the image model. Describe the subject, style, composition, lighting, and any text to render; only the prompt is required. Refer to reference images by their order (image 1, image 2, image 3) when explaining how to use them. Returns the new document ID to cite inline. Generation takes several seconds."
+---
+
+# GenerateImage
+
+Generate or edit an image with Google's Nano Banana image model and save the result as a new image document in Macro. Use for pictures, illustrations, diagram concepts, logo ideas, mockups, or edits based on reference photos. When the user supplies photos or asks to modify an existing image, pass them in referenceImages; describing a photo in the prompt alone does not send it to the image model. Describe the subject, style, composition, lighting, and any text to render; only the prompt is required. Refer to reference images by their order (image 1, image 2, image 3) when explaining how to use them. Returns the new document ID to cite inline. Generation takes several seconds.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `prompt` | string | Yes | Detailed description of the image to generate: subject, style (photo, illustration, flat vector...), composition, colours, mood, and any text that must appear. |
+| `fileName` | string | No | Optional short descriptive name for the saved image, for example `sunset-lighthouse`. The file extension is added from the generated format. No directory path. Omit to name the image after the prompt. |
+| `aspectRatio` | `"square"` \| `"landscape"` \| `"portrait"` \| `"widescreen"` \| `"tall"` | No | Shape of the image. Omit for the model default (square). `widescreen` (16:9) suits banners and slides, `tall` (9:16) suits phone screens and stories. |
+| `projectId` | string | No | Optional destination project (folder) ID. Requires edit access. Omit to save to the user's top-level files. |
+| `referenceImages` | ImageReferenceInput[] | No | Up to three reference photos, in the order used by the prompt. Use type document with a Macro image document ID, or type staticFile with the UUID from /file/<id> in an uploaded attachment's source URL. Use the actual IDs supplied in the conversation or by tools; do not invent IDs. Omit for text-only generation. |

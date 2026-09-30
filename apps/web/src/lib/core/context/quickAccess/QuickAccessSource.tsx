@@ -367,16 +367,17 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     const graphqlCacheHost = getGraphqlSoupCacheHost();
     return graphqlCacheHost?.disabled ? undefined : graphqlCacheHost;
   });
-  const [cacheRevision, setCacheRevision] = createSignal(0);
+  const [manualRefreshRevision, setManualRefreshRevision] = createSignal(0);
   const cachedChannelsQuery = useCachedGraphqlChannelsQuery(cacheHost);
   createEffect(() => {
     const host = cacheHost();
     if (!host) return;
     onCleanup(
-      subscribeToVisibleCacheChanges(host, () => {
-        setCacheRevision((revision) => revision + 1);
-        return cachedChannelsQuery.refetch({ cancelRefetch: false });
-      })
+      subscribeToVisibleCacheChanges(
+        host,
+        () => cachedChannelsQuery.refetch({ cancelRefetch: false }),
+        { searchBuckets: () => ['channel', 'dm'] }
+      )
     );
   });
   const instructionsIdQuery = useInstructionsMdIdQuery();
@@ -956,6 +957,19 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     );
     // A retired host degrades this list to local items; later lists skip it.
     const projectionHost = options ? cacheHost() : undefined;
+    const [cacheRevision, setCacheRevision] = createSignal(0);
+    createEffect(() => {
+      if (!projectionHost || cacheHost() !== projectionHost) return;
+      onCleanup(
+        subscribeToVisibleCacheChanges(
+          projectionHost,
+          () => {
+            setCacheRevision((revision) => revision + 1);
+          },
+          { searchBuckets: projectedBuckets }
+        )
+      );
+    });
     const projected =
       options && projectionHost
         ? createProjectedList<QuickAccessItem>({
@@ -963,7 +977,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
             get buckets() {
               return projectedBuckets();
             },
-            revision: cacheRevision,
+            revision: () => cacheRevision() + manualRefreshRevision(),
             searchTerm: options.searchTerm,
             // An empty bucket list means "all" to the cache, not "none".
             enabled: () =>
@@ -1093,7 +1107,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
 
   const refresh = () => {
     if (cacheHost()) {
-      setCacheRevision((revision) => revision + 1);
+      setManualRefreshRevision((revision) => revision + 1);
       void cachedChannelsQuery.refetch();
     }
     historyQuery.refetch();

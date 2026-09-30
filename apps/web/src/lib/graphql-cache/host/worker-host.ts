@@ -63,6 +63,7 @@ import {
 import { CacheNavigationError } from './navigation-error';
 import { createNoopCacheHost } from './noop-host';
 import type {
+  CacheChangeListener,
   CacheChangeOptions,
   CacheGenerationChange,
   CacheHost,
@@ -221,8 +222,8 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   const lostRegisteredOpKeys = new Set<number>();
   const replacementReadOpKeys = new Set<number>();
   const affectedSubscribers = new Set<(opKeys: number[]) => void>();
-  const cacheChangeSubscribers = new Set<(revision: CacheRevision) => void>();
-  const hydrationSubscribers = new Set<(revision: CacheRevision) => void>();
+  const cacheChangeSubscribers = new Set<CacheChangeListener>();
+  const hydrationSubscribers = new Set<CacheChangeListener>();
   const generationChangeSubscribers = new Set<
     (change: CacheGenerationChange) => void
   >();
@@ -290,7 +291,13 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     const msg = event.data;
     if (isCachePush(msg)) {
       if (msg.kind === 'cache-hydrated') {
-        for (const cb of hydrationSubscribers) cb(msg.revision);
+        for (const cb of hydrationSubscribers) {
+          if (msg.searchChangedBuckets === undefined) cb(msg.revision);
+          else
+            cb(msg.revision, {
+              searchChangedBuckets: msg.searchChangedBuckets,
+            });
+        }
         return;
       }
       if (msg.kind === 'cache-changed') {
@@ -1397,7 +1404,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     },
 
     onCacheChanged(
-      cb: (revision: CacheRevision) => void,
+      cb: CacheChangeListener,
       options?: CacheChangeOptions
     ): () => void {
       cacheChangeSubscribers.add(cb);

@@ -344,9 +344,16 @@ export type CachedQueryInstanceWire = CachedQueryVariantWire & {
   value?: unknown;
 };
 
-export type HydrationResult =
-  | { kind: 'data'; data: unknown; revision: CacheRevision }
-  | { kind: 'void'; revision: CacheRevision };
+/** Missing metadata means unknown (older runtimes); [] proves no search change. */
+export type HydrationSearchChanges = {
+  searchChangedBuckets?: string[];
+};
+
+export type HydrationResult = HydrationSearchChanges &
+  (
+    | { kind: 'data'; data: unknown; revision: CacheRevision }
+    | { kind: 'void'; revision: CacheRevision }
+  );
 
 export type WriteResult = {
   /** Effective-view revision installed by this logical mutation. */
@@ -626,7 +633,10 @@ export type CachePush =
       keys: string[];
     }
   | { kind: 'cache-changed'; revision: CacheRevision; reset?: boolean }
-  | { kind: 'cache-hydrated'; revision: CacheRevision }
+  | ({
+      kind: 'cache-hydrated';
+      revision: CacheRevision;
+    } & HydrationSearchChanges)
   | { kind: 'mutation-settled'; settlement: MutationSettlement };
 
 export type WorkerMessage = CacheResponse | CachePush;
@@ -717,8 +727,10 @@ export function isCachePush(value: unknown): value is CachePush {
       );
     case 'cache-hydrated':
       return (
-        hasOnlyWireKeys(value, ['kind', 'revision']) &&
-        isCacheRevision(value.revision)
+        hasOnlyWireKeys(value, ['kind', 'revision', 'searchChangedBuckets']) &&
+        isCacheRevision(value.revision) &&
+        (value.searchChangedBuckets === undefined ||
+          isWireStringArray(value.searchChangedBuckets))
       );
     case 'mutation-settled': {
       const settlement = value.settlement;

@@ -2,8 +2,8 @@
 edition = "2024"
 name = "cache-wasm"
 publish = false
-# Rebuild the browser cache with read-path optimizations.
-version = "0.6.32"
+# Rebuild with read-path optimizations and bucket-scoped Quick Access hydration notifications.
+version = "0.6.33"
 
 [features]
 default = []

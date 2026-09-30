@@ -3442,6 +3442,62 @@ async fn open_managed_session_spawns_at_the_users_default_size() {
 }
 
 #[tokio::test]
+async fn open_external_session_refuses_a_bot_owner() {
+    let (service, repo, _containers, announcer, _runtimes) = harness();
+    let id = AgentSessionId::new();
+
+    let error = service
+        .open_external_session(OpenExternalAgentSession {
+            id: Some(id),
+            owner: model_owner::Owner::Bot(BotId::TEST_A),
+            ..open_external_request("/srv/agent")
+        })
+        .await
+        .expect_err("a bot cannot own a session");
+
+    assert!(
+        matches!(
+            error,
+            AgentSessionError::OwnerNotUser(model_owner::OwnerType::Bot)
+        ),
+        "unexpected error: {error:?}"
+    );
+    assert!(repo.get(id).await.is_err(), "no session row is created");
+    assert!(announcer.announced().is_empty());
+}
+
+#[tokio::test]
+async fn open_managed_session_refuses_a_bot_owner() {
+    let (service, repo, containers, announcer, _runtimes) = harness();
+    let id = AgentSessionId::new();
+
+    let error = service
+        .open_managed_session(OpenManagedSession {
+            id: Some(id),
+            repo_url: None,
+            repo_branch: None,
+            instructions: None,
+            model: None,
+            owner: model_owner::Owner::Bot(BotId::TEST_A),
+            prompt: None,
+            profile: None,
+        })
+        .await
+        .expect_err("a bot cannot own a session");
+
+    assert!(
+        matches!(
+            error,
+            AgentSessionError::OwnerNotUser(model_owner::OwnerType::Bot)
+        ),
+        "unexpected error: {error:?}"
+    );
+    assert!(repo.get(id).await.is_err(), "no session row is created");
+    assert!(announcer.announced().is_empty());
+    assert!(containers.spawn_sizes().is_empty());
+}
+
+#[tokio::test]
 async fn set_sandbox_size_refuses_a_session_not_owned_by_a_user() {
     let (service, repo, containers, _announcer, _runtimes) = harness();
     // The size is remembered as the owner's preference, and a bot has none.

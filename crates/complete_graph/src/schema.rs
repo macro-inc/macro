@@ -668,7 +668,7 @@ where
         resolve_task_initiative_references(ctx, self.user_id.clone(), task_ids).await
     }
 
-    /// AI routines owned by the authenticated user.
+    /// AI routines the authenticated user can access.
     async fn scheduled_actions(
         &self,
         ctx: &Context<'_>,

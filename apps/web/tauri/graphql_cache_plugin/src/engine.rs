@@ -73,6 +73,8 @@ pub struct WriteResultWire {
 /// Internal hydration result used to fan out changes before returning only
 /// the caller-visible projection across IPC.
 pub struct HydrationWriteResultWire {
+    /// Quick Access buckets changed by hydration.
+    pub search_changed_buckets: std::collections::BTreeSet<String>,
     /// Cache changes required for host notifications.
     pub write_result: WriteResultWire,
     /// Fields not marked `@cacheOnly`, or `None` when there are none.
@@ -634,6 +636,7 @@ impl EngineHandle {
             )
             .await
             .map(|result| HydrationWriteResultWire {
+                search_changed_buckets: result.search_changed_buckets,
                 write_result: wire_write_result(ops, result.write_result),
                 data: result.data,
             })

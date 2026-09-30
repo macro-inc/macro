@@ -549,6 +549,8 @@ services:
       - "8787:8787"
     volumes:
       - ./services/sync-service/src:/app/src
+      # Durable Objects, KV, R2 and D1 must survive container replacement.
+      - sync_state:/app/.wrangler/state
     environment:
       - INTERNAL_API_SECRET_KEY=${INTERNAL_API_SECRET_KEY}
       - DOCUMENT_PERMISSIONS_SECRET=${DOCUMENT_PERMISSION_JWT}
@@ -805,6 +807,7 @@ services:
           - otel-collector
 
 volumes:
+  sync_state:
   # Backing store for the `lgtm` collector (profile-gated, global project).
   lgtm_data:
 

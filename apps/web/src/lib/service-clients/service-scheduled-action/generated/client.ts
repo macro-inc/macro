@@ -143,6 +143,11 @@ export type createScheduledActionResponse401 = {
   status: 401;
 };
 
+export type createScheduledActionResponse403 = {
+  data: string;
+  status: 403;
+};
+
 export type createScheduledActionResponse500 = {
   data: string;
   status: 500;
@@ -155,6 +160,7 @@ export type createScheduledActionResponseSuccess =
 export type createScheduledActionResponseError = (
   | createScheduledActionResponse400
   | createScheduledActionResponse401
+  | createScheduledActionResponse403
   | createScheduledActionResponse500
 ) & {
   headers: Headers;

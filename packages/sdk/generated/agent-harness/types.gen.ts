@@ -742,13 +742,12 @@ export type CreateAgentSessionRequest = {
     model?: string | null;
     /**
      * The user who owns the session. Ignored for user callers, who always
-     * own their own sessions, and for harness callers, whose verified acting
-     * user (owner or confirmed team member) owns the session instead;
-     * required for bot callers without verified acting-user claims.
-     *
-     * For bot callers this is a claim, not a verified fact: it is scoped to
-     * the bot's own sessions, but the named user owns the session on the
-     * bot's say-so.
+     * own their own sessions, for harness callers, whose verified acting
+     * user owns the session, and for bots that already act for a verified
+     * user. A bot without one may name a user here. That claim is trusted
+     * for the bot's own sessions. With no claim, a team bot owns the session
+     * itself only while non-user owners are enabled. Every other bot still
+     * needs an owner.
      */
     owner?: string | null;
     /**

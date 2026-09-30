@@ -21,6 +21,7 @@ import type {
   EnqueueOptimisticMutationResult,
   EntityFilterCacheArgs,
   EntityFilterCacheResult,
+  HydrationSearchChanges,
   OptimisticLinkPatchWire,
   QueryRevalidationWire,
   ReadRecordsByKeysResult,
@@ -64,9 +65,10 @@ export interface CacheOpenResult {
   outcome: CacheOpenOutcome;
 }
 
-export type CacheEngineHydrationResult = WriteResult & {
-  data: unknown | null;
-};
+export type CacheEngineHydrationResult = WriteResult &
+  HydrationSearchChanges & {
+    data: unknown | null;
+  };
 
 export interface CacheEngine {
   currentRevision(): Promise<CacheRevision>;

@@ -1224,3 +1224,45 @@ describe('ToolCallPart result summaries', () => {
     expect(rendered.getByTestId('trailing').textContent).toBe('');
   });
 });
+
+describe('generated image dispatch', () => {
+  it.each(['native', 'mcp'] as const)(
+    'uses the image result renderer for %s calls outside group chrome',
+    (kind) => {
+      const input = { prompt: 'A frog under a leaf' };
+      const output = {
+        documentId: '01a0eecf-1162-7bea-9ba9-925769372a8a',
+        fileName: 'frog.png',
+        mimeType: 'image/png',
+        sizeBytes: 132421,
+      };
+      const part: ToolUsePart = {
+        kind: 'tool_use',
+        id: 'image-call',
+        status: 'completed',
+        name:
+          kind === 'native'
+            ? { kind, name: 'GenerateImage' }
+            : { kind, server: 'macro', tool: 'GenerateImage' },
+        detail:
+          kind === 'native'
+            ? { kind: 'macro', input, output, error: null }
+            : {
+                kind: 'other',
+                acpKind: 'other',
+                input,
+                output: null,
+                result: output,
+                error: null,
+              },
+      };
+      const view = render(() => <ToolCallPart part={part} />);
+      const image = view.getByTestId('macro-tool');
+      expect(image.textContent).toBe('GenerateImage');
+      expect(image.dataset.grouped).toBe('false');
+      expect(JSON.parse(image.dataset.response ?? '')).toEqual(output);
+      expect(view.queryByTestId('dashboard-view')).toBeNull();
+      expect(view.queryByTestId('tool-card')).toBeNull();
+    }
+  );
+});

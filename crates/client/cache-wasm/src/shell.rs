@@ -160,6 +160,7 @@ struct JsWriteResult {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct JsHydrationWriteResult {
+    search_changed_buckets: std::collections::BTreeSet<String>,
     revision: String,
     revision_advanced: bool,
     changed: Vec<String>,
@@ -1602,6 +1603,7 @@ impl CacheEngine {
                 .await;
             let result = state.engine_result(result)?;
             to_js(&JsHydrationWriteResult {
+                search_changed_buckets: result.search_changed_buckets,
                 revision: result.write_result.revision.to_string(),
                 revision_advanced: result.write_result.revision_advanced,
                 changed: result
