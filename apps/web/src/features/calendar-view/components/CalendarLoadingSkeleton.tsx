@@ -4,6 +4,26 @@ import { createStore, reconcile } from 'solid-js/store';
 import { Portal } from 'solid-js/web';
 import { createCalendarLoadingTransition } from '../../calendar/primitives/create-calendar-loading-transition';
 
+const SKELETON_VARIANT_COUNT = 3;
+const TITLE_WIDTH_BASE_PERCENT = 50;
+const TITLE_WIDTH_STEP_PERCENT = 10;
+
+const TIMED_SKELETON = {
+  // Fractions of the rendered time range keep samples inside restricted grids.
+  sampleFractions: [0.375, 0.55, 0.69],
+  sparseEventCount: 2,
+  insetPx: 2,
+  minHeightPx: 12,
+  detailMinHeightPx: 44,
+};
+
+const DAY_GRID_SKELETON = {
+  rowHeightPx: 24,
+  eventHeightPx: 20,
+  topInsetPx: 4,
+  fallbackHeaderHeightPx: 28,
+};
+
 type SkeletonPlacement = {
   kind: 'timed' | 'bar' | 'text';
   top: number;
@@ -17,83 +37,163 @@ type SkeletonTarget = {
   placements: SkeletonPlacement[];
 };
 
-/** A small, date-stable sample of event shapes, positioned in the live grid. */
-function skeletonTargets(element: HTMLElement): SkeletonTarget[] {
-  const slots = Array.from(
-    element.querySelectorAll<HTMLElement>('.fc-timegrid-slot-lane[data-time]'),
-    (slot) => slot.getBoundingClientRect()
+function skeletonVariant(date: string | undefined) {
+  const dayOfMonthText = date?.slice(-2);
+  const dayOfMonth = Number(dayOfMonthText);
+
+  return dayOfMonth % SKELETON_VARIANT_COUNT;
+}
+
+function skeletonTitleWidth(index: number, variant: number) {
+  const widthVariant = (index + variant) % SKELETON_VARIANT_COUNT;
+  const widthOffset = widthVariant * TITLE_WIDTH_STEP_PERCENT;
+
+  return TITLE_WIDTH_BASE_PERCENT + widthOffset;
+}
+
+function timedSkeletonTargets(element: HTMLElement): SkeletonTarget[] {
+  const slotElements = element.querySelectorAll<HTMLElement>(
+    '.fc-timegrid-slot-lane[data-time]'
+  );
+  const slots = Array.from(slotElements, (slot) =>
+    slot.getBoundingClientRect()
   );
   const origin = slots[0]?.top ?? 0;
-  const timed = Array.from(
-    element.querySelectorAll<HTMLElement>(
-      '.fc-timegrid-col[data-date]:not(.fc-day-disabled) .fc-timegrid-col-frame'
-    )
-  ).map((frame): SkeletonTarget => {
+  const lastSlotIndex = slots.length - 1;
+
+  const frames = element.querySelectorAll<HTMLElement>(
+    '.fc-timegrid-col[data-date]:not(.fc-day-disabled) .fc-timegrid-col-frame'
+  );
+
+  return Array.from(frames, (frame): SkeletonTarget => {
     const date = frame.closest<HTMLElement>('[data-date]')?.dataset.date ?? '';
-    const variant = Number(date.slice(-2)) % 3;
-    const samples = variant === 0 ? [0.375, 0.55] : [0.375, 0.55, 0.69];
-    const starts = slots.length
-      ? [
-          ...new Set(
-            samples.map((fraction) =>
-              Math.min(
-                slots.length - 1,
-                Math.floor(slots.length * fraction) + variant
-              )
-            )
-          ),
-        ]
-      : [];
-    const placements = starts.map((start, index): SkeletonPlacement => {
+    const variant = skeletonVariant(date);
+
+    let samples = TIMED_SKELETON.sampleFractions;
+
+    if (variant === 0) {
+      samples = samples.slice(0, TIMED_SKELETON.sparseEventCount);
+    }
+
+    const starts = new Set<number>();
+
+    if (slots.length > 0) {
+      for (const fraction of samples) {
+        const sampleIndex = Math.floor(slots.length * fraction) + variant;
+        const startIndex = Math.min(lastSlotIndex, sampleIndex);
+
+        starts.add(startIndex);
+      }
+    }
+
+    const placements = Array.from(starts, (start, index): SkeletonPlacement => {
+      const additionalSlots = (index + variant) % SKELETON_VARIANT_COUNT;
+      const endIndex = Math.min(lastSlotIndex, start + additionalSlots);
       const first = slots[start]!;
-      const last =
-        slots[Math.min(slots.length - 1, start + ((index + variant) % 3))]!;
-      return {
-        kind: 'timed',
-        top: first.top - origin + 2,
-        height: Math.max(12, last.bottom - first.top - 4),
-        titleWidth: 50 + ((index + variant) % 3) * 10,
-      };
+      const last = slots[endIndex]!;
+
+      const top = first.top - origin + TIMED_SKELETON.insetPx;
+      const verticalInset = TIMED_SKELETON.insetPx * 2;
+      const availableHeight = last.bottom - first.top - verticalInset;
+      const height = Math.max(TIMED_SKELETON.minHeightPx, availableHeight);
+      const titleWidth = skeletonTitleWidth(index, variant);
+
+      return { kind: 'timed', top, height, titleWidth };
     });
+
     return { element: frame, kind: 'timed', placements };
   });
-  const month = element.querySelector('.fc-dayGridMonth-view') !== null;
-  const days = Array.from(
-    element.querySelectorAll<HTMLElement>(
-      '.fc-daygrid-day[data-date]:not(.fc-day-disabled)'
-    )
-  ).map((cell): SkeletonTarget => {
-    const variant = Number(cell.dataset.date?.slice(-2)) % 3;
+}
+
+function dayGridSkeletonTargets(element: HTMLElement): SkeletonTarget[] {
+  const isMonthView = element.querySelector('.fc-dayGridMonth-view') !== null;
+  const cells = element.querySelectorAll<HTMLElement>(
+    '.fc-daygrid-day[data-date]:not(.fc-day-disabled)'
+  );
+
+  return Array.from(cells, (cell): SkeletonTarget => {
+    const variant = skeletonVariant(cell.dataset.date);
     const bounds = cell.getBoundingClientRect();
-    const header = cell
-      .querySelector('.fc-daygrid-day-top')
-      ?.getBoundingClientRect();
-    const top = month
-      ? (header && header.height > 0 ? header.bottom - bounds.top : 28) + 4
-      : 4;
-    const requestedCount = month ? 1 + variant : variant === 0 ? 0 : 1;
-    const count =
-      bounds.height > 0
-        ? Math.min(
-            requestedCount,
-            Math.max(0, Math.floor((bounds.height - top) / 24))
-          )
-        : requestedCount;
+    const header = cell.querySelector('.fc-daygrid-day-top');
+    const headerBounds = header?.getBoundingClientRect();
+
+    let top = DAY_GRID_SKELETON.topInsetPx;
+
+    if (isMonthView) {
+      let headerHeight = DAY_GRID_SKELETON.fallbackHeaderHeightPx;
+      const hasMeasuredHeader = headerBounds && headerBounds.height > 0;
+
+      if (hasMeasuredHeader) {
+        headerHeight = headerBounds.bottom - bounds.top;
+      }
+
+      top += headerHeight;
+    }
+
+    let requestedCount = 0;
+
+    if (isMonthView) {
+      requestedCount = 1 + variant;
+    } else if (variant !== 0) {
+      requestedCount = 1;
+    }
+
+    let count = requestedCount;
+
+    if (bounds.height > 0) {
+      const availableHeight = bounds.height - top;
+      const availableRows = Math.floor(
+        availableHeight / DAY_GRID_SKELETON.rowHeightPx
+      );
+      const rowCapacity = Math.max(0, availableRows);
+
+      count = Math.min(requestedCount, rowCapacity);
+    }
+
     const placements = Array.from(
       { length: count },
-      (_, index): SkeletonPlacement => ({
-        kind: month && (index > 0 || variant !== 0) ? 'text' : 'bar',
-        top: top + index * 24,
-        height: 20,
-        titleWidth: 50 + ((index + variant) % 3) * 10,
-      })
+      (_, index): SkeletonPlacement => {
+        const isTextRow = isMonthView && (index > 0 || variant !== 0);
+        const rowOffset = index * DAY_GRID_SKELETON.rowHeightPx;
+        const titleWidth = skeletonTitleWidth(index, variant);
+
+        return {
+          kind: isTextRow ? 'text' : 'bar',
+          top: top + rowOffset,
+          height: DAY_GRID_SKELETON.eventHeightPx,
+          titleWidth,
+        };
+      }
     );
-    return { element: cell, kind: month ? 'month' : 'all-day', placements };
+
+    return {
+      element: cell,
+      kind: isMonthView ? 'month' : 'all-day',
+      placements,
+    };
   });
-  return [...timed, ...days].filter((target) => target.placements.length > 0);
+}
+
+/** A small, date-stable sample of event shapes, positioned in the live grid. */
+function skeletonTargets(element: HTMLElement): SkeletonTarget[] {
+  const timedTargets = timedSkeletonTargets(element);
+  const dayGridTargets = dayGridSkeletonTargets(element);
+  const targets = [...timedTargets, ...dayGridTargets];
+
+  return targets.filter((target) => target.placements.length > 0);
 }
 
 function EventSkeleton(props: { placement: SkeletonPlacement }) {
+  const isTextRow = () => props.placement.kind === 'text';
+
+  const showDetailLine = () => {
+    const isTimedEvent = props.placement.kind === 'timed';
+    const hasDetailSpace =
+      props.placement.height >= TIMED_SKELETON.detailMinHeightPx;
+
+    return isTimedEvent && hasDetailSpace;
+  };
+
   return (
     <div
       data-calendar-loading-placeholder={props.placement.kind}
@@ -104,18 +204,14 @@ function EventSkeleton(props: { placement: SkeletonPlacement }) {
       }}
     >
       <Show
-        when={props.placement.kind === 'text'}
+        when={isTextRow()}
         fallback={
           <div class="flex size-full flex-col justify-center gap-1.5 rounded-md bg-skeleton px-1.5 py-1">
             <div
               class="h-2 shrink-0 rounded-sm bg-skeleton"
               style={{ width: `${props.placement.titleWidth}%` }}
             />
-            <Show
-              when={
-                props.placement.kind === 'timed' && props.placement.height >= 44
-              }
-            >
+            <Show when={showDetailLine()}>
               <div class="h-1.5 w-1/2 shrink-0 rounded-sm bg-skeleton" />
             </Show>
           </div>
@@ -139,13 +235,19 @@ export function CalendarLoadingSkeleton(props: {
   disabled: boolean;
   onBlockingChange?: (blocking: boolean) => void;
 }) {
-  const transition = createCalendarLoadingTransition((phase) =>
-    props.onBlockingChange?.(phase === 'waiting' || phase === 'visible')
-  );
+  const transition = createCalendarLoadingTransition((phase) => {
+    const blocksEventRendering = phase === 'waiting' || phase === 'visible';
+
+    props.onBlockingChange?.(blocksEventRendering);
+  });
+
   const [targets, setTargets] = createStore<SkeletonTarget[]>([]);
-  const mounted = createMemo(
-    () => transition.phase() === 'visible' || transition.phase() === 'leaving'
-  );
+
+  const mounted = createMemo(() => {
+    const phase = transition.phase();
+
+    return phase === 'visible' || phase === 'leaving';
+  });
 
   createEffect(
     on(
@@ -153,13 +255,20 @@ export function CalendarLoadingSkeleton(props: {
       ([loading, disabled]) => {
         if (disabled) {
           transition.reset();
-        } else if (loading) {
-          transition.setLoading(true);
-        } else {
-          // Let FullCalendar finish laying out events before revealing them.
-          const timer = setTimeout(() => transition.setLoading(false), 0);
-          onCleanup(() => clearTimeout(timer));
+          return;
         }
+
+        if (loading) {
+          transition.setLoading(true);
+          return;
+        }
+
+        // Let FullCalendar finish laying out events before revealing them.
+        const timer = setTimeout(() => transition.setLoading(false));
+
+        onCleanup(() => {
+          clearTimeout(timer);
+        });
       }
     )
   );
@@ -168,31 +277,56 @@ export function CalendarLoadingSkeleton(props: {
     on(
       () => [props.element, props.dateInfo, mounted()] as const,
       ([element, dateInfo, visible]) => {
-        if (!element || !dateInfo || !visible) {
+        const canMeasure =
+          element !== undefined && dateInfo !== undefined && visible;
+
+        if (!canMeasure) {
           setTargets([]);
           return;
         }
+
         const refresh = () => {
-          if (transition.phase() === 'leaving') return;
-          // Reconcile by DOM cell and update placements in place, without remounting portals.
-          setTargets(
-            reconcile(skeletonTargets(element), { key: 'element', merge: true })
-          );
+          const isLeaving = transition.phase() === 'leaving';
+
+          if (isLeaving) {
+            return;
+          }
+
+          // Update placements in place without remounting portals.
+          const nextTargets = skeletonTargets(element);
+          const updateTargets = reconcile(nextTargets, {
+            key: 'element',
+            merge: true,
+          });
+
+          setTargets(updateTargets);
         };
+
         refresh();
+
         let timer: ReturnType<typeof setTimeout> | undefined;
+
         const observer = new ResizeObserver(() => {
           clearTimeout(timer);
-          timer = setTimeout(refresh, 0);
+          timer = setTimeout(refresh);
         });
+
         observer.observe(element);
+
         const slots = element.querySelector('.fc-timegrid-slots');
-        if (slots) observer.observe(slots);
-        for (const cell of element.querySelectorAll(
+
+        if (slots) {
+          observer.observe(slots);
+        }
+
+        const cells = element.querySelectorAll(
           '.fc-daygrid-day[data-date]:not(.fc-day-disabled)'
-        )) {
+        );
+
+        for (const cell of cells) {
           observer.observe(cell);
         }
+
         onCleanup(() => {
           observer.disconnect();
           clearTimeout(timer);
@@ -205,10 +339,18 @@ export function CalendarLoadingSkeleton(props: {
     on(
       () => [props.element, transition.phase()] as const,
       ([element, phase]) => {
-        if (!element) return;
-        element.dataset.calendarLoadingState =
-          phase === 'leaving' ? 'revealing' : phase;
-        onCleanup(() => delete element.dataset.calendarLoadingState);
+        if (!element) {
+          return;
+        }
+
+        const isRevealingEvents = phase === 'leaving';
+        const loadingState = isRevealingEvents ? 'revealing' : phase;
+
+        element.dataset.calendarLoadingState = loadingState;
+
+        onCleanup(() => {
+          delete element.dataset.calendarLoadingState;
+        });
       }
     )
   );

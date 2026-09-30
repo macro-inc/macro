@@ -2,6 +2,11 @@ import type { Transition } from '@macro-inc/machine';
 import { createSolidMachine } from '@macro-inc/machine/solid';
 import { onCleanup } from 'solid-js';
 
+const SKELETON_SHOW_DELAY_MS = 120;
+const SKELETON_MIN_VISIBLE_MS = 240;
+// Matches the skeleton's duration-180 opacity transition.
+const SKELETON_FADE_OUT_MS = 180;
+
 type LoadingState =
   | { t: 'hidden' }
   | { t: 'waiting' }
@@ -18,12 +23,14 @@ type LoadingEvent =
 
 export type CalendarLoadingPhase = LoadingState['t'];
 
-const transitionTo = (
+function transitionTo(
   state: LoadingState
-): Transition<LoadingState, CalendarLoadingPhase> => ({
-  state,
-  commands: [state.t],
-});
+): Transition<LoadingState, CalendarLoadingPhase> {
+  return {
+    state,
+    commands: [state.t],
+  };
+}
 
 /** State scopes own timers, so interrupted loads cannot leave stale transitions. */
 export function createCalendarLoadingTransition(
@@ -38,15 +45,23 @@ export function createCalendarLoadingTransition(
     def: {
       hidden: {
         on: (_state, event) => {
-          if (event.t === 'load-started') return transitionTo({ t: 'waiting' });
-          if (event.t === 'reset') return transitionTo({ t: 'hidden' });
+          if (event.t === 'load-started') {
+            return transitionTo({ t: 'waiting' });
+          }
+
+          if (event.t === 'reset') {
+            return transitionTo({ t: 'hidden' });
+          }
         },
       },
       waiting: {
         on: (_state, event) => {
-          if (event.t === 'load-finished' || event.t === 'reset') {
+          const shouldHide = event.t === 'load-finished' || event.t === 'reset';
+
+          if (shouldHide) {
             return transitionTo({ t: 'hidden' });
           }
+
           if (event.t === 'delay-elapsed') {
             return transitionTo({
               t: 'visible',
@@ -58,13 +73,18 @@ export function createCalendarLoadingTransition(
       },
       visible: {
         on: (state, event) => {
-          if (event.t === 'reset') return transitionTo({ t: 'hidden' });
+          if (event.t === 'reset') {
+            return transitionTo({ t: 'hidden' });
+          }
+
           if (event.t === 'load-started' && !state.loading) {
             return { state: { ...state, loading: true } };
           }
+
           if (event.t === 'load-finished' && state.loading) {
             return { state: { ...state, loading: false } };
           }
+
           if (event.t === 'minimum-elapsed' && !state.loading) {
             return transitionTo({ t: 'leaving' });
           }
@@ -79,7 +99,10 @@ export function createCalendarLoadingTransition(
               loading: true,
             });
           }
-          if (event.t === 'fade-elapsed' || event.t === 'reset') {
+
+          const shouldHide = event.t === 'fade-elapsed' || event.t === 'reset';
+
+          if (shouldHide) {
             return transitionTo({ t: 'hidden' });
           }
         },
@@ -89,45 +112,63 @@ export function createCalendarLoadingTransition(
       waiting: (_state, dispatch) => {
         const timer = setTimeout(
           () => dispatch({ t: 'delay-elapsed', now: Date.now() }),
-          120
+          SKELETON_SHOW_DELAY_MS
         );
+
         return () => clearTimeout(timer);
       },
       visible: (state, dispatch) => {
-        if (state.loading) return;
-        const remaining = Math.max(0, 240 - (Date.now() - state.visibleSince));
-        if (remaining === 0) {
+        if (state.loading) {
+          return;
+        }
+
+        const elapsedMs = Date.now() - state.visibleSince;
+        const remainingMs = Math.max(0, SKELETON_MIN_VISIBLE_MS - elapsedMs);
+
+        if (remainingMs === 0) {
           dispatch({ t: 'minimum-elapsed' });
           return;
         }
+
         const timer = setTimeout(
           () => dispatch({ t: 'minimum-elapsed' }),
-          remaining
+          remainingMs
         );
+
         return () => clearTimeout(timer);
       },
       leaving: (_state, dispatch) => {
-        const timer = setTimeout(() => dispatch({ t: 'fade-elapsed' }), 180);
+        const timer = setTimeout(
+          () => dispatch({ t: 'fade-elapsed' }),
+          SKELETON_FADE_OUT_MS
+        );
+
         return () => clearTimeout(timer);
       },
     },
     execute: (phase) => onPhaseChange?.(phase),
   });
 
-  // Solid runs cleanups in reverse order: reset before the machine is disposed.
-  onCleanup(reset);
   function reset() {
     machine.dispatch({ t: 'reset' });
   }
 
+  function setLoading(loading: boolean) {
+    if (!loading) {
+      return machine.dispatch({ t: 'load-finished' });
+    }
+
+    const now = Date.now();
+
+    return machine.dispatch({ t: 'load-started', now });
+  }
+
+  // Solid runs cleanups in reverse order: reset before the machine is disposed.
+  onCleanup(reset);
+
   return {
     phase: () => machine.state().t,
-    setLoading: (loading: boolean) =>
-      machine.dispatch(
-        loading
-          ? { t: 'load-started', now: Date.now() }
-          : { t: 'load-finished' }
-      ),
+    setLoading,
     reset,
   };
 }
