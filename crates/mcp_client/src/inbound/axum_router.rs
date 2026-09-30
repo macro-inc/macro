@@ -9,6 +9,7 @@ use axum::{
     response::IntoResponse,
     routing::{delete, get, post, put},
 };
+use http::{HeaderName, HeaderValue};
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
@@ -140,6 +141,10 @@ pub struct AddServerRequest {
     url: String,
     /// Human-readable name for the server.
     server_name: String,
+    /// Custom request headers to send with every request (key-value pairs).
+    /// For example: `{"Authorization": "Bearer token123"}`.
+    #[serde(default)]
+    headers: Option<std::collections::HashMap<String, String>>,
 }
 
 /// Request body for updating an MCP server.
@@ -153,6 +158,10 @@ pub struct UpdateServerRequest {
     /// Enable or disable the server.
     #[serde(default)]
     enabled: Option<bool>,
+    /// Custom request headers to send with every request (key-value pairs).
+    /// Pass an empty object `{}` to clear all custom headers.
+    #[serde(default)]
+    headers: Option<std::collections::HashMap<String, String>>,
 }
 
 /// Query parameters for deleting an MCP server.
@@ -209,6 +218,8 @@ pub struct ServerResponse {
     enabled: bool,
     /// Whether the server has valid stored credentials.
     authenticated: bool,
+    /// Custom request headers set for this server.
+    headers: std::collections::HashMap<String, String>,
 }
 
 impl ServerResponse {
@@ -218,6 +229,7 @@ impl ServerResponse {
             server_name: record.server_name.clone(),
             enabled: record.enabled,
             authenticated: record.credentials.is_some(),
+            headers: record.headers.clone(),
         }
     }
 }
@@ -236,6 +248,9 @@ pub enum McpHandlerErr {
     /// The callback was missing both a code and an error parameter.
     #[error("malformed OAuth callback: missing code and error parameters")]
     MalformedCallback,
+    /// A custom header name or value was malformed.
+    #[error("{0}")]
+    InvalidHeader(String),
     /// An internal error occurred.
     #[error("{0}")]
     Internal(#[from] anyhow::Error),
@@ -245,9 +260,9 @@ impl IntoResponse for McpHandlerErr {
     fn into_response(self) -> axum::response::Response {
         let status = match &self {
             McpHandlerErr::NotFound => StatusCode::NOT_FOUND,
-            McpHandlerErr::OAuthRejected(_) | McpHandlerErr::MalformedCallback => {
-                StatusCode::BAD_REQUEST
-            }
+            McpHandlerErr::OAuthRejected(_)
+            | McpHandlerErr::MalformedCallback
+            | McpHandlerErr::InvalidHeader(_) => StatusCode::BAD_REQUEST,
             McpHandlerErr::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
         (
@@ -261,6 +276,22 @@ impl IntoResponse for McpHandlerErr {
 }
 
 // -- handlers -----------------------------------------------------------------
+
+/// Validate that each custom header has a well-formed name and value so a typo
+/// fails loudly at write time instead of being silently dropped when the
+/// transport config is built.
+fn validate_headers(
+    headers: &std::collections::HashMap<String, String>,
+) -> Result<(), McpHandlerErr> {
+    for (name, value) in headers {
+        HeaderName::from_bytes(name.as_bytes())
+            .map_err(|_| McpHandlerErr::InvalidHeader(format!("invalid header name `{name}`")))?;
+        HeaderValue::from_str(value).map_err(|_| {
+            McpHandlerErr::InvalidHeader(format!("invalid value for header `{name}`"))
+        })?;
+    }
+    Ok(())
+}
 
 #[utoipa::path(
     get,
@@ -305,6 +336,7 @@ where
     request_body = AddServerRequest,
     responses(
         (status = 201, body = ServerResponse),
+        (status = 400, body = ErrorResponse),
         (status = 401, body = String),
         (status = 500, body = ErrorResponse),
     )
@@ -323,12 +355,34 @@ where
     anyhow::Error: From<S::Err>,
 {
     let user = &authorization.authorization.user;
+
+    // Adding an existing URL is an upsert. Load the current row so we preserve
+    // its headers when none are supplied and reflect its stored OAuth
+    // credentials in the response (the repo COALESCEs credentials on conflict).
+    let existing = state
+        .store
+        .load(&user.macro_user_id, &body.url)
+        .await
+        .map_err(anyhow::Error::from)?;
+
+    let headers = match body.headers {
+        Some(headers) => {
+            validate_headers(&headers)?;
+            headers
+        }
+        None => existing
+            .as_ref()
+            .map(|e| e.headers.clone())
+            .unwrap_or_default(),
+    };
+
     let record = McpServerRecord {
         user_id: user.macro_user_id.clone(),
         url: body.url,
         server_name: body.server_name,
-        credentials: None,
+        credentials: existing.as_ref().and_then(|e| e.credentials.clone()),
         enabled: true,
+        headers,
     };
 
     state
@@ -351,6 +405,7 @@ where
     request_body = UpdateServerRequest,
     responses(
         (status = 200, body = ServerResponse),
+        (status = 400, body = ErrorResponse),
         (status = 401, body = String),
         (status = 404, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
@@ -382,6 +437,10 @@ where
     }
     if let Some(enabled) = body.enabled {
         record.enabled = enabled;
+    }
+    if let Some(headers) = body.headers {
+        validate_headers(&headers)?;
+        record.headers = headers;
     }
 
     state

@@ -17,4 +17,7 @@ export interface UpdateServerRequest {
   server_name?: UpdateServerRequestServerName;
   /** The server URL to update. */
   url: string;
+  /** Custom request headers to send with every request (key-value pairs).
+   * Pass an empty object `{}` to clear all custom headers. */
+  headers?: Record<string, string>;
 }
