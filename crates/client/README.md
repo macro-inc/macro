@@ -97,6 +97,21 @@ sent as network revalidations. Callers should supply an explicit targeted query
 for recovery when the parent/field is missing; the exchange can then enqueue
 entity-only optimism and retain that recovery query for eventual commit/replay.
 
+## Text search catalogs
+
+Text search loads compact rows lazily per `(profile, bucket)` through the existing
+`search_documents_browse_idx`. Searching documents does not load cached emails;
+changing categories loads only newly requested buckets, including caching empty
+buckets. Empty bucket selection still means every bucket in the profile.
+
+Ranking borrows catalog and optimistic entries, normalizes the query once, and
+retains at most `limit + 1` references in a heap. Only the final returned rows are
+cloned. Fuzzy/freshness scoring, DM priority, recency/key tie breaks and browse
+cursors are unchanged. Write-through updates remove old bucket membership before
+updating already-loaded buckets; unopened buckets stay lazy. Optimistic shadows
+replace durable hits without mutating the catalogs, so rollback restores them.
+No storage schema, projection version, or database migration changes are needed.
+
 ## Browser OPFS writes
 
 The OPFS adapter coalesces each Turso vectored write into batches of at most

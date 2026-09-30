@@ -252,86 +252,144 @@ fn moving_to_an_unloaded_bucket_does_not_mark_its_other_rows_loaded() {
 }
 
 #[test]
-fn optimistic_bucket_moves_overlay_borrowed_catalogs_and_rollback_restores_them() {
+fn optimistic_bucket_moves_overlay_borrowed_catalogs_through_settlement() {
     pollster::block_on(async {
-        let key = EntityKey::entity("GraphqlSoupDocument", &["doc"]);
-        let mut storage = InMemoryStorage::new();
-        storage
-            .put_batch(vec![(key, record("GraphqlSoupDocument", "needle", false))])
-            .await
-            .unwrap();
-        let mut engine = Engine::new(storage);
-        engine
-            .search(&request(&["document", "note"]))
-            .await
-            .unwrap();
-        let variables = serde_json::Map::new();
-        let (id, _) = engine.begin_optimistic_write(None, BeginOptimisticWrite {
-            uuid: "00000000-0000-4000-8000-000000000001", query: include_str!("fixtures/search_move.graphql"), operation_name: None,
-            variables: &variables, data: &json!({"renameEntities":{"results":[{"__typename":"GraphqlMutationSuccess","effects":[{"__typename":"SoupUpdated","item":{"__typename":"GraphqlSoupDocument","id":"doc","name":"needle","fileType":"md"}}]}]}}),
-            link_patches: &[], revalidations: &[], created_at_ms: 1,
-        }).await.unwrap();
-        assert!(
-            engine
-                .search(&request(&["document"]))
+        for commit in [false, true] {
+            let key = EntityKey::entity("GraphqlSoupDocument", &["doc"]);
+            let mut storage = InMemoryStorage::new();
+            storage
+                .put_batch(vec![(key, record("GraphqlSoupDocument", "needle", false))])
                 .await
-                .unwrap()
-                .documents
-                .is_empty()
-        );
-        assert_eq!(
-            engine
-                .search(&request(&["note"]))
-                .await
-                .unwrap()
-                .documents
-                .len(),
-            1
-        );
-        assert_eq!(
+                .unwrap();
+            let mut engine = Engine::new(storage);
             engine
                 .search(&request(&["document", "note"]))
                 .await
-                .unwrap()
-                .documents
-                .len(),
-            1
-        );
-        let claimed = engine
-            .claim_next_mutation(MutationClaimRequest {
-                owner: "test".into(),
-                now_ms: 2,
-                lease_expires_at_ms: 100,
-            })
-            .await
-            .unwrap()
-            .unwrap();
-        engine
-            .rollback_optimistic_write(
-                id,
-                MutationClaimToken {
+                .unwrap();
+            let variables = serde_json::Map::new();
+            let mutation = include_str!("fixtures/search_move.graphql");
+            let response = json!({"renameEntities":{"results":[{"__typename":"GraphqlMutationSuccess","effects":[{"__typename":"SoupUpdated","item":{"__typename":"GraphqlSoupDocument","id":"doc","name":"needle","fileType":"md"}}]}]}});
+            let (id, _) = engine
+                .begin_optimistic_write(
+                    None,
+                    BeginOptimisticWrite {
+                        uuid: "00000000-0000-4000-8000-000000000001",
+                        query: mutation,
+                        operation_name: None,
+                        variables: &variables,
+                        data: &response,
+                        link_patches: &[],
+                        revalidations: &[],
+                        created_at_ms: 1,
+                    },
+                )
+                .await
+                .unwrap();
+            assert!(
+                engine
+                    .search(&request(&["document"]))
+                    .await
+                    .unwrap()
+                    .documents
+                    .is_empty()
+            );
+            assert_eq!(
+                engine
+                    .search(&request(&["note"]))
+                    .await
+                    .unwrap()
+                    .documents
+                    .len(),
+                1
+            );
+            assert_eq!(
+                engine
+                    .search(&request(&["document", "note"]))
+                    .await
+                    .unwrap()
+                    .documents
+                    .len(),
+                1
+            );
+            let claimed = engine
+                .claim_next_mutation(MutationClaimRequest {
                     owner: "test".into(),
-                    generation: claimed.lease_generation,
-                },
-            )
-            .await
-            .unwrap();
-        assert_eq!(
-            engine
-                .search(&request(&["document"]))
+                    now_ms: 2,
+                    lease_expires_at_ms: 100,
+                })
                 .await
                 .unwrap()
-                .documents
-                .len(),
-            1
-        );
-        assert!(
-            engine
-                .search(&request(&["note"]))
-                .await
-                .unwrap()
-                .documents
-                .is_empty()
-        );
+                .unwrap();
+            let claim = MutationClaimToken {
+                owner: "test".into(),
+                generation: claimed.lease_generation,
+            };
+            if commit {
+                engine
+                    .commit_optimistic_write(id, claim, mutation, None, &variables, &response)
+                    .await
+                    .unwrap();
+            } else {
+                engine.rollback_optimistic_write(id, claim).await.unwrap();
+            }
+            assert_eq!(
+                engine
+                    .search(&request(&["document"]))
+                    .await
+                    .unwrap()
+                    .documents
+                    .len(),
+                usize::from(!commit)
+            );
+            assert_eq!(
+                engine
+                    .search(&request(&["note"]))
+                    .await
+                    .unwrap()
+                    .documents
+                    .len(),
+                usize::from(commit)
+            );
+        }
+    });
+}
+
+#[test]
+fn bounded_browse_preserves_cross_bucket_cursor_order_and_ties() {
+    pollster::block_on(async {
+        let entries: Vec<_> = (0..17)
+            .map(|i| {
+                let key = EntityKey::entity("GraphqlSoupDocument", &[&format!("d{i:02}")]);
+                let mut value = record("GraphqlSoupDocument", "needle", i % 2 == 0);
+                value.fields.insert(
+                    "updatedAt".into(),
+                    CacheValue::Number(cache_core::value::CacheNumber::PosInt(i / 3)),
+                );
+                (key, value)
+            })
+            .collect();
+        let mut expected: Vec<_> = entries
+            .iter()
+            .flat_map(|(key, record)| cache_core::search::project_search_documents(key, record))
+            .collect();
+        expected.sort_by(cache_core::search::compare_recent);
+        let mut storage = InMemoryStorage::new();
+        storage.put_batch(entries).await.unwrap();
+        let diagnostics = storage.clone();
+        let mut engine = Engine::new(storage);
+        let mut req = request(&["document", "note"]);
+        req.query.clear();
+        req.limit = 3;
+        let mut actual = Vec::new();
+        for _ in 0..10 {
+            let page = engine.search(&req).await.unwrap();
+            actual.extend(page.documents);
+            req.cursor = page.next_cursor;
+            if req.cursor.is_none() {
+                break;
+            }
+        }
+        assert_eq!(actual, expected);
+        assert_eq!(diagnostics.search_catalog_load_count(), 0);
     });
 }
