@@ -277,7 +277,9 @@ export function createEmailComposer(props: EmailComposerOptions) {
   ) {
     props.notices.reportError(error);
     if (!session.serverConfirmed()) {
-      if (schedule?.pending()) {
+      // A best-effort pre-send save may fail while delivery still succeeds.
+      // Background saves and explicit draft actions report their own failure.
+      if (schedule?.pending() || !submitting()) {
         props.notices.feedback.failure(`Failed to ${operation} draft`);
       }
       return;
@@ -376,10 +378,6 @@ export function createEmailComposer(props: EmailComposerOptions) {
     schedule?.state().type === 'scheduled';
 
   const autosave = createDraftAutosave({
-    onError: (error) => {
-      props.notices.reportError(error);
-      props.notices.feedback.failure('Unable to save draft on this device');
-    },
     capture: () => ({
       draft: collectDraft(),
       inboxId: activeInboxId(),

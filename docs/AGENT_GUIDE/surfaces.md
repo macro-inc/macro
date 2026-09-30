@@ -575,9 +575,12 @@ writes still stop retrying.
 Test this with a previously saved draft as well as a new one: a queued edit must
 block Send and scheduling until a save commits. Reopening a cached draft while
 offline must retain its uploaded attachments and confirmed scheduled time.
-Open an existing server reply draft before its durable cache record is available:
-editing and sending must reuse its server ID. If the live mail transport switches
-to GraphQL while the editor is open, queued saves must still adopt their server
+Open a reply draft while its durable identity read is still pending: REST lifecycle
+reads and attachment actions must wait for confirmation. Editing keeps the seed ID
+as a handle; a committed cache read or save unlocks server-only actions. A failed
+identity read must not mark a queued draft committed. Verify an autosave failure
+shows one notice in both standalone and reply composers. If the live mail transport
+switches to GraphQL while the editor is open, queued saves must still adopt their server
 identity after settlement without replacing the editor's current text.
 
 
@@ -592,6 +595,10 @@ Verify the durable lifecycle: create a standalone draft offline, enter recipient
 subject and body, close the composer, then restart while still offline. Open it
 from Drafts and confirm its content and sending inbox; edit it again. Reconnect
 and check that exactly one draft remains and the open editor keeps any new text.
+On a cold app start, reopen a local draft thread before another GraphQL query has
+initialized the cache. Its subscription must observe settlement and adopt the
+server ID. If its identity read fails, it must remain cache-only until a later
+cache event resolves it; never send the unresolved handle to the server.
 Keep a reopened offline draft open while reconnecting: the composer must remain
 mounted when the local thread handle resolves to its server ID. After syncing,
 reopen the original local thread URL and confirm the composer still loads; then

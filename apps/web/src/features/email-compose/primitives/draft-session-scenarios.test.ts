@@ -30,7 +30,7 @@ beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
 describe('draft session: reply composer', () => {
-  it('preserves a fetched draft ID when local draft lookup has no record', async () => {
+  it('preserves the seeded ID as a handle until a save confirms it when lookup has no record', async () => {
     const context = createComposeContext();
     context.drafts.readDraft = vi.fn(async () => undefined);
     context.drafts.watchDrafts = () => () => {};
@@ -43,10 +43,44 @@ describe('draft session: reply composer', () => {
       expect(context.drafts.readDraft).toHaveBeenCalledWith('existing');
       expect(context.drafts.saveDraft).toHaveBeenCalledWith(
         expect.objectContaining({
-          draft: expect.objectContaining({ db_id: 'existing' }),
-          clientHandles: undefined,
+          clientHandles: expect.objectContaining({ draftId: 'existing' }),
         })
       );
+    } finally {
+      state.dispose();
+    }
+  });
+
+  it('keeps REST lifecycle reads blocked while the seeded draft identity is unresolved', async () => {
+    const context = createComposeContext();
+    const pending =
+      Promise.withResolvers<
+        Awaited<ReturnType<NonNullable<typeof context.drafts.readDraft>>>
+      >();
+    context.drafts.readDraft = vi.fn(() => pending.promise);
+    context.drafts.watchDrafts = () => () => {};
+    const draft = message('local', { is_draft: true });
+    const state = mountReplyComposer(context, undefined, { draft });
+    const observed = vi.mocked(context.draftLifecycle.observe).mock.calls[0][0];
+    try {
+      expect(observed.draftId()).toBeUndefined();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(observed.draftId()).toBeUndefined();
+      pending.resolve({ draft, persistence: 'queued' });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(observed.draftId()).toBeUndefined();
+      vi.mocked(context.drafts.saveDraft).mockImplementation(async (input) =>
+        queued(input)
+      );
+      await state.sendEmail();
+      expect(context.delivery.sendMessage).not.toHaveBeenCalled();
+      vi.mocked(context.drafts.readDraft).mockResolvedValue({
+        draft: message('server-1', { is_draft: true }),
+        persistence: 'committed',
+      });
+      vi.mocked(context.drafts.saveDraft).mockResolvedValue(committed());
+      await state.sendEmail();
+      expect(context.delivery.sendMessage).toHaveBeenCalledOnce();
     } finally {
       state.dispose();
     }
@@ -270,7 +304,7 @@ describe('draft session: compose composer', () => {
         );
         if (firstSave === 'autosave') {
           expect(context.notices.feedback.failure).toHaveBeenCalledWith(
-            'Unable to save draft on this device'
+            'Failed to save draft'
           );
         } else {
           expect(context.notices.feedback.failure).not.toHaveBeenCalled();

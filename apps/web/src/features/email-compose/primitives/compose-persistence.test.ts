@@ -4,6 +4,7 @@ import type { PersistedEmailIdentity } from '../context/compose-capabilities';
 import { decodeBase64Utf8 } from '../core/decode-base64';
 import { createComposeContext } from '../tests/capabilities';
 import { mountEmailComposer } from '../tests/composer';
+import { mountReplyComposer } from '../tests/reply';
 
 const response: PersistedEmailIdentity = {
   draftId: 'saved-id',
@@ -939,3 +940,55 @@ it('recovers local and forwarded attachments without retaining remote-only attac
   );
   root.dispose();
 });
+
+it.each(['standalone', 'reply'] as const)(
+  'reports one failed autosave notice for a confirmed %s draft',
+  async (surface) => {
+    const context = createComposeContext();
+    const root =
+      surface === 'standalone'
+        ? mountEmailComposer(context)
+        : mountReplyComposer(context);
+    try {
+      root.edit('First save');
+      await vi.advanceTimersByTimeAsync(600);
+      const error = new Error('save failed');
+      vi.mocked(context.drafts.saveDraft).mockRejectedValueOnce(error);
+      root.edit('Failed edit');
+      await vi.advanceTimersByTimeAsync(600);
+      expect(context.notices.feedback.failure).toHaveBeenCalledExactlyOnceWith(
+        'Failed to save draft'
+      );
+      expect(context.notices.reportError).toHaveBeenCalledExactlyOnceWith(
+        error
+      );
+    } finally {
+      root.dispose();
+    }
+  }
+);
+
+it.each(['standalone', 'reply'] as const)(
+  'reports one local-save failure for an unconfirmed %s draft',
+  async (surface) => {
+    const context = createComposeContext();
+    const error = new Error('local storage failed');
+    vi.mocked(context.drafts.saveDraft).mockRejectedValue(error);
+    const root =
+      surface === 'standalone'
+        ? mountEmailComposer(context)
+        : mountReplyComposer(context);
+    try {
+      root.edit('Unsaved edit');
+      await vi.advanceTimersByTimeAsync(600);
+      expect(context.notices.feedback.failure).toHaveBeenCalledExactlyOnceWith(
+        'Failed to save draft'
+      );
+      expect(context.notices.reportError).toHaveBeenCalledExactlyOnceWith(
+        error
+      );
+    } finally {
+      root.dispose();
+    }
+  }
+);

@@ -17,12 +17,13 @@ const queryMock = vi.hoisted(() => vi.fn());
 const executeQueryMock = vi.hoisted(() => vi.fn());
 const hostMock = vi.hoisted(() => vi.fn(() => undefined as unknown));
 const cacheEnabledMock = vi.hoisted(() => vi.fn(() => true));
+const initializeClientMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@service-storage/graphql-soup', () => ({
-  getGraphqlSoupClient: () => ({
-    query: queryMock,
-    executeQuery: executeQueryMock,
-  }),
+  getGraphqlSoupClient: () => {
+    initializeClientMock();
+    return { query: queryMock, executeQuery: executeQueryMock };
+  },
   graphqlCacheEnabled: cacheEnabledMock,
   getGraphqlCacheHost: hostMock,
 }));
@@ -85,7 +86,10 @@ const cachedPage: EmailThreadPageQuery = {
 describe('fetchGraphqlEmailThread', () => {
   beforeEach(() => {
     queryMock.mockReset();
-    hostMock.mockReturnValue(undefined);
+    initializeClientMock.mockReset();
+    hostMock.mockReturnValue({
+      readRecordsByKeys: vi.fn(async () => ({ revision: '1', records: [] })),
+    });
     cacheEnabledMock.mockReset();
     cacheEnabledMock.mockReturnValue(true);
   });
@@ -197,26 +201,33 @@ it('exposes the resolved identity across queue settlement without confusing a di
   let changed = () => {};
   const unsubscribe = vi.fn();
   cacheEnabledMock.mockReturnValue(true);
-  hostMock.mockReturnValue({
-    readRecordsByKeys: vi.fn(async () => ({
-      revision: '1',
-      records: [
-        {
-          recordKey: `GraphqlSoupEmailThread:${canonical}`,
-          record: { id: canonical },
-          identity: {
-            pending: canonical === 'local-thread',
-            mutationUuid: 'draft',
+  hostMock.mockReturnValue(undefined);
+  initializeClientMock.mockImplementation(() =>
+    hostMock.mockReturnValue({
+      readRecordsByKeys: vi.fn(async () => ({
+        revision: '1',
+        records: [
+          {
+            recordKey: `GraphqlSoupEmailThread:${canonical}`,
+            record: { id: canonical },
+            identity: {
+              pending: canonical === 'local-thread',
+              mutationUuid: 'draft',
+            },
           },
-        },
-      ],
-    })),
-    onCacheChanged: (callback: () => void) => {
-      changed = callback;
-      return unsubscribe;
-    },
-  });
-  const executions: Array<{ id: string; emit(id: string): void }> = [];
+        ],
+      })),
+      onCacheChanged: (callback: () => void) => {
+        changed = callback;
+        return unsubscribe;
+      },
+    })
+  );
+  const executions: Array<{
+    id: string;
+    policy: string | undefined;
+    emit(id: string): void;
+  }> = [];
   executeQueryMock.mockImplementation(
     (
       request: GraphQLRequest<
@@ -233,6 +244,7 @@ it('exposes the resolved identity across queue settlement without confusing a di
       });
       executions.push({
         id: String(request.variables.threadId),
+        policy: context.requestPolicy,
         emit: (id) =>
           stream.next({
             operation,
@@ -257,6 +269,7 @@ it('exposes the resolved identity across queue settlement without confusing a di
   try {
     await vi.waitFor(() => expect(executions).toHaveLength(1));
     expect(executions[0].id).toBe('local-thread');
+    expect(executions[0].policy).toBe('cache-only');
     executions[0].emit('local-thread');
     expect(root.query.data?.pages[0].db_id).toBe('local-thread');
     canonical = 'server-thread';
@@ -264,6 +277,7 @@ it('exposes the resolved identity across queue settlement without confusing a di
     await vi.waitFor(() => expect(executions).toHaveLength(2));
     expect(root.resolvedThreadId()).toBe('server-thread');
     expect(executions[1].id).toBe('server-thread');
+    expect(executions[1].policy).toBe('cache-and-network');
     executions[1].emit('server-thread');
     expect(root.query.data?.pages[0].db_id).toBe('server-thread');
 
@@ -278,4 +292,79 @@ it('exposes the resolved identity across queue settlement without confusing a di
     root.dispose();
   }
   expect(unsubscribe).toHaveBeenCalledOnce();
+});
+
+it('keeps identity-read failures cache-only and recovers on a cache change', async () => {
+  initializeClientMock.mockReset();
+  executeQueryMock.mockReset();
+  cacheEnabledMock.mockReturnValue(true);
+  let changed = () => {};
+  const read = vi.fn().mockRejectedValue(new Error('storage unavailable'));
+  hostMock.mockReturnValue({
+    readRecordsByKeys: read,
+    onCacheChanged: (callback: () => void) => {
+      changed = callback;
+      return () => {};
+    },
+  });
+  executeQueryMock.mockImplementation(() => makeSubject().source);
+  const root = createRoot((dispose) => ({
+    dispose,
+    ...createGraphqlEmailThreadQuery(
+      () => 'local-thread',
+      () => ({ enabled: true })
+    ),
+  }));
+  try {
+    await vi.waitFor(() => expect(executeQueryMock).toHaveBeenCalledOnce());
+    expect(executeQueryMock.mock.calls[0][1].requestPolicy).toBe('cache-only');
+    read.mockResolvedValue({
+      revision: '2',
+      records: [
+        {
+          recordKey: 'GraphqlSoupEmailThread:local-thread',
+          record: { id: 'server-thread' },
+          identity: { pending: false },
+        },
+      ],
+    });
+    changed();
+    await vi.waitFor(() =>
+      expect(root.resolvedThreadId()).toBe('server-thread')
+    );
+    expect(executeQueryMock.mock.calls.at(-1)?.[0].variables.threadId).toBe(
+      'server-thread'
+    );
+    expect(executeQueryMock.mock.calls.at(-1)?.[1].requestPolicy).toBe(
+      'cache-and-network'
+    );
+  } finally {
+    root.dispose();
+  }
+});
+
+it('does not query a local route when cache initialization fails', async () => {
+  initializeClientMock.mockReset();
+  executeQueryMock.mockReset();
+  queryMock.mockReset();
+  cacheEnabledMock.mockReturnValue(true);
+  hostMock.mockReturnValue(undefined);
+  const root = createRoot((dispose) => ({
+    dispose,
+    ...createGraphqlEmailThreadQuery(
+      () => 'local-thread',
+      () => ({ enabled: true })
+    ),
+  }));
+  try {
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(executeQueryMock).not.toHaveBeenCalled();
+    await expect(fetchGraphqlEmailThread('local-thread')).rejects.toThrow(
+      'identity is unknown'
+    );
+    expect(queryMock).not.toHaveBeenCalled();
+  } finally {
+    root.dispose();
+  }
 });

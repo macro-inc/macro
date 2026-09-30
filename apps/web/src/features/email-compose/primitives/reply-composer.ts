@@ -255,7 +255,9 @@ export function createReplyComposer(
         ? {
             draftId: draftSeed.db_id,
             threadId: draftSeed.thread_db_id,
-            persistence: props.drafts.readDraft ? 'committed' : undefined,
+            // A cached seed may still use local IDs. Only a cache read or save
+            // can confirm it for REST actions.
+            persistence: props.drafts.readDraft ? 'queued' : undefined,
             inboxId: draftSeed.link_id,
           }
         : undefined
@@ -501,7 +503,9 @@ export function createReplyComposer(
   ) {
     props.notices.reportError(error);
     if (!session.serverConfirmed()) {
-      if (schedule?.pending()) {
+      // A best-effort pre-send save may fail while delivery still succeeds.
+      // Background saves and explicit draft actions report their own failure.
+      if (schedule?.pending() || !submitting()) {
         props.notices.feedback.failure(`Failed to ${operation} draft`);
       }
       return;
@@ -597,10 +601,6 @@ export function createReplyComposer(
   }
 
   const autosave = createDraftAutosave({
-    onError: (error) => {
-      props.notices.reportError(error);
-      props.notices.feedback.failure('Unable to save draft on this device');
-    },
     capture: captureSave,
     persist: persistDraft,
     paused: () =>
