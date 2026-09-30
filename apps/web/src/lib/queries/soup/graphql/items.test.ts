@@ -1150,6 +1150,90 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     }
   });
 
+  it('keeps a newer non-Mail reconciliation authoritative after reconnect', async () => {
+    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    let revision = REVISION_1;
+    getGraphqlSoupCacheHostMock.mockReturnValue({
+      currentRevision: async () => revision,
+      entityFilter: entityFilterMock,
+      onCacheChanged: () => () => {},
+      onCacheGenerationChanged: () => () => {},
+    });
+    entityFilterMock.mockImplementation(async () => ({
+      kind: 'reconciled',
+      revision,
+      keys: ['GraphqlSoupDocument:item-0'],
+      retainedKeys: [],
+      optimistic: false,
+    }));
+    readRecordsByKeysMock.mockImplementation(async () => ({
+      revision,
+      records: [
+        {
+          recordKey: 'GraphqlSoupDocument:item-0',
+          record: {
+            id: 'item-0',
+            type: 'document',
+            name: 'Hydrated local item',
+          },
+        },
+      ],
+    }));
+    const { query, dispose } = createRoot((dispose) => ({
+      dispose,
+      query: createGraphqlSoupAstItemsQuery(
+        () => ({ params: {}, body: {} }),
+        () => ({ enabled: true })
+      ),
+    }));
+    const names = () => query.data()?.entities.map((item) => item.name);
+    const page = (name: string) =>
+      graphqlSoupPage({
+        items: [{ id: 'item-0', type: 'document', name }],
+        next_cursor: null,
+      });
+    try {
+      fake.executions[0].next(page('Old network item'), {
+        source: 'live-network',
+        revision: REVISION_1,
+      });
+      await vi.waitFor(() => expect(names()).toEqual(['Old network item']));
+
+      // Hydration advances storage without notifying foreground readers.
+      revision = REVISION_2;
+      online.mockReturnValue(false);
+      window.dispatchEvent(new Event('offline'));
+      await vi.waitFor(() => expect(names()).toEqual(['Hydrated local item']));
+      expect(entityFilterMock.mock.calls.at(-1)?.[0]).toHaveProperty(
+        'baseline'
+      );
+      expect(entityFilterMock.mock.calls.at(-1)?.[0]).not.toHaveProperty(
+        'mail'
+      );
+
+      online.mockReturnValue(true);
+      window.dispatchEvent(new Event('online'));
+      // Neither the synchronous publication nor a completed follow-up may
+      // restore revision 1 merely because connectivity returned.
+      expect(names()).toEqual(['Hydrated local item']);
+      await vi.waitFor(() => expect(names()).toEqual(['Hydrated local item']));
+      expect(fake.executions).toHaveLength(1);
+
+      // A genuinely newer network snapshot must still take authority.
+      revision = '3';
+      fake.executions[0].next(page('Fresh network item'), {
+        source: 'live-network',
+        revision,
+      });
+      await vi.waitFor(() => expect(names()).toEqual(['Fresh network item']));
+    } finally {
+      dispose();
+      online.mockRestore();
+    }
+  });
+
   it('paginates never-visited Mail filters offline without a server cursor or stale preview timestamps', async () => {
     const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
     const fake = makeFakeClient();

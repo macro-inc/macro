@@ -522,10 +522,9 @@ export function createGraphqlSoupAstItemsQuery(
             });
             // The filter, fragments, and final revision agree. A newer coherent
             // page is valid even if hydration advanced past the initial read.
-            // Publish its watermark atomically so the Mail guard avoids another scan.
-            if (result.kind === 'mail-page') {
-              setCurrentCacheRevision(result.revision);
-            }
+            // Publish both result kinds' watermarks: the Mail guard avoids a
+            // rescan, and reconnect cannot make an older network snapshot authoritative.
+            setCurrentCacheRevision(result.revision);
           });
           outcome = 'success';
           recordAuthority('local');
