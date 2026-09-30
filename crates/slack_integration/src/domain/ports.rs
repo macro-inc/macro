@@ -165,6 +165,14 @@ pub trait ImportRepo: Send + Sync + 'static {
         job: JobId,
     ) -> impl Future<Output = PortResult<Option<ImportProgress>>> + Send;
 
+    /// Original human requester, resolved only within the authorized team/job.
+    /// Used for best-effort invalidation, never exposed in progress payloads.
+    fn requested_by(
+        &self,
+        team: TeamId,
+        job: JobId,
+    ) -> impl Future<Output = PortResult<Option<MacroUserIdStr<'static>>>> + Send;
+
     /// At most 50 team-owned receipts, descending job ID, exclusively before the cursor.
     fn list(
         &self,
@@ -292,6 +300,18 @@ pub trait ImportAuthorizer: Send + Sync + 'static {
     ) -> impl Future<Output = PortResult<()>> + Send;
 }
 
+/// Read-only disclosure for administrator receipts, separate from import-write authority.
+pub trait ImportProgressAccess: Send + Sync + 'static {
+    /// Return targets in which this viewer currently participates. Conservatively
+    /// omit all other IDs, including team-visible channels without participation.
+    /// Inputs are deduplicated and bounded to 500 IDs per call.
+    fn participating_targets(
+        &self,
+        viewer: &MacroUserIdStr<'_>,
+        targets: &[Uuid],
+    ) -> impl Future<Output = PortResult<Vec<Uuid>>> + Send;
+}
+
 /// Best-effort invalidation only; persisted polling is the source of truth.
 pub trait ImportNotifier: Send + Sync + 'static {
     /// Notify the requesting administrator's gateway entity of a job revision using
@@ -318,10 +338,14 @@ pub trait ImportLedger: Send + Sync + 'static {
 
     /// Atomically reserve or return the stable target for (team, Slack, foreign ID).
     /// Ambiguous legacy mappings fail closed; never allocate a second candidate.
+    /// Pass the persisted requester and metadata, not queue-supplied context. An
+    /// existing target must already be independently authorized by the caller.
     fn reserve(
         &self,
         team: TeamId,
-        conversation: &ConversationId,
+        requester: &MacroUserIdStr<'static>,
+        metadata: &ConversationMetadata,
+        authorized_existing_target: Option<Uuid>,
     ) -> impl Future<Output = PortResult<TargetReservation>> + Send;
 
     /// Mark a successfully created reserved target ready, preserving the first mapping.

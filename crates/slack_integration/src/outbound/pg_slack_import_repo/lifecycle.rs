@@ -120,6 +120,26 @@ impl ImportRepo for PgSlackImportRepo {
     async fn progress(&self, team: TeamId, job: JobId) -> PortResult<Option<ImportProgress>> {
         Self::progress(self, team, job).await
     }
+    async fn requested_by(
+        &self,
+        team: TeamId,
+        job: JobId,
+    ) -> PortResult<Option<MacroUserIdStr<'static>>> {
+        sqlx::query_scalar!(
+            "SELECT user_id FROM slack_import_job WHERE team_id = $1 AND id = $2",
+            Uuid::from(team),
+            Uuid::from(job),
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(internal)?
+        .map(|user| {
+            MacroUserIdStr::parse_from_str(&user)
+                .map(CowLike::into_owned)
+                .map_err(internal)
+        })
+        .transpose()
+    }
     async fn list(&self, team: TeamId, before: Option<JobId>) -> PortResult<Vec<ImportProgress>> {
         Self::list(self, team, before).await
     }
