@@ -3118,6 +3118,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum",
+ "axum-extra",
  "bot_id",
  "bot_token",
  "channels",
@@ -3313,7 +3314,7 @@ dependencies = [
 
 [[package]]
 name = "cache-wasm"
-version = "0.6.32"
+version = "0.6.34"
 dependencies = [
  "async-lock",
  "cache-core",

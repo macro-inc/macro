@@ -8,6 +8,7 @@ import CheckIcon from '@phosphor/check.svg';
 import CodeIcon from '@phosphor/code.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import { Dropdown } from '@ui';
+import { tourTarget } from '@ui/components/Tour';
 import { createSignal, For, Show } from 'solid-js';
 import { AgentModelMenuItem } from '../../block-agent/component/AgentModelMenuItem';
 import type {
@@ -21,6 +22,7 @@ import {
   rosterForAgentPicker,
 } from '../core/roster';
 import { createComposerModels } from '../queries/composer-models';
+import { AGENTS_TOUR } from '../tour';
 
 /** Agent selection with a per-message model catalog in each submenu. */
 export function AgentPicker(props: {
@@ -75,6 +77,7 @@ export function AgentPicker(props: {
       <Dropdown.Trigger
         variant="ghost"
         aria-label="Agent"
+        ref={tourTarget(AGENTS_TOUR.picker)}
         title={
           rawModel()
             ? label()

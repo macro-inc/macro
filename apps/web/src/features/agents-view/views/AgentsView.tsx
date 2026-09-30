@@ -4,6 +4,7 @@ import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filter
 import { AgentSettings } from '@app/features/settings/AgentSettings';
 import { McpConnections } from '@app/features/settings/McpConnections';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
+import { ViewTour } from '@app/features/tours/ViewTour';
 import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
@@ -49,6 +50,7 @@ import {
 import { kindForBot } from '../core/roster';
 import { type AgentsRoute, agentsRouteId } from '../core/route';
 import { createAgentRosterSource } from '../queries/agent-roster-source';
+import { agentsTour } from '../tour';
 import { NewChatPage, type StartConversation } from './NewChatPage';
 
 type SelectedConversation = {
@@ -292,6 +294,7 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
               </ViewShell.Aside>
 
               <ViewShell.Main class="overflow-hidden">
+                <ViewTour tour={agentsTour} />
                 <main class="main">
                   <Show
                     when={selected()?.conversation}

@@ -355,7 +355,7 @@ export type HydrationResult = HydrationSearchChanges &
     | { kind: 'void'; revision: CacheRevision }
   );
 
-export type WriteResult = {
+export type WriteResult = HydrationSearchChanges & {
   /** Effective-view revision installed by this logical mutation. */
   revision: CacheRevision;
   /** Whether this write advanced `revision`. */
@@ -632,7 +632,11 @@ export type CachePush =
       /** Changed entity keys, for diagnostics/advanced consumers. */
       keys: string[];
     }
-  | { kind: 'cache-changed'; revision: CacheRevision; reset?: boolean }
+  | ({
+      kind: 'cache-changed';
+      revision: CacheRevision;
+      reset?: boolean;
+    } & HydrationSearchChanges)
   | ({
       kind: 'cache-hydrated';
       revision: CacheRevision;
@@ -721,9 +725,16 @@ export function isCachePush(value: unknown): value is CachePush {
       );
     case 'cache-changed':
       return (
-        hasOnlyWireKeys(value, ['kind', 'revision', 'reset']) &&
+        hasOnlyWireKeys(value, [
+          'kind',
+          'revision',
+          'reset',
+          'searchChangedBuckets',
+        ]) &&
         isCacheRevision(value.revision) &&
-        (value.reset === undefined || typeof value.reset === 'boolean')
+        (value.reset === undefined || typeof value.reset === 'boolean') &&
+        (value.searchChangedBuckets === undefined ||
+          isWireStringArray(value.searchChangedBuckets))
       );
     case 'cache-hydrated':
       return (

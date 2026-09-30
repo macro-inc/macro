@@ -29,6 +29,7 @@ import PlusIcon from '@phosphor/plus.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, cn } from '@ui';
 import { usePager } from '@ui/components/Pager';
+import { tourTarget } from '@ui/components/Tour';
 import {
   createMemo,
   createSignal,
@@ -37,6 +38,7 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { CALENDAR_TOUR } from '../tour';
 import {
   CalendarCreateCallItem,
   CalendarCreateEventItem,
@@ -251,6 +253,7 @@ export function Header(props: { presentation: 'workspace' | 'preview' }) {
                 size="icon-sm"
                 class="shrink-0"
                 label="Show calendar navigation"
+                ref={tourTarget(CALENDAR_TOUR.sidebarToggle)}
                 aria-expanded={shell?.aside.isOverlay() ?? false}
                 onClick={() => shell?.aside.expand()}
               >
@@ -274,7 +277,10 @@ export function Header(props: { presentation: 'workspace' | 'preview' }) {
 
         <SplitHeaderRight>
           <HeaderIsland class="px-1">
-            <div class="flex items-center gap-1">
+            <div
+              ref={tourTarget(CALENDAR_TOUR.period)}
+              class="flex items-center gap-1"
+            >
               <Show when={!isMobile()}>
                 <PeriodSelector isNarrow={isNarrow()} />
                 <div class="flex shrink-0 items-center gap-1">
@@ -359,6 +365,7 @@ export function Header(props: { presentation: 'workspace' | 'preview' }) {
               isCompactHeader() ? 'basis-full' : 'ml-4'
             )}
             data-calendar-period-controls=""
+            ref={tourTarget(CALENDAR_TOUR.period)}
             onClick={() => setSearchExpanded(false)}
           >
             <Show when={showHeaderCreate()}>

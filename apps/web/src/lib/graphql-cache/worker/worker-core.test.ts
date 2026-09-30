@@ -972,6 +972,46 @@ describe('CacheWorkerCore', () => {
     });
   });
 
+  it.each([
+    { searchChangedBuckets: [], reset: false },
+    { searchChangedBuckets: ['note'], reset: false },
+    { searchChangedBuckets: [], reset: true },
+  ])(
+    'scopes ordinary writes but not resets: %j',
+    async ({ searchChangedBuckets, reset }) => {
+      loadCacheWasmMock.mockResolvedValue({
+        openCache: vi.fn().mockResolvedValue({
+          writeQuery: vi.fn().mockResolvedValue({
+            revision: INITIAL_CACHE_REVISION,
+            revisionAdvanced: true,
+            changed: ['GraphqlUser:viewer'],
+            affectedOps: [],
+            reset,
+            searchChangedBuckets,
+          }),
+        }),
+      });
+      const messages: unknown[] = [];
+      const port = {
+        postMessage: (message: unknown) => messages.push(message),
+      };
+      const core = new CacheWorkerCore();
+      core.addPort(port);
+      await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+      await core.handleRequest(port, {
+        id: 2,
+        kind: 'write',
+        query: '{ user { id } }',
+        data: { user: { id: 'viewer' } },
+      });
+      expect(messages).toContainEqual({
+        kind: 'cache-changed',
+        revision: INITIAL_CACHE_REVISION,
+        ...(reset ? { reset: true } : { searchChangedBuckets }),
+      });
+    }
+  );
+
   it('does not push cache changes for no-op writes', async () => {
     const writeResult = {
       revision: INITIAL_CACHE_REVISION,

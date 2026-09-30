@@ -163,6 +163,60 @@ pub struct BotProfile {
     pub avatar_url: Option<String>,
 }
 
+/// Most bot ids one owner-profile request accepts, counting duplicates.
+pub const MAX_BOT_OWNER_PROFILE_IDS: usize = 100;
+
+/// Bot identity for rendering, including the sponsor and soft-delete time.
+///
+/// `owner` is none only for a registry system bot. A persisted row always has
+/// a sponsor.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct BotOwnerProfile {
+    /// Bot id.
+    pub id: BotId,
+    /// Display name.
+    pub name: String,
+    /// Avatar URL. Registry system bots have none.
+    pub avatar_url: Option<String>,
+    /// Soft-delete time. Absent for an active bot and for a registry system bot.
+    pub deleted_at: Option<DateTime<Utc>>,
+    /// Sponsor. None only for a registry system bot.
+    pub owner: Option<BotOwner>,
+}
+
+impl BotOwnerProfile {
+    /// Profile of a first-party bot from the registry.
+    #[must_use]
+    pub fn system(bot: &bot_id::SystemBot) -> Self {
+        Self {
+            id: bot.id,
+            name: bot.name.to_owned(),
+            avatar_url: None,
+            deleted_at: None,
+            owner: None,
+        }
+    }
+
+    /// Profile of a persisted bot, including one that is soft-deleted.
+    #[must_use]
+    pub fn persisted(
+        id: BotId,
+        name: String,
+        avatar_url: Option<String>,
+        deleted_at: Option<DateTime<Utc>>,
+        owner: BotOwner,
+    ) -> Self {
+        Self {
+            id,
+            name,
+            avatar_url,
+            deleted_at,
+            owner: Some(owner),
+        }
+    }
+}
+
 impl Bot {
     /// The [`Bot`] view of a first-party bot.
     ///
