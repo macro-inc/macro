@@ -7,7 +7,7 @@ use super::{
         BotChannelListCaller, BotId, BotKind, BotOwner, BotOwnerProfile, BotToken,
         BotTokenCandidate, CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest,
         CreateChannelScopedBotRequest, CreateChannelScopedBotResponse, HarnessId, HarnessOwner,
-        MAX_BOT_OWNER_PROFILE_IDS, PatchBotRequest, UpdateAgentRequest,
+        MAX_BOT_OWNER_PROFILE_IDS, PatchAgentRequest, PatchBotRequest, UpdateAgentRequest,
     },
     ports::{BotError, BotRepo, BotService},
     tokens,
@@ -395,6 +395,64 @@ where
         }
     }
 
+    /// Replace a manageable agent's configuration with `req`, `current` being
+    /// the bot [`Self::ensure_manageable`] returned for it.
+    async fn replace_agent(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        current: &Bot,
+        req: UpdateAgentRequest,
+    ) -> Result<Agent, BotError> {
+        validate_update_agent_request(&req)?;
+        if req.channel_scope == AgentChannelScope::Selected
+            && !self
+                .repo
+                .user_has_channels(caller.clone(), &req.channel_ids)
+                .await
+                .map_err(|err| BotError::Repo(err.into()))?
+        {
+            return Err(BotError::Unauthorized);
+        }
+
+        let owner = self
+            .owner_for_agent_update(caller.clone(), current, req.team_id)
+            .await?;
+        self.ensure_harness_usable(
+            caller.clone(),
+            &owner,
+            req.harness_id,
+            req.auto_accept_permissions,
+        )
+        .await?;
+        let requested_name = req.name.clone();
+        let requested_handle = req.handle.clone();
+        let requested_description = req.description.clone();
+        let requested_avatar_url = req.avatar_url.clone();
+        let agent = self
+            .repo
+            .update_agent(current.id, owner, req)
+            .await
+            .map_err(|err| BotError::Repo(err.into()))?
+            .ok_or_else(|| BotError::NotFound("agent not found".to_string()))?;
+
+        self.publish_bot_event(&BotMacroEvent::updated(BotUpdatedMetadata {
+            bot_id: agent.bot.id,
+            owner: agent
+                .bot
+                .owner
+                .clone()
+                .expect("owned agent bot must have an owner"),
+            actor_user_id: caller,
+            name: Some(requested_name),
+            handle: Some(requested_handle),
+            description: requested_description,
+            avatar_url: requested_avatar_url,
+            updated_at: agent.bot.updated_at,
+        }));
+
+        Ok(agent)
+    }
+
     async fn authenticate_candidate(
         &self,
         candidate: Option<BotTokenCandidate>,
@@ -485,55 +543,24 @@ where
         req: UpdateAgentRequest,
     ) -> Result<Agent, BotError> {
         let current = self.ensure_manageable(caller.clone(), bot_id).await?;
+        self.replace_agent(caller, &current, req).await
+    }
 
-        validate_update_agent_request(&req)?;
-        if req.channel_scope == AgentChannelScope::Selected
-            && !self
-                .repo
-                .user_has_channels(caller.clone(), &req.channel_ids)
-                .await
-                .map_err(|err| BotError::Repo(err.into()))?
-        {
-            return Err(BotError::Unauthorized);
-        }
-
-        let owner = self
-            .owner_for_agent_update(caller.clone(), &current, req.team_id)
-            .await?;
-        self.ensure_harness_usable(
-            caller.clone(),
-            &owner,
-            req.harness_id,
-            req.auto_accept_permissions,
-        )
-        .await?;
-        let requested_name = req.name.clone();
-        let requested_handle = req.handle.clone();
-        let requested_description = req.description.clone();
-        let requested_avatar_url = req.avatar_url.clone();
+    async fn patch_agent(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        bot_id: BotId,
+        req: PatchAgentRequest,
+    ) -> Result<Agent, BotError> {
+        let current = self.ensure_manageable(caller.clone(), bot_id).await?;
         let agent = self
             .repo
-            .update_agent(bot_id, owner, req)
+            .get_agent(bot_id)
             .await
             .map_err(|err| BotError::Repo(err.into()))?
             .ok_or_else(|| BotError::NotFound("agent not found".to_string()))?;
-
-        self.publish_bot_event(&BotMacroEvent::updated(BotUpdatedMetadata {
-            bot_id: agent.bot.id,
-            owner: agent
-                .bot
-                .owner
-                .clone()
-                .expect("owned agent bot must have an owner"),
-            actor_user_id: caller,
-            name: Some(requested_name),
-            handle: Some(requested_handle),
-            description: requested_description,
-            avatar_url: requested_avatar_url,
-            updated_at: agent.bot.updated_at,
-        }));
-
-        Ok(agent)
+        self.replace_agent(caller, &current, req.apply_to(&agent))
+            .await
     }
 
     async fn list_agents(&self, caller: MacroUserIdStr<'static>) -> Result<Vec<Agent>, BotError> {

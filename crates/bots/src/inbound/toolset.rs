@@ -1,10 +1,12 @@
 //! AI tools for bot management.
 
+mod configure_agent;
 mod configure_bot;
 mod create_bot;
 mod delete_bot;
 mod get_bot_webhooks;
 mod issue_bot_credential;
+mod list_agents;
 mod list_bots;
 mod manage_bot_channel_access;
 mod types;
@@ -14,6 +16,7 @@ mod test;
 
 use crate::domain::ports::{BotError, BotService};
 use ai_toolset::{AsyncToolCollection, RequestContext, ToolCallError};
+use configure_agent::ConfigureAgent;
 use configure_bot::ConfigureBot;
 use create_bot::CreateBot;
 use delete_bot::DeleteBot;
@@ -23,12 +26,16 @@ use entity_access::domain::{
 };
 use get_bot_webhooks::GetBotWebhooks;
 use issue_bot_credential::IssueBotCredential;
+use list_agents::ListAgents;
 use list_bots::ListBots;
 use manage_bot_channel_access::ManageBotChannelAccess;
 use std::sync::Arc;
 use uuid::Uuid;
 
+pub use configure_agent::{AgentHarnessOption, ConfigureAgentResponse};
+pub use list_agents::ListAgentsResponse;
 pub use types::{
+    AgentChannelScopeSummary, AgentMcpScopeSummary, AgentMcpServerSummary, AgentSummary,
     BOT_WEBHOOK_SCOPE, BOT_WEBHOOK_SCOPE_HEADER, BOT_WEBHOOK_TOKEN_HEADER, BotOwnerSummary,
     BotSummary, BotWebhook, CreatedBotChannelSetup,
 };
@@ -146,4 +153,6 @@ where
         .add_tool::<ManageBotChannelAccess, BotToolContext<Svc, AccessSvc>>()
         .add_tool::<ConfigureBot, BotToolContext<Svc, AccessSvc>>()
         .add_tool::<DeleteBot, BotToolContext<Svc, AccessSvc>>()
+        .add_tool::<ListAgents, BotToolContext<Svc, AccessSvc>>()
+        .add_tool::<ConfigureAgent, BotToolContext<Svc, AccessSvc>>()
 }

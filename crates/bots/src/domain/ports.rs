@@ -4,7 +4,8 @@ use super::models::{
     Agent, AuthenticatedBot, Bot, BotChannel, BotChannelListCaller, BotId, BotOwner,
     BotOwnerProfile, BotProfile, BotToken, BotTokenCandidate, CreateAgentRequest, CreateBotRequest,
     CreateBotTokenRequest, CreateBotTokenResponse, CreateChannelScopedBotRequest,
-    CreateChannelScopedBotResponse, HarnessFacts, HarnessId, PatchBotRequest, UpdateAgentRequest,
+    CreateChannelScopedBotResponse, HarnessFacts, HarnessId, PatchAgentRequest, PatchBotRequest,
+    UpdateAgentRequest,
 };
 use bot_token::HashedBotToken;
 use entity_access::domain::models::{EntityAccessReceipt, MemberParticipantRole};
@@ -231,6 +232,15 @@ pub trait BotService: Send + Sync + 'static {
         caller: MacroUserIdStr<'static>,
         bot_id: BotId,
         req: UpdateAgentRequest,
+    ) -> impl Future<Output = Result<Agent, BotError>> + Send;
+
+    /// Change part of a manageable agent's instructions or settings, keeping
+    /// everything the patch leaves unnamed - owner and profile included.
+    fn patch_agent(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        bot_id: BotId,
+        req: PatchAgentRequest,
     ) -> impl Future<Output = Result<Agent, BotError>> + Send;
 
     /// List agents the caller can manage or start a managed session as.
