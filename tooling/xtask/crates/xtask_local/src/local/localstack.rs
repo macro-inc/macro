@@ -124,6 +124,19 @@ async fn create_queues(sqs: &aws_sdk_sqs::Client) -> Result<()> {
         }
         ignore_exists(request.send().await.map(|_| ()), &format!("queue {name}"))?;
     }
+    // Update existing queues too; do not rely on CreateQueue accepting changed attributes.
+    for queue in resources::QUEUES {
+        let attributes = queue.attributes();
+        if attributes.is_empty() {
+            continue;
+        }
+        sqs.set_queue_attributes()
+            .queue_url(resources::queue_url(queue.name))
+            .set_attributes(Some(attributes))
+            .send()
+            .await
+            .with_context(|| format!("setting attributes on {}", queue.name))?;
+    }
     Ok(())
 }
 
