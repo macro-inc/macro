@@ -1458,6 +1458,10 @@ input GraphqlChannelThreadLiteral @oneOf {
 	Exact notification state for the requester.
 	"""
 	notificationState: NotificationState
+	"""
+	Whether the thread has at least one undeleted reply.
+	"""
+	hasReplies: Boolean
 }
 
 """

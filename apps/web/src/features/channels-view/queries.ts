@@ -18,10 +18,7 @@ import {
   useSoupAstItemsQuery,
 } from '@queries/soup/items';
 import { type Accessor, createEffect, createMemo } from 'solid-js';
-import {
-  channelThreadsQueryArgs,
-  isUnansweredOwnMessage,
-} from './queries/channel-threads';
+import { channelThreadsQueryArgs } from './queries/channel-threads';
 import type {
   ChannelListSort,
   ChannelsQueryScope,
@@ -244,11 +241,7 @@ function useThreadChannelsDataSource(
     if (!threadsQuery.isEnabled || threadsQuery.isLoading) return previous;
     const ids = new Set<string>();
     for (const entity of threadsQuery.data?.entities ?? []) {
-      if (
-        isChannelThreadEntity(entity) &&
-        !entity.deletedAt &&
-        !isUnansweredOwnMessage(entity, userId())
-      )
+      if (isChannelThreadEntity(entity) && !entity.deletedAt)
         ids.add(entity.channelId);
     }
     return [...ids];

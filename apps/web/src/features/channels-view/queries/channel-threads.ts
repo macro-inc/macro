@@ -10,14 +10,23 @@ import { type Accessor, createMemo } from 'solid-js';
 const CHANNEL_THREADS_PAGE_SIZE = 20;
 
 /**
- * Threads the user takes part in, most recent reply first. With a channel id,
- * only that conversation's threads; without one, across every conversation.
+ * Threads the user takes part in, most recent reply first, except messages
+ * they sent that nobody has answered. With a channel id, only that
+ * conversation's threads; without one, across every conversation.
  */
 export function channelThreadsQueryArgs(
   userId: string,
   channelId: string | undefined
 ): SoupAstItemsQueryArgs {
-  const participant = clause.eq('channelThreadParticipantId', userId);
+  const involved = clause.and(
+    clause.eq('channelThreadParticipantId', userId),
+    clause.not(
+      clause.and(
+        clause.eq('channelThreadRootSenderId', userId),
+        clause.eq('channelThreadHasReplies', false)
+      )
+    )
+  );
   return {
     params: {
       limit: CHANNEL_THREADS_PAGE_SIZE,
@@ -26,25 +35,11 @@ export function channelThreadsQueryArgs(
     body: compileClause(
       confine({
         cthf: channelId
-          ? clause.and(
-              clause.eq('channelThreadChannelId', channelId),
-              participant
-            )
-          : participant,
+          ? clause.and(clause.eq('channelThreadChannelId', channelId), involved)
+          : involved,
       })
     ),
   };
-}
-
-/**
- * A root message the user sent that nobody has replied to. Participant counts
- * the root sender, and the backend has no reply-count filter, so drop these here.
- */
-export function isUnansweredOwnMessage(
-  thread: ChannelThreadEntity,
-  userId: string | undefined
-): boolean {
-  return thread.senderId === userId && thread.thread.replyCount === 0;
 }
 
 export function useChannelThreadsQuery(
@@ -61,9 +56,7 @@ export function useChannelThreadsQuery(
     query.isEnabled && !query.isLoading
       ? (query.data?.entities ?? []).filter(
           (entity): entity is ChannelThreadEntity =>
-            isChannelThreadEntity(entity) &&
-            !entity.deletedAt &&
-            !isUnansweredOwnMessage(entity, userId())
+            isChannelThreadEntity(entity) && !entity.deletedAt
         )
       : []
   );

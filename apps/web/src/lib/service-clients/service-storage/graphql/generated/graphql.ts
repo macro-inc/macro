@@ -312,14 +312,16 @@ export type GraphqlChannelThreadExpr =
 /** GraphQL input representing the channel thread literal. */
 export type GraphqlChannelThreadLiteral =
   {   /** The channel id option. */
-  channelId: string | number; notificationState?: never; participant?: never; rootSender?: never; threadId?: never; }
-  |  { channelId?: never;   /** Exact notification state for the requester. */
+  channelId: string | number; hasReplies?: never; notificationState?: never; participant?: never; rootSender?: never; threadId?: never; }
+  |  { channelId?: never;   /** Whether the thread has at least one undeleted reply. */
+  hasReplies: boolean; notificationState?: never; participant?: never; rootSender?: never; threadId?: never; }
+  |  { channelId?: never; hasReplies?: never;   /** Exact notification state for the requester. */
   notificationState: NotificationState; participant?: never; rootSender?: never; threadId?: never; }
-  |  { channelId?: never; notificationState?: never;   /** The participant option. */
+  |  { channelId?: never; hasReplies?: never; notificationState?: never;   /** The participant option. */
   participant: string; rootSender?: never; threadId?: never; }
-  |  { channelId?: never; notificationState?: never; participant?: never;   /** The root sender option. */
+  |  { channelId?: never; hasReplies?: never; notificationState?: never; participant?: never;   /** The root sender option. */
   rootSender: string; threadId?: never; }
-  |  { channelId?: never; notificationState?: never; participant?: never; rootSender?: never;   /** The thread id option. */
+  |  { channelId?: never; hasReplies?: never; notificationState?: never; participant?: never; rootSender?: never;   /** The thread id option. */
   threadId: string | number; };
 
 /** GraphQL input representing the channel type filter. */

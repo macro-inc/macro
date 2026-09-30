@@ -110,9 +110,11 @@ describe('Threads rail source', () => {
       name: id,
       updatedAt,
     });
+    const threadFilters: string[] = [];
     useSoupAstItemsQuery.mockImplementation((args) => {
       const { body } = args();
       const isThreadQuery = JSON.stringify(body.cthf).includes('Participant');
+      if (isThreadQuery) threadFilters.push(JSON.stringify(body.cthf));
       return {
         isEnabled: true,
         isLoading: false,
@@ -120,8 +122,8 @@ describe('Threads rail source', () => {
           entities: isThreadQuery
             ? [
                 thread('t1', 'dm', 'someone', 2),
-                thread('t2', 'general', 'user-1', 0),
-                thread('t3', 'eng', 'user-1', 1),
+                thread('t2', 'eng', 'user-1', 1),
+                thread('t3', 'eng', 'someone', 4),
               ]
             : [
                 channel('eng', '2026-09-02'),
@@ -136,8 +138,10 @@ describe('Threads rail source', () => {
         (scope) => scope === 'threads',
         () => 'updated_at'
       );
-      // `general` only holds the user's unanswered message, so it is left out.
+      // Distinct channels in the channel sort; `general` holds no threads.
       expect(sources.threads.items().map((c) => c.id)).toEqual(['eng', 'dm']);
+      // The server drops the user's unanswered roots, so pages stay full.
+      expect(threadFilters[0]).toContain('HasReplies');
       return dispose;
     });
     dispose();

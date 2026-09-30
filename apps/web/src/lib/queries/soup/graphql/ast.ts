@@ -416,7 +416,8 @@ type ChannelThreadLiteralField =
   | 'RootSender'
   | 'Sender'
   | 'Participant'
-  | 'NotificationState';
+  | 'NotificationState'
+  | 'HasReplies';
 
 const CHANNEL_THREAD_LITERAL_FIELDS = [
   'ThreadId',
@@ -425,6 +426,7 @@ const CHANNEL_THREAD_LITERAL_FIELDS = [
   'Sender',
   'Participant',
   'NotificationState',
+  'HasReplies',
 ] as const satisfies readonly ChannelThreadLiteralField[];
 
 function isChannelThreadLiteralField(
@@ -451,6 +453,9 @@ function mapChannelThreadLiteral(
     }))
     .with('Participant', () => ({
       participant: mapString(value, 'participant'),
+    }))
+    .with('HasReplies', () => ({
+      hasReplies: mapBoolean(value, 'hasReplies'),
     }))
     .with('NotificationState', () => ({
       notificationState: mapNotificationState(value),

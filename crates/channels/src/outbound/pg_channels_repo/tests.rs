@@ -1387,6 +1387,90 @@ async fn channel_thread_rows_filter_by_root_sender(pool: Pool<Postgres>) -> anyh
     Ok(())
 }
 
+async fn thread_ids_matching(
+    pool: Pool<Postgres>,
+    querying_user: &str,
+    filter: Expr<ChannelThreadLiteral>,
+) -> anyhow::Result<Vec<Uuid>> {
+    let rows = repo(pool)
+        .get_thread_messages(
+            thread_rows_request(
+                querying_user,
+                Some(Arc::new(filter)),
+                SimpleSortMethod::UpdatedAt,
+                50,
+            )
+            .into_params(),
+        )
+        .await
+        .map_err(report_err)?;
+    Ok(rows.iter().map(|row| row.id).collect())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn channel_thread_rows_filter_by_has_replies(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    // user-a rooted msg1 (four replies), msg31 (one reply) and msg3 (none).
+    let root_sender = || Expr::val(ChannelThreadLiteral::RootSender(macro_user_id(USER_A)));
+    let with_replies = thread_ids_matching(
+        pool.clone(),
+        USER_A,
+        Expr::and(
+            root_sender(),
+            Expr::val(ChannelThreadLiteral::HasReplies(true)),
+        ),
+    )
+    .await?;
+    assert_eq!(with_replies, vec![MSG1, MSG31]);
+
+    let without_replies = thread_ids_matching(
+        pool,
+        USER_A,
+        Expr::and(
+            root_sender(),
+            Expr::val(ChannelThreadLiteral::HasReplies(false)),
+        ),
+    )
+    .await?;
+    assert_eq!(without_replies, vec![MSG3]);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn channel_thread_rows_filter_hides_unanswered_own_roots(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    // The web Threads tab: threads user-a takes part in, minus roots they sent
+    // that nobody answered. msg3 is user-a's unanswered root.
+    let participant = Expr::val(ChannelThreadLiteral::Participant(macro_user_id(USER_A)));
+    let unanswered_own_root = Expr::and(
+        Expr::val(ChannelThreadLiteral::RootSender(macro_user_id(USER_A))),
+        Expr::val(ChannelThreadLiteral::HasReplies(false)),
+    );
+    let parent_ids = thread_ids_matching(
+        pool.clone(),
+        USER_A,
+        Expr::and(participant.clone(), Expr::is_not(unanswered_own_root)),
+    )
+    .await?;
+    let all_participating = thread_ids_matching(pool, USER_A, participant).await?;
+
+    assert!(all_participating.contains(&MSG3));
+    assert_eq!(
+        parent_ids,
+        all_participating
+            .into_iter()
+            .filter(|id| *id != MSG3)
+            .collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
 async fn threads_matching_participant(
     pool: Pool<Postgres>,
     querying_user: &str,
