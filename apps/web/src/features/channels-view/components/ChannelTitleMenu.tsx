@@ -2,33 +2,32 @@ import { toSingleEntityActionListState } from '@app/features/next-soup/actions';
 import { SoupEntityActionsDropdown } from '@app/features/soup/SoupEntityActionsDropdown';
 import { ChannelDetailTitle } from '@channel/Channel/ChannelDetail';
 import type { ChannelEntity } from '@entity';
-import CaretDownIcon from '@phosphor/caret-down.svg';
+import DotsThreeIcon from '@phosphor/dots-three.svg';
 import { CHANNEL_ACTION_VIEW_CONTEXT } from './rail/ChannelRailItems';
 
 /**
- * The conversation header's title, doubling as its action menu. It offers the
- * same entity actions as the channel's row in the rail, so favoriting, muting
- * or renaming a conversation works from the conversation itself.
+ * The conversation's title followed by its entity actions, behind the same
+ * ellipsis a block's title menu uses. The actions match the channel's row in
+ * the rail, so favoriting, muting or renaming a conversation does not depend
+ * on finding that row.
  */
 export function ChannelTitleMenu(props: { channel: ChannelEntity }) {
   const list = toSingleEntityActionListState(() => props.channel);
 
   return (
-    <SoupEntityActionsDropdown
-      entity={props.channel}
-      list={list}
-      viewContext={CHANNEL_ACTION_VIEW_CONTEXT}
-      // No aria-label: the conversation's name is the button's own content,
-      // and Kobalte's trigger already announces that it opens a menu.
-      // text-ink: the conversation's name keeps a title's weight rather than
-      // the muted ink a ghost button paints its label in.
-      triggerProps={{ class: 'min-w-0 shrink gap-1.5 px-2 text-ink' }}
-    >
+    <div class="flex min-w-0 shrink items-center gap-1">
       <ChannelDetailTitle
         channelId={props.channel.id}
         fallbackName={props.channel.name}
       />
-      <CaretDownIcon class="size-3.5 shrink-0 text-ink-muted" />
-    </SoupEntityActionsDropdown>
+      <SoupEntityActionsDropdown
+        entity={props.channel}
+        list={list}
+        viewContext={CHANNEL_ACTION_VIEW_CONTEXT}
+        triggerProps={{ size: 'icon-sm', label: 'Channel actions' }}
+      >
+        <DotsThreeIcon />
+      </SoupEntityActionsDropdown>
+    </div>
   );
 }
