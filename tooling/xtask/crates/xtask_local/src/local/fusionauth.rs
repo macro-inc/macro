@@ -40,7 +40,7 @@ pub fn write_kickstart(
     std::fs::create_dir_all(&dir)
         .with_context(|| format!("creating kickstart dir {}", dir.display()))?;
 
-    let doc = kickstart::build(
+    let mut doc = kickstart::build(
         instance.port(Port::Frontend),
         instance.port(Port::Auth),
         instance.port(Port::DocCognition),
@@ -49,6 +49,9 @@ pub fn write_kickstart(
         google,
         github,
     );
+    if let Some(origin) = instance.public_origin() {
+        kickstart::configure_public_origin(&mut doc, origin);
+    }
     let json = serde_json::to_string_pretty(&doc)? + "\n";
     std::fs::write(dir.join("kickstart.json"), json)
         .with_context(|| format!("writing {}", dir.join("kickstart.json").display()))?;

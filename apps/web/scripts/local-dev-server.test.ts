@@ -61,6 +61,31 @@ describe('localDevServer', () => {
     expect(config.allowedHosts).toEqual(['coworker-dev']);
   });
 
+  it('binds loopback and admits a configured public HTTPS hostname', () => {
+    const target = 'https://localhost:8090';
+    const config = localDevServer({
+      LOCAL_PUBLIC_ORIGIN: 'https://forge.tail66c63e.ts.net:3000',
+      MACRO_LOCAL_BACKEND_PROXY: target,
+      MACRO_LOCAL_BACKEND_ROUTES: '/auth,/sync,/s3,/oauth2',
+      MACRO_LOCAL_HOSTNAME: 'local-workstation',
+    });
+
+    expect(config.host).toBe('127.0.0.1');
+    expect(config.allowedHosts).toEqual([
+      'local-workstation',
+      'forge.tail66c63e.ts.net',
+    ]);
+    expect(config.hmr).toBeUndefined();
+    for (const options of Object.values(config.proxy ?? {})) {
+      expect(options).toEqual({
+        target,
+        ws: true,
+        xfwd: true,
+        changeOrigin: true,
+      });
+    }
+  });
+
   it('rejects missing or malformed routing metadata instead of proxying everything', () => {
     for (const routes of [undefined, '', '/', '/auth,', '/auth|/app']) {
       expect(() =>
@@ -69,6 +94,37 @@ describe('localDevServer', () => {
           MACRO_LOCAL_BACKEND_ROUTES: routes,
         })
       ).toThrow(/MACRO_LOCAL_BACKEND_ROUTES/);
+    }
+  });
+
+  it('rejects malformed public origins and non-loopback public upstreams', () => {
+    for (const origin of [
+      'http://forge:3000',
+      'https://forge/app',
+      'https://user@forge',
+      'https://.example.com',
+      'https://*.example.com',
+    ]) {
+      expect(() =>
+        localDevServer({
+          LOCAL_PUBLIC_ORIGIN: origin,
+          MACRO_LOCAL_BACKEND_PROXY: 'https://localhost:8090',
+          MACRO_LOCAL_BACKEND_ROUTES: '/auth',
+        })
+      ).toThrow();
+    }
+    for (const target of [
+      'https://remote.example',
+      'http://remote.example:8090',
+      'https://localhost:8090/path',
+    ]) {
+      expect(() =>
+        localDevServer({
+          LOCAL_PUBLIC_ORIGIN: 'https://forge.tail66c63e.ts.net:3000',
+          MACRO_LOCAL_BACKEND_PROXY: target,
+          MACRO_LOCAL_BACKEND_ROUTES: '/auth',
+        })
+      ).toThrow();
     }
   });
 });

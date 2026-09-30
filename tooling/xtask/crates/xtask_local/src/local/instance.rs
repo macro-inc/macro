@@ -151,6 +151,7 @@ pub struct Instance {
     name: InstanceName,
     project_name: String,
     port_base: u16,
+    public_origin: Option<super::public_origin::PublicOrigin>,
 }
 
 impl Instance {
@@ -171,7 +172,56 @@ impl Instance {
             name,
             project_name,
             port_base,
+            public_origin: None,
         })
+    }
+
+    /// Resolve explicit CLI configuration; no persisted configuration is read.
+    pub fn from_args(args: &super::cli::InstanceArgs) -> Result<Self> {
+        let mut instance = Self::derive(args.instance.as_deref(), args.port_base)?;
+        instance.public_origin = args.public_origin.clone();
+        Ok(instance)
+    }
+
+    pub fn public_origin(&self) -> Option<&super::public_origin::PublicOrigin> {
+        self.public_origin.as_ref()
+    }
+
+    /// Browser-facing origin, keeping legacy loopback defaults without opt-in.
+    pub fn app_origin(&self, static_frontend: bool) -> String {
+        self.public_origin.as_ref().map_or_else(
+            || {
+                if static_frontend {
+                    format!("https://localhost:{}", self.port(Port::Proxy))
+                } else {
+                    format!("http://localhost:{}", self.port(Port::Frontend))
+                }
+            },
+            |origin| origin.as_str().to_string(),
+        )
+    }
+
+    /// Status and update retain the origin selected during artifact generation.
+    pub fn restore_public_origin(mut self) -> Result<Self> {
+        if self.public_origin.is_none() {
+            let path = self.artifact_dir().join("public-origin.json");
+            match std::fs::read_to_string(path) {
+                Ok(raw) => {
+                    let origin: Option<String> = serde_json::from_str(&raw)?;
+                    self.public_origin = origin.map(|value| value.parse()).transpose()?;
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error.into()),
+            }
+        }
+        Ok(self)
+    }
+
+    pub fn save_public_origin(&self) -> Result<()> {
+        let path = self.ensure_artifact_dir()?.join("public-origin.json");
+        let origin = self.public_origin.as_ref().map(|origin| origin.as_str());
+        std::fs::write(path, serde_json::to_string(&origin)?)?;
+        Ok(())
     }
 
     pub fn name(&self) -> &str {

@@ -105,6 +105,25 @@ impl GithubIdp {
     }
 }
 
+/// Add only exact public callback URLs, retaining the internal callbacks used
+/// by local services. This affects newly initialized FusionAuth databases;
+/// existing databases require the same application update via its local API.
+pub fn configure_public_origin(doc: &mut Value, origin: &super::public_origin::PublicOrigin) {
+    let requests = doc["requests"].as_array_mut().expect("kickstart requests");
+    for request in requests {
+        let Some(config) = request.pointer_mut("/body/application/oauthConfiguration") else {
+            continue;
+        };
+        let redirects = config["authorizedRedirectURLs"]
+            .as_array_mut()
+            .expect("redirect URLs");
+        for path in ["/app", "/auth/oauth/redirect", "/cognition/oauth/redirect"] {
+            redirects.push(json!(format!("{}{path}", origin.as_str())));
+        }
+        config["authorizedURLValidationPolicy"] = json!("ExactMatch");
+    }
+}
+
 /// Build the kickstart document. `lambda_body` is the JS source of
 /// `populate_jwt_local.js`; `reconcile_lambda_body` is the reconcile lambda
 /// attached to `google_gmail` (only used when `google` is configured); redirect

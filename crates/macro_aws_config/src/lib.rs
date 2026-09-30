@@ -11,7 +11,10 @@ maybe_env_var! {
 }
 
 maybe_env_var! {
-    /// Browser-facing LocalStack origin for a local stack with mapped ports.
+    /// Browser-facing local S3 base for mapped ports or a trusted public origin.
+    ///
+    /// Public origins include the `/s3` prefix; ordinary local stacks use a
+    /// loopback LocalStack origin.
     #[derive(Clone)]
     pub struct LocalAwsPublicUrl;
 }
@@ -37,6 +40,9 @@ pub async fn sqs_client() -> aws_sdk_sqs::Client {
 /// Otherwise we load normally.
 pub async fn get_macro_aws_config() -> aws_config::SdkConfig {
     if let Some(local_aws_url) = LocalAwsUrl::new() {
+        // Validate generated browser configuration when clients initialize,
+        // rather than first discovering a bad URL during an upload request.
+        let _ = local_public_base();
         local_aws_config(local_aws_url.as_ref()).await
     } else {
         aws_config::defaults(aws_config::BehaviorVersion::latest())
@@ -81,11 +87,14 @@ fn transform_local_url(url: &str, public_url: Option<&str>) -> String {
         return format!("{origin}{path}{query}");
     }
 
-    // hostname should be in the form {asset}.localstack or {asset}.localhost
-    let asset = host
+    // Legacy virtual-host URLs; current local S3 clients force path style so
+    // Caddy can restore the signed Host and path without changing the signature.
+    let Some(asset) = host
         .strip_suffix(".localstack")
         .or_else(|| host.strip_suffix(".localhost"))
-        .unwrap();
+    else {
+        return url.to_string();
+    };
 
     format!("{origin}/{asset}{path}{query}")
 }
@@ -133,9 +142,79 @@ fn transform_internal_url(url: &str, local_aws_url: &str) -> String {
 /// outside local AWS.
 pub fn transform_aws_url_for_internal_fetch(url: &str) -> String {
     if let Some(local_aws_url) = LocalAwsUrl::new() {
+        if let Some(base) = local_public_base() {
+            return transform_public_url_for_internal_fetch(url, &base, local_aws_url.as_ref());
+        }
         return transform_internal_url(url, local_aws_url.as_ref());
     }
     url.to_string()
+}
+
+fn local_public_base() -> Option<url::Url> {
+    let configured = LocalAwsPublicUrl::new()?;
+    if let Some(base) = parse_public_base(configured.as_ref()) {
+        return Some(base);
+    }
+
+    let parsed = url::Url::parse(configured.as_ref()).unwrap_or_else(|_| {
+        panic!(
+            "LOCAL_AWS_PUBLIC_URL must be a loopback HTTP origin or an HTTPS origin with /s3 prefix"
+        )
+    });
+    let is_loopback_origin = parsed.scheme() == "http"
+        && matches!(parsed.host_str(), Some("localhost" | "127.0.0.1" | "::1"))
+        && parsed.username().is_empty()
+        && parsed.password().is_none()
+        && parsed.path() == "/"
+        && parsed.query().is_none()
+        && parsed.fragment().is_none()
+        && parsed.origin().ascii_serialization() == configured.as_ref();
+    assert!(
+        is_loopback_origin,
+        "LOCAL_AWS_PUBLIC_URL must be a loopback HTTP origin or an HTTPS origin with /s3 prefix"
+    );
+    None
+}
+
+fn parse_public_base(raw: &str) -> Option<url::Url> {
+    let parsed = url::Url::parse(raw).ok()?;
+    (parsed.scheme() == "https"
+        && parsed.host_str().is_some()
+        && parsed.username().is_empty()
+        && parsed.password().is_none()
+        && parsed.path() == "/s3"
+        && parsed.query().is_none()
+        && parsed.fragment().is_none()
+        && parsed.as_str() == raw)
+        .then_some(parsed)
+}
+
+fn transform_public_url_for_internal_fetch(
+    raw: &str,
+    public_base: &url::Url,
+    internal: &str,
+) -> String {
+    let Ok(parsed) = url::Url::parse(raw) else {
+        return raw.to_string();
+    };
+    if parsed.origin() != public_base.origin()
+        || !parsed.username().is_empty()
+        || parsed.password().is_some()
+    {
+        // Existing documents may retain localhost URLs from before the public
+        // origin was configured. Keep their legacy internal-fetch mapping.
+        return transform_internal_url(raw, internal);
+    }
+    let Some(path) = parsed.path().strip_prefix("/s3/") else {
+        return raw.to_string();
+    };
+    // Do not decode/re-encode the key or query: SigV4 signs the encoded path
+    // and query. Restore the configured Docker endpoint, not a public host.
+    let query = parsed
+        .query()
+        .map(|query| format!("?{query}"))
+        .unwrap_or_default();
+    format!("{}/{path}{query}", internal.trim_end_matches('/'))
 }
 
 #[cfg(test)]

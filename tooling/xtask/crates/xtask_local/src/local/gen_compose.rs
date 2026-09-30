@@ -317,6 +317,10 @@ fn add_proxy_service(
             instance.artifact_dir().join("preview-caddy-data").display()
         )));
     }
+    let mut networks = vec!["services".to_string(), "databases".to_string()];
+    if instance.public_origin().is_some() {
+        networks.push("auth".to_string());
+    }
     services.insert(
         "proxy".to_string(),
         Some(dct::Service {
@@ -328,7 +332,7 @@ fn add_proxy_service(
             extra_hosts: vec!["host.docker.internal:host-gateway".to_string()],
             ports: dct::Ports::Short(ports),
             volumes,
-            networks: dct::Networks::Simple(vec!["services".to_string(), "databases".to_string()]),
+            networks: dct::Networks::Simple(networks),
             ..Default::default()
         }),
     );
