@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n            c.id as \"channel_id\",\n            c.name as \"name\",\n            c.channel_type AS \"channel_type: ChannelType\",\n            c.org_id as \"org_id\",\n            m.id as \"message_id\",\n            m.thread_id as \"thread_id\",\n            m.sender_id as \"sender_id\",\n            m.content as \"content\",\n            m.created_at as \"created_at\",\n            m.updated_at as \"updated_at\",\n            m.deleted_at::timestamptz as \"deleted_at\"\n        FROM\n            comms_messages m\n        JOIN\n            comms_channels c on c.\"id\" = m.\"channel_id\"\n        WHERE\n            m.id = $1\n            AND c.id = $2\n        ",
+  "query": "\n        SELECT\n            c.id as \"channel_id\",\n            c.name as \"name\",\n            c.channel_type AS \"channel_type: ChannelType\",\n            c.org_id as \"org_id\",\n            m.id as \"message_id\",\n            m.thread_id as \"thread_id\",\n            m.sender_id as \"sender_id\",\n            m.imported_author,\n            m.content as \"content\",\n            m.created_at as \"created_at\",\n            m.updated_at as \"updated_at\",\n            m.deleted_at::timestamptz as \"deleted_at\"\n        FROM\n            comms_messages m\n        JOIN\n            comms_channels c on c.\"id\" = m.\"channel_id\"\n        WHERE\n            m.id = $1\n            AND c.id = $2\n        ",
   "describe": {
     "columns": [
       {
@@ -52,21 +52,26 @@
       },
       {
         "ordinal": 7,
-        "name": "content",
+        "name": "imported_author",
         "type_info": "Text"
       },
       {
         "ordinal": 8,
+        "name": "content",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "updated_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 10,
+        "ordinal": 11,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       }
@@ -85,11 +90,12 @@
       false,
       true,
       false,
+      true,
       false,
       false,
       false,
       null
     ]
   },
-  "hash": "908627bdd27f344ce26c501bb7431b621173c04bfda9678021360817c3f25103"
+  "hash": "f77d0dbbbc6bc89b676be55a9939ffbd908da49d228156dbed63c097fd25d39b"
 }

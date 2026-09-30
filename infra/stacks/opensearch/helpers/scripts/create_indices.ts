@@ -21,6 +21,7 @@ import {
   SHARD_SETTINGS,
   SLOWLOG_SETTINGS,
 } from '../constants';
+import { IMPORTED_AUTHOR_MAPPING } from './add_imported_author';
 
 export type CreateIndexArgs = {
   indexName: string;
@@ -424,6 +425,8 @@ const CHANNEL_BODY = {
         type: 'keyword',
         index: true,
       },
+      // copy_to indexes the name without modifying the message's _source.content.
+      imported_author: IMPORTED_AUTHOR_MAPPING,
       mentions: {
         type: 'keyword',
         index: true,
