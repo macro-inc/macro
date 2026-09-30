@@ -1,5 +1,10 @@
 use super::*;
 use crate::domain::{
+    events::ChannelEvent,
+    ports::{ChannelEventDispatcher, ChannelMutationErr},
+    service::NoopChannelReferenceSharePermissions,
+};
+use crate::domain::{
     models::{
         GetChannelsRequest, GetOrCreateAction, GetOrCreateDmRequest, ParticipantRole, Sender,
     },
@@ -9,7 +14,22 @@ use crate::domain::{
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use models_pagination::{Query, SimpleSortMethod};
 use sqlx::PgPool;
-use std::collections::HashSet;
+use std::{
+    collections::HashSet,
+    sync::{Arc, Mutex},
+};
+
+#[derive(Clone, Default)]
+struct CreationEvents(Arc<Mutex<Vec<Uuid>>>);
+
+impl ChannelEventDispatcher for CreationEvents {
+    fn dispatch(&self, event: ChannelEvent) {
+        let ChannelEvent::ChannelCreated { channel_id, .. } = event else {
+            panic!("unexpected event");
+        };
+        self.0.lock().unwrap().push(channel_id);
+    }
+}
 
 fn user(email: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(format!("macro|{email}")).unwrap()
@@ -481,4 +501,119 @@ async fn team_creation_is_explicit_and_reuse_preserves_auto_join(pool: PgPool) {
     );
     request.kind = HistoricalChannelKind::Private;
     assert!(repo.create_historical_channel(&request).await.is_err());
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn onboarding_and_archive_share_reserved_target_without_replaying_effects(pool: PgPool) {
+    let repo = PgChannelsRepo::new(pool.clone());
+    let events = CreationEvents::default();
+    let service = ChannelServiceImpl::with_dependencies(
+        repo.clone(),
+        events.clone(),
+        NoopChannelReferenceSharePermissions,
+    );
+    let team_id = Uuid::from_u128(0x11111111_1111_1111_1111_111111111111);
+    for order in 0..3 {
+        let before_channels = sqlx::query_scalar!("SELECT COUNT(*) FROM comms_channels")
+            .fetch_one(&pool)
+            .await
+            .unwrap()
+            .unwrap();
+        let before_activity = sqlx::query_scalar!("SELECT COUNT(*) FROM comms_activity")
+            .fetch_one(&pool)
+            .await
+            .unwrap()
+            .unwrap();
+        let mut request = channel();
+        request.kind = HistoricalChannelKind::Team(team_id);
+        request.owner = user("left-user@test.com");
+        let onboarding = || {
+            service.create_reserved_team_channel(
+                request.owner.clone(),
+                request.id,
+                team_id,
+                "onboarding name".into(),
+                HashSet::new(),
+            )
+        };
+        let (archive, onboarded) = match order {
+            0 => (
+                repo.create_historical_channel(&request).await.unwrap(),
+                onboarding().await.unwrap(),
+            ),
+            1 => {
+                let onboarded = onboarding().await.unwrap();
+                (
+                    repo.create_historical_channel(&request).await.unwrap(),
+                    onboarded,
+                )
+            }
+            _ => {
+                let (archive, onboarded) =
+                    tokio::join!(repo.create_historical_channel(&request), onboarding());
+                (archive.unwrap(), onboarded.unwrap())
+            }
+        };
+        assert_eq!(archive.id, onboarded.id);
+        assert_ne!(archive.created, onboarded.created);
+        assert!(!onboarding().await.unwrap().created);
+        assert!(
+            !repo
+                .create_historical_channel(&request)
+                .await
+                .unwrap()
+                .created
+        );
+        assert_eq!(
+            events
+                .0
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|id| **id == request.id)
+                .count(),
+            usize::from(onboarded.created)
+        );
+        assert_eq!(
+            sqlx::query_scalar!("SELECT COUNT(*) FROM comms_channels")
+                .fetch_one(&pool)
+                .await
+                .unwrap(),
+            Some(before_channels + 1)
+        );
+        assert_eq!(
+            sqlx::query_scalar!("SELECT COUNT(*) FROM comms_activity")
+                .fetch_one(&pool)
+                .await
+                .unwrap(),
+            Some(before_activity + i64::from(onboarded.created))
+        );
+        let persisted = sqlx::query!(
+            "SELECT name, owner_id, team_id, auto_join_team, created_at, updated_at FROM comms_channels WHERE id = $1",
+            request.id,
+        ).fetch_one(&pool).await.unwrap();
+        assert_eq!(persisted.team_id, Some(team_id));
+        assert!(!persisted.auto_join_team);
+        if archive.created {
+            assert_eq!(persisted.name.as_deref(), Some(request.name.as_str()));
+            assert_eq!(persisted.created_at, request.created_at);
+        } else {
+            assert_eq!(persisted.name.as_deref(), Some("onboarding name"));
+            assert!(persisted.created_at > request.created_at);
+        }
+        // Reuse does not grant access to a different team's caller.
+        let denied = service
+            .create_reserved_team_channel(
+                user("user-d@test.com"),
+                request.id,
+                team_id,
+                "forbidden".into(),
+                HashSet::new(),
+            )
+            .await;
+        assert!(matches!(denied, Err(ChannelMutationErr::Unauthorized(_))));
+    }
 }

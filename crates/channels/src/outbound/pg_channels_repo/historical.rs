@@ -17,10 +17,11 @@ use super::{PgChannelsRepo, create_activity};
 #[cfg(test)]
 mod test;
 
-impl HistoricalChannelRepo for PgChannelsRepo {
-    async fn create_historical_channel(
+impl PgChannelsRepo {
+    async fn ensure_reserved_channel(
         &self,
         channel: &HistoricalChannel,
+        live_activity: bool,
     ) -> anyhow::Result<EnsuredChannel> {
         validate_reserved_id(channel.id)?;
         let (channel_type, team_id) = match channel.kind {
@@ -50,6 +51,9 @@ impl HistoricalChannelRepo for PgChannelsRepo {
             insert_owner(&mut tx, channel.id, &channel.owner, channel.created_at).await?;
             let participants = channel.participants.iter().cloned().collect::<Vec<_>>();
             insert_members(&mut tx, channel.id, &participants, channel.created_at).await?;
+            if live_activity {
+                create_activity(&mut *tx, channel.id, channel.owner.as_ref()).await?;
+            }
         } else {
             // An explicit ID is not authority to repurpose a different target.
             let existing = sqlx::query!(
@@ -69,6 +73,26 @@ impl HistoricalChannelRepo for PgChannelsRepo {
             id: channel.id,
             created,
         })
+    }
+}
+
+impl HistoricalChannelRepo for PgChannelsRepo {
+    async fn create_historical_channel(
+        &self,
+        channel: &HistoricalChannel,
+    ) -> anyhow::Result<EnsuredChannel> {
+        self.ensure_reserved_channel(channel, false).await
+    }
+
+    async fn create_onboarding_channel(
+        &self,
+        channel: &HistoricalChannel,
+    ) -> anyhow::Result<EnsuredChannel> {
+        anyhow::ensure!(
+            matches!(channel.kind, HistoricalChannelKind::Team(_)),
+            "onboarding requires a Team channel"
+        );
+        self.ensure_reserved_channel(channel, true).await
     }
 
     async fn insert_historical_participants(

@@ -15,6 +15,8 @@ use std::collections::HashSet;
 use std::str::FromStr;
 use uuid::Uuid;
 
+mod targets;
+
 #[cfg(test)]
 mod test;
 
