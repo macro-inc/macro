@@ -10,9 +10,11 @@
 mod config;
 mod date_buckets;
 mod field;
+mod gtd_buckets;
 mod meta;
 
 pub use config::*;
 pub use date_buckets::*;
 pub use field::*;
+pub use gtd_buckets::*;
 pub use meta::*;

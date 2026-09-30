@@ -6,6 +6,7 @@ version = "0.1.0"
 
 [dependencies]
 chrono = { workspace = true }
+chrono-tz = { workspace = true }
 serde = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

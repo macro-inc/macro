@@ -179,10 +179,17 @@ impl GroupedSoupContinuationInput {
 struct GraphqlGroupByInput {
     /// The kind of grouping to perform.
     field: GraphqlGroupByField,
-    /// Property definition to group by when `field` is `PROPERTY`.
+    /// Property definition to group by when `field` is `PROPERTY` or
+    /// `DUE_DATE_BUCKET`.
     property_definition_id: Option<ID>,
     /// Optional property entity type restriction.
     entity_type: Option<GraphqlPropertyEntityType>,
+    /// IANA timezone the due-date day boundaries are computed in. Only valid
+    /// with `DUE_DATE_BUCKET`; unset falls back to UTC.
+    time_zone: Option<String>,
+    /// Days after today counted as Upcoming. Only valid with
+    /// `DUE_DATE_BUCKET`; unset defaults to 7.
+    horizon_days: Option<u16>,
 }
 
 impl GraphqlGroupByInput {
@@ -195,40 +202,63 @@ impl GraphqlGroupByInput {
             }
             GraphqlGroupByField::Project => self.without_property_options(GroupByField::Project),
             GraphqlGroupByField::Property => {
-                let property_definition_id = self.property_definition_id.ok_or_else(|| {
-                    async_graphql::Error::new(
-                        "propertyDefinitionId is required when grouping by PROPERTY",
-                    )
-                })?;
-                let property_definition_id =
-                    parse_id(property_definition_id, "propertyDefinitionId")?;
-                let entity_type = self
-                    .entity_type
-                    .map(PropertyEntityType::try_from)
-                    .transpose()
-                    .map_err(|_| {
-                        async_graphql::Error::new(
-                            "CALL_RECORD is not supported for property grouping",
-                        )
-                    })?
-                    .map(|entity_type| entity_type.to_string());
+                let (property_definition_id, entity_type) = self.property_target("PROPERTY")?;
 
                 Ok(GroupByField::Property {
                     property_definition_id,
                     entity_type,
                 })
             }
+            GraphqlGroupByField::DueDateBucket => {
+                let time_zone = self.time_zone.clone();
+                let horizon_days = self.horizon_days;
+                let (property_definition_id, entity_type) =
+                    self.property_target("DUE_DATE_BUCKET")?;
+
+                Ok(GroupByField::DueDateBucket {
+                    property_definition_id,
+                    entity_type,
+                    time_zone,
+                    horizon_days,
+                })
+            }
         }
     }
 
-    /// Reject property-only options for non-property grouping modes.
+    /// Extract the property definition and entity type both property-backed
+    /// grouping modes need.
+    fn property_target(self, mode: &str) -> async_graphql::Result<(uuid::Uuid, Option<String>)> {
+        let property_definition_id = self.property_definition_id.ok_or_else(|| {
+            async_graphql::Error::new(format!(
+                "propertyDefinitionId is required when grouping by {mode}"
+            ))
+        })?;
+        let property_definition_id = parse_id(property_definition_id, "propertyDefinitionId")?;
+        let entity_type = self
+            .entity_type
+            .map(PropertyEntityType::try_from)
+            .transpose()
+            .map_err(|_| {
+                async_graphql::Error::new("CALL_RECORD is not supported for property grouping")
+            })?
+            .map(|entity_type| entity_type.to_string());
+
+        Ok((property_definition_id, entity_type))
+    }
+
+    /// Reject property-only options for grouping modes that read no property.
     fn without_property_options(
         self,
         group_by: GroupByField,
     ) -> async_graphql::Result<GroupByField> {
         if self.property_definition_id.is_some() || self.entity_type.is_some() {
             return Err(async_graphql::Error::new(
-                "propertyDefinitionId and entityType require PROPERTY grouping",
+                "propertyDefinitionId and entityType require PROPERTY or DUE_DATE_BUCKET grouping",
+            ));
+        }
+        if self.time_zone.is_some() || self.horizon_days.is_some() {
+            return Err(async_graphql::Error::new(
+                "timeZone and horizonDays require DUE_DATE_BUCKET grouping",
             ));
         }
         Ok(group_by)
@@ -246,6 +276,9 @@ enum GraphqlGroupByField {
     Project,
     /// Group by a property value.
     Property,
+    /// Group into forward-looking due-date buckets: Today, Upcoming, Later,
+    /// Backlog. Reads a `Date`-typed property.
+    DueDateBucket,
 }
 
 impl SoupInput {
