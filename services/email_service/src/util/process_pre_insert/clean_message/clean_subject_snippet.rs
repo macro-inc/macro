@@ -65,13 +65,6 @@ fn is_invisible_char(c: char) -> bool {
         c == '\u{2060}' || // Word Joiner
         c == '\u{034F}' || // Combining Grapheme Joiner
 
-        // Other combining marks and format characters
-        ('\u{0300}'..='\u{036F}').contains(&c) || // Combining Diacritical Marks
-        ('\u{1AB0}'..='\u{1AFF}').contains(&c) || // Combining Diacritical Marks Extended
-        ('\u{1DC0}'..='\u{1DFF}').contains(&c) || // Combining Diacritical Marks Supplement
-        ('\u{20D0}'..='\u{20FF}').contains(&c) || // Combining Diacritical Marks for Symbols
-        ('\u{FE00}'..='\u{FE0F}').contains(&c) || // Variation Selectors
-
         // Additional format characters
         ('\u{2000}'..='\u{200F}').contains(&c) || // General Punctuation (includes spaces and invisible format characters)
         ('\u{2028}'..='\u{202F}').contains(&c) || // Line/Paragraph Separator and spaces
@@ -147,6 +140,28 @@ mod tests {
                 "See the latest deals ͏ ‌ ﻿ ͏ ‌ ﻿ ͏ ‌ ﻿ ͏ ‌ ﻿ ͏ ‌ ﻿ ͏ ‌ ﻿ ͏ ‌ ﻿ ͏ ‌ ﻿ ͏ ‌ ﻿ ͏ ‌ ﻿ ͏ ‌ ﻿ ͏ ‌ ﻿ ͏ ‌ ﻿ ͏ ‌ ﻿ ͏ ‌ ﻿ ͏ ‌ ﻿ ͏ ‌ ﻿ ͏ ‌ ﻿ ͏ ‌ ﻿ ͏ ‌ ﻿ ͏ ‌ ﻿ ͏ ‌ ﻿ ͏ ‌ ﻿ ͏ ‌ ﻿ ͏ ‌ ﻿ ͏ ‌ ﻿ ͏ ‌ ﻿ ͏ ‌ ﻿ ͏ ‌ ﻿ ͏"
             ),
             "See the latest deals"
+        );
+
+        // Combining marks modify the preceding character and must be kept.
+        assert_eq!(
+            remove_trailing_special_chars("cafe\u{0301}"),
+            "cafe\u{0301}"
+        );
+        assert_eq!(
+            remove_trailing_special_chars("naive\u{0308}"),
+            "naive\u{0308}"
+        );
+
+        // Variation selectors are part of the emoji/grapheme, not trailing noise.
+        assert_eq!(
+            remove_trailing_special_chars("Hello \u{2B50}\u{FE0F}"),
+            "Hello \u{2B50}\u{FE0F}"
+        );
+
+        // Trailing format controls still come off after a combining mark.
+        assert_eq!(
+            remove_trailing_special_chars("cafe\u{0301}\u{200B}\u{FEFF}"),
+            "cafe\u{0301}"
         );
     }
 }
