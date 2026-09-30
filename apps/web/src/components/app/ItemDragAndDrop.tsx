@@ -5,6 +5,8 @@ import {
 } from '@core/component/EntityIcon';
 import { TruncatedText } from '@core/component/FileList/TruncatedText';
 import type { EntityDragData } from '@entity';
+import { TagDot } from '@property/tags/TagDot';
+import type { TagDragData } from '@property/tags/tag-drag-and-drop';
 import {
   DragDropProvider,
   DragDropSensors,
@@ -52,7 +54,7 @@ function ItemDragOverlay() {
     if (data.dragType === 'channel-label') {
       return data.iconType as EntityIconSelector;
     }
-    if (data.dragType === 'stage') return 'default';
+    if (data.dragType === 'stage' || data.dragType === 'tag') return 'default';
     return getEntityIconType(data as EntityDragData);
   });
 
@@ -61,6 +63,11 @@ function ItemDragOverlay() {
   const isStage = createMemo(
     () => activeDraggable()?.data.dragType === 'stage'
   );
+
+  const tagDrag = createMemo((): TagDragData | undefined => {
+    const data = activeDraggable()?.data;
+    return data?.dragType === 'tag' ? (data as TagDragData) : undefined;
+  });
 
   const centeredOnPointerStyle = createMemo(() => {
     const overlay = state?.active.overlay;
@@ -80,9 +87,16 @@ function ItemDragOverlay() {
       >
         <div class="flex flex-row items-center gap-2">
           <Show
-            when={!isStage()}
+            when={!isStage() && !tagDrag()}
             fallback={
-              <span class="size-2 shrink-0 rounded-full bg-accent/70" />
+              <Show
+                when={tagDrag()}
+                fallback={
+                  <span class="size-2 shrink-0 rounded-full bg-accent/70" />
+                }
+              >
+                {(tag) => <TagDot color={tag().color} />}
+              </Show>
             }
           >
             <EntityIcon size="xs" targetType={iconType()} />

@@ -18,6 +18,9 @@ import {
   tagEntityType,
   useSoupDocTags,
 } from '@property/tags';
+import type { TreeTag } from '@property/tags/core/tag-tree';
+import { DroppedTagApplier } from '@property/tags/DroppedTagApplier';
+import { createTagDropTarget } from '@property/tags/tag-drag-and-drop';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
 import { cn } from '@ui';
@@ -93,6 +96,20 @@ export const SoupEntityContextMenu: FlowComponent<
 
   const canEditTags = () => addTagAction.canExecute(props.entity);
 
+  const [droppedTag, setDroppedTag] = createSignal<{
+    tag: TreeTag;
+    entities: EntityData[];
+  }>();
+  // Dropping onto a selected row tags the whole selection, like the menu.
+  const tagDropTarget = createTagDropTarget({
+    disabled: () => isMobile() || !canEditTags(),
+    onDropTag: (tag) =>
+      setDroppedTag({
+        tag,
+        entities: menuEntities().filter(addTagAction.canExecute),
+      }),
+  });
+
   return (
     <Switch>
       <Match when={isMobile()}>
@@ -119,7 +136,13 @@ export const SoupEntityContextMenu: FlowComponent<
         <ContextMenu onOpenChange={props.onOpenChange}>
           <ContextMenuTrigger
             as={props.as}
-            class={cn('h-full w-full group/cm-trigger', props.class)}
+            ref={(element: HTMLElement) => tagDropTarget?.ref(element)}
+            class={cn(
+              'h-full w-full group/cm-trigger',
+              tagDropTarget?.isOver() &&
+                'rounded-xl outline-2 -outline-offset-2 outline-accent',
+              props.class
+            )}
             on:contextmenu={(event: MouseEvent) =>
               setMenuPosition({ x: event.clientX, y: event.clientY })
             }
@@ -174,6 +197,19 @@ export const SoupEntityContextMenu: FlowComponent<
               }}
               position={menuPosition()}
               onClose={() => setTagPickerOpen(false)}
+            />
+          )}
+        </Show>
+        <Show when={droppedTag()} keyed>
+          {(drop) => (
+            <DroppedTagApplier
+              tag={drop.tag}
+              entities={drop.entities}
+              onDone={() =>
+                setDroppedTag((current) =>
+                  current === drop ? undefined : current
+                )
+              }
             />
           )}
         </Show>
