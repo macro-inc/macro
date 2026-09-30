@@ -141,6 +141,9 @@ pub struct WriteResult {
     pub revision: CacheRevision,
     /// Whether this write advanced [`Self::revision`].
     pub revision_advanced: bool,
+    /// Search buckets changed by an ordinary query response. `None` keeps
+    /// mutation/reset notifications conservative; an empty set proves no change.
+    pub search_changed_buckets: Option<BTreeSet<String>>,
     /// Records whose contents changed.
     pub changed: BTreeSet<EntityKey<'static>>,
     /// Active operations depending on changed records (host re-executes
@@ -444,6 +447,7 @@ impl<S: Storage> Engine<S> {
         Ok(WriteResult {
             revision,
             revision_advanced: true,
+            search_changed_buckets: None,
             changed,
             affected_ops,
             reset: false,
@@ -1136,6 +1140,7 @@ impl<S: Storage> Engine<S> {
                 )),
             ));
         }
+        let is_query = op.kind == OperationKind::Query;
         let normalized = normalize_with_dependencies(op, variables, data, &entity_resolvers)?;
         let mut updates = normalized.updates;
         if !retain_pages {
@@ -1233,6 +1238,8 @@ impl<S: Storage> Engine<S> {
             WriteResult {
                 revision,
                 revision_advanced,
+                search_changed_buckets: (is_query && !reset)
+                    .then(|| search_changed_buckets.clone()),
                 changed,
                 affected_ops,
                 reset,
@@ -1676,6 +1683,7 @@ impl<S: Storage> Engine<S> {
             write_result: WriteResult {
                 revision,
                 revision_advanced: true,
+                search_changed_buckets: None,
                 changed,
                 affected_ops,
                 reset: false,
@@ -2103,6 +2111,7 @@ impl<S: Storage> Engine<S> {
         Ok(WriteResult {
             revision,
             revision_advanced: true,
+            search_changed_buckets: None,
             changed: durable_changed,
             affected_ops,
             reset: false,
@@ -2189,6 +2198,7 @@ impl<S: Storage> Engine<S> {
         Ok(WriteResult {
             revision,
             revision_advanced: true,
+            search_changed_buckets: None,
             changed: BTreeSet::new(),
             affected_ops,
             reset: false,
@@ -2492,6 +2502,7 @@ impl<S: PredicateIndexStorage> Engine<S> {
         Ok(WriteResult {
             revision,
             revision_advanced,
+            search_changed_buckets: None,
             changed,
             affected_ops,
             reset: false,

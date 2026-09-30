@@ -305,7 +305,14 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
           for (const cb of generationChangeSubscribers)
             cb({ storage: 'reset' });
         }
-        for (const cb of cacheChangeSubscribers) cb(msg.revision);
+        for (const cb of cacheChangeSubscribers) {
+          if (msg.reset || msg.searchChangedBuckets === undefined)
+            cb(msg.revision);
+          else
+            cb(msg.revision, {
+              searchChangedBuckets: msg.searchChangedBuckets,
+            });
+        }
         return;
       }
       if (msg.kind === 'mutation-settled') {

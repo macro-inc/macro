@@ -566,6 +566,23 @@ describe('createTauriCacheHost', () => {
     }
   );
 
+  it.each(
+    [[], ['note']].map((searchChangedBuckets) => ({ searchChangedBuckets }))
+  )(
+    'forwards ordinary native writes and keeps resets conservative: $searchChangedBuckets',
+    ({ searchChangedBuckets }) => {
+      const host = createTauriCacheHost({ scope: 'scope-1' });
+      const listener = vi.fn();
+      host.onCacheChanged(listener);
+      const notify = eventCallbacks.get('graphql-cache://cache-changed')!;
+      notify({ payload: { revision: '7', searchChangedBuckets } });
+      expect(listener).toHaveBeenLastCalledWith('7', { searchChangedBuckets });
+      notify({ payload: { revision: '8', searchChangedBuckets, reset: true } });
+      expect(listener).toHaveBeenLastCalledWith('8');
+      host.dispose();
+    }
+  );
+
   it('delivers cross-window hydration only to opted-in listeners', async () => {
     const host = createTauriCacheHost({ scope: 'scope-1' });
     const foreground = vi.fn();

@@ -100,6 +100,7 @@ fn empty_write_result() -> WriteResultWire {
     WriteResultWire {
         revision: "0".to_string(),
         revision_advanced: false,
+        search_changed_buckets: None,
         changed: Vec::new(),
         affected_ops: Vec::new(),
         reset: false,

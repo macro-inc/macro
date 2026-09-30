@@ -177,7 +177,17 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       if (event.payload.reset) {
         for (const cb of generationChangeSubscribers) cb({ storage: 'reset' });
       }
-      for (const cb of cacheChangeSubscribers) cb(revision);
+      for (const cb of cacheChangeSubscribers) {
+        if (
+          event.payload.reset ||
+          event.payload.searchChangedBuckets === undefined
+        )
+          cb(revision);
+        else
+          cb(revision, {
+            searchChangedBuckets: event.payload.searchChangedBuckets,
+          });
+      }
     }).catch((error) => {
       console.warn('graphql cache change listener failed', error);
       return undefined;

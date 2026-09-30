@@ -213,6 +213,7 @@ fn empty_js_write_result() -> JsWriteResult {
     JsWriteResult {
         revision: "0".to_string(),
         revision_advanced: false,
+        search_changed_buckets: None,
         changed: Vec::new(),
         affected_ops: Vec::new(),
         reset: false,

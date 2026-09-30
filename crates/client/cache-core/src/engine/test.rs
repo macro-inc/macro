@@ -2,6 +2,7 @@ use super::*;
 use crate::store::InMemoryStorage;
 
 mod hydration_search_changes;
+mod query_search_changes;
 
 #[test]
 fn storage_generation_survives_reopening_and_preserves_existing_records() {
