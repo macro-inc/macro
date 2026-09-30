@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT source_created_at, resolved_created_at, creator_id, message_count FROM slack_import_conversation WHERE job_id = $1 AND slack_channel_id = 'D1'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "source_created_at",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "resolved_created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "creator_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "message_count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "4dc8e5fb101c7e05efde4720e9dc538eecf360dc1e872223634a96df79678418"
+}

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE slack_import_job SET registration_closed_at = clock_timestamp(),\n               finalized_at = clock_timestamp() WHERE team_id = $1 AND id = $2\n               AND registration_closed_at IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "748de90309e774e622be549fad11792f5c722e8a6022ece1656534860a384b06"
+}

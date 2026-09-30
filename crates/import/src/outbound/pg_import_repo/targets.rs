@@ -56,30 +56,8 @@ impl CanonicalImportRepo for PgImportRepo {
         workspace_id: Option<&SlackWorkspaceId>,
         confirmed_unknown: bool,
     ) -> Result<ImportSourceBinding> {
-        if workspace_id.is_none() && !confirmed_unknown {
-            return Err(ImportError::SourceConfirmationRequired);
-        }
-        let row = sqlx::query_as!(
-            BindingRow,
-            r#"
-            INSERT INTO import_source_binding (team_id, slack_workspace_id, confirmed_unknown_at)
-            VALUES ($1, $2, CASE WHEN $2::text IS NULL AND $3 THEN now() END)
-            ON CONFLICT (team_id) DO UPDATE
-            SET slack_workspace_id = COALESCE(import_source_binding.slack_workspace_id, EXCLUDED.slack_workspace_id),
-                confirmed_unknown_at = COALESCE(import_source_binding.confirmed_unknown_at, EXCLUDED.confirmed_unknown_at)
-            WHERE import_source_binding.slack_workspace_id IS NULL
-               OR EXCLUDED.slack_workspace_id IS NULL
-               OR import_source_binding.slack_workspace_id = EXCLUDED.slack_workspace_id
-            RETURNING slack_workspace_id, confirmed_unknown_at
-            "#,
-            team_id,
-            workspace_id.map(SlackWorkspaceId::as_str),
-            confirmed_unknown,
-        )
-        .fetch_optional(&self.pool)
-        .await?
-        .ok_or(ImportError::SourceMismatch)?;
-        row.try_into()
+        crate::source_binding::bind_source(&self.pool, team_id, workspace_id, confirmed_unknown)
+            .await
     }
 
     async fn reserve_target(
