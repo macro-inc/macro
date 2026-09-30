@@ -534,6 +534,9 @@ export function ViewSidebarCloseButton(
 /** Safe outside a shell so block preview headers can share this control. */
 export function ViewSidebarToggle(props: { action: 'collapse' | 'expand' }) {
   const ws = useContext(ViewShellContext);
+  // A conditional expression as `ref` is dropped by the Solid compiler, so
+  // only the expand toggle registers, from inside the callback.
+  const toggleTarget = tourTarget(VIEW_SHELL_TOUR.sidebarToggle);
   const visible = () =>
     ws?.aside.canCollapse() &&
     (props.action === 'expand'
@@ -556,11 +559,9 @@ export function ViewSidebarToggle(props: { action: 'collapse' | 'expand' }) {
         }
         hotkey={TOKENS.workspace.toggleNavigation}
         aria-expanded={props.action !== 'expand'}
-        ref={
-          props.action === 'expand'
-            ? tourTarget(VIEW_SHELL_TOUR.sidebarToggle)
-            : undefined
-        }
+        ref={(element) => {
+          if (props.action === 'expand') toggleTarget(element);
+        }}
         data-view-sidebar-toggle={props.action}
         onClick={(event) => {
           const shell = event.currentTarget.closest('[data-view-shell]');

@@ -713,6 +713,9 @@ function ChannelHeadingDropTarget(props: { element: HTMLElement }) {
 }
 
 function ExpandedGroupSection(props: { config: GroupConfig }) {
+  // A conditional expression as `ref` is dropped by the Solid compiler, so
+  // the target is chosen inside the callback.
+  const createTarget = tourTarget(CHANNELS_TOUR.create);
   const rail = useChannelsRail();
   const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
   const [headerElement, setHeaderElement] = createSignal<HTMLElement>();
@@ -778,11 +781,9 @@ function ExpandedGroupSection(props: { config: GroupConfig }) {
           </Show>
         </button>
         <div
-          ref={
-            props.config.group === 'channels'
-              ? tourTarget(CHANNELS_TOUR.create)
-              : undefined
-          }
+          ref={(element) => {
+            if (props.config.group === 'channels') createTarget(element);
+          }}
           data-section-action=""
           class="flex items-center gap-0.5"
         >

@@ -77,6 +77,10 @@ function register(target: TourTarget, element: HTMLElement) {
 /**
  * A ref that registers the element as `target` for as long as the owning
  * component is mounted. Call it in JSX: `ref={tourTarget(TARGETS.name)}`.
+ *
+ * Don't pass a conditional expression as the ref
+ * (`ref={cond ? tourTarget(X) : undefined}`): the Solid compiler drops it.
+ * Create the ref in the component body and branch inside a callback.
  */
 export function tourTarget(target: TourTarget) {
   let unregister: (() => void) | undefined;
