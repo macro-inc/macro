@@ -292,12 +292,16 @@ it('opens notification targets at the linked range and keeps deleted-sheet threa
   ).toBeTruthy();
 });
 
-it('uses workbook discussion for sidebar comments and keeps selection comments in the grid', () => {
+it('uses discussion for sidebar comments and keeps selection comments in the grid', () => {
   mount();
   fireEvent.click(screen.getByRole('button', { name: 'Comments' }));
   const panel = screen.getByRole('complementary');
   expect(panel.querySelector('input[aria-label="Comment draft"]')).toBeNull();
-  expect(screen.getByText('Workbook discussion')).toBeTruthy();
+  expect(screen.getByText('Discussion')).toBeTruthy();
+  expect(screen.queryByText('Cell comments')).toBeNull();
+  expect(
+    screen.queryByText('Comments attached to a sheet selection')
+  ).toBeNull();
 
   selection = { anchor: 'D9', focus: 'D9' };
   fireEvent.click(screen.getByRole('button', { name: 'Comment' }));
@@ -307,7 +311,7 @@ it('uses workbook discussion for sidebar comments and keeps selection comments i
   expect(screen.getByRole('dialog').querySelector('input')).toBeTruthy();
 });
 
-it('mounts a workbook discussion on the document parent without legacy comment links', () => {
+it('mounts discussion on the document parent without legacy comment links', () => {
   mount();
   fireEvent.click(screen.getByRole('button', { name: 'Comments' }));
   expect(mocks.discussion).toHaveBeenCalledWith(
@@ -317,7 +321,7 @@ it('mounts a workbook discussion on the document parent without legacy comment l
       targetId: null,
     })
   );
-  expect(screen.getByText('Workbook discussion')).toBeTruthy();
+  expect(screen.getByText('Discussion')).toBeTruthy();
 });
 
 it.each(['root-id', 'reply-id'])(

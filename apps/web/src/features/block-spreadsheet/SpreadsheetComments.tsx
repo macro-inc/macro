@@ -414,18 +414,7 @@ export function SpreadsheetComments(props: {
                   <p class="text-sm text-ink-muted">Loading comments…</p>
                 }
               >
-                <section aria-labelledby="spreadsheet-cell-comments-heading">
-                  <div class="mb-3">
-                    <h3
-                      id="spreadsheet-cell-comments-heading"
-                      class="text-sm font-medium"
-                    >
-                      Cell comments
-                    </h3>
-                    <p class="mt-0.5 text-xs text-ink-muted">
-                      Comments attached to a sheet selection
-                    </p>
-                  </div>
+                <section aria-label="Cell comments">
                   <div class="mb-3">
                     <SegmentedControl
                       value={commentFilter()}
@@ -486,7 +475,7 @@ export function SpreadsheetComments(props: {
                     canWrite={canComment()}
                     link={{ type: 'spreadsheet', id: props.documentId }}
                     targetId={discussionTarget()}
-                    label="Workbook discussion"
+                    label="Discussion"
                   />
                 </div>
               </Suspense>

@@ -255,17 +255,16 @@ open until dismissed so a reply is not lost when moving the pointer.
 
 **Comments** in the document header opens the workbook commenting sidebar. Range labels
 navigate to the corresponding sheet and cells; deleted-sheet threads remain
-readable. The **Cell comments** section separates range threads from
-**Workbook discussion** and filters them by **Open**, **Resolved**, or **All**;
-Open is the default. **Workbook discussion** contains comments about the whole
-workbook and is the sidebar's new-comment composer. To start a cell comment,
+readable. Range threads are filtered by **Open**, **Resolved**, or **All**;
+Open is the default. **Discussion** contains comments about the whole workbook
+and is the sidebar's new-comment composer. To start a cell comment,
 select the range and use the ribbon, keyboard shortcut, or cell context menu.
 Both surfaces use the shared message controls for replies, edits, deletion,
 reactions, and attachments. Range threads also offer **Resolve** and **Reopen**.
 Mentions and replies use inbox notifications and message links. Older spreadsheet
 annotation comments are not displayed.
 Opening an inbox notification opens the sidebar and targets its comment/range.
-Range links leave Workbook discussion on its normal timeline; workbook links
+Range links leave Discussion on its normal timeline; workbook links
 open that discussion at the linked message and clear the previous range highlight
 or navigation error. A resolved range link switches the filter to **Resolved** so
 the targeted thread remains visible.
