@@ -498,10 +498,11 @@ the cache or reopening the menu with unchanged data does not reorder the results
 
 Pending or failed Quick Access history, recently-viewed, and cached-channel lookups
 must not hide the app shell. Verify a cold lookup with Cmd/Ctrl+K: navigation stays
-mounted and usable while the optional source loads or fails. When no entity rows
-are available yet, the menu shows **Loading results…** while keeping commands
-usable; a settled empty category shows **No results found**. Background history
-or channel refetches alone must not switch settled empty results back to loading,
+mounted and usable while the optional source loads or fails. The menu shows no
+loading text: while entity rows are still loading, an empty list stays blank and
+commands remain usable; a settled empty category shows **No results found**.
+Background history or channel refetches alone must not blank a settled empty
+category back to its loading state,
 including when the active category does not use that source. Cache-update bursts
 must let in-flight history, channel, and menu-search reads publish their results,
 then catch up with one coalesced refresh. Verify with cache reads slower than the
