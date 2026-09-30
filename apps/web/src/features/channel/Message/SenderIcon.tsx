@@ -1,7 +1,7 @@
 import { firstPartyBotMark } from '@core/component/firstPartyBotMark';
 import { UserIcon } from '@core/component/UserIcon';
 import { senderFromStorageId } from '@queries/messages/message-sender';
-import type { ApiMessageSender } from '@service-storage/generated/schemas/apiMessageSender';
+import type { MessageSender } from '@service-storage/messages';
 import { cn } from '@ui';
 import { Show } from 'solid-js';
 import { BotIcon } from './BotIcon';
@@ -18,7 +18,7 @@ export function SenderIcon(props: SenderIconProps) {
   // Team bots render their uploaded avatar; first-party bots have none and
   // keep their brand mark, which UserIcon draws the same way the mention menu
   // does.
-  const botSender = (): ApiMessageSender | undefined => {
+  const botSender = (): MessageSender | undefined => {
     const sender = message().sender ?? senderFromStorageId(message().sender_id);
     if (sender.type !== 'bot' || firstPartyBotMark(sender.id)) return undefined;
     return sender;

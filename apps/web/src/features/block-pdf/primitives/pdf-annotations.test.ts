@@ -72,7 +72,6 @@ function createHighlight(
 
 function createServerHighlight(
   uuid: string,
-  threadId?: number,
   rootId?: string
 ): CreateUnthreadedAnchorResponse {
   return {
@@ -90,14 +89,13 @@ function createServerHighlight(
     pageViewportHeight: 800,
     text: 'server highlight',
     owner: 'user-1',
-    threadId,
     rootId,
   };
 }
 
 function createServerPlaceable(
   uuid: string,
-  binding: { threadId?: number; rootId?: string }
+  binding: { rootId?: string }
 ): CreateUnthreadedAnchorResponse {
   return {
     uuid,
@@ -208,7 +206,6 @@ describe('createPdfAnnotations', () => {
     annotations.commands.applyDeletedAnchor({
       uuid: 'highlight-1',
       documentId: 'document-1',
-      threadId: 31,
     } as DeleteUnthreadedAnchorResponse);
 
     expect({
@@ -271,7 +268,7 @@ describe('createPdfAnnotations on the message API', () => {
     await waitForAnchors(annotations);
 
     annotations.commands.applyCreatedAnchor(
-      createServerHighlight('highlight-1', undefined, 'root-1')
+      createServerHighlight('highlight-1', 'root-1')
     );
     // A threaded highlight waits for its discussion.
     expect(annotations.highlightsByUuid()).toEqual({});
@@ -333,7 +330,7 @@ describe('createPdfAnnotations on the message API', () => {
     // draft gives way to the saved thread.
     messageRoots.setRoots([root('root-9'), root('root-10')]);
     annotations.commands.applyCreatedAnchor(
-      createServerHighlight('new-highlight', undefined, 'root-10')
+      createServerHighlight('new-highlight', 'root-10')
     );
     await waitFor(() =>
       expect(
@@ -380,27 +377,20 @@ describe('createPdfAnnotations on the message API', () => {
   });
 });
 
-/**
- * Imported anchors carry both ids; an anchor bound only to a legacy thread
- * that was never imported is not a bare highlight this client may delete or
- * re-thread.
- */
-describe('anchors bound to legacy threads', () => {
+/** Anchors reference their discussion by message root id only. */
+describe('anchor discussions', () => {
   const messageHighlight = () =>
-    createServerHighlight('message-highlight', undefined, 'root-1');
-  const legacyHighlight = () => createServerHighlight('legacy-highlight', 31);
+    createServerHighlight('message-highlight', 'root-1');
   const importedHighlight = () =>
-    createServerHighlight('imported-highlight', 32, 'root-2');
+    createServerHighlight('imported-highlight', 'root-2');
   const bareHighlight = () => createServerHighlight('bare-highlight');
 
   function seed(annotations: PdfAnnotations) {
     for (const anchor of [
       messageHighlight(),
-      legacyHighlight(),
       importedHighlight(),
       bareHighlight(),
       createServerPlaceable('message-placeable', { rootId: 'root-3' }),
-      createServerPlaceable('legacy-placeable', { threadId: 33 }),
     ])
       annotations.commands.applyCreatedAnchor(anchor);
   }
@@ -414,7 +404,7 @@ describe('anchors bound to legacy threads', () => {
       ])
     );
 
-  it('keeps anchors only a legacy thread holds hidden', async () => {
+  it('binds anchors to the message roots they name', async () => {
     const { annotations, dispose } = setup('document-1');
     await waitFor(() => expect(annotations.anchors()).toEqual([]));
     messageRoots.setRoots([root('root-1'), root('root-2'), root('root-3')]);
@@ -429,11 +419,9 @@ describe('anchors bound to legacy threads', () => {
     });
     expect(threadIdsByAnchor(annotations)).toEqual({
       'message-highlight': 'root-1',
-      'legacy-highlight': undefined,
       'imported-highlight': 'root-2',
       'bare-highlight': null,
       'message-placeable': 'root-3',
-      'legacy-placeable': undefined,
     });
     dispose();
   });

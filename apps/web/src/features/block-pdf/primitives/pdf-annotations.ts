@@ -40,20 +40,13 @@ export function messageThreadPayload(
 
 export type AnchorBinding =
   | { kind: 'unthreaded' }
-  | { kind: 'thread'; threadId: number | string }
-  | { kind: 'foreign' };
+  | { kind: 'thread'; threadId: number | string };
 
-/**
- * Which discussion an anchor carries. Discussions are message roots joined on
- * the anchor's `rootId`. An anchor bound only to a legacy annotation thread
- * that was never imported is foreign: it stays hidden, so this client can
- * neither delete it nor thread a second discussion onto it.
- */
-export function anchorBinding(
-  anchor: Pick<Anchor, 'threadId' | 'rootId'>
-): AnchorBinding {
-  if (anchor.rootId != null) return { kind: 'thread', threadId: anchor.rootId };
-  return anchor.threadId != null ? { kind: 'foreign' } : { kind: 'unthreaded' };
+/** Which discussion an anchor carries: the message root named by its `rootId`. */
+export function anchorBinding(anchor: Pick<Anchor, 'rootId'>): AnchorBinding {
+  return anchor.rootId != null
+    ? { kind: 'thread', threadId: anchor.rootId }
+    : { kind: 'unthreaded' };
 }
 
 /**
@@ -84,7 +77,6 @@ export function createPdfAnnotations(documentId: Accessor<string>) {
   const anchorThread = (anchor: Anchor): ThreadPayload | null | undefined => {
     const binding = anchorBinding(anchor);
     if (binding.kind === 'unthreaded') return null;
-    if (binding.kind === 'foreign') return undefined;
     const root = messageThreadsByRootId().get(String(binding.threadId));
     return root && messageThreadPayload(root, anchor.uuid, anchor.page);
   };
