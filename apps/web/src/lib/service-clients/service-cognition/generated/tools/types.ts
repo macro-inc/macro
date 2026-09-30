@@ -166,6 +166,22 @@ export type SpreadsheetValueKind =
   | 'boolean'
   | 'error';
 /**
+ * The runtimes an agent can be moved onto.
+ */
+export type AgentHarnessOption =
+  | 'in-memory'
+  | 'cursor'
+  | 'claude-cloud'
+  | 'macrod';
+/**
+ * Where an agent can be mentioned.
+ */
+export type AgentChannelScopeSummary = 'all' | 'selected';
+/**
+ * Which connected apps an agent's sessions are handed as MCP servers.
+ */
+export type AgentMcpScopeSummary = 'owner_connections' | 'selected';
+/**
  * Ownership scope of a manageable bot.
  */
 export type BotOwnerSummary =
@@ -1806,6 +1822,151 @@ export interface CommentOnDocumentResponse {
   markedText?: string | null;
 }
 /**
+ * Update the instructions or settings of an AI agent the current user can manage. Provide only the fields that should change; everything else keeps its current value. Read the agent first with ListAgents: instructions are replaced whole, so to edit them, apply the edit to the current text and pass the complete result. Changes apply to sessions opened afterwards; running sessions keep the instructions they started with. Use ConfigureBot for the display name, handle, description, or picture, and ManageBotChannelAccess for plain webhook bots.
+ */
+export interface ConfigureAgent {
+  /**
+   * The agent's bot id: `bot.botId` from ListAgents.
+   */
+  botId: string;
+  /**
+   * The complete new instructions in markdown. Replaces the current instructions entirely; omit to keep them.
+   */
+  instructions?: string | null;
+  /**
+   * Runtime to move the agent onto. `macrod` also needs harnessId; the other runtimes must not have one. The current model may not exist on the new runtime, so usually pass defaultModel with it. Omit to keep the current runtime.
+   */
+  harness?: AgentHarnessOption | null;
+  /**
+   * Id of the registered self-hosted harness, required when harness is `macrod` and forbidden otherwise.
+   */
+  harnessId?: string | null;
+  /**
+   * Model id the agent's new sessions should use, as the runtime names it (e.g. `claude-sonnet-4-5`). Valid ids depend on the runtime. Omit to keep the current model.
+   */
+  defaultModel?: string | null;
+  /**
+   * `all` makes the agent mentionable in every channel its owner can use; `selected` limits it to channelIds. Omit to keep the current scope, or omit it and pass channelIds alone to switch to `selected`.
+   */
+  channelScope?: AgentChannelScopeSummary | null;
+  /**
+   * The complete list of channel ids the agent is limited to; the user must be a member of each. Required with the `selected` scope and forbidden with `all`.
+   */
+  channelIds?: string[] | null;
+  /**
+   * `owner_connections` hands sessions whatever apps the person running them has connected; `selected` hands exactly mcpServers. Omit to keep the current scope, or omit it and pass mcpServers alone to switch to `selected`.
+   */
+  mcpScope?: AgentMcpScopeSummary | null;
+  /**
+   * The complete list of connected apps for the `selected` MCP scope, each as its Pipedream app slug (e.g. `linear`) and display name. Forbidden with `owner_connections`.
+   */
+  mcpServers?: AgentMcpServerSummary[] | null;
+  /**
+   * `true` lets sessions approve tool permission requests without asking, where the runtime allows it; `false` makes them ask every time. Omit to leave unchanged.
+   */
+  autoAcceptPermissions?: boolean | null;
+  /**
+   * `true` for a coding agent, which works in a repository and answers a mention with a live session; `false` for a chat agent, which replies in the thread. Omit to leave unchanged.
+   */
+  isCoding?: boolean | null;
+}
+/**
+ * One Pipedream app an agent lists under the `selected` MCP scope.
+ */
+export interface AgentMcpServerSummary {
+  /**
+   * Pipedream app slug, e.g. `linear`.
+   */
+  appSlug: string;
+  /**
+   * Display name, e.g. `Linear`.
+   */
+  serverName: string;
+}
+/**
+ * Response from [`ConfigureAgent`].
+ */
+export interface ConfigureAgentResponse {
+  agent: AgentSummary;
+  /**
+   * Human-readable result summary naming what changed.
+   */
+  summary: string;
+}
+/**
+ * High-signal agent details returned to AI agents: the bot profile plus the
+ * instructions and settings that decide how its sessions run.
+ */
+export interface AgentSummary {
+  bot: BotSummary;
+  /**
+   * Instructions the agent works under, whole. New sessions snapshot them.
+   */
+  instructions: string;
+  /**
+   * Harness slug: `in-memory`, `cursor`, `claude-cloud`, or `macrod`.
+   */
+  harness: string;
+  /**
+   * Registered harness the agent runs on when `harness` is `macrod`.
+   */
+  harnessId?: string | null;
+  /**
+   * Model id the agent's sessions open with. Valid ids depend on the harness.
+   */
+  defaultModel: string;
+  channelScope: AgentChannelScopeSummary;
+  /**
+   * Selected channel ids; empty unless `channelScope` is `selected`.
+   */
+  channelIds: string[];
+  mcpScope: AgentMcpScopeSummary;
+  /**
+   * Selected apps; empty unless `mcpScope` is `selected`.
+   */
+  mcpServers: AgentMcpServerSummary[];
+  /**
+   * Whether sessions approve tool permission requests without asking.
+   * Absent means the agent always prompts.
+   */
+  autoAcceptPermissions?: boolean | null;
+  /**
+   * Whether the agent is a coding agent (works in a repository and answers
+   * mentions with a live session) or a chat agent (replies in the thread).
+   */
+  isCoding: boolean;
+}
+/**
+ * High-signal bot details returned to AI agents.
+ */
+export interface BotSummary {
+  /**
+   * Bot id used by the other bot-management tools.
+   */
+  botId: string;
+  owner: BotOwnerSummary;
+  /**
+   * Display name.
+   */
+  name: string;
+  /**
+   * Stable mention handle.
+   */
+  handle: string;
+  /**
+   * Optional description.
+   */
+  description?: string | null;
+  /**
+   * Optional profile-picture URL.
+   */
+  avatarUrl?: string | null;
+  /**
+   * Whether mentioning this bot opens a sandboxed coding-agent session.
+   */
+  hasAgent: boolean;
+}
+/**
  * Configure a manageable bot's profile. Provide only fields that should change. Use avatarUrl to set a profile picture from an image already uploaded to Macro static files or another reachable image URL; pass an empty string to clear the current picture. Passing an empty string for description clears it. Confirm handle changes because integrations and mentions may rely on the stable handle.
  */
 export interface ConfigureBot {
@@ -1843,36 +2004,6 @@ export interface ConfigureBotResponse {
    * Human-readable result summary.
    */
   summary: string;
-}
-/**
- * High-signal bot details returned to AI agents.
- */
-export interface BotSummary {
-  /**
-   * Bot id used by the other bot-management tools.
-   */
-  botId: string;
-  owner: BotOwnerSummary;
-  /**
-   * Display name.
-   */
-  name: string;
-  /**
-   * Stable mention handle.
-   */
-  handle: string;
-  /**
-   * Optional description.
-   */
-  description?: string | null;
-  /**
-   * Optional profile-picture URL.
-   */
-  avatarUrl?: string | null;
-  /**
-   * Whether mentioning this bot opens a sandboxed coding-agent session.
-   */
-  hasAgent: boolean;
 }
 /**
  * Search items by their content: document body text; email subject/body/sender/recipient/cc/bcc and the display names on those addresses; chat messages; call transcripts. This is keyword search, not semantic search: queries only match literal words/tokens, prefixes, or exact quoted terms that appear in the indexed content. Use this for targeted keyword/content lookup, not for activity-summary questions like "what happened today", "what's going on", "catch me up", or "what happened in standup today"; those should start with ListEntities using time/type/channel filters. Whitespace-separated terms are ANDed. For documents and emails, every term must match somewhere in the document — different terms can appear in different chunks/pages or different fields. For documents and emails specifically, each single-word term is matched as a prefix (so `scri` matches `script`); for emails the prefix expansion also runs against the local-part of address fields. For chats, channels, and call transcripts the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the content, not the user's natural-language description; long phrases will not match. Matching defaults to prefix; set matchType to 'exact' to match whole tokens/phrases with no prefix expansion (e.g. an exact word, identifier, or full email address). Wrap a multi-word phrase in double quotes to keep it together as one adjacent phrase. If the user's request combines a person with a topic, run separate searches rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type. Results for documents, emails, AI chats, projects, and call records include the tags visible to the user as {label, scope} pairs; to restrict a search to tagged items, pass the tag labels in the tags argument (ListTags shows which tags exist).
@@ -4013,6 +4144,23 @@ export interface IssueBotCredentialResponse {
    * Optional expiration time.
    */
   expiresAt?: string | null;
+  /**
+   * Human-readable result summary.
+   */
+  summary: string;
+}
+/**
+ * List every AI agent the current user can manage - their own, their teams', and channel agents they can mention - with each agent's current instructions and settings: harness, model, channel availability, connected apps, permission behavior, and whether it is a coding or chat agent. Use this to find an agent's botId and read its current configuration before changing it with ConfigureAgent. ListBots covers plain webhook bots instead.
+ */
+export type ListAgents = {};
+/**
+ * Response from [`ListAgents`].
+ */
+export interface ListAgentsResponse {
+  /**
+   * Agents the caller can manage, with their current instructions and settings.
+   */
+  agents: AgentSummary[];
   /**
    * Human-readable result summary.
    */
