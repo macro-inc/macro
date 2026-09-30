@@ -36,6 +36,8 @@ message and attachments. Failed uploads show **Retry** and block Send until they
 succeed. Send stays disabled while posting and after success, including when
 native queue cleanup fails; retrying cleanup must not post the message again.
 Test rapid repeated taps with delayed cleanup and retry after a failed send.
+On Android and iOS, if a send finishes after its sheet is canceled, cleanup must
+leave any newer share pending with its attachments intact.
 **Cancel** explicitly discards the current share. Send
 is a real channel/DM mutation: do not use it in verification without authorization.
 Android attachment controls open the system picker. File downloads open Android's
