@@ -531,6 +531,7 @@ pub(crate) fn lifecycle_audience(event: &AgentSessionLifecycleEvent) -> Lifecycl
         AgentSessionLifecycleEvent::Opened(_)
         | AgentSessionLifecycleEvent::TurnStarted(_)
         | AgentSessionLifecycleEvent::TurnEnded(_)
+        | AgentSessionLifecycleEvent::CommandRejected(_)
         | AgentSessionLifecycleEvent::Settled(_)
         | AgentSessionLifecycleEvent::WaitingForInput(_)
         | AgentSessionLifecycleEvent::InputReceived(_)

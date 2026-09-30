@@ -300,6 +300,7 @@ impl IntoResponse for AgentSessionApiError {
             // here, and nothing the caller does again right now will land, so it
             // answers 409 with a reason rather than a 500 that reads as a bug
             // and buries the one fact worth showing a user.
+            Self::Domain(AgentSessionError::Admission(error)) => error.into_response(),
             Self::Domain(AgentSessionError::Disconnected(session_id)) => {
                 tracing::info!(%session_id, "action refused: the session's runtime is not connected");
                 (
@@ -1762,6 +1763,7 @@ impl IntoResponse for CreateSessionApiError {
                 };
                 return (StatusCode::CONFLICT, Json(body)).into_response();
             }
+            Self::Domain(AgentSessionError::Admission(error)) => return error.into_response(),
             Self::Domain(AgentSessionError::ThreadSessionExists) => (
                 StatusCode::CONFLICT,
                 "this bot already has a session for this thread".to_owned(),
