@@ -139,7 +139,8 @@ list):
   tour restarts at step 1.
 - Don't gate it on desktop or on a flag yourself; `ViewTour` already checks
   both. All tours sit behind the `enableInAppTours` flag
-  (`enable-in-app-tours` in PostHog, on in local dev).
+  (`enable-in-app-tours` in PostHog). To see tours on the local dev server,
+  start it with `VITE_ENABLE_IN_APP_TOURS=true`.
 - Don't pass step callbacks that change pages or open panels.
 
 ## 6. Test and document
@@ -151,7 +152,8 @@ list):
   (`completed`, `dismissed`, or the active step). Changing a tour's steps
   doesn't reset it for users who finished it; bump the `id` only if everyone
   must see the new version.
-- Check it in a browser: on localhost the tour reopens on every mount. Walk
+- Check it in a browser with `VITE_ENABLE_IN_APP_TOURS=true`: on localhost
+  the tour reopens on every mount. Walk
   every step, including one that waits on an entry, once with the sidebar
   open and once collapsed.
 - Update `docs/AGENT_GUIDE/view-tours.md` when a view gains a tour or its steps
