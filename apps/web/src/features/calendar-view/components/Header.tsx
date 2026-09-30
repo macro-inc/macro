@@ -133,7 +133,10 @@ export function Header(props: { presentation: 'workspace' | 'preview' }) {
     searchExpansionTimer = window.setTimeout(finishSearchExpansion, 140);
   };
   const handleSearchTransitionEnd = (event: TransitionEvent) => {
-    if (event.target === event.currentTarget && event.propertyName === 'width') {
+    if (
+      event.target === event.currentTarget &&
+      event.propertyName === 'width'
+    ) {
       finishSearchExpansion();
     }
   };
