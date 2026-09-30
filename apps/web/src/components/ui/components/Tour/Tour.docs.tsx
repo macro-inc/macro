@@ -89,7 +89,7 @@ const ENTRY_STEPS: TourStep[] = [
     entryLabel: 'Show settings to continue the tour',
     title: 'Found it',
     description:
-      'While the target is missing the card hides and a beacon marks the entry. Pressing it resumes the step.',
+      'While the target is missing the card hides and a beacon marks the entry until the target appears.',
   },
 ];
 

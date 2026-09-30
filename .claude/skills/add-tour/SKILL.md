@@ -109,8 +109,7 @@ unopened item), don't open it from the tour. Give the step an `entry`:
 
 While the target is missing and the entry is shown, the card hides, a beacon
 marks the entry, and a small card beside it shows `entryLabel` with Skip
-(and Skip all, after one Skip, when more steps wait on the same entry). Pressing the entry, or the target appearing any other way, resumes the
-step. Register the entry control as a target like any other.
+(and Skip all, after one Skip, when more steps wait on the same entry). The beacon stays until the target appears, however the user gets there. Register the entry control as a target like any other.
 
 - Keep `entryLabel` short and imperative: "Open a channel or DM to continue".
 - **Chain entries** when the entry itself can be hidden. The first shown one

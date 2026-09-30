@@ -160,7 +160,7 @@ describe('Tour', () => {
     expect(status()).toBe('floating');
   });
 
-  it('waits on the entry instead of navigating, and resumes when pressed or when the target appears', async () => {
+  it('waits on the entry instead of navigating, and resumes when the target appears', async () => {
     const [shown, setShown] = createSignal(false);
     const waiting: TourStep[] = [
       {
@@ -194,10 +194,9 @@ describe('Tour', () => {
       'Open settings to continue'
     );
 
+    // Pressing alone doesn't clear the beacon; only the target appearing does.
     fireEvent.pointerDown(screen.getByRole('button', { name: 'Settings' }));
-    // Nothing shows while the press reveals the target: no card at the
-    // corner that would then glide over.
-    expect(document.querySelector('[data-tour-beacon]')).toBeNull();
+    expect(document.querySelector('[data-tour-beacon]')).toBeTruthy();
     expect(screen.queryByRole('dialog')).toBeNull();
 
     setShown(true);
@@ -298,33 +297,6 @@ describe('Tour', () => {
     await settle();
     expect(tour.status()).toBe('waiting');
     expect(tour.entry()).toBe(screen.getByTestId('row'));
-  });
-
-  it('brings the beacon back when a press reveals nothing', async () => {
-    vi.useFakeTimers();
-    try {
-      render(() => (
-        <>
-          <button type="button" ref={tourTarget(T.entry)}>
-            Settings
-          </button>
-          <Tour.Root
-            steps={[
-              { target: T.hidden, entry: T.entry, title: 'x', description: '' },
-            ]}
-          >
-            <Probe />
-          </Tour.Root>
-        </>
-      ));
-      await vi.advanceTimersByTimeAsync(0);
-      fireEvent.pointerDown(screen.getByRole('button', { name: 'Settings' }));
-      expect(tour.status()).toBe('revealing');
-      await vi.advanceTimersByTimeAsync(1600);
-      expect(tour.status()).toBe('waiting');
-    } finally {
-      vi.useRealTimers();
-    }
   });
 
   it('falls back to the root entry for steps with a target', async () => {

@@ -48,8 +48,8 @@ export type TourStep = {
   /**
    * A control that reveals `target` when the target isn't on screen, such as
    * a nav item or a sidebar toggle. While the target is missing, the step
-   * waits: the card hides and `Tour.Beacon` marks the entry instead. Pressing
-   * the entry, or the target appearing any other way, resumes the step.
+   * waits: the card hides and `Tour.Beacon` marks the entry instead, until
+   * the target appears.
    */
   entry?: Targets;
   /** Accessible description of what the entry beacon leads to. */
@@ -61,15 +61,9 @@ export type TourStep = {
 /**
  * - `anchored`: the target is on screen.
  * - `waiting`: the target is missing but its entry is on screen.
- * - `revealing`: the entry was just pressed and the target hasn't appeared
- *   yet. Nothing shows, so the card appears at the target instead of
- *   floating first; if nothing appears shortly, the step waits again.
  * - `floating`: nothing to point at; the card floats in the boundary.
  */
-export type TourStatus = 'anchored' | 'waiting' | 'revealing' | 'floating';
-
-/** How long a pressed entry has to reveal its target before the beacon returns. */
-const REVEAL_TIMEOUT = 1500;
+export type TourStatus = 'anchored' | 'waiting' | 'floating';
 
 export type TourContextValue<Step extends TourStep = TourStep> = {
   steps: Accessor<readonly Step[]>;
@@ -191,43 +185,10 @@ function TourRoot<Step extends TourStep>(props: TourRootProps<Step>) {
     target() ? undefined : resolveTourTarget(entries(), boundary())
   );
 
-  // Pressing an entry hides everything while the press does its work. The
-  // press is remembered per element, so when it reveals the next entry in a
-  // chain (a sidebar toggle showing the row to open) the beacon moves there
-  // at once. If the target doesn't appear in time, the beacon comes back.
-  const [pressedEntry, setPressedEntry] = createSignal<HTMLElement>();
-  createEffect(
-    on([index, target], () => setPressedEntry(undefined), { defer: true })
-  );
-  createEffect(() => {
-    const element = pressedEntry();
-    if (!element) return;
-    const timer = setTimeout(() => {
-      if (pressedEntry() === element) setPressedEntry(undefined);
-    }, REVEAL_TIMEOUT);
-    onCleanup(() => clearTimeout(timer));
-  });
-  createEffect(() => {
-    const element = entry();
-    if (!element) return;
-    const press = () => setPressedEntry(element);
-    const pressKey = (event: KeyboardEvent) => {
-      if (event.key === 'Enter' || event.key === ' ') press();
-    };
-    element.addEventListener('pointerdown', press, true);
-    element.addEventListener('keydown', pressKey, true);
-    onCleanup(() => {
-      element.removeEventListener('pointerdown', press, true);
-      element.removeEventListener('keydown', pressKey, true);
-    });
-  });
-
-  const status = (): TourStatus => {
-    if (target()) return 'anchored';
-    const waitingOn = entry();
-    if (!waitingOn) return 'floating';
-    return waitingOn === pressedEntry() ? 'revealing' : 'waiting';
-  };
+  // The beacon stays on the entry until the target appears; pressing a
+  // sidebar toggle hands off to the next entry in the chain as it appears.
+  const status = (): TourStatus =>
+    target() ? 'anchored' : entry() ? 'waiting' : 'floating';
 
   const goTo = (next: number) => {
     const clamped = Math.min(Math.max(next, 0), props.steps.length - 1);
@@ -246,7 +207,6 @@ function TourRoot<Step extends TourStep>(props: TourRootProps<Step>) {
           explainTourTarget(t, boundary())
         ),
         entries: entries().map((t) => explainTourTarget(t, boundary())),
-        pressedEntry: pressedEntry(),
       };
     });
   }
@@ -553,8 +513,7 @@ function TourHighlight(props: { class?: string; inset?: number }) {
 
 /**
  * A pulsing ring and dot on the entry the current step is waiting on. It
- * doesn't intercept input: pressing the entry itself clears it and resumes
- * the step.
+ * doesn't intercept input; it stays until the target appears.
  */
 function TourBeacon(props: { class?: string; inset?: number }) {
   const tour = useTour();

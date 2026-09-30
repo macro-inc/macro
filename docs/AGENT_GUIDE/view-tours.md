@@ -27,8 +27,8 @@ and highlights.
   channel or DM to continue"), with Skip below. After one Skip, Skip all
   appears next to it when more steps wait on the same action. If that control is itself in a collapsed
   sidebar, the dot marks the sidebar toggle first, then moves once the
-  sidebar opens. Pressing the marked control, or reaching the feature any
-  other way, clears the dot and shows the step. Leaving again brings it back.
+  sidebar opens. The dot stays until the feature itself is on screen, however
+  you get there; then the card appears at it. Leaving again brings the dot back.
 
 ## Per view
 
