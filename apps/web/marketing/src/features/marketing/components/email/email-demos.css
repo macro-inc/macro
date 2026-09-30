@@ -34,7 +34,10 @@
 .mail-sidebar h3 { margin: 0; }
 .mail-main { flex: 1; min-width: 0; container: mail-list / inline-size; }
 .mail-rows { padding-bottom: 28px; }
-.mail-row { width: calc(100% - 8px); border: 0; background: transparent; font-family: inherit; margin-bottom: 4px; }
+.mail-row { width: calc(100% - 8px); border: 0; background: transparent; font-family: inherit; min-height: 40px; margin-bottom: 0; }
+.mail-row:hover { background: var(--color-list-hover, var(--color-active)); }
+.mail-row[data-unread=true] .mail-row-content { font-weight: 600; }
+.mail-row-narrow .mail-row-tags { margin-top: 5px; }
 .mail-row:focus-visible { outline: 1px solid var(--color-ink-muted); outline-offset: -1px; }
 .mail-row.soup-row-wide { --soup-row-padding-l: .5rem; --soup-row-indicator-width: 1rem; --soup-row-column-gap: .5rem; }
 .mail-date-group { padding: 7px 32px 5px; }

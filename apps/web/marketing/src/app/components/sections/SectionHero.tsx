@@ -29,7 +29,7 @@ export function SectionHero() {
       >
         <span
           style={{
-            'font-family': 'rajdhani, body',
+            'font-family': 'Inter, body',
             'font-size': isCompact() ? '10px' : breakpoint() ? '9px' : '16px',
             color: 'var(--a0)',
             'letter-spacing': '0.08em',
@@ -45,7 +45,7 @@ export function SectionHero() {
             'line-height': 1.1,
             'font-size': isCompact() ? '31px' : breakpoint() ? '40px' : '52px',
             'font-family': 'display',
-            'font-weight': '410',
+            'font-weight': '315',
           }}
         >
           The new office suite.

@@ -1,58 +1,22 @@
-/* First-paint fonts live in public/fonts/ at stable URLs so index.html can
-   <link rel="preload"> them in parallel with the JS bundle. */
+@import '../../styles/fonts.css';
+
+/* Legacy page aliases use the same variable fonts as the homepage. */
 @font-face {
   src: url('/fonts/roboto-slab-variable.woff2') format('woff2');
   font-family: 'display';
   font-weight: 100 900;
   font-display: swap;
 }
-
 @font-face {
-  src: url('/fonts/rajdhani-medium.woff2') format('woff2');
+  src: url('/fonts/inter-variable.woff2') format('woff2');
   font-family: 'body';
+  font-weight: 100 900;
   font-display: swap;
 }
-
-/* Rajdhani under its own name. ~146 rules say `font-family: 'rajdhani',
-   'body'`, and with no such face declared they fell through to 'body' — the
-   same file, so it looked right, but it also meant a locally-installed
-   Rajdhani would win instead. Declaring it pins them to the bundled Medium. */
-@font-face {
-  src: url('/fonts/rajdhani-medium.woff2') format('woff2');
-  font-family: 'rajdhani';
-  font-display: swap;
-}
-
-/* Neutral UI sans for the faux-app mocks (appFont). Without this the mocks
-   fall back to the OS system font, whose bold renders far heavier than
-   Inter's, making 700 read like extrabold. */
 @font-face {
   src: url('/fonts/inter-variable.woff2') format('woff2');
   font-family: 'Inter';
   font-weight: 100 900;
-  font-display: swap;
-}
-
-/* Cyberreader: a 50/50 blend of Rajdhani's edge and Inter's readability.
-   Used for the blog (headers + body). */
-@font-face {
-  src: url('/fonts/cyberreader2-regular.woff2') format('woff2');
-  font-family: 'cyberreader';
-  font-weight: 400;
-  font-display: swap;
-}
-
-@font-face {
-  src: url('/fonts/cyberreader2-bold.woff2') format('woff2');
-  font-family: 'cyberreader';
-  font-weight: 700;
-  font-display: swap;
-}
-
-@font-face {
-  src: url('/fonts/cyberreader2-light.woff2') format('woff2');
-  font-family: 'cyberreader';
-  font-weight: 300;
   font-display: swap;
 }
 
@@ -197,9 +161,9 @@ html, body, #root, #app-scroll-root { background: #000; }
 .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
 body{
-  font-family: 'body';
+  font-family: 'Inter Variable', Inter, sans-serif;
   color: var(--c2);
-  font-size: 16px;
+  font-size: 14px;
   margin: 0px;
 }
 
@@ -222,20 +186,20 @@ body{
    instead). Resetting min-width on structural boxes drops each item's base track
    contribution to 0, so every track fills its definite container, matching
    Chrome. Scroll strips opt out so their children stay swipeable. */
-#app-scroll-root :is(section, div):not(.no-scrollbar, .no-scrollbar *) {
+#app-scroll-root :is(section, div):not(.no-scrollbar, .no-scrollbar *, .dummy-workspace, .dummy-workspace *) {
   min-width: 0;
 }
 
-input, button{
-  font-family: 'Courier New', Courier, monospace;
+input:not(.dummy-workspace input), button:not(.dummy-workspace button){
+  font-family: 'Inter Variable', Inter, sans-serif;
   color: var(--c4);
   font-size: 15px;
 }
-input::placeholder{
+input:not(.dummy-workspace input)::placeholder{
   color: oklch(from var(--c4) l c h / 0.6);
 }
 
-a{
+a:not(.dummy-workspace a){
   transition: color var(--transition);
   text-decoration: none;
   color: var(--c2);
@@ -280,75 +244,129 @@ a{
   }
 }
 
-/* 3D liquid-glass rim — same recipe as the home/partners CTA tray: a 1px
-   gradient stroke that catches light at the corners, plus inset highlights
-   so pill buttons read as polished panes rather than flat fills. */
-.home-hero-cta,
-.base-header-pill-cta,
-.base-header-github-stars,
-.pricing-cta-button,
-.pricing-final-cta,
-.feat-lite-cta-primary,
-.feat-lite-cta-secondary,
-.email-cta-button,
-.agents-cta-button,
-.crm-cta-button,
-.channels-cta-button,
-.docs-cta-button,
-.docs-final-cta,
-.migrate-cta-button,
-.tasks-cta-button,
-.gh-cta-button,
-.calls-cta-button,
-.hero-cta-button,
-.final-bento-cta-button,
-.mobile-signup-submit {
-  border: 1px solid color-mix(in srgb, var(--b4) 32%, transparent);
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, var(--c1) 6%, transparent),
-    inset 0 -1px 0 color-mix(in srgb, var(--b0) 40%, transparent),
-    0 14px 32px -22px rgb(0 0 0 / 0.55);
-  position: relative;
+/* Public-page CTAs match the homepage's flat, quiet pills. The legacy
+   components still set sizing inline, so these shared rules define the skin. */
+:is(
+  .home-hero-cta,
+  .base-header-pill-cta,
+  .base-header-github-stars,
+  .pricing-cta-button,
+  .pricing-final-cta,
+  .feat-lite-cta-primary,
+  .feat-lite-cta-secondary,
+  .email-cta-button,
+  .agents-cta-button,
+  .crm-cta-button,
+  .channels-cta-button,
+  .docs-cta-button,
+  .docs-final-cta,
+  .migrate-cta-button,
+  .tasks-cta-button,
+  .gh-cta-button,
+  .calls-cta-button,
+  .hero-cta-button,
+  .final-bento-cta-button,
+  .mobile-signup-submit
+) {
+  border-radius: 999px !important;
+  box-shadow: none !important;
+  background-image: none !important;
+  font-family: 'Inter Variable', Inter, sans-serif !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  letter-spacing: normal !important;
+  text-transform: none !important;
+  min-height: 40px;
+  transform: none !important;
+  transition: background-color 160ms ease, color 160ms ease !important;
+}
+:is(
+  .home-hero-cta,
+  .base-header-pill-cta,
+  .base-header-github-stars,
+  .pricing-cta-button,
+  .pricing-final-cta,
+  .feat-lite-cta-primary,
+  .feat-lite-cta-secondary,
+  .email-cta-button,
+  .agents-cta-button,
+  .crm-cta-button,
+  .channels-cta-button,
+  .docs-cta-button,
+  .docs-final-cta,
+  .migrate-cta-button,
+  .tasks-cta-button,
+  .gh-cta-button,
+  .calls-cta-button,
+  .hero-cta-button,
+  .final-bento-cta-button,
+  .mobile-signup-submit
+)::after,
+.home-hero-cta-bar::after {
+  content: none;
 }
 
-.home-hero-cta-bar::after,
-.home-hero-cta::after,
-.base-header-pill-cta::after,
-.base-header-github-stars::after,
-.pricing-cta-button::after,
-.pricing-final-cta::after,
-.feat-lite-cta-primary::after,
-.feat-lite-cta-secondary::after,
-.email-cta-button::after,
-.agents-cta-button::after,
-.crm-cta-button::after,
-.channels-cta-button::after,
-.docs-cta-button::after,
-.docs-final-cta::after,
-.migrate-cta-button::after,
-.tasks-cta-button::after,
-.gh-cta-button::after,
-.calls-cta-button::after,
-.hero-cta-button::after,
-.final-bento-cta-button::after,
-.mobile-signup-submit::after {
-  background: linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--c1) 18%, transparent) 0%,
-    transparent 24%,
-    transparent 76%,
-    color-mix(in srgb, var(--c1) 12%, transparent) 100%
-  );
-  border-radius: inherit;
-  content: '';
-  inset: 0;
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  mask-composite: exclude;
-  padding: 1px;
-  pointer-events: none;
-  position: absolute;
+/* Main conversion links use the white Open app treatment. */
+a:is(
+  .email-cta-button,
+  .agents-cta-button,
+  .crm-cta-button,
+  .channels-cta-button,
+  .docs-cta-button,
+  .migrate-cta-button,
+  .tasks-cta-button,
+  .gh-cta-button,
+  .calls-cta-button,
+  .hero-cta-button,
+  .final-bento-cta-button
+),
+.feat-lite-cta-primary, .docs-final-cta, .pricing-final-cta,
+.mobile-signup-submit {
+  background-color: var(--c0) !important;
+  color: var(--b0) !important;
+  border: 1px solid transparent !important;
+}
+
+/* Demo actions use the subdued Book demo treatment. */
+button:is(
+  .email-cta-button,
+  .channels-cta-button,
+  .docs-cta-button,
+  .migrate-cta-button,
+  .tasks-cta-button,
+  .gh-cta-button,
+  .calls-cta-button
+),
+.feat-lite-cta-secondary {
+  background-color: color-mix(in srgb, var(--c0) 6%, var(--b0)) !important;
+  border: 1px solid color-mix(in srgb, var(--c0) 10%, transparent) !important;
+  color: var(--c3) !important;
+}
+
+:is(
+  .home-hero-cta,
+  .base-header-pill-cta,
+  .base-header-github-stars,
+  .pricing-cta-button,
+  .pricing-final-cta,
+  .feat-lite-cta-primary,
+  .feat-lite-cta-secondary,
+  .email-cta-button,
+  .agents-cta-button,
+  .crm-cta-button,
+  .channels-cta-button,
+  .docs-cta-button,
+  .docs-final-cta,
+  .migrate-cta-button,
+  .tasks-cta-button,
+  .gh-cta-button,
+  .calls-cta-button,
+  .hero-cta-button,
+  .final-bento-cta-button,
+  .mobile-signup-submit
+):focus-visible {
+  outline: 2px solid var(--c0);
+  outline-offset: 3px;
 }
 
 .scene-panel{
@@ -395,7 +413,7 @@ a{
 
 .lifetime-pricing__header span {
   color: var(--a0);
-  font-family: 'rajdhani', 'body';
+  font-family: 'Inter', 'body';
   font-size: 15px;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -407,7 +425,7 @@ a{
   color: var(--c1);
   font-family: 'display';
   font-size: clamp(40px, 5vw, 56px);
-  font-weight: 650;
+  font-weight: 315;
   letter-spacing: -0.035em;
   line-height: 1.02;
   margin: 0;
@@ -576,7 +594,7 @@ a{
   color: var(--c0);
   font-family: 'display';
   font-size: 52px;
-  font-weight: 650;
+  font-weight: 315;
   letter-spacing: -0.035em;
   line-height: 1;
 }
@@ -700,7 +718,7 @@ a{
 
 .lifetime-pricing__header span {
   color: var(--a0);
-  font-family: 'rajdhani', 'body';
+  font-family: 'Inter', 'body';
   font-size: 16px;
   font-weight: 700;
   letter-spacing: 0.1em;
@@ -712,7 +730,7 @@ a{
   color: var(--c1);
   font-family: 'display';
   font-size: clamp(34px, 4vw, 46px);
-  font-weight: 650;
+  font-weight: 315;
   letter-spacing: -0.035em;
   line-height: 1.06;
   margin: 0;
@@ -796,7 +814,7 @@ a{
   color: var(--a0);
   font-family: 'display';
   font-size: 34px;
-  font-weight: 650;
+  font-weight: 315;
   line-height: 1;
   margin: 0;
 }
@@ -813,7 +831,7 @@ a{
   color: var(--c0);
   font-family: 'display';
   font-size: clamp(52px, 6vw, 66px);
-  font-weight: 650;
+  font-weight: 315;
   letter-spacing: -0.045em;
   line-height: 1;
 }
@@ -1077,7 +1095,7 @@ a{
 
 .lifetime-pricing__header > span {
   color: var(--a0);
-  font-family: 'rajdhani', 'body';
+  font-family: 'Inter', 'body';
   font-size: 16px;
   font-weight: 700;
   letter-spacing: 0.1em;
@@ -1089,7 +1107,7 @@ a{
   color: var(--c1);
   font-family: 'display';
   font-size: 44px;
-  font-weight: 410;
+  font-weight: 315;
   letter-spacing: -0.015em;
   line-height: 1.2;
   margin: 0;
@@ -1180,7 +1198,7 @@ a{
   color: var(--c1);
   font-family: 'display';
   font-size: 44px;
-  font-weight: 410;
+  font-weight: 315;
   letter-spacing: -0.015em;
   line-height: 1.2;
   margin: 0;
@@ -1306,7 +1324,7 @@ a{
 .lifetime-pricing__card-top > span {
   color: var(--a0);
   display: inline-flex;
-  font-family: 'rajdhani', 'body';
+  font-family: 'Inter', 'body';
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.14em;
@@ -1327,7 +1345,7 @@ a{
   background: transparent;
   border: 0;
   color: var(--a0);
-  font-family: 'rajdhani', 'body';
+  font-family: 'Inter', 'body';
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.14em;
@@ -1380,7 +1398,7 @@ a{
   color: var(--c0);
   font-family: 'display';
   font-size: 44px;
-  font-weight: 410;
+  font-weight: 315;
   letter-spacing: -0.015em;
   line-height: 1.2;
 }
@@ -1512,7 +1530,7 @@ a{
   display: grid;
   font-family: 'display';
   font-size: 18px;
-  font-weight: 450;
+  font-weight: 315;
   gap: 24px;
   grid-template-columns: minmax(0, 1fr) auto;
   line-height: 1.12;
@@ -1703,7 +1721,7 @@ a{
 
 .lifetime-pricing__security-copy span {
   color: var(--a0);
-  font-family: 'rajdhani', 'body';
+  font-family: 'Inter', 'body';
   font-size: 16px;
   font-weight: 700;
   letter-spacing: 0.1em;
@@ -1715,7 +1733,7 @@ a{
   color: var(--c1);
   font-family: 'display';
   font-size: clamp(39px, 5vw, 51px);
-  font-weight: 410;
+  font-weight: 315;
   letter-spacing: -0.015em;
   line-height: 1.08;
   margin: 0;

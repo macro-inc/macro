@@ -5,7 +5,7 @@ export function SectionNewsprint() {
   const stacked = () => viewportWidth() < 800;
 
   const labelStyle = {
-    'font-family': 'rajdhani, body',
+    'font-family': 'Inter, body',
     'font-size': viewportWidth() < 700 ? '12px' : '14px',
     'font-weight': '700',
     color: 'var(--a0)',

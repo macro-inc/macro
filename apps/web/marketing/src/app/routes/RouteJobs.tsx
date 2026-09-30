@@ -9,7 +9,7 @@ const APPLY_EMAIL = 'jobs@macro.com';
 const eyebrowStyle = () =>
   ({
     color: 'var(--a0)',
-    'font-family': 'rajdhani, body',
+    'font-family': 'Inter, body',
     'font-size': viewportWidth() < 700 ? '13px' : '14px',
     'font-weight': '700',
     'letter-spacing': '0.08em',
@@ -21,7 +21,7 @@ const eyebrowStyle = () =>
 const metaStyle = () =>
   ({
     color: 'var(--c4)',
-    'font-family': 'rajdhani, body',
+    'font-family': 'Inter, body',
     'font-size': viewportWidth() < 700 ? '13px' : '14px',
     'font-weight': '700',
     'letter-spacing': '0.08em',
@@ -73,7 +73,7 @@ function JobCard(props: JobCardProps) {
             color: 'var(--c1)',
             'font-family': 'display',
             'font-size': stacked() ? '26px' : '30px',
-            'font-weight': '450',
+            'font-weight': '315',
             'letter-spacing': '-0.02em',
             'line-height': 1.1,
             margin: '0',
@@ -106,7 +106,7 @@ function JobCard(props: JobCardProps) {
         >
           <span
             style={{
-              'font-family': 'rajdhani, body',
+              'font-family': 'Inter, body',
               'font-size': stacked() ? '14px' : '15px',
               'font-weight': '700',
               'letter-spacing': '0.1em',
@@ -183,7 +183,7 @@ export const RouteJobs: Component = () => {
             color: 'var(--c1)',
             'font-family': 'display',
             'font-size': breakpoint() ? '38px' : '50px',
-            'font-weight': '450',
+            'font-weight': '315',
             'letter-spacing': '-0.035em',
             'line-height': breakpoint() ? 1.04 : 1,
             margin: '0',

@@ -1,0 +1,60 @@
+/* Email's quiet dot field and cool glow, only around the focused subgraphics.
+   The extra tail fades the window into the page without dimming its controls. */
+.product-page .feature-page-visual .product-demo-stage {
+  --product-demo-height: 580px;
+  --product-demo-fade-tail: 84px;
+  padding-top: 28px;
+}
+
+.product-page .feature-page-visual .product-demo-stage::before {
+  inset: -40px -40px 0;
+  z-index: -2;
+  background:
+    radial-gradient(ellipse at 65% 31%, rgb(144 148 159 / 0.13), transparent 57%),
+    radial-gradient(ellipse at 25% 60%, rgb(106 117 135 / 0.07), transparent 60%);
+  mask-image: linear-gradient(transparent, #000 18%, #000 60%, transparent);
+  -webkit-mask-image: linear-gradient(transparent, #000 18%, #000 60%, transparent);
+}
+
+.product-page .feature-page-visual .product-demo-stage::after {
+  content: '';
+  position: absolute;
+  inset: -10px -24px 0;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(rgb(208 214 225 / 0.2) 0.6px, transparent 0.9px) 0 0 / 8px 8px;
+  mask-image: radial-gradient(ellipse at 63% 34%, #000, transparent 69%);
+  -webkit-mask-image: radial-gradient(ellipse at 63% 34%, #000, transparent 69%);
+  opacity: 0.48;
+}
+
+.product-page .feature-page-visual .product-demo {
+  box-sizing: border-box;
+  height: calc(var(--product-demo-height) + var(--product-demo-fade-tail));
+  padding-bottom: var(--product-demo-fade-tail);
+  background: linear-gradient(145deg, #17181b, #101112 60%);
+  mask-image: linear-gradient(
+    #000 calc(100% - var(--product-demo-fade-tail)),
+    rgb(0 0 0 / 0.65) calc(100% - 32px),
+    transparent
+  );
+  -webkit-mask-image: linear-gradient(
+    #000 calc(100% - var(--product-demo-fade-tail)),
+    rgb(0 0 0 / 0.65) calc(100% - 32px),
+    transparent
+  );
+}
+
+@media (max-width: 699px) {
+  .product-page .feature-page-visual .product-demo-stage {
+    --product-demo-height: 620px;
+    --product-demo-fade-tail: 64px;
+    padding-top: 12px;
+  }
+  .product-page .feature-page-visual .product-demo-stage::before {
+    inset: -18px 0 0;
+  }
+  .product-page .feature-page-visual .product-demo-stage::after {
+    inset-inline: 0;
+  }
+}

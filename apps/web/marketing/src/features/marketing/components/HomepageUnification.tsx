@@ -343,11 +343,11 @@ export function HomepageUnification(
           <span class="unification-subtext-desktop">
             From email and docs to booking links, databases, and coding agents.
             <br />
-            Already connected, with one shared context.
+            One search. Bidirectional links. Agent tools across your work.
           </span>
           <span class="unification-subtext-mobile">
             From email to docs to booking links, databases, and coding agents.
-            One shared context.
+            One search. Linked work. Agents that can edit it.
           </span>
         </p>
       </div>

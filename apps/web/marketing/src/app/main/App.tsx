@@ -7,7 +7,10 @@ import {
   on,
   onCleanup,
   onMount,
+  Show,
+  Suspense,
 } from 'solid-js';
+import { DemoMentionMenu } from '../../features/marketing/components/DemoMentionMenu';
 import { PageVignette } from '../../features/marketing/components/PageVignette';
 import {
   applyTheme,
@@ -56,9 +59,9 @@ const RouteTest = lazy(() =>
 );
 const PostsIndex = lazy(() => import('../../routes/posts/index'));
 const PostPage = lazy(() => import('../../routes/posts/PostPage'));
-const RouteStartups = lazy(() =>
-  import('../routes/RouteStartups').then((module) => ({
-    default: module.RouteStartups,
+const RouteStartupsRedirect = lazy(() =>
+  import('../routes/RouteStartupsRedirect').then((module) => ({
+    default: module.RouteStartupsRedirect,
   }))
 );
 const RouteTasks = lazy(() =>
@@ -66,23 +69,28 @@ const RouteTasks = lazy(() =>
     default: module.RouteTasks,
   }))
 );
+const RouteDemo = lazy(() => import('../routes/RouteDemo'));
 const RouteEmail = lazy(() =>
   import('../routes/RouteEmail').then((module) => ({
     default: module.RouteEmail,
   }))
 );
 const RouteDocuments = lazy(() =>
-  import('../routes/RouteDocuments').then((module) => ({
-    default: module.RouteDocuments,
-  }))
+  import('../../features/marketing/views/ProductDocumentsPage').then(
+    (module) => ({
+      default: module.RouteDocuments,
+    })
+  )
 );
 const RouteChannels = lazy(() =>
-  import('../routes/RouteChannels').then((module) => ({
-    default: module.RouteChannels,
-  }))
+  import('../../features/marketing/views/ProductChannelsPage').then(
+    (module) => ({
+      default: module.RouteChannels,
+    })
+  )
 );
 const RouteCalls = lazy(() =>
-  import('../routes/RouteCalls').then((module) => ({
+  import('../../features/marketing/views/ProductCallsPage').then((module) => ({
     default: module.RouteCalls,
   }))
 );
@@ -90,14 +98,16 @@ const RouteCrm = lazy(() =>
   import('../routes/RouteCrm').then((module) => ({ default: module.RouteCrm }))
 );
 const RouteAgents = lazy(() =>
-  import('../routes/RouteAgents').then((module) => ({
+  import('../../features/marketing/views/ProductAgentsPage').then((module) => ({
     default: module.RouteAgents,
   }))
 );
 const RouteGithub = lazy(() =>
-  import('../routes/RouteGithub').then((module) => ({
-    default: module.RouteGithub,
-  }))
+  import('../../features/marketing/views/ProductReviewsPage').then(
+    (module) => ({
+      default: module.RouteGithub,
+    })
+  )
 );
 const RoutePricing = lazy(() =>
   import('../routes/RoutePricing').then((module) => ({
@@ -174,6 +184,7 @@ const RootLayout: ParentComponent = (props) => {
   );
 
   onMount(() => {
+    if (!scrollRef) return;
     const handleScroll = () => {
       setHeaderCtaActive(
         scrollRef.scrollTop >= HEADER_CTA_ACTIVE_SCROLL_THRESHOLD
@@ -187,30 +198,40 @@ const RootLayout: ParentComponent = (props) => {
 
   return (
     <>
-      <div
-        id="app-scroll-root"
-        ref={scrollRef}
-        style={{
-          'overscroll-behavior': 'none',
-          'box-sizing': 'border-box',
-          'scrollbar-width': 'none',
-          'justify-items': 'center',
-          'overflow-y': 'scroll',
-          'overflow-x': 'hidden',
-          // Viewport units are NOT scaled by the html `zoom` (--site-scale), so
-          // 100vw would render 10% wider than the screen and shove the centered
-          // grid content off to the right. Divide by the zoom to land exactly
-          // on the real viewport.
-          height: 'calc(100dvh / var(--site-scale, 1))',
-          display: 'grid',
-          width: 'calc(100vw / var(--site-scale, 1))',
-        }}
+      <DemoMentionMenu />
+      <Show
+        when={location.pathname === '/demo'}
+        fallback={
+          <>
+            <div
+              id="app-scroll-root"
+              ref={scrollRef}
+              style={{
+                'overscroll-behavior': 'none',
+                'box-sizing': 'border-box',
+                'scrollbar-width': 'none',
+                'justify-items': 'center',
+                'overflow-y': 'scroll',
+                'overflow-x': 'hidden',
+                // Viewport units are NOT scaled by the html `zoom` (--site-scale), so
+                // 100vw would render 10% wider than the screen and shove the centered
+                // grid content off to the right. Divide by the zoom to land exactly
+                // on the real viewport.
+                height: 'calc(100dvh / var(--site-scale, 1))',
+                display: 'grid',
+                width: 'calc(100vw / var(--site-scale, 1))',
+              }}
+            >
+              <BaseHeader ctaActive={headerCtaActive()} />
+              <UtilWrap>{props.children}</UtilWrap>
+            </div>
+            <PageVignette />
+            <DialogTheme />
+          </>
+        }
       >
-        <BaseHeader ctaActive={headerCtaActive()} />
-        <UtilWrap>{props.children}</UtilWrap>
-      </div>
-      <PageVignette />
-      <DialogTheme />
+        <Suspense>{props.children}</Suspense>
+      </Show>
     </>
   );
 };
@@ -235,8 +256,9 @@ export const App: Component<{
       <Route path="/dpa" component={RouteDpa} />
       <Route path="/posts" component={PostsIndex} />
       <Route path="/posts/:slug" component={PostPage} />
-      <Route path="/startups" component={RouteStartups} />
+      <Route path="/startups" component={RouteStartupsRedirect} />
       <Route path="/tasks" component={RouteTasks} />
+      <Route path="/demo" component={RouteDemo} />
       <Route path="/email" component={RouteEmail} />
       <Route path="/documents" component={RouteDocuments} />
       <Route path="/channels" component={RouteChannels} />

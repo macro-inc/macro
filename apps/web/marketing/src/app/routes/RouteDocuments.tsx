@@ -283,7 +283,7 @@ function PowerInSimplicity() {
             // its own column is the third of those, so it drops from 36/380 to
             // .tasks-h3's 30/350.
             'font-size': mobile() ? '23px' : '30px',
-            'font-weight': '350',
+            'font-weight': '315',
             'letter-spacing': '-0.01em',
             'line-height': 1.35,
             // Wide gap under the heading: it reads as a title over a statement
@@ -304,13 +304,9 @@ function PowerInSimplicity() {
           <p
             style={{
               color: 'var(--c4)',
-              // 'body' stays behind cyberreader everywhere on this page: with
-              // font-display: swap a failed load would otherwise drop to the
-              // generic default instead of to Rajdhani, which is the site's
-              // voice.
-              'font-family': 'cyberreader, body',
-              'font-size': mobile() ? '16.5px' : '18px',
-              'font-weight': '300',
+              'font-family': 'Inter, body',
+              'font-size': mobile() ? '14px' : '15px',
+              'font-weight': '400',
               'line-height': 1.6,
               margin: '0',
               'text-align': 'left',
@@ -419,7 +415,7 @@ function _FeatureSplit(props: {
             style={{
               'font-family': 'display',
               'font-size': mobile() ? '32px' : '42px',
-              'font-weight': '400',
+              'font-weight': '315',
               'letter-spacing': '-0.018em',
               'line-height': 1.1,
               margin: '0',
@@ -432,10 +428,10 @@ function _FeatureSplit(props: {
             <p
               style={{
                 color: 'var(--c4)',
-                // rajdhani, as on the email and tasks feature sections — this
+                // Inter, as on the email and tasks feature sections — this
                 // page was the only one setting these descriptions in body.
-                'font-family': 'rajdhani, body',
-                'font-size': mobile() ? '18px' : '21px',
+                'font-family': 'Inter, body',
+                'font-size': mobile() ? '15px' : '18px',
                 'font-weight': '400',
                 'line-height': 1.6,
                 margin: '0',
@@ -1157,7 +1153,7 @@ export function TimelineArtworkBand(props: {
  * baselines then forces the line-height, because the headline has one gap to
  * cover the description's two:
  *
- *   L = 2 x 30.4 + x(cyberreader 19px) - x(display 42px)
+ *   L = 2 x 30.4 + x(Inter 19px) - x(display 42px)
  *     = 60.8 + 10.66 - 22.19
  *     = 49.27
  *
@@ -1167,8 +1163,8 @@ export function TimelineArtworkBand(props: {
  * (49.27 - 55) / 2 + (44 - 22.19) = 18.95 against
  * (30.4 - 25) / 2 + (19 - 10.66) = 11.04.
  *
- * Both constants moved when the subtitle went from rajdhani 21px/1.6 to
- * cyberreader 19px/1.6, and they moved in opposite directions: the subtitle's
+ * Both constants moved when the subtitle went from Inter 21px/1.6 to
+ * Inter 19px/1.6, and they moved in opposite directions: the subtitle's
  * line-height dropped 3.2px, and the headline covers TWO of its gaps against
  * one of its own, so L lost 6.4px and gained back the 0.95px the wider face
  * adds to the x-height. At 49.27 on 42px type the leading is 1.17, tighter
@@ -1211,13 +1207,13 @@ function DocsFeatureCopy(props: { block: DocsFeatureBlock }) {
          * The footer list is the email page's compose-section bullets in
          * this page's own type, and the swap is not cosmetic: that list is
          * set in body at 19px/1.45, while DOCS_HEADLINE_NUDGE above aligns
-         * the headline's x-height top against a FIRST LINE BOX of cyberreader
+         * the headline's x-height top against a FIRST LINE BOX of Inter
          * 19px/1.6. Adopting the other page's font moves that x-top 1.5px
          * and the headline stops registering against its own subtitle.
          *
          * So what is borrowed is the form -- an inline mark, a grid ul, one
          * claim per row -- and the gap that carries it is that list's own,
-         * scaled from its 19px body to this 19px cyberreader:
+         * scaled from its 19px body to this 19px Inter:
          *
          *   gap    9 / 27.55 x 30.4 = 9.9
          *
@@ -1238,7 +1234,7 @@ function DocsFeatureCopy(props: { block: DocsFeatureBlock }) {
         .docs-note-list {
           color: var(--c3);
           display: grid;
-          font-family: cyberreader, body;
+          font-family: Inter, body;
           font-size: 19px;
           font-weight: 300;
           gap: 10px;
@@ -1269,9 +1265,9 @@ function DocsFeatureCopy(props: { block: DocsFeatureBlock }) {
          * 5.7 and 5.1 -- close enough that the dot may as well be a stated
          * size, and a stated size cannot drift when the type does.
          *
-         * The dot keeps its 6px through the move to cyberreader 19px because
-         * what it is sized against barely moved: rajdhani's x-height at 21px
-         * is 10.71 and cyberreader's at 19px is 10.66, so the same dot reads
+         * The dot keeps its 6px through the move to Inter 19px because
+         * what it is sized against barely moved: Inter's x-height at 21px
+         * is 10.71 and Inter's at 19px is 10.66, so the same dot reads
          * at the same weight beside the row.
          *
          * baseline alignment plus a lift, the same pair the closing figure's
@@ -1332,7 +1328,7 @@ function DocsFeatureCopy(props: { block: DocsFeatureBlock }) {
             'font-family': 'display',
             'font-size': mobile() ? '32px' : '42px',
             // Main's h2 tier: a section title, same slot as .tasks-h2.
-            'font-weight': '380',
+            'font-weight': '315',
             'letter-spacing': '-0.018em',
             'line-height': mobile() ? 1.1 : `${DOCS_HEADLINE_LH}px`,
             // The nudge is a cross-column correction -- it registers this
@@ -1360,18 +1356,9 @@ function DocsFeatureCopy(props: { block: DocsFeatureBlock }) {
               // with an inline style object. Retype one, retype the other, or
               // the version-history section stops matching its siblings.
               color: 'var(--c3)',
-              // Main's lead tier, at its own size rather than this page's old
-              // one. 21px was a rajdhani measure, and rajdhani is condensed:
-              // the same string set in cyberreader runs 14% wider and wrapped
-              // to FOUR lines in this 430px track, which breaks the two-column
-              // registration outright -- the headline has one line gap to cover
-              // the subtitle's, and against three of them the solved
-              // line-height would be 90px on 42px type. At 19px, which is what
-              // .tasks-lead sets, it is three lines again and 8px narrower than
-              // the rajdhani version was, so the column is unchanged.
-              'font-family': 'cyberreader, body',
-              'font-size': mobile() ? '17px' : '19px',
-              'font-weight': '300',
+              'font-family': 'Inter, body',
+              'font-size': mobile() ? '14px' : '16px',
+              'font-weight': '400',
               'line-height': 1.6,
               margin: '0',
               'max-width': '430px',
@@ -1569,7 +1556,7 @@ function DocsIntegrationHero() {
             color: 'var(--c1)',
             'font-family': 'display',
             'font-size': mobile() ? '32px' : '42px',
-            'font-weight': '380',
+            'font-weight': '315',
             'letter-spacing': '-0.018em',
             // The bands set their leading in px because their two-column
             // header registers the headline's x-height against the subtitle's
@@ -1587,14 +1574,11 @@ function DocsIntegrationHero() {
         <p
           style={{
             color: 'var(--c4)',
-            'font-family': 'cyberreader, body',
-            'font-size': mobile() ? '17px' : '19px',
-            'font-weight': '300',
+            'font-family': 'Inter, body',
+            'font-size': mobile() ? '14px' : '16px',
+            'font-weight': '400',
             'line-height': 1.6,
             margin: '0',
-            // Still 44ch, and the measure grows with the font rather than in
-            // spite of it: cyberreader's zero is wider, so the same 44ch is
-            // 507px where rajdhani's was 435. Two lines either way.
             'max-width': '44ch',
             'text-align': 'left',
           }}
@@ -1723,7 +1707,7 @@ function _LiveEditorSection() {
                 <p
                   style={{
                     color: 'color-mix(in srgb, var(--c4) 70%, transparent)',
-                    'font-family': 'rajdhani, body, system-ui, sans-serif',
+                    'font-family': 'Inter, body, system-ui, sans-serif',
                     'font-size': '14px',
                     'font-weight': '600',
                     'letter-spacing': '0.12em',
@@ -1852,7 +1836,7 @@ function ComparisonSection() {
             // Main's h3 tier -- the smaller section title. /tasks sets its own
             // "How does Macro Tasks stack up?" in .tasks-h3 at 350, which is
             // this heading in the same slot on the sibling page.
-            'font-weight': '350',
+            'font-weight': '315',
             'letter-spacing': '-0.015em',
             'line-height': 1.1,
             margin: 0,
@@ -2180,7 +2164,7 @@ const DOCS_HERO_NOTES: DocsHeroNote[] = [
   {
     // "anything" italic because it is the load-bearing word: the claim is not
     // that @ links documents, it is that the set of things it links is not
-    // enumerated. Rajdhani ships no italic face, so this is a synthesised
+    // enumerated. Inter ships no italic face, so this is a synthesised
     // oblique -- which is why it is one word and not a phrase.
     label: () => (
       <>
@@ -2254,7 +2238,7 @@ const DHC_ART_H = 500;
  * yet. None of that applies now.
  *
  * DHC_LABEL_W is 232 because that is where the longest note stops taking a
- * third line. Measured in Rajdhani at the 14-unit size: the first two notes
+ * third line. Measured in Inter at the 14-unit size: the first two notes
  * reach two lines at 164.0 and 164.8 units, but the email note is half again
  * as long as either and needs 230.3, so it sets the width and the other two
  * spend their second line ragged and short. If this copy is replaced -- it is
@@ -2458,14 +2442,14 @@ function DocsClosingFigure() {
         }
         .dhc-note-text {
           color: var(--dhc-ink);
-          font-family: rajdhani, body;
+          font-family: Inter, body;
           /* Proportional, so every clearance measured in artwork units holds
              at every width. 14 units of 801. */
           font-size: ${(14 / DHC_ART_W) * 100}cqw;
           line-height: 1.4;
           pointer-events: auto;
         }
-        /* The page's own eyebrow -- rajdhani 600 at 0.12em, uppercase, the
+        /* The page's own eyebrow -- Inter 600 at 0.12em, uppercase, the
            same as LIVE DEMO above the demo frame -- restated in artwork units
            so it scales with the figure like everything else here. Neutral
            rather than accent: it is a category marker sitting over an accent
@@ -2482,7 +2466,7 @@ function DocsClosingFigure() {
           margin-bottom: ${(4 / DHC_ART_W) * 100}cqw;
           text-transform: uppercase;
         }
-        /* Rajdhani has no italic face, so this is the browser's synthesised
+        /* Inter has no italic face, so this is the browser's synthesised
            oblique. It is legible on one word and gets loose over a phrase,
            which is the reason the emphasis is kept to one. */
         .dhc-note-text em { font-style: italic; }
@@ -2505,7 +2489,7 @@ function DocsClosingFigure() {
           align-items: baseline;
           color: var(--dhc-ink);
           display: flex;
-          font-family: rajdhani, body;
+          font-family: Inter, body;
           font-size: 13px;
           gap: 8px;
           line-height: 1.45;

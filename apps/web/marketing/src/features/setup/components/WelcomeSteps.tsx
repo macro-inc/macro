@@ -144,8 +144,8 @@ export function WelcomeStep(props: {
           data-welcome-copy
           class="mx-auto max-w-sm text-sm leading-6 text-ink-muted md:max-w-[480px] md:text-[17.5px] md:leading-[30px]"
         >
-          Work together with your agents, with every conversation, document, and
-          tool in one place.
+          Emails, messages, tasks, and agent responses in one inbox. Documents
+          you and your agents can edit live.
         </p>
       </div>
       <div
@@ -179,19 +179,19 @@ export function IntroductionStep(props: {
       </div>
       <div class="grid grid-cols-3 gap-4 text-center text-xs leading-5 text-ink-muted">
         <span>
-          Bring your tools
+          Read your work
           <br />
-          <strong class="font-medium text-ink">into one place</strong>
+          <strong class="font-medium text-ink">in one inbox</strong>
         </span>
         <span>
-          Find the context
+          Search across
           <br />
-          <strong class="font-medium text-ink">behind your work</strong>
+          <strong class="font-medium text-ink">email, chat, and docs</strong>
         </span>
         <span>
-          Move forward
+          Give agents
           <br />
-          <strong class="font-medium text-ink">with your team</strong>
+          <strong class="font-medium text-ink">tools to edit</strong>
         </span>
       </div>
       <ContinueButton label="Set up my workspace" onClick={props.onContinue} />

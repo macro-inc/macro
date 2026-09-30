@@ -24,7 +24,10 @@ const typesIn = (html: string) =>
 
 const linksByRoute = new Map<string, string[]>();
 const documentsByRoute = new Map<string, ReturnType<typeof parse>>();
-for (const previous of baseline.routes) {
+const indexedRoutes = baseline.routes.filter(
+  ({ path }) => !baseline.retiredPaths.includes(path)
+);
+for (const previous of indexedRoutes) {
   assert(
     routes.includes(previous.path),
     `Lost indexed route: ${previous.path}`
@@ -77,8 +80,15 @@ for (const previous of baseline.routes) {
     (doc.getElementById('root')?.textContent?.length ?? 0) > 200,
     `${previous.path}: empty HTML shell`
   );
-  if (previous.path !== '/')
-    assert.equal(doc.title, previous.title, `${previous.path}: title changed`);
+  // The copy audit replaces the absolute ‘perfect memory’ claim. Keep the
+  // captured baseline intact and require the intentional replacement exactly.
+  if (previous.path !== '/') {
+    const expectedTitle =
+      previous.path === '/calls'
+        ? 'Macro Calls — Recordings, Transcripts, and Agent Tools'
+        : previous.title;
+    assert.equal(doc.title, expectedTitle, `${previous.path}: title changed`);
+  }
   for (const type of previous.schemaTypes)
     assert(
       typesIn(html).includes(type),
@@ -159,10 +169,33 @@ while (pending.length) {
     }
   }
 }
-for (const route of baseline.routes)
+for (const route of indexedRoutes)
   assert(reachable.has(route.path), `Orphaned page: ${route.path}`);
 
 const home = parse(htmlFor('/'));
+for (const route of baseline.retiredPaths) {
+  assert(
+    !routes.includes(route),
+    `Retired route leaked into sitemap: ${route}`
+  );
+  const doc = parse(htmlFor(route));
+  assert.equal(
+    doc.querySelector('meta[http-equiv="refresh"]')?.getAttribute('content'),
+    '0;url=/',
+    `${route}: missing homepage redirect`
+  );
+  assert(
+    doc
+      .querySelector('meta[name="robots"]')
+      ?.getAttribute('content')
+      ?.includes('noindex'),
+    `${route}: retired route must stay noindex`
+  );
+  assert(
+    !home.querySelector(`a[href="${route}"]`),
+    `${route}: retired navigation link`
+  );
+}
 for (const route of [
   '/email',
   '/tasks',
@@ -182,8 +215,16 @@ for (const route of [
     `Homepage lacks a crawlable link to ${route}`
   );
 }
-for (const route of ['/start', '/mobile-signup', '/mobile-signup-sent']) {
-  assert(!routes.includes(route), `Signup route leaked into sitemap: ${route}`);
+for (const route of [
+  '/start',
+  '/mobile-signup',
+  '/mobile-signup-sent',
+  '/demo',
+]) {
+  assert(
+    !routes.includes(route),
+    `Noindex route leaked into sitemap: ${route}`
+  );
   assert(
     parse(htmlFor(route))
       .querySelector('meta[name="robots"]')
@@ -222,7 +263,7 @@ assert(
   `Homepage initial JS exceeds 225 KB gzip: ${bytes}; check for eager demo or analytics imports`
 );
 console.log(
-  `[seo] Preserved ${baseline.routes.length} live URLs, static content, schema, metadata, internal links and crawler rules.`
+  `[seo] Preserved ${indexedRoutes.length} live URLs, static content, schema, metadata, internal links and crawler rules.`
 );
 console.log(
   `[seo] Validated ${internalLinks} internal links and ${localAssets} local assets.`

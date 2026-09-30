@@ -6,7 +6,6 @@ const EXPLORE_PAGES = [
   { href: '/', label: 'Home' },
   { href: '/pricing', label: 'Pricing' },
   { href: '/partners', label: 'Partners' },
-  { href: '/startups', label: 'Startups' },
   { href: 'https://cal.com/team/macro/macro-demo-call', label: 'Book demo' },
 ];
 
