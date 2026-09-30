@@ -9,6 +9,62 @@ use stream::domain::{
 use tokio::sync::broadcast::{self, Receiver};
 use tokio_util::task::TaskTracker;
 
+pub const ADMISSION_TEST_USER: &str = "macro|admission@example.com";
+
+pub struct TestAdmission {
+    pub result: Result<(), ai_billing::AiAdmissionError>,
+    pub calls: std::sync::Mutex<Vec<(String, ai_usage::AiFeature)>>,
+}
+
+impl TestAdmission {
+    pub fn rejecting(error: ai_billing::AiAdmissionError) -> Arc<Self> {
+        Arc::new(Self {
+            result: Err(error),
+            calls: Default::default(),
+        })
+    }
+}
+
+impl ai_billing::AiAdmissionService for TestAdmission {
+    fn admit<'a>(
+        &'a self,
+        user: &'a macro_user_id::user_id::MacroUserIdStr<'_>,
+        feature: ai_usage::AiFeature,
+    ) -> ai_billing::domain::admission::AdmissionFuture<'a> {
+        self.calls.lock().unwrap().push((user.to_string(), feature));
+        Box::pin(async { self.result })
+    }
+}
+
+pub fn admission_errors() -> [ai_billing::AiAdmissionError; 4] {
+    use ai_billing::{AiAdmissionError, DenyReason};
+    [
+        AiAdmissionError::Denied(DenyReason::AllowanceExhausted),
+        AiAdmissionError::Denied(DenyReason::OverageLimitReached),
+        AiAdmissionError::Denied(DenyReason::OveragePaymentFailed),
+        AiAdmissionError::Unavailable,
+    ]
+}
+
+pub fn authorized_request(path: &str, body: serde_json::Value) -> axum::extract::Request {
+    axum::http::Request::builder()
+        .method("POST")
+        .uri(path)
+        .header("content-type", "application/json")
+        .header("x-internal-auth-key", "testing")
+        .header("x-internal-macro-user-id", ADMISSION_TEST_USER)
+        .body(axum::body::Body::from(body.to_string()))
+        .unwrap()
+}
+
+pub async fn test_model_access(ctx: &ApiContext) -> DcsChatModelAccess {
+    use axum::extract::FromRequestParts;
+    let (mut parts, _) = authorized_request("/", serde_json::json!({})).into_parts();
+    DcsChatModelAccess::from_request_parts(&mut parts, ctx)
+        .await
+        .unwrap_or_else(|_| panic!("test model access should resolve"))
+}
+
 pub struct MockConnectionRepo;
 
 impl MockConnectionRepo {
@@ -425,6 +481,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         ),
         schedule_tool_context: ai_tools::no_op_schedule_context(),
         anthropic_tool_context: ai_tools::build_anthropic_tool_context_test(),
+        admission: Arc::new(ai_billing::DisabledAiAdmissionService),
         recorder: ai_usage::pg_recorder(pool.clone()),
         usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
     };
@@ -541,6 +598,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         search_service_client,
         email_service_client_external,
         authorization_state: authorization_state.clone(),
+        ai_admission: Arc::new(ai_billing::DisabledAiAdmissionService),
         ai_billing: Arc::new(ai_billing::domain::BillingServiceImpl::new(
             ai_billing::outbound::RolesTeamsEntitlementSource::new(
                 (*user_permissions_service).clone(),

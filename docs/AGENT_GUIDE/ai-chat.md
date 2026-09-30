@@ -373,11 +373,17 @@ documents:
 
 ## AI usage limits
 
-AI usage billing is enabled only in the dev environment (`dev.macro.com/app`,
-including a local frontend pointed at the dev backend). The backend enforces
-allowances and settles usage only in `Environment::Develop`. In production and
-local-backend environments, requests are not blocked by credits, spending caps,
-or failed-overage-payment state, and usage is recorded without settlement.
+Quota admission uses the backend's default-off `ENABLE_AI_USAGE_ENFORCEMENT`
+policy once configured by the host; it is independent of environment. Settlement
+still runs only in `Environment::Develop`. With admission enabled, cognition chat
+and structured completion return 402 for exhausted allowance or 503 with
+`ai_billing_unavailable` when validation is unavailable. Neither starts AI work;
+chat admission also precedes chat/message creation. Existing model and chat
+permission failures take precedence over quota errors. Retry 503 later rather
+than treating it as approval or repeatedly sending the prompt.
+
+Automatic chat naming is admitted independently. If naming is denied or validation
+is unavailable, the successful chat continues with its existing/default title.
 Usage meters, credit controls, out-of-credit dialogs, and model usage multipliers
 are hidden outside frontend development mode. Normal paid-model access rules
 still apply everywhere.

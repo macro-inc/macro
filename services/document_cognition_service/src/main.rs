@@ -697,6 +697,7 @@ async fn main() -> anyhow::Result<()> {
         ),
         schedule_tool_context: ai_tools::NoOpScheduleContext,
         anthropic_tool_context: ai_tools::build_anthropic_tool_context(),
+        admission: Arc::new(ai_billing::DisabledAiAdmissionService),
         recorder,
         usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
     };
@@ -852,6 +853,8 @@ async fn main() -> anyhow::Result<()> {
         authorization_state,
         user_permissions_service,
         non_user_owners,
+        // Configured shared policy is wired by the host-enforcement rollout.
+        ai_admission: tool_service_context.admission.clone(),
         ai_billing,
         internal_api_key: config.internal_api_key.clone(),
         config: Arc::new(config),
