@@ -36,10 +36,9 @@ a partial unique index for one live Markdown discussion per mark per document.
 
 Until the last PR of the rollout removes them, the schema keeps:
 
-- `comms_messages.channel_id` and `comms_attachments.channel_id`, nullable, filled for
-  channel parents by the messages crate and by the channel writers that still exist.
-  A `BEFORE INSERT` shim keeps the two representations of a channel parent in step
-  for writers that only set one of them.
+- `comms_messages.channel_id` and `comms_attachments.channel_id`, nullable. No
+  application code reads or writes them any more; the `BEFORE INSERT` shim fills
+  them from the parent columns for channel parents until the schema drop.
 - An `AFTER INSERT` trigger that creates the thread row for roots inserted by writers
   that know nothing about `comms_message_threads`. The messages crate inserts the row
   itself with `ON CONFLICT`, so the trigger can be dropped without changing it.
@@ -47,8 +46,11 @@ Until the last PR of the rollout removes them, the schema keeps:
   bigint `threadId`. New document discussions reference PDF anchors through the
   nullable `root_id` columns; `PdfPlaceableCommentAnchor` rows carry exactly one of
   `threadId` or `root_id`.
-- The empty `migrated_comment_id` and `migrated_comment_thread_id` tables that the
-  import fills; `resolve_legacy` reads them and returns not-found until then.
+- The `migrated_comment_id` and `migrated_comment_thread_id` tables the document
+  import filled; `resolve_legacy` reads them so old numeric comment links resolve.
+  They stay after the schema drop.
+- The legacy `crm_comment` and `crm_thread` tables. The CRM import copied them into
+  the message store with their ids, and nothing but the importer reads them.
 
 ## One message API
 
@@ -160,13 +162,18 @@ Lifecycle events keep their schema too: `ThreadOrigin` carries `parent` and its
 
 ## What remains
 
-The contract PR removed the legacy comment handlers and their `macro_db_client`
-writes, the channel message routes and adapters, the channel realtime frames, the
-`channel.message_*` broker events (search, webhooks, and soup consume `macro.messages`),
-and every `channel_id` read; the SDK re-pointed at the message routes with a major
-bump. One migration is still owed, deployed only after the contract release: drop
-`comms_messages.channel_id`, `comms_attachments.channel_id`, the parent-sync trigger,
-the legacy `"threadId"` on the PDF anchor tables, and the `"Comment"`, `"Thread"`, and
-`"ThreadAnchor"` tables, and rewrite `cascade_comms_message_delete_to_notifications`
-onto the parent columns. The `migrated_comment_id` / `migrated_comment_thread_id`
-mapping tables stay so old links keep resolving.
+The contract PR removed the legacy document comment handlers and their
+`macro_db_client` writers, the legacy CRM comment API, the channel message routes
+and adapters, the channel realtime frames, the `channel.message_*` broker events
+(search, webhooks, soup, activity, and scheduled actions consume `macro.messages`),
+and every application read and write of the message and attachment `channel_id`
+columns; the SDK moved channel, document, and CRM comments onto the message routes
+in 0.2.0. One migration is still owed, deployed only after the contract release
+reaches every consumer: drop `comms_messages.channel_id`,
+`comms_attachments.channel_id`, the parent-sync trigger and its constraints, the
+legacy `"threadId"` on the PDF anchor tables, and the `"Comment"`, `"Thread"`,
+`"ThreadAnchor"`, `crm_comment`, and `crm_thread` tables; rewrite
+`cascade_comms_message_delete_to_notifications` onto the parent columns; and retire
+the document and CRM comment importers with their source tables. The
+`migrated_comment_id` / `migrated_comment_thread_id` mapping tables stay so old
+links keep resolving.
