@@ -150,6 +150,22 @@ fn attachment_content(attachment: &PromptAttachment) -> AttachmentContent<'stati
             attachment.name, attachment.uri
         ))
     };
+    let mut content = NonEmpty::one(part);
+    if is_image && fetchable {
+        // The model conversion emits content parts, not AttachmentContent's
+        // name/reference fields. Keep the source visible even when a local
+        // adapter replaces the image URL with inline bytes, so tools can reuse
+        // an uploaded reference. This describes any image URL without claiming
+        // that a third-party image is a Macro static file.
+        content.push(AttachmentPart::Metadata {
+            key: "image_file_name".to_owned(),
+            value: attachment.name.clone(),
+        });
+        content.push(AttachmentPart::Metadata {
+            key: "image_source_uri".to_owned(),
+            value: attachment.uri.clone(),
+        });
+    }
     AttachmentContent {
         // The static file id is the URL's last path segment; a URL shaped
         // some other way is identified by the whole URL.
@@ -163,7 +179,7 @@ fn attachment_content(attachment: &PromptAttachment) -> AttachmentContent<'stati
                 .to_owned(),
         ),
         name: Some(attachment.name.clone()),
-        content: NonEmpty::one(part),
+        content,
     }
 }
 

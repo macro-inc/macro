@@ -510,7 +510,11 @@ fn named_instance_separates_browser_and_container_aws_endpoints() {
     assert_eq!(env["LOCAL_AWS_URL"], "http://localstack:4566");
     assert_eq!(
         env["LOCAL_AWS_PUBLIC_URL"],
-        format!("http://localhost:{}", instance.port(Port::LocalStack))
+        format!("{}/local-storage", env["FRONTEND_ORIGIN"])
+    );
+    assert_eq!(
+        env["DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL"],
+        format!("{}/local-storage/doc-storage", env["FRONTEND_ORIGIN"])
     );
 }
 

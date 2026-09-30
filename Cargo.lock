@@ -519,6 +519,7 @@ dependencies = [
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
+ "url",
  "workspace-hack",
 ]
 
@@ -863,6 +864,7 @@ dependencies = [
  "foreign_entity",
  "frecency",
  "futures",
+ "image_generation",
  "import",
  "initiative",
  "initiative_documents",
@@ -913,6 +915,7 @@ dependencies = [
  "soup",
  "sqlx",
  "sqs_client",
+ "static_file",
  "strum 0.27.2",
  "sync_service_client",
  "system_properties",
@@ -3114,6 +3117,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum",
+ "axum-extra",
  "bot_id",
  "bot_token",
  "channels",
@@ -3309,7 +3313,7 @@ dependencies = [
 
 [[package]]
 name = "cache-wasm"
-version = "0.6.31"
+version = "0.6.34"
 dependencies = [
  "async-lock",
  "cache-core",
@@ -9393,6 +9397,37 @@ checksum = "525e9ff3e1a4be2fbea1fdf0e98686a6d98b4d8f937e1bf7402245af1909e8c3"
 dependencies = [
  "byteorder-lite",
  "quick-error",
+]
+
+[[package]]
+name = "image_generation"
+version = "0.1.0"
+dependencies = [
+ "ai_toolset",
+ "anyhow",
+ "async-trait",
+ "attachment",
+ "base64 0.22.1",
+ "bot_id",
+ "documents",
+ "entity_access",
+ "macro_user_id",
+ "model",
+ "model-entity",
+ "model_owner",
+ "models_permissions",
+ "non_empty",
+ "reqwest 0.13.4",
+ "rootcause",
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "uuid",
+ "wiremock",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -15813,6 +15848,7 @@ dependencies = [
  "documents",
  "doppler-config",
  "entity_access",
+ "entity_access_db_utils",
  "entity_registry",
  "entity_registry_db_utils",
  "futures",

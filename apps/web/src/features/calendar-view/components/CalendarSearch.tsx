@@ -310,6 +310,7 @@ export function CalendarSearch(
     inline?: boolean;
     compact?: boolean;
     expanded?: boolean;
+    popupReady?: boolean;
     onExpand?: () => void;
     onDismiss?: () => void;
     onOpenChange?: (open: boolean) => void;
@@ -322,6 +323,7 @@ export function CalendarSearch(
         inline={props.inline}
         compact={props.compact}
         expanded={props.expanded}
+        popupReady={props.popupReady}
         onExpand={props.onExpand}
         onDismiss={props.onDismiss}
         onOpenChange={props.onOpenChange}
@@ -334,6 +336,7 @@ function CalendarSearchControl(props: {
   inline?: boolean;
   compact?: boolean;
   expanded?: boolean;
+  popupReady?: boolean;
   onExpand?: () => void;
   onDismiss?: () => void;
   onOpenChange?: (open: boolean) => void;
@@ -345,10 +348,21 @@ function CalendarSearchControl(props: {
   const setOpen = (next: boolean) => {
     setOpenInternal(next);
     props.onOpenChange?.(next);
+    if (!next) {
+      setActiveRow(0);
+      setPreviewTarget(null);
+      props.onDismiss?.();
+    }
   };
   const [rawQuery, setRawQuery] = createSignal('');
   const [filters, setFilters] = createSignal(DEFAULT_CALENDAR_SEARCH_FILTERS);
   let inputRef: HTMLInputElement | undefined;
+  let searchButton: HTMLButtonElement | undefined;
+  const dismissSearch = () => {
+    inputRef?.blur();
+    setOpen(false);
+    if (props.onDismiss) queueMicrotask(() => searchButton?.focus());
+  };
   let listRef: HTMLDivElement | undefined;
   const [activeRow, setActiveRow] = createSignal(0);
   // Set to the chosen result when it falls outside the navigable range: the
@@ -357,6 +371,8 @@ function CalendarSearchControl(props: {
     createSignal<CalendarSearchResult | null>(null);
 
   const query = createMemo(() => rawQuery().trim());
+  const popupVisible = () =>
+    props.popupReady !== false && (!props.inline || query().length > 0);
   const debouncedQuery = debouncedDependent(query, 250);
 
   const searchQuery = useSearchSoupQuery(
@@ -646,13 +662,7 @@ function CalendarSearchControl(props: {
   return (
     <Popover
       open={open()}
-      onOpenChange={(next) => {
-        setOpen(next);
-        if (!next) {
-          setActiveRow(0);
-          setPreviewTarget(null);
-        }
-      }}
+      onOpenChange={setOpen}
       placement={props.inline ? 'bottom-start' : 'bottom-end'}
       gutter={6}
       flip
@@ -671,32 +681,48 @@ function CalendarSearchControl(props: {
           </Popover.Trigger>
         }
       >
-        <div class="min-w-0 max-w-md flex-1">
-          <Popover.Anchor as="div" class="w-full">
-            <SearchBar
-              ref={(element) => (inputRef = element)}
-              label="Search events"
-              onClose={
-                props.onDismiss
-                  ? () => {
-                      inputRef?.blur();
-                      props.onDismiss?.();
-                    }
-                  : undefined
-              }
-              value={rawQuery()}
-              onValueChange={changeQuery}
-              actions={filterActions()}
-              onClick={() => setOpen(true)}
-              onFocus={() => setOpen(true)}
-              onKeyDown={handleSearchKeyDown}
-              onEscape={() => {
-                setOpen(false);
-                props.onDismiss?.();
+        <div class="relative h-10 min-w-0 w-full flex-1">
+          <Popover.Anchor as="div" class="h-10 w-full">
+            <Show when={props.expanded === false}>
+              <Button
+                ref={searchButton}
+                type="button"
+                variant="ghost"
+                size="icon-lg"
+                label="Search events"
+                hotkey={TOKENS.calendar.search}
+                aria-expanded="false"
+                aria-haspopup="dialog"
+                onClick={props.onExpand}
+              >
+                <SearchIcon class="size-5" />
+              </Button>
+            </Show>
+            {/* Keep the input mounted while its width animates; inert removes collapsed controls from keyboard navigation. */}
+            <div
+              aria-hidden={props.expanded === false}
+              inert={props.expanded === false}
+              class="absolute inset-x-0 top-0 overflow-hidden rounded-full transition-opacity duration-150 motion-reduce:transition-none"
+              classList={{
+                'pointer-events-none opacity-0': props.expanded === false,
               }}
-              hotkey="cmd+f"
-              placeholder="Search events"
-            />
+            >
+              <SearchBar
+                ref={(element) => (inputRef = element)}
+                label="Search events"
+                class="has-[input:focus-visible]:ring-inset"
+                onClose={props.onDismiss ? dismissSearch : undefined}
+                value={rawQuery()}
+                onValueChange={changeQuery}
+                actions={filterActions()}
+                onClick={() => setOpen(true)}
+                onFocus={() => setOpen(true)}
+                onKeyDown={handleSearchKeyDown}
+                onEscape={dismissSearch}
+                hotkey="cmd+f"
+                placeholder="Search events"
+              />
+            </div>
           </Popover.Anchor>
         </div>
       </Show>
@@ -704,7 +730,12 @@ function CalendarSearchControl(props: {
       <Popover.Portal>
         <Layer depth={3}>
           <Popover.Content
-            class="portal-scope z-modal outline-none"
+            class="portal-scope z-modal outline-none transition-opacity duration-200 ease-out motion-reduce:transition-none"
+            classList={{
+              'pointer-events-none opacity-0': !popupVisible(),
+            }}
+            aria-hidden={!popupVisible() ? true : undefined}
+            inert={!popupVisible()}
             onOpenAutoFocus={(event) => {
               event.preventDefault();
               if (!props.inline) inputRef?.focus();
@@ -712,12 +743,27 @@ function CalendarSearchControl(props: {
             onCloseAutoFocus={(event) => {
               if (props.inline) event.preventDefault();
             }}
+            onEscapeKeyDown={(event) => {
+              if (!props.inline) return;
+              event.preventDefault();
+              dismissSearch();
+            }}
             onKeyDown={handleContentKeyDown}
             onInteractOutside={(event) => {
               const target = event.detail.originalEvent.target;
               if (
                 target instanceof Element &&
                 target.closest('[data-calendar-search-filters]')
+              ) {
+                event.preventDefault();
+              }
+              // The header dismisses after a period control's click. Collapsing
+              // on pointerdown can move that control before mouseup and lose the click.
+              if (
+                props.inline &&
+                target instanceof Element &&
+                target.closest('[data-calendar-period-controls]') &&
+                inputRef?.closest('[data-view-shell-top-bar]')?.contains(target)
               ) {
                 event.preventDefault();
               }
@@ -732,9 +778,12 @@ function CalendarSearchControl(props: {
           >
             <div
               class={cn(
-                'max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl glass bg-menu-glass text-ink',
+                'max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl glass bg-menu-glass text-ink transition-[translate] duration-200 ease-out motion-reduce:transition-none',
                 props.inline ? 'w-[var(--kb-popper-anchor-width)]' : 'w-80'
               )}
+              classList={{
+                '-translate-y-1': !popupVisible(),
+              }}
             >
               <Show
                 when={previewTarget()}

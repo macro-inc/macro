@@ -531,7 +531,13 @@ export class CacheWorkerCore {
         // Identity changes remain ordinary cache resets for every subscriber.
         if (result.reset) this.fanOut(result, true);
         else if (result.revisionAdvanced) {
-          this.push({ kind: 'cache-hydrated', revision: result.revision });
+          this.push({
+            kind: 'cache-hydrated',
+            revision: result.revision,
+            ...(result.searchChangedBuckets !== undefined
+              ? { searchChangedBuckets: result.searchChangedBuckets }
+              : {}),
+          });
         }
         const hydration: HydrationResult & Pick<WriteResult, 'reset'> =
           result.data === null
@@ -1034,6 +1040,9 @@ export class CacheWorkerCore {
       this.push({
         kind: 'cache-changed',
         revision: result.revision,
+        ...(!result.reset && result.searchChangedBuckets !== undefined
+          ? { searchChangedBuckets: result.searchChangedBuckets }
+          : {}),
         ...(result.reset ? { reset: true } : {}),
       });
     }

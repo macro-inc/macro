@@ -74,6 +74,7 @@ use agent_harness::outbound::runtime_registry::{HarnessKeyedConnections, Runtime
 use agent_inmem::domain::engine::TurnEngine;
 use agent_inmem::outbound::acp_mcp::AcpMcpConnector;
 use agent_inmem::outbound::egress_mcp::EgressMcpClient;
+use agent_inmem::outbound::local_attachments::LocalAttachmentTurnEngine;
 use agent_inmem::outbound::log_frames::LogFrameSource;
 use agent_inmem::outbound::manager::InMemAgentManager;
 use agent_inmem::outbound::tool_catalog::McpToolCatalog;
@@ -453,6 +454,29 @@ async fn run() -> anyhow::Result<()> {
             .context("failed to build the in-memory agent tool context")?;
     let inmem_model_engine: Arc<dyn TurnEngine> =
         Arc::new(RigTurnEngine::new(pool.clone(), tool_context));
+    // A model provider cannot fetch images from a private local-stack hostname.
+    // Resolve its static-file links through the existing attachment service,
+    // including links replayed from earlier turns, before calling the model.
+    let inmem_model_engine: Arc<dyn TurnEngine> = if let (Environment::Local, Some(local_aws)) =
+        (&config.environment, macro_aws_config::LocalAwsUrl::new())
+    {
+        let public_base = url::Url::parse(config::StaticFileServiceUrl::new()?.as_ref())?;
+        let cdn_base = format!(
+            "{}/{}",
+            local_aws.as_ref().trim_end_matches('/'),
+            config::StaticStorageBucket::new()?.as_ref(),
+        );
+        let attachments = static_file::inbound::attachment::StaticFileAttachmentService::new(
+            Arc::new(static_file::outbound::CdnStaticFileRepo::new(cdn_base)),
+        );
+        Arc::new(LocalAttachmentTurnEngine::new(
+            inmem_model_engine,
+            public_base,
+            attachments,
+        )?)
+    } else {
+        inmem_model_engine
+    };
     // Cold attaches (fresh spawns and post-restart resumes) rebuild
     // their model context from the same log every frame lands in.
     let frames = Arc::new(LogFrameSource::new(session_repo.clone()));

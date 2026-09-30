@@ -2,6 +2,7 @@
 
 pub mod acp_mcp;
 pub mod egress_mcp;
+pub mod local_attachments;
 pub mod log_frames;
 pub mod manager;
 pub mod tool_catalog;

@@ -72,6 +72,7 @@ import {
 import { usePostTypingUpdateMutation } from '@queries/messages/typing';
 import { ChannelTypeEnum } from '@service-storage/client';
 import { useBeforeLeave } from '@solidjs/router';
+import { tourTarget } from '@ui/components/Tour';
 import {
   createEffect,
   createMemo,
@@ -92,6 +93,7 @@ import { ChannelInputContainer } from '../Input/ChannelInputContainer';
 import { hasSendableInputContent } from '../Input/utils/sendable-content';
 import { ChannelThread } from '../Thread';
 import { buildReplyTargetValue } from '../Thread/utils/message-actions';
+import { CHANNEL_TOUR } from '../tour';
 import { isUnifiedInputMode } from '../unified-input-mode';
 import { ActiveCallMessage } from './ActiveCallMessage';
 import { ChannelDropZone } from './ChannelDropZone';
@@ -201,6 +203,8 @@ export function Channel(props: ChannelProps) {
     isReady: () => !!threadListNavigation(),
   });
 
+  const messagesTarget = tourTarget(CHANNEL_TOUR.messages);
+  const composerTarget = tourTarget(CHANNEL_TOUR.composer);
   const [channelInputSnapshot, setChannelInputSnapshot] =
     createSignal<InputSnapshot>();
   const [channelInputHandle, setChannelInputHandle] =
@@ -700,6 +704,7 @@ export function Channel(props: ChannelProps) {
                   class="ph-no-capture relative flex-1 min-h-0 outline-none flex flex-col"
                   ref={(element) => {
                     attachMessageListRef(element);
+                    messagesTarget(element);
                   }}
                   tabIndex={-1}
                   data-channel-message-list
@@ -904,6 +909,7 @@ export function Channel(props: ChannelProps) {
                     <ChannelInputContainer
                       ref={(el) => {
                         attachInputRef(el);
+                        composerTarget(el);
                       }}
                     >
                       <Switch>

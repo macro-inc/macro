@@ -17,7 +17,8 @@ use crate::engine::{
     WriteResultWire,
 };
 use crate::{
-    CacheState, InitializedCache, emit_cache_changed, emit_mutation_settled, emit_ops_affected,
+    CacheState, InitializedCache, emit_cache_changed, emit_cache_changed_with_search_changes,
+    emit_mutation_settled, emit_ops_affected,
 };
 use cache_core::entity_resolver::EntityResolver;
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
@@ -191,7 +192,12 @@ pub async fn graphql_cache_write<R: Runtime>(
         .await?;
     emit_ops_affected(&app, &result.affected_ops, &result.changed);
     if result.revision_advanced {
-        emit_cache_changed(&app, &result.revision, result.reset);
+        emit_cache_changed_with_search_changes(
+            &app,
+            &result.revision,
+            result.reset,
+            result.search_changed_buckets.as_ref(),
+        );
     }
     Ok(result)
 }
@@ -202,6 +208,9 @@ pub async fn graphql_cache_write<R: Runtime>(
 pub enum HydrationResultWire {
     /// At least one non-cache-only field was projected.
     Data {
+        /// Quick Access buckets whose searchable or materialized fields changed.
+        #[serde(rename = "searchChangedBuckets")]
+        search_changed_buckets: std::collections::BTreeSet<String>,
         /// Projected GraphQL response data.
         data: serde_json::Value,
         /// Revision installed by the hydration write.
@@ -212,6 +221,9 @@ pub enum HydrationResultWire {
     },
     /// Every response field was cache-only.
     Void {
+        /// Quick Access buckets whose searchable or materialized fields changed.
+        #[serde(rename = "searchChangedBuckets")]
+        search_changed_buckets: std::collections::BTreeSet<String>,
         /// Revision installed by the hydration write.
         revision: String,
         /// Whether this hydration changed the effective cache view.
@@ -258,11 +270,13 @@ pub async fn graphql_cache_hydrate<R: Runtime>(
     }
     Ok(match result.data {
         Some(data) => HydrationResultWire::Data {
+            search_changed_buckets: result.search_changed_buckets,
             data,
             revision: result.write_result.revision,
             revision_advanced: result.write_result.revision_advanced,
         },
         None => HydrationResultWire::Void {
+            search_changed_buckets: result.search_changed_buckets,
             revision: result.write_result.revision,
             revision_advanced: result.write_result.revision_advanced,
         },

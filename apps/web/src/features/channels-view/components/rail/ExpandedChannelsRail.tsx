@@ -21,6 +21,7 @@ import {
   useDragDropContext,
 } from '@thisbeyond/solid-dnd';
 import { cn, Dropdown, EmptyStatePanel, Hotkey, Tabs, Tooltip } from '@ui';
+import { tourTarget } from '@ui/components/Tour';
 import {
   type Accessor,
   createSignal,
@@ -33,6 +34,7 @@ import {
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import { canLabelChannel } from '../../core/channel-label-eligibility';
 import { ChannelsLiveCallsSidebar } from '../../live-calls-sidebar';
+import { CHANNELS_TOUR } from '../../tour';
 import type { ChannelListSort, ChannelsGroup } from '../../types';
 import { channelMentionsUser, formatDetailedTimestamp } from '../../utils';
 import { ChannelsEmptyState } from '../ChannelsEmptyState';
@@ -323,6 +325,7 @@ function ChannelOption(props: {
       >
         <ViewSidebar.Item
           as="div"
+          ref={tourTarget(CHANNELS_TOUR.conversation)}
           id={item().domId}
           role="treeitem"
           tabIndex={-1}
@@ -710,6 +713,9 @@ function ChannelHeadingDropTarget(props: { element: HTMLElement }) {
 }
 
 function ExpandedGroupSection(props: { config: GroupConfig }) {
+  // A conditional expression as `ref` is dropped by the Solid compiler, so
+  // the target is chosen inside the callback.
+  const createTarget = tourTarget(CHANNELS_TOUR.create);
   const rail = useChannelsRail();
   const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
   const [headerElement, setHeaderElement] = createSignal<HTMLElement>();
@@ -774,7 +780,13 @@ function ExpandedGroupSection(props: { config: GroupConfig }) {
             </span>
           </Show>
         </button>
-        <div data-section-action="" class="flex items-center gap-0.5">
+        <div
+          ref={(element) => {
+            if (props.config.group === 'channels') createTarget(element);
+          }}
+          data-section-action=""
+          class="flex items-center gap-0.5"
+        >
           <ChannelSortDropdown
             group={props.config.group}
             label={props.config.label}
@@ -1015,6 +1027,7 @@ function ExpandedRecents() {
 }
 
 export function ExpandedChannelsRail(props: { search: ChannelRailSearch }) {
+  const listTarget = tourTarget(CHANNELS_TOUR.list);
   const rail = useChannelsRail();
   const activeDescendant = () => {
     const rowId = rail.list.focus.key();
@@ -1027,7 +1040,10 @@ export function ExpandedChannelsRail(props: { search: ChannelRailSearch }) {
       <ChannelsLiveCallsSidebar />
       <div class="flex min-h-0 flex-1 flex-col">
         <div
-          ref={rail.registerRootRef}
+          ref={(element) => {
+            rail.registerRootRef(element);
+            listTarget(element);
+          }}
           role="tree"
           tabIndex={-1}
           aria-activedescendant={activeDescendant()}

@@ -10,6 +10,7 @@ import { useUserId } from '@core/context/user';
 import { uploadFile } from '@core/util/upload';
 import { useAgentCapabilitiesQuery } from '@queries/agents/capabilities';
 import type { PromptAttachment } from '@service-agent-harness/generated/schemas';
+import { tourTarget } from '@ui/components/Tour';
 import { createMemo, createSignal } from 'solid-js';
 import {
   type EffortChoice,
@@ -29,6 +30,7 @@ import { createRecentRepositories } from '../primitives/recent-repositories';
 import { createComposerModels } from '../queries/composer-models';
 import { createReachableRepositories } from '../queries/reachable-repositories';
 import { createRepositoryBranches } from '../queries/repository-branches';
+import { AGENTS_TOUR } from '../tour';
 import { AgentPicker } from './AgentPicker';
 import { RepositoryPicker } from './RepositoryPicker';
 
@@ -255,7 +257,7 @@ export function NewChatPage(props: {
 
   return (
     <section class="page newchat" data-active aria-label="New conversation">
-      <div class="col">
+      <div ref={tourTarget(AGENTS_TOUR.composer)} class="col">
         <div class="greeting">
           <h2>
             {coding() ? 'What should we build?' : 'What should we work on?'}

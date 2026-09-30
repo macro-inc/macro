@@ -26,6 +26,7 @@
   "AI/mcp/tools/edit-document",
   "AI/mcp/tools/edit-spreadsheet",
   "AI/mcp/tools/edit-tag",
+  "AI/mcp/tools/generate-image",
   "AI/mcp/tools/get-bot-webhooks",
   "AI/mcp/tools/get-company",
   "AI/mcp/tools/get-entity-properties",

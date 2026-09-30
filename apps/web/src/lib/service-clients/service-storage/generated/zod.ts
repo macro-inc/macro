@@ -1146,6 +1146,62 @@ export const getSelfBotResponse = zod
   .describe('Bot row.\n\nClients deserialize this, so both derives are used.');
 
 /**
+ * Returns display fields and the sponsor for each requested bot. Not a
+manageability check: any authenticated user or internal caller may look up
+ids they already have.
+ * @summary Handler for `GET /bots/profiles`.
+ */
+export const getBotOwnerProfilesQueryParams = zod.object({
+  ids: zod
+    .array(zod.string())
+    .optional()
+    .describe('Bot ids. Repeat the key: `?ids=<uuid>&ids=<uuid>`.'),
+});
+
+export const getBotOwnerProfilesResponseItem = zod
+  .object({
+    avatar_url: zod
+      .string()
+      .nullish()
+      .describe('Avatar URL. Registry system bots have none.'),
+    deleted_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe(
+        'Soft-delete time. Absent for an active bot and for a registry system bot.'
+      ),
+    id: zod.string(),
+    name: zod.string().describe('Display name.'),
+    owner: zod
+      .union([
+        zod.null(),
+        zod
+          .union([
+            zod
+              .object({
+                type: zod.enum(['user']),
+                user_id: zod.string().describe('Owner user id.'),
+              })
+              .describe('User-owned bot.'),
+            zod
+              .object({
+                team_id: zod.uuid().describe('Owner team id.'),
+                type: zod.enum(['team']),
+              })
+              .describe('Team-owned bot.'),
+          ])
+          .describe('Bot owner.'),
+      ])
+      .optional(),
+  })
+  .describe(
+    'Bot identity for rendering, including the sponsor and soft-delete time.\n\n`owner` is none only for a registry system bot. A persisted row always has\na sponsor.'
+  );
+export const getBotOwnerProfilesResponse = zod.array(
+  getBotOwnerProfilesResponseItem
+);
+
+/**
  * @summary Handler for `GET /bots/{bot_id}/channels`.
  */
 export const listBotChannelsParams = zod.object({
