@@ -248,11 +248,14 @@ macro.events.on('message.posted', async ({ metadata, target }) => {
 app.post('/webhook', (c) => macro.events.webhook()(c.req.raw));
 ```
 
-# Upgrading to 1.0
+# Upgrading to 0.2
 
-Channel messages and document comments share one API, `/messages/{parent_type}/{parent_id}`,
-and the SDK entities follow it. The public `Channel`, `Message`, `Thread`, and
-`Document` methods keep their names; these details changed:
+Channel messages, document comments, and CRM company and contact comments share
+one API, `/messages/{parent_type}/{parent_id}`, and the SDK entities follow it.
+The old channel message, document comment, and CRM comment routes are removed
+from the server in the same release, so 0.1 clients stop working against it.
+The public `Channel`, `Message`, `Thread`, `Document`, `Company`, and `Contact`
+methods keep their names; these details changed:
 
 - `Channel.messages()` and `Channel.messagesAfter()` page with the structured
   `MessageCursor` and yield `Message` handles seeded from the shared message
@@ -266,6 +269,17 @@ and the SDK entities follow it. The public `Channel`, `Message`, `Thread`, and
   `Comment.reply` exists. `Document.comment(body, { threadId })` takes a string
   thread id and a rich body; `Document.comments()` returns `{ thread: ThreadState,
   comments }` per live thread.
+- `CrmComment` is a message-backed comment on its company or contact
+  (`parent: { type: 'crm_company' | 'crm_contact', id }`). Its ids are message
+  UUIDs (imported comments kept their old ids); `text`, `createdAt`,
+  `updatedAt`, and `deletedAt` are lazy accessors; `threadId()` and `author()`
+  are async; `edit` accepts a rich body; and `reply` exists. `owner`, `sender`,
+  `order`, and `metadata` are gone. `Company.comments()` and
+  `Contact.comments()` return `{ thread: ThreadState, comments }` per live
+  thread; `comment(body, { threadId })` replaces `comment({ text, threadId })`;
+  `commentById(id)` returns a handle; `editComment` and `deleteComment` are
+  replaced by `CrmComment.edit` and `CrmComment.delete`. Deleting a thread's
+  root keeps its replies, as it does for channel and document threads.
 - Webhook and SSE events `channel.message_posted`, `channel.mentioned`,
   `channel.message_patched`, `channel.message_deleted`,
   `channel.message_attachment_created`, and `channel.message_attachment_removed`
@@ -285,7 +299,11 @@ Removed storage operations and their replacements: `getChannelMessages` →
 `postReaction` → `entityMessageReact`; `postTyping` → `entityMessageTyping`;
 `getDocumentComments` → `messageTimeline` + `entityMessageGetThread` on a
 document parent; `createComment` → `entityMessageCreate`; `editComment` →
-`entityMessageEdit`; `deleteComment` → `entityMessageDeleteMessage`.
+`entityMessageEdit`; `deleteComment` → `entityMessageDeleteMessage`;
+`listCrmComments` → `messageTimeline` + `entityMessageGetThread` on a
+`crm_company` or `crm_contact` parent; `createCrmComment` →
+`entityMessageCreate`; `editCrmComment` → `entityMessageEdit`;
+`deleteCrmComment` → `entityMessageDeleteMessage`.
 
 # Developing
 

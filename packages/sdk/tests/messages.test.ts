@@ -11,6 +11,8 @@ const originalFetch = globalThis.fetch;
 const host = 'https://storage.example.test';
 const channelId = '0198a4cc-e138-7670-a308-a6b766602700';
 const documentId = '0198a4cc-e138-7670-a308-a6b766602701';
+const companyId = '0198a4cc-e138-7670-a308-a6b766602704';
+const contactId = '0198a4cc-e138-7670-a308-a6b766602705';
 const rootId = '0198a4cc-e138-7670-a308-a6b766602702';
 const replyId = '0198a4cc-e138-7670-a308-a6b766602703';
 const timestamp = '2026-09-09T12:00:00Z';
@@ -323,6 +325,80 @@ describe('shared message API contracts', () => {
       ...replies.map(({ id }) => id),
     ]);
     await expect(comments[0]?.comments[1]?.text()).resolves.toBe('Reply 0');
+  });
+
+  test('CRM company comments list, post, reply, edit, and delete through message routes', async () => {
+    const parent = { type: 'crm_company', id: companyId } as const;
+    const root = message({ parent, content: 'Intro call went well' });
+    const reply = message({
+      parent,
+      id: replyId,
+      thread_id: rootId,
+      content: 'Following up',
+    });
+    const path = `/messages/crm_company/${companyId}`;
+    const requests = serve(async (request) => {
+      const url = new URL(request.url);
+      if (url.pathname === `${path}/threads/${rootId}`)
+        return Response.json(thread(root, [reply]));
+      if (url.pathname === path && request.method === 'GET')
+        return Response.json({
+          items: [listItem(thread(root, [reply]))],
+          next_cursor: null,
+        });
+      if (url.pathname === path && request.method === 'POST') {
+        const body = await request.json();
+        return Response.json(
+          body.thread_id ? reply : { ...root, content: body.content },
+        );
+      }
+      if (url.pathname === `${path}/items/${replyId}`) {
+        if (request.method === 'DELETE') return Response.json(reply);
+        return Response.json({ ...reply, content: 'Edited' });
+      }
+      return new Response(null, { status: 404 });
+    });
+    const company = macro().crm.companyById(companyId);
+
+    const threads = await company.comments();
+    expect(threads.map(({ thread }) => thread.root_id)).toEqual([rootId]);
+    expect(threads[0]?.comments.map((comment) => comment.id)).toEqual([
+      rootId,
+      replyId,
+    ]);
+
+    const created = await company.comment('Intro call went well');
+    expect(created.id).toBe(rootId);
+    const replied = await created.reply('Following up');
+    expect(replied.id).toBe(replyId);
+    await replied.edit('Edited');
+    await replied.delete();
+
+    const writes = requests.filter((request) => request.method !== 'GET');
+    expect(writes.map((request) => [request.method, new URL(request.url).pathname])).toEqual([
+      ['POST', path],
+      ['POST', path],
+      ['PATCH', `${path}/items/${replyId}`],
+      ['DELETE', `${path}/items/${replyId}`],
+    ]);
+    expect(await writes[1]?.json()).toMatchObject({
+      content: 'Following up',
+      thread_id: rootId,
+    });
+    expect(await writes[2]?.json()).toMatchObject({ content: 'Edited' });
+  });
+
+  test('CRM contact comments address the contact parent', async () => {
+    const parent = { type: 'crm_contact', id: contactId } as const;
+    const path = `/messages/crm_contact/${contactId}`;
+    const requests = serve(() =>
+      Response.json(message({ parent, content: 'Met at the conference' })),
+    );
+    const comment = await macro()
+      .crm.contactById(contactId)
+      .comment(msg`Met at the conference`);
+    expect(comment.parent).toEqual({ type: 'crm_contact', id: contactId });
+    expect(new URL(requests[0]?.url ?? '').pathname).toBe(path);
   });
 
   test('team bot auth reaches shared posting while user-owned bots retain the webhook fallback', async () => {
