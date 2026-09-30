@@ -11,6 +11,4 @@ export const projectKeys = createQueryKeys('initiatives', {
   taskReferences: (userId: string | undefined, ids: readonly string[]) => ({
     queryKey: [userId, [...ids].sort()],
   }),
-  /** Composer submissions not yet in the lists; client-only, never fetched. */
-  pending: null,
 });

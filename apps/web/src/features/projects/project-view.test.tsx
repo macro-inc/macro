@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render } from '@solidjs/testing-library';
 import { type Accessor, createSignal, type ParentProps } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
-import type { ProjectCreationResult } from './context/projects-context';
+import type { ProjectDetail } from './core/project';
 import {
   failedProjectDraft,
   type ProjectComposerSubmission,
@@ -73,13 +73,14 @@ afterEach(() => {
 });
 const projectId = '01992d2f-8444-7000-8000-000000000001';
 const draft = { name: 'Launch', shareWithTeam: true, properties: [] };
+const project = { id: projectId } as ProjectDetail;
 function submit(popover: boolean) {
   fixtures.popover = popover;
-  const result = Promise.withResolvers<ProjectCreationResult>();
+  const result = Promise.withResolvers<ProjectDetail>();
   fixtures.submission = { draft, result: result.promise };
   const view = render(() => <CreateProjectView />);
   fireEvent.click(view.getByRole('button'));
-  return { ...view, settle: result.resolve };
+  return { ...view, resolve: result.resolve, reject: result.reject };
 }
 
 const projectContent = {
@@ -96,7 +97,7 @@ async function toastActions() {
 it.each([true, false])(
   'closes on submit and offers the created project without navigating, popover=%s',
   async (popover) => {
-    const { settle, unmount } = submit(popover);
+    const { resolve, unmount } = submit(popover);
     if (popover) {
       expect(fixtures.close).toHaveBeenCalledOnce();
       expect(fixtures.manager.openWithSplit).not.toHaveBeenCalled();
@@ -110,7 +111,7 @@ it.each([true, false])(
     fixtures.manager.openWithSplit.mockClear();
     // The server answers after the composer, and its panel, are gone.
     unmount();
-    settle({ status: 'created', id: projectId });
+    resolve(project);
     const [open, openInNewSplit] = await toastActions();
     expect(fixtures.manager.openWithSplit).not.toHaveBeenCalled();
     open.onClick();
@@ -128,9 +129,9 @@ it.each([true, false])(
 
 it('never opens a new split from the toast on a touch device', async () => {
   fixtures.touch = true;
-  const { settle, unmount } = submit(true);
+  const { resolve, unmount } = submit(true);
   unmount();
-  settle({ status: 'created', id: projectId });
+  resolve(project);
   const [, openInNewSplit] = await toastActions();
   openInNewSplit.onClick();
   expect(fixtures.manager.openWithSplit).toHaveBeenLastCalledWith(
@@ -139,28 +140,23 @@ it('never opens a new split from the toast on a touch device', async () => {
   );
 });
 
-it.each([
-  { status: 'failed', error: new Error('offline') },
-  { status: 'propertiesFailed', id: projectId, error: new Error('offline') },
-] satisfies Exclude<ProjectCreationResult, { status: 'created' }>[])(
-  'reopens the composer with the draft after $status',
-  async (result) => {
-    const { settle, unmount } = submit(true);
-    unmount();
-    settle(result);
-    await vi.waitFor(() =>
-      expect(fixtures.manager.createPopoverSplit).toHaveBeenCalledOnce()
-    );
-    expect(fixtures.manager.createPopoverSplit).toHaveBeenCalledWith({
-      content: {
-        type: 'component',
-        id: 'project-compose',
-        params: { initialDraft: failedProjectDraft(draft, result) },
-      },
-    });
-    expect(fixtures.toast).not.toHaveBeenCalled();
-  }
-);
+it('reopens the composer with the draft and the reason after a failure', async () => {
+  const { reject, unmount } = submit(true);
+  unmount();
+  const error = new Error('offline');
+  reject(error);
+  await vi.waitFor(() =>
+    expect(fixtures.manager.createPopoverSplit).toHaveBeenCalledOnce()
+  );
+  expect(fixtures.manager.createPopoverSplit).toHaveBeenCalledWith({
+    content: {
+      type: 'component',
+      id: 'project-compose',
+      params: { initialDraft: failedProjectDraft(draft, error) },
+    },
+  });
+  expect(fixtures.toast).not.toHaveBeenCalled();
+});
 
 it('redirects a project link once the router tracks its newly opened split', () => {
   const [routed, setRouted] = createSignal(false);

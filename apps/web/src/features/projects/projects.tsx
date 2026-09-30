@@ -126,7 +126,6 @@ function ProjectsCollectionHost(props: {
       createProjectCollection({
         ...createProjectCollectionPersistence(panel.handle),
         createSource: context.createCollectionSource,
-        createPendingSource: context.createPendingProjectsSource,
         userId: context.userId,
         onOpen: (id, metadata) => activation.current?.(id, metadata),
       })

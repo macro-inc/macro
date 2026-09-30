@@ -89,8 +89,8 @@ use favorites::inbound::axum_router::{
 use foreign_entity::domain::models::ForeignEntity;
 use initiative::domain::models::{
     AssignTaskStatus, AssignTasksRequest, AssignTasksResponse, AssignTasksResult,
-    CreateInitiativeRequest, InitiativeDetail, InitiativeId, InitiativeList, InitiativeSummary,
-    UpdateInitiativeRequest,
+    CreateInitiativeRequest, InitialPropertyValue, InitiativeDetail, InitiativeId, InitiativeList,
+    InitiativeSummary, UpdateInitiativeRequest,
 };
 use model::document::response::{
     CreateDocumentRequest, CreateDocumentResponse, CreateDocumentResponseData,
@@ -565,6 +565,7 @@ use utoipa::OpenApi;
             InitiativeDetail,
             InitiativeList,
             CreateInitiativeRequest,
+            InitialPropertyValue,
             UpdateInitiativeRequest,
             AssignTasksRequest,
             AssignTasksResult,

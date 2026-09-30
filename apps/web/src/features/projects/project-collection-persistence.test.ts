@@ -2,7 +2,6 @@ import { createRoot } from 'solid-js';
 import { expect, it, vi } from 'vitest';
 import { createProjectCollection } from './primitives/project-collection';
 import { createProjectCollectionPersistence } from './project-collection-persistence';
-import { noPendingProjects } from './tests/fixtures';
 
 it('restores collection grouping, filters, collapsed groups, focus and scroll after the split captures inline navigation', () => {
   let captured: Record<string, unknown> = {};
@@ -41,7 +40,6 @@ it('restores collection grouping, filters, collapsed groups, focus and scroll af
           loadMore: vi.fn(async () => {}),
           refresh: vi.fn(async () => {}),
         }),
-        createPendingSource: noPendingProjects,
       }),
     }));
   const first = mount();

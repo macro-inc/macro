@@ -16,7 +16,6 @@ import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { type Accessor, createMemo, createSignal } from 'solid-js';
 import type { ProjectRow, ProjectsContext } from '../context/projects-context';
 import type { ProjectFilters } from '../core/project';
-import { withPendingProjects } from './pending-projects';
 
 export type ProjectListEntity = ProjectRow & {
   id: string;
@@ -48,8 +47,6 @@ export type ProjectsViewState =
 
 export function createProjectCollection(capabilities: {
   createSource: ProjectsContext['createCollectionSource'];
-  /** Projects being created lead the list until the server settles them. */
-  createPendingSource: ProjectsContext['createPendingProjectsSource'];
   userId: Accessor<string | undefined>;
   onOpen?: (id: string, metadata?: ProjectListActivation) => void;
   initialState?: ProjectCollectionSnapshot;
@@ -76,7 +73,7 @@ export function createProjectCollection(capabilities: {
     defaultExpanded: true,
     initialToggledKeys: initial?.collapsedGroupIds,
   });
-  const filters = (): ProjectFilters => ({
+  const source = capabilities.createSource(() => ({
     query: query().trim() || undefined,
     status: status() || undefined,
     priority: priority() || undefined,
@@ -89,9 +86,7 @@ export function createProjectCollection(capabilities: {
     assignee: mine() ? capabilities.userId() : undefined,
     sort: sort(),
     descending: true,
-  });
-  const source = capabilities.createSource(filters);
-  const pending = capabilities.createPendingSource();
+  }));
   const state = createMemo((): ProjectsViewState => {
     const rows = source.rows();
     if (rows === undefined) {
@@ -99,13 +94,9 @@ export function createProjectCollection(capabilities: {
       if (error) return { kind: 'error', error };
       return { kind: 'loading' };
     }
-    // Filters are only tracked here while something is pending.
-    const projects = pending.projects();
     return {
       kind: 'ready',
-      rows: projects.length
-        ? withPendingProjects(rows, projects, filters())
-        : rows,
+      rows,
       backgroundError: source.error(),
     };
   });
@@ -193,13 +184,11 @@ export function createProjectCollection(capabilities: {
       getKey: (row) => (row.kind === 'entity' ? row.entity.id : row.id),
     },
     isNavigable: (row) => row.kind !== 'section-header',
-    // A project still being created cannot be opened or batched yet.
-    isSelectable: (row) =>
-      row.kind === 'entity' && row.entity.pending !== 'creating',
+    isSelectable: (row) => row.kind === 'entity',
     onActivate: ({ item, metadata }) => {
       if (item.kind === 'group-header') disclosure.toggle(item.groupId);
       else if (item.kind === 'load-more') void source.loadMore();
-      else if (item.kind === 'entity' && item.entity.pending !== 'creating')
+      else if (item.kind === 'entity')
         capabilities.onOpen?.(item.entity.id, metadata);
     },
   });

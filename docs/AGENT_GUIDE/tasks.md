@@ -141,21 +141,13 @@ Submit with
 name, properties, and sharing choice; `Clear Draft` resets an uncreated draft.
 Leaving a property unset keeps its normal server default.
 Submitting closes the composer at once; a full composer returns its split to
-Projects, and Back skips the submitted composer. The Projects list shows the
-new project immediately at the top, in the group of its selected Status and
-only under filters that match it. Until the server creates it, the row is
-dimmed and cannot be opened, selected, or edited. Once created it can be opened
-and selected and shows the selected values while they save, but its property
-cells stay read-only until the refreshed server row replaces it in place,
-without a duplicate. If the list cannot refresh, the row stays for up to a
-minute. When everything is saved, a `Project created` toast offers `Open` and
-`Open (New Split)` (on touch devices both open in place); nothing navigates on
-its own.
-If creation fails, the dimmed row disappears and the composer reopens as a
-popover with the draft and the error. If creation succeeds but a property write
-fails, the project stays listed without those values and the composer reopens
-with `Retry saving properties`, which finishes the existing project, including
-after continuing in a split, without creating a duplicate.
+Projects, and Back skips the submitted composer. One request creates the project
+together with its selected properties: a value the server rejects fails the whole
+create, so no half-configured project is left behind. When the server answers, a
+`Project created` toast offers `Open` and `Open (New Split)` (on touch devices
+both open in place); nothing navigates on its own. The Projects list then
+refreshes in the background to include the new row. If creation fails, the
+composer reopens as a popover with the draft and the error.
 Closing the popover without submitting keeps the underlying view open.
 
 Opening a project keeps the Tasks workspace and its navigation. The top bar

@@ -1,9 +1,6 @@
 import { createUrqlMutation } from '@app/lib/urql-solid/create-urql-mutation';
 import { createUrqlQuery } from '@app/lib/urql-solid/create-urql-query';
-import type {
-  UrqlMutationExecutor,
-  UrqlMutationExecutorArgs,
-} from '@app/lib/urql-solid/types';
+import type { UrqlMutationExecutor } from '@app/lib/urql-solid/types';
 import { soupPropertyToProperty } from '@entity/extractors-property/property-helpers';
 import {
   executeOptimisticMutation,
@@ -178,7 +175,7 @@ function toGraphqlEntityReference(
   };
 }
 
-function toGraphqlSetPropertyValue(
+export function toGraphqlSetPropertyValue(
   value: SetPropertyValue | null
 ): GraphqlSetPropertyValue | null {
   if (value === null) return null;
@@ -497,106 +494,11 @@ type GraphqlBulkMutationOptions<Context> = {
   ) => void | Promise<void>;
 };
 
-type BulkEntityPropertyExecution = UrqlMutationExecutorArgs<
-  SetEntityPropertyMutation,
-  SetEntityPropertyMutationVariables,
-  BulkSaveEntityPropertiesInput
->;
-
 /**
  * Enqueues every optimistic layer before waiting for HTTP, but keeps the bulk
  * lifecycle pending until queued saves commit or permanently fail. Replayed
  * saves retain their submission payload; settlement events carry no response.
  */
-async function executeGraphqlBulkPropertySave(
-  { client, mutation, input, context }: BulkEntityPropertyExecution,
-  onCommitted?: GraphqlBulkMutationOptions<unknown>['onCommitted']
-) {
-  let latestResult:
-    | OperationResult<
-        SetEntityPropertyMutation,
-        SetEntityPropertyMutationVariables
-      >
-    | undefined;
-  let permanentError: Error | undefined;
-
-  const pending = [];
-  const host = getGraphqlCacheHost();
-  const prepareGrouped = host
-    ? createGroupedPropertyPreparation(host)
-    : undefined;
-  const settlements = observePropertyMutationSettlements(host);
-  try {
-    for (const item of input.properties) {
-      let acknowledge!: () => void;
-      const enqueued = new Promise<void>((resolve) => {
-        acknowledge = resolve;
-      });
-      async function submitSave() {
-        try {
-          const result = await executeGraphqlEntityPropertyMutation(
-            {
-              client,
-              mutation,
-              input: { kind: 'save', ...item },
-              context,
-            },
-            acknowledge,
-            prepareGrouped
-          );
-          acknowledge();
-          const disposition = mutationDisposition(result);
-          if (disposition.kind === 'queued') {
-            await settlements.waitForCommit(disposition.transactionId);
-            await onCommitted?.(item, { kind: 'committed' });
-          } else if (disposition.kind === 'committed') {
-            await onCommitted?.(item, disposition);
-          }
-          return { kind: 'result' as const, result };
-        } catch (error) {
-          return {
-            kind: 'error' as const,
-            error: error instanceof Error ? error : new Error(String(error)),
-          };
-        } finally {
-          // Plain clients and failed preparation have no cache acknowledgement.
-          acknowledge();
-        }
-      }
-      pending.push(submitSave());
-      // Preserve layer ordering for relation recipes, not HTTP completion.
-      await enqueued;
-    }
-    for (const settled of await Promise.all(pending)) {
-      if (settled.kind === 'error') {
-        permanentError ??= settled.error;
-        continue;
-      }
-      latestResult = settled.result;
-      const disposition = mutationDisposition(latestResult);
-      if (disposition.kind === 'permanently-failed') {
-        permanentError ??= disposition.error;
-      }
-    }
-  } finally {
-    settlements.dispose();
-  }
-
-  if (!latestResult && permanentError) throw permanentError;
-  if (!latestResult) {
-    throw new Error('bulk property mutation requires at least one property');
-  }
-  if (!permanentError) return latestResult;
-
-  return {
-    ...latestResult,
-    error:
-      permanentError instanceof CombinedError
-        ? permanentError
-        : new CombinedError({ networkError: permanentError }),
-  };
-}
-
 export function createGraphqlBulkSaveEntityPropertiesMutation<Context = void>(
   options: GraphqlBulkMutationOptions<Context> = {}
 ) {
@@ -608,8 +510,94 @@ export function createGraphqlBulkSaveEntityPropertiesMutation<Context = void>(
   >(() => ({
     mutation: SetEntityPropertyDocument,
     client: getGraphqlSoupClient(),
-    execute: (execution) =>
-      executeGraphqlBulkPropertySave(execution, options.onCommitted),
+    execute: async ({ client, mutation, input, context }) => {
+      let latestResult:
+        | OperationResult<
+            SetEntityPropertyMutation,
+            SetEntityPropertyMutationVariables
+          >
+        | undefined;
+      let permanentError: Error | undefined;
+
+      const pending = [];
+      const host = getGraphqlCacheHost();
+      const prepareGrouped = host
+        ? createGroupedPropertyPreparation(host)
+        : undefined;
+      const settlements = observePropertyMutationSettlements(host);
+      try {
+        for (const item of input.properties) {
+          let acknowledge!: () => void;
+          const enqueued = new Promise<void>((resolve) => {
+            acknowledge = resolve;
+          });
+          async function submitSave() {
+            try {
+              const result = await executeGraphqlEntityPropertyMutation(
+                {
+                  client,
+                  mutation,
+                  input: { kind: 'save', ...item },
+                  context,
+                },
+                acknowledge,
+                prepareGrouped
+              );
+              acknowledge();
+              const disposition = mutationDisposition(result);
+              if (disposition.kind === 'queued') {
+                await settlements.waitForCommit(disposition.transactionId);
+                await options.onCommitted?.(item, { kind: 'committed' });
+              } else if (disposition.kind === 'committed') {
+                await options.onCommitted?.(item, disposition);
+              }
+              return { kind: 'result' as const, result };
+            } catch (error) {
+              return {
+                kind: 'error' as const,
+                error:
+                  error instanceof Error ? error : new Error(String(error)),
+              };
+            } finally {
+              // Plain clients and failed preparation have no cache acknowledgement.
+              acknowledge();
+            }
+          }
+          pending.push(submitSave());
+          // Preserve layer ordering for relation recipes, not HTTP completion.
+          await enqueued;
+        }
+        for (const settled of await Promise.all(pending)) {
+          if (settled.kind === 'error') {
+            permanentError ??= settled.error;
+            continue;
+          }
+          latestResult = settled.result;
+          const disposition = mutationDisposition(latestResult);
+          if (disposition.kind === 'permanently-failed') {
+            permanentError ??= disposition.error;
+          }
+        }
+      } finally {
+        settlements.dispose();
+      }
+
+      if (!latestResult && permanentError) throw permanentError;
+      if (!latestResult) {
+        throw new Error(
+          'bulk property mutation requires at least one property'
+        );
+      }
+      if (!permanentError) return latestResult;
+
+      return {
+        ...latestResult,
+        error:
+          permanentError instanceof CombinedError
+            ? permanentError
+            : new CombinedError({ networkError: permanentError }),
+      };
+    },
     onMutate: options.onMutate,
     onSuccess: (_data, input, context) => options.onSuccess?.(input, context),
     onError: (error, input, context) =>
@@ -617,22 +605,6 @@ export function createGraphqlBulkSaveEntityPropertiesMutation<Context = void>(
     onSettled: (_data, error, input, context) =>
       options.onSettled?.(error, input, context),
   }));
-}
-
-/**
- * The same bulk save without a Solid mutation observer, for a write that must
- * outlive the owner that started it. Throws if any property fails.
- */
-export async function saveGraphqlEntityProperties(
-  input: BulkSaveEntityPropertiesInput
-): Promise<void> {
-  const result = await executeGraphqlBulkPropertySave({
-    client: getGraphqlSoupClient(),
-    mutation: SetEntityPropertyDocument,
-    input,
-    context: {},
-  });
-  if (result.error) throw result.error;
 }
 
 /** Maps one entity's GraphQL query result to the shared Soup property shape. */

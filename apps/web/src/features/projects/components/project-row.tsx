@@ -13,7 +13,6 @@ import type { Property, PropertyApiValues } from '@property/types';
 import { cn } from '@ui';
 import { For, Show, Suspense } from 'solid-js';
 import type { ProjectRow as ProjectRowData } from '../context/projects-context';
-import { canEditProject } from '../core/project';
 
 // Projects reuse the task grid; its project column holds the due date.
 const gridStyle = taskGridTemplate({ indicator: true, project: true });
@@ -66,9 +65,8 @@ export function ProjectRow(props: {
   onChecked(selected: boolean, shiftKey: boolean): void;
   onSave(property: Property, value: PropertyApiValues): Promise<void>;
 }) {
-  // Stand-in rows show submitted values; edits go to the server row.
-  const canEdit = () => !props.row.pending && canEditProject(props.row.project);
-  const creating = () => props.row.pending === 'creating';
+  const canEdit = () =>
+    props.row.project.access === 'edit' || props.row.project.access === 'owner';
   const properties = () => [...props.row.properties];
   const propertyFor = (id: string) =>
     props.row.properties.find(
@@ -99,7 +97,6 @@ export function ProjectRow(props: {
         id={props.rowId}
         role="row"
         aria-selected={props.checked}
-        aria-busy={creating() || undefined}
         tabIndex={-1}
         onClick={props.onOpen}
         onMouseMove={props.onFocus}
@@ -110,8 +107,6 @@ export function ProjectRow(props: {
             'bg-list-selected-highlighted': props.checked && props.highlighted,
             'bg-list-highlighted': props.highlighted && !props.checked,
             'hover:bg-list-hover': !props.highlighted && !props.checked,
-            // Being created: no server id yet.
-            'opacity-60': creating(),
           }
         )}
       >
@@ -120,12 +115,10 @@ export function ProjectRow(props: {
           style={gridStyle}
         >
           <Entity.Slot placement="indicator" class="size-full">
-            <Show when={!creating()}>
-              <MultiSelectCheckbox
-                checked={props.checked}
-                onChecked={props.onChecked}
-              />
-            </Show>
+            <MultiSelectCheckbox
+              checked={props.checked}
+              onChecked={props.onChecked}
+            />
           </Entity.Slot>
           <Entity.Slot
             placement="content"

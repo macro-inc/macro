@@ -3,17 +3,18 @@
 use entity_access::domain::{
     models::{
         AccessError, AccessLevel, BotAccessScope, BotReceiptScope, EditAccessLevel, Entity,
-        EntityAccessAuth, EntityAccessReceipt, EntityPermission, ViewAccessLevel,
+        EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType, ViewAccessLevel,
     },
     ports::EntityAccessService,
 };
+use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::service::property_value::PropertyValue;
-use properties::PropertiesService;
+use properties::{PropertiesErr, PropertiesService};
 use std::{collections::HashMap, sync::Arc};
 use system_properties::{StatusOption, SystemPropertiesService, SystemPropertyKey};
 
 use crate::domain::{
-    models::{InitiativeError, InitiativeId},
+    models::{InitialPropertyValue, InitiativeError, InitiativeId},
     reads::InitiativePropertySnapshot,
     resources::{InitiativeResources, ResourceFuture},
 };
@@ -51,6 +52,48 @@ impl<P: PropertiesService, S: SystemPropertiesService, A: EntityAccessService> I
                 .attach_initiative_properties(vec![id.to_string()])
                 .await
                 .map_err(|error| InitiativeError::Internal(rootcause::report!(error).into()))
+        })
+    }
+    fn set_initial_properties(
+        &self,
+        owner: MacroUserIdStr<'static>,
+        id: InitiativeId,
+        values: Vec<InitialPropertyValue>,
+    ) -> ResourceFuture<'_, ()> {
+        Box::pin(async move {
+            if values.is_empty() {
+                return Ok(());
+            }
+            // The same edit capability the owner's own property writes carry, so
+            // validation, side effects and attribution match a later edit.
+            let receipt = self
+                .access
+                .generate_entity_access_receipt::<EditAccessLevel>(
+                    &owner,
+                    None,
+                    &id.to_string(),
+                    EntityType::Initiative,
+                )
+                .await
+                .map_err(|error| InitiativeError::Internal(rootcause::report!(error).into()))?;
+            for InitialPropertyValue {
+                property_definition_id,
+                value,
+            } in values
+            {
+                if let Err(error) = self
+                    .properties
+                    .set_entity_property(&receipt, property_definition_id, Some(value))
+                    .await
+                {
+                    // The caller deletes the initiative; values already written go with it.
+                    if let Err(cleanup) = self.properties.delete_entity_properties(&receipt).await {
+                        tracing::error!(error = ?cleanup, %id, "failed to remove initial properties");
+                    }
+                    return Err(initial_property_error(error));
+                }
+            }
+            Ok(())
         })
     }
     fn purge(&self, receipt: EntityAccessReceipt<EditAccessLevel>) -> ResourceFuture<'_, ()> {
@@ -188,5 +231,19 @@ impl<P: PropertiesService, S: SystemPropertiesService, A: EntityAccessService> I
             }
             Ok(output)
         })
+    }
+}
+
+/// Rejected values are the caller's to fix; anything else is an internal failure.
+fn initial_property_error(error: PropertiesErr) -> InitiativeError {
+    match error {
+        PropertiesErr::Validation(_)
+        | PropertiesErr::NotFound
+        | PropertiesErr::OptionNotFound
+        | PropertiesErr::PermissionDenied
+        | PropertiesErr::SystemPropertyNotModifiable
+        | PropertiesErr::TeamMembershipRequired
+        | PropertiesErr::ManagedDefinition => InitiativeError::BadRequest(error.to_string()),
+        error => InitiativeError::Internal(rootcause::report!(error).into()),
     }
 }

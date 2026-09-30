@@ -8130,6 +8130,7 @@ dependencies = [
  "futures",
  "graphql_common",
  "graphql_permission",
+ "graphql_properties",
  "graphql_soup",
  "initiative",
  "macro_user_id",

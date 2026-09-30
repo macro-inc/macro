@@ -10,6 +10,7 @@ import { toast } from '@core/component/Toast/Toast';
 import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
 import SplitIcon from '@phosphor/square-half.svg';
 import { createEffect, onMount } from 'solid-js';
+import type { ProjectDetail } from './core/project';
 import { type ProjectRoute, projectRouteId } from './core/route';
 import {
   failedProjectDraft,
@@ -77,12 +78,14 @@ async function settleProjectSubmission(
     'openWithSplit' | 'popoverSplit'
   >
 ) {
-  const outcome = await result;
-  if (outcome.status !== 'created') {
+  let project: ProjectDetail;
+  try {
+    project = await result;
+  } catch (error) {
     layout.popoverSplit({
       type: 'component',
       id: 'project-compose',
-      params: { initialDraft: failedProjectDraft(draft, outcome) },
+      params: { initialDraft: failedProjectDraft(draft, error) },
     });
     return;
   }
@@ -90,7 +93,7 @@ async function settleProjectSubmission(
     layout.openWithSplit(
       {
         type: 'component',
-        id: projectRouteId({ id: outcome.id, section: 'overview' }),
+        id: projectRouteId({ id: project.id, section: 'overview' }),
       },
       { referredFrom: null, preferNewSplit }
     );

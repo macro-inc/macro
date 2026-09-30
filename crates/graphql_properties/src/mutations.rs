@@ -336,7 +336,7 @@ impl EntityPropertyOptionDeltaInput {
 
 /// Input identifying an entity referenced by a property value.
 #[derive(async_graphql::InputObject)]
-struct GraphqlEntityReferenceInput {
+pub struct GraphqlEntityReferenceInput {
     /// Type of the referenced entity.
     entity_type: GraphqlPropertyEntityType,
     /// Identifier of the referenced entity.
@@ -361,7 +361,7 @@ impl GraphqlEntityReferenceInput {
 
 /// A typed value accepted when setting an entity property.
 #[derive(async_graphql::OneofObject)]
-enum GraphqlSetPropertyValue {
+pub enum GraphqlSetPropertyValue {
     /// A Boolean value.
     Boolean(bool),
     /// An RFC 3339 date-time value.
@@ -386,7 +386,7 @@ enum GraphqlSetPropertyValue {
 
 impl GraphqlSetPropertyValue {
     /// Convert the GraphQL value into its properties-domain request model.
-    fn try_into_model(self) -> async_graphql::Result<SetPropertyValue> {
+    pub fn try_into_model(self) -> async_graphql::Result<SetPropertyValue> {
         Ok(match self {
             Self::Boolean(value) => SetPropertyValue::Boolean { value },
             Self::Date(value) => SetPropertyValue::Date {

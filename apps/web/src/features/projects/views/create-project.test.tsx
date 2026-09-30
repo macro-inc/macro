@@ -1,18 +1,18 @@
 import { Dialog } from '@app/components/ui/components/Dialog';
 import { focusPopoverInput } from '@components/app/split-layout/utils/focusPopoverInput';
+import type { Property } from '@property/types';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { type ComponentProps, type ParentProps, Show } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import {
-  type ProjectCreationResult,
   type ProjectsContext,
   ProjectsProvider,
 } from '../context/projects-context';
+import type { ProjectDetail } from '../core/project';
 import type {
   ProjectComposerDraft,
   ProjectComposerSubmission,
 } from '../primitives/create-project';
-import { dueDate, dueValue, fakeCommands } from '../tests/fixtures';
 import { CreateProject } from './create-project';
 
 vi.mock('@ui', async () => ({
@@ -53,8 +53,42 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+const dueDate: Property = {
+  propertyId: 'due',
+  propertyDefinitionId: 'due',
+  displayName: 'Due date',
+  valueType: 'DATE',
+  value: null,
+  isMultiSelect: false,
+  owner: { scope: 'system' },
+  createdAt: '',
+  updatedAt: '',
+};
+const project: ProjectDetail = {
+  id: 'project',
+  name: 'Launch',
+  descriptionDocumentId: 'description',
+  ownerId: 'owner',
+  memberIds: [],
+  taskIds: [],
+  access: 'owner',
+  createdAt: '',
+  updatedAt: '',
+};
+function commands() {
+  return {
+    createTask: vi.fn(async () => null),
+    pending: () => false,
+    create: vi.fn(async () => project),
+    saveProperty: vi.fn(async () => {}),
+    rename: vi.fn(async () => {}),
+    setMembers: vi.fn(async () => {}),
+    assignTasks: vi.fn(async () => []),
+    delete: vi.fn(async () => {}),
+  } satisfies ReturnType<ProjectsContext['createCommands']>;
+}
 function setup(
-  service = fakeCommands(),
+  service = commands(),
   initialDraft?: ProjectComposerDraft,
   popover = false
 ) {
@@ -64,7 +98,6 @@ function setup(
   const context: ProjectsContext = {
     userId: () => 'owner',
     createCollectionSource: unused,
-    createPendingProjectsSource: unused,
     createProjectSource: unused,
     createReferencesSource: unused,
     createPropertyDefinitionsSource: () => ({
@@ -104,11 +137,14 @@ function setup(
   ));
   return { ...view, service, onSubmit, onClose, onContinueInSplit };
 }
-it('hands its draft and creation to the host the moment it submits', async () => {
-  const service = fakeCommands();
-  const creation = Promise.withResolvers<ProjectCreationResult>();
-  service.create.mockReturnValueOnce(creation.promise);
-  const { onSubmit, onClose } = setup(service);
+
+const dueValue = {
+  valueType: 'DATE' as const,
+  value: new Date('2026-10-01T00:00:00Z'),
+};
+
+it('hands its draft and one create with the drafted values to the host the moment it submits', async () => {
+  const { service, onSubmit, onClose } = setup();
   expect(screen.queryByRole('dialog')).toBeNull();
   const title = screen.getByRole('textbox', { name: 'Project name' });
   expect(document.activeElement).toBe(title);
@@ -123,100 +159,48 @@ it('hands its draft and creation to the host the moment it submits', async () =>
   fireEvent.click(screen.getByRole('button', { name: 'Set due date' }));
   fireEvent.click(screen.getByRole('checkbox', { name: 'Share with my team' }));
   fireEvent.click(screen.getByRole('button', { name: /Create Project/ }));
-  // Nothing is awaited: the list shows the project pending while the host closes.
+  expect(service.create).toHaveBeenCalledOnce();
   expect(service.create).toHaveBeenCalledWith({
     name: 'Launch',
     shareWithTeam: false,
     properties: [{ property: dueDate, value: dueValue }],
-    createdId: undefined,
   });
+  expect(service.saveProperty).not.toHaveBeenCalled();
   expect(onSubmit).toHaveBeenCalledOnce();
   const [submission] = onSubmit.mock.calls[0];
   expect(submission.draft).toEqual({
     name: '  Launch  ',
     shareWithTeam: false,
     properties: [{ property: dueDate, value: dueValue }],
-    createdId: undefined,
-    error: undefined,
   });
+  // The host closes the composer; the view never waits for the server.
   expect(onClose).not.toHaveBeenCalled();
-  creation.resolve({ status: 'created', id: 'project' });
-  expect(await submission.result).toEqual({ status: 'created', id: 'project' });
-});
-
-it('continues a reopened property failure in a split without losing the draft or creating a duplicate', () => {
-  const service = fakeCommands();
-  const view = setup(service, {
-    name: 'Launch',
-    shareWithTeam: true,
-    properties: [{ property: dueDate, value: dueValue }],
-    createdId: 'project',
-    error:
-      'Your project was created, but some properties could not be saved. Retry to finish saving it.',
-  });
-  expect(screen.getByRole('alert')).toHaveProperty(
-    'textContent',
-    expect.stringContaining('Retry')
-  );
-  expect(screen.getByRole('textbox', { name: 'Project name' })).toHaveProperty(
-    'disabled',
-    true
-  );
-  expect(
-    screen.getByRole('checkbox', { name: 'Share with my team' })
-  ).toHaveProperty('disabled', true);
-  expect(screen.queryByRole('button', { name: 'Clear Draft' })).toBeNull();
-  fireEvent.click(
-    screen.getByRole('button', { name: 'Continue editing in split' })
-  );
-  const draft = view.onContinueInSplit.mock.calls[0][0] as ProjectComposerDraft;
-  expect(draft).toMatchObject({ createdId: 'project' });
-  expect(draft.properties[0].value).toEqual(dueValue);
-  cleanup();
-  const continued = setup(service, draft);
-  expect(screen.getByRole('textbox', { name: 'Project name' })).toHaveProperty(
-    'value',
-    'Launch'
-  );
-  fireEvent.click(
-    screen.getByRole('button', { name: /Retry saving properties/ })
-  );
-  expect(continued.onSubmit).toHaveBeenCalledOnce();
-  // The retry names the existing project, so only its properties are saved.
-  expect(service.create).toHaveBeenCalledOnce();
-  expect(service.create).toHaveBeenCalledWith({
-    name: 'Launch',
-    shareWithTeam: true,
-    properties: [{ property: dueDate, value: dueValue }],
-    createdId: 'project',
-  });
+  expect(await submission.result).toBe(project);
 });
 
 it('shows a reopened creation failure and resubmits the same draft', () => {
-  const service = fakeCommands();
+  const service = commands();
   const { onSubmit } = setup(service, {
     name: 'Launch',
     shareWithTeam: true,
-    properties: [],
+    properties: [{ property: dueDate, value: dueValue }],
     error: 'offline',
   });
   expect(screen.getByRole('alert')).toHaveProperty('textContent', 'offline');
   const title = screen.getByRole('textbox', { name: 'Project name' });
   expect(title).toHaveProperty('value', 'Launch');
-  expect(title).toHaveProperty('disabled', false);
   fireEvent.keyDown(title, { key: 'Enter', ctrlKey: true });
   expect(onSubmit).toHaveBeenCalledOnce();
   expect(service.create).toHaveBeenCalledWith({
     name: 'Launch',
     shareWithTeam: true,
-    properties: [],
-    createdId: undefined,
+    properties: [{ property: dueDate, value: dueValue }],
   });
-  expect(onSubmit.mock.calls[0][0].draft.error).toBeUndefined();
+  expect(onSubmit.mock.calls[0][0].draft).not.toHaveProperty('error');
 });
 
 it('blocks empty and duplicate keyboard submits, and clears intentionally', () => {
-  const service = fakeCommands();
+  const service = commands();
   const { onSubmit } = setup(service);
   const title = screen.getByRole('textbox', { name: 'Project name' });
   fireEvent.keyDown(title, { key: 'Enter', metaKey: true });
@@ -248,13 +232,12 @@ it('blocks empty and duplicate keyboard submits, and clears intentionally', () =
     name: '',
     shareWithTeam: true,
     properties: [],
-    createdId: undefined,
     error: undefined,
   });
 });
 
 it('keeps the project name focused after the popover applies initial focus', async () => {
-  setup(fakeCommands(), undefined, true);
+  setup(commands(), undefined, true);
   await screen.findByRole('dialog');
   // Kobalte applies its default initial focus on the next timer, after child onMount.
   await new Promise((resolve) => setTimeout(resolve, 20));

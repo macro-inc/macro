@@ -2,10 +2,8 @@ import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
 import {
-  type BulkSaveEntityPropertiesInput,
   createGraphqlBulkSaveEntityPropertiesMutation,
   refetchGraphqlInitiativeProperties,
-  saveGraphqlEntityProperties,
 } from '@queries/properties/graphql/entity';
 import { propertiesKeys } from '@queries/properties/keys';
 import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
@@ -19,17 +17,10 @@ import {
 } from '@tanstack/solid-query';
 import type { Client } from '@urql/core';
 import type { Accessor } from 'solid-js';
-import type {
-  ProjectPropertyDraft,
-  ProjectsContext,
-} from '../context/projects-context';
+import type { ProjectsContext } from '../context/projects-context';
 import { assignProjectTasks } from '../core/assignment';
 import type { ProjectDetail, TaskProjectReference } from '../core/project';
-import {
-  createProjectCreationMutation,
-  type ProjectCreationCapabilities,
-  usePendingProjects,
-} from './create-project';
+import { createProjectMutation } from './create-project';
 import { createProjectTaskMutation } from './create-project-task';
 import { projectKeys } from './keys';
 import { projectDetailQueryOptions } from './project-identity';
@@ -40,18 +31,6 @@ const accessLost = (error: unknown) =>
   ['UNAUTHORIZED', 'FORBIDDEN', 'NOT_FOUND'].some((code) =>
     thrownResultErrorHasCode(error, code)
   );
-
-const propertyInput = (
-  entityId: string,
-  properties: readonly ProjectPropertyDraft[]
-): BulkSaveEntityPropertiesInput => ({
-  properties: properties.map(({ property, value }) => ({
-    entityType: 'INITIATIVE',
-    entityId,
-    property,
-    apiValues: value,
-  })),
-});
 
 /** GraphQL Soup lists projects and holds the optimistic rows of their tasks. */
 export type ProjectSoupTransport = {
@@ -72,21 +51,6 @@ export function createProjectSources(
       cache.invalidateQueries({ queryKey: projectKeys._def }),
       refreshActiveGraphqlSoupQueries(),
     ]);
-  };
-  // Context-scoped, so a finished creation holds no closed composer's scope.
-  const creation: ProjectCreationCapabilities = {
-    create: (input) => throwOnErr(() => client.create(input)),
-    saveProperties: (id, properties) =>
-      saveGraphqlEntityProperties(propertyInput(id, properties)),
-    // Only the new project and the lists can have changed.
-    revalidate: async (id) => {
-      await Promise.all([
-        cache.invalidateQueries({
-          queryKey: projectKeys.detail(userId(), id).queryKey,
-        }),
-        refreshActiveGraphqlSoupQueries({ throwOnError: true }),
-      ]);
-    },
   };
   const context: ProjectsContext = {
     userId,
@@ -111,9 +75,6 @@ export function createProjectSources(
         filters,
         () => Boolean(userId()) && readEnabled() && enabled()
       );
-    },
-    createPendingProjectsSource() {
-      return { projects: usePendingProjects(cache) };
     },
     createProjectSource(id) {
       const readEnabled = createReadGate();
@@ -237,6 +198,7 @@ export function createProjectSources(
           ]);
         }
       );
+      const create = createProjectMutation(client, cache, userId);
       const update = useMutation(
         () => ({
           mutationFn: ({
@@ -323,11 +285,12 @@ export function createProjectSources(
       return {
         createTask,
         pending: () =>
+          create.isPending ||
           update.isPending ||
           remove.isPending ||
           property.isPending ||
           assign.isPending,
-        create: createProjectCreationMutation(creation, cache),
+        create: (input) => create.mutateAsync(input),
         rename: async (id, name) => {
           await update.mutateAsync({ id, name });
         },
@@ -338,9 +301,16 @@ export function createProjectSources(
           await remove.mutateAsync(id);
         },
         saveProperty: async (id, input, value) => {
-          const result = await property.mutateAsync(
-            propertyInput(id, [{ property: input, value }])
-          );
+          const result = await property.mutateAsync({
+            properties: [
+              {
+                entityType: 'INITIATIVE',
+                entityId: id,
+                property: input,
+                apiValues: value,
+              },
+            ],
+          });
           if (result.error) throw result.error;
         },
         assignTasks: (projectId, taskIds) =>

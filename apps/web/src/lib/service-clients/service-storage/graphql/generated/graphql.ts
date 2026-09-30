@@ -45,6 +45,8 @@ export type CreateInitiativeInput = {
   memberIds?: Array<string> | null | undefined;
   /** Initial name. */
   name: string;
+  /** Initial property values, set in the same create; a rejected value fails it. */
+  propertyValues?: Array<InitialPropertyValueInput> | null | undefined;
   /** Whether to share with the owner's team, defaulting to true. */
   shareWithTeam?: boolean | null | undefined;
 };
@@ -1176,6 +1178,14 @@ export type GroupedSoupInput =
   continuation: GroupedSoupContinuationInput; initial?: never; }
   |  { continuation?: never;   /** Start a new grouped Soup query. */
   initial: GroupedSoupInitialInput; };
+
+/** One property value set when an initiative is created. */
+export type InitialPropertyValueInput = {
+  /** Property definition to set. */
+  propertyDefinitionId: string | number;
+  /** Value, in the same shape `setEntityProperty` accepts. */
+  value: GraphqlSetPropertyValue;
+};
 
 /** A channel sharing patch. */
 export type InitiativeChannelShareInput = {
