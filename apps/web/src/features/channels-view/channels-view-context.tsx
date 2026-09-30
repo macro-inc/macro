@@ -36,6 +36,7 @@ import type {
   ChannelsViewState,
   ChannelsViewStateOptions,
 } from './types';
+import { activeChannelsTab } from './utils';
 
 type ChannelsViewProviderProps = ContextProviderProps & {
   initialState?: ChannelsViewStateOptions;
@@ -48,6 +49,12 @@ export type ChannelsViewContext = {
   selectedChannel: Accessor<ChannelPreviewSelection | undefined>;
   /** Whether the Threads tab is available to this user. */
   threadsEnabled: Accessor<boolean>;
+  /**
+   * The tab to render. A stored or linked Threads tab shows All while the flag
+   * is off or still loading, and returns once it resolves on; `state.tab`
+   * keeps the choice so persistence and URLs are not rewritten.
+   */
+  tab: Accessor<ChannelsTab>;
   /** Threads tab filter: the conversation whose threads are shown, or all. */
   threadsChannelId: Accessor<string | undefined>;
   setThreadsChannelId: (channelId: string | undefined) => void;
@@ -119,18 +126,11 @@ export const [ChannelsViewProvider, useChannelsView] =
         on(
           () => [search.tab, search.mobileTab] as const,
           ([tab, mobileTab]) => {
-            if (state.tab !== tab && (tab !== 'threads' || threadsEnabled()))
-              setState('tab', tab);
+            if (state.tab !== tab) setState('tab', tab);
             if (state.mobileTab !== mobileTab) setState('mobileTab', mobileTab);
           }
         )
       );
-
-      // A restored Threads tab falls back to All while the flag is off.
-      createEffect(() => {
-        if (state.tab === 'threads' && !threadsEnabled())
-          setState('tab', 'browse');
-      });
 
       const mobileLayout = () => isTouchDevice();
       const selectedChannel = createMemo<ChannelPreviewSelection | undefined>(
@@ -212,6 +212,7 @@ export const [ChannelsViewProvider, useChannelsView] =
         mobileLayout,
         selectedChannel,
         threadsEnabled,
+        tab: () => activeChannelsTab(state.tab, threadsEnabled()),
         threadsChannelId: () => search.threadsChannel || undefined,
         setThreadsChannelId: (channelId) => {
           if ((search.threadsChannel || undefined) === channelId) return;

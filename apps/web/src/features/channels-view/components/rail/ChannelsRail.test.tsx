@@ -128,6 +128,8 @@ vi.mock('../../channels-view-context', () => ({
       expandedGroups: { channels: true, direct_messages: true },
       collapsedLabels: [],
     },
+    tab: () => 'browse',
+    threadsEnabled: () => false,
     selectedChannel: () => mocks.selected,
     setSelectedChannel: mocks.select,
   }),

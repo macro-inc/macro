@@ -63,9 +63,11 @@ export function createChannelSearchSource(options: {
         ...channel,
         ...loadedById.get(channel.id),
       }));
-    // Recent search includes both channels and DMs, even without message metadata.
+    // Recent and Threads search include both channels and DMs, even without
+    // message metadata.
+    const scope = options.scope();
     return filterChannelsForScope(
-      options.scope() === 'recents' ? 'search' : options.scope(),
+      scope === 'recents' || scope === 'threads' ? 'search' : scope,
       matches
     );
   });

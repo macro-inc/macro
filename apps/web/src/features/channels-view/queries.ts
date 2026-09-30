@@ -4,20 +4,33 @@ import {
   defineQueryFilters,
   queryStateFrom,
 } from '@app/features/next-soup/filters/filter-store';
+import { useUserId } from '@core/context/user';
 import { compareDateDesc } from '@core/util/date';
-import { type ChannelEntity, type EntityData, isChannelEntity } from '@entity';
+import {
+  type ChannelEntity,
+  type EntityData,
+  isChannelEntity,
+  isChannelThreadEntity,
+} from '@entity';
 import {
   type SoupAstItemsQueryArgs,
   type SoupAstParams,
   useSoupAstItemsQuery,
 } from '@queries/soup/items';
 import { type Accessor, createEffect, createMemo } from 'solid-js';
+import {
+  channelThreadsQueryArgs,
+  isUnansweredOwnMessage,
+} from './queries/channel-threads';
 import type {
   ChannelListSort,
   ChannelsQueryScope,
   ChannelsSortGroup,
 } from './types';
 import { channelHasMessages, isDirectMessage } from './utils';
+
+/** Threads per page the Threads rail reads to find their channels. */
+const THREAD_CHANNELS_PAGE_SIZE = 100;
 
 const CHANNELS_QUERY_PARAMS = {
   limit: 100,
@@ -31,7 +44,10 @@ type ChannelsQueryDefinition = {
 
 export type ChannelsDataSource = ListDataSource<ChannelEntity>;
 
-export type ChannelsSourceScope = ChannelsQueryScope | 'search' | 'threads';
+/** Scopes backed by a channel list query. */
+type ChannelsListScope = ChannelsQueryScope | 'search';
+
+export type ChannelsSourceScope = ChannelsListScope | 'threads';
 
 export type ChannelsSources = Record<ChannelsSourceScope, ChannelsDataSource>;
 
@@ -71,21 +87,10 @@ export const CHANNELS_QUERY_DEFINITIONS = {
     }),
     matches: () => true,
   },
-  /**
-   * The Threads rail: channels and DMs together, in one list. Naming both
-   * participation states also brings in team channels the user has not joined.
-   */
-  threads: {
-    params: { ...CHANNELS_QUERY_PARAMS, sort_method: 'updated_at' },
-    filters: defineQueryFilters({
-      include: { channelIsParticipant: [true, false] },
-    }),
-    matches: () => true,
-  },
-} satisfies Record<ChannelsSourceScope, ChannelsQueryDefinition>;
+} satisfies Record<ChannelsListScope, ChannelsQueryDefinition>;
 
 export function channelsQueryArgs(
-  scope: ChannelsSourceScope,
+  scope: ChannelsListScope,
   sortMethod?: ChannelListSort
 ): SoupAstItemsQueryArgs {
   const definition = CHANNELS_QUERY_DEFINITIONS[scope];
@@ -100,7 +105,7 @@ export function channelsQueryArgs(
 }
 
 export function filterChannelsForScope(
-  scope: ChannelsSourceScope,
+  scope: ChannelsListScope,
   channels: readonly ChannelEntity[]
 ): ChannelEntity[] {
   return channels.filter(CHANNELS_QUERY_DEFINITIONS[scope].matches);
@@ -199,8 +204,104 @@ export function resolveSelectedChannel(
   );
 }
 
+function sortChannels(
+  channels: readonly ChannelEntity[],
+  sort: ChannelListSort
+): ChannelEntity[] {
+  const sortDate = (channel: ChannelEntity) =>
+    sort === 'created_at'
+      ? channel.createdAt
+      : sort === 'viewed_at'
+        ? channel.viewedAt
+        : channel.updatedAt;
+
+  return channels
+    .slice()
+    .sort((left, right) => compareDateDesc(sortDate(left), sortDate(right)));
+}
+
+/**
+ * The Threads rail: channels and DMs holding threads the user takes part in.
+ * Channels have no thread filter, so the rail pages through the user's
+ * threads and loads the distinct channels they belong to.
+ */
+function useThreadChannelsDataSource(
+  enabled: Accessor<boolean>,
+  sortMethod: Accessor<ChannelListSort>
+): ChannelsDataSource {
+  const userId = useUserId();
+  const threadsQuery = useSoupAstItemsQuery(
+    () => {
+      const args = channelThreadsQueryArgs(userId() ?? '', undefined);
+      return {
+        ...args,
+        params: { ...args.params, limit: THREAD_CHANNELS_PAGE_SIZE },
+      };
+    },
+    () => ({ enabled: enabled() && Boolean(userId()), staleTime: 30_000 })
+  );
+  const channelIds = createMemo<string[]>((previous) => {
+    if (!threadsQuery.isEnabled || threadsQuery.isLoading) return previous;
+    const ids = new Set<string>();
+    for (const entity of threadsQuery.data?.entities ?? []) {
+      if (
+        isChannelThreadEntity(entity) &&
+        !entity.deletedAt &&
+        !isUnansweredOwnMessage(entity, userId())
+      )
+        ids.add(entity.channelId);
+    }
+    return [...ids];
+  }, []);
+  const channelsQuery = useChannelsByIdsQuery(channelIds);
+  const items = createMemo<ChannelEntity[]>((previous) => {
+    if (channelIds().length === 0) return [];
+    if (!channelsQuery.isEnabled || channelsQuery.isLoading) return previous;
+    const byId = new Map(
+      (channelsQuery.data?.entities ?? [])
+        .filter(isChannelEntity)
+        .map((channel) => [channel.id, channel])
+    );
+    return sortChannels(
+      channelIds().flatMap((id) => byId.get(id) ?? []),
+      sortMethod()
+    );
+  }, []);
+
+  return {
+    items,
+    isLoading: () =>
+      items().length === 0 &&
+      ((threadsQuery.isEnabled && threadsQuery.isLoading) ||
+        (channelsQuery.isEnabled && channelsQuery.isLoading)),
+    isFetching: () =>
+      (threadsQuery.isEnabled && threadsQuery.isFetching) ||
+      (channelsQuery.isEnabled && channelsQuery.isFetching),
+    error: () =>
+      (threadsQuery.isEnabled ? threadsQuery.error : null) ??
+      (channelsQuery.isEnabled ? channelsQuery.error : null) ??
+      undefined,
+    hasMore: () => threadsQuery.isEnabled && threadsQuery.hasNextPage,
+    isLoadingMore: () =>
+      threadsQuery.isEnabled && threadsQuery.isFetchingNextPage,
+    loadMore: async () => {
+      if (
+        !threadsQuery.isEnabled ||
+        threadsQuery.isFetchingNextPage ||
+        !threadsQuery.hasNextPage
+      )
+        return;
+      await threadsQuery.fetchNextPage();
+    },
+    refresh: async () => {
+      if (!threadsQuery.isEnabled) return;
+      await threadsQuery.refresh();
+    },
+  };
+}
+
 function useChannelsDataSource(
-  scope: ChannelsSourceScope,
+  scope: ChannelsListScope,
   enabled: Accessor<boolean>,
   sortMethod: Accessor<ChannelListSort | undefined>
 ): ChannelsDataSource {
@@ -222,18 +323,10 @@ function useChannelsDataSource(
 
     if (scope === 'recents') return channels;
 
-    const activeSort =
-      sortMethod() ?? CHANNELS_QUERY_DEFINITIONS[scope].params.sort_method;
-    const sortDate = (channel: ChannelEntity) =>
-      activeSort === 'created_at'
-        ? channel.createdAt
-        : activeSort === 'viewed_at'
-          ? channel.viewedAt
-          : channel.updatedAt;
-
-    return channels
-      .slice()
-      .sort((left, right) => compareDateDesc(sortDate(left), sortDate(right)));
+    return sortChannels(
+      channels,
+      sortMethod() ?? CHANNELS_QUERY_DEFINITIONS[scope].params.sort_method
+    );
   }, []);
 
   return {
@@ -282,8 +375,7 @@ export function useChannelsSources(
       () => enabled('search'),
       () => undefined
     ),
-    threads: useChannelsDataSource(
-      'threads',
+    threads: useThreadChannelsDataSource(
       () => enabled('threads'),
       () => sortBy('threads')
     ),

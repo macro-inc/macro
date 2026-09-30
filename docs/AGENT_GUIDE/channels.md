@@ -378,18 +378,21 @@ conversation in a new split instead.
 The `enable-channel-threads-preview` feature flag adds a third `Threads` tab.
 It is on in development; `VITE_ENABLE_CHANNEL_THREADS_PREVIEW` overrides it
 locally. The rail shows an `All threads` row above a `Conversations` section
-that lists channels and DMs together, including team channels the user has
-not joined, with the same sort and `+` controls as the
-All tab's sections. Selecting a row filters the main pane instead of opening
-the conversation. `All threads` clears the filter.
+with the same sort and `+` controls as the All tab's sections. Conversations
+lists only channels and DMs that hold threads the user takes part in; it pages
+through the user's threads and loads their channels, so scrolling the section
+reveals more. Selecting a row filters the main pane instead of opening the
+conversation. `All threads` clears the filter.
 
-The main pane lists channel threads the user takes part in, newest reply first.
-Messages the user sent that have no replies are hidden. Each card shows the
-root message, its replies, and a reply input. In `All threads`, each card is
-labelled with its conversation. `View in channel` switches back to `All`
-and opens the channel at that thread. Shift-clicking a conversation row opens
-it in a new split. The URL keeps the filter as `threadsChannel` in the
-`channels` search namespace.
+The main pane is a virtualized list of channel threads the user takes part in,
+newest reply first; it loads more as it nears the end. Messages the user sent
+that have no replies are hidden. Each card shows the root message with its
+replies collapsed the same way as a channel timeline: the first reply groups,
+then a `N more replies` control that expands the rest in place. In
+`All threads`, each card is labelled with its conversation. The icon button at a card's top right (`View in channel`) switches
+back to `All` and opens the channel at that thread. Shift-clicking a
+conversation row opens it in a new split. The URL keeps the filter as
+`threadsChannel` in the `channels` search namespace.
 
 ### Channel labels
 

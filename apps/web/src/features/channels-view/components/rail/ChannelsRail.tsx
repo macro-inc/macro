@@ -144,6 +144,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     setSelectedChannel,
     setSortBy,
     setTab,
+    tab,
     threadsEnabled,
     threadsChannelId,
     setThreadsChannelId,
@@ -399,7 +400,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     }
 
     return buildChannelRailRows(
-      state.tab,
+      tab(),
       state.expandedGroups,
       {
         favorites: favorites(),
@@ -434,8 +435,9 @@ export function ChannelsRail(props: ChannelsRailProps) {
           return;
         }
 
-        // Threads rows filter the thread list; they open only into a new split.
-        if (item.kind === 'conversation' && item.scope === 'threads') {
+        // In the Threads tab, conversation rows (including search results)
+        // filter the thread list; they open only into a new split.
+        if (item.kind === 'conversation' && tab() === 'threads') {
           if (openInNewSplit) activateChannel(item.channel, true);
           else setThreadsChannelId(item.channel.id);
           return;
@@ -501,9 +503,9 @@ export function ChannelsRail(props: ChannelsRailProps) {
           ? sectionScrollRoots().favorites
           : row.kind === 'conversation' && row.group
             ? sectionScrollRoots()[row.group]
-            : state.tab === 'recents'
+            : tab() === 'recents'
               ? listRoot()
-              : state.tab === 'threads'
+              : tab() === 'threads'
                 ? sectionScrollRoots().threads
                 : undefined;
       if (!element || !scrollRoot) return;
@@ -604,9 +606,9 @@ export function ChannelsRail(props: ChannelsRailProps) {
     const searchOpen = props.searchOpen;
     const sourcesReady = searchOpen
       ? !props.sources.search.isLoading()
-      : state.tab === 'recents'
+      : tab() === 'recents'
         ? !props.sources.recents.isLoading()
-        : state.tab === 'threads'
+        : tab() === 'threads'
           ? !props.sources.threads.isLoading()
           : BROWSE_QUERY_SCOPES.every(
               (scope) => !props.sources[scope].isLoading()
@@ -618,9 +620,9 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
       if (searchOpen) {
         scrollSearchToSelectedOrStart();
-      } else if (state.tab === 'recents') {
+      } else if (tab() === 'recents') {
         scrollScopeToSelectedOrStart('recents');
-      } else if (state.tab === 'threads') {
+      } else if (tab() === 'threads') {
         scrollThreadsToSelectedOrStart();
       } else {
         scrollFavoritesToSelectedOrStart();
@@ -638,7 +640,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     enabled: panel.isPanelActive,
     ids: () =>
       threadsEnabled() ? CHANNEL_TAB_IDS_WITH_THREADS : CHANNEL_TAB_IDS,
-    activeId: () => state.tab,
+    activeId: () => tab(),
     setActiveId: selectTab,
   });
 
@@ -715,7 +717,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
           previewAfterNavigation.clear();
 
           const row = event.result?.item;
-          if (state.tab === 'threads') {
+          if (tab() === 'threads') {
             if (row?.kind === 'all-threads') setThreadsChannelId(undefined);
             else if (row?.kind === 'conversation')
               setThreadsChannelId(row.channel.id);
@@ -786,7 +788,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
   const sectionHotkeys = createHotkeyGroup();
   const sectionHotkeysEnabled = () =>
-    panel.isPanelActive() && !props.searchOpen && state.tab === 'browse';
+    panel.isPanelActive() && !props.searchOpen && tab() === 'browse';
 
   registerHotkey({
     hotkey: ']',
@@ -1132,7 +1134,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
   const rail: ChannelsRailContext = {
     railId: listDomId,
     list,
-    tab: () => state.tab,
+    tab,
     selectTab,
     sources: props.sources,
     favorites,

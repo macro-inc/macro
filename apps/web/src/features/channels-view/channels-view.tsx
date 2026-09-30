@@ -118,9 +118,9 @@ function DesktopChannelThreads(props: { sources: ChannelsSources }) {
 
 function ChannelsViewRoot() {
   const panel = useSplitPanelOrThrow();
-  const { state, mobileLayout, selectedChannel, setAsideWidth } =
+  const { state, tab, mobileLayout, selectedChannel, setAsideWidth } =
     useChannelsView();
-  const threadsTab = () => !mobileLayout() && state.tab === 'threads';
+  const threadsTab = () => !mobileLayout() && tab() === 'threads';
   const [railSearchOpen, setRailSearchOpen] = createSignal(false);
 
   const sources = useChannelsSources(
@@ -129,9 +129,9 @@ function ChannelsViewRoot() {
         return scope !== 'search' && state.mobileTab === scope;
       if (railSearchOpen()) return scope === 'search';
       if (scope === 'search') return false;
-      if (scope === 'recents') return state.tab === 'recents';
-      if (scope === 'threads') return state.tab === 'threads';
-      return state.tab === 'browse';
+      if (scope === 'recents') return tab() === 'recents';
+      if (scope === 'threads') return tab() === 'threads';
+      return tab() === 'browse';
     },
     (group) => state.sortBy[group]
   );
