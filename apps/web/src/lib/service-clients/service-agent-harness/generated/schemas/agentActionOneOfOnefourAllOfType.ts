@@ -10,5 +10,5 @@ export type AgentActionOneOfOnefourAllOfType =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const AgentActionOneOfOnefourAllOfType = {
-  respondToPermission: 'respondToPermission',
+  respondElicitation: 'respondElicitation',
 } as const;

@@ -2,8 +2,9 @@
 edition = "2024"
 name = "cache-wasm"
 publish = false
-# Rebuild for entity-only Soup hydration and bounded page retention.
-version = "0.6.30"
+# Rebuild for bucket-scoped Quick Access hydration notifications.
+# Retains the storage-lifecycle fixes shipped in 0.6.31.
+version = "0.6.32"
 
 [features]
 default = []

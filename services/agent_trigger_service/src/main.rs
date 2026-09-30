@@ -18,6 +18,8 @@ use anyhow::Context as _;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
 use channels::outbound::pg_channels_repo::PgChannelsRepo;
 use config::Config;
+use entity_registry::OwnerGrantPolicy;
+use entity_registry_db_utils::OwnedEntityRegistrar;
 use kafka_util::{GroupName, KafkaEventConsumer, consumer_span, record_span_error};
 use lexical_client::LexicalClient;
 use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
@@ -40,7 +42,7 @@ impl GroupName for AgentTriggerConsumerGroup {
 
 /// The concrete trigger service this binary composes.
 type Trigger = AgentTriggerService<
-    PgAgentSessionRepo,
+    PgAgentSessionRepo<PgBotsRepo>,
     BotRepoAgentLookup<PgBotsRepo>,
     BotRepoAgentLookup<PgBotsRepo>,
     BotRepoAgentLookup<PgBotsRepo>,
@@ -95,7 +97,10 @@ async fn run() -> anyhow::Result<()> {
         recorder.clone(),
     );
     let trigger = AgentTriggerService::new(
-        PgAgentSessionRepo::new(pool.clone()),
+        PgAgentSessionRepo::new(
+            pool.clone(),
+            OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(pool.clone()))),
+        ),
         BotRepoAgentLookup::new(PgBotsRepo::new(pool.clone())),
         BotRepoAgentLookup::new(PgBotsRepo::new(pool.clone())),
         BotRepoAgentLookup::new(PgBotsRepo::new(pool.clone())),

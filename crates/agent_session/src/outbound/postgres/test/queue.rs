@@ -21,7 +21,7 @@ fn stored_prompt(text: &str) -> StoredQueuedAction {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn replace_lists_oldest_first_and_empty_deletes_the_row(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot_id = create_test_bot(&pool).await;
     let session = create_session(&repo, new_session(bot_id, None, None)).await;
 
@@ -71,7 +71,7 @@ async fn replace_lists_oldest_first_and_empty_deletes_the_row(pool: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn deleting_a_session_cascades_its_queue(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot_id = create_test_bot(&pool).await;
     let session = create_session(&repo, new_session(bot_id, None, None)).await;
     repo.replace_queued_actions(session.id, &[stored_prompt("remember me")])
@@ -98,7 +98,7 @@ async fn deleting_a_session_cascades_its_queue(pool: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_session_without_a_row_lists_empty(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot_id = create_test_bot(&pool).await;
     let session = create_session(&repo, new_session(bot_id, None, None)).await;
     assert!(

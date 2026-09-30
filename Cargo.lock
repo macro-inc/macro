@@ -422,6 +422,8 @@ dependencies = [
  "database_env_vars",
  "doppler-config",
  "entity_access",
+ "entity_registry",
+ "entity_registry_db_utils",
  "futures",
  "github",
  "harness_id",
@@ -517,6 +519,7 @@ dependencies = [
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
+ "url",
  "workspace-hack",
 ]
 
@@ -598,6 +601,7 @@ dependencies = [
  "dashmap",
  "entity_access",
  "entity_access_db_utils",
+ "entity_registry",
  "entity_registry_db_utils",
  "genai_telemetry",
  "harness_id",
@@ -685,6 +689,8 @@ dependencies = [
  "crm",
  "database_env_vars",
  "entity_access",
+ "entity_registry",
+ "entity_registry_db_utils",
  "initiative",
  "kafka_util",
  "lexical_client",
@@ -858,6 +864,7 @@ dependencies = [
  "foreign_entity",
  "frecency",
  "futures",
+ "image_generation",
  "import",
  "initiative",
  "initiative_documents",
@@ -908,6 +915,7 @@ dependencies = [
  "soup",
  "sqlx",
  "sqs_client",
+ "static_file",
  "strum 0.27.2",
  "sync_service_client",
  "system_properties",
@@ -3304,7 +3312,7 @@ dependencies = [
 
 [[package]]
 name = "cache-wasm"
-version = "0.6.30"
+version = "0.6.32"
 dependencies = [
  "async-lock",
  "cache-core",
@@ -9391,6 +9399,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "image_generation"
+version = "0.1.0"
+dependencies = [
+ "ai_toolset",
+ "anyhow",
+ "async-trait",
+ "attachment",
+ "base64 0.22.1",
+ "bot_id",
+ "documents",
+ "entity_access",
+ "macro_user_id",
+ "model",
+ "model-entity",
+ "model_owner",
+ "models_permissions",
+ "non_empty",
+ "reqwest 0.13.4",
+ "rootcause",
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "uuid",
+ "wiremock",
+ "workspace-hack",
+]
+
+[[package]]
 name = "image_optimizer"
 version = "0.1.0"
 dependencies = [
@@ -14059,10 +14098,13 @@ dependencies = [
  "async-trait",
  "aws-sdk-secretsmanager",
  "axum",
+ "bots",
  "connection_gateway_client",
  "database_env_vars",
  "doppler-config",
  "entity_access",
+ "entity_registry",
+ "entity_registry_db_utils",
  "macro_auth",
  "macro_authorization",
  "macro_aws_config",
@@ -15804,6 +15846,7 @@ dependencies = [
  "documents",
  "doppler-config",
  "entity_access",
+ "entity_access_db_utils",
  "entity_registry",
  "entity_registry_db_utils",
  "futures",
@@ -15966,6 +16009,7 @@ dependencies = [
  "aws-sdk-s3",
  "aws-sdk-sqs",
  "axum",
+ "bots",
  "calendar_events",
  "call",
  "channels",
@@ -15978,6 +16022,8 @@ dependencies = [
  "email",
  "email_db_client",
  "ensure_exists",
+ "entity_registry",
+ "entity_registry_db_utils",
  "futures",
  "http-body-util",
  "kafka_util",

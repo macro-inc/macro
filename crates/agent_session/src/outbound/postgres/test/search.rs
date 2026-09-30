@@ -10,7 +10,7 @@ async fn search_snapshot_folds_persisted_acp_instead_of_indexing_protocol_frames
     use agent_fold::domain::{model::Author, service::FoldedMessageService};
     use serde_json::json;
 
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot = create_test_bot(&pool).await;
     let session = create_session(&repo, new_session(bot, None, None)).await;
     for content in [
@@ -62,7 +62,7 @@ async fn indexing_pages_current_sessions_and_serializes_snapshot_leases(pool: Pg
     use sqlx::postgres::PgPoolOptions;
     use std::time::Duration;
 
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot = create_test_bot(&pool).await;
     let first = create_session(&repo, new_session(bot, None, None)).await;
     let second = create_session(&repo, new_session(bot, None, None)).await;
@@ -104,7 +104,7 @@ async fn indexing_pages_current_sessions_and_serializes_snapshot_leases(pool: Pg
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn search_metadata_is_scoped_current_and_omits_deleted_sessions(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let search_metadata = AgentSessionSearchMetadataServiceImpl::new(repo.clone());
     let bot = create_test_bot(&pool).await;
     let session = create_session(&repo, new_session(bot, None, None)).await;

@@ -10,9 +10,14 @@ import {
  * @vitest-environment jsdom
  */
 
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AGENT_INPUT_TEXT_AREA_ID, AgentInput } from './AgentInput';
+
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: vi.fn(() => false),
+}));
 
 const editor = vi.hoisted(() => ({
   lexical: undefined as LexicalEditor | undefined,
@@ -112,6 +117,43 @@ beforeEach(() => {
   editor.clear.mockClear();
   editor.enter = undefined;
   editor.change = undefined;
+  vi.mocked(isTouchDevice).mockReturnValue(false);
+});
+
+describe('on a touch device', () => {
+  beforeEach(() => {
+    vi.mocked(isTouchDevice).mockReturnValue(true);
+  });
+
+  it('leaves Enter to the virtual keyboard and sends only from the button', () => {
+    const onSend = vi.fn();
+    render(() => <AgentInput onSend={onSend} />);
+
+    editor.change?.('first line');
+    // Not captured, so the editor inserts a newline instead of sending.
+    expect(editor.enter?.()).toBe(false);
+    expect(onSend).not.toHaveBeenCalled();
+    expect(editor.clear).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(onSend).toHaveBeenCalledWith('first line', []);
+    expect(editor.clear).toHaveBeenCalledOnce();
+  });
+
+  it('does not advance the queue from Enter either', () => {
+    const onStop = vi.fn();
+    render(() => (
+      <AgentInput busy hasQueuedMessages onSend={vi.fn()} onStop={onStop} />
+    ));
+
+    expect(editor.enter?.()).toBe(false);
+    expect(onStop).not.toHaveBeenCalled();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Send next queued message' })
+    );
+    expect(onStop).toHaveBeenCalledOnce();
+  });
 });
 
 describe('queued message advancement', () => {

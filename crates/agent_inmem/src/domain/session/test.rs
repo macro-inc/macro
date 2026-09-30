@@ -134,3 +134,36 @@ fn a_plain_http_image_is_named_rather_than_handed_over_as_an_image_url() {
     };
     assert!(text.contains("a.png") && text.contains("http://localhost:8100/file/1"));
 }
+
+#[test]
+fn image_names_and_source_uris_reach_the_model_after_history_replay() {
+    use agent_client_protocol::RawJsonRpcMessage;
+    use agent_runtime_protocol::domain::schema::v0::{AcpMessage, ToRuntimeMessage};
+    use agent_session::domain::model::Message;
+
+    for uri in [
+        "https://local.example.test/static-file/file/00000000-0000-4000-8000-000000000001",
+        "https://external.example/photo.png",
+    ] {
+        let prompt = PromptRequest::new(
+            SessionId::new("replayed-session"),
+            vec![link("reference-photo.png", uri, Some("image/png"))],
+        );
+        let raw: RawJsonRpcMessage = serde_json::from_value(serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "session/prompt",
+            "params": prompt,
+        }))
+        .expect("logged request");
+        let history = crate::domain::replay::replay_history([Message::ToRuntime(
+            ToRuntimeMessage::Acp(AcpMessage(raw)),
+        )]);
+        let messages = messages_for_turn(&history, &UserPrompt::text("use that reference"));
+        let serialized = serde_json::to_string(&agent::to_rig_messages(&messages))
+            .expect("model messages serialize");
+        assert!(serialized.contains("image_file_name: reference-photo.png"));
+        assert!(serialized.contains(&format!("image_source_uri: {uri}")));
+        assert!(!serialized.contains("static_file_id"));
+    }
+}

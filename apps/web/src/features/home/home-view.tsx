@@ -81,6 +81,7 @@ function HomeViewRoot() {
     setTab,
     previewTarget,
     calendarOpen,
+    reminderOpen,
     openPreview,
     closePreview,
   } = useHomeView();
@@ -119,7 +120,9 @@ function HomeViewRoot() {
                       <DebugSuspense name="HomeView.list-pane">
                         <HomeListPane
                           hasPreview={
-                            previewTarget() !== undefined || calendarOpen()
+                            previewTarget() !== undefined ||
+                            calendarOpen() ||
+                            reminderOpen()
                           }
                           onPreviewEntityChange={onPreviewEntityChange}
                           onNewChat={newChat}
@@ -148,7 +151,9 @@ function HomeViewRoot() {
                   <DebugSuspense name="HomeView.list-pane">
                     <HomeListPane
                       hasPreview={
-                        previewTarget() !== undefined || calendarOpen()
+                        previewTarget() !== undefined ||
+                        calendarOpen() ||
+                        reminderOpen()
                       }
                       onPreviewEntityChange={onPreviewEntityChange}
                       onNewChat={newChat}

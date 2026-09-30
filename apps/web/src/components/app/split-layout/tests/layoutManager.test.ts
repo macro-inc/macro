@@ -8,6 +8,10 @@ import {
   emailThreadRoute,
 } from '@app/features/email-view/route';
 import { searchLocationUpdates } from '@app/features/next-soup/search-navigation';
+import {
+  reminderDetailContent,
+  reminderIdFromDetailContent,
+} from '@app/features/reminders/reminder-navigation';
 import { reviewsHostedContent } from '@app/features/reviews-view/reviews-hosted-content';
 import { reviewsSplitRoute } from '@app/features/reviews-view/route';
 import {
@@ -42,6 +46,7 @@ import { createMobileSwipeLayout } from '../mobile/createMobileSwipeLayout';
 import { createAppSplitRouterMiddleware } from '../split-router/app-middleware';
 import { appSplitRoutes } from '../split-router/app-routes';
 import { createContentNavigator } from '../split-router/content-navigation';
+import { decodeLegacyPair } from '../split-router/legacy-route';
 import { createAppSplitRouterLayout } from '../splitRouterLayout';
 
 // Settings UI imports the app route registry and is unrelated to layout behavior.
@@ -103,6 +108,26 @@ function createMockOrchestrator(): BlockOrchestrator {
 }
 
 describe('layoutManager', () => {
+  it('tracks content navigator replacement as a reactive host lifecycle', () => {
+    createRoot((dispose) => {
+      const manager = createSplitLayout(createMockOrchestrator(), [
+        { type: 'component', id: 'home' },
+      ]);
+      expect(manager.contentNavigationReady()).toBe(false);
+      expect(manager.contentNavigationVersion()).toBe(0);
+      manager.setContentNavigator(() => {});
+      expect(manager.contentNavigationReady()).toBe(true);
+      expect(manager.contentNavigationVersion()).toBe(1);
+      manager.setContentNavigator(() => {});
+      expect(manager.contentNavigationVersion()).toBe(2);
+      manager.setContentNavigator(undefined);
+
+      expect(manager.contentNavigationReady()).toBe(false);
+      expect(manager.contentNavigationVersion()).toBe(3);
+      dispose();
+    });
+  });
+
   describe('header close action', () => {
     it.each([false, true])(
       'returns the sole visible split to its prior list (excluded background: %s)',
@@ -860,6 +885,60 @@ describe('layoutManager', () => {
         return { manager, location, router, dispose };
       });
     }
+
+    it('shares reminder identity across Home and standalone routes', async () => {
+      const { manager, router, location, dispose } = ingressRouter(
+        '/home/reminder/reminder-a'
+      );
+      await router.settled();
+      const home = manager.activeSplit()!;
+      const firstApplied = vi.fn();
+
+      manager.openWithSplit(reminderDetailContent('reminder-a'), {
+        handle: home,
+        preferNewSplit: true,
+        search: {},
+        onApplied: firstApplied,
+      });
+      await router.settled();
+
+      expect(manager.splits()).toHaveLength(1);
+      expect(manager.activeSplitId()).toBe(home.id);
+      expect(firstApplied).toHaveBeenCalledOnce();
+
+      const secondApplied = vi.fn();
+      manager.openWithSplit(reminderDetailContent('reminder-b'), {
+        handle: home,
+        preferNewSplit: true,
+        search: {},
+        onApplied: secondApplied,
+      });
+      await router.settled();
+
+      expect(manager.splits()).toHaveLength(2);
+      expect(
+        reminderIdFromDetailContent(manager.activeSplit()!.content())
+      ).toBe('reminder-b');
+      expect(location.read().pathname).toContain('/reminder/reminder-b');
+      expect(secondApplied).toHaveBeenCalledOnce();
+
+      manager.openWithSplit(reminderDetailContent('reminder-a'), {
+        handle: manager.activeSplit(),
+        preferNewSplit: true,
+        search: {},
+      });
+      await router.settled();
+      expect(manager.splits()).toHaveLength(2);
+      expect(manager.activeSplitId()).toBe(home.id);
+
+      router.dispose();
+      dispose();
+    });
+
+    it('keeps reminder list and detail surfaces native-route only', () => {
+      expect(decodeLegacyPair('component', 'reminders')).toBeUndefined();
+      expect(decodeLegacyPair('component', 'reminder-detail')).toBeUndefined();
+    });
 
     const searchTargets: {
       type: SplitContent['type'];
@@ -2989,6 +3068,31 @@ describe('layoutManager', () => {
   });
 
   describe('activation invariant', () => {
+    it('reports direct mobile navigation applied after forward promotion', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'component', id: 'home' },
+        ]);
+        const swipe = createMobileSwipeLayout(manager);
+        const animate = vi.fn();
+        const onApplied = vi.fn();
+        swipe.setForwardNavigationTrigger(animate);
+
+        const result = manager.openWithSplit(
+          { type: 'email', id: 'thread' },
+          { onApplied }
+        );
+
+        expect(result).toMatchObject({ status: 'navigating' });
+        expect(animate).toHaveBeenCalledOnce();
+        expect(onApplied).not.toHaveBeenCalled();
+        swipe.completeNavigateForward();
+        expect(onApplied).toHaveBeenCalledOnce();
+
+        dispose();
+      });
+    });
+
     it.each(['foreground', 'background'] as const)(
       'reuses the mobile %s conversation across Agents routes and blocks',
       (position) => {

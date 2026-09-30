@@ -290,6 +290,43 @@ impl AccessRepository for PgAccessRepository {
         .await?)
     }
 
+    async fn get_scheduled_action_access(
+        &self,
+        scheduled_action_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        let Ok(scheduled_action_uuid) = scheduled_action_id.parse::<Uuid>() else {
+            return Ok(None);
+        };
+        let source_ids = queries::get_user_source_ids(&self.pool, user_id)
+            .await
+            .map_err(anyhow_access_error)?;
+        Ok(
+            queries::scheduled_action_access::get_scheduled_action_access(
+                &self.pool,
+                &scheduled_action_uuid,
+                &source_ids,
+            )
+            .await?,
+        )
+    }
+
+    async fn accessible_scheduled_action_ids(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<Vec<Uuid>, AccessError> {
+        let source_ids = queries::get_user_source_ids(&self.pool, Some(user_id))
+            .await
+            .map_err(anyhow_access_error)?;
+        Ok(
+            queries::scheduled_action_access::accessible_scheduled_action_ids(
+                &self.pool,
+                &source_ids,
+            )
+            .await?,
+        )
+    }
+
     // A macro user id embeds the user's email, so it stays out of the span; the
     // reminder id is what identifies the lookup anyway.
     #[tracing::instrument(err, skip(self, user_id))]

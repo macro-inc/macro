@@ -3,11 +3,12 @@ import {
   ChannelUnreadPresenceDocument,
 } from '@service-storage/graphql/generated/graphql';
 import type { Client } from '@urql/core';
+import { delegateChannelNotificationRefresh } from '../../channel/notification-refresh';
 import { getActiveGraphqlSoupRevalidations } from './active-queries';
 
 /** Filtered notification membership must be re-evaluated after status writes. */
-export function getChannelListRevalidations() {
-  return getActiveGraphqlSoupRevalidations().filter(
+export function getChannelListRevalidations(client?: Pick<Client, 'query'>) {
+  return getActiveGraphqlSoupRevalidations(client).filter(
     (query) =>
       query.document === ChannelListSoupDocument ||
       query.document === ChannelUnreadPresenceDocument
@@ -19,8 +20,10 @@ export async function revalidateChannelLists(
   client: Pick<Client, 'query'>
 ): Promise<void> {
   await Promise.all(
-    getChannelListRevalidations().map(async ({ document, variables }) => {
+    getChannelListRevalidations(client).map(async ({ document, variables }) => {
       try {
+        if (delegateChannelNotificationRefresh(client, { document, variables }))
+          return;
         const result = await client
           .query(document, variables, { requestPolicy: 'network-only' })
           .toPromise();

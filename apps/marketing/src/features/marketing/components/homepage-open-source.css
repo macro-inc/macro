@@ -1,0 +1,38 @@
+.homepage-open-source { --graphic-unit: clamp(.72px, min(.095vw, .115svh), 1px); position: relative; isolation: isolate; padding: calc(110 * var(--graphic-unit)) 0 calc(60 * var(--graphic-unit)); text-align: center; color: var(--color-ink); font-family: 'Inter Variable', Inter, sans-serif; }
+.homepage-github-link { display: inline-flex; flex-direction: column; align-items: center; color: inherit; text-decoration: none; border-radius: 24px; outline-offset: 8px; }
+.homepage-github-orbit { position: relative; display: grid; place-items: center; width: calc(360 * var(--graphic-unit)); height: calc(280 * var(--graphic-unit)); isolation: isolate; }
+.homepage-github-orbit::before { content: ''; position: absolute; z-index: -1; width: calc(470 * var(--graphic-unit)); height: calc(470 * var(--graphic-unit)); border-radius: 50%; background: repeating-radial-gradient(circle, transparent 0 15px, rgb(255 255 255 / 9%) 15px 16px); mask-image: radial-gradient(circle, #000 15%, transparent 68%); }
+.homepage-github-mark { display: grid; place-items: center; width: calc(152 * var(--graphic-unit)); height: calc(152 * var(--graphic-unit)); border-radius: 50%; background: #1e1e1e; box-shadow: 0 0 0 7px #ffffff03; }
+.homepage-github-mark svg { width: calc(76 * var(--graphic-unit)); height: calc(76 * var(--graphic-unit)); }
+.homepage-github-stars { display: inline-flex; gap: 9px; align-items: center; min-height: 28px; margin-top: -12px; font-size: 17px; color: var(--color-ink-muted); font-variant-numeric: tabular-nums; }
+.homepage-github-star { color: #f69232; }
+.homepage-github-link:hover .homepage-github-stars { color: var(--color-ink); }
+.homepage-open-source h2 { margin: calc(44 * var(--graphic-unit)) 0 0; font-family: 'Roboto Slab Variable', display, serif; font-size: clamp(36px, min(4.5vw, 6.5svh), 60px); font-weight: 315; line-height: 1.12; letter-spacing: -.025em; }
+.homepage-open-source-subtext { margin: clamp(20px, 3svh, 30px) 0 0; font-size: clamp(14px, 1.4vw, 17.5px); line-height: 1.8; color: var(--color-ink-muted); }
+.homepage-open-source-badges { display: flex; align-items: center; justify-content: center; gap: clamp(24px, 4vw, 56px); margin: calc(52 * var(--graphic-unit)) auto 0; color: var(--color-ink-extra-muted); }
+.homepage-open-source-badges > div { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.homepage-open-source-badges span { font-size: 11px; line-height: 1.5; }
+.homepage-open-source-backing > svg { width: 120px; height: 36px; color: var(--color-ink-muted); }
+.homepage-open-source-security > div { display: flex; gap: 14px; }
+.homepage-open-source-security svg { width: 36px; height: 36px; }
+.homepage-sidebar-connection { position: relative; isolation: isolate; padding-top: clamp(140px, 26svh, 260px); }
+.homepage-sidebar-connection-line { position: absolute; z-index: 1; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.homepage-sidebar-connection-line path { stroke: rgb(255 255 255 / 42%); stroke-width: 1; stroke-dasharray: 1; stroke-dashoffset: 1; }
+.homepage-sidebar-connection .homepage-sidebar-section { padding-top: 0; }
+@media (max-width: 767px) {
+  .homepage-open-source { padding: 70px 0 44px; }
+  .homepage-github-orbit { width: min(300px, 80vw); height: 220px; }
+  .homepage-github-orbit::before { width: 350px; height: 350px; }
+  .homepage-github-mark { width: 120px; height: 120px; }
+  .homepage-github-mark svg { width: 60px; height: 60px; }
+  .homepage-open-source h2 { font-size: 36px; margin-top: 32px; }
+  .homepage-open-source-subtext { font-size: 14px; margin-top: 24px; }
+  .homepage-open-source-badges { gap: 24px; margin-top: 36px; flex-wrap: wrap; }
+  .homepage-open-source-badges span { font-size: 10px; }
+  .homepage-open-source-backing > svg { width: 100px; }
+  .homepage-open-source-security svg { width: 30px; height: 36px; }
+  .homepage-sidebar-connection { padding-top: 180px; }
+}
+
+.homepage-open-source-travel { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+.homepage-github-link, .homepage-open-source h2, .homepage-open-source-subtext, .homepage-open-source-badges { position: relative; z-index: 3; }

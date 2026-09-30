@@ -171,7 +171,7 @@ export type CreateNewSplitOptions = {
 export type OpenWithSplitOptions = {
   /** Route-owned targets must pass through middleware and content claims before opening. */
   search?: Record<string, SplitSearchUpdate>;
-  /** For routed opens, runs only after the router applies or reuses a destination. */
+  /** Runs after a cooperating navigator applies or reuses its destination. */
   onApplied?: () => void;
   mergeHistory?: boolean;
   activate?: boolean;
@@ -281,6 +281,10 @@ export type SplitManager = {
       | ((content: SplitContent, options: OpenWithSplitOptions) => void)
       | undefined
   ) => void;
+  /** Whether the app router is currently bound for route-owned imperative opens. */
+  readonly contentNavigationReady: Accessor<boolean>;
+  /** Changes whenever the app router binding is installed, replaced, or removed. */
+  readonly contentNavigationVersion: Accessor<number>;
   /** Find the view owning this content without activating it. */
   findOpenView: (content: SplitContent) => OpenView | undefined;
   /** Register live inline views; call the returned function when the host is disposed. */
@@ -660,9 +664,11 @@ export function createSplitLayout(
 
   let exclusionFilter: ((split: SplitState) => boolean) | undefined;
   let splitNavigationInterceptor: SplitNavigationInterceptor | undefined;
-  let contentNavigator:
-    | ((content: SplitContent, options: OpenWithSplitOptions) => void)
-    | undefined;
+  const [contentNavigator, setContentNavigatorBinding] = createSignal<
+    ((content: SplitContent, options: OpenWithSplitOptions) => void) | undefined
+  >();
+  const [contentNavigationVersion, setContentNavigationVersion] =
+    createSignal(0);
   const isExcluded = (split: SplitState) => exclusionFilter?.(split) ?? false;
 
   const canAppendSplit = createMemo(
@@ -1670,9 +1676,10 @@ export function createSplitLayout(
   ): OpenSplitResult {
     const sourceOwner = options.handle?.id;
     if (options.search) {
-      if (!contentNavigator)
+      const navigate = contentNavigator();
+      if (!navigate)
         throw new Error('Split content navigation requires the app router');
-      contentNavigator(content, options);
+      navigate(content, options);
       return { status: 'navigating', sourceOwner };
     }
     const existing = findOpenView(content);
@@ -1869,6 +1876,8 @@ export function createSplitLayout(
     canAppendSplit,
     getVisibleSplits,
     getVisibleSplitCount: () => getVisibleSplits().length,
+    contentNavigationReady: () => contentNavigator() !== undefined,
+    contentNavigationVersion,
     setExclusionFilter: (fn) => {
       exclusionFilter = fn;
     },
@@ -1876,7 +1885,10 @@ export function createSplitLayout(
       splitNavigationInterceptor = fn;
     },
     setContentNavigator: (navigate) => {
-      contentNavigator = navigate;
+      batch(() => {
+        setContentNavigatorBinding(() => navigate);
+        setContentNavigationVersion((version) => version + 1);
+      });
     },
   };
 }

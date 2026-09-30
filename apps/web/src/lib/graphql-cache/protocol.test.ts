@@ -147,6 +147,16 @@ describe('cache worker message validators', () => {
       { kind: 'cache-changed', revision: INITIAL_CACHE_REVISION },
       { kind: 'cache-hydrated', revision: INITIAL_CACHE_REVISION },
       {
+        kind: 'cache-hydrated',
+        revision: INITIAL_CACHE_REVISION,
+        searchChangedBuckets: [],
+      },
+      {
+        kind: 'cache-hydrated',
+        revision: INITIAL_CACHE_REVISION,
+        searchChangedBuckets: ['note', 'email'],
+      },
+      {
         kind: 'mutation-settled',
         settlement: { transactionId: '3', status: 'committed' },
       },
@@ -187,6 +197,8 @@ describe('cache worker message validators', () => {
     { kind: 'cache-changed', keys: [] },
     { kind: 'cache-hydrated', revision: 1 },
     { kind: 'cache-hydrated', revision: '1', extra: true },
+    { kind: 'cache-hydrated', revision: '1', searchChangedBuckets: 'note' },
+    { kind: 'cache-hydrated', revision: '1', searchChangedBuckets: [1] },
     {
       kind: 'mutation-settled',
       settlement: { transactionId: '3', status: 'committed', error: 'extra' },

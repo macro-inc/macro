@@ -1,4 +1,5 @@
 import type { NormalizedCacheExchangeOptions } from '@graphql-cache/exchange/normalized-cache-exchange';
+import type { CacheHost } from '@graphql-cache/host/types';
 import type { BrowserTursoCacheRolloutDecision } from '@graphql-cache/rollout-policy';
 import type { Operation } from '@urql/core';
 import { parse } from 'graphql';
@@ -44,6 +45,36 @@ it('preserves initiative identity, properties, and metadata separately from fold
       descriptionDocumentId: 'description',
       properties: [],
       updatedAt: '2026-09-26',
+    },
+  });
+});
+
+it('preserves the scheduled occurrence identity on reminder notifications', async () => {
+  const { mapGraphqlNotification } = await import('./graphql-soup');
+  const mapped = mapGraphqlNotification({
+    id: 'notification-1',
+    entityId: 'reminder-1',
+    entityType: 'REMINDER',
+    eventType: 'reminder',
+    state: 'UNSEEN',
+    sent: true,
+    senderId: null,
+    viewedAt: null,
+    createdAt: '2026-09-21T10:00:00Z',
+    updatedAt: '2026-09-21T10:00:00Z',
+    metadata: {
+      __typename: 'GraphqlReminderMetadata',
+      reminderReminderId: 'reminder-1',
+      reminderDescription: 'Follow up',
+      reminderScheduledFor: '2026-09-21T10:00:00Z',
+    },
+  });
+  expect(mapped.notification_metadata).toEqual({
+    tag: 'reminder',
+    content: {
+      reminderId: 'reminder-1',
+      description: 'Follow up',
+      scheduledFor: '2026-09-21T10:00:00Z',
     },
   });
 });
@@ -117,6 +148,7 @@ const mocks = vi.hoisted(() => {
     });
   let queuedMutationCount = 0;
   let initializationErrorHandler: ((error: Error) => void) | undefined;
+  let supersededHandler: (() => void) | undefined;
   const cleanupOrder: string[] = [];
   const host = {
     disabled: false,
@@ -174,6 +206,7 @@ const mocks = vi.hoisted(() => {
       queuedMutationCount = 0;
       cleanupOrder.length = 0;
       initializationErrorHandler = undefined;
+      supersededHandler = undefined;
     },
     queueDepth: () => queuedMutationCount,
     recordSubscriptionDisposal: () => cleanupOrder.push('subscriptions'),
@@ -181,6 +214,8 @@ const mocks = vi.hoisted(() => {
     failInitialization: (
       error = new Error('injected initialization failure')
     ) => initializationErrorHandler?.(error),
+    supersede: () => supersededHandler?.(),
+    reloadForNewerBuild: vi.fn(),
     plainClient,
     realtimeClient,
     replaceSubscriptions,
@@ -194,8 +229,12 @@ const mocks = vi.hoisted(() => {
       })
     ),
     createWorkerCacheHost: vi.fn(
-      (options: { onInitializationError?: (error: Error) => void }) => {
+      (options: {
+        onInitializationError?: (error: Error) => void;
+        onSuperseded?: () => void;
+      }) => {
         initializationErrorHandler = options.onInitializationError;
+        supersededHandler = options.onSuperseded;
         return host;
       }
     ),
@@ -220,6 +259,9 @@ vi.mock('@core/constant/servers', () => ({
   SERVER_HOSTS: { 'document-storage-service': 'http://dss.test' },
 }));
 vi.mock('@core/util/fetchWithToken', () => ({ fetchToken: vi.fn() }));
+vi.mock('@core/util/reloadForNewerBuild', () => ({
+  reloadForNewerBuild: mocks.reloadForNewerBuild,
+}));
 vi.mock('@core/util/platform', () => ({ isTauri: () => mocks.tauri }));
 vi.mock('@core/util/platformFetch', () => ({
   platformFetch: mocks.platformFetch,
@@ -707,6 +749,12 @@ describe('GraphQL Soup browser cache session gate', () => {
         '@graphql-cache/host/navigation-error'
       );
       report?.(new CacheNavigationError(), operation);
+      report?.(
+        Object.assign(new Error('owner lock is held by another context'), {
+          errorCode: 'owner-lock-unavailable',
+        }),
+        operation
+      );
       expect(mocks.telemetryError).not.toHaveBeenCalled();
       report?.(error, operation);
 
@@ -816,6 +864,84 @@ describe('GraphQL Soup browser cache session gate', () => {
       'graphql cache async init failed; using uncached client',
       expect.objectContaining({ message: 'injected initialization failure' })
     );
+  });
+
+  it('retires a failed host so the replaced client degrades instead of rejecting', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const soup = await import('./graphql-soup');
+    soup.getGraphqlSoupClient();
+    const exchangeHost = mocks.normalizedCacheExchange.mock.calls[0]?.[0] as
+      | CacheHost
+      | undefined;
+    expect(exchangeHost?.disabled).toBe(false);
+
+    mocks.failInitialization();
+
+    // Operations still running on the old client, and callers that captured
+    // the host, now miss to the network rather than "host was disposed".
+    expect(mocks.host.dispose).toHaveBeenCalledOnce();
+    expect(exchangeHost?.disabled).toBe(true);
+    await expect(
+      exchangeHost?.readQuery({ query: 'query Q { user { id } }' })
+    ).resolves.toEqual({ kind: 'miss' });
+    await expect(
+      exchangeHost?.search({ profile: 'quick-access-v1', limit: 10 })
+    ).resolves.toEqual({ documents: [], nextCursor: null });
+  });
+
+  it('moves reactive cache readers off a host abandoned mid-session', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const soup = await import('./graphql-soup');
+    soup.getGraphqlSoupClient();
+    const { createMemo, createRoot } = await import('solid-js');
+    const readers = createRoot((dispose) => ({
+      dispose,
+      enabled: createMemo(() => soup.graphqlCacheEnabled()),
+      host: createMemo(() => soup.getGraphqlSoupCacheHost()),
+    }));
+    expect(readers.enabled()).toBe(true);
+    expect(readers.host()).toBeDefined();
+
+    mocks.failInitialization();
+
+    expect(readers.enabled()).toBe(false);
+    expect(readers.host()).toBeUndefined();
+    readers.dispose();
+  });
+
+  it('falls back quietly while another context holds the database', async () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => {});
+    const soup = await import('./graphql-soup');
+    const cachedClient = soup.getGraphqlSoupClient();
+
+    mocks.failInitialization(
+      Object.assign(new Error('owner lock is held by another context'), {
+        errorCode: 'owner-lock-unavailable',
+      })
+    );
+
+    // Expected after a deploy or while a closing tab lets go: no toast and no
+    // error report, but the cache is off for this page session and its host
+    // is retired.
+    expect(mocks.toastFailure).not.toHaveBeenCalled();
+    expect(mocks.telemetryError).not.toHaveBeenCalled();
+    expect(info).toHaveBeenCalledExactlyOnceWith(
+      '[graphql-cache] owner lock is held by another context; using the network until reload'
+    );
+    expect(mocks.host.dispose).toHaveBeenCalledOnce();
+    expect(soup.graphqlCacheEnabled()).toBe(false);
+    expect(soup.getGraphqlSoupClient()).not.toBe(cachedClient);
+  });
+
+  it('moves the page to a newer build that took the database over', async () => {
+    const soup = await import('./graphql-soup');
+    soup.getGraphqlSoupClient();
+    expect(mocks.reloadForNewerBuild).not.toHaveBeenCalled();
+
+    mocks.supersede();
+
+    expect(mocks.reloadForNewerBuild).toHaveBeenCalledOnce();
+    expect(mocks.toastFailure).not.toHaveBeenCalled();
   });
 
   it('imports and uses the native path without constructing browser workers', async () => {

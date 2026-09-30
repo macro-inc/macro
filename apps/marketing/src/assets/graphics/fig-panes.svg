@@ -1,0 +1,53 @@
+<svg id="fig-panes" xmlns="http://www.w3.org/2000/svg" viewBox="348 200 855 960">
+  <style>
+    #fig-panes .silhouette, #fig-panes .edge, #fig-panes .dash { fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: .9px; vector-effect: non-scaling-stroke; }
+    #fig-panes .edge { opacity: .5; }
+    #fig-panes .dash { opacity: .5; stroke-dasharray: 2.5 2.5; }
+    #fig-panes .face { fill: color-mix(in srgb, color-mix(in srgb, currentColor 30%, var(--c1)) 11%, var(--b0) 89%); }
+    #fig-panes .shade { fill: color-mix(in srgb, currentColor 12%, var(--b0)); }
+  </style>
+  <!-- Each pane is split into a solid `pane-*` body and the dashed socket it
+       sits in. The socket stays anchored so the body can slide out of it. -->
+  <g>
+    <g id="pane-right-lower">
+      <path class="face" d="M845.8 847.3v261.3l14.1 8.2 282.8-163.3V692.2l-14.1-8.2-282.8 163.3Z"/>
+      <polygon class="shade" points="1142.8 693.1 859.9 855.6 859.9 1117.7 1142.8 955.2 1142.8 693.1"/>
+      <path class="silhouette" d="M845.8 847.3v261.3l14.1 8.2 282.8-163.3V692.2l-14.1-8.2-282.8 163.3Z"/>
+      <path class="edge" d="M1132 698.3 859.9 855.4v246.3"/>
+    </g>
+    <path class="dash" d="m1151.6 725.3-235.5 135.3c-16.2 9.3-26.2 26.6-26.2 45.2v207.4c0 10.9 11.8 17.7 21.2 12.3l235.5-135.3c16.2-9.3 26.2-26.6 26.2-45.2v-207.4c0-10.9-11.8-17.7-21.2-12.3Z"/>
+  </g>
+  <g>
+    <g id="pane-right-upper">
+      <path class="face" d="M761.7 638v117.9l14.1 8.2 127.7-73.7V572.5l-14.1-8.2L761.7 638Z"/>
+      <polygon class="shade" points="903.5 572.1 775.3 645.8 775.3 764.5 903.5 690.9 903.5 572.1"/>
+      <path class="silhouette" d="M761.7 638v117.9l14.1 8.2 127.7-73.7V572.5l-14.1-8.2L761.7 638Z"/>
+      <path class="edge" d="M889.1 580.7 775.8 646.1v105.5"/>
+    </g>
+    <path class="dash" d="m910.8 605.1-85.1 48.9c-12.6 7.3-20.4 20.7-20.4 35.3v69c0 11.6 12.6 18.9 22.7 13.1l84.4-48.5c13.1-7.5 21.1-21.4 21.1-36.5v-68.2c0-11.6-12.6-18.9-22.7-13.1Z"/>
+  </g>
+  <g>
+    <g id="pane-left-upper">
+      <path class="face" d="M533.5 650.4v165.8l179.5 103.6 14.1-8.2V745.8L547.6 642.2l-14.1 8.2Z"/>
+      <polygon class="shade" points="727.1 745.8 713 754 713 919.7 727.1 911.6 727.1 745.8"/>
+      <path class="silhouette" d="M533.5 650.4v165.8l179.5 103.6 14.1-8.2V745.8L547.6 642.2l-14.1 8.2Z"/>
+      <path class="edge" d="M713 905.4V754c-59.7-34.5-108.4-62.6-168.1-97.1"/>
+    </g>
+    <path class="dash" d="m512.9 679.9 147.5 84.7c10.1 5.8 16.4 16.6 16.4 28.3v129.9c0 6.8-7.4 11.1-13.3 7.7L516 845.8c-10.1-5.8-16.4-16.6-16.4-28.3v-129.9c0-6.8 7.4-11.1 13.3-7.7Z"/>
+  </g>
+  <g>
+    <g id="pane-left-lower">
+      <path class="face" d="M408.6 722.5v165.8l179.5 103.6 14.1-8.2V817.9L422.7 714.3l-14.1 8.2Z"/>
+      <polygon class="shade" points="602.2 817.9 588.1 826.1 588.1 991.8 602.2 983.7 602.2 817.9"/>
+      <path class="silhouette" d="M408.6 722.5v165.8l179.5 103.6 14.1-8.2V817.9L422.7 714.3l-14.1 8.2Z"/>
+      <path class="edge" d="M588.1 977.5V826.1c-59.7-34.5-108.4-62.6-168.1-97.1"/>
+    </g>
+    <path class="dash" d="m389.9 750.9 147.5 84.7c10.1 5.8 16.4 16.6 16.4 28.3v129.9c0 6.8-7.4 11.1-13.3 7.7L393.1 916.8c-10.1-5.8-16.4-16.6-16.4-28.3v-129.9c0-6.8 7.4-11.1 13.3-7.7Z"/>
+  </g>
+  <g id="node">
+    <path class="face" d="m670.3 379.8 90.1 98 14.8 8.5h.3l14.6-8.6 90.1-98.5v-32.5l-90.1-97.8-14.8-8.5h-.3l-14.6 8.6-90.1 98.5v32.4Z"/>
+    <polygon class="shade" points="775.2 486.2 775.8 440.1 790.8 423.7 880.3 371.2 880.3 379.2 790.1 477.6 775.2 486.2"/>
+    <path class="silhouette" d="m670.3 379.8 90.1 98 14.8 8.5h.3l14.6-8.6 90.1-98.5v-32.5l-90.1-97.8-14.8-8.5h-.3l-14.6 8.6-90.1 98.5v32.4Z"/>
+    <path class="edge" d="m871.7 376.4-80.9 47.3-15 16.4-14.7-16.3-78.2-44.6M775.2 257.6l.6 150.2"/>
+  </g>
+</svg>
