@@ -22,6 +22,12 @@ lazy_static! {
         r#"(?i)(^\s*--+original message--+)|(^\s*from:)|(^\s*on .*wrote:)"#
     ).unwrap();
 
+    // Regex for common forward-subject prefixes ("Fwd:", "FW:", "fwd:", ...), allowing
+    // leading whitespace but requiring the colon so "fwiw:" etc. don't match.
+    pub static ref FORWARD_SUBJECT_RE: Regex = Regex::new(
+        r#"(?i)^\s*fwd?:"#
+    ).unwrap();
+
     // Regex for common signature lines.
     // (?im) -> i: case-insensitive, m: multiline mode (^ and $ match line start/end)
     pub static ref SIGNATURE_RE: Regex = Regex::new(
@@ -73,4 +79,10 @@ lazy_static! {
     pub static ref ANY_ELEMENT_SELECTOR: Selector = Selector::parse("*").unwrap();
     pub static ref BODY_SELECTOR: Selector = Selector::parse("body").unwrap();
     pub static ref BLOCK_LEVEL_ELEMENTS_SELECTOR: Selector = Selector::parse("p, div, li, h1, h2, h3, h4, h5, h6").unwrap();
+}
+
+/// Returns true if the subject uses a common forward prefix (`Fwd:`, `FW:`, ...),
+/// matched case-insensitively and independent of leading whitespace.
+pub fn is_forward_subject(subject: Option<&str>) -> bool {
+    subject.is_some_and(|s| FORWARD_SUBJECT_RE.is_match(s))
 }
