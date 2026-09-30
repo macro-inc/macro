@@ -11,8 +11,9 @@ and highlights.
   outline highlights the feature. The card stays inside the viewport and the
   view's split. It doesn't take focus or block the rest of the UI; clicking
   outside keeps it open.
-- The header shows the tour name, Back / `n / total` / Next, and ×. The footer
-  button reads Next, then Got it on the last step.
+- The header shows the feature name and Back / `n / total` / Next. The footer
+  has a ghost Dismiss button beside the primary button, which reads Next, then
+  Got it on the last step.
 - A step with nothing to point at floats at the top right of the split. When a
   feature isn't set up (for example, no connected calendar, or only one
   calendar), the step points at the nearest real surface instead and adds a
@@ -44,13 +45,15 @@ and highlights.
 
 Connection suggestions open Email or Connected settings. Home, Email, Documents,
 Tasks, Channels, Customers, and Calls include a video from Macro's YouTube
-channel; no player loads until Watch is clicked, and dismissing removes it.
+channel; no player loads until Watch is clicked. The player has an × above it
+to close the video, and dismissing the tour removes it.
 
 ## Progress
 
 Progress is saved per user and view in this browser's local storage, not on
 the server. Got it on the last step (or skipping past it) saves the tour as
-completed; ×, or Escape while focus is inside the card, saves it as dismissed.
+completed; Dismiss, or Escape while focus is inside the card, saves it as
+dismissed.
 Either keeps it hidden. An unfinished tour resumes at the step last reached.
 Other views keep their own tours. On localhost, 127.0.0.1, and IPv6 loopback
 in development, tours start from the first step on every mount and saved

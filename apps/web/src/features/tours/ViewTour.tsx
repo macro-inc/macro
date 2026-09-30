@@ -139,10 +139,10 @@ function ViewTourHint(props: { tour: ViewTourDefinition }) {
   return (
     <>
       <p class="text-[10px] uppercase tracking-widest text-ink-muted">
-        {props.tour.title} tour · <Tour.Progress />
+        {props.tour.title} · <Tour.Progress />
       </p>
       <p class="mt-1.5 text-sm leading-5">
-        {tour.current().entryLabel ?? `Continue the ${props.tour.title} tour`}
+        {tour.current().entryLabel ?? `Continue with ${props.tour.title}`}
       </p>
       <div class="mt-3 flex items-center gap-1.5">
         <Button
@@ -178,12 +178,11 @@ function ViewTourCard(props: ViewTourProps) {
     <>
       <div class="mb-5 flex items-center gap-1 text-ink-muted">
         <p class="mr-auto text-[10px] uppercase tracking-widest">
-          {props.tour.title} tour
+          {props.tour.title}
         </p>
         <Tour.Previous />
         <Tour.Progress class="min-w-8 text-center text-[10px]" />
         <Tour.Next disabled={tour.isLast()} />
-        <Tour.Close label={`Dismiss ${props.tour.title} tour`} />
       </div>
       <div aria-live="polite">
         <Tour.Title class="text-lg font-medium tracking-tight" />
@@ -200,8 +199,11 @@ function ViewTourCard(props: ViewTourProps) {
         </Show>
         {props.actions}
       </div>
-      <div class="mt-5 flex items-center justify-end">
-        <Tour.Next variant="cta" size="sm" doneLabel="Got it">
+      <div class="mt-5 flex items-center justify-end gap-2">
+        <Tour.Close variant="ghost" size="md">
+          Dismiss
+        </Tour.Close>
+        <Tour.Next variant="cta" size="md" doneLabel="Got it">
           Next
         </Tour.Next>
       </div>

@@ -1,4 +1,6 @@
 import PlayIcon from '@phosphor/play.svg';
+import XIcon from '@phosphor/x.svg';
+import { Button } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import type { ViewTourVideo as Video } from '../core/view-tour';
 
@@ -26,6 +28,19 @@ export function ViewTourVideo(props: { video: Video }) {
           </button>
         }
       >
+        <div class="mb-2 flex items-center justify-between gap-2">
+          <span class="min-w-0 truncate text-xs text-ink">
+            {props.video.title}
+          </span>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            label="Close video"
+            onClick={() => setPlaying(false)}
+          >
+            <XIcon />
+          </Button>
+        </div>
         <iframe
           class="aspect-video w-full rounded-lg border-0 bg-surface"
           src={`https://www.youtube-nocookie.com/embed/${props.video.youtubeId}?autoplay=1&rel=0`}
@@ -34,23 +49,6 @@ export function ViewTourVideo(props: { video: Video }) {
           allowfullscreen
           referrerpolicy="strict-origin-when-cross-origin"
         />
-        <div class="mt-2 flex items-center justify-between gap-2 text-[10px] text-ink-muted">
-          <a
-            href={`https://www.youtube.com/watch?v=${props.video.youtubeId}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            class="rounded px-1 py-1 hover:text-ink"
-          >
-            Watch on YouTube
-          </a>
-          <button
-            type="button"
-            onClick={() => setPlaying(false)}
-            class="rounded px-1 py-1 hover:text-ink"
-          >
-            Close video
-          </button>
-        </div>
       </Show>
     </div>
   );

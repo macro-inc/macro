@@ -79,7 +79,7 @@ afterEach(() => {
 describe('ViewTour', () => {
   it('saves a dismissal per user and stays hidden afterwards', () => {
     const view = render(() => <ViewTour tour={plain} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Dismiss Plain tour' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(saved('plain')).toEqual({ status: 'dismissed' });
     view.unmount();
@@ -116,7 +116,7 @@ describe('ViewTour', () => {
     localStorage.setItem(key('plain'), JSON.stringify({ status: 'dismissed' }));
     render(() => <ViewTour tour={plain} />);
     expect(screen.getByRole('dialog')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Dismiss Plain tour' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
     expect(saved('plain')).toEqual({ status: 'dismissed' });
   });
 
@@ -130,6 +130,15 @@ describe('ViewTour', () => {
     expect(localStorage.getItem(key('video'))).toBeNull();
     setDesktop(true);
     expect(screen.getByRole('dialog')).toBeTruthy();
+  });
+
+  it('closes the video from the × above it, with no YouTube link', () => {
+    render(() => <ViewTour tour={withVideo} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Watch Demo video' }));
+    expect(document.querySelector('iframe')).toBeTruthy();
+    expect(screen.queryByRole('link', { name: /YouTube/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Close video' }));
+    expect(document.querySelector('iframe')).toBeNull();
   });
 
   it('runs connection queries only for tours with a connector', () => {
@@ -219,9 +228,7 @@ describe('ViewTour waiting hint', () => {
     const hint = () => document.querySelector('[data-tour-hint]');
     expect(hint()?.textContent).toContain('Open the thing to continue');
     expect(screen.queryByRole('button', { name: 'Skip all' })).toBeNull();
-    expect(
-      screen.queryByRole('button', { name: 'Dismiss Waiting tour' })
-    ).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Dismiss' })).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
     expect(hint()?.textContent).toContain('2 / 4');
