@@ -220,8 +220,18 @@ where
         let mut response = self.forward.forward(request).await?;
         sanitize_response_headers(response.headers_mut());
 
-        tracing::Span::current().record("upstream_status", response.status().as_u16());
-        tracing::debug!(status = %response.status(), "upstream answered");
+        let status = response.status();
+        tracing::Span::current().record("upstream_status", status.as_u16());
+        if status.is_success() {
+            tracing::debug!(%status, "upstream answered");
+        } else {
+            tracing::warn!(
+                session = %grant.session,
+                upstream = %target.name(),
+                %status,
+                "upstream answered with a failure status"
+            );
+        }
 
         Ok(response)
     }

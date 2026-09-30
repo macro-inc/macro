@@ -17,7 +17,11 @@ import { createThreadDrafts } from './thread-drafts';
 import { createThreadRecipients } from './thread-recipients';
 import { createThreadSnapshot } from './thread-snapshot';
 
-type NavigationTarget = { threadId: string; messageId: string | undefined };
+type NavigationTarget = {
+  threadId: string;
+  messageId: string | undefined;
+  request?: string;
+};
 
 export type EmailThreadState = {
   isScrollingToMessage: Accessor<boolean>;
@@ -139,11 +143,14 @@ export function createEmailThreadState(
     () => ({
       threadId: threadContext.source.id(),
       messageId: host.targetMessageId?.(),
+      request: host.targetRequest?.(),
     }),
     undefined,
     {
       equals: (a, b) =>
-        a.threadId === b.threadId && a.messageId === b.messageId,
+        a.threadId === b.threadId &&
+        a.messageId === b.messageId &&
+        a.request === b.request,
     }
   );
   const [clearedTarget, setClearedTarget] = createSignal<NavigationTarget>();

@@ -8,12 +8,22 @@ import {
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
 import { uploadFile } from '@core/util/upload';
+import { useAgentCapabilitiesQuery } from '@queries/agents/capabilities';
 import type { PromptAttachment } from '@service-agent-harness/generated/schemas';
 import { createMemo, createSignal } from 'solid-js';
+import {
+  type EffortChoice,
+  effortConfigOption,
+  effortLabel,
+} from '../../block-agent/state/session-config';
 import { ChatComposer } from '../components/ChatComposer';
 import type { AgentKind } from '../core/agent-kind';
 import { defaultBranchFor } from '../core/repository';
 import { MACRO_PERSONA_ID, type RosterAgent } from '../core/roster';
+import {
+  createPersistedComposerDraft,
+  NEW_CONVERSATION_ATTACHMENTS_KEY,
+} from '../primitives/composer-draft';
 import { createPreferredInmemModel } from '../primitives/preferred-inmem-model';
 import { createRecentRepositories } from '../primitives/recent-repositories';
 import { createComposerModels } from '../queries/composer-models';
@@ -31,6 +41,7 @@ export type StartConversation = {
   repoUrl?: string;
   repoBranch?: string;
   modelOverride?: string;
+  effortOverride?: { configId: string; value: string };
 };
 
 /** One agent choice determines the session kind, default model, and repository context. */
@@ -58,10 +69,12 @@ export function NewChatPage(props: {
   const [modelOverride, setModelOverride] = createSignal<string>();
   // A new conversation starts on Automatic until the caller picks a repository.
   const [repoUrl, setRepoUrl] = createSignal<string | undefined>();
-  const [localDraft, setLocalDraft] = createSignal('');
-  const draft = () => props.draft ?? localDraft();
+  const persistedDraft = createPersistedComposerDraft();
+  const draft = () => props.draft ?? persistedDraft.draft();
   const setDraft = (text: string) =>
-    props.onDraftChange ? props.onDraftChange(text) : setLocalDraft(text);
+    props.onDraftChange
+      ? props.onDraftChange(text)
+      : persistedDraft.setDraft(text);
   const [branchOverride, setBranchOverride] = createSignal<string>();
   const recentAgentId = () => {
     const ids = recentAgents.ids();
@@ -98,6 +111,41 @@ export function NewChatPage(props: {
     }
     return modelOverride();
   };
+  const capabilityTarget = () => {
+    const agent = selected();
+    const harness =
+      agent?.harness === 'macro-inmem' ? 'in-memory' : agent?.harness;
+    if (harness !== 'in-memory' && harness !== 'cursor') return undefined;
+    return {
+      harness,
+      model: composerModelOverride() ?? agent?.defaultModel,
+    } as const;
+  };
+  const capabilities = useAgentCapabilitiesQuery(capabilityTarget);
+  const effort = () =>
+    effortConfigOption(
+      capabilities.isSuccess ? capabilities.data.configOptions : []
+    );
+  const [effortSelection, setEffortSelection] = createSignal<{
+    target: string;
+    configId: string;
+    value: string;
+    name: string;
+  }>();
+  const selectedEffort = () => {
+    const selection = effortSelection();
+    return selection?.target === JSON.stringify(capabilityTarget())
+      ? selection
+      : undefined;
+  };
+  // The submenu already validated this choice. Retain it while the selected
+  // model's discovery refreshes; startup revalidates against the runtime.
+  const effortOverride = () => {
+    const selection = selectedEffort();
+    return selection
+      ? { configId: selection.configId, value: selection.value }
+      : undefined;
+  };
   const coding = () => selected()?.kind === 'coder';
   // The create-session API accepts explicit repositories only for Cursor.
   const canSelectRepository = () => selected()?.harness === 'cursor';
@@ -125,7 +173,12 @@ export function NewChatPage(props: {
     if (agent.harness === 'cursor') openSettings('Harness');
   };
 
-  const attachmentTracker = createInputAttachmentTracker();
+  const attachmentTracker = createInputAttachmentTracker({
+    // Home supplies its own text draft; attachment persistence here is for Agents.
+    persistenceKey: props.onDraftChange
+      ? undefined
+      : NEW_CONVERSATION_ATTACHMENTS_KEY,
+  });
   const attachFiles = (files: File[]) =>
     void uploadInputAttachments({
       files,
@@ -156,10 +209,33 @@ export function NewChatPage(props: {
       repoUrl: repo,
       ...(repo ? { repoBranch: repoBranch() } : {}),
       ...(model ? { modelOverride: model } : {}),
+      effortOverride: effortOverride(),
     });
     attachmentTracker.clearAttachments();
     // Macro's preferred model stays; coding-agent submenu picks are one-shot.
     setModelOverride(undefined);
+    setEffortSelection(undefined);
+  };
+
+  const selectAgent = (
+    agent: RosterAgent,
+    model?: string,
+    selection?: EffortChoice
+  ) => {
+    setAgentId(agent.id);
+    if (agent.id === MACRO_PERSONA_ID) {
+      if (model) preferredInmem.remember(model);
+      // Still set the override so the trigger updates when Macro was
+      // already selected (agent id unchanged would otherwise skip a render).
+      setModelOverride(model);
+    } else {
+      setModelOverride(model);
+    }
+    setEffortSelection(
+      selection
+        ? { ...selection, target: JSON.stringify(capabilityTarget()) }
+        : undefined
+    );
   };
 
   const agentSelector = () => (
@@ -168,17 +244,10 @@ export function NewChatPage(props: {
       selected={selected()}
       modelOverride={composerModelOverride()}
       loading={props.rosterLoading}
-      onSelect={(agent, model) => {
-        setAgentId(agent.id);
-        if (agent.id === MACRO_PERSONA_ID) {
-          if (model) preferredInmem.remember(model);
-          // Still set the override so the trigger updates when Macro was
-          // already selected (agent id unchanged would otherwise skip a render).
-          setModelOverride(model);
-          return;
-        }
-        setModelOverride(model);
-      }}
+      effortLabel={selectedEffort()?.name ?? effortLabel(effort())}
+      effortSelection={effortOverride()}
+      onSelect={selectAgent}
+      onSelectEffort={selectAgent}
       onConnect={connect}
       onCreate={() => props.onOpenRoster(coding() ? 'coder' : 'agent')}
     />

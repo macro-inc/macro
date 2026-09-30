@@ -12,6 +12,7 @@ import {
   eventEmailRecipients,
   guestEmails,
 } from '@app/features/calendar/utils/guest-emails';
+import { handleOpenEventOutsidePress } from '@app/features/calendar/utils/open-event-outside-press';
 import { EventRsvpSection } from '@app/features/calendar-view/components/EventRsvpSection';
 import { useOpenEventComposer } from '@app/features/calendar-view/components/use-open-event-composer';
 import { useOpenEventEmail } from '@app/features/calendar-view/components/use-open-event-email';
@@ -151,20 +152,10 @@ function EveryoneElseDeclinedNotice(props: {
           </div>
           <Show when={props.canModify}>
             <div class="flex justify-end gap-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                class="rounded-lg"
-                onClick={props.onDelete}
-              >
+              <Button variant="ghost" size="sm" onClick={props.onDelete}>
                 Delete
               </Button>
-              <Button
-                variant="cta"
-                size="sm"
-                class="rounded-lg"
-                onClick={props.onReschedule}
-              >
+              <Button variant="cta" size="sm" onClick={props.onReschedule}>
                 Reschedule
               </Button>
             </div>
@@ -194,7 +185,7 @@ function EventGuestActions(props: {
         variant="ghost"
         size="icon-sm"
         depth={3}
-        class="rounded-md text-ink-muted [&_svg]:size-4"
+        class="text-ink-muted [&_svg]:size-4"
         onClick={() => copyGuestEmails(guestEmails(props.event.attendees))}
       >
         <CopyIcon />
@@ -205,7 +196,7 @@ function EventGuestActions(props: {
           variant="ghost"
           size="icon-sm"
           depth={3}
-          class="rounded-md text-ink-muted [&_svg]:size-4"
+          class="text-ink-muted [&_svg]:size-4"
           onClick={() => {
             const event = props.event;
             props.closeDetails();
@@ -266,7 +257,7 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
                 variant="ghost"
                 size="icon-md"
                 depth={3}
-                class="size-11 rounded-full bg-ink/6 text-ink-muted [&_svg]:size-5"
+                class="size-11 bg-ink/6 text-ink-muted [&_svg]:size-5"
                 onClick={() => copyCalendarEventMention(props.event)}
               >
                 <LinkIcon />
@@ -277,7 +268,7 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
                   variant="ghost"
                   size="icon-md"
                   depth={3}
-                  class="size-11 rounded-full bg-ink/6 text-ink-muted [&_svg]:size-5"
+                  class="size-11 bg-ink/6 text-ink-muted [&_svg]:size-5"
                   onClick={openEditor}
                 >
                   <PencilSimpleIcon />
@@ -287,7 +278,7 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
                   variant="ghost"
                   size="icon-md"
                   depth={3}
-                  class="size-11 rounded-full bg-ink/6 text-ink-muted [&_svg]:size-5"
+                  class="size-11 bg-ink/6 text-ink-muted [&_svg]:size-5"
                   onClick={deleteDialog.open}
                 >
                   <TrashIcon />
@@ -466,20 +457,7 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
         <Layer depth={3}>
           <Popover.Content
             class="portal-scope z-modal max-w-[calc(100vw-2rem)] outline-none"
-            onInteractOutside={(event) => {
-              // FullCalendar and external calendar target controls select on
-              // click (pointer release), so dismissing on pointer down would
-              // briefly close the popover before navigation finishes.
-              const target = event.detail.originalEvent.target;
-              if (
-                target instanceof Element &&
-                (target.closest('.fc-event') !== null ||
-                  target.closest('[data-calendar-event-target-navigation]') !==
-                    null)
-              ) {
-                event.preventDefault();
-              }
-            }}
+            onInteractOutside={handleOpenEventOutsidePress}
             onOpenAutoFocus={(event) => {
               // Aims can arrive while the keyboard is elsewhere — arrow-key
               // scanning in the inbox previews a calendar notification here,
@@ -513,7 +491,7 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
                   variant="ghost"
                   size="icon-sm"
                   depth={3}
-                  class="rounded-md text-ink-muted [&_svg]:size-4"
+                  class="text-ink-muted [&_svg]:size-4"
                   onClick={() => copyCalendarEventMention(props.event)}
                 >
                   <LinkIcon />
@@ -524,7 +502,7 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
                     variant="ghost"
                     size="icon-sm"
                     depth={3}
-                    class="rounded-md text-ink-muted [&_svg]:size-4"
+                    class="text-ink-muted [&_svg]:size-4"
                     onClick={openEditor}
                   >
                     <PencilSimpleIcon />
@@ -534,7 +512,7 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
                     variant="ghost"
                     size="icon-sm"
                     depth={3}
-                    class="rounded-md text-ink-muted [&_svg]:size-4"
+                    class="text-ink-muted [&_svg]:size-4"
                     onClick={deleteDialog.open}
                   >
                     <TrashIcon />

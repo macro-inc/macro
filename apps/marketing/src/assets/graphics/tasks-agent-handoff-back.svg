@@ -1,0 +1,61 @@
+<svg width="400" height="130" viewBox="0 0 400 130" fill="none" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<defs>
+<clipPath id="tasks-agent-handoff-back-clip2_817_13485">
+<rect width="339" height="12" fill="white" transform="translate(47 77)"/>
+</clipPath>
+<clipPath id="tasks-agent-handoff-back-clip1_817_13485">
+<rect width="14" height="14" fill="white" transform="translate(18.5 81.5)"/>
+</clipPath>
+<pattern id="tasks-agent-handoff-back-pattern1_817_13485" patternContentUnits="objectBoundingBox" width="1" height="1">
+<use xlink:href="#tasks-agent-handoff-back-image0_817_13485" transform="translate(-0.166667) scale(0.00416667)"/>
+</pattern>
+<image id="tasks-agent-handoff-back-image0_817_13485" width="320" height="240" preserveAspectRatio="none" xlink:href="data:image/webp;base64,UklGRmgCAABXRUJQVlA4IFwCAACwDACdASo8AC0APj0aiUMiIaEYCq4AIAPEoAnTOOiz2q9vFz4/ol3hjebZcA31Nr3Zt/Zz2BUecsz2XOJFNuoSFridpFGfXbWFPTvIoZg0Q3Rpv9pqcHq8Sn9MYjpppdU0FM9Gkcjj8JsQpI96CAD+/twHxlSz6sOCxDQGyk9cSw8tfR3Sa4G6ANEv/jVqSdiO1znHsJZSGL3L0XbOVon+7WTlkITwrvJwnJDdKbrOIUQ9gsj34dcb6NseKlrxWarPkvAFjaF5/+jOFaIEQy5gfLP6Lbjr0vj5rT1WYxLT+Bc5HRXn2yB2V/D+ebxPzNvfUKHJly92uFbovmnG6mx4ouUoNZlC3/zPwiqIvW5/gNU50C33fhvIMtGyUG9IUEhxo3VzJG132aXBr5weB9ui/4LuixLfIHqk2v2hp8j6evzVD5aBSn8i6AS1O6t5LYzIcwySU39bSVPEwcCWS+qdJw0AcJ5pCAOYrCCvrTPhOqV5/Rc4+VfCk/IHAQpQIsWcDb/mZ5a5kgv/g+33BcaCI3U7k8aZNm9VnM2w0pHWwSJEQBoTzgH60ms+h0eqv8XQWqqK2d6zjQ9Un4X7A63CLGhlMLzbz1vZ2nVD0YKzr/I4mD/uLSzQ4rB2q4DAq5Kg703kzkhQXoBUuef/av7ohM4TM4JZTQQopFUpxdOsrZWEweRoxyxE7JHCw+LFtFyuBRI7wK/mGzYT8iUSzRSd8UvTr33GWLqqpw/WzCFzpYPAWNC6ppMmo2UezEuaKnkDdw5bc6zbnL/k1xycTyl5hWuMlY3tOmM6rEQA"/>
+<clipPath id="tasks-agent-handoff-back-clip0_817_13485">
+<rect width="338" height="12" fill="white" transform="translate(48 17)"/>
+</clipPath>
+<pattern id="tasks-agent-handoff-back-pattern0_817_13485" patternContentUnits="objectBoundingBox" width="1" height="1">
+<use xlink:href="#tasks-agent-handoff-back-image0_817_13485" transform="translate(-0.166667) scale(0.00416667)"/>
+</pattern>
+<linearGradient id="tasks-agent-handoff-back-paint0_linear_817_13485" x1="8.5" y1="-2.5" x2="70.172" y2="223.142" gradientUnits="userSpaceOnUse">
+<stop stop-color="#818181"/>
+<stop offset="0.528846" stop-color="#2B2B2B"/>
+<stop offset="1" stop-color="#414141"/>
+</linearGradient>
+</defs>
+<rect x="0.25" y="0.25" width="399.5" height="129.5" rx="13.75" fill="#060709"/>
+<rect x="0.25" y="0.25" width="399.5" height="129.5" rx="13.75" stroke="url(#tasks-agent-handoff-back-paint0_linear_817_13485)" stroke-width="0.5"/>
+<rect x="14" y="17" width="24" height="24" rx="12" fill="url(#tasks-agent-handoff-back-pattern0_817_13485)"/>
+<g clip-path="url(#tasks-agent-handoff-back-clip0_817_13485)">
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" font-weight="600" letter-spacing="0em"><tspan x="48.1514" y="26.6364">Gabriel</tspan></text>
+<text fill="#8B8B8B" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" letter-spacing="0em"><tspan x="347.286" y="26.6364">9:41 AM</tspan></text>
+</g>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" letter-spacing="0em"><tspan x="87.6875" y="42.6364"> can you take </tspan></text>
+<text fill="#FF8F00" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" font-weight="500" letter-spacing="0em"><tspan x="48" y="42.6364">@Macro</tspan></text>
+<path d="M155.875 35.3125H154.5C153.948 35.3125 153.5 35.7602 153.5 36.3125V37.6875C153.5 38.2398 153.948 38.6875 154.5 38.6875H155.875C156.427 38.6875 156.875 38.2398 156.875 37.6875V36.3125C156.875 35.7602 156.427 35.3125 155.875 35.3125Z" stroke="#15DA43" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M153.5 40.6433L155.007 42.2933L157.367 39.9333" stroke="#15DA43" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M158.625 37H164.625" stroke="#15DA43" stroke-width="0.8" stroke-linecap="round"/>
+<path d="M158.625 41.0625H164.625" stroke="#15DA43" stroke-width="0.8" stroke-linecap="round"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" letter-spacing="0em" text-decoration="underline"><tspan x="167" y="42.6364">Fix pricing step drop-off</tspan></text>
+<path fill-rule="evenodd" clip-rule="evenodd" d="M290 35C292.207 35 294 36.7933 294 39C294 41.2067 292.207 43 290 43C287.793 43 286 41.2067 286 39C286 36.7933 287.793 35 290 35ZM290 36.2C291.547 36.2 292.8 37.4533 292.8 39C292.8 40.5467 291.547 41.8 290 41.8C288.453 41.8 287.2 40.5467 287.2 39C287.2 37.4533 288.453 36.2 290 36.2Z" fill="#FFAE00"/>
+<path d="M290 35C287.793 35 286 36.7933 286 39C286 41.2067 287.793 43 290 43V35Z" fill="#FFAE00"/>
+<path d="M298 39H300.083V42.3333H298.312C298.142 42.3333 298 42.1444 298 41.9167V39Z" fill="#BFBFBF"/>
+<path d="M304.041 37.3333H301.958V42.3333H304.041V37.3333Z" fill="#BFBFBF"/>
+<path d="M305.917 35.6667H307.688C307.859 35.6667 308 35.85 308 36.0833V42.3333H305.917V35.6667Z" fill="#BFBFBF"/>
+<rect x="310" y="34" width="10" height="10" rx="5" fill="url(#tasks-agent-handoff-back-pattern1_817_13485)"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" letter-spacing="0em"><tspan x="322" y="42.6364">?</tspan></text>
+<rect x="46.5" y="33.5" width="43" height="12" rx="2" fill="#FF8F00" fill-opacity="0.2"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" letter-spacing="0em"><tspan x="48" y="56.6364">I&#x2019;m heads down on launch prep.</tspan></text>
+<rect x="14.25" y="77.25" width="22.5" height="22.5" rx="11.25" fill="black"/>
+<rect x="14.25" y="77.25" width="22.5" height="22.5" rx="11.25" stroke="#353535" stroke-width="0.5"/>
+<g clip-path="url(#tasks-agent-handoff-back-clip1_817_13485)">
+<path d="M18.5 87.3415V91.3087C18.5035 91.4217 18.5505 91.5289 18.6313 91.608L20.2308 93.1503L21.3986 92.6837V88.5426L19.6661 86.8748L18.5 87.3415Z" fill="#FF8F00"/>
+<path d="M20.8789 84.3V87.6752L21.6722 88.4388V89.2047L25.7807 93.1667L26.9485 92.7L26.9479 88.5583L22.0456 83.8333L20.8789 84.3Z" fill="#FF8F00"/>
+<path d="M26.4297 84.3V87.6752L27.223 88.4399L27.2154 89.1983L31.3332 93.1667L32.4999 92.7V88.745C32.4997 88.6871 32.4879 88.6298 32.4654 88.5764C32.4429 88.523 32.41 88.4746 32.3686 88.4341L27.5969 83.8333L26.4297 84.3Z" fill="#FF8F00"/>
+</g>
+<g clip-path="url(#tasks-agent-handoff-back-clip2_817_13485)">
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" font-weight="600" letter-spacing="0em"><tspan x="47.2998" y="86.6364">Macro</tspan></text>
+<text fill="#8B8B8B" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" letter-spacing="0em"><tspan x="81.4229" y="86.6364">Agent</tspan></text>
+<text fill="#8B8B8B" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" letter-spacing="0em"><tspan x="347.286" y="86.6364">9:41 AM</tspan></text>
+</g>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Inter" font-size="10" letter-spacing="0em"><tspan x="47" y="102.636">Sure thing &#x2014; I&#x2019;ll update the task as I got and hand it back for review.</tspan></text>
+</svg>

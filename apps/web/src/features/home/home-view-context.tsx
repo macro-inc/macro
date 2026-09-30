@@ -1,4 +1,5 @@
 import { channelsSearch } from '@app/features/channels-view/channels-route';
+import { useMobileSearchText } from '@app/features/command/mobile/use-mobile-search-text';
 import { driveSearch } from '@app/features/drive-view/primitives/drive-search';
 import type { FacetSelection } from '@app/features/soup/filters/facets/types';
 import { makePersistedState } from '@app/lib/persistence';
@@ -24,6 +25,7 @@ import {
   createEffect,
   createMemo,
   createSignal,
+  mergeProps,
   on,
 } from 'solid-js';
 import {
@@ -47,6 +49,7 @@ import {
   homeChannelRoute,
   homeDocumentRoute,
   homePreviewRoute,
+  homeReminderRoute,
   homeSplitRoute,
 } from './route';
 import type {
@@ -69,6 +72,8 @@ export type HomeViewContext = {
   previewNavigationRequest: Accessor<number>;
   /** Whether the route opens the Calendar view inline. */
   calendarOpen: Accessor<boolean>;
+  /** Whether the route opens a reminder inline. */
+  reminderOpen: Accessor<boolean>;
   /** Bumped when the open calendar event is requested again, to re-aim in place. */
   calendarRefocus: Accessor<number>;
   openPreview: (entity: PreviewSelection) => boolean;
@@ -88,15 +93,16 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
   const panel = useSplitPanelOrThrow();
   const userId = useUserId();
   const navigate = useNavigate();
-  const routeParams =
-    useParams<Parameters<typeof homeDetailParamsFromRoute>[0]>();
+  const routeParams = useParams<
+    Parameters<typeof homeDetailParamsFromRoute>[0] & { reminderId?: string }
+  >();
   const [channelSearch] = createSearchParams(channelsSearch);
   const [documentSearch] = createSearchParams(driveSearch);
   const [tabSearch] = createSearchParams(homeTabSearch);
   const selectPreview = createPreviewSelectionGuard();
   const initial = props.initialState ?? {};
   const initialTab = initial.tab ?? 'signal';
-  const [state, setState] = makePersistedState(
+  const [persistedState, setState] = makePersistedState(
     createStore<HomeViewState>({
       tab: initialTab,
       search: initial.search ?? '',
@@ -110,6 +116,16 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
       restorePreferences: initial.facets === undefined,
     })
   );
+
+  const searchText = useMobileSearchText(
+    () => persistedState.search,
+    panel.handle.isActive
+  );
+  const state = mergeProps(persistedState, {
+    get search() {
+      return searchText();
+    },
+  });
 
   createEffect(
     on(
@@ -144,6 +160,7 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
   });
   const { calendarOpen, calendarRefocus, openCalendarEvent } =
     useHomeCalendarPreview(withTab);
+  const reminderOpen = () => typeof routeParams.reminderId === 'string';
   const navigateDetail = (
     { params, search }: HomePreviewNavigation,
     replace = false
@@ -172,6 +189,13 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
   const openPreview = (entity: PreviewSelection) => {
     if (entity.type === 'calendar_event') {
       return openCalendarEvent(entity);
+    }
+    if (entity.type === 'reminder') {
+      navigate(
+        { route: homeReminderRoute, params: { reminderId: entity.id } },
+        { search: withTab(homeDetailSearch()) }
+      );
+      return true;
     }
     const target = previewBlockTarget(entity);
     if (!selectPreview.canSelect(target)) return false;
@@ -224,6 +248,7 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
     previewNavigationRequest,
     calendarOpen,
     calendarRefocus,
+    reminderOpen,
     openPreview,
     closePreview,
     setTab,

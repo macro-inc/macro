@@ -33,11 +33,11 @@ impl AsyncTool<AnthropicToolContext> for WebFetch {
     async fn call(
         &self,
         service_context: ServiceContext<AnthropicToolContext>,
-        _request_context: RequestContext,
+        request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         let ctx = &*service_context;
         let blocks =
-            super::invoke_server_tool(&ctx.client, &ctx.model, WEB_FETCH_TOOL.clone(), &self.input)
+            super::invoke_server_tool(ctx, &request_context, WEB_FETCH_TOOL.clone(), &self.input)
                 .await?;
 
         blocks

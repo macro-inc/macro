@@ -20,7 +20,7 @@ Switching tabs or navigating an in-app route is not a back/forward-cache restore
 | `/app/invite?token=<token>` | GTM invite welcome page ("Welcome, <first name>", Continue → signup). Links come from the staff portal, last 48h, and grant the first month of Premium free once the account is created |
 | `/app/internal/invite-links` | Macro staff only (`@macro.com`): create GTM invite links and track opens, signups, and subscriptions |
 | `/app/home` | Desktop: Home (notifications + recent activity); mobile: Notifications soup |
-| `/app/home/<block-type>/<uuid>` | Home with an item opened inline; `<block-type>` may be an alias such as `task`; a targeted channel message uses `sN.channels.messageId` (and optionally `sN.channels.threadId`) and a document comment `sN.drive.commentId`; a calendar row renders the Calendar view inline at `/app/home/calendar/<month-or-week-or-day>` with the event, occurrence, and locator range in `sN.calendar.*` |
+| `/app/home/<block-type>/<uuid>` | Home with an item opened inline; `<block-type>` may be an alias such as `task`; a targeted channel message uses `sN.channels.messageId` (and optionally `sN.channels.threadId`) and a document comment `sN.drive.commentId`; a calendar row renders the Calendar view inline at `/app/home/calendar/<month-or-week-or-day>` with the event, occurrence, and locator range in `sN.calendar.*`; reminders use `/app/home/reminder/<uuid>` |
 | `/app/mail` | Email client |
 | `/app/mail/<uuid>` | Email with a thread opened inline; a targeted message uses `sN.email-detail.messageId` |
 | `/app/channels` | Channels list |
@@ -42,6 +42,8 @@ Switching tabs or navigating an in-app route is not a back/forward-cache restore
 | `/app/coders/<uuid>` | Code session with the Agents sidebar |
 | `/app/agents/chat/<uuid>` | Legacy AI chat opened in the Agents workspace (`/app/agent-chats/<uuid>` remains a compatibility alias) |
 | `/app/calls` | Calls list |
+| `/app/reminders` | Reminders list (requires the Reminders flag) |
+| `/app/reminder/<uuid>` | Lightweight reminder details; the same reminder opened from Home or another split reuses its existing route owner |
 | `/app/companies` | Customers (CRM; needs a team) |
 | `/app/activity` | Activity heatmap + feed |
 | `/app/calendar/<month-or-week-or-day>` | Calendar; the focused event, its occurrence, and the locator range use `sN.calendar.*` |
@@ -55,6 +57,25 @@ Switching tabs or navigating an in-app route is not a back/forward-cache restore
 | `/app/settings/account` | Settings (also `/app/settings/api-keys`, `/mcp-server`, `/shortcuts`, etc.) |
 | `/app/debug/ui?ui=invert-util` | UI gallery, including the inverted Markdown demo on the InvertUtil page |
 | `/app/debug/<component>` | Registered debug views (for example `icon-gallery`, `md`, or `agent-ui`); existing environment gates apply. `/app/component/<component>` remains a compatibility alias for these views |
+
+Search-result locations use pane-local namespaces: `channels` (message/thread),
+`email-detail` (message), `markdown-detail` (node), `pdf-detail` (page and highlight
+context), `agent-detail` (turn/author), and `call-detail` (transcript segment).
+A `seek` value identifies each click so selecting the same hit again scrolls again.
+Markdown and PDF targets also name their document so navigation to another file in
+the same workspace cannot apply the previous file's target.
+Channel-message @mentions and AI-generated channel mentions also preserve their
+message/thread target when opening a channel or reusing its existing pane.
+Returning to Home's list clears the prior target, so reopening an item without
+a specific location does not replay the previous search hit.
+
+Reminder navigation is native-route only: list, Home, notifications, commands,
+copied links, and new browser tabs use `/app/reminders`,
+`/app/home/reminder/<uuid>`, or `/app/reminder/<uuid>`. Imperative callers use
+`openReminderDetail` so Split Manager sends the typed destination through the
+app content navigator. The standalone and Home routes claim the same reminder
+identity, and callers must never treat a reminder ID as a document ID. Startup
+notification intents are consumed only by the destination's applied callback.
 
 When an event opens inline from Home, changing the Calendar period stays under
 `/app/home/calendar/`, updates the period segment, and re-focuses that event.
@@ -130,9 +151,9 @@ their child routes and history independently; returning to a list does not
 activate another pane. Opening a resource already displayed in another pane
 activates its owner through router claim arbitration, preserves the owner's route,
 and applies compatible search targets to that pane. The compatibility preview
-guard can instead reject a conflicting embedded preview. On touch, or
-when the new-app-view flag cannot render the detail, Home, Email, Tasks, and
-Channels detail URLs fall back to the existing full-block surface. Legacy email
+guard can instead reject a conflicting embedded preview. On touch, Home, Email,
+Tasks, and Channels detail URLs fall back to the existing full-block surface.
+Legacy email
 and channel message targets are normalized into per-pane search by ingress
 middleware, including external/history navigation; explicit namespaced values win.
 Unavailable documents retain their error/retry UI rather than navigating away.
@@ -210,23 +231,22 @@ stay centered and the preview body fills the remaining height below the divider.
 
 ## Sidebar (a11y names are load-bearing)
 
-- Top: buttons `Search` and `Create`. Clicking sidebar `Search` opens a menu
+The outer sidebar is an icon rail; labels appear in tooltips.
+
+- Top: buttons `Create` and `Search`. Clicking `Search` opens a menu
   with `Command Menu` (⌘K on Mac / Ctrl+K elsewhere) and `Search everything`
   (`/`). Choose the first to open commands, or the second to open and focus
   global search. Hold Shift while selecting `Search everything` to open it in a
   new split, including when Search is already active. This left-click menu shares
-  its surface and item styling with the sidebar right-click menus, in both the
-  compact rail and expanded sidebar.
-- Nav: `Go to Home`, `Go to Getting Started`, `Go to Recent`, `Go to Activity`.
-- Workspace: `Go to Email`, `Go to Channels`, `Go to Calls`, `Go to Files`, `Go to Tasks`,
-  `Go to Calendar`, `Go to Agents`, `Go to Customers`.
-- Then `Favorites` (pinned items) and `Latest` (recent channels/DMs with an `Unread` switch).
-- Bottom: button named after the user's email — menu with `Command menu (Ctrl K)`,
-  `Settings (Ctrl ;)`, `Log out`.
+  its surface and item styling with the sidebar right-click menus.
+- Nav: `Home`, `Drive`, `Email`, `Chat`, `Tasks`, `Reminders`, `Calendar`,
+  `Agents`, `Customers`. Reminders, Calendar, and Customers appear only when
+  their features are enabled.
+- Bottom: button named after the user (their name, or email when unset) — menu
+  with `Command menu (Ctrl K)`, `Settings (Ctrl ;)`, `Log out`.
 
-With the new app views enabled, the outer sidebar is an icon rail. Start a new AI
-chat from the Agents workspace; the rail has no separate new-chat-in-a-new-split
-button. Its tooltips
+Start a new AI chat from the Agents workspace; the rail has no separate
+new-chat-in-a-new-split button. Its tooltips
 use the standard 400 ms hover delay and 300 ms grace period between items. Home,
 Email, and Chat show a small accent dot when the loaded data contains an unread
 item. Home uses Signal; Email uses Important across all linked inboxes.
@@ -309,8 +329,7 @@ uploading or moving anything.
 
 ## Favorites
 
-Use an entity's command/context menu to add or remove it from Favorites; drag rows
-within the expanded sidebar's Favorites section to reorder them. Documents, chats,
+Use an entity's command/context menu to add or remove it from Favorites. Documents, chats,
 projects, email threads, channels, calls, CRM companies, and CRM contacts support
 toggling. Individual channel messages are not favoritable.
 
@@ -425,9 +444,19 @@ the static highlight.
 
 ## Routines (automations)
 
-Create → Automation creates a cron-scheduled routine. Cron routines support
-editing instructions and schedule, Rename, Pause/Resume, Duplicate, Run Now,
-and History links to run chats. Edits autosave; Run Now also works while paused.
+Create → Automation creates an active cron-scheduled routine. Cron routines support
+editing instructions, schedule, and the **Execution target** model/agent picker,
+Rename, the **Active** switch, Duplicate, Run Now, and History links to run chats.
+The **Active** switch next to **Run Now** pauses or resumes the routine at once,
+separately from autosave and even while the draft is invalid. A paused routine
+shows no next run in its editor; routine lists mute its title and label it
+**Paused**. Edits autosave in order and never change whether the routine is
+active. **Run Now** stays disabled until the latest valid edit saves successfully;
+it also works while paused. A failed save keeps the selection visible with
+**Changes not saved** and **Retry save**. While running, configuration cannot be
+changed, and the switch can pause the routine but cannot resume it until the run
+ends. Duplicate retains the saved execution configuration and active state, not
+unsaved edits.
 If a background refresh fails, cached cron routines stay listed and their editor
 and queued autosave remain available. An initial load failure without cached data
 shows **Unable to load automation** instead. Cached event routines remain

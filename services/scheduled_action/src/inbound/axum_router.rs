@@ -6,6 +6,8 @@ use crate::domain::models::{
     InProgressExecution, OwnerNotUserError, Schedule, ScheduledAction, UpdateScheduledAction,
 };
 use crate::domain::ports::ScheduledActionService;
+use crate::domain::target_validation::TargetValidationError;
+use agent_session::domain::routines::RoutineSessionError;
 use axum::extract::{FromRef, Path, Query, State, rejection::JsonRejection};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
@@ -58,6 +60,12 @@ impl From<ScheduledAction> for ScheduledActionResponse {
     }
 }
 
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SetScheduledActionEnabled {
+    pub enabled: bool,
+}
+
 #[derive(Debug, Default, Deserialize, IntoParams)]
 pub struct ListActionsQuery {
     /// Backend clients must opt in to event actions; defaults to false (cron-only).
@@ -105,6 +113,10 @@ where
         .route(
             "/scheduled-actions/{id}",
             put(update_action::<S, Auth>).delete(delete_action::<S, Auth>),
+        )
+        .route(
+            "/scheduled-actions/{id}/enabled",
+            put(set_action_enabled::<S, Auth>),
         )
         .route(
             "/scheduled-actions/{id}/execute",
@@ -241,6 +253,43 @@ pub async fn update_action<
 }
 
 #[utoipa::path(
+    put,
+    path = "/scheduled-actions/{id}/enabled",
+    tag = "scheduled actions",
+    operation_id = "set_scheduled_action_enabled",
+    params(("id" = String, Path, description = "ID of the scheduled action")),
+    request_body = SetScheduledActionEnabled,
+    responses(
+        (status = 200, body = ScheduledActionResponse),
+        (status = 400, body = String),
+        (status = 409, body = String, description = "Configuration changed or execution is active"),
+        (status = 401, body = String),
+        (status = 404, body = String),
+        (status = 500, body = String),
+    )
+)]
+pub async fn set_action_enabled<
+    S: ScheduledActionService + Send + Sync + 'static,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<ScheduledActionRouterState<S, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Path(id): Path<Uuid>,
+    body: Result<Json<SetScheduledActionEnabled>, JsonRejection>,
+) -> Result<impl IntoResponse, ScheduledActionApiError> {
+    let Json(req) = body.map_err(ScheduledActionApiError::InvalidRequest)?;
+    let action = state
+        .service
+        .set_enabled(
+            &id,
+            req.enabled,
+            user.authorization.user.macro_user_id.clone(),
+        )
+        .await?;
+    Ok(Json(ScheduledActionResponse::from(action)))
+}
+
+#[utoipa::path(
     delete,
     path = "/scheduled-actions/{id}",
     tag = "scheduled actions",
@@ -359,6 +408,39 @@ impl IntoResponse for ScheduledActionApiError {
                 }
             };
             return (status, policy.to_string()).into_response();
+        }
+        if let Some(validation) = error.downcast_ref::<TargetValidationError>() {
+            let status = match validation {
+                TargetValidationError::InvalidTask | TargetValidationError::AgentsDisabled => {
+                    StatusCode::BAD_REQUEST
+                }
+                TargetValidationError::ExplicitAgentRequired => StatusCode::CONFLICT,
+            };
+            return (status, validation.to_string()).into_response();
+        }
+        if let Some(session) = error.downcast_ref::<RoutineSessionError>() {
+            let (status, message) = match session {
+                RoutineSessionError::InvalidCommand | RoutineSessionError::ModelMismatch => {
+                    (StatusCode::BAD_REQUEST, session.to_string())
+                }
+                RoutineSessionError::PersonaUnavailable => {
+                    (StatusCode::NOT_FOUND, session.to_string())
+                }
+                RoutineSessionError::Forbidden => (StatusCode::FORBIDDEN, session.to_string()),
+                RoutineSessionError::Conflict => (StatusCode::CONFLICT, session.to_string()),
+                RoutineSessionError::RuntimeUnavailable | RoutineSessionError::OperationFailed => (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    "agent service is unavailable".to_owned(),
+                ),
+                RoutineSessionError::PromptDeliveryUnknown => {
+                    (StatusCode::SERVICE_UNAVAILABLE, session.to_string())
+                }
+                RoutineSessionError::SessionMismatch => (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "internal server error".to_owned(),
+                ),
+            };
+            return (status, message).into_response();
         }
         if let Some(already_running) = error.downcast_ref::<AlreadyRunningError>() {
             tracing::info!(error=%already_running, "scheduled action already running");

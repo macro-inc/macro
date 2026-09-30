@@ -286,7 +286,6 @@ function ChannelCallsList(props: { channelId: string }) {
                   <Button
                     variant="outline"
                     size="sm"
-                    class="rounded-lg"
                     onClick={() => void source.refresh()}
                   >
                     Try again

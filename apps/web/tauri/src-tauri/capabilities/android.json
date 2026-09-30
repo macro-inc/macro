@@ -1,0 +1,13 @@
+{
+  "identifier": "android-capability",
+  "platforms": [
+    "android"
+  ],
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "android-auth:allow-authenticate",
+    "android-push:default"
+  ]
+}

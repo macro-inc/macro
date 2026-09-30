@@ -29,6 +29,8 @@ import type {
 } from '@service-agent-harness/generated/schemas';
 import { type Accessor, createSignal } from 'solid-js';
 import { v7 as uuidv7 } from 'uuid';
+import { effortConfigOption } from '../state/session-config';
+import { confirmSessionControl } from './confirm-session-control';
 
 export type PendingSession = {
   /** The session's id, once the create has made it real. */
@@ -60,6 +62,8 @@ export type StartPendingSessionOptions = {
   userId?: string;
   /** Model to run on instead of the persona's, set as the session is created. */
   modelOverride?: string;
+  /** Opaque harness setting confirmed before the first prompt. */
+  effortOverride?: { configId: string; value: string };
   /**
    * Explicit GitHub repository for the managed Cursor session.
    */
@@ -105,39 +109,80 @@ export function startPendingSession(
         );
         return;
       }
-      // Normally the id this tab minted; a service that predates the field
-      // mints its own, and the block adopts that one the way it always did.
+      // Normally the id this tab minted; an older service may mint its own.
       const created = result.value.session.id;
       void refetchSoupEntity(created, 'agentSession', { created: true });
-      // The block adopts the session the moment it exists. The first prompt
-      // then goes through the shared session like any other, so it is folded
-      // speculatively - bubble and working line on screen at once - while
-      // the control POST waits out the runtime handshake. Delivering it
-      // first and adopting after left the transcript empty for that wait.
-      setSessionId(created);
+      // Hold the block in preflight while selected settings are confirmed,
+      // then adopt the session before issuing the first prompt so that prompt
+      // is folded speculatively while its POST is in flight.
       const prompt = options.prompt?.trim() ?? '';
-      if (prompt || options.attachments?.length) {
+      if (
+        options.modelOverride ||
+        options.effortOverride ||
+        prompt ||
+        options.attachments?.length
+      ) {
         const session = AgentSession.acquire(created);
         try {
-          const delivered = await session.issue(
-            {
-              type: 'prompt',
-              prompt,
-              ...(options.attachments?.length
-                ? { attachments: options.attachments }
-                : {}),
-            },
-            { userId: options.userId }
-          );
-          if (delivered.isErr()) {
-            setError(
-              delivered.error.map((error) => error.message).join(' ') ||
-                'The first message could not be sent.'
-            );
+          if (options.modelOverride || options.effortOverride) {
+            await session.load();
+            if (options.modelOverride) {
+              await confirmSessionControl(session, {
+                type: 'setModel',
+                model: options.modelOverride,
+              });
+            }
+            if (options.effortOverride) {
+              const snapshot = await session.snapshot();
+              const effort = effortConfigOption(
+                snapshot.metadata.configOptions
+              );
+              if (
+                effort?.id !== options.effortOverride.configId ||
+                !effort.options.some(
+                  (option) => option.value === options.effortOverride?.value
+                )
+              ) {
+                throw new Error(
+                  'The selected effort is no longer available for this model.'
+                );
+              }
+              await confirmSessionControl(session, {
+                type: 'setConfigOption',
+                ...options.effortOverride,
+              });
+            }
           }
+          setSessionId(created);
+          if (prompt || options.attachments?.length) {
+            const delivered = await session.issue(
+              {
+                type: 'prompt',
+                prompt,
+                ...(options.attachments?.length
+                  ? { attachments: options.attachments }
+                  : {}),
+              },
+              { userId: options.userId }
+            );
+            if (delivered.isErr()) {
+              setError(
+                delivered.error.map((error) => error.message).join(' ') ||
+                  'The first message could not be sent.'
+              );
+            }
+          }
+        } catch (error) {
+          setError(
+            error instanceof Error
+              ? error.message
+              : 'The selected settings could not be applied.'
+          );
         } finally {
           session.release();
         }
+      } else {
+        setSessionId(created);
       }
     })
     .catch(() =>

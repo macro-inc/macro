@@ -349,7 +349,7 @@ export function LeftoverRow(props: { leftover: Leftover }) {
             </label>
             <div class="flex justify-end gap-2">
               <Button
-                variant="outline"
+                variant="ghost"
                 size="sm"
                 depth={3}
                 onClick={() => setRenaming(false)}
@@ -357,7 +357,7 @@ export function LeftoverRow(props: { leftover: Leftover }) {
                 Cancel
               </Button>
               <Button
-                variant="accent"
+                variant="strong"
                 size="sm"
                 depth={3}
                 disabled={!nameDraft().trim() || native.update.isPending}

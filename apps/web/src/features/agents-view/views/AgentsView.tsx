@@ -43,7 +43,7 @@ import {
   type AgentConversationEntity,
   type AgentConversationTarget,
   conversationMode,
-  groupConversations,
+  partitionArchived,
   selectRecentAgentConversations,
 } from '../core/recent-conversations';
 import { kindForBot } from '../core/roster';
@@ -116,7 +116,7 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
       search()
     )
   );
-  const groups = createMemo(() => groupConversations(conversations()));
+  const partitioned = createMemo(() => partitionArchived(conversations()));
   const modeForConversation = (conversation: AgentConversationEntity) =>
     conversationMode(conversation, (botId) =>
       kindForBot(botId, rosterSource.roster())
@@ -202,13 +202,8 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
   };
   const startConversation = (start: StartConversation) => {
     const id = startPendingSession({
-      botId: start.botId,
+      ...start,
       userId: userId(),
-      prompt: start.prompt,
-      attachments: start.attachments,
-      modelOverride: start.modelOverride,
-      repoUrl: start.repoUrl,
-      repoBranch: start.repoBranch,
     });
     openConversation(
       { id, type: 'agent_session' },
@@ -276,7 +271,8 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
                   modeForConversation={modeForConversation}
                   activeConversationId={selected()?.activeConversationId}
                   search={search()}
-                  groups={groups()}
+                  conversations={partitioned().conversations}
+                  archived={partitioned().archived}
                   loading={query.isPending}
                   error={query.isLoadingError}
                   hasNextPage={Boolean(query.hasNextPage)}

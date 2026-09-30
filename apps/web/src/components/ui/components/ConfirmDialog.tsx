@@ -27,12 +27,6 @@ export type ConfirmDialogDisplayProps = {
   class?: string;
 };
 
-const TONE_VARIANT = {
-  default: 'accent',
-  danger: 'danger',
-  success: 'success',
-} as const;
-
 export type ConfirmDialogProps = ManagedDialogProps &
   ConfirmDialogDisplayProps & {
     onConfirm: () => void;
@@ -66,7 +60,6 @@ export function ConfirmDialog(props: ConfirmDialogProps) {
                 type="button"
                 variant="ghost"
                 depth={2}
-                class="rounded-lg"
                 disabled={props.pending}
                 onClick={() => props.onOpenChange(false)}
               >
@@ -74,9 +67,8 @@ export function ConfirmDialog(props: ConfirmDialogProps) {
               </Button>
               <Button
                 type="button"
-                variant={TONE_VARIANT[props.tone ?? 'default']}
+                variant="strong"
                 depth={2}
-                class="rounded-lg"
                 disabled={props.pending}
                 onClick={props.onConfirm}
               >

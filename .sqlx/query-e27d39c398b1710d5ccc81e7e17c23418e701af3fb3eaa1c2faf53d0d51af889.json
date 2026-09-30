@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE \"Document\" SET \"fileType\" = 'spreadsheet' WHERE id = 'message-doc-a'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "e27d39c398b1710d5ccc81e7e17c23418e701af3fb3eaa1c2faf53d0d51af889"
+}

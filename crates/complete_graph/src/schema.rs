@@ -46,6 +46,7 @@ use graphql_properties::{
     NoOpEntityPropertyWriter, PropertiesMutationRoot, load_property_definitions,
     load_property_options,
 };
+use graphql_scheduled_action::{GraphqlScheduledAction, resolve_scheduled_actions};
 use graphql_soup::{
     GraphqlSoupEmailThread, GraphqlSoupInitiative, GroupedSoup, GroupedSoupInput,
     SoupEmailThreadMutationOutput, SoupEntityEdges, SoupInput, SoupPage, SoupPatch,
@@ -665,6 +666,14 @@ where
         Vec<GraphqlTaskInitiativeReference<SoupEdges<NR, PR, ER, FR, AR, AcR>>>,
     > {
         resolve_task_initiative_references(ctx, self.user_id.clone(), task_ids).await
+    }
+
+    /// AI routines owned by the authenticated user.
+    async fn scheduled_actions(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Vec<GraphqlScheduledAction>> {
+        resolve_scheduled_actions(ctx, self.user_id.clone()).await
     }
 
     /// Authorized property definitions available to this viewer.

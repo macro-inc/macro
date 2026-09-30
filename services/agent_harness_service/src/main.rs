@@ -18,6 +18,7 @@ mod harness_bindings;
 mod internal_mcp;
 mod model_providers;
 mod permission_policy;
+mod routine_sessions;
 mod runtime_commands;
 mod trigger;
 
@@ -987,6 +988,23 @@ async fn run() -> anyhow::Result<()> {
     .with_harness_authorizer(PgHarnessAuthorizer::new(PgHarnessAuthorizationRepo::new(
         pool.clone(),
     )));
+    let capabilities = agent_harness::inbound::capability_discovery::agent_capabilities_router(
+        agent_harness::inbound::capability_discovery::AgentCapabilitiesRouterState::new(
+            Arc::new(
+                agent_harness::domain::capability_discovery::AgentCapabilitiesServiceImpl::new(
+                    VisibleHarnessAccess::new(PgHarnessRepo::new(pool.clone())),
+                    InMemoryModels::new(
+                        Some(Arc::clone(&inmem_model_engine)),
+                        config.inmem_model.clone(),
+                    ),
+                    CursorModels::new(cursor_keys.clone(), cursor_api_base_url()),
+                    macrod_models.clone(),
+                    model_probe_timeout,
+                ),
+            ),
+            MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+        ),
+    );
     let model_service = Arc::new(
         AgentModelsServiceImpl::new(
             VisibleHarnessAccess::new(PgHarnessRepo::new(pool.clone())),
@@ -1041,6 +1059,14 @@ async fn run() -> anyhow::Result<()> {
         ),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
+    let routine_sessions = routine_sessions::router(
+        (*bots_directory).clone(),
+        (*harness).clone(),
+        draining_sessions.clone(),
+        broker.clone(),
+        session_repo.clone(),
+        MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+    );
     let gateway_state = RuntimeGatewayState::new(
         runtimes,
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
@@ -1082,7 +1108,9 @@ async fn run() -> anyhow::Result<()> {
                 changes_state,
             )
             .with_claude_auth(claude_auth)
-            .with_sharing(sharing),
+            .with_sharing(sharing)
+            .with_routine_sessions(routine_sessions)
+            .with_capabilities(capabilities),
             http_runtime_commands_readiness,
             http_port,
             shutdown_signal(),

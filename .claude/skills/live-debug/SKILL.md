@@ -86,7 +86,7 @@ work. State (cookies, login) persists across agent sessions until the
 container restarts.
 
 - The container uses host networking, so plain localhost URLs work: the app
-  is **http://localhost:3000/app**, the proxy `http://localhost:8090` (named
+  is **http://localhost:3000/app**, the proxy `https://localhost:8090` (named
   instances remap these ports; read the stack summary).
 - A human can watch the browser live at **http://localhost:6080/vnc.html**
   (noVNC over the Xvfb display) — work in the visible window, not isolated

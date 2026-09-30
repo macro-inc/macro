@@ -78,6 +78,7 @@ function HomeViewRoot() {
     setTab,
     previewTarget,
     calendarOpen,
+    reminderOpen,
     openPreview,
     closePreview,
   } = useHomeView();
@@ -92,7 +93,7 @@ function HomeViewRoot() {
     else closePreview();
   };
 
-  // The touch nav item and legacy touch view both call this "Notifications".
+  // The touch nav item calls this "Notifications".
   onMount(() =>
     panel.handle.setDisplayName(isTouchDevice() ? 'Notifications' : 'Home')
   );
@@ -116,7 +117,9 @@ function HomeViewRoot() {
                       <DebugSuspense name="HomeView.list-pane">
                         <HomeListPane
                           hasPreview={
-                            previewTarget() !== undefined || calendarOpen()
+                            previewTarget() !== undefined ||
+                            calendarOpen() ||
+                            reminderOpen()
                           }
                           onPreviewEntityChange={onPreviewEntityChange}
                           onNewChat={newChat}
@@ -145,7 +148,9 @@ function HomeViewRoot() {
                   <DebugSuspense name="HomeView.list-pane">
                     <HomeListPane
                       hasPreview={
-                        previewTarget() !== undefined || calendarOpen()
+                        previewTarget() !== undefined ||
+                        calendarOpen() ||
+                        reminderOpen()
                       }
                       onPreviewEntityChange={onPreviewEntityChange}
                       onNewChat={newChat}

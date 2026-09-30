@@ -156,6 +156,8 @@ export default defineConfig({
     baseURL: localE2EBaseURL ?? `http://localhost:${localE2EPort}/app`,
     /* Only retain traces on the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'retain-on-failure',
+    // Local stack proxy is HTTPS with the checked-in self-signed CA.
+    ignoreHTTPSErrors: isLocalE2E,
   },
   // One set of snapshots for all platforms
   snapshotPathTemplate:

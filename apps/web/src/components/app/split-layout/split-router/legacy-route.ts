@@ -11,7 +11,14 @@ import {
   calendarTargetSearch,
 } from '@app/features/calendar-view/calendar-url';
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
+import { channelsSearch } from '@app/features/channels-view/channels-route';
 import { URL_PARAMS as EMAIL_URL_PARAMS } from '@app/features/email-thread/core/location';
+import {
+  REMINDER_DETAIL_COMPONENT_ID,
+  REMINDER_DETAIL_ROUTE_ID,
+  reminderDetailContent,
+  reminderIdFromDetailContent,
+} from '@app/features/reminders/reminder-navigation';
 import {
   defineRoute,
   routeParams,
@@ -59,6 +66,8 @@ export function decodeLegacyPair(
   }
 
   if (type === 'component') {
+    // Reminder list/detail surfaces are native routes only.
+    if (id === 'reminders' || id === REMINDER_DETAIL_COMPONENT_ID) return;
     // Preview Pair placeholders must never reach the view registry.
     return {
       type: 'component',
@@ -184,6 +193,18 @@ export function splitLocationFromContent(
   routes: SplitRoutesManifest,
   content: SplitContent
 ): SplitLocation {
+  const reminderId =
+    content.type === 'component' && content.id === REMINDER_DETAIL_COMPONENT_ID
+      ? reminderIdFromDetailContent(content)
+      : undefined;
+  if (reminderId) {
+    return {
+      route: {
+        matches: [{ id: REMINDER_DETAIL_ROUTE_ID, params: { reminderId } }],
+      },
+    };
+  }
+
   if (
     (content.type === 'component' && content.id === CALENDAR_VIEW_ID) ||
     (content.type === 'calendar' && content.id === CALENDAR_BLOCK_ID)
@@ -302,11 +323,31 @@ export function resolveContentLocation(
     }
   }
   route ??= resolve(splitLocationFromContent(routes, content).route);
-  const search = filterRouteSearch(
-    routes,
-    route,
-    parseSearchState(metadataLocation?.search)
-  );
+  const savedSearch = parseSearchState(metadataLocation?.search);
+  // In-app message opens carry block params, not external URL query keys.
+  // Preserve the target before middleware upgrades the block to Chat, where
+  // the legacy block (and its imperative navigation handle) is replaced.
+  const channelParams: Record<string, unknown> | undefined =
+    content.type === 'channel' && isRecord(content.params)
+      ? content.params
+      : undefined;
+  const messageId = channelParams?.[CHANNEL_URL_PARAMS.message];
+  const threadId = channelParams?.[CHANNEL_URL_PARAMS.thread];
+  let contentSearch = savedSearch;
+  if (typeof messageId === 'string') {
+    const channelSearch = { ...savedSearch?.[channelsSearch.namespace] };
+    // Message and thread identify one target; never combine two saved opens.
+    if (!Object.hasOwn(channelSearch, 'messageId')) {
+      channelSearch.messageId = [messageId];
+      if (typeof threadId === 'string') channelSearch.threadId = [threadId];
+      else delete channelSearch.threadId;
+    }
+    contentSearch = {
+      ...savedSearch,
+      [channelsSearch.namespace]: channelSearch,
+    };
+  }
+  const search = filterRouteSearch(routes, route, contentSearch);
   const location: SplitLocation = { route };
   if (search) location.search = search;
   return location;
@@ -316,6 +357,14 @@ export function splitContentFromLocation(
   location: SplitLocation
 ): SplitContent {
   const root = location.route.matches[0];
+
+  if (root.id === REMINDER_DETAIL_ROUTE_ID) {
+    const { reminderId } = routeParams(location.route);
+    if (typeof reminderId === 'string' && reminderId.length > 0) {
+      return reminderDetailContent(reminderId);
+    }
+    throw new Error('Invalid reminder detail split route');
+  }
 
   if (root.id.startsWith('view-'))
     return { type: 'component', id: root.id.slice('view-'.length) };
@@ -375,6 +424,8 @@ export const legacySplitRoute = defineRoute({
   claim: ({ type, id }) => {
     const content = decodeLegacyPair(type, id);
     if (!content) return;
+
+    if (content.type === 'agent') return { namespace: 'agent', id };
 
     if (content.type === 'component') {
       const [section, conversationId] = agentsRouteSegments(content.id) ?? [];

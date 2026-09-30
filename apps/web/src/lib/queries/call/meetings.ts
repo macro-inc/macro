@@ -106,11 +106,14 @@ export function useCancelMeetingMutation() {
   }));
 }
 
-export function useCallLinkQuery(callId: Accessor<string | undefined>) {
+export function useCallLinkQuery(
+  callId: Accessor<string | undefined>,
+  options?: { enabled?: boolean }
+) {
   return useQuery(() => ({
     queryKey: callKeys.link(callId() ?? '').queryKey,
     queryFn: () => throwOnErr(() => callServiceClient.getCallLink(callId()!)),
-    enabled: Boolean(callId()),
+    enabled: Boolean(callId()) && (options?.enabled ?? true),
     staleTime: Infinity,
     retry: false,
   }));

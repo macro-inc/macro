@@ -98,6 +98,7 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 	...SoupEntityIdentityFields
 	... on GraphqlSoupAgentSession {
 		sessionName: name
+		isArchived
 		ownerId
 		botId
 		harness
@@ -543,6 +544,15 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 		channelMessageSendSender: sender
 		channelMessageSendMessageId: messageId
 		channelMessageSendChannelType: channelType
+	}
+	... on GraphqlChannelMessageReactionMetadata {
+		channelMessageReactionMessageId: messageId
+		channelMessageReactionThreadId: threadId
+		channelMessageReactionMessageContent: messageContent
+		channelMessageReactionEmoji: emoji
+		channelMessageReactionChannelType: channelType
+		channelMessageReactionChannelName: channelName
+		channelMessageReactionSenderProfilePictureUrl: senderProfilePictureUrl
 	}
 	... on GraphqlChannelReplyMetadata {
 		channelReplyThreadId: threadId

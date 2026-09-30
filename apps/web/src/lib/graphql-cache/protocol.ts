@@ -293,9 +293,11 @@ export type EmbeddedLinkPathSegment =
     };
 
 export type OptimisticLinkPatchWire = {
-  /** Generated GraphQL operation used as the typed graph entrypoint. */
+  /** Generated query, or fragment document when recordRoot is present. */
   query: string;
   operationName?: string;
+  /** Explicit normalized parent; absent for legacy query-rooted recipes. */
+  recordRoot?: { fragmentName: string; entityKey: string };
   /** Variables for the entrypoint operation. */
   variablesJson: string;
   /** Response-key path beginning at the query root. */
@@ -583,11 +585,20 @@ export type CacheRequest = { id: number } & (
 /** Stable machine-readable cache RPC rejection codes. */
 export type CacheResponseErrorCode =
   | 'owner-epoch-lost'
+  | 'owner-lock-unavailable'
   | 'admitted-enqueue-uncertain';
 
 /** Old-owner work was rejected after fenced engine loss and was not replayed. */
 export const OWNER_EPOCH_LOST_ERROR_CODE: CacheResponseErrorCode =
   'owner-epoch-lost';
+
+/**
+ * Another context holds the database, so this page's cache stays off until
+ * reload: typically another deployed build keeps its owner lock, or a closing
+ * tab's worker still has its files open. The request never reached an engine.
+ */
+export const OWNER_LOCK_UNAVAILABLE_ERROR_CODE: CacheResponseErrorCode =
+  'owner-lock-unavailable';
 
 /** An enqueue send was admitted before its unfenced transport became uncertain. */
 export const ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE: CacheResponseErrorCode =
@@ -638,6 +649,7 @@ export const isCacheResponseErrorCode = (
   value: unknown
 ): value is CacheResponseErrorCode =>
   value === OWNER_EPOCH_LOST_ERROR_CODE ||
+  value === OWNER_LOCK_UNAVAILABLE_ERROR_CODE ||
   value === ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE;
 
 /** Identifies a coordinator-fenced rejection from a lost owner epoch. */
@@ -647,6 +659,14 @@ export const isOwnerEpochLostError = (
   value instanceof Error &&
   'errorCode' in value &&
   value.errorCode === OWNER_EPOCH_LOST_ERROR_CODE;
+
+/** Identifies a request refused because another context holds the database. */
+export const isOwnerLockUnavailableError = (
+  value: unknown
+): value is Error & { errorCode: 'owner-lock-unavailable' } =>
+  value instanceof Error &&
+  'errorCode' in value &&
+  value.errorCode === OWNER_LOCK_UNAVAILABLE_ERROR_CODE;
 
 /** Identifies the host-only uncertainty result for an admitted enqueue send. */
 export const isAdmittedEnqueueUncertainError = (

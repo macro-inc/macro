@@ -7,7 +7,12 @@ import type {
 } from '@app/lib/split-router';
 import deepEqual from 'fast-deep-equal';
 import { createEffect, createRoot, on } from 'solid-js';
-import type { SplitContent, SplitId, SplitManager } from './layoutManager';
+import type {
+  OpenWithSplitOptions,
+  SplitContent,
+  SplitId,
+  SplitManager,
+} from './layoutManager';
 import {
   resolveContentLocation,
   splitContentFromLocation,
@@ -60,6 +65,57 @@ function changeHistory(
   return changed?.lastNavigationCause === 'replace' ? 'replace' : 'push';
 }
 
+export function openAppSplitLocation(
+  manager: SplitManager,
+  routes: SplitRoutesManifest,
+  { location, target, replace }: Parameters<AppSplitRouterLayout['open']>[0],
+  source?: SplitContent,
+  options: OpenWithSplitOptions = {}
+): ReturnType<AppSplitRouterLayout['open']> {
+  let handle: ReturnType<SplitManager['getSplit']>;
+  if (target && target !== 'new-split') {
+    handle = manager.getSplit(target);
+  }
+
+  const result = manager.openWithSplit(
+    {
+      ...contentForLocation(location, source),
+      ...(source?.state && { state: source.state }),
+    },
+    {
+      ...options,
+      search: undefined,
+      handle,
+      preferNewSplit: target === 'new-split',
+      allowDuplicate: options.allowDuplicate || target === 'new-split',
+      mergeHistory: replace,
+      referredFrom: options.referredFrom ?? null,
+    }
+  );
+  if (!result.split) return { status: 'unavailable' };
+
+  const appliedLocation = resolveContentLocation(
+    routes,
+    result.split.content()
+  );
+  if (!deepEqual(appliedLocation, location)) {
+    if (!deepEqual(appliedLocation.route, location.route)) {
+      result.split.captureEntryState();
+    }
+    result.split.updateCurrentEntry((content) =>
+      contentForLocation(location, content)
+    );
+  }
+  // Native forward animation prepares an excluded pane first. Its eventual
+  // promotion publishes the accepted location through the layout subscription.
+  if (
+    !manager.getVisibleSplits().some((split) => split.id === result.split?.id)
+  ) {
+    return { status: 'unavailable' };
+  }
+  return { status: 'applied', splitId: result.split.id };
+}
+
 export function createAppSplitRouterLayout(
   manager: SplitManager,
   routes: SplitRoutesManifest
@@ -98,35 +154,7 @@ export function createAppSplitRouterLayout(
       );
     },
 
-    open({ location, target, replace }) {
-      let handle: ReturnType<SplitManager['getSplit']>;
-      if (target && target !== 'new-split') {
-        handle = manager.getSplit(target);
-      }
-
-      const result = manager.openWithSplit(contentForLocation(location), {
-        handle,
-        preferNewSplit: target === 'new-split',
-        allowDuplicate: target === 'new-split',
-        mergeHistory: replace,
-        referredFrom: null,
-      });
-      if (!result.split) return { status: 'unavailable' };
-
-      const appliedLocation = resolveContentLocation(
-        routes,
-        result.split.content()
-      );
-      if (!deepEqual(appliedLocation, location)) {
-        if (!deepEqual(appliedLocation.route, location.route)) {
-          result.split.captureEntryState();
-        }
-        result.split.updateCurrentEntry((content) =>
-          contentForLocation(location, content)
-        );
-      }
-      return { status: 'applied', splitId: result.split.id };
-    },
+    open: (request) => openAppSplitLocation(manager, routes, request),
 
     reconcile(locations) {
       for (const [index, split] of manager.getVisibleSplits().entries()) {

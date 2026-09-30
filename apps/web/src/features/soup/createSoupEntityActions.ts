@@ -43,7 +43,6 @@ import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import type { EntityData } from '@entity';
 import { isTaskEntity } from '@entity';
-import StackIcon from '@phosphor/stack.svg';
 import { useSetCompanyHiddenMutation } from '@queries/crm/companies';
 import type { Component, JSX } from 'solid-js';
 
@@ -254,17 +253,8 @@ export function createSoupEntityActions(): {
       if (!entity || entity.type === 'foreign') return undefined;
       const splitManager = globalSplitManager();
       if (!splitManager) return undefined;
-      // A reminder opens its own editor — a `reminder-view` component split —
-      // not what it references, so a standalone reminder is openable too and
-      // the dedup check is against that editor split, not the reference.
-      if (entity.type === 'reminder') {
-        const open = splitManager.getSplitByContent(
-          'component',
-          `reminder-view~${entity.id}`
-        );
-        if (open) return undefined;
-        return entity;
-      }
+      // Reminder route claims perform identity reuse when the action runs.
+      if (entity.type === 'reminder') return entity;
       const contentId =
         entity.type === 'channel_message' || entity.type === 'channel_thread'
           ? entity.channelId
@@ -396,8 +386,7 @@ export function createSoupEntityActions(): {
     ) {
       middleItems.push({
         id: 'set-initiative',
-        label: 'Set project…',
-        icon: StackIcon,
+        label: 'Set project',
         onClick: () => {
           if (isFeatureEnabled(enableProjects)) openProjectPicker();
         },

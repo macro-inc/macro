@@ -100,9 +100,17 @@ it.each(['saved', 'failed', 'assignment-failed'] as const)(
         [],
         new Map(),
         vi.fn(),
-        { onMutate }
+        { onMutate, shareWithTeam: false }
       );
       await vi.waitFor(() => expect(mock.create).toHaveBeenCalledOnce());
+      expect(mock.create).toHaveBeenCalledWith(
+        'Created task',
+        '',
+        [],
+        new Map(),
+        expect.any(Function),
+        { revalidateSoup: false, shareWithTeam: false }
+      );
       expect(onMutate).toHaveBeenCalledOnce();
       expect(assignTasks).not.toHaveBeenCalled();
       complete(

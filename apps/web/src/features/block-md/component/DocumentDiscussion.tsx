@@ -6,13 +6,19 @@ import {
   DiscussionProvider,
 } from '@core/comments/discussion';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { useUrlParams } from '@core/component/ParamsProvider';
 import {
   enableUnifiedDocumentDiscussions,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
+import { COMMENT_LINK_PARAM } from '@core/messages/comment-link';
 import { EntityDiscussion } from '@core/messages/EntityDiscussion';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
+import {
+  useMessageLink,
+  useMessageRootsQuery,
+} from '@queries/messages/document-messages';
 import { Show } from 'solid-js';
 import { createDocumentDiscussionSource } from '../comments/documentDiscussionSource';
 import { useMarkdownDocument } from '../context/markdown-document-context';
@@ -44,9 +50,20 @@ export function MessageDocumentDiscussion(props: {
   const id = documentId();
   const documentKind = kind();
   const blockName = documentKind === 'document' ? 'md' : documentKind;
+  const parent = () => ({ type: 'document' as const, id });
+  const params = useUrlParams({ commentId: COMMENT_LINK_PARAM });
+  const target = useMessageLink(parent, params.commentId);
+  const roots = useMessageRootsQuery(parent);
+  const discussionTarget = () =>
+    roots.isSuccess &&
+    roots.data.find((thread) => thread.id === target.rootId())?.state.anchor ===
+      null
+      ? target.messageId()
+      : null;
   return (
     <EntityDiscussion
-      parent={{ type: 'document', id }}
+      parent={parent()}
+      targetId={discussionTarget()}
       canWrite={permissions.canComment()}
       link={{ type: blockName, id }}
       label={props.label}

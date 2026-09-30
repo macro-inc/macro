@@ -2,47 +2,53 @@ import { queryClient } from '@queries/client';
 import { createConnectionWebsocketEffect } from '@service-connection/websocket';
 import type {
   ActionExecutionRecord,
+  ExecutionResource,
   ScheduledAction,
 } from '@service-scheduled-action/generated/schemas';
+import { z } from 'zod';
 import { scheduledActionKeys } from './keys';
+import {
+  getExecutionResource,
+  getHistoryResource,
+  resourcesMatch,
+} from './run-resource';
 
 const UPDATE = 'scheduled_action_update';
 
-type StartedPayload = {
-  type: 'started';
-  owner: string;
+// Validate the fields consumed here; ownership and success come from the
+// authenticated connection and the refetched history, respectively.
+const updateSchema = z.object({
+  type: z.enum(['started', 'stopped']),
+  action_id: z.string().refine((id) => id.trim().length > 0),
+  resource: z.unknown().optional(),
+  chat_id: z.unknown().optional(),
+});
+
+type UpdatePayload = {
+  type: 'started' | 'stopped';
   action_id: string;
-  chat_id: string;
+  resource: ExecutionResource | undefined;
 };
-type StoppedPayload = {
-  type: 'stopped';
-  owner: string;
-  action_id: string;
-  chat_id: string;
-  is_success: boolean;
-};
-type UpdatePayload = StartedPayload | StoppedPayload;
 
 function parsePayload(data: unknown): UpdatePayload | undefined {
-  try {
-    const parsed =
-      typeof data === 'string' ? (JSON.parse(data) as unknown) : data;
-    if (
-      parsed &&
-      typeof parsed === 'object' &&
-      'type' in parsed &&
-      (parsed.type === 'started' || parsed.type === 'stopped')
-    ) {
-      return parsed as UpdatePayload;
+  let decoded: unknown = data;
+  if (typeof data === 'string') {
+    try {
+      decoded = JSON.parse(data);
+    } catch {
+      return undefined;
     }
-    return undefined;
-  } catch (e) {
-    console.warn('scheduled-action live update: unparsable payload', data, e);
-    return undefined;
   }
+  const parsed = updateSchema.safeParse(decoded);
+  if (!parsed.success) return undefined;
+  return {
+    type: parsed.data.type,
+    action_id: parsed.data.action_id,
+    resource: getExecutionResource(parsed.data),
+  };
 }
 
-function patchClaimed(actionId: string, claimed: string | null) {
+function patchClaimed(actionId: string, claimed: string | null): void {
   queryClient.setQueryData(
     scheduledActionKeys.list.queryKey,
     (current: ScheduledAction[] | undefined) => {
@@ -56,44 +62,52 @@ function patchClaimed(actionId: string, claimed: string | null) {
   );
 }
 
-function upsertPendingHistoryRow(payload: StartedPayload) {
+function upsertPendingHistoryRow(
+  actionId: string,
+  resource: ExecutionResource,
+  startedAt: string
+): void {
   queryClient.setQueryData(
-    scheduledActionKeys.history({ scheduleId: payload.action_id }).queryKey,
+    scheduledActionKeys.history({ scheduleId: actionId }).queryKey,
     (current: ActionExecutionRecord[] | undefined) => {
+      // Repeated starts must not reset timestamps or resurrect a persisted run.
+      if (
+        current?.some((row) =>
+          resourcesMatch(getHistoryResource(row), resource)
+        )
+      ) {
+        return current;
+      }
       const synthetic: ActionExecutionRecord = {
-        action_id: payload.action_id,
-        resource_id: payload.chat_id,
-        start_time: new Date().toISOString(),
+        action_id: actionId,
+        resource_id: resource.id,
+        start_time: startedAt,
         // `end_time` is not nullable on the server record, but the stop event
         // triggers a refetch which replaces this synthetic row with the real
         // persisted one. The missing `id` flags this row as pending — the UI
         // checks for that to render the running affordance rather than a
         // final state.
-        end_time: new Date().toISOString(),
+        end_time: startedAt,
         is_success: false,
-        result: {},
-        created_at: new Date().toISOString(),
+        result: { version: 1, resource },
+        created_at: startedAt,
       };
-      if (!current) return [synthetic];
-      const existingIdx = current.findIndex(
-        (r) => !r.id && r.resource_id === payload.chat_id
-      );
-      if (existingIdx !== -1) {
-        const next = [...current];
-        next[existingIdx] = synthetic;
-        return next;
-      }
-      return [synthetic, ...current];
+      return [synthetic, ...(current ?? [])];
     }
   );
 }
 
-function removePendingHistoryRow(chatId: string, scheduleId: string) {
+function removePendingHistoryRow(
+  resource: ExecutionResource,
+  scheduleId: string
+): void {
   queryClient.setQueryData(
     scheduledActionKeys.history({ scheduleId }).queryKey,
     (current: ActionExecutionRecord[] | undefined) => {
       if (!current) return current;
-      return current.filter((r) => !(!r.id && r.resource_id === chatId));
+      return current.filter(
+        (row) => row.id || !resourcesMatch(getHistoryResource(row), resource)
+      );
     }
   );
 }
@@ -104,8 +118,11 @@ createConnectionWebsocketEffect((data) => {
   if (!payload) return;
 
   if (payload.type === 'started') {
-    patchClaimed(payload.action_id, new Date().toISOString());
-    upsertPendingHistoryRow(payload);
+    const startedAt = new Date().toISOString();
+    patchClaimed(payload.action_id, startedAt);
+    if (payload.resource) {
+      upsertPendingHistoryRow(payload.action_id, payload.resource, startedAt);
+    }
     return;
   }
 
@@ -113,8 +130,10 @@ createConnectionWebsocketEffect((data) => {
   // showing it as running, then invalidate to refetch the server-persisted
   // record (with end_time, is_success, and a real id).
   patchClaimed(payload.action_id, null);
-  removePendingHistoryRow(payload.chat_id, payload.action_id);
-  queryClient.invalidateQueries({
+  if (payload.resource) {
+    removePendingHistoryRow(payload.resource, payload.action_id);
+  }
+  void queryClient.invalidateQueries({
     queryKey: scheduledActionKeys.history({
       scheduleId: payload.action_id,
     }).queryKey,

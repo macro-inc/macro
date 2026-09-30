@@ -155,10 +155,12 @@ const run = async (): Promise<Record<string, unknown>> => {
     );
     return { acquired, release, completed };
   };
-  const waitForPendingReplacementLock = async (
+  // The replacement retries the contender's lock without queueing behind it.
+  const waitForRetriedReplacementLock = async (
+    ownerEpoch: number,
     description: string
-  ): Promise<{ held: number; pending: number }> => {
-    let evidence = { held: 0, pending: 0 };
+  ): Promise<{ held: number; pending: number; busyAttempts: number }> => {
+    let evidence = { held: 0, pending: 0, busyAttempts: 0 };
     await waitUntil(description, async () => {
       const snapshot = await navigator.locks.query();
       evidence = {
@@ -168,8 +170,16 @@ const run = async (): Promise<Record<string, unknown>> => {
         pending:
           snapshot.pending?.filter((lock) => lock.name === ownerLockName)
             .length ?? 0,
+        busyAttempts: telemetry.filter(
+          (event) =>
+            event.kind === 'owner-lock-busy' && event.ownerEpoch === ownerEpoch
+        ).length,
       };
-      return evidence.held === 1 && evidence.pending === 1;
+      return (
+        evidence.held === 1 &&
+        evidence.pending === 0 &&
+        evidence.busyAttempts > 0
+      );
     });
     return evidence;
   };
@@ -215,8 +225,9 @@ const run = async (): Promise<Record<string, unknown>> => {
       (event) => event.kind === 'activation-started' && event.ownerEpoch === 2
     )
   );
-  const gracefulLockEvidence = await waitForPendingReplacementLock(
-    'epoch 2 exact owner lock request to become pending'
+  const gracefulLockEvidence = await waitForRetriedReplacementLock(
+    2,
+    'epoch 2 to retry the held owner lock'
   );
   const gracefulWaitedForPhysicalLock = !telemetry.some(
     (event) => event.kind === 'ready' && event.ownerEpoch === 2
@@ -277,8 +288,9 @@ const run = async (): Promise<Record<string, unknown>> => {
       (event) => event.kind === 'activation-started' && event.ownerEpoch === 3
     )
   );
-  const recoveryLockEvidence = await waitForPendingReplacementLock(
-    'epoch 3 exact owner lock request to become pending'
+  const recoveryLockEvidence = await waitForRetriedReplacementLock(
+    3,
+    'epoch 3 to retry the held owner lock'
   );
   const recoveryWaitedForPhysicalLock = !telemetry.some(
     (event) => event.kind === 'ready' && event.ownerEpoch === 3
@@ -318,12 +330,14 @@ const run = async (): Promise<Record<string, unknown>> => {
       (event) => event.kind === 'drained' && event.ownerEpoch === 1
     ),
     gracefulReplacementWaitedForPhysicalLock: gracefulWaitedForPhysicalLock,
-    gracefulPendingOwnerLockRequests: gracefulLockEvidence.pending,
+    gracefulQueuedOwnerLockRequests: gracefulLockEvidence.pending,
+    gracefulRetriedHeldOwnerLock: gracefulLockEvidence.busyAttempts > 0,
     abruptInflightRejected: abruptError.includes('owner epoch 2 was lost'),
     abruptRequestReplayCount: slowAdmissions.length,
     abruptOwnerPageStayedAlive: !secondPage.closed,
     recoveryReplacementWaitedForPhysicalLock: recoveryWaitedForPhysicalLock,
-    recoveryPendingOwnerLockRequests: recoveryLockEvidence.pending,
+    recoveryQueuedOwnerLockRequests: recoveryLockEvidence.pending,
+    recoveryRetriedHeldOwnerLock: recoveryLockEvidence.busyAttempts > 0,
     atomicRecoveryOpenWipedToMiss: true,
     recoveryDatabaseAction: telemetry.find(
       (event) => event.kind === 'ready' && event.ownerEpoch === 3

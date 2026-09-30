@@ -1,5 +1,6 @@
 use super::*;
 use crate::testing::{fixture_with, identity};
+use tower::ServiceExt;
 
 /// Settings for a local stack that published a quick tunnel: every reachability
 /// path at once, which is also the only configuration that allows a proxy host.
@@ -116,4 +117,91 @@ fn a_proxy_host_is_rejected_outside_a_local_stack() {
 
     settings.ssh_proxy_host = Some("not a hostname".into());
     assert!(settings.validate().is_err());
+}
+
+#[test]
+fn configured_control_hosts_are_added_to_the_loopback_allowlist() {
+    assert_eq!(
+        mcp_allowed_hosts(vec![
+            "preview-gateway".into(),
+            " localhost ".into(),
+            String::new(),
+        ]),
+        vec!["localhost", "127.0.0.1", "::1", "preview-gateway"]
+    );
+}
+
+#[test]
+fn a_dropped_host_is_restored_only_from_an_allowed_forwarded_name() {
+    let allowed = mcp_allowed_hosts(vec!["dev-gateway.macro.com".into()]);
+    let mut headers = HeaderMap::new();
+    headers.insert("x-forwarded-host", "dev-gateway.macro.com".parse().unwrap());
+    restore_dropped_host(&mut headers, &"/preview/mcp".parse().unwrap(), &allowed);
+    assert_eq!(headers[header::HOST], "dev-gateway.macro.com");
+
+    let mut headers = HeaderMap::new();
+    headers.insert("x-forwarded-host", "attacker.test".parse().unwrap());
+    restore_dropped_host(&mut headers, &"/preview/mcp".parse().unwrap(), &allowed);
+    assert!(headers.get(header::HOST).is_none());
+}
+
+#[tokio::test]
+async fn live_discovery_lists_share_preview_without_a_session() {
+    let (service, _, _) = crate::testing::fixture(22);
+    let app = router(service, vec!["preview-gateway".into()]);
+    let body = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/list",
+        "params": {}
+    });
+    let response = app
+        .oneshot(
+            axum::http::Request::builder()
+                .method("POST")
+                .uri("/mcp")
+                .header("host", "preview-gateway:8080")
+                .header("content-type", "application/json")
+                .header("accept", "application/json, text/event-stream")
+                .body(axum::body::Body::from(body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert!(
+        response.status().is_success(),
+        "discovery failed: {}",
+        response.status()
+    );
+    let bytes = axum::body::to_bytes(response.into_body(), 64 * 1024)
+        .await
+        .unwrap();
+    let payload: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(payload["result"]["tools"][0]["name"], "SharePreview");
+}
+
+#[tokio::test]
+async fn a_disallowed_host_is_rejected_before_tools_are_listed() {
+    let (service, _, _) = crate::testing::fixture(22);
+    let app = router(service, vec!["preview-gateway".into()]);
+    let body = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/list",
+        "params": {}
+    });
+    let response = app
+        .oneshot(
+            axum::http::Request::builder()
+                .method("POST")
+                .uri("/mcp")
+                .header("host", "attacker.test")
+                .header("content-type", "application/json")
+                .header("accept", "application/json, text/event-stream")
+                .body(axum::body::Body::from(body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), axum::http::StatusCode::FORBIDDEN);
 }

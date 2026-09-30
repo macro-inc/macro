@@ -1,3 +1,4 @@
+export type { AiFilterOutcome } from './AiFilterInput';
 export {
   CollapsibleSection,
   type CollapsibleSectionRootProps,

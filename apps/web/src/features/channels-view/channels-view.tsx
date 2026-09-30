@@ -1,5 +1,6 @@
 import { ViewShell } from '@app/components/view-shell';
 import { SearchState } from '@app/features/command/mobile/mobileSearchState';
+import { useMobileSearchText } from '@app/features/command/mobile/use-mobile-search-text';
 import { markChannelNotificationsSeenOnOpen } from '@app/features/next-soup/utils';
 import { MaybeSoupEntityActionDrawerManager } from '@app/features/soup';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
@@ -13,10 +14,8 @@ import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import {
   createContext,
-  createEffect,
   createMemo,
   createSignal,
-  on,
   onMount,
   Show,
   useContext,
@@ -25,6 +24,7 @@ import { ChannelsViewProvider, useChannelsView } from './channels-view-context';
 import { ChannelDetailView } from './components/ChannelDetailView';
 import { ChannelsMobileView } from './components/ChannelsMobileView';
 import { ChannelsRail } from './components/rail/ChannelsRail';
+import { createChannelDetail } from './primitives/create-channel-detail';
 import {
   type ChannelsSources,
   deduplicateChannels,
@@ -32,49 +32,66 @@ import {
   useChannelByIdQuery,
   useChannelsSources,
 } from './queries';
-import { useMobileChannelSearch } from './queries/mobile-channel-search';
+import { createChannelDetailSource } from './queries/channel-detail-source';
+import { createChannelSearchSource } from './queries/channel-search-source';
 
 const ChannelSourcesContext =
   createContext<ReturnType<typeof useChannelsSources>>();
 
-import type { ChannelsQueryScope, ChannelsViewStateOptions } from './types';
+import type { ChannelsViewStateOptions } from './types';
 
 export type ChannelsViewProps = {
   /** Explicit navigation state. When present, it wins over entry restoration. */
   initialState?: ChannelsViewStateOptions;
 };
 
-function MobileChannels(props: {
-  sources: ChannelsSources;
-  tab: ChannelsQueryScope;
-  onTabChange: (tab: ChannelsQueryScope) => void;
-}) {
+// Mounted inside the mobile list's Suspense boundary.
+function MobileChannelsList(props: { sources: ChannelsSources }) {
   const panel = useSplitPanelOrThrow();
-  // The dock lives outside the split. Derive its query only for the active
-  // mobile list so closing search or navigating away restores ordinary rows.
-  const searchText = () =>
-    SearchState.isOpen() && panel.handle.isActive()
-      ? SearchState.query().trim()
-      : '';
-  const source = useMobileChannelSearch({
-    text: searchText,
-    scope: () => props.tab,
-    source: () => props.sources[props.tab],
+  const { state, setMobileTab } = useChannelsView();
+  const mobileSearchText = useMobileSearchText(() => '', panel.handle.isActive);
+  const mobileSearchSource = createChannelSearchSource({
+    text: mobileSearchText,
+    scope: () => state.mobileTab,
+    source: () => props.sources[state.mobileTab],
   });
-
   return (
     <ChannelsMobileView
-      source={source}
-      tab={props.tab}
-      onTabChange={props.onTabChange}
-      searchText={searchText()}
+      source={mobileSearchSource}
+      searchQuery={mobileSearchText()}
+      onClearSearch={() => SearchState.setQuery('')}
+      tab={state.mobileTab}
+      onTabChange={setMobileTab}
+    />
+  );
+}
+
+function DesktopChannelsRail(props: {
+  sources: ChannelsSources;
+  searchOpen: boolean;
+  onSearchOpenChange: (open: boolean) => void;
+}) {
+  const [searchQuery, setSearchQuery] = createSignal('');
+  const searchSource = createChannelSearchSource({
+    text: searchQuery,
+    enabled: () => props.searchOpen,
+    scope: () => 'search',
+    source: () => props.sources.search,
+  });
+  return (
+    <ChannelsRail
+      sources={{ ...props.sources, search: searchSource }}
+      searchQuery={searchQuery()}
+      onSearchQueryChange={setSearchQuery}
+      searchOpen={props.searchOpen}
+      onSearchOpenChange={props.onSearchOpenChange}
     />
   );
 }
 
 function ChannelsViewRoot() {
   const panel = useSplitPanelOrThrow();
-  const { state, mobileLayout, selectedChannel, setAsideWidth, setMobileTab } =
+  const { state, mobileLayout, selectedChannel, setAsideWidth } =
     useChannelsView();
   const [railSearchOpen, setRailSearchOpen] = createSignal(false);
 
@@ -112,8 +129,16 @@ function ChannelsViewRoot() {
                     resizable
                   >
                     <ViewShell.Aside onWidthChangeEnd={setAsideWidth}>
-                      <DebugSuspense name="ChannelsView.rail">
-                        <ChannelsRail
+                      <DebugSuspense
+                        name="ChannelsView.rail"
+                        fallback={
+                          <SpinnerIcon
+                            aria-label="Loading channels"
+                            class="size-5 animate-spin"
+                          />
+                        }
+                      >
+                        <DesktopChannelsRail
                           sources={sources}
                           searchOpen={railSearchOpen()}
                           onSearchOpenChange={setRailSearchOpen}
@@ -164,11 +189,7 @@ function ChannelsViewRoot() {
                     </div>
                   }
                 >
-                  <MobileChannels
-                    sources={sources}
-                    tab={state.mobileTab}
-                    onTabChange={setMobileTab}
-                  />
+                  <MobileChannelsList sources={sources} />
                 </DebugSuspense>
               </MaybeSoupEntityActionDrawerManager>
             </Show>
@@ -182,7 +203,7 @@ function ChannelsViewRoot() {
 function ChannelDetailRouteContent() {
   const { selectedChannel } = useChannelsView();
   const notificationSource = useGlobalNotificationSource();
-  const channelId = () => selectedChannel()?.id;
+  const channelId = createMemo(() => selectedChannel()?.id);
   const sources = useContext(ChannelSourcesContext);
   const loaded = createMemo(() =>
     resolveSelectedChannel(
@@ -197,81 +218,73 @@ function ChannelDetailRouteContent() {
         : []
     )
   );
-  const needsFullEdge = createMemo(
-    on(
-      channelId,
-      () =>
-        loaded() === undefined ||
-        (loaded()?.unreadNotifications?.length ?? 0) > 0
-    )
-  );
-  const query = useChannelByIdQuery(
+  const source = createChannelDetailSource({
     channelId,
-    () =>
-      channelId() !== undefined && (needsFullEdge() || loaded() === undefined)
-  );
-  const hydrated = createMemo((previous: ReturnType<typeof loaded>) => {
-    const selection = selectedChannel();
-    if (!selection || selection.type !== 'channel') return;
-    const cached = loaded();
-    if (cached && !needsFullEdge())
-      return { ...cached, target: selection.target, notifications: () => [] };
-    if (
-      !query.isEnabled ||
-      query.isLoading ||
-      query.isFetching ||
-      query.error
-    ) {
-      return previous?.id === selection.id ? previous : undefined;
-    }
-    const full = resolveSelectedChannel(selection.id, [], query.data?.entities);
-    if (!full) return;
+    cached: loaded,
+    createQuery: useChannelByIdQuery,
+  });
+  const detail = createChannelDetail({
+    selection: selectedChannel,
+    cached: loaded,
+    source,
+    markRead: (channel) =>
+      markChannelNotificationsSeenOnOpen(
+        withEntityNotifications(channel, notificationSource),
+        notificationSource,
+        { channelReadScope: 'top-level' }
+      ),
+  });
+  const visibleChannel = createMemo(() => {
+    const view = detail.view();
+    if (view.status !== 'ready') return;
     return withEntityNotifications(
-      { ...full, target: selection.target },
+      { ...view.channel, target: selectedChannel()?.target },
       notificationSource
     );
   });
-  const unavailable = () =>
-    Boolean(query.error) ||
-    (query.isEnabled && !query.isLoading && !query.isFetching && !hydrated());
+  const unavailable = () => detail.view().status === 'unavailable';
   const retry = async () => {
     try {
-      await query.refresh();
+      await detail.refresh();
     } catch {
-      /* Query state presents the failure. */
+      /* The source presents the failure. */
     }
   };
-  const readyId = createMemo(() => hydrated()?.id);
-  createEffect(
-    on(readyId, () => {
-      const channel = hydrated();
-      if (channel && channel.isParticipant !== false)
-        markChannelNotificationsSeenOnOpen(channel, notificationSource, {
-          scopeChannelThreads: false,
-        });
-    })
-  );
 
   return (
     <DebugSuspense name="ChannelsView.detail-content">
       <Show
-        when={hydrated()}
+        when={visibleChannel()}
         fallback={
-          <div class="flex size-full flex-col items-center justify-center gap-2 text-ink-muted">
-            <h2>
-              {unavailable()
-                ? 'Conversation unavailable'
-                : 'Loading conversation'}
-            </h2>
-            <Show when={unavailable()}>
-              <button type="button" onClick={retry}>
-                Retry
-              </button>
-            </Show>
-          </div>
+          <>
+            <ViewShell.TopBar>
+              <span class="truncate text-sm font-semibold">
+                {loaded()?.name ?? 'Conversation'}
+              </span>
+            </ViewShell.TopBar>
+            <div
+              class="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 text-ink-muted"
+              role="status"
+            >
+              <h2>
+                {unavailable()
+                  ? 'Conversation unavailable'
+                  : 'Loading conversation'}
+              </h2>
+              <Show when={unavailable()}>
+                <button type="button" onClick={retry}>
+                  Retry
+                </button>
+              </Show>
+            </div>
+          </>
         }
       >
-        {(channel) => <ChannelDetailView channel={channel()} />}
+        {(channel) => (
+          <div class="flex size-full min-h-0 flex-col">
+            <ChannelDetailView channel={channel()} target={detail.target()} />
+          </div>
+        )}
       </Show>
     </DebugSuspense>
   );

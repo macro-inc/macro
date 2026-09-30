@@ -186,7 +186,7 @@ fn identical_hydration_does_not_advance_the_native_revision() {
 }
 
 #[test]
-fn hydration_returns_only_unmarked_fields() {
+fn hydration_returns_only_unmarked_fields_and_retains_entities_without_pages() {
     let handle = spawn_handle();
     let result = block_on(handle.hydrate_query(
         HYDRATION_QUERY.to_string(),
@@ -204,10 +204,29 @@ fn hydration_returns_only_unmarked_fields() {
         }))
     );
     assert!(!result.write_result.changed.is_empty());
-    let ReadResultWire::Hit { data } = read(&handle, None) else {
-        panic!("expected hydrated cache hit");
+    assert!(matches!(read(&handle, None), ReadResultWire::Miss));
+    let ReadResultWire::Hit { data } = block_on(handle.read(
+        None,
+        "query Viewer { user { id } }".to_string(),
+        Some("Viewer".to_string()),
+        Variables::new(),
+        Vec::new(),
+    ))
+    .unwrap() else {
+        panic!("expected hydrated viewer");
     };
-    assert_eq!(data, soup_data(true));
+    assert_eq!(data, serde_json::json!({"user": {"id": "user-1"}}));
+    let records = block_on(handle.read_records_by_keys(
+        "fragment Document on GraphqlSoupDocument { __typename id }".to_string(),
+        "Document".to_string(),
+        vec!["GraphqlSoupDocument:doc-1".to_string()],
+    ))
+    .unwrap();
+    assert_eq!(records.records.len(), 1);
+    assert_eq!(
+        records.records[0].record,
+        serde_json::json!({"__typename": "GraphqlSoupDocument", "id": "doc-1"})
+    );
 }
 
 #[test]

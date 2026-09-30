@@ -7,7 +7,7 @@
 //!   wire protocol: Anthropic-native, Gemini GenerateContent, OpenAI Responses,
 //!   and OpenAI-compatible Chat Completions. Compatible providers live in a
 //!   data registry keyed by name, so adding one is
-//!   [`with_openai_provider`](ModelRouter::with_openai_provider).
+//!   `with_openai_provider` on the metered router.
 //! - [`ProviderAgent`] — a built rig agent, with the same arms. Its
 //!   [`run_stream`](ProviderAgent::run_stream) matches internally, so callers
 //!   (e.g. `agent_loop`) hold one type and never fan out.
@@ -28,16 +28,19 @@ use rig_agent::agent::{Agent, AgentBuilder, MultiTurnStreamItem};
 use rig_agent::streaming::StreamingPrompt;
 use rig_agent::tool::server::ToolServerHandle;
 use rig_core::completion::{CompletionModel, GetTokenUsage};
+use rig_core::http_client::{HttpClientExt, ReqwestClient};
 use rig_core::message::Message;
 use rig_core::providers::{anthropic, gemini, openai};
 use rig_core::streaming::StreamedAssistantContent;
 use tracing::Instrument as _;
 
-use super::PredefinedModel;
 use super::anthropic::AnthropicModel;
 use super::gemini::GeminiModel;
+use super::metering::{MeteringContext, WireProtocol};
+use super::metering_http::MeteredHttpClient;
 use super::openai::{OpenAiChatCompletionsModel, OpenAiResponsesModel};
 use super::types::Model;
+use super::{PredefinedModel, ReasoningEffort};
 use crate::error::AgentError;
 use crate::hook::{BridgeInputs, StreamBridge};
 use crate::stream::{ChatCompletionStream, StreamPart};
@@ -72,18 +75,18 @@ const FIREWORKS_BASE_URL: &str = "https://api.fireworks.ai/inference/v1";
 const GOOGLE_PROVIDER: &str = "google";
 
 /// A routed model id bound to the provider client that serves it.
-pub(crate) enum RoutedModel<'a> {
+pub(crate) enum RoutedModel<'a, H = MeteredHttpClient> {
     /// A model on Anthropic's native API.
-    Anthropic(AnthropicModel<'a>),
+    Anthropic(AnthropicModel<'a, H>),
     /// A model on Gemini's native GenerateContent API.
-    Gemini(GeminiModel<'a>),
+    Gemini(GeminiModel<'a, H>),
     /// A model on the OpenAI-compatible Chat Completions API.
-    OpenAiChatCompletions(OpenAiChatCompletionsModel<'a>),
+    OpenAiChatCompletions(OpenAiChatCompletionsModel<'a, H>),
     /// A model on OpenAI's Responses API.
-    OpenAiResponses(OpenAiResponsesModel<'a>),
+    OpenAiResponses(OpenAiResponsesModel<'a, H>),
 }
 
-impl<'a> RoutedModel<'a> {
+impl<'a, H: HttpClientExt + Clone + Default + std::fmt::Debug + 'static> RoutedModel<'a, H> {
     /// The provider segment of the routed id (`anthropic`, `openai`, …).
     pub(crate) fn provider(&self) -> &str {
         match self {
@@ -108,15 +111,16 @@ impl<'a> RoutedModel<'a> {
     /// config. Pure construction — no model call is made here.
     pub(crate) fn into_agent(
         self,
+        reasoning_effort: Option<ReasoningEffort>,
         handle: ToolServerHandle,
         system_prompt: &str,
         max_turns: usize,
         max_tokens: u64,
         telemetry: &GenAiContext,
-    ) -> ProviderAgent {
+    ) -> ProviderAgent<H> {
         match self {
             RoutedModel::Anthropic(m) => {
-                let thinking = m.thinking_params();
+                let thinking = m.thinking_params(reasoning_effort);
                 ProviderAgent::Anthropic(build_agent(
                     m.completion(),
                     thinking,
@@ -140,7 +144,7 @@ impl<'a> RoutedModel<'a> {
                 ))
             }
             RoutedModel::OpenAiChatCompletions(m) => {
-                let thinking = m.thinking_params();
+                let thinking = m.thinking_params(reasoning_effort);
                 ProviderAgent::OpenAiChatCompletions(build_agent(
                     m.completion(),
                     thinking,
@@ -152,7 +156,7 @@ impl<'a> RoutedModel<'a> {
                 ))
             }
             RoutedModel::OpenAiResponses(m) => {
-                let thinking = m.thinking_params();
+                let thinking = m.thinking_params(reasoning_effort);
                 ProviderAgent::OpenAiResponses(build_agent(
                     m.completion(),
                     thinking,
@@ -173,22 +177,24 @@ impl<'a> RoutedModel<'a> {
 /// that behind one concrete [`ChatCompletionStream`], so callers never match.
 ///
 /// [`run_stream`]: ProviderAgent::run_stream
-pub(crate) enum ProviderAgent {
+pub(crate) enum ProviderAgent<
+    H: HttpClientExt + Clone + Default + std::fmt::Debug + 'static = MeteredHttpClient,
+> {
     /// An agent over Anthropic's native completion model.
-    Anthropic(Agent<TracedModel<anthropic::completion::CompletionModel>>),
+    Anthropic(Agent<TracedModel<anthropic::completion::CompletionModel<H>>>),
     /// An agent over Gemini's native GenerateContent model.
-    Gemini(Agent<TracedModel<gemini::completion::CompletionModel>>),
+    Gemini(Agent<TracedModel<gemini::completion::CompletionModel<H>>>),
     /// An agent over the OpenAI Chat Completions model.
-    OpenAiChatCompletions(Agent<TracedModel<openai::completion::CompletionModel>>),
+    OpenAiChatCompletions(Agent<TracedModel<openai::completion::CompletionModel<H>>>),
     /// An agent over the OpenAI Responses model.
-    OpenAiResponses(Agent<TracedModel<openai::responses_api::ResponsesCompletionModel>>),
+    OpenAiResponses(Agent<TracedModel<openai::responses_api::ResponsesCompletionModel<H>>>),
     /// A test-only agent over an arbitrary completion model (e.g. a scripted
-    /// fake), type-erased so the enum itself stays non-generic.
+    /// fake), type-erased so arbitrary model types do not enter this enum.
     #[cfg(test)]
     Test(Box<dyn DynStreamAgent>),
 }
 
-impl ProviderAgent {
+impl<H: HttpClientExt + Clone + Default + std::fmt::Debug + 'static> ProviderAgent<H> {
     /// Run the agentic loop and adapt rig's stream into the provider-agnostic
     /// [`StreamPart`] stream consumed by DCS. The provider fan-out is internal.
     #[allow(clippy::too_many_arguments)]
@@ -290,19 +296,19 @@ impl ProviderAgent {
 /// Holds native Anthropic, Gemini, and OpenAI Responses clients plus a
 /// registry of OpenAI-compatible Chat Completions clients keyed by provider
 /// name. The built-in [`OPENAI_PROVIDER`] always uses Responses; register
-/// compatible providers with [`with_openai_provider`](Self::with_openai_provider).
+/// compatible providers with `with_openai_provider` on the metered router.
 #[derive(Clone)]
-pub struct ModelRouter {
-    anthropic: Arc<anthropic::Client>,
-    openai: Arc<openai::Client>,
-    gemini: Option<Arc<gemini::Client>>,
-    openai_compatible: HashMap<String, Arc<openai::CompletionsClient>>,
+pub struct ModelRouter<H = ReqwestClient> {
+    anthropic: Arc<anthropic::Client<H>>,
+    openai: Arc<openai::Client<H>>,
+    gemini: Option<Arc<gemini::Client<H>>>,
+    openai_compatible: HashMap<String, Arc<openai::CompletionsClient<H>>>,
 }
 
-impl ModelRouter {
+impl<H: HttpClientExt + Clone + 'static> ModelRouter<H> {
     /// Build a router over native Anthropic and OpenAI Responses clients, with
     /// no OpenAI-compatible Chat Completions providers registered yet.
-    pub fn new(anthropic: anthropic::Client, openai: openai::Client) -> Self {
+    pub fn new(anthropic: anthropic::Client<H>, openai: openai::Client<H>) -> Self {
         Self {
             anthropic: Arc::new(anthropic),
             openai: Arc::new(openai),
@@ -310,21 +316,39 @@ impl ModelRouter {
             openai_compatible: HashMap::new(),
         }
     }
+}
 
+impl ModelRouter {
     /// Build a router with the built-in providers from the environment.
     ///
     /// Requires `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `CEREBRAS_API_KEY`,
     /// `FIREWORK_API_KEY`, and `GOOGLE_GENERATIVE_AI_API_KEY`. Chain
-    /// [`with_openai_provider`](Self::with_openai_provider) to add more.
-    pub fn try_from_env() -> Result<Self, AgentError> {
+    /// `with_openai_provider` on the returned router to add more.
+    pub fn try_from_env() -> Result<ModelRouter<MeteredHttpClient>, AgentError> {
         let env = ApiKeys::new()?;
+        // No executions may hide below the financial HTTP boundary.
+        let http = ReqwestClient::builder()
+            .retry(reqwest::retry::never())
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .map_err(|error| rig_core::http_client::Error::Instance(Box::new(error)))?;
         let anthropic = anthropic::Client::builder()
             .api_key(env.anthropic_api_key.to_string())
+            .http_client(MeteredHttpClient::new(
+                http.clone(),
+                ANTHROPIC_PROVIDER,
+                WireProtocol::Anthropic,
+            ))
             .build()?;
         // Default base URL is api.openai.com; OpenAI's GPT models use
         // Responses API so reasoning models get max_output_tokens.
         let openai = openai::Client::builder()
             .api_key(env.openai_api_key.to_string())
+            .http_client(MeteredHttpClient::new(
+                http.clone(),
+                OPENAI_PROVIDER,
+                WireProtocol::Responses,
+            ))
             .build()?;
         // Cerebras and Fireworks speak the OpenAI Chat Completions API, so they
         // ride the compatible-provider registry: a `<provider>/` segment routes
@@ -332,8 +356,13 @@ impl ModelRouter {
         // so tool-call thought signatures survive the multi-step tool loop.
         let gemini = gemini::Client::builder()
             .api_key(env.google_generative_ai_api_key.to_string())
+            .http_client(MeteredHttpClient::new(
+                http.clone(),
+                GOOGLE_PROVIDER,
+                WireProtocol::Gemini,
+            ))
             .build()?;
-        Self::new(anthropic, openai)
+        ModelRouter::new(anthropic, openai)
             .with_gemini_client(gemini)
             .with_openai_provider(CEREBRAS_PROVIDER, CEREBRAS_BASE_URL, &env.cerebras_api_key)?
             .with_openai_provider(
@@ -349,17 +378,19 @@ impl ModelRouter {
     /// the same fully-populated instance, so a model id resolves identically
     /// everywhere. Register additional OpenAI-compatible providers here as they
     /// are added.
-    pub(crate) fn shared() -> Result<&'static ModelRouter, AgentError> {
-        static ROUTER: OnceLock<ModelRouter> = OnceLock::new();
+    pub(crate) fn shared() -> Result<&'static ModelRouter<MeteredHttpClient>, AgentError> {
+        static ROUTER: OnceLock<ModelRouter<MeteredHttpClient>> = OnceLock::new();
         if let Some(router) = ROUTER.get() {
             return Ok(router);
         }
         let router = Self::try_from_env()?;
         Ok(ROUTER.get_or_init(|| router))
     }
+}
 
+impl<H: HttpClientExt + Clone + 'static> ModelRouter<H> {
     /// Bind the native Gemini GenerateContent client. Google ids route here.
-    pub fn with_gemini_client(mut self, client: gemini::Client) -> Self {
+    pub fn with_gemini_client(mut self, client: gemini::Client<H>) -> Self {
         self.gemini = Some(Arc::new(client));
         self
     }
@@ -369,13 +400,15 @@ impl ModelRouter {
     pub fn with_openai_client(
         mut self,
         provider: impl Into<String>,
-        client: openai::CompletionsClient,
+        client: openai::CompletionsClient<H>,
     ) -> Self {
         self.openai_compatible
             .insert(provider.into(), Arc::new(client));
         self
     }
+}
 
+impl ModelRouter<MeteredHttpClient> {
     /// Register an OpenAI-compatible Chat Completions provider from a base URL
     /// and key.
     ///
@@ -383,43 +416,38 @@ impl ModelRouter {
     /// then reachable as `provider/<model-id>`. The extension point for the
     /// open provider set (Cerebras is wired this way in [`try_from_env`]).
     ///
-    /// [`try_from_env`]: Self::try_from_env
+    /// [`try_from_env`]: ModelRouter::try_from_env
     pub fn with_openai_provider(
         self,
         provider: impl Into<String>,
         base_url: &str,
         api_key: &str,
     ) -> Result<Self, AgentError> {
+        let provider = provider.into();
+        let http = ReqwestClient::builder()
+            .retry(reqwest::retry::never())
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .map_err(|error| rig_core::http_client::Error::Instance(Box::new(error)))?;
         let client = openai::CompletionsClient::builder()
             .api_key(api_key)
             .base_url(base_url)
+            .http_client(MeteredHttpClient::new(
+                http,
+                provider.clone(),
+                WireProtocol::ChatCompletions,
+            ))
             .build()?;
         Ok(self.with_openai_client(provider, client))
     }
+}
 
-    /// Route + build the agent in one step, falling back to the default model on
-    /// an unroutable id. Tells `telemetry` which provider and model the session
-    /// actually runs on, so its spans report the routed model, not the
-    /// requested id.
-    pub(crate) fn agent(
-        &self,
-        model: &str,
-        handle: ToolServerHandle,
-        system_prompt: &str,
-        max_turns: usize,
-        max_tokens: u64,
-        telemetry: GenAiContext,
-    ) -> ProviderAgent {
-        let routed = self.route_or_default(model);
-        telemetry.set_model(routed.provider(), routed.model_name());
-        routed.into_agent(handle, system_prompt, max_turns, max_tokens, &telemetry)
-    }
-
+impl<H: HttpClientExt + Clone + Default + std::fmt::Debug + 'static> ModelRouter<H> {
     /// Route a `provider/model` id to the provider that serves it.
     ///
     /// Returns [`AgentError::UnknownModel`] if no provider claims it (and
     /// [`AgentError::MalformedModel`] if the id has no `provider/` segment).
-    pub(crate) fn route<'a>(&self, model: &'a str) -> Result<RoutedModel<'a>, AgentError> {
+    pub(crate) fn route<'a>(&self, model: &'a str) -> Result<RoutedModel<'a, H>, AgentError> {
         let parsed = Model::try_from(model)?;
 
         if parsed.provider() == ANTHROPIC_PROVIDER {
@@ -453,7 +481,7 @@ impl ModelRouter {
     }
 
     /// Route `model`, falling back to the default model on an unroutable id.
-    pub(crate) fn route_or_default<'a>(&self, model: &'a str) -> RoutedModel<'a> {
+    pub(crate) fn route_or_default<'a>(&self, model: &'a str) -> RoutedModel<'a, H> {
         self.route(model).unwrap_or_else(|_| self.default_model())
     }
 
@@ -462,7 +490,7 @@ impl ModelRouter {
     /// Built via `From<PredefinedModel>` so the bound [`Model`] carries the
     /// bare api id — `PredefinedModel`'s `Display` is the provider-qualified
     /// routing id, which the Anthropic API rejects as a model name.
-    fn default_model(&self) -> RoutedModel<'static> {
+    fn default_model(&self) -> RoutedModel<'static, H> {
         RoutedModel::Anthropic(AnthropicModel::new(
             PredefinedModel::Smart.into(),
             self.anthropic.clone(),
@@ -640,8 +668,9 @@ where
         concluded: false,
     };
     let driver_span = agent_span.clone();
+    let financial_context = MeteringContext::current();
     let driver = tokio::spawn(
-        async move {
+        MeteringContext::carry(financial_context, async move {
             let mut liveness = StreamLiveness::new(agent_span.clone());
 
             while let Some(item) = rig_stream.next().await {
@@ -667,7 +696,8 @@ where
                                     &final_resp.output,
                                     &usage,
                                 );
-                                // Best-effort cost logging; never fails the stream.
+                                // Aggregate analytics only. Financial evidence is
+                                // persisted per HTTP attempt before SDK parsing.
                                 recorder.record(usage_ctx.clone().into_event(
                                     model.clone(),
                                     usage.input_tokens,
@@ -711,7 +741,7 @@ where
             // Dropping `rig_stream` (and with it the hook's sender) plus `driver_tx`
             // here closes the channel, ending the consumer stream below.
             drop(finish_run);
-        }
+        })
         // Entered into the agent span: the runtime opens its `chat` and
         // `execute_tool` spans from inside this task, and they belong under
         // the run, not at the root of a trace of their own.
@@ -740,7 +770,7 @@ where
 }
 
 /// Test-only type erasure so [`ProviderAgent`] can hold an arbitrary
-/// [`Agent<M>`] (e.g. a scripted fake model) without the enum becoming generic.
+/// [`Agent<M>`] (e.g. a scripted fake model) without adding a model type parameter.
 /// Mirrors the production arms: it just drives [`drive_stream`].
 #[cfg(test)]
 pub(crate) trait DynStreamAgent: Send + Sync {

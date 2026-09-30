@@ -122,10 +122,9 @@ pub async fn build_tool_service_context(
         &config.document_storage_bucket,
         &config.docx_document_upload_bucket,
     );
-    let document_repo = PgDocumentRepo::new(
-        pool.clone(),
-        OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(pool.clone()))),
-    );
+    let owned_entity_registrar =
+        OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(pool.clone())));
+    let document_repo = PgDocumentRepo::new(pool.clone(), owned_entity_registrar.clone());
     let cloudfront_config = CloudFrontConfig {
         distribution_url: config
             .document_storage_service_cloudfront_distribution_url
@@ -224,7 +223,7 @@ pub async fn build_tool_service_context(
 
     let chat_tool_context = chat::inbound::toolset::ChatToolContext::new(
         chat::domain::service::ChatServiceImpl::new(
-            chat::outbound::postgres::PgChatRepo::new(pool.clone()),
+            chat::outbound::postgres::PgChatRepo::new(pool.clone(), owned_entity_registrar),
             Arc::new(ai_toolset::AsyncToolCollection::new()),
             (),
             entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
@@ -235,8 +234,11 @@ pub async fn build_tool_service_context(
     );
 
 
-    let skill_tool_context =
-        ai_tools::build_skill_tool_context(search_client.clone(), soup_service.clone());
+    let skill_tool_context = ai_tools::build_skill_tool_context(
+        search_client.clone(),
+        soup_service.clone(),
+        &document_tool_context,
+    );
 
     Ok(ToolServiceContext {
         search_service_client: search_client.clone(),

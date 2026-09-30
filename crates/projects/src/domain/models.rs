@@ -3,14 +3,15 @@
 use macro_user_id::user_id::MacroUserIdStr;
 use model::folder::FileSystemNode;
 use model::project::Project;
+use model_owner::Owner;
 use models_permissions::share_permission::team_share::AuthorizedTeamShareCommand;
 use models_permissions::share_permission::{SharePermissionV2, UpdateSharePermissionRequestV2};
 
 /// Arguments for atomically creating a project and its access metadata.
 #[derive(Debug, Clone)]
 pub struct CreateProjectArgs {
-    /// Project owner.
-    pub user_id: String,
+    /// Recorded project owner.
+    pub owner: Owner,
     /// Project name.
     pub name: String,
     /// Optional parent project.

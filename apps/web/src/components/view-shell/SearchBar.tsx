@@ -129,7 +129,6 @@ export function SearchBar(props: SearchBarProps) {
             size="sm"
             square
             label={local.onClose ? 'Close search' : 'Clear search'}
-            class="rounded-lg"
             onPointerDown={(event) => event.preventDefault()}
             onClick={() => (local.onClose ?? clear)()}
           >

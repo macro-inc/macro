@@ -212,7 +212,10 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
         </For>
 
         <Show when={props.projectSlot !== undefined}>
-          <Entity.Slot placement="initiative" class="min-w-0 truncate text-xs">
+          <Entity.Slot
+            placement="initiative"
+            class="flex items-center min-w-0 text-xs ph-no-capture @container/slot @max-[840px]/u-list:justify-center"
+          >
             {props.projectSlot}
           </Entity.Slot>
         </Show>

@@ -223,6 +223,9 @@ export function ChatInput(props: ChatInputComponentProps) {
       },
     })
     .onEnter((e) => {
+      // On a virtual keyboard Enter is a newline, as in channels; the send
+      // button is the only way to submit.
+      if (isTouchDevice()) return false;
       if (canSendMessage()) {
         sendMessage({ metaKey: e?.metaKey });
       }
@@ -261,7 +264,7 @@ export function ChatInput(props: ChatInputComponentProps) {
     <Button
       variant="ghost"
       size="icon-composer"
-      class="rounded-full text-ink not-touch:text-composer-ink touch:size-6"
+      class="text-ink not-touch:text-composer-ink touch:size-6"
       label="Attach files"
       aria-label="Attach files"
       onClick={() => {
@@ -281,7 +284,7 @@ export function ChatInput(props: ChatInputComponentProps) {
       hotkey={TOKENS.chat.stop}
       onClick={() => props.onStop?.()}
       class={cn(
-        'rounded-full touch:size-7.5 [&_svg]:stroke-[4px]',
+        'touch:size-7.5 [&_svg]:stroke-[4px]',
         isTouchDevice() &&
           'text-ink-extra-muted not-disabled:bg-ink/5 not-disabled:hover:bg-ink/10',
         'data-disabled:opacity-100 data-disabled:text-ink-extra-muted data-disabled:bg-ink-muted/5'

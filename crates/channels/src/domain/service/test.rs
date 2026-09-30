@@ -10,8 +10,8 @@ use crate::domain::{
         GetOrCreateDmRequest, MessageAttachment, MessagePageDirection, MutatedAttachment,
         MutatedMessage, NewChannelAttachment, ParticipantRole, PatchChannelRequest,
         PatchMessageRequest, PostMessageRequest, PostReactionRequest, ReactionAction,
-        ReferencedShareItem, ReferencedShareItemType, ResolvedChannelMessage, Sender, ThreadData,
-        ThreadReplyRow, TopLevelMessageRow,
+        ReactionMessageContext, ReferencedShareItem, ReferencedShareItemType,
+        ResolvedChannelMessage, Sender, ThreadData, ThreadReplyRow, TopLevelMessageRow,
     },
     ports::{
         ChannelEventDispatcher, ChannelMentionExtractor, ChannelReferenceSharePermissions,
@@ -838,6 +838,24 @@ impl ChannelRepo for FakeMutationRepo {
             .map(CowLike::into_owned)
             .map(Some)
             .map_err(Into::into)
+    }
+
+    async fn get_reaction_message_context(
+        &self,
+        _channel_id: Uuid,
+        _message_id: Uuid,
+    ) -> Result<Option<ReactionMessageContext>, Self::Err> {
+        let state = self.state.lock().unwrap();
+        if state.message.deleted_at.is_some() {
+            return Ok(None);
+        }
+        Ok(Some(ReactionMessageContext {
+            sender: ChannelSender::parse_from_str(&state.owner)
+                .map(CowLike::into_owned)
+                .map_err(anyhow::Error::from)?,
+            thread_id: state.message.thread_id,
+            content: state.message.content.clone(),
+        }))
     }
 
     async fn get_participants(
@@ -1768,7 +1786,7 @@ async fn reaction_mutation_emits_grouped_reaction_event() {
     let svc = mutation_service(repo, events.clone(), FakeReferenceSharing::default());
 
     svc.post_reaction(
-        sender("macro|sender@test.com"),
+        sender("macro|reactor@test.com"),
         channel_id,
         PostReactionRequest {
             emoji: "👍".to_string(),
@@ -1786,6 +1804,7 @@ async fn reaction_mutation_emits_grouped_reaction_event() {
         channel_id: emitted_channel_id,
         message_id: emitted_message_id,
         reactions,
+        notification,
         ..
     } = &emitted[0]
     else {
@@ -1794,6 +1813,14 @@ async fn reaction_mutation_emits_grouped_reaction_event() {
     assert_eq!(*emitted_channel_id, channel_id);
     assert_eq!(*emitted_message_id, message_id);
     assert_eq!(reactions[0].emoji, "👍");
+    assert!(matches!(
+        notification,
+        Some(ReactionNotificationContext {
+            emoji,
+            message_content,
+            ..
+        }) if emoji == "👍" && message_content == "hello"
+    ));
 }
 
 #[tokio::test]
