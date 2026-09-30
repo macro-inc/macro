@@ -128,7 +128,11 @@ fn emit_cache_changed_with_search_changes<R: Runtime>(
     app.emit(
         CACHE_CHANGED_EVENT,
         CacheChangedEvent {
-            search_changed_buckets: if reset { None } else { search_changed_buckets.cloned() },
+            search_changed_buckets: if reset {
+                None
+            } else {
+                search_changed_buckets.cloned()
+            },
             revision: revision.to_owned(),
             reset: reset.then_some(true),
         },

@@ -68,6 +68,21 @@ generation, normalized entities, projection facts, queue and optimistic shadows.
 Subsequent opens only check the marker. There is no schema/namespace bump, reset,
 or VACUUM; freed pages can be reused without rewriting the whole database file.
 
+## Query-write invalidation
+
+Ordinary query responses carry optional `searchChangedBuckets`, using the same
+composed-view comparison as hydration. An empty list proves that Quick Access
+needs no refresh; missing metadata, mutations, subscriptions and identity resets
+remain conservative. Both browser-worker and native hosts preserve this distinction.
+
+Active queries track the canonical top-level fields they select on `GraphqlUser`,
+including argument-qualified Soup pages. Query writes only wake readers of changed
+viewer fields, while document/property/etc. changes still invalidate by record.
+Normalization installs the same dependencies as cache reads, without another read.
+Missing records, incomplete response registrations, explicit invalidations/deletions
+and resets retain conservative behavior. Page-retention eviction wakes readers of
+the removed page. This is in-memory dependency tracking, not a storage migration.
+
 ## Entity-rooted optimistic relations
 
 Link recipes may use an optional `recordRoot` (`fragmentName`, `entityKey`).

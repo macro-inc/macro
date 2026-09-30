@@ -192,7 +192,12 @@ pub async fn graphql_cache_write<R: Runtime>(
         .await?;
     emit_ops_affected(&app, &result.affected_ops, &result.changed);
     if result.revision_advanced {
-        emit_cache_changed_with_search_changes(&app, &result.revision, result.reset, result.search_changed_buckets.as_ref());
+        emit_cache_changed_with_search_changes(
+            &app,
+            &result.revision,
+            result.reset,
+            result.search_changed_buckets.as_ref(),
+        );
     }
     Ok(result)
 }

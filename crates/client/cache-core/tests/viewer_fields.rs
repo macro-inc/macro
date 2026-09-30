@@ -1,5 +1,9 @@
-use cache_core::engine::{Engine, NetworkWrite, QueryRegistration, ReadResult};
+use cache_core::engine::{
+    BeginOptimisticWrite, Engine, NetworkWrite, QueryRegistration, ReadResult,
+};
+use cache_core::page_retention::MAX_SOUP_PAGES;
 use cache_core::store::InMemoryStorage;
+use cache_core::value::EntityKey;
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
 
@@ -198,6 +202,80 @@ fn misses_grouped_pages_and_partial_registrations_keep_safe_dependencies() {
 }
 
 #[test]
+fn retention_eviction_invalidates_the_removed_page_not_other_pages() {
+    pollster::block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let data = page("shared", "Original", false);
+        write(&mut engine, "Page", &variables(0), &data, Some(1)).await;
+        for n in 1..MAX_SOUP_PAGES {
+            assert!(
+                write(&mut engine, "Page", &variables(n), &data, None)
+                    .await
+                    .is_empty()
+            );
+        }
+        engine
+            .read_query(Some(2), QUERY, Some("Page"), &variables(MAX_SOUP_PAGES - 1))
+            .await
+            .unwrap();
+        assert_eq!(
+            write(&mut engine, "Page", &variables(MAX_SOUP_PAGES), &data, None).await,
+            [1].into()
+        );
+        assert!(matches!(
+            engine
+                .read_query(None, QUERY, Some("Page"), &variables(0))
+                .await
+                .unwrap(),
+            ReadResult::Miss
+        ));
+    });
+}
+
+#[test]
+fn query_updates_remain_scoped_while_an_optimistic_layer_is_pending() {
+    pollster::block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let a = variables(1);
+        let data = page("shared", "Original", false);
+        write(&mut engine, "Page", &a, &data, Some(1)).await;
+        engine
+            .begin_optimistic_write(
+                None,
+                BeginOptimisticWrite {
+                    uuid: "00000000-0000-4000-8000-000000000001",
+                    query: "mutation { setEntityProperty { id } }",
+                    operation_name: None,
+                    variables: &serde_json::Map::new(),
+                    data: &json!({"setEntityProperty":{"id":"pending-property"}}),
+                    link_patches: &[],
+                    revalidations: &[],
+                    created_at_ms: 1,
+                },
+            )
+            .await
+            .unwrap();
+        let result = engine
+            .write_query(None, QUERY, Some("Page"), &variables(2), &data, None)
+            .await
+            .unwrap();
+        assert!(result.affected_ops.is_empty());
+        assert_eq!(result.search_changed_buckets, Some(BTreeSet::new()));
+        assert_eq!(
+            write(
+                &mut engine,
+                "Page",
+                &a,
+                &page("shared", "Renamed", false),
+                None
+            )
+            .await,
+            [1].into()
+        );
+    });
+}
+
+#[test]
 fn resets_and_invalidations_still_reexecute_all_affected_readers() {
     pollster::block_on(async {
         let mut engine = Engine::new(InMemoryStorage::new());
@@ -205,6 +283,12 @@ fn resets_and_invalidations_still_reexecute_all_affected_readers() {
         let b = variables(2);
         write(&mut engine, "Page", &a, &page("doc", "Doc", false), Some(1)).await;
         write(&mut engine, "Page", &b, &page("doc", "Doc", false), Some(2)).await;
+        let key = EntityKey::entity("GraphqlUser", &["viewer"]);
+        assert_eq!(engine.invalidate_keys([&key]).unwrap().value, [1, 2].into());
+        assert_eq!(
+            engine.delete_keys(&[key]).await.unwrap().value,
+            [1, 2].into()
+        );
         let reset = engine
             .write_query(
                 None,
