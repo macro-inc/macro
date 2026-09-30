@@ -1,12 +1,10 @@
-import type {
-  GetCompanyResponses,
-} from '../../../generated/storage/types.gen';
+import type { GetCompanyResponses } from '../../../generated/storage/types.gen';
+import type { RichMessage } from '../../mentions';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { PropertiedEntity } from '../entity';
 import { entitySearch } from '../search';
 import { Team } from '../teams/team';
-import { type RichMessage } from '../../mentions';
 import {
   CrmComment,
   type CrmCommentParent,
@@ -180,5 +178,4 @@ export class Company extends PropertiedEntity<CompanyDetail> {
   commentById(id: string): CrmComment {
     return CrmComment.byId(this.client, this.commentParent, id);
   }
-
 }

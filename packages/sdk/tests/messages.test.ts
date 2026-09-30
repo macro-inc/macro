@@ -375,7 +375,9 @@ describe('shared message API contracts', () => {
     await replied.delete();
 
     const writes = requests.filter((request) => request.method !== 'GET');
-    expect(writes.map((request) => [request.method, new URL(request.url).pathname])).toEqual([
+    expect(
+      writes.map((request) => [request.method, new URL(request.url).pathname]),
+    ).toEqual([
       ['POST', path],
       ['POST', path],
       ['PATCH', `${path}/items/${replyId}`],

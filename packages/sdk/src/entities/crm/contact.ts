@@ -1,10 +1,8 @@
-import type {
-  GetContactResponses,
-} from '../../../generated/storage/types.gen';
+import type { GetContactResponses } from '../../../generated/storage/types.gen';
+import type { RichMessage } from '../../mentions';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { FavoritableEntity } from '../entity';
-import { type RichMessage } from '../../mentions';
 import {
   CrmComment,
   type CrmCommentParent,
@@ -121,5 +119,4 @@ export class Contact extends FavoritableEntity<ContactDetail> {
   commentById(id: string): CrmComment {
     return CrmComment.byId(this.client, this.commentParent, id);
   }
-
 }
