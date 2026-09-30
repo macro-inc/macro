@@ -60,10 +60,16 @@ export type TourStep = {
 
 /**
  * - `anchored`: the target is on screen.
- * - `waiting`: the target is missing but its entry is on screen and unpressed.
+ * - `waiting`: the target is missing but its entry is on screen.
+ * - `revealing`: the entry was just pressed and the target hasn't appeared
+ *   yet. Nothing shows, so the card appears at the target instead of
+ *   floating first; if nothing appears shortly, the step waits again.
  * - `floating`: nothing to point at; the card floats in the boundary.
  */
-export type TourStatus = 'anchored' | 'waiting' | 'floating';
+export type TourStatus = 'anchored' | 'waiting' | 'revealing' | 'floating';
+
+/** How long a pressed entry has to reveal its target before the beacon returns. */
+const REVEAL_TIMEOUT = 1500;
 
 export type TourContextValue<Step extends TourStep = TourStep> = {
   steps: Accessor<readonly Step[]>;
@@ -185,32 +191,43 @@ function TourRoot<Step extends TourStep>(props: TourRootProps<Step>) {
     target() ? undefined : resolveTourTarget(entries(), boundary())
   );
 
-  // Pressing an entry clears its beacon. It's remembered per element, so
-  // when that press reveals the next entry in the chain (a sidebar toggle
-  // showing the row to open), the beacon moves there. The target appearing,
-  // by any route, forgets it, so leaving again shows the beacon again.
+  // Pressing an entry hides everything while the press does its work. The
+  // press is remembered per element, so when it reveals the next entry in a
+  // chain (a sidebar toggle showing the row to open) the beacon moves there
+  // at once. If the target doesn't appear in time, the beacon comes back.
   const [pressedEntry, setPressedEntry] = createSignal<HTMLElement>();
   createEffect(
     on([index, target], () => setPressedEntry(undefined), { defer: true })
   );
   createEffect(() => {
+    const element = pressedEntry();
+    if (!element) return;
+    const timer = setTimeout(() => {
+      if (pressedEntry() === element) setPressedEntry(undefined);
+    }, REVEAL_TIMEOUT);
+    onCleanup(() => clearTimeout(timer));
+  });
+  createEffect(() => {
     const element = entry();
     if (!element) return;
     const press = () => setPressedEntry(element);
+    const pressKey = (event: KeyboardEvent) => {
+      if (event.key === 'Enter' || event.key === ' ') press();
+    };
     element.addEventListener('pointerdown', press, true);
-    element.addEventListener('keydown', press, true);
+    element.addEventListener('keydown', pressKey, true);
     onCleanup(() => {
       element.removeEventListener('pointerdown', press, true);
-      element.removeEventListener('keydown', press, true);
+      element.removeEventListener('keydown', pressKey, true);
     });
   });
 
-  const status = (): TourStatus =>
-    target()
-      ? 'anchored'
-      : entry() && entry() !== pressedEntry()
-        ? 'waiting'
-        : 'floating';
+  const status = (): TourStatus => {
+    if (target()) return 'anchored';
+    const waitingOn = entry();
+    if (!waitingOn) return 'floating';
+    return waitingOn === pressedEntry() ? 'revealing' : 'waiting';
+  };
 
   const goTo = (next: number) => {
     const clamped = Math.min(Math.max(next, 0), props.steps.length - 1);
@@ -327,13 +344,24 @@ export type TourPopoverProps = ParentProps<{
 
 /**
  * The step content as a floating, non-modal card next to the target, kept
- * inside the boundary. Hidden while the step waits on its entry.
+ * inside the boundary. Hidden while the step waits on or reveals its entry.
  *
  * `data-placed` appears once the card is positioned (animate its entrance
  * from there) and `data-settled` a frame later (animate moves between steps
  * only then).
  */
 function TourPopover(props: TourPopoverProps) {
+  const tour = useTour();
+  // Each appearance mounts a fresh card, so it rises where it belongs
+  // instead of resuming from wherever it last was.
+  return (
+    <Show when={tour.status() === 'anchored' || tour.status() === 'floating'}>
+      <PopoverCard {...props} />
+    </Show>
+  );
+}
+
+function PopoverCard(props: TourPopoverProps) {
   const tour = useTour();
   const [card, setCard] = createSignal<HTMLElement>();
   const [position, setPosition] = createSignal({
@@ -360,7 +388,8 @@ function TourPopover(props: TourPopoverProps) {
 
   createEffect(() => {
     const element = card();
-    if (!element || tour.status() === 'waiting') return;
+    const status = tour.status();
+    if (!element || (status !== 'anchored' && status !== 'floating')) return;
     const target = tour.target();
     const boundary = tour.boundary();
     // App-scoped targets live outside the split, so bound by the viewport.
@@ -409,40 +438,38 @@ function TourPopover(props: TourPopoverProps) {
   });
 
   return (
-    <Show when={tour.status() !== 'waiting'}>
-      <Portal>
-        <section
-          ref={setCard}
-          role="dialog"
-          aria-modal="false"
-          aria-labelledby={tour.titleId}
-          data-tour-popover
-          data-status={tour.status()}
-          data-placed={position().placed ? '' : undefined}
-          data-settled={settled() ? '' : undefined}
-          class={cn('fixed left-0 top-0 z-[70]', props.class)}
-          style={{
-            transform: `translate3d(${position().x}px, ${position().y}px, 0)`,
-            // Transparent until first placed, so it never flashes at 0,0.
-            opacity: position().placed ? undefined : 0,
-            visibility: position().hidden ? 'hidden' : 'visible',
-            'max-width': position().maxWidth
-              ? `${position().maxWidth}px`
-              : undefined,
-            'max-height': position().maxHeight
-              ? `${position().maxHeight}px`
-              : undefined,
-          }}
-          onKeyDown={(event) => {
-            if (event.key !== 'Escape') return;
-            event.stopPropagation();
-            tour.dismiss();
-          }}
-        >
-          {props.children}
-        </section>
-      </Portal>
-    </Show>
+    <Portal>
+      <section
+        ref={setCard}
+        role="dialog"
+        aria-modal="false"
+        aria-labelledby={tour.titleId}
+        data-tour-popover
+        data-status={tour.status()}
+        data-placed={position().placed ? '' : undefined}
+        data-settled={settled() ? '' : undefined}
+        class={cn('fixed left-0 top-0 z-[70]', props.class)}
+        style={{
+          transform: `translate3d(${position().x}px, ${position().y}px, 0)`,
+          // Transparent until first placed, so it never flashes at 0,0.
+          opacity: position().placed ? undefined : 0,
+          visibility: position().hidden ? 'hidden' : 'visible',
+          'max-width': position().maxWidth
+            ? `${position().maxWidth}px`
+            : undefined,
+          'max-height': position().maxHeight
+            ? `${position().maxHeight}px`
+            : undefined,
+        }}
+        onKeyDown={(event) => {
+          if (event.key !== 'Escape') return;
+          event.stopPropagation();
+          tour.dismiss();
+        }}
+      >
+        {props.children}
+      </section>
+    </Portal>
   );
 }
 

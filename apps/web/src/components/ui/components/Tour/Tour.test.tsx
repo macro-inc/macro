@@ -195,8 +195,10 @@ describe('Tour', () => {
     );
 
     fireEvent.pointerDown(screen.getByRole('button', { name: 'Settings' }));
+    // Nothing shows while the press reveals the target: no card at the
+    // corner that would then glide over.
     expect(document.querySelector('[data-tour-beacon]')).toBeNull();
-    expect(status()).toBe('floating');
+    expect(screen.queryByRole('dialog')).toBeNull();
 
     setShown(true);
     await settle();
@@ -296,6 +298,33 @@ describe('Tour', () => {
     await settle();
     expect(tour.status()).toBe('waiting');
     expect(tour.entry()).toBe(screen.getByTestId('row'));
+  });
+
+  it('brings the beacon back when a press reveals nothing', async () => {
+    vi.useFakeTimers();
+    try {
+      render(() => (
+        <>
+          <button type="button" ref={tourTarget(T.entry)}>
+            Settings
+          </button>
+          <Tour.Root
+            steps={[
+              { target: T.hidden, entry: T.entry, title: 'x', description: '' },
+            ]}
+          >
+            <Probe />
+          </Tour.Root>
+        </>
+      ));
+      await vi.advanceTimersByTimeAsync(0);
+      fireEvent.pointerDown(screen.getByRole('button', { name: 'Settings' }));
+      expect(tour.status()).toBe('revealing');
+      await vi.advanceTimersByTimeAsync(1600);
+      expect(tour.status()).toBe('waiting');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('falls back to the root entry for steps with a target', async () => {
