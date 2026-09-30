@@ -91,12 +91,11 @@ function Submit(props: ButtonProps & { hasContent: boolean }) {
   return (
     <Button
       {...rest}
-      variant={local.variant ?? (local.hasContent ? 'accent' : 'ghost')}
+      variant={local.variant ?? 'strong'}
       depth={3}
       class={cn(
-        'gap-3 rounded-lg',
-        local.variant !== 'outline' && 'border-0',
-        !isTouchDevice() && 'rounded-full h-[33.75px] px-[15px]',
+        'gap-3',
+        !isTouchDevice() && 'h-[33.75px] px-[15px]',
         local.class
       )}
     >

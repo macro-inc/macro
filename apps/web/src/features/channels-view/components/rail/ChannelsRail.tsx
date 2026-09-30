@@ -40,6 +40,7 @@ import {
 import { notificationIsRead } from '@entity/utils/notification';
 import { ensureNotificationSourceLoaded } from '@notifications/notification-helpers';
 import { hydrateChannelNotificationSelection } from '@queries/channel/notification-selection';
+import { fetchChannelSelectionById } from '@queries/channel/selection-by-id';
 import {
   useChannelLabelsQuery,
   useCreateChannelLabelMutation,
@@ -174,23 +175,23 @@ export function ChannelsRail(props: ChannelsRailProps) {
           openInNewSplit: true,
           referredFrom: 'channels',
           notificationSource,
-          scopeChannelThreads: false,
+          channelNavigation: 'latest',
+          channelReadScope: 'top-level',
         });
         return;
       }
       const selection = channelPreviewSelection(channelId, {
         target: getChannelEntityTarget(entity, {
-          scopeChannelThreads: false,
+          channelNavigation: 'latest',
         }),
-        notifications: entity.notifications,
       });
       const previous = selectedChannel();
       if (!setSelectedChannel(selection)) return;
-      // Mark on every accepted activation, including re-clicks of the same
-      // route. The detail's ready-id effect only handles initial/route opens.
-      if (channel.isParticipant !== false) {
+      // The detail owns read marking on route opens. Re-clicks refresh and
+      // mark again even though the mounted route does not change.
+      if (previous?.id === selection.id && channel.isParticipant !== false) {
         markChannelNotificationsSeenOnOpen(entity, notificationSource, {
-          scopeChannelThreads: false,
+          channelReadScope: 'top-level',
         });
       }
       // Repeated clicks must navigate even when the route stays the same.
@@ -232,6 +233,19 @@ export function ChannelsRail(props: ChannelsRailProps) {
     const channelId = channel.id;
     if (!channelId) {
       reportActivationError(new Error('Missing channel id'));
+      return;
+    }
+    // A different channel owns its loading UI and notification hydration.
+    // Select it before fetching so the rail and destination respond to the
+    // click immediately. Re-clicks still refresh and re-aim the open channel.
+    if (!openInNewSplit && selectedChannel()?.id !== channelId) {
+      setSelectedChannel(
+        channelPreviewSelection(channelId, {
+          target: channel.target
+            ? { kind: 'message', ...channel.target }
+            : undefined,
+        })
+      );
       return;
     }
     const selection = hydrateChannelNotificationSelection(
@@ -472,12 +486,17 @@ export function ChannelsRail(props: ChannelsRailProps) {
             ? item.channel
             : channelsById().get(channelId);
         if (channel) activateChannel(channel, openInNewSplit);
-        else if (openInNewSplit) {
-          layout.openWithSplit(
-            { type: 'channel', id: channelId },
-            { preferNewSplit: true, referredFrom: 'channels' }
-          );
-        } else setSelectedChannel({ type: 'channel', id: channelId });
+        else {
+          const request = ++activation;
+          if (openInNewSplit) {
+            void selectHydratedChannel(
+              fetchChannelSelectionById(channelId),
+              request,
+              channelId,
+              true
+            );
+          } else setSelectedChannel({ type: 'channel', id: channelId });
+        }
       },
     })
   );

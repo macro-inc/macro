@@ -9,9 +9,22 @@ keeps loaded items visible. Wait for real rows before navigating or selecting.
 
 ## Top bars
 
-Right-aligned split-header actions (including Calendar's touch/preview New event
-and Channel's Call and Ask Macro) are borderless with a rounded-xl background on
-hover. Channel header tabs use fully rounded tracks and selected pills.
+Low-emphasis right-aligned split-header actions (including Calendar's touch/preview
+New event and Channel's idle Call and Ask Macro) are borderless with a rounded-xl
+background on hover. Emphasized variants retain their treatment, including an
+active call's green ink and outline frame. Channel header tabs use fully rounded tracks and
+selected pills. Button sizes do not change variant colors or framing; individual
+framed controls default to glass on touch and flat on desktop. Use `glass={true}`
+to enable glass on all devices, or `glass={false}` to disable it everywhere.
+Embedded and low-emphasis actions use `ghost`; inline calendar-invitation text
+actions remove the transparent border to keep their text alignment.
+
+## Dialog actions
+
+Cancel uses a ghost button. Confirm, save, and create actions use strong: the
+outline surface and border with semibold text, without inverted colors. Disabled
+and pending primary actions retain the strong variant. Mobile confirmation drawers
+use the same action hierarchy.
 
 ## User cards
 
@@ -41,6 +54,15 @@ block targets, but not workspace paths or pane-local search state; unsupported
 links remain text.
 
 ## Live updates in flat Soup lists
+
+The normalized cache retains at most 64 flat/grouped Soup page snapshots per
+viewer, with a combined 512 KiB encoded budget. Older pages can require a network
+refetch when revisited; normalized entities and queued offline edits are not
+removed. Backfills hydrate entities/indexes without retaining their pagination
+wrappers. Existing oversized viewer records compact once on a compatible open,
+without resetting storage generation or pending mutations. To verify, load many
+pages, revisit an evicted page online, and confirm an offline property edit still
+replays after reopening the app.
 
 With browser or native Tauri GraphQL caching enabled, locally supported flat lists reconcile their
 loaded server pages with matching cached entities. Complete matching updates can
@@ -98,6 +120,37 @@ Realtime Soup batches coalesce repeated entity IDs (including entity type), keep
 that entity's last operation in the batch. Emitted `SoupUpdated` items are non-null.
 If viewer-scoped hydration finds no item, the backend logs and omits that update;
 it does not imply deletion. Only explicit `GraphqlCacheDeletion` events remove records.
+
+## In-app reminder alerts
+
+With reminders enabled, an unseen reminder notification produces a persistent
+alert while the Macro tab is visible, including when DevTools, the address bar,
+or another window has keyboard focus. Browser notification permission is not
+required. Returning to a hidden tab also surfaces unseen reminders from the
+loaded notification feed. Alerts do not activate the full notification history
+query: live arrivals are buffered independently while the tab is hidden.
+Multiple occurrences share one alert, with up to three descriptions and a count
+of the rest; normal save/copy toasts do not replace it.
+
+**Open reminder** opens the reminder details, including standalone reminders.
+For a group, **View reminders** opens the reminders list. Opening acknowledges
+the alert only after navigation applies; a rejected or superseded navigation
+leaves the card actionable. Opening or closing acknowledges it only in this
+browser account; it does not complete, delete, or snooze a reminder.
+Acknowledgements survive reloads and synchronize between tabs on the same origin.
+A later occurrence of a recurring reminder alerts again.
+Seeing or completing its notification elsewhere also removes it from the alert.
+
+Existing item-level notification mutes and snoozes also hide matching reminder
+alerts. Snoozing does not acknowledge the occurrence: an unseen alert can return
+when the snooze expires, without requiring another network event. The alert does
+not add a new per-occurrence Snooze control.
+
+When verifying, intercept notification responses in an owned browser tab and
+inject unseen reminder fixtures instead of scheduling real hosted reminders.
+Check permission denied, a burst of reminders before history loads, hide/show,
+reload after dismissal, mute/unmute, snooze expiry, and desktop/mobile widths. This foreground path does not deliver browser
+push when Macro is closed.
 
 ## Home (desktop) / Notifications (mobile) — `/app/home`
 
@@ -820,6 +873,32 @@ that path. Calendar navigation defaults to Day on phones and Week on desktop; th
 recent choice is remembered locally for navigation that does not specify a period. An
 opened event is reflected in the pane-owned `sN.calendar.eventId` search parameter.
 
+Period selection updates its label and route immediately. The active grid redraws
+on a deferred task; hidden neighboring periods follow on separate tasks. Calendar
+grids stay mounted and undimmed while occurrences load. An uncached range never
+shows events from the previous range. After a short delay, representative event
+skeletons appear without adding synthetic FullCalendar events. Week/Day use sparse
+blocks with varied start times and durations, plus separate all-day bars. Month mixes
+filled bars for all-day/multi-day-style entries with single subtle text lines for
+single-day timed-style entries, without placeholder dots or time chips. Patterns stay
+stable for each date and clear the date headers. Skeletons preserve the grid, scroll
+position, and navigation.
+Quick loads skip the skeletons. Real events lay out underneath during the brief
+minimum display, then fade in as the skeletons fade out. Changing period during a
+load carries feedback into the new cells without restarting the appearance delay.
+Background refreshes retain current events without skeletons or a transient loading
+pill. Provider sync and errors still show their own states. Verify delayed occurrence
+responses: switch Month/Week/Day rapidly and navigate without blanking the grid.
+Confirm mixed event shapes, stable positions, clean handoff, and an uncovered Retry.
+Reduced-motion mode disables pulses and transitions. The page stays busy until the
+handoff starts. Hidden pages do not animate. Resize to confirm skeleton alignment.
+
+A single period arrow retains its slide. Rapid arrow clicks and period hotkeys
+accumulate against the requested date and interrupt unfinished slides, without
+waiting for event responses or hidden-page redraws. Verify repeated forward clicks
+and mixed directions reach the cumulative date while events are still loading.
+Touch swipes retain their page-readiness gates.
+
 Quick-call creation, incoming invitations, Live lists, Macro meeting links, and
 the `/app/meet/*` routes require the PostHog flag `enable-quick-calls`. While the
 flag loads or is off, those controls stay hidden and meeting routes do not mount
@@ -869,22 +948,30 @@ Reminder. Inline Calendar previews retain their host's chrome without adding
 another sidebar; their left header island has a compact New menu because the
 bottom New action follows the foreground host view.
 
-The in-view desktop Calendar header follows Drive's two-level layout: the slim
-top bar shows the viewed month and year and, when the sidebar is closed, a
-compact `New` menu. At wide widths, the row beneath puts `Search events` on
-the left and a labeled `Today` button followed by the rounded period selector
-and previous/next arrows on the right. The idle search field places its hotkey
-beside the placeholder. A query reveals the icon-only Exact-match toggle at
-wide widths; in narrow splits, Exact and Filters appear after focusing search.
-The filter button stays before Clear. The filter menu opens below the button,
-aligned to its right edge: Search in is single-select, while Status, Organizer,
-and Attendee allow multiple values. Organizer and Attendee virtualize their
-contact lists; selected contacts stay in place, while custom email addresses
-appear first. Adding a valid email clears the contact search. Filter selections
-apply immediately, and only these filters mark the filter button, not Exact
-mode. Clicking search opens a calendar-search hint until at least three
-characters are entered; searches show skeleton rows while loading. Empty
-results show an illustrated empty state. Result titles show a calendar-color
+The in-view desktop Calendar header uses one responsive top bar. The viewed
+month and year stay on the left in a heading that scales from 16px in narrow
+splits to a maximum of 24px, with a compact `New` menu when the sidebar is closed.
+An icon-only ghost `Search events` button sits on the right, before a slightly
+larger gap and the `Today`, period selector, and previous/next controls.
+Click Search or press Cmd/Ctrl+F to expand and focus the wider inline search field.
+The field slides out with a short width transition and focuses immediately.
+The results popup stays hidden until the field contains non-whitespace text,
+then fades and slides in once expansion is nearly complete. Clearing the field
+hides the popup without collapsing search. Reduced-motion preferences skip
+both transitions.
+Close search, Escape, selecting a result, or clicking outside collapses it back
+to the icon without clearing the query. Activating a period control also
+collapses search after the action runs. Escape and Close restore focus to the
+Search button. The expanded field exposes Filters and, after typing, the
+icon-only Exact-match toggle. The filter button stays before Close. The filter
+menu opens below the button, aligned to its right edge: Search in is
+single-select, while Status, Organizer, and Attendee allow multiple values.
+Organizer and Attendee virtualize their contact lists; selected contacts stay
+in place, while custom email addresses appear first. Adding a valid email clears
+the contact search. Filter selections apply immediately, and only these filters
+mark the filter button, not Exact mode. Search opens a calendar-search hint
+until at least three characters are entered; searches show skeleton rows while
+loading. Empty results show an illustrated empty state. Result titles show a calendar-color
 swatch when the event is loaded in the visible range, falling back to the
 default calendar color otherwise. A result shows its location after the
 date/time when available. Each result offers at most one rounded Join action:
@@ -898,14 +985,19 @@ occurrence details before showing Join. Selecting a result preserves the search
 text. Availability lives in the desktop sidebar's Upcoming events section and
 in the mobile header.
 
-Resizing the split keeps the same search field mounted in the fixed-height
-header row. At narrow widths the row hides `Today` and the period selector,
-then the navigation arrows when space becomes scarce; focusing search also
-hides the remaining controls to give the field room. Its clear button remains
-available when a query is present. The `New` menu stays in the desktop top
-bar. Touch devices keep the month selector and header controls without separate
-create or call buttons in the right island. The desktop sidebar's mini
-calendar remains navigable by date and month.
+The period controls move into a separate row below 600px of calendar-pane width,
+with `New` on the left and navigation on the right. With a docked sidebar, the
+header needs fewer controls and stays inline down to 480px. This avoids wrapping
+and immediately unwrapping when the sidebar hides. Expanded search does not
+force early wrapping; its results popup stays directly below the search field.
+Below 1040px, search slides over the month title without moving any controls or
+changing the header height. `New` stays outside the search overlay. Resizing the
+pane keeps the search field mounted and preserves its query and focus. Today
+and New retain their text labels until the controls row runs out of room, then
+become icon buttons.
+Touch devices keep the month selector and header controls without separate
+create or call buttons in the right island. Mobile header islands omit Search.
+The desktop sidebar's mini calendar remains navigable by date and month.
 
 Active Quick Calls you created, participated in, or were invited to appear above your
 next five events (including ones in progress), whether or not they have call links.
@@ -1136,7 +1228,8 @@ Join-preview and in-call controls use the standard Macro icon buttons. Pause
 over the microphone, camera, or background group to reveal an animated settings popover
 above the call toolbar; click its caret to keep it open. Brief pointer passes
 do not open settings, and moving into the popover keeps it open. Settings
-respect reduced-motion preferences.
+respect reduced-motion preferences. The toolbar and settings panels use Macro's
+shared glass surface in both light and dark themes.
 Audio settings include microphone, speaker, and noise suppression. Camera
 settings include the camera selector. Clicking the background icon toggles the
 selected effect off/on, restoring the last blur strength or image (Strong blur
@@ -1146,6 +1239,11 @@ and touch access. Click outside or press Escape to close the settings.
 The controls also work by keyboard and touch.
 
 ### Sharing a call
+
+With quick calls enabled, channel calls use the same **Copy Meeting Url** button
+as instant and scheduled calls. Clicking it creates the share link and copies it;
+opening the call tab alone does not create a link. If loading fails, click again
+to retry. If clipboard access fails, a selectable URL appears below the button.
 
 A channel call's **Share** dialog has a `Team access` control (None or View) for the same canonical
 team share. Its side panel has a `Sharing` section with one `Share with team` checkbox, and the
@@ -1528,7 +1626,21 @@ session were not exercised by that UI check.
 
 ## Notifications
 
-Toast regions are labeled `Notifications (alt+T)`; five empty live regions always exist in
+On native Android, enable notifications in Settings while signed in. Android 13+
+also asks for system permission; the system's **Activity** notification channel
+must be enabled. Remote push owns system notification display after registration,
+so the same WebSocket event should not create a second local notification. Tapping
+a notification opens its target; simply receiving one does not navigate. Check
+this with the app foregrounded, backgrounded, and after ordinary process death.
+Logout clears delivered notifications and disables receipt for the old account.
+After a transient native listener failure, verify that notification taps recover
+without restarting the app. Android alerts without display text show
+`New notification`; silent read/done clears must remain silent.
+Also verify logout and notification opt-out while registration is pending: late
+backend or native completions must leave the receiver disabled. If a new account
+signs in before cleanup finishes, its registration must remain active afterward.
+
+Toast regions are labeled `Notifications (alt+T)`; seven empty live regions always exist in
 the a11y tree (ignore them when parsing snapshots).
 
 Staff Noise emails still create in-app notification rows, but do not send a new-notification
@@ -1609,3 +1721,24 @@ action is unavailable.
 focus to its trigger. Busy overlapping events are labeled, while cancelled, declined,
 and free events do not count as conflicts. Calendar 12/24-hour preferences apply to
 already-open invitation cards as well as the calendar view.
+
+### Agent reasoning effort
+
+Open the model selector and hover a model to choose its reasoning effort in the
+submenu. Keyboard users open it with Right Arrow; touch users tap the model.
+Cursor and Macro's in-memory agent load the hovered model's own advertised
+choices. The selected label includes the effort, such as `Sonnet 5 · High`;
+there is no separate effort control in the input box. Models without effort
+support remain selectable through `Use <model>` (or a desktop click/Enter).
+Default keeps the model's existing behavior.
+
+In an open session, choosing a different model's effort confirms the model first,
+then validates and applies effort. Wait for the selector to become available
+again. If the model succeeds but effort is rejected, the new model remains
+selected with its confirmed effort; the error is shown and no unsupported
+setting is presented as accepted.
+
+New conversations confirm selected model and effort settings before sending the
+first message. If startup reports a rejected setting or timeout, the first prompt
+has not been sent. See [effort capabilities](../AGENT_EFFORT.md) for the harness
+contracts and test coverage.

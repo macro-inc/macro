@@ -33,6 +33,34 @@ bytes reached storage; previews, DOCX conversion, Markdown initialization, and
 indexing may finish asynchronously. Invalid contents, oversized files, and folder
 permission failures should display a failed tool call without a successful result.
 
+## Generating images with AI
+
+`GenerateImage` takes a text prompt, renders it with Google's Nano Banana image
+model, and saves the result as an image document. Optional arguments: a short file
+name (otherwise the opening words of the prompt name the document), an aspect ratio
+(`square`, `landscape`, `portrait`, `widescreen`, `tall`), and a project ID (edit
+access required). The file extension comes from the generated format, so
+`fileName: "lighthouse"` yields `lighthouse.png`.
+
+For edits or variations, attach photos with the existing paperclip or use Macro
+image documents the user can view. Pass up to three references in `referenceImages`,
+for example `[{"type":"staticFile","id":"<UUID>"},{"type":"document","id":"<UUID>"}]`.
+For an uploaded photo, use the UUID from `/file/<id>` in its attachment URL;
+for a document, use its document ID. Describe the edit in `prompt`, referring to
+image 1, image 2, and image 3 in array order. A description alone does not send
+the photo to the image model. The result is saved as a new document.
+
+The result appears as a standalone image card outside grouped tool calls. A
+rounded header shows the filename above the image preview; clicking the card
+opens the image document in a new app split. The card fits the image's scaled
+width without side padding, preserves its aspect ratio, and truncates long
+filenames in the header. The preview loads once the upload
+is ready, with a placeholder while it is being prepared. Any commentary the
+model added appears below the image.
+Refused prompts, provider failures, and hosts without a Google Generative AI key
+display a failed tool call; the error tells the agent whether to rephrase, retry,
+or stop.
+
 ## Where chats live
 
 The Agents conversation list shows row skeletons after a short delay on first
@@ -74,7 +102,8 @@ the shimmer.
   Changing the composer mode does not filter the sidebar.
   Selecting a row opens its own mode; Shift-click opens it in a new split.
   Right-click (or long-press on mobile) opens the same entity menu as Home:
-  Rename, Favorite, Copy link, Share, Delete, and the other session actions.
+  Rename, Favorite, Copy link, Share, Archive, Delete, and the other session
+  actions. Archived sessions are grouped at the bottom under **Archived**.
 - The starting page has a compact composer that starts at one line and grows
   with longer prompts or Shift+Enter. Lists, quotes, headings, and other
   non-paragraph blocks expand immediately, even with short text. This also applies
@@ -153,7 +182,11 @@ the shimmer.
   confirm button. Someone who reaches no repository sees a hint with **Connect
   GitHub**, which opens Settings → Connected. Listed recents are remembered
   per user in local storage and offered first, without changing the Automatic
-  default. Once selected, **Branch** shows the repository's default branch (`main` when it
+  default. Automatic selection always chooses an accessible repository, using
+  the most recent accessible session repository when the prompt is ambiguous,
+  or the first available repository for users without repository history. Questions
+  and investigations also get a repository. With no accessible GitHub repositories,
+  starting a coding session fails with a prompt to connect GitHub. Once selected, **Branch** shows the repository's default branch (`main` when it
   has none) and opens a searchable list of that repository's branches
   (`GET /agent-repositories/branches?repoUrl=…` on the agent harness),
   default first. Typing filters the list; an unlisted valid name adds a
@@ -216,6 +249,9 @@ the shimmer.
   the right.
   Existing sessions retain their agent and kind; use **New conversation** to
   choose another. Stop, queued-message advancement, and quoting remain available.
+  Archived sessions are read-only: Rename and all message controls are unavailable,
+  and an **Unarchive** action replaces the composer at the bottom. Archive /
+  Unarchive is also available from the title dropdown.
 - Touch devices and users outside the flag retain the Owned / Running / Shared /
   Automations / Skills list. On touch devices, conversation links open standalone
   agent sessions or legacy chats instead of the desktop Agents workspace. A standalone legacy chat is `/app/chat/<uuid>`; doc-scoped chat
@@ -260,6 +296,7 @@ is available, the AI composer returns with its draft intact, including in
 documents without a comment composer. Type a
 prompt, optionally choose a model or
 attach context, and tap **Send** to create the chat and send its first message.
+Enter on the virtual keyboard adds a line to the draft rather than sending it.
 The paperclip (**Attach files**) opens the device file chooser directly, including
 in the native iPhone app; it does not open a Macro file browser. Select supported
 files to upload and attach them, or cancel to return to the unchanged draft.
@@ -449,6 +486,7 @@ After completion, each assistant message gets `Edit assistant response in Notes`
 The chat auto-titles itself after the first exchange (route stays stable, title changes).
 
 The agent has workspace tools (it can list your documents, read channels, create tasks,
+list, create, and update projects (initiatives in the API) and move tasks in or out of them,
 render `displayResults` views). Requests go to `POST /cognition/stream/chat/message`; results
 stream over the app's websocket, not the HTTP response.
 
@@ -465,6 +503,16 @@ and the passage is highlighted in the document with the comment floating beside 
 A passage that is missing, spans blocks, or repeats with no occurrence chosen is
 refused with no highlight left behind. The comment is posted as the agent with a
 **from <user>** pill, and needs the user's comment access to the document.
+
+Project rows include **Find projects**, **Read project**, **Create project <name>**,
+**Update project**, **Add N tasks to project**, and **Remove N tasks from project**.
+The assignment and removal rows show a task count; the caret expands each task id
+and its outcome, with the full response available under **Result data**. Assignment
+outcomes are **assigned**, **moved**, **not a task**, **not found**, or
+**skipped no permission**. Removal outcomes are **unassigned** or **not assigned**;
+a task in a different project is left unchanged. Both actions require edit access
+to the project and each task. Removal stops on access or service failures, so
+previous tasks in the same batch may already have been removed.
 
 ## Agent sessions asking a question
 
@@ -539,8 +587,13 @@ video previews that open the same lightbox as channel media; file chips that
 open the file). A prompt may be files only, including the
 first message in a new conversation. Uploading attachments survive switching the
 agent or opening repository settings; sending clears the attachment previews.
-Queued prompts
+Expanded queued prompts
 list their attached file names under the text; editing a queued prompt keeps them.
+
+On a local stack, the in-memory agent reads uploaded image attachments from local
+storage and sends their bytes to the model. The provider does not need access to
+the stack's private hostname. This also applies to images in earlier turns when
+resuming a conversation after a service restart.
 
 Cursor walkthrough files the run re-hosts appear in the transcript after the
 answer: screenshots as images, recordings as video players, and `.txt` / `.log`
@@ -551,7 +604,11 @@ On mobile the composer (and any queued prompts above it) floats in the bottom
 accessory region above the dock — same placement as channel and AI chat — so it
 stays tappable and clear of the home indicator. The box is full width; the text
 sits on top and a footer row holds the model (left, as a provider logo and
-name, e.g. `✳ Sonnet 5 ⌄`) and **Send** (right). Tapping the model opens a
+name, e.g. `✳ Sonnet 5 ⌄`) and **Send** (right). On touch devices Enter on the
+virtual keyboard inserts a newline and never sends; only **Send** submits, the
+same as channel composers. This also applies to the Agents workspace session
+and new-conversation inputs and to the mobile **Ask AI** composer. On desktop
+Enter still sends and Shift+Enter inserts a newline. Tapping the model opens a
 bottom sheet listing every model the same way, with a check on the current one
 — pick a row to switch. Models read as names even when the runtime reports
 only ids: Macro Agent's `anthropic/claude-sonnet-5` shows as **Sonnet 5**. On desktop the
@@ -840,9 +897,17 @@ must stay hidden; subsequent live messages must still appear.
   harness restart — they must not disappear if the managing replica drains.
 - Queued prompts render as a list between the transcript and the input, newest at the
   top — the prompt about to be sent sits at the bottom, immediately above the input.
-  Each row shows a `Queued` label (with `by {user}` when someone else queued it —
+  The list is capped at the smaller of 40% of the viewport height and 24rem. Past that
+  it scrolls on its own and starts scrolled to the bottom, so the next-to-send row stays
+  visible. Scroll up inside the list to reach newer entries; no extra count row hides
+  messages. Each prompt starts as a single-line preview, including long messages.
+  Click a preview (or press Enter/Space on it) to open its editor; opening another
+  row collapses the previous one. The expanded editor scrolls within the smaller of
+  32% of the viewport and 16rem. Click the preview again or press Escape to collapse
+  it, retaining edits and editor state. Each row shows a `Queued` label (with `by
+  {user}` when someone else queued it —
   several users can stack prompts in one session's queue) and an always-visible remove
-  (`X`) button. A queued prompt's text is itself an editor: click in and type — changes
+  (`X`) button. Type in the expanded editor — changes
   autosave (debounced, and on blur) with no save button. Editing and removal are
   possible only until the entry dispatches; after that the row simply becomes the next
   user message in the transcript.
@@ -939,6 +1004,29 @@ Verify status changes (open/merged/closed) while the chip stays mounted, and
 verify that reconnecting the gateway catches up changes missed while disconnected.
 There is no periodic PR lookup polling.
 
+### Agent reasoning effort
+
+Open the model selector and hover a model to choose its reasoning effort in the
+submenu. Keyboard users open it with Right Arrow; touch users tap the model.
+Cursor and Macro's in-memory agent load the hovered model's own advertised
+choices. The selected label includes the effort, such as `Sonnet 5 · High`;
+there is no separate effort control in the input box. Models without effort
+support remain selectable through `Use <model>` (or a desktop click/Enter).
+Default keeps the model's existing behavior.
+
+In an open session, choosing a different model's effort confirms the model first,
+then validates and applies effort. Wait for the selector to become available
+again. If the model succeeds but effort is rejected, the new model remains
+selected with its confirmed effort; the error is shown and no unsupported
+setting is presented as accepted.
+
+New conversations confirm selected model and effort settings before sending the
+first message. If startup reports a rejected setting or timeout, the first prompt
+has not been sent. See [effort capabilities](../AGENT_EFFORT.md) for the harness
+contracts and test coverage.
+
+Routine model/agent pickers retain model-only selection: they do not offer effort
+choices, because routine targets do not save an effort setting.
 
 ## Reading skills
 

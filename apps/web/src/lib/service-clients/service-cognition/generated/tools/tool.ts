@@ -8,6 +8,10 @@ import * as schemas from './schemas';
 import type * as types from './types';
 
 type ToolParserMap = {
+  AssignTasksToInitiative: {
+    call: types.AssignTasksToInitiative;
+    response: types.AssignTasksToInitiativeResponse;
+  };
   BashCodeExecution: {
     call: types.BashCodeExecution;
     response: types.BashCodeExecutionResponse;
@@ -90,6 +94,10 @@ type ToolParserMap = {
     response: types.SpreadsheetResponse;
   };
   EditTag: { call: types.EditTag; response: types.EditTagResponse };
+  GenerateImage: {
+    call: types.GenerateImage;
+    response: types.GenerateImageResponse;
+  };
   GetBotWebhooks: {
     call: types.GetBotWebhooks;
     response: types.GetBotWebhooksResponse;
@@ -266,6 +274,10 @@ type ToolParserMap = {
     call: types.TextEditorCodeExecution;
     response: types.TextEditorCodeExecutionResponse;
   };
+  UnassignTasksFromInitiative: {
+    call: types.UnassignTasksFromInitiative;
+    response: types.UnassignTasksFromInitiativeResponse;
+  };
   UpdateCalendarEvent: {
     call: types.UpdateCalendarEvent;
     response: types.ToolCalendarEvent;
@@ -289,6 +301,10 @@ type ToolParserMap = {
 };
 
 const toolParserMap = {
+  AssignTasksToInitiative: {
+    call: schemas.AssignTasksToInitiative,
+    response: schemas.AssignTasksToInitiativeResponse,
+  },
   BashCodeExecution: {
     call: schemas.BashCodeExecution,
     response: schemas.BashCodeExecutionResponse,
@@ -374,6 +390,10 @@ const toolParserMap = {
     response: schemas.SpreadsheetResponse,
   },
   EditTag: { call: schemas.EditTag, response: schemas.EditTagResponse },
+  GenerateImage: {
+    call: schemas.GenerateImage,
+    response: schemas.GenerateImageResponse,
+  },
   GetBotWebhooks: {
     call: schemas.GetBotWebhooks,
     response: schemas.GetBotWebhooksResponse,
@@ -574,6 +594,10 @@ const toolParserMap = {
     call: schemas.TextEditorCodeExecution,
     response: schemas.TextEditorCodeExecutionResponse,
   },
+  UnassignTasksFromInitiative: {
+    call: schemas.UnassignTasksFromInitiative,
+    response: schemas.UnassignTasksFromInitiativeResponse,
+  },
   UpdateCalendarEvent: {
     call: schemas.UpdateCalendarEvent,
     response: schemas.ToolCalendarEvent,
@@ -611,6 +635,10 @@ type NamedRawTool = {
 };
 
 type ToolDataMap = {
+  AssignTasksToInitiative: {
+    call: types.AssignTasksToInitiative;
+    response: types.AssignTasksToInitiativeResponse;
+  };
   BashCodeExecution: {
     call: types.BashCodeExecution;
     response: types.BashCodeExecutionResponse;
@@ -693,6 +721,10 @@ type ToolDataMap = {
     response: types.SpreadsheetResponse;
   };
   EditTag: { call: types.EditTag; response: types.EditTagResponse };
+  GenerateImage: {
+    call: types.GenerateImage;
+    response: types.GenerateImageResponse;
+  };
   GetBotWebhooks: {
     call: types.GetBotWebhooks;
     response: types.GetBotWebhooksResponse;
@@ -868,6 +900,10 @@ type ToolDataMap = {
   TextEditorCodeExecution: {
     call: types.TextEditorCodeExecution;
     response: types.TextEditorCodeExecutionResponse;
+  };
+  UnassignTasksFromInitiative: {
+    call: types.UnassignTasksFromInitiative;
+    response: types.UnassignTasksFromInitiativeResponse;
   };
   UpdateCalendarEvent: {
     call: types.UpdateCalendarEvent;

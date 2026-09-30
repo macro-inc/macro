@@ -6,7 +6,7 @@ use scheduled_action::domain::{
 };
 use serde_json::Value;
 
-/// An AI routine owned by the authenticated user.
+/// An AI routine the authenticated user can access.
 #[derive(SimpleObject)]
 pub struct GraphqlScheduledAction {
     /// Stable identifier of the routine.

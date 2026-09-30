@@ -31,6 +31,7 @@ export const agentHarnessExcluded = [
   'start',
   'status',
   'loadAgentModelsHandler',
+  'discoverAgentCapabilitiesHandler',
   'previewAgentSessions',
 ] as const satisfies readonly (keyof AgentHarnessSdk)[];
 
@@ -305,6 +306,7 @@ export const storageExcluded = [
   'getBatchPreviewHandler',
   'getActiveCalls',
   'getBatchProjectPreview',
+  'getBotOwnerProfiles',
   'getCollabSurface',
   'getDocumentListHandler',
   'getDocumentLocationV3',

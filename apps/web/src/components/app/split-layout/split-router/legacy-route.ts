@@ -14,6 +14,12 @@ import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
 import { channelsSearch } from '@app/features/channels-view/channels-route';
 import { URL_PARAMS as EMAIL_URL_PARAMS } from '@app/features/email-thread/core/location';
 import {
+  REMINDER_DETAIL_COMPONENT_ID,
+  REMINDER_DETAIL_ROUTE_ID,
+  reminderDetailContent,
+  reminderIdFromDetailContent,
+} from '@app/features/reminders/reminder-navigation';
+import {
   defineRoute,
   routeParams,
   type SplitLocation,
@@ -60,6 +66,8 @@ export function decodeLegacyPair(
   }
 
   if (type === 'component') {
+    // Reminder list/detail surfaces are native routes only.
+    if (id === 'reminders' || id === REMINDER_DETAIL_COMPONENT_ID) return;
     // Preview Pair placeholders must never reach the view registry.
     return {
       type: 'component',
@@ -185,6 +193,18 @@ export function splitLocationFromContent(
   routes: SplitRoutesManifest,
   content: SplitContent
 ): SplitLocation {
+  const reminderId =
+    content.type === 'component' && content.id === REMINDER_DETAIL_COMPONENT_ID
+      ? reminderIdFromDetailContent(content)
+      : undefined;
+  if (reminderId) {
+    return {
+      route: {
+        matches: [{ id: REMINDER_DETAIL_ROUTE_ID, params: { reminderId } }],
+      },
+    };
+  }
+
   if (
     (content.type === 'component' && content.id === CALENDAR_VIEW_ID) ||
     (content.type === 'calendar' && content.id === CALENDAR_BLOCK_ID)
@@ -337,6 +357,14 @@ export function splitContentFromLocation(
   location: SplitLocation
 ): SplitContent {
   const root = location.route.matches[0];
+
+  if (root.id === REMINDER_DETAIL_ROUTE_ID) {
+    const { reminderId } = routeParams(location.route);
+    if (typeof reminderId === 'string' && reminderId.length > 0) {
+      return reminderDetailContent(reminderId);
+    }
+    throw new Error('Invalid reminder detail split route');
+  }
 
   if (root.id.startsWith('view-'))
     return { type: 'component', id: root.id.slice('view-'.length) };

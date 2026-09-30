@@ -1,4 +1,5 @@
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
+import { ViewTour } from '@app/features/tours/ViewTour';
 import { SplitRouter } from '@app/lib/split-router';
 import { type PillTabItem, PillTabs } from '@components/app/mobile/PillTabs';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
@@ -25,6 +26,7 @@ import { EmailList } from './components/EmailList';
 import { EmailSidebar } from './components/EmailSidebar';
 import { EMAIL_TABS } from './constants';
 import { EmailViewProvider, useEmailView } from './email-view-context';
+import { emailTour } from './tour';
 import type { EmailTab, EmailViewStateOptions } from './types';
 
 export type EmailViewProps = {
@@ -69,6 +71,7 @@ function EmailDesktopLayout(
       <ViewShell.Header>
         <EmailHeader onSearchEscape={props.onSearchEscape} />
       </ViewShell.Header>
+      <ViewTour tour={emailTour} />
       <ViewShell.Content>{props.children}</ViewShell.Content>
     </>
   );

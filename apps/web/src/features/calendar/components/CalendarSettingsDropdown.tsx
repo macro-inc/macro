@@ -166,8 +166,8 @@ function DesktopCalendarSettings(props: {
         size={props.sidebar ? 'md' : 'icon-md'}
         class={
           props.sidebar
-            ? 'w-full rounded-full border-transparent bg-transparent'
-            : 'shrink-0 rounded-full border-transparent bg-transparent'
+            ? 'w-full border-transparent bg-transparent'
+            : 'shrink-0 border-transparent bg-transparent'
         }
         aria-label="Calendar settings"
       >

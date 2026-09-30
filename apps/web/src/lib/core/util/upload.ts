@@ -21,6 +21,7 @@ import {
   blockAcceptsFileExtension,
 } from '@core/constant/allBlocks';
 import { heicConversionService } from '@core/heic/service';
+import { holdAutomaticReload } from '@core/util/reloadForNewerBuild';
 import {
   createStaticUploadFile,
   createUploadFile,
@@ -411,6 +412,8 @@ export async function uploadFile(
   dssOptions: DssUploadFileOptions = {}
 ): Promise<MaybeUploadResult> {
   const uploadSource = createUploadFile(file);
+  // Reloading into a newer app build would cut the upload off.
+  const releaseReloadHold = holdAutomaticReload();
   try {
     validateFileSize(uploadSource);
 
@@ -448,6 +451,8 @@ export async function uploadFile(
           : new UploadError(uploadSource, 'dss', new Error(String(error))),
       name,
     };
+  } finally {
+    releaseReloadHold();
   }
 }
 

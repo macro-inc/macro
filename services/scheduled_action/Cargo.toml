@@ -25,10 +25,12 @@ activity = { path = "../../crates/activity", default-features = false }
 agent_runtime_protocol = { path = "../../crates/agent_runtime_protocol", default-features = false }
 agent_session = { path = "../../crates/agent_session", default-features = false }
 bot_id = { path = "../../crates/bot_id" }
+bots = { path = "../../crates/bots", default-features = false, features = ["outbound"] }
 channel_sender = { path = "../../crates/channel_sender" }
 channels = { path = "../../crates/channels", default-features = false }
 documents = { path = "../../crates/documents", default-features = false }
-entity_access = { path = "../../crates/entity_access", default-features = false, features = ["ports"] }
+entity_access = { path = "../../crates/entity_access", default-features = false, features = ["inbound", "outbound"] }
+entity_access_db_utils = { path = "../../crates/entity_access_db_utils" }
 kafka_util = { path = "../../crates/kafka_util" }
 macro_event_broker = { path = "../../crates/macro_event_broker", features = ["outbound"] }
 macro_event_topics = { path = "../../crates/macro_event_topics" }
@@ -72,6 +74,7 @@ memory = { path = "../../crates/memory" }
 model = { path = "../../crates/model" }
 model-entity = { path = "../../crates/model-entity" }
 model_owner = { path = "../../crates/model_owner" }
+entity_registry = { path = "../../crates/entity_registry/entity_registry", features = ["axum"] }
 entity_registry_db_utils = { path = "../../crates/entity_registry/entity_registry_db_utils" }
 model_notifications = { path = "../../crates/model_notifications" }
 notification = { path = "../../crates/notification" }
@@ -91,4 +94,5 @@ macro_service_urls = { path = "../../crates/macro_service_urls" }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 [dev-dependencies]
+bot_id = { path = "../../crates/bot_id", features = ["test-utils"] }
 macro_db_migrator = { path = "../../crates/macro_db_migrator" }

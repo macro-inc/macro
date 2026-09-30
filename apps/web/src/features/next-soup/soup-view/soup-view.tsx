@@ -109,6 +109,7 @@ import Spinner from '@phosphor/spinner.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { debounce } from '@solid-primitives/scheduled';
 import { Button, cn, Layer, Tooltip } from '@ui';
+import { tourTarget } from '@ui/components/Tour';
 import {
   type Accessor,
   batch,
@@ -127,6 +128,7 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import type { CacheSnapshot } from 'virtua/unstable_core';
+import { SOUP_TOUR } from '../tour';
 import { SearchAskAiButton } from './search-ask-ai-button';
 import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
 import { useSoupNavigationHotkeys } from './use-soup-navigation-hotkeys';
@@ -275,6 +277,8 @@ interface SoupViewProps {
    * When set, its pieces win over persisted/preset state during init.
    */
   initialCrmView?: CrmViewConfig;
+  /** The view's tour, e.g. `<ViewTour tour={callsTour} />`. */
+  tour?: JSX.Element;
 }
 
 export const SoupView = (props: SoupViewProps) => {
@@ -511,7 +515,7 @@ export const SoupView = (props: SoupViewProps) => {
                       <Button
                         size="icon-md"
                         variant="ghost"
-                        class="p-0.5 rounded-sm text-ink-extra-muted hover:text-ink-muted @max-[380px]/split-header:hidden"
+                        class="p-0.5 text-ink-extra-muted hover:text-ink-muted @max-[380px]/split-header:hidden"
                         label="View documentation"
                         onClick={() => openExternalUrl(url())}
                       >
@@ -612,7 +616,7 @@ export const SoupView = (props: SoupViewProps) => {
                             <Button
                               size="icon-md"
                               variant="outline"
-                              class="p-1 size-7 rounded-lg ml-2"
+                              class="p-1 size-7 ml-2"
                               onClick={() => setNarrowSearchExpanded(true)}
                               depth={2}
                             >
@@ -639,6 +643,7 @@ export const SoupView = (props: SoupViewProps) => {
         </div>
         <SoupFiltersBar variant={props.filterBarVariant} />
       </Show>
+      {props.tour}
       <Show when={soupView.source.cachedMail?.()}>
         <p role="status" class="px-4 py-1 text-xs text-ink-muted">
           Showing cached mail. Only synchronized messages are available.
@@ -1225,6 +1230,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
   };
 
   const featuredCount = createMemo(() => featuredIds().length);
+  const listTarget = tourTarget(SOUP_TOUR.list);
 
   return (
     <MaybeSoupEntityActionDrawerManager>
@@ -1232,6 +1238,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
         class="size-full"
         ref={(el) => {
           setSoupViewRef(el);
+          listTarget(el);
           attachHotkeys(el);
         }}
         tabIndex={-1}

@@ -39,6 +39,7 @@ import type { ApiChannelAttachmentsPage } from './generated/schemas/apiChannelAt
 import type { ApiChannelParticipant } from './generated/schemas/apiChannelParticipant';
 import type { Bot } from './generated/schemas/bot';
 import type { BotChannel } from './generated/schemas/botChannel';
+import type { BotOwnerProfile } from './generated/schemas/botOwnerProfile';
 import type { BotToken } from './generated/schemas/botToken';
 import type { CalendarMentionPreviewRequest } from './generated/schemas/calendarMentionPreviewRequest';
 import type { CalendarMentionPreviewResponse } from './generated/schemas/calendarMentionPreviewResponse';
@@ -658,6 +659,18 @@ export const storageServiceClient = {
     return (
       await dssFetch<Bot>(`/bots/${args.bot_id}`, {
         method: 'GET',
+      })
+    ).map((result) => result);
+  },
+
+  async getBotOwnerProfiles(args: { ids: string[]; signal?: AbortSignal }) {
+    const query = new URLSearchParams();
+    args.ids.forEach((id) => query.append('ids', id));
+    const qs = query.toString();
+    return (
+      await dssFetch<BotOwnerProfile[]>(`/bots/profiles${qs ? `?${qs}` : ''}`, {
+        method: 'GET',
+        signal: args.signal,
       })
     ).map((result) => result);
   },

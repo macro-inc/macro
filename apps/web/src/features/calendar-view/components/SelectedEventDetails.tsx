@@ -62,9 +62,11 @@ interface SelectedEventDetailsProps {
 export function SelectedEventDetails(props: SelectedEventDetailsProps) {
   const calendarsQuery = useVisibleCalendarsQuery();
   const defaultReminders = (event: CalendarEvent) =>
-    calendarsQuery.data?.find(
-      (calendar) => calendar.id === reminderCalendarIdOf(event)
-    )?.defaultReminders;
+    calendarsQuery.isSuccess
+      ? calendarsQuery.data?.find(
+          (calendar) => calendar.id === reminderCalendarIdOf(event)
+        )?.defaultReminders
+      : undefined;
   const popoverSelection = createMemo(
     () => {
       const event = props.event();
@@ -152,20 +154,10 @@ function EveryoneElseDeclinedNotice(props: {
           </div>
           <Show when={props.canModify}>
             <div class="flex justify-end gap-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                class="rounded-lg"
-                onClick={props.onDelete}
-              >
+              <Button variant="ghost" size="sm" onClick={props.onDelete}>
                 Delete
               </Button>
-              <Button
-                variant="cta"
-                size="sm"
-                class="rounded-lg"
-                onClick={props.onReschedule}
-              >
+              <Button variant="cta" size="sm" onClick={props.onReschedule}>
                 Reschedule
               </Button>
             </div>
@@ -195,7 +187,7 @@ function EventGuestActions(props: {
         variant="ghost"
         size="icon-sm"
         depth={3}
-        class="rounded-md text-ink-muted [&_svg]:size-4"
+        class="text-ink-muted [&_svg]:size-4"
         onClick={() => copyGuestEmails(guestEmails(props.event.attendees))}
       >
         <CopyIcon />
@@ -206,7 +198,7 @@ function EventGuestActions(props: {
           variant="ghost"
           size="icon-sm"
           depth={3}
-          class="rounded-md text-ink-muted [&_svg]:size-4"
+          class="text-ink-muted [&_svg]:size-4"
           onClick={() => {
             const event = props.event;
             props.closeDetails();
@@ -267,7 +259,7 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
                 variant="ghost"
                 size="icon-md"
                 depth={3}
-                class="size-11 rounded-full bg-ink/6 text-ink-muted [&_svg]:size-5"
+                class="size-11 bg-ink/6 text-ink-muted [&_svg]:size-5"
                 onClick={() => copyCalendarEventMention(props.event)}
               >
                 <LinkIcon />
@@ -278,7 +270,7 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
                   variant="ghost"
                   size="icon-md"
                   depth={3}
-                  class="size-11 rounded-full bg-ink/6 text-ink-muted [&_svg]:size-5"
+                  class="size-11 bg-ink/6 text-ink-muted [&_svg]:size-5"
                   onClick={openEditor}
                 >
                   <PencilSimpleIcon />
@@ -288,7 +280,7 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
                   variant="ghost"
                   size="icon-md"
                   depth={3}
-                  class="size-11 rounded-full bg-ink/6 text-ink-muted [&_svg]:size-5"
+                  class="size-11 bg-ink/6 text-ink-muted [&_svg]:size-5"
                   onClick={deleteDialog.open}
                 >
                   <TrashIcon />
@@ -501,7 +493,7 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
                   variant="ghost"
                   size="icon-sm"
                   depth={3}
-                  class="rounded-md text-ink-muted [&_svg]:size-4"
+                  class="text-ink-muted [&_svg]:size-4"
                   onClick={() => copyCalendarEventMention(props.event)}
                 >
                   <LinkIcon />
@@ -512,7 +504,7 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
                     variant="ghost"
                     size="icon-sm"
                     depth={3}
-                    class="rounded-md text-ink-muted [&_svg]:size-4"
+                    class="text-ink-muted [&_svg]:size-4"
                     onClick={openEditor}
                   >
                     <PencilSimpleIcon />
@@ -522,7 +514,7 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
                     variant="ghost"
                     size="icon-sm"
                     depth={3}
-                    class="rounded-md text-ink-muted [&_svg]:size-4"
+                    class="text-ink-muted [&_svg]:size-4"
                     onClick={deleteDialog.open}
                   >
                     <TrashIcon />

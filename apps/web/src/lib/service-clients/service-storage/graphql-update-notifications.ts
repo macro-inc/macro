@@ -106,7 +106,10 @@ export async function executeGraphqlUpdateNotifications(
     UpdateNotificationsDocument,
     variables,
     optimisticData,
-    { uuid: crypto.randomUUID(), revalidations: getChannelListRevalidations() }
+    {
+      uuid: crypto.randomUUID(),
+      revalidations: getChannelListRevalidations(client),
+    }
   ).toPromise();
 
   // A retryable transport failure keeps the normalized optimistic layer in

@@ -328,7 +328,7 @@ function useChannelsDataSource(
     })
   );
   const items = createMemo<ChannelEntity[]>((previous) => {
-    if (!query.isEnabled || query.isLoading) return previous;
+    if (!query.isEnabled || query.isPending) return previous;
 
     const channels = filterChannelsForScope(
       scope,

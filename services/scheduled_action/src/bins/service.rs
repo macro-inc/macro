@@ -4,9 +4,12 @@ use std::{future::Future, sync::Arc, time::Duration};
 use ai_tools::{AiHost, build_tool_service_context_from_env, tools_for};
 use anyhow::{Context, Result};
 use axum::Router;
+use bots::outbound::pg_bots_repo::PgBotsRepo;
 use chat::outbound::postgres::PgChatRepo;
 use connection_gateway_client::client::ConnectionGatewayClient;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
+use entity_registry::OwnerGrantPolicy;
+use entity_registry_db_utils::OwnedEntityRegistrar;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{
     InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationServiceImpl,
@@ -100,12 +103,14 @@ async fn main() -> Result<()> {
         &conn_gateway_client,
     )));
 
-    let repo = Arc::new(PgScheduledActionRepo::new(db.clone()));
+    let registrar = OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(db.clone())));
+    let repo = Arc::new(PgScheduledActionRepo::new(db.clone(), registrar.clone()));
 
     let event_repo = Arc::new(PgEventRunRepo::new(db.clone()));
-    let event_access = Arc::new(EventAccessAdapter::new(EntityAccessServiceImpl::new(
-        PgAccessRepository::new(db.clone()),
+    let access = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
+        db.clone(),
     )));
+    let event_access = Arc::new(EventAccessAdapter::new(access.as_ref().clone()));
     let memory = MemoryServiceImpl::new(
         PgMemoryRepo::new(db.clone()),
         tool_context.clone(),
@@ -113,7 +118,7 @@ async fn main() -> Result<()> {
     );
     let runner = Arc::new(AgentTaskRunner::new(
         Arc::clone(&tool_context.chat_tool_context.service),
-        PgChatRepo::new(db.clone()),
+        PgChatRepo::new(db.clone(), registrar),
         memory,
         tool_context,
         notification_ingress,
@@ -194,18 +199,24 @@ async fn main() -> Result<()> {
     );
 
     let service = Arc::new(
-        ScheduledActionServiceImpl::new(Arc::clone(&repo), service_executor, dispatcher_tx)
-            .with_event_management_enabled(config.event_routines_enabled)
-            .with_target_validation(TargetValidation::new(
-                sessions,
-                config.routine_agents_enabled,
-            )),
+        ScheduledActionServiceImpl::new(
+            Arc::clone(&repo),
+            service_executor,
+            dispatcher_tx,
+            access.clone(),
+        )
+        .with_event_management_enabled(config.event_routines_enabled)
+        .with_target_validation(TargetValidation::new(
+            sessions,
+            config.routine_agents_enabled,
+        )),
     );
     let state = ScheduledActionRouterState {
         service,
+        access_service: access,
         authorization_state,
     };
-    let authed_routes = scheduled_action_router::<_, _, ()>(state);
+    let authed_routes = scheduled_action_router::<_, _, _, ()>(state);
 
     let router = Router::new()
         .merge(mount_at_root_and_prefix(

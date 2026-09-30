@@ -734,3 +734,13 @@ export const enableUnifiedDocumentDiscussions = defineFlag({
   env: 'ENABLE_UNIFIED_DOCUMENT_DISCUSSIONS',
   default: onInDev,
 });
+
+/**
+ * Automatic in-app feature tours on desktop views (`features/tours`). Follows
+ * PostHog everywhere, including the local dev server; set
+ * VITE_ENABLE_IN_APP_TOURS=true to turn tours on locally.
+ */
+export const enableInAppTours = defineFlag({
+  key: 'enable-in-app-tours',
+  env: 'ENABLE_IN_APP_TOURS',
+});

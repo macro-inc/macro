@@ -89,7 +89,7 @@ export const MagicChipPullRequest: Component<{ url: string }> = (props) => {
           rel="noreferrer"
           aria-label={label()}
           class={buttonClasses({
-            variant: 'plain',
+            variant: 'ghost',
             size: 'sm',
             fullWidth: true,
             noTouchResize: true,
@@ -105,7 +105,7 @@ export const MagicChipPullRequest: Component<{ url: string }> = (props) => {
     >
       {(pr) => (
         <Button
-          variant="plain"
+          variant="ghost"
           size="sm"
           fullWidth
           noTouchResize

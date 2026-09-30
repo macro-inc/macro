@@ -74,11 +74,16 @@ pub(super) async fn get_filtered_entity_notifications(
               AND un.deleted_at IS NULL
               AND un.state = ANY($4::notification_state[])
               AND (cardinality($5::text[]) = 0 OR n.notification_event_type = ANY($5))
+              AND (NOT $7::bool OR (
+                  n.notification_event_type IN ('channel_message_send', 'channel_mention', 'document_mention')
+                  AND COALESCE(n.metadata->>'threadId', n.metadata->>'thread_id') IS NULL
+              ))
             ORDER BY un.created_at DESC, un.notification_id DESC
             LIMIT $6
         ) matched
         "#,
         user_id.as_ref(), &ids, &types, &query.states as _, &query.event_types, limit,
+        query.top_level_messages_only,
     ).fetch_all(pool).await?;
 
     for row in rows {

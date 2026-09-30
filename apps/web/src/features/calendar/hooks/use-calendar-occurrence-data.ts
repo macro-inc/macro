@@ -51,7 +51,12 @@ export function useCalendarOccurrenceData(
     }
   );
   const events = createMemo(() => {
-    if (!isRangeSupported()) return [];
+    if (
+      !isRangeSupported() ||
+      !occurrencesQuery.isSuccess ||
+      occurrencesQuery.isPlaceholderData
+    )
+      return [];
     const sourceById = options.sourceById?.();
     return (occurrencesQuery.data?.items ?? []).map((item) =>
       mapCalendarOccurrence(item, {
@@ -73,6 +78,8 @@ export function useCalendarOccurrenceData(
     (isRangeSupported() &&
       (occurrencesQuery.isPending || occurrencesQuery.isPlaceholderData));
   const isSyncing = () =>
+    occurrencesQuery.isSuccess &&
+    !occurrencesQuery.isPlaceholderData &&
     occurrencesQuery.data?.syncStatus === CalendarSyncStatus.syncing;
 
   return {

@@ -12,19 +12,22 @@ import {
   useUserInfoQuery,
 } from '@queries/auth/user-info';
 import { queryClient } from '@queries/client';
-import { Navigate, useSearchParams } from '@solidjs/router';
+import { Navigate, useLocation, useSearchParams } from '@solidjs/router';
 import { Button } from '@ui';
 import {
+  createEffect,
   createResource,
   createSignal,
   Match,
-  onMount,
+  on,
   Show,
   Switch,
 } from 'solid-js';
 
-function getCurrentQueryString() {
-  const params = new URLSearchParams(window.location.search);
+function getCurrentQueryString(routerSearch: string) {
+  const params = new URLSearchParams(
+    isNativeMobilePlatform() ? routerSearch : window.location.search
+  );
   return params.toString().length > 0 ? `?${params.toString()}` : '';
 }
 
@@ -70,6 +73,7 @@ function SessionVerificationFallback(props: {
 }
 
 function SessionExpiredRedirect() {
+  const location = useLocation();
   // The UNAUTHORIZED that got us here can come from a latched refresh failure
   // without the server ever being consulted, so confirm with a fresh refresh
   // before destroying local session state. If the session turns out to be
@@ -91,24 +95,38 @@ function SessionExpiredRedirect() {
 
   return (
     <Show when={expired()}>
-      <Navigate href={`/welcome${getCurrentQueryString()}`} />
+      <Navigate href={`/welcome${getCurrentQueryString(location.search)}`} />
     </Show>
   );
 }
 
+function AuthenticatedDestination(props: { fallback: string }) {
+  const pending = isNativeMobilePlatform() ? consumePostLoginRedirect() : null;
+  return <Navigate href={pending ?? props.fallback} />;
+}
+
 export function BasePathComponent() {
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const userInfoQuery = useUserInfoQuery();
   const checkoutRefreshPending = useCheckoutCompletionListener();
 
-  onMount(() => {
-    if (searchParams.upgrade === 'true') {
-      sessionStorage.setItem('showUpgradeModal', 'true');
-    }
-  });
+  createEffect(
+    on(
+      () => searchParams.upgrade,
+      (upgrade) => {
+        if (upgrade === 'true')
+          sessionStorage.setItem('showUpgradeModal', 'true');
+      }
+    )
+  );
 
   // check session storage for redirect url
-  const redirectUrl = consumePostLoginRedirect();
+  // Native destinations survive process death and must remain pending until
+  // identity is known; consuming during the unauthenticated launch loses them.
+  const redirectUrl = isNativeMobilePlatform()
+    ? null
+    : consumePostLoginRedirect();
   if (redirectUrl) {
     const relativeUrl = redirectUrl.replace(window.location.origin, '');
     window.location.href = relativeUrl;
@@ -116,8 +134,8 @@ export function BasePathComponent() {
   }
 
   // Preserve existing query parameters when redirecting
-  const queryString = getCurrentQueryString();
-  const redirectPath = `${DEFAULT_ROUTE}${queryString}`;
+  const queryString = () => getCurrentQueryString(location.search);
+  const redirectPath = () => `${DEFAULT_ROUTE}${queryString()}`;
 
   return (
     <Switch>
@@ -133,7 +151,7 @@ export function BasePathComponent() {
         <SessionExpiredRedirect />
       </Match>
       <Match when={userInfoQuery.data?.authenticated}>
-        <Navigate href={redirectPath} />
+        <AuthenticatedDestination fallback={redirectPath()} />
       </Match>
       {/* A failed remote check does not make an authenticated cached session
           unusable: the data branch above enters the local app first. Block only
@@ -156,7 +174,7 @@ export function BasePathComponent() {
       <Match
         when={!userInfoQuery.isLoading && !userInfoQuery.data?.authenticated}
       >
-        <Navigate href={`/welcome${queryString}`} />
+        <Navigate href={`/welcome${queryString()}`} />
       </Match>
     </Switch>
   );

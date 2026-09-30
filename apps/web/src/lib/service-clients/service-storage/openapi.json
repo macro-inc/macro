@@ -760,6 +760,75 @@
         }
       }
     },
+    "/bots/profiles": {
+      "get": {
+        "tags": ["bots"],
+        "summary": "Handler for `GET /bots/profiles`.",
+        "description": "Returns display fields and the sponsor for each requested bot. Not a\nmanageability check: any authenticated user or internal caller may look up\nids they already have.",
+        "operationId": "get_bot_owner_profiles",
+        "parameters": [
+          {
+            "name": "ids",
+            "in": "query",
+            "description": "Bot ids. Repeat the key: `?ids=<uuid>&ids=<uuid>`.",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/BotId"
+              }
+            },
+            "style": "form",
+            "explode": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/BotOwnerProfile"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/bots/{bot_id}/channels": {
       "get": {
         "tags": ["bots"],
@@ -17650,6 +17719,41 @@
         ],
         "description": "Bot owner."
       },
+      "BotOwnerProfile": {
+        "type": "object",
+        "description": "Bot identity for rendering, including the sponsor and soft-delete time.\n\n`owner` is none only for a registry system bot. A persisted row always has\na sponsor.",
+        "required": ["id", "name"],
+        "properties": {
+          "avatar_url": {
+            "type": ["string", "null"],
+            "description": "Avatar URL. Registry system bots have none."
+          },
+          "deleted_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Soft-delete time. Absent for an active bot and for a registry system bot."
+          },
+          "id": {
+            "$ref": "#/components/schemas/BotId",
+            "description": "Bot id."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "owner": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BotOwner",
+                "description": "Sponsor. None only for a registry system bot."
+              }
+            ]
+          }
+        }
+      },
       "BotSenderProfile": {
         "type": "object",
         "description": "Public bot profile attached to bot-authored messages.",
@@ -29496,6 +29600,7 @@
             "required": [
               "id",
               "name",
+              "isArchived",
               "ownerId",
               "botId",
               "harness",
@@ -29522,6 +29627,10 @@
                 "type": "string",
                 "format": "uuid",
                 "description": "The agent session uuid"
+              },
+              "isArchived": {
+                "type": "boolean",
+                "description": "Whether the session is archived and read-only."
               },
               "name": {
                 "type": "string",

@@ -3693,6 +3693,10 @@ input GraphqlNotificationFilter {
 	Event names to include; omitted or empty means every event type.
 	"""
 	eventTypes: [String!]
+	"""
+	Only notifications about top-level channel messages, including mentions but excluding reactions.
+	"""
+	topLevelMessagesOnly: Boolean
 }
 
 """
@@ -4299,7 +4303,7 @@ type GraphqlRepliedToDocumentCommentThreadMetadata {
 }
 
 """
-An AI routine owned by the authenticated user.
+An AI routine the authenticated user can access.
 """
 type GraphqlScheduledAction {
 	"""
@@ -4648,6 +4652,10 @@ type GraphqlSoupAgentSession implements GraphqlSoupEntity {
 	The name.
 	"""
 	name: String!
+	"""
+	Whether the session is archived and read-only.
+	"""
+	isArchived: Boolean!
 	"""
 	The principal identifier of the owner.
 	"""
@@ -6685,7 +6693,7 @@ type GraphqlUser {
 	"""
 	taskInitiativeReferences(taskIds: [ID!]!): [TaskInitiativeReference!]!
 	"""
-	AI routines owned by the authenticated user.
+	AI routines the authenticated user can access.
 	"""
 	scheduledActions: [GraphqlScheduledAction!]!
 	"""

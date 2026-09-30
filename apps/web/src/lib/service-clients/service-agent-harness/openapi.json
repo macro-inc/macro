@@ -10,6 +10,58 @@
     "version": "0.1.0"
   },
   "paths": {
+    "/agent-capabilities/discover": {
+      "post": {
+        "tags": ["agent-capabilities"],
+        "summary": "Probe one provider's ACP session configuration without persisting a session.",
+        "operationId": "discover_agent_capabilities_handler",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscoverAgentCapabilitiesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Fresh provider session capabilities",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoverAgentCapabilitiesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid target"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Harness is not visible to caller"
+          },
+          "409": {
+            "description": "Macrod runtime is disconnected"
+          },
+          "502": {
+            "description": "Provider probe failed"
+          },
+          "504": {
+            "description": "Macrod probe timed out"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/agent-models/load": {
       "post": {
         "tags": ["agent-models"],
@@ -478,6 +530,70 @@
         }
       }
     },
+    "/agent-sessions/{session_id}/archived": {
+      "put": {
+        "tags": ["agent-sessions"],
+        "summary": "Archive or unarchive an agent session.",
+        "operationId": "set_agent_session_archived",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "ID of the agent session",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetAgentSessionArchivedRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/agent-sessions/{session_id}/changes": {
       "get": {
         "tags": ["agent-sessions"],
@@ -868,6 +984,16 @@
           },
           "403": {
             "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The session is archived",
             "content": {
               "text/plain": {
                 "schema": {
@@ -1497,6 +1623,25 @@
             "description": "Switch the model the agent runs on."
           },
           {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AgentSetConfigOptionAction",
+                "description": "Change an agent-advertised select-style session setting."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["setConfigOption"]
+                  }
+                }
+              }
+            ],
+            "description": "Change an agent-advertised select-style session setting."
+          },
+          {
             "type": "object",
             "description": "Compact the agent's current context.",
             "required": ["type"],
@@ -1563,6 +1708,102 @@
         "type": "string",
         "format": "uuid",
         "description": "Identifies one accepted [`AgentAction`] end to end: returned by the\ncontrol endpoint, written as the JSON-RPC request id on the action's wire\nframe, and read back off that frame as `request_id` on the folded message\nit derives.\n\nA v7 uuid, so ids sort by mint time. Minted by the server at accept time,\nor by a client that speculated the action and named it in the control\nrequest - either way the server is the only writer of runtime-bound\nframes, so a uuid-shaped request id remains the whole ownership test. The\nmachine's own handshake request ids (`agent_session:{session}:{n}`) are\nnot uuids and stay `None`."
+      },
+      "AgentConfigKindDto": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A single-value selector.",
+            "required": ["currentValue", "options", "type"],
+            "properties": {
+              "currentValue": {
+                "type": "string",
+                "description": "Current opaque value."
+              },
+              "options": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/AgentConfigSelectOptionDto"
+                },
+                "description": "Ordered values supplied by the agent."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["select"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An on/off setting.",
+            "required": ["currentValue", "type"],
+            "properties": {
+              "currentValue": {
+                "type": "boolean",
+                "description": "Current value."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["boolean"]
+              }
+            }
+          }
+        ],
+        "description": "Type-specific state for one agent session setting."
+      },
+      "AgentConfigOptionDto": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/AgentConfigKindDto",
+            "description": "Type-specific current value and choices."
+          },
+          {
+            "type": "object",
+            "required": ["id", "name"],
+            "properties": {
+              "category": {
+                "type": ["string", "null"],
+                "description": "ACP semantic category, such as `model` or `thought_level`."
+              },
+              "description": {
+                "type": ["string", "null"],
+                "description": "Optional explanatory copy."
+              },
+              "id": {
+                "type": "string",
+                "description": "Opaque id used to change this setting."
+              },
+              "name": {
+                "type": "string",
+                "description": "Display label supplied by the agent."
+              }
+            }
+          }
+        ],
+        "description": "One agent-advertised ACP session setting."
+      },
+      "AgentConfigSelectOptionDto": {
+        "type": "object",
+        "description": "One value in an agent-advertised select.",
+        "required": ["value", "name"],
+        "properties": {
+          "description": {
+            "type": ["string", "null"],
+            "description": "Optional provider description of this value."
+          },
+          "group": {
+            "type": ["string", "null"],
+            "description": "Optional group heading supplied by the provider."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display label."
+          },
+          "value": {
+            "type": "string",
+            "description": "Opaque value returned to the agent when selected."
+          }
+        }
       },
       "AgentModelDto": {
         "type": "object",
@@ -1917,6 +2158,7 @@
         "required": [
           "id",
           "name",
+          "isArchived",
           "ownerId",
           "canEdit",
           "botId",
@@ -1970,6 +2212,10 @@
           "instructions": {
             "type": ["string", "null"],
             "description": "Instructions the session's runtime works under, when any were stated\nat creation. Absent otherwise, so existing payloads are unchanged."
+          },
+          "isArchived": {
+            "type": "boolean",
+            "description": "Whether the session is archived and read-only."
           },
           "model": {
             "type": "string",
@@ -2036,6 +2282,21 @@
           }
         }
       },
+      "AgentSetConfigOptionAction": {
+        "type": "object",
+        "description": "Ask the agent to change one advertised select-style session setting.",
+        "required": ["configId", "value"],
+        "properties": {
+          "configId": {
+            "type": "string",
+            "description": "Opaque ACP config id advertised by the agent."
+          },
+          "value": {
+            "type": "string",
+            "description": "Opaque select value advertised for that config option."
+          }
+        }
+      },
       "AgentSetModelAction": {
         "type": "object",
         "description": "Ask the agent to run on a different model from here on.",
@@ -2049,6 +2310,11 @@
       },
       "BotId": {
         "type": "string"
+      },
+      "CapabilityHarnessDto": {
+        "type": "string",
+        "description": "Harness names accepted by the capability-discovery endpoint.",
+        "enum": ["in-memory", "cursor", "macrod"]
       },
       "CaptureAttemptDto": {
         "type": "object",
@@ -2311,7 +2577,7 @@
           },
           "owner": {
             "type": ["string", "null"],
-            "description": "The user who owns the session. Ignored for user callers, who always\nown their own sessions, and for harness callers, whose verified acting\nuser (owner or confirmed team member) owns the session instead;\nrequired for bot callers without verified acting-user claims.\n\nFor bot callers this is a claim, not a verified fact: it is scoped to\nthe bot's own sessions, but the named user owns the session on the\nbot's say-so."
+            "description": "The user who owns the session. Ignored for user callers, who always\nown their own sessions, for harness callers, whose verified acting\nuser owns the session, and for bots that already act for a verified\nuser. A bot without one may name a user here. That claim is trusted\nfor the bot's own sessions. With no claim, a team bot owns the session\nitself only while non-user owners are enabled. Every other bot still\nneeds an owner."
           },
           "prompt": {
             "type": ["string", "null"],
@@ -2387,6 +2653,40 @@
             "type": ["string", "null"],
             "format": "uuid",
             "description": "Thread the session belongs to; defaults to the message itself, which\nis how a top-level mention roots its own thread."
+          }
+        }
+      },
+      "DiscoverAgentCapabilitiesRequest": {
+        "type": "object",
+        "description": "HTTP request selecting one provider to probe.",
+        "required": ["harness"],
+        "properties": {
+          "harness": {
+            "$ref": "#/components/schemas/CapabilityHarnessDto",
+            "description": "Provider to probe."
+          },
+          "harnessId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Required for macrod and forbidden for other targets."
+          },
+          "model": {
+            "type": ["string", "null"],
+            "description": "Model whose session settings should be inspected."
+          }
+        }
+      },
+      "DiscoverAgentCapabilitiesResponse": {
+        "type": "object",
+        "description": "Successful capability-discovery response.",
+        "required": ["configOptions"],
+        "properties": {
+          "configOptions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentConfigOptionDto"
+            },
+            "description": "Complete ordered ACP session configuration advertised by the agent."
           }
         }
       },
@@ -2903,6 +3203,17 @@
           }
         ],
         "description": "Transport representation of a session's status, mirroring\n[`SessionStatus`]."
+      },
+      "SetAgentSessionArchivedRequest": {
+        "type": "object",
+        "description": "Request body for archiving or unarchiving an agent session.",
+        "required": ["isArchived"],
+        "properties": {
+          "isArchived": {
+            "type": "boolean",
+            "description": "The requested archive state."
+          }
+        }
       },
       "SharePermissionV2": {
         "type": "object",

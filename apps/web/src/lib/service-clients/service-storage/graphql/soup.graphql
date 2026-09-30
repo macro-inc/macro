@@ -98,6 +98,7 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 	...SoupEntityIdentityFields
 	... on GraphqlSoupAgentSession {
 		sessionName: name
+		isArchived
 		ownerId
 		botId
 		harness
@@ -593,6 +594,7 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 	... on GraphqlReminderMetadata {
 		reminderReminderId: reminderId
 		reminderDescription: description
+		reminderScheduledFor: scheduledFor
 	}
 	... on GraphqlCalendarEventReminderMetadata {
 		calendarEventReminderEventId: eventId

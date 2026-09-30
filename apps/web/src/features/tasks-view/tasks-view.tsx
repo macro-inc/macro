@@ -1,6 +1,7 @@
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
 import { openProject } from '@app/features/projects/open-project';
 import { ProjectsTab } from '@app/features/projects/projects';
+import { ViewTour, ViewTourAction } from '@app/features/tours/ViewTour';
 import { SplitRouter, useNavigate, useParams } from '@app/lib/split-router';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -24,6 +25,7 @@ import { TasksSidebar } from './components/TasksSidebar';
 import { TaskList } from './components/task-list/TaskList';
 import { projectDetailRoute } from './route';
 import { TasksViewProvider, useTasksView } from './tasks-view-context';
+import { tasksTour } from './tour';
 import type { TasksViewStateOptions } from './types';
 
 export type TasksViewProps = {
@@ -76,6 +78,18 @@ function TasksViewBreadcrumbs(props: ParentProps) {
   );
 }
 
+/** The tasks tour's shortcut for bringing existing issues over. */
+function ImportLinearAction() {
+  const { openWithSplit } = useSplitLayout();
+  return (
+    <ViewTourAction
+      onClick={() => openWithSplit({ type: 'component', id: 'import-linear' })}
+    >
+      Import from Linear
+    </ViewTourAction>
+  );
+}
+
 function TasksViewRoot() {
   const panel = useSplitPanelOrThrow();
   const { state, projectsEnabled } = useTasksView();
@@ -91,6 +105,7 @@ function TasksViewRoot() {
       <ViewShell.Header>
         <TasksHeader onSearchEscape={() => listElement()?.focus()} />
       </ViewShell.Header>
+      <ViewTour tour={tasksTour} actions={<ImportLinearAction />} />
       <ViewShell.Content>
         <Suspense fallback={<TasksListFallback />}>
           <TaskList ref={setListElement} />

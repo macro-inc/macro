@@ -48,6 +48,41 @@ ordinary engine handoff preserves the marker and continues the saved scan.
 Reset notifications restart active backfills promptly, but checkpoint validity
 does not depend on observing a notification.
 
+## Soup page retention
+
+Backfill hydration persists normalized descendants (including email message
+pages), identity, email links and filter/search projections, but not the viewer's
+`soup(...)` / `groupSoup(...)` page wrappers. `@cacheOnly` still controls the
+returned cursor projection; it is not an entity-eviction directive.
+
+Foreground Soup snapshots share a per-viewer budget of 64 pages and 512 KiB
+(encoded fields plus retention metadata). Most recently written pages win; reads
+do not persist recency or cause a COMMIT. Individually oversized snapshots are
+not retained. Evicted snapshots miss and require a network refetch; their entity
+records and pending offline mutations remain available.
+
+On the first compatible Turso open after this upgrade, a metadata-versioned
+transaction compacts only `GraphqlUser` records via the type/id index. It prefers
+initial pages when legacy data has no recency ordering. It preserves the storage
+generation, normalized entities, projection facts, queue and optimistic shadows.
+Subsequent opens only check the marker. There is no schema/namespace bump, reset,
+or VACUUM; freed pages can be reused without rewriting the whole database file.
+
+## Query-write invalidation
+
+Ordinary query responses carry optional `searchChangedBuckets`, using the same
+composed-view comparison as hydration. An empty list proves that Quick Access
+needs no refresh; missing metadata, mutations, subscriptions and identity resets
+remain conservative. Both browser-worker and native hosts preserve this distinction.
+
+Active queries track the canonical top-level fields they select on `GraphqlUser`,
+including argument-qualified Soup pages. Query writes only wake readers of changed
+viewer fields, while document/property/etc. changes still invalidate by record.
+Normalization installs the same dependencies as cache reads, without another read.
+Missing records, incomplete response registrations, explicit invalidations/deletions
+and resets retain conservative behavior. Page-retention eviction wakes readers of
+the removed page. This is in-memory dependency tracking, not a storage migration.
+
 ## Entity-rooted optimistic relations
 
 Link recipes may use an optional `recordRoot` (`fragmentName`, `entityKey`).
@@ -61,6 +96,21 @@ response-derived `upsertByField` settlement as query recipes. Fragments are neve
 sent as network revalidations. Callers should supply an explicit targeted query
 for recovery when the parent/field is missing; the exchange can then enqueue
 entity-only optimism and retain that recovery query for eventual commit/replay.
+
+## Text search catalogs
+
+Text search loads compact rows lazily per `(profile, bucket)` through the existing
+`search_documents_browse_idx`. Searching documents does not load cached emails;
+changing categories loads only newly requested buckets, including caching empty
+buckets. Empty bucket selection still means every bucket in the profile.
+
+Ranking borrows catalog and optimistic entries, normalizes the query once, and
+retains at most `limit + 1` references in a heap. Only the final returned rows are
+cloned. Fuzzy/freshness scoring, DM priority, recency/key tie breaks and browse
+cursors are unchanged. Write-through updates remove old bucket membership before
+updating already-loaded buckets; unopened buckets stay lazy. Optimistic shadows
+replace durable hits without mutating the catalogs, so rollback restores them.
+No storage schema, projection version, or database migration changes are needed.
 
 ## Browser OPFS writes
 

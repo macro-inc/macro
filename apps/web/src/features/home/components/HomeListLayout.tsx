@@ -1,7 +1,9 @@
 import { SidebarCreateHeader } from '@app/components/view-shell/SidebarCreateButton';
 import { MobileTopEdgeFade } from '@components/app/mobile/MobileEdgeFade';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { tourTarget } from '@ui/components/Tour';
 import { type JSX, type ParentProps, Show } from 'solid-js';
+import { HOME_TOUR } from '../tour';
 import { HomeFilterDropdown } from './HomeFilters';
 
 function MobileHomeHeader(props: ParentProps) {
@@ -20,6 +22,7 @@ export function HomeListLayout(
 ) {
   return (
     <div
+      ref={tourTarget(HOME_TOUR.list)}
       class="relative flex size-full min-h-0 min-w-0 flex-col"
       style={{
         '--mobile-content-inset-top': 'calc(var(--safe-top, 0px) + 3.75rem)',

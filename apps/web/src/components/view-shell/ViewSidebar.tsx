@@ -93,10 +93,7 @@ function Control(props: ButtonProps) {
       variant="ghost"
       size="icon-sm"
       {...rest}
-      class={cn(
-        'size-(--sidebar-control-size) shrink-0 rounded-lg',
-        local.class
-      )}
+      class={cn('size-(--sidebar-control-size) shrink-0', local.class)}
       data-view-sidebar-control=""
     />
   );
@@ -226,6 +223,7 @@ function TreeItem(props: {
       <Show when={props.expanded !== undefined}>
         <span class="absolute right-(--sidebar-action-inset) top-1/2 flex -translate-y-1/2">
           <Control
+            class="rounded-md"
             label={`${props.expanded ? 'Collapse' : 'Expand'} ${props.label}`}
             aria-expanded={props.expanded}
             onClick={props.onToggle}

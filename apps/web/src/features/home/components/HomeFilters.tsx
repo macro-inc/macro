@@ -10,10 +10,12 @@ import { Accordion } from '@kobalte/core/accordion';
 import BellSimpleIcon from '@phosphor/bell-simple.svg';
 import FilterIcon from '@phosphor/funnel-simple.svg';
 import { Dropdown } from '@ui';
+import { tourTarget } from '@ui/components/Tour';
 import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
 import { selectedHomeTypes, setHomeTypeSelected } from '../core/type-selection';
 import { HOME_TYPE_FILTER_GROUPS } from '../home-facets';
 import { useHomeView } from '../home-view-context';
+import { HOME_TOUR } from '../tour';
 
 const FILTER_ICONS = new Map<string, () => JSX.Element>([
   [
@@ -228,6 +230,7 @@ export function HomeFilterDropdown() {
         label="Filter Home"
         customTrigger={
           <Dropdown.Trigger
+            ref={tourTarget(HOME_TOUR.filter)}
             variant="ghost"
             size="sm"
             square

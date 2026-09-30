@@ -143,6 +143,8 @@ dependencies = [
  "async-stream",
  "async-trait",
  "attachment",
+ "bytes",
+ "chrono",
  "futures",
  "genai_telemetry",
  "macro_env_var",
@@ -153,6 +155,7 @@ dependencies = [
  "opentelemetry_sdk",
  "prompt",
  "regex",
+ "reqwest 0.13.4",
  "rig-agent",
  "rig-core",
  "schemars 1.2.1",
@@ -419,6 +422,8 @@ dependencies = [
  "database_env_vars",
  "doppler-config",
  "entity_access",
+ "entity_registry",
+ "entity_registry_db_utils",
  "futures",
  "github",
  "harness_id",
@@ -514,6 +519,7 @@ dependencies = [
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
+ "url",
  "workspace-hack",
 ]
 
@@ -595,6 +601,7 @@ dependencies = [
  "dashmap",
  "entity_access",
  "entity_access_db_utils",
+ "entity_registry",
  "entity_registry_db_utils",
  "genai_telemetry",
  "harness_id",
@@ -682,6 +689,8 @@ dependencies = [
  "crm",
  "database_env_vars",
  "entity_access",
+ "entity_registry",
+ "entity_registry_db_utils",
  "initiative",
  "kafka_util",
  "lexical_client",
@@ -855,6 +864,7 @@ dependencies = [
  "foreign_entity",
  "frecency",
  "futures",
+ "image_generation",
  "import",
  "initiative",
  "initiative_documents",
@@ -905,6 +915,7 @@ dependencies = [
  "soup",
  "sqlx",
  "sqs_client",
+ "static_file",
  "strum 0.27.2",
  "sync_service_client",
  "system_properties",
@@ -1086,6 +1097,7 @@ name = "anthropic"
 version = "0.2.0"
 dependencies = [
  "ai_toolset",
+ "ai_usage",
  "anyhow",
  "async-openai",
  "async-stream",
@@ -3105,6 +3117,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum",
+ "axum-extra",
  "bot_id",
  "bot_token",
  "channels",
@@ -3300,7 +3313,7 @@ dependencies = [
 
 [[package]]
 name = "cache-wasm"
-version = "0.6.29"
+version = "0.6.34"
 dependencies = [
  "async-lock",
  "cache-core",
@@ -3838,6 +3851,7 @@ dependencies = [
  "entity_access_db_utils",
  "entity_access_management",
  "entity_mutation",
+ "entity_registry",
  "entity_registry_db_utils",
  "futures",
  "http-body-util",
@@ -7000,6 +7014,7 @@ dependencies = [
 name = "entity_registry"
 version = "0.1.0"
 dependencies = [
+ "axum",
  "bot_id",
  "chrono",
  "harness_id",
@@ -9382,6 +9397,37 @@ checksum = "525e9ff3e1a4be2fbea1fdf0e98686a6d98b4d8f937e1bf7402245af1909e8c3"
 dependencies = [
  "byteorder-lite",
  "quick-error",
+]
+
+[[package]]
+name = "image_generation"
+version = "0.1.0"
+dependencies = [
+ "ai_toolset",
+ "anyhow",
+ "async-trait",
+ "attachment",
+ "base64 0.22.1",
+ "bot_id",
+ "documents",
+ "entity_access",
+ "macro_user_id",
+ "model",
+ "model-entity",
+ "model_owner",
+ "models_permissions",
+ "non_empty",
+ "reqwest 0.13.4",
+ "rootcause",
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "uuid",
+ "wiremock",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -14053,10 +14099,13 @@ dependencies = [
  "async-trait",
  "aws-sdk-secretsmanager",
  "axum",
+ "bots",
  "connection_gateway_client",
  "database_env_vars",
  "doppler-config",
  "entity_access",
+ "entity_registry",
+ "entity_registry_db_utils",
  "macro_auth",
  "macro_authorization",
  "macro_aws_config",
@@ -15786,6 +15835,7 @@ dependencies = [
  "aws-sdk-sqs",
  "axum",
  "bot_id",
+ "bots",
  "channel_sender",
  "channels",
  "chat",
@@ -15797,6 +15847,8 @@ dependencies = [
  "documents",
  "doppler-config",
  "entity_access",
+ "entity_access_db_utils",
+ "entity_registry",
  "entity_registry_db_utils",
  "futures",
  "kafka_util",
@@ -15958,6 +16010,7 @@ dependencies = [
  "aws-sdk-s3",
  "aws-sdk-sqs",
  "axum",
+ "bots",
  "calendar_events",
  "call",
  "channels",
@@ -15970,6 +16023,8 @@ dependencies = [
  "email",
  "email_db_client",
  "ensure_exists",
+ "entity_registry",
+ "entity_registry_db_utils",
  "futures",
  "http-body-util",
  "kafka_util",

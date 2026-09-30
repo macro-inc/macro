@@ -24,6 +24,7 @@ import {
 } from '@queries/messages/mutations';
 import type { MessageListItem } from '@service-storage/messages';
 import { Button } from '@ui/components/Button';
+import { SegmentedControl } from '@ui/components/SegmentedControl';
 import {
   createEffect,
   createMemo,
@@ -52,6 +53,17 @@ import type { SpreadsheetStore } from './primitives/create-spreadsheet-store';
 import { SpreadsheetCommentComposer } from './views/SpreadsheetCommentComposer';
 import { SpreadsheetCommentThread } from './views/SpreadsheetCommentThread';
 
+type CommentFilter = 'open' | 'resolved' | 'all';
+
+const COMMENT_FILTER_OPTIONS: Array<{
+  value: CommentFilter;
+  label: string;
+}> = [
+  { value: 'open', label: 'Open' },
+  { value: 'resolved', label: 'Resolved' },
+  { value: 'all', label: 'All' },
+];
+
 /** Production wiring for spreadsheet discussions on the shared message store. */
 export function SpreadsheetComments(props: {
   documentId: string;
@@ -73,9 +85,9 @@ export function SpreadsheetComments(props: {
   const target = useMessageLink(parent, linkedMessageId);
   const navigationCount = useParamNavigationCount('comment_id');
   const [open, setOpen] = createSignal(false);
-  const [anchor, setAnchor] = createSignal<SpreadsheetCommentAnchor>();
   const [location, setLocation] = createSignal<SpreadsheetCommentAnchor>();
   const [error, setError] = createSignal('');
+  const [commentFilter, setCommentFilter] = createSignal<CommentFilter>('open');
   const threads = () => (query.isSuccess ? query.data : []);
   const discussionTarget = () =>
     threads().find((thread) => thread.id === target.rootId())?.state.anchor ===
@@ -191,12 +203,26 @@ export function SpreadsheetComments(props: {
       range: context.range,
     };
   };
-  const selectAnchor = () => setAnchor(currentAnchor());
   const toggle = () => {
-    if (!open()) selectAnchor();
     closeCard();
     setOpen(!open());
   };
+  const selectionThreads = createMemo(() =>
+    threads().filter(
+      (thread) =>
+        !thread.state.deleted_at &&
+        (!thread.deleted_at || thread.thread.reply_count > 0) &&
+        spreadsheetCommentAnchor(thread.state.anchor)
+    )
+  );
+  const filteredSelectionThreads = createMemo(() =>
+    selectionThreads().filter((thread) => {
+      if (commentFilter() === 'all') return true;
+      return commentFilter() === 'resolved'
+        ? thread.state.resolved
+        : !thread.state.resolved;
+    })
+  );
   const anchoredThreads = createMemo(() =>
     threads().flatMap((thread) => {
       const value = spreadsheetCommentAnchor(thread.state.anchor);
@@ -251,12 +277,11 @@ export function SpreadsheetComments(props: {
     add: (element) => {
       if (!canComment()) return;
       clearHover();
-      const selected = currentAnchor();
       if (!element) {
-        setAnchor(selected);
         setOpen(true);
         return;
       }
+      const selected = currentAnchor();
       setCard({
         element,
         anchor: selected,
@@ -309,11 +334,9 @@ export function SpreadsheetComments(props: {
           closeCard();
           setLocation(undefined);
           setError('');
-          if (!open()) setAnchor(ready ? currentAnchor() : undefined);
           setOpen(true);
         }
         if (!ready) return;
-        if (!anchor()) setAnchor(currentAnchor());
         if (!loaded) return;
         const thread = threads().find(
           (thread) => thread.id === target.rootId()
@@ -322,7 +345,7 @@ export function SpreadsheetComments(props: {
         navigatedRequest = value;
         const linked = spreadsheetCommentAnchor(thread.state.anchor);
         if (linked) {
-          setAnchor(linked);
+          setCommentFilter(thread.state.resolved ? 'resolved' : 'open');
           navigate(linked);
         }
       }
@@ -386,85 +409,77 @@ export function SpreadsheetComments(props: {
                   {error()}
                 </p>
               </Show>
-              <Show when={query.isSuccess && !count()}>
-                <p class="py-4 text-sm text-ink-muted">
-                  No comments yet. Start a discussion about the selected cells.
-                </p>
-              </Show>
               <Suspense
                 fallback={
                   <p class="text-sm text-ink-muted">Loading comments…</p>
                 }
               >
-                <For
-                  each={threads()
-                    .filter(
-                      (thread) =>
-                        !thread.state.deleted_at &&
-                        spreadsheetCommentAnchor(thread.state.anchor)
-                    )
-                    .map((thread) => thread.id)}
-                >
-                  {(id) => {
-                    const thread = () =>
-                      threads().find((item) => item.id === id)!;
-                    const linked = () =>
-                      spreadsheetCommentAnchor(thread().state.anchor)!;
-                    const label = () => {
-                      const value = linked();
-                      const sheet = props.store
-                        .workbook()
-                        .find((sheet) => sheet.id === value.sheetId);
-                      return `${sheet?.name ?? value.sheetName} · ${value.range}${sheet ? '' : ' (deleted sheet)'}`;
-                    };
-                    return (
-                      <>
-                        <button
-                          class="mt-3 mb-1 rounded px-2 py-1 text-xs text-accent hover:bg-hover"
-                          onClick={() => navigate(linked())}
-                        >
-                          {label()}
-                        </button>
-                        {renderThread(thread)}
-                      </>
-                    );
-                  }}
-                </For>
-                <EntityDiscussion
-                  parent={parent()}
-                  canWrite={canComment()}
-                  link={{ type: 'spreadsheet', id: props.documentId }}
-                  targetId={discussionTarget()}
-                  label="Workbook discussion"
-                />
+                <section aria-label="Cell comments">
+                  <div class="mb-3">
+                    <SegmentedControl
+                      value={commentFilter()}
+                      options={COMMENT_FILTER_OPTIONS}
+                      onChange={setCommentFilter}
+                      size="sm"
+                      aria-label="Filter cell comments"
+                    />
+                  </div>
+                  <Show when={selectionThreads().length === 0}>
+                    <p class="py-3 text-sm text-ink-muted">
+                      No cell comments yet. Select cells in the sheet to add
+                      one.
+                    </p>
+                  </Show>
+                  <Show
+                    when={
+                      selectionThreads().length > 0 &&
+                      filteredSelectionThreads().length === 0
+                    }
+                  >
+                    <p class="py-3 text-sm text-ink-muted">
+                      No {commentFilter()} cell comments.
+                    </p>
+                  </Show>
+                  <For
+                    each={filteredSelectionThreads().map((thread) => thread.id)}
+                  >
+                    {(id) => {
+                      const thread = () =>
+                        threads().find((item) => item.id === id)!;
+                      const linked = () =>
+                        spreadsheetCommentAnchor(thread().state.anchor)!;
+                      const label = () => {
+                        const value = linked();
+                        const sheet = props.store
+                          .workbook()
+                          .find((sheet) => sheet.id === value.sheetId);
+                        return `${sheet?.name ?? value.sheetName} · ${value.range}${sheet ? '' : ' (deleted sheet)'}`;
+                      };
+                      return (
+                        <>
+                          <button
+                            class="mt-3 mb-1 rounded px-2 py-1 text-xs text-accent hover:bg-hover"
+                            onClick={() => navigate(linked())}
+                          >
+                            {label()}
+                          </button>
+                          {renderThread(thread)}
+                        </>
+                      );
+                    }}
+                  </For>
+                </section>
+                <div class="mt-5 border-t border-edge-muted pt-1">
+                  <EntityDiscussion
+                    parent={parent()}
+                    canWrite={canComment()}
+                    link={{ type: 'spreadsheet', id: props.documentId }}
+                    targetId={discussionTarget()}
+                    label="Discussion"
+                  />
+                </div>
               </Suspense>
             </div>
-            <Show when={canComment() && anchor()}>
-              <div class="shrink-0 border-t border-edge-muted p-3">
-                <div class="mb-2 flex items-center justify-between gap-2 text-xs text-ink-muted">
-                  <span>
-                    {anchor()
-                      ? `${anchor()!.sheetName} · ${anchor()!.range}`
-                      : 'Workbook comment'}
-                  </span>
-                  <button class="underline" onClick={selectAnchor}>
-                    Use selection
-                  </button>
-                </div>
-                <StaticMarkdownContext>
-                  <Suspense>
-                    <SpreadsheetCommentComposer
-                      parent={parent()}
-                      onSend={async (snapshot) => {
-                        const value = anchor();
-                        if (!value) throw new Error('Select cells to comment');
-                        await post(value, snapshot);
-                      }}
-                    />
-                  </Suspense>
-                </StaticMarkdownContext>
-              </div>
-            </Show>
           </aside>
         </Show>
       </div>
