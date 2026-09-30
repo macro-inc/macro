@@ -303,6 +303,7 @@ export type CreateScheduledActionData = {
 export type CreateScheduledActionErrors = {
     400: string;
     401: string;
+    403: string;
     500: string;
 };
 
