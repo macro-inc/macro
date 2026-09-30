@@ -21,6 +21,7 @@ import {
   Switch,
 } from 'solid-js';
 import { useProjectsContext } from '../context/projects-context';
+import { canEditProject } from '../core/project';
 
 type PickerItem =
   | { type: 'clear' }
@@ -74,9 +75,7 @@ export function ProjectPicker(props: {
 
   const items = createMemo<PickerItem[]>(() => {
     const projects: PickerItem[] = (source.rows() ?? [])
-      .filter(
-        (row) => row.project.access === 'edit' || row.project.access === 'owner'
-      )
+      .filter((row) => canEditProject(row.project))
       .map((row) => ({
         type: 'project',
         id: row.project.id,

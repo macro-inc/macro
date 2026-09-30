@@ -13,6 +13,8 @@ import type {
   ControlResponse,
   CreateAgentSessionRequest,
   CreateAgentSessionResponse,
+  DiscoverAgentCapabilitiesRequest,
+  DiscoverAgentCapabilitiesResponse,
   LoadAgentModelsRequest,
   LoadAgentModelsResponse,
   PreviewAgentSessionsResponse,
@@ -56,6 +58,21 @@ export const agentHarnessServiceClient = {
   loadAgentModels(request: LoadAgentModelsRequest, signal?: AbortSignal) {
     return fetchWithToken<LoadAgentModelsResponse>(
       `${agentHarnessHost}/agent-models/load`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+        signal,
+      }
+    );
+  },
+
+  discoverAgentCapabilities(
+    request: DiscoverAgentCapabilitiesRequest,
+    signal?: AbortSignal
+  ) {
+    return fetchWithToken<DiscoverAgentCapabilitiesResponse>(
+      `${agentHarnessHost}/agent-capabilities/discover`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

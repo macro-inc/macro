@@ -268,6 +268,7 @@ is available, the AI composer returns with its draft intact, including in
 documents without a comment composer. Type a
 prompt, optionally choose a model or
 attach context, and tap **Send** to create the chat and send its first message.
+Enter on the virtual keyboard adds a line to the draft rather than sending it.
 The paperclip (**Attach files**) opens the device file chooser directly, including
 in the native iPhone app; it does not open a Macro file browser. Select supported
 files to upload and attach them, or cancel to return to the unchanged draft.
@@ -570,7 +571,11 @@ On mobile the composer (and any queued prompts above it) floats in the bottom
 accessory region above the dock — same placement as channel and AI chat — so it
 stays tappable and clear of the home indicator. The box is full width; the text
 sits on top and a footer row holds the model (left, as a provider logo and
-name, e.g. `✳ Sonnet 5 ⌄`) and **Send** (right). Tapping the model opens a
+name, e.g. `✳ Sonnet 5 ⌄`) and **Send** (right). On touch devices Enter on the
+virtual keyboard inserts a newline and never sends; only **Send** submits, the
+same as channel composers. This also applies to the Agents workspace session
+and new-conversation inputs and to the mobile **Ask AI** composer. On desktop
+Enter still sends and Shift+Enter inserts a newline. Tapping the model opens a
 bottom sheet listing every model the same way, with a check on the current one
 — pick a row to switch. Models read as names even when the runtime reports
 only ids: Macro Agent's `anthropic/claude-sonnet-5` shows as **Sonnet 5**. On desktop the
@@ -966,6 +971,29 @@ Verify status changes (open/merged/closed) while the chip stays mounted, and
 verify that reconnecting the gateway catches up changes missed while disconnected.
 There is no periodic PR lookup polling.
 
+### Agent reasoning effort
+
+Open the model selector and hover a model to choose its reasoning effort in the
+submenu. Keyboard users open it with Right Arrow; touch users tap the model.
+Cursor and Macro's in-memory agent load the hovered model's own advertised
+choices. The selected label includes the effort, such as `Sonnet 5 · High`;
+there is no separate effort control in the input box. Models without effort
+support remain selectable through `Use <model>` (or a desktop click/Enter).
+Default keeps the model's existing behavior.
+
+In an open session, choosing a different model's effort confirms the model first,
+then validates and applies effort. Wait for the selector to become available
+again. If the model succeeds but effort is rejected, the new model remains
+selected with its confirmed effort; the error is shown and no unsupported
+setting is presented as accepted.
+
+New conversations confirm selected model and effort settings before sending the
+first message. If startup reports a rejected setting or timeout, the first prompt
+has not been sent. See [effort capabilities](../AGENT_EFFORT.md) for the harness
+contracts and test coverage.
+
+Routine model/agent pickers retain model-only selection: they do not offer effort
+choices, because routine targets do not save an effort setting.
 
 ## Reading skills
 

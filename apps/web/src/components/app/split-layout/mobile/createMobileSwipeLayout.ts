@@ -127,8 +127,10 @@ export function createMobileSwipeLayout(
         referredFrom,
         mergeHistory: true,
       });
-      startForwardNavigation(bgHandle.id, options?.onApplied);
-      return { status: 'reused', owner: bgHandle.id, split: bgHandle };
+      const deferred = startForwardNavigation(bgHandle.id, options?.onApplied);
+      return deferred
+        ? { status: 'navigating' }
+        : { status: 'reused', owner: bgHandle.id, split: bgHandle };
     }
 
     const newFgInitialHistory = fgHandle?.history() ?? [];
@@ -151,16 +153,23 @@ export function createMobileSwipeLayout(
     });
     if (!prepared) return { status: 'unavailable' };
 
-    startForwardNavigation(prepared.id, options?.onApplied);
-    return { status: 'opened', split: prepared };
+    const deferred = startForwardNavigation(prepared.id, options?.onApplied);
+    return deferred
+      ? { status: 'navigating' }
+      : { status: 'opened', split: prepared };
   }
 
-  function startForwardNavigation(splitId: SplitId, onApplied?: () => void) {
+  function startForwardNavigation(
+    splitId: SplitId,
+    onApplied?: () => void
+  ): boolean {
+    if (onApplied) pendingForwardApplied = { splitId, notify: onApplied };
     if (forwardNavigationTrigger) {
-      if (onApplied) pendingForwardApplied = { splitId, notify: onApplied };
       forwardNavigationTrigger();
+      return true;
     } else {
       completeNavigateForward();
+      return false;
     }
   }
 

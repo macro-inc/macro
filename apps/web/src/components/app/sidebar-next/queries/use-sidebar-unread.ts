@@ -12,6 +12,7 @@ import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { enableGraphqlSoup } from '@core/constant/featureFlags';
 import { notificationIsRead } from '@entity/utils/notification';
 import { notificationStateFromGraphql } from '@notifications/notification-state';
+import { isUnreadChannelMessageNotification } from '@notifications/top-level-channel-notification';
 import { createChannelUnreadQuery } from '@queries/channel/unread-presence';
 import { makeGraphqlSoupInput } from '@queries/soup/graphql/ast';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
@@ -83,7 +84,8 @@ export function useSidebarUnread() {
       .some(
         (notification) =>
           notification.entity_type === 'channel' &&
-          !notificationIsRead(notification)
+          !notificationIsRead(notification) &&
+          isUnreadChannelMessageNotification(notification)
       );
   });
 

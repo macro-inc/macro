@@ -5,6 +5,7 @@ import {
   type BackgroundEffect,
   backgroundProcessorOptions,
 } from '@core/media/background-effect';
+import { holdAutomaticReload } from '@core/util/reloadForNewerBuild';
 import type { KrispNoiseFilter } from '@livekit/krisp-noise-filter';
 import type { BackgroundProcessorWrapper } from '@livekit/track-processors';
 import {
@@ -37,7 +38,7 @@ import {
   createCallSessionController,
   stopPrejoinTracks,
 } from './CallSessionController';
-import { createCallLifecycle } from './call-lifecycle';
+import { type CallLifecycleState, createCallLifecycle } from './call-lifecycle';
 import { publishCallResolution } from './call-resolution';
 import { createLatestAsyncRequestQueue } from './latest-async-request-queue';
 import {
@@ -1630,9 +1631,22 @@ function createCallState() {
   const [lifecycleSnapshot, setLifecycleSnapshot] = createSignal(
     lifecycle.getState()
   );
-  const unsubscribeLifecycle = lifecycle.subscribe((state) =>
-    setLifecycleSnapshot(state)
-  );
+  // Reloading into a newer app build would cut the call off.
+  let releaseReloadHold: (() => void) | undefined;
+  const holdReloadDuringCall = (state: CallLifecycleState) => {
+    const inCall = state.t !== 'idle' && state.t !== 'failed';
+    if (inCall && !releaseReloadHold) {
+      releaseReloadHold = holdAutomaticReload();
+    } else if (!inCall && releaseReloadHold) {
+      releaseReloadHold();
+      releaseReloadHold = undefined;
+    }
+  };
+  holdReloadDuringCall(lifecycle.getState());
+  const unsubscribeLifecycle = lifecycle.subscribe((state) => {
+    setLifecycleSnapshot(state);
+    holdReloadDuringCall(state);
+  });
 
   const unsubscribeNative =
     isNativeIosCallKitEnabled() && nativeCall
@@ -1649,6 +1663,7 @@ function createCallState() {
   onCleanup(() => {
     unsubscribeNative?.();
     unsubscribeLifecycle();
+    releaseReloadHold?.();
     lifecycle.dispose();
     disposed = true;
     browserConnectGeneration += 1;

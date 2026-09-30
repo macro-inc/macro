@@ -19,8 +19,12 @@ const mocks = await vi.hoisted(async () => {
     invalidate: vi.fn().mockResolvedValue(undefined),
     updates: new Set<(event: unknown) => void>(),
     reconnects: new Set<() => void>(),
+    warn: vi.fn(),
   };
 });
+vi.mock('@macro-inc/observability', () => ({
+  Telemetry: { info: vi.fn(), warn: mocks.warn, error: vi.fn() },
+}));
 vi.mock('@core/signal/tabFocus', () => ({ isTabFocused: mocks.focused }));
 vi.mock('@service-connection/stream', () => ({
   clearStream: mocks.clearStream,
@@ -191,6 +195,32 @@ it('suspends the shared heartbeat in a background tab', () => {
   mocks.setFocused(true);
   vi.advanceTimersByTime(20_000);
   expect(sent('ping')).toHaveLength(1);
+});
+
+it('reports a presence lapse once per unfocused absence past the gateway window', () => {
+  mount(useRefreshTrackedEntitiesOnFocus);
+  mountBlock();
+  const lapses = () =>
+    mocks.warn.mock.calls.filter(
+      ([name]) => name === 'presence.heartbeat_lapsed'
+    );
+
+  mocks.setFocused(false);
+  vi.advanceTimersByTime(40_000);
+  expect(lapses()).toHaveLength(0);
+  vi.advanceTimersByTime(40_000);
+  expect(lapses()).toHaveLength(1);
+  expect(lapses()[0][1]).toMatchObject({
+    'presence.entity_id': parent.id,
+    'presence.lapsed_ms': 60_000,
+  });
+  vi.advanceTimersByTime(60_000);
+  expect(lapses()).toHaveLength(1);
+
+  mocks.setFocused(true);
+  mocks.setFocused(false);
+  vi.advanceTimersByTime(60_000);
+  expect(lapses()).toHaveLength(2);
 });
 
 it('pings on refocus and refreshes only views left unseen past the gateway window', () => {

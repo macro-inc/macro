@@ -137,7 +137,8 @@ export function ChannelsMobileView(props: {
         splitHandle: panel.handle,
         referredFrom: 'channels',
         notificationSource,
-        scopeChannelThreads: false,
+        channelNavigation: 'latest',
+        channelReadScope: 'top-level',
       });
     } catch (error) {
       if (request !== opening) return;

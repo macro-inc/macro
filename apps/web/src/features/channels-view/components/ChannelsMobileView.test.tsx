@@ -149,7 +149,7 @@ afterEach(cleanup);
 
 describe('mobile channel activation', () => {
   it.each<ChannelsQueryScope>(['recents', 'channels', 'direct_messages'])(
-    'hydrates and includes unread reply targets when opening from %s',
+    'hydrates and opens at latest with top-level read marking from %s',
     async (tab) => {
       let resolve!: (channel: WithNotification<ChannelEntity>) => void;
       mocks.hydrate.mockReturnValueOnce(
@@ -180,7 +180,8 @@ describe('mobile channel activation', () => {
           splitHandle: mocks.handle,
           referredFrom: 'channels',
           notificationSource: mocks.source,
-          scopeChannelThreads: false,
+          channelNavigation: 'latest',
+          channelReadScope: 'top-level',
         })
       );
     }

@@ -31,6 +31,7 @@ export const agentHarnessExcluded = [
   'start',
   'status',
   'loadAgentModelsHandler',
+  'discoverAgentCapabilitiesHandler',
   'previewAgentSessions',
 ] as const satisfies readonly (keyof AgentHarnessSdk)[];
 

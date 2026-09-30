@@ -331,6 +331,42 @@ impl TursoStorage {
     }
 }
 
+/// Mutations still queued in a database of any storage schema version.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum QueuedMutationCount {
+    /// The file has a mutation queue holding this many rows.
+    Queued(u64),
+    /// The file has no mutation queue, so it never held queued work.
+    NoQueue,
+}
+
+/// Counts queued mutations without validating or changing the metadata.
+///
+/// Every storage schema version keeps its queue in `mutation_queue` and
+/// deletes a row once the mutation settles, so this is safe to call on a
+/// database written by an older build before deciding whether to delete it.
+#[cfg(target_arch = "wasm32")]
+pub fn count_queued_mutations(
+    session: &ConnectedOpfsSession,
+) -> Result<QueuedMutationCount, TursoStorageError> {
+    let connection = session.connection();
+    let count = |sql: &str| -> Result<u64, TursoStorageError> {
+        let rows = driver::query(&connection, sql, Vec::new())?;
+        let [row] = rows.as_slice() else {
+            return Err(invariant());
+        };
+        u64::try_from(required_i64(row, 0)?).map_err(|_| invariant())
+    };
+    if count("SELECT COUNT(*) FROM sqlite_schema WHERE type = 'table' AND name = 'mutation_queue'")?
+        == 0
+    {
+        return Ok(QueuedMutationCount::NoQueue);
+    }
+    Ok(QueuedMutationCount::Queued(count(
+        "SELECT COUNT(*) FROM mutation_queue",
+    )?))
+}
+
 /// Result of consuming and gracefully closing a browser Turso storage.
 #[cfg(target_arch = "wasm32")]
 #[derive(Debug)]

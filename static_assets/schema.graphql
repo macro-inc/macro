@@ -3693,6 +3693,10 @@ input GraphqlNotificationFilter {
 	Event names to include; omitted or empty means every event type.
 	"""
 	eventTypes: [String!]
+	"""
+	Only notifications about top-level channel messages, including mentions but excluding reactions.
+	"""
+	topLevelMessagesOnly: Boolean
 }
 
 """
