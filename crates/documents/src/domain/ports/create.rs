@@ -105,3 +105,13 @@ where
         (**self).cleanup_created_document(document_id).await
     }
 }
+
+/// Inbound service for saving file bytes as a document using the existing upload lifecycle.
+pub trait DocumentUploadService: Send + Sync {
+    /// Validate the destination and file, create the document, and upload its bytes.
+    fn upload_file(
+        &self,
+        principal: &CreationPrincipal,
+        upload: crate::domain::create::upload::NewFileUpload,
+    ) -> impl Future<Output = Result<crate::domain::create::CreatedDocument, DocumentError>> + Send;
+}

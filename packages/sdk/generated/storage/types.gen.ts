@@ -1455,6 +1455,32 @@ export type BotOwner = {
 };
 
 /**
+ * Bot identity for rendering, including the sponsor and soft-delete time.
+ *
+ * `owner` is none only for a registry system bot. A persisted row always has
+ * a sponsor.
+ */
+export type BotOwnerProfile = {
+    /**
+     * Avatar URL. Registry system bots have none.
+     */
+    avatar_url?: string | null;
+    /**
+     * Soft-delete time. Absent for an active bot and for a registry system bot.
+     */
+    deleted_at?: string | null;
+    /**
+     * Bot id.
+     */
+    id: BotId;
+    /**
+     * Display name.
+     */
+    name: string;
+    owner?: null | BotOwner;
+};
+
+/**
  * Public bot profile attached to bot-authored messages.
  */
 export type BotSenderProfile = {
@@ -11510,6 +11536,32 @@ export type GetSelfBotResponses = {
 };
 
 export type GetSelfBotResponse = GetSelfBotResponses[keyof GetSelfBotResponses];
+
+export type GetBotOwnerProfilesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Bot ids. Repeat the key: `?ids=<uuid>&ids=<uuid>`.
+         */
+        ids?: Array<BotId>;
+    };
+    url: '/bots/profiles';
+};
+
+export type GetBotOwnerProfilesErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetBotOwnerProfilesError = GetBotOwnerProfilesErrors[keyof GetBotOwnerProfilesErrors];
+
+export type GetBotOwnerProfilesResponses = {
+    200: Array<BotOwnerProfile>;
+};
+
+export type GetBotOwnerProfilesResponse = GetBotOwnerProfilesResponses[keyof GetBotOwnerProfilesResponses];
 
 export type ListBotChannelsData = {
     body?: never;

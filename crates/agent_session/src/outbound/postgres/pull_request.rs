@@ -2,7 +2,9 @@
 
 use super::*;
 
-impl crate::domain::pull_request::SessionPullRequestRepo for PgAgentSessionRepo {
+impl<B: BotFacts + 'static> crate::domain::pull_request::SessionPullRequestRepo
+    for PgAgentSessionRepo<B>
+{
     async fn record_pull_request(
         &self,
         session: AgentSessionId,

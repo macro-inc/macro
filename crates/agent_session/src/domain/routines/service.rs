@@ -69,7 +69,9 @@ where
         )
         .await
         .map_err(|error| match error {
-            ManagedPersonaError::Forbidden => RoutineSessionError::Forbidden,
+            ManagedPersonaError::Forbidden | ManagedPersonaError::OwnerNotUser(_) => {
+                RoutineSessionError::Forbidden
+            }
             ManagedPersonaError::Lookup(error) => session_error(error),
             ManagedPersonaError::Unknown
             | ManagedPersonaError::NotAgent

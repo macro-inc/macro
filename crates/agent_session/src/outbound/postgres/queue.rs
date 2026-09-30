@@ -4,7 +4,7 @@ use super::*;
 use crate::domain::model::StoredQueuedAction;
 use sqlx::types::Json;
 
-impl PgAgentSessionRepo {
+impl<B> PgAgentSessionRepo<B> {
     pub(super) async fn load_queued_actions(
         &self,
         id: AgentSessionId,

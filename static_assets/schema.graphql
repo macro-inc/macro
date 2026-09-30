@@ -4303,7 +4303,7 @@ type GraphqlRepliedToDocumentCommentThreadMetadata {
 }
 
 """
-An AI routine owned by the authenticated user.
+An AI routine the authenticated user can access.
 """
 type GraphqlScheduledAction {
 	"""
@@ -6693,7 +6693,7 @@ type GraphqlUser {
 	"""
 	taskInitiativeReferences(taskIds: [ID!]!): [TaskInitiativeReference!]!
 	"""
-	AI routines owned by the authenticated user.
+	AI routines the authenticated user can access.
 	"""
 	scheduledActions: [GraphqlScheduledAction!]!
 	"""

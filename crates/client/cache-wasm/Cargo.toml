@@ -2,10 +2,8 @@
 edition = "2024"
 name = "cache-wasm"
 publish = false
-# Rebuild for entity-only Soup hydration, bounded page retention,
-# storage-version database names, stale-database cleanup, and waiting out
-# files a departing worker holds.
-version = "0.6.31"
+# Rebuild for bucket-scoped search catalogs and bounded borrowed ranking.
+version = "0.6.34"
 
 [features]
 default = []

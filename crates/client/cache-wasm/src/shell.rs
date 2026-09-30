@@ -151,6 +151,8 @@ struct JsQueryRegistration {
 struct JsWriteResult {
     revision: String,
     revision_advanced: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    search_changed_buckets: Option<std::collections::BTreeSet<String>>,
     changed: Vec<String>,
     affected_ops: Vec<String>,
     reset: bool,
@@ -160,6 +162,7 @@ struct JsWriteResult {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct JsHydrationWriteResult {
+    search_changed_buckets: std::collections::BTreeSet<String>,
     revision: String,
     revision_advanced: bool,
     changed: Vec<String>,
@@ -415,6 +418,7 @@ fn js_write_result(result: WriteResult, ops: &OpInterner) -> JsWriteResult {
     JsWriteResult {
         revision: result.revision.to_string(),
         revision_advanced: result.revision_advanced,
+        search_changed_buckets: result.search_changed_buckets,
         changed: result
             .changed
             .into_iter()
@@ -1557,6 +1561,7 @@ impl CacheEngine {
                 .await;
             let result = state.engine_result(result)?;
             to_js(&JsHydrationWriteResult {
+                search_changed_buckets: result.search_changed_buckets,
                 revision: result.write_result.revision.to_string(),
                 revision_advanced: result.write_result.revision_advanced,
                 changed: result

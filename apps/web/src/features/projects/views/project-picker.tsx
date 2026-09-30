@@ -38,10 +38,12 @@ export function ProjectPicker(props: {
   let listRef: HTMLDivElement | undefined;
 
   const assign = async (projectId?: string) => {
+    // The selection that owns these ids unmounts as soon as the picker closes.
+    const taskIds = [...props.taskIds];
     // Close first like the other property editors; the save settles after.
     props.onClose();
     try {
-      const results = await commands.assignTasks(projectId, props.taskIds);
+      const results = await commands.assignTasks(projectId, taskIds);
       const failed = results.filter((item) => item.error);
       if (!failed.length) return;
       toast.failure(
