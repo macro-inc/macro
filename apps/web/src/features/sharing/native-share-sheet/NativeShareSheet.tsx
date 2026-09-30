@@ -120,6 +120,9 @@ function ShareSheetComposerError(_props: { error: unknown }) {
 
 function NativeShareSheetComposer(props: { handleCancel: () => void }) {
   const shareTarget = useShareTarget();
+  const batchTokens = (shareTarget?.pendingShareFiles() ?? []).map(
+    (file) => file.token
+  );
   const userId = useUserId();
   const sendMessage = useSendMessageMutation();
   const { all: destinationOptions } = useCombinedRecipients();
@@ -211,7 +214,7 @@ function NativeShareSheetComposer(props: { handleCancel: () => void }) {
     clear: async () => {
       invalidateListChannels();
       invalidateContacts();
-      await shareTarget?.clearPendingShareFiles();
+      await shareTarget?.clearPendingShareFiles(batchTokens);
     },
     send: async (snapshot) => {
       if (uploading() || failedFiles().length > 0) {

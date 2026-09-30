@@ -93,7 +93,7 @@ async function readSharedFileText(token: string): Promise<string> {
   return invoke<string>('read_shared_file_text', { token });
 }
 
-async function clearSharedFiles(tokens: string[]): Promise<void> {
+async function clearSharedFiles(tokens: readonly string[]): Promise<void> {
   await invoke('clear_shared_files', { tokens });
 }
 
@@ -111,7 +111,7 @@ async function uploadPendingShareFile(
 interface ShareTargetContextValue {
   pendingShareFiles: Accessor<PendingShareFile[]>;
   uploadPendingShareFile: (args: UploadPendingShareFileArgs) => Promise<void>;
-  clearPendingShareFiles: () => Promise<void>;
+  clearPendingShareFiles: (tokens?: readonly string[]) => Promise<void>;
 }
 
 const ShareTargetContext = createContext<ShareTargetContextValue | undefined>(
@@ -129,25 +129,24 @@ export function ShareTargetProvider(props: {
     string[]
   >([]);
 
-  const clearPendingShareFiles = async () => {
-    const files = pendingShareFiles();
-    if (props.os !== 'android') {
-      setPendingShareFiles([]);
-      setPendingShareFileNames([]);
-    }
+  const clearPendingShareFiles = async (
+    tokens: readonly string[] = pendingShareFiles().map((file) => file.token)
+  ) => {
+    if (tokens.length === 0) return;
 
-    if (files.length === 0) {
-      return;
-    }
+    const clearMatchingFiles = () => {
+      setPendingShareFiles((current) =>
+        current.filter((file) => !tokens.includes(file.token))
+      );
+      if (pendingShareFiles().length === 0) setPendingShareFileNames([]);
+    };
+    if (props.os !== 'android') clearMatchingFiles();
 
     try {
-      const tokens = files.map((file) => file.token);
       if (props.os === 'android') {
         await invoke('plugin:android-mobile|clearShares', { tokens });
         // A queue notification may already have loaded the next batch.
-        setPendingShareFiles((current) =>
-          current.filter((file) => !tokens.includes(file.token))
-        );
+        clearMatchingFiles();
       } else {
         await clearSharedFiles(tokens);
       }
