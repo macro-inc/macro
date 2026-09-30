@@ -1,6 +1,8 @@
 # In-app feature tours
 
-Desktop views show a floating feature tour until it is dismissed: Home, Email,
+Tours are behind the `enable-in-app-tours` PostHog flag (on in local dev;
+override with `VITE_ENABLE_IN_APP_TOURS`). With it on, desktop views show a
+floating feature tour until it is dismissed: Home, Email,
 Documents, Tasks, Channels, Calendar, Customers, Agents, Calls, and Folders. Tours
 are not mounted on narrow screens or primary touch devices, including their videos
 and highlights.

@@ -16,6 +16,10 @@ const wiring = vi.hoisted(() => ({
 
 const [desktop, setDesktop] = createSignal(true);
 vi.mock('@solid-primitives/media', () => ({ createMediaQuery: () => desktop }));
+const [flagOn, setFlagOn] = createSignal(true);
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: flagOn() }),
+}));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => wiring.userId }));
 vi.mock('@core/constant/SettingsState', () => ({
   useSettingsState: () => ({ openSettingsInSplit: wiring.settings }),
@@ -63,6 +67,7 @@ const saved = (id: string) =>
 beforeEach(() => {
   vi.stubEnv('DEV', false);
   setDesktop(true);
+  setFlagOn(true);
   localStorage.clear();
   wiring.userId = 'tour-user';
   wiring.links = [];
@@ -77,6 +82,14 @@ afterEach(() => {
 });
 
 describe('ViewTour', () => {
+  it('renders nothing while the in-app tours flag is off', () => {
+    setFlagOn(false);
+    render(() => <ViewTour tour={withVideo} />);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    setFlagOn(true);
+    expect(screen.getByRole('dialog')).toBeTruthy();
+  });
+
   it('saves a dismissal per user and stays hidden afterwards', () => {
     const view = render(() => <ViewTour tour={plain} />);
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));

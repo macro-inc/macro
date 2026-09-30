@@ -1,5 +1,7 @@
 import { VIEW_SHELL_TOUR } from '@app/components/view-shell/tour';
 import { isMcpToolConnected } from '@app/features/setup/core/connectedTools';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { enableInAppTours } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
 import { createUserScopedStorage } from '@core/util/userScopedStorage';
@@ -34,8 +36,9 @@ export type ViewTourProps = {
 export function ViewTour(props: ViewTourProps) {
   const userId = useUserId();
   const desktop = createMediaQuery(DESKTOP_QUERY);
+  const flag = useFeatureFlag(enableInAppTours);
   return (
-    <Show when={desktop() && userId()} keyed>
+    <Show when={flag().enabled && desktop() && userId()} keyed>
       {(id) => <DismissibleTour {...props} userId={id} />}
     </Show>
   );

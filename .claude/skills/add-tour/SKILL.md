@@ -137,7 +137,9 @@ list):
   `<SoupView … tour={<ViewTour tour={callsTour} />} />`.
 - Don't put it inside a `<Show>` branch that remounts on navigation, or the
   tour restarts at step 1.
-- Don't gate it on desktop yourself; `ViewTour` already does.
+- Don't gate it on desktop or on a flag yourself; `ViewTour` already checks
+  both. All tours sit behind the `enableInAppTours` flag
+  (`enable-in-app-tours` in PostHog, on in local dev).
 - Don't pass step callbacks that change pages or open panels.
 
 ## 6. Test and document
