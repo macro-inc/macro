@@ -1,5 +1,3 @@
-import { UserIcon } from '@core/component/UserIcon';
-import { getDisplayName, tryMacroId } from '@core/user';
 import { formatTimeZoneAbbreviation } from '@core/util/date';
 import ClockIcon from '@phosphor/clock.svg';
 import HashIcon from '@phosphor/hash.svg';
@@ -11,6 +9,7 @@ import { isThisYear } from 'date-fns/isThisYear';
 import { isToday } from 'date-fns/isToday';
 import { isTomorrow } from 'date-fns/isTomorrow';
 import type { ParentProps } from 'solid-js';
+import { OwnerLabel } from '../owner/owner-display';
 import type { CallStatus } from '../types/entity';
 
 function Badge(props: ParentProps<{ class?: string; title?: string }>) {
@@ -27,31 +26,28 @@ function Badge(props: ParentProps<{ class?: string; title?: string }>) {
   );
 }
 
-// TODO (seamus) : tool tip for now, better shared context later
 export function SharedBadge(props: { ownerId: string }) {
   return (
-    <Badge class="text-ink-extra-muted border-edge-muted pr-2">
-      <UserIcon id={props.ownerId} size="sm" />
+    <Badge class="text-ink-extra-muted border-edge-muted pr-2 max-w-48 min-w-0">
+      <span class="flex min-w-0 normal-case font-sans">
+        <OwnerLabel ownerId={props.ownerId} userAvatarOnly />
+      </span>
       shared
     </Badge>
   );
 }
 
 export function SharedBadgeSmall(props: { ownerId: string }) {
-  const id = () => tryMacroId(props.ownerId);
-  const name = () => getDisplayName(id()) || undefined;
-
   return (
     <HoverCard
       content={
         <div class="flex items-center gap-1.5 text-xs">
-          <UserIcon
-            id={props.ownerId}
-            size="sm"
+          <OwnerLabel
+            ownerId={props.ownerId}
             suppressClick
             showTooltip={false}
           />
-          <span>{name()} shared this with you</span>
+          <span>shared this with you</span>
         </div>
       }
     >
@@ -63,20 +59,16 @@ export function SharedBadgeSmall(props: { ownerId: string }) {
 }
 
 export function CreatedByBadgeSmall(props: { ownerId: string }) {
-  const id = () => tryMacroId(props.ownerId);
-  const name = () => getDisplayName(id()) || undefined;
-
   return (
     <HoverCard
       content={
         <div class="flex items-center gap-1.5 text-xs">
-          <UserIcon
-            id={props.ownerId}
-            size="sm"
+          <span>Created by</span>
+          <OwnerLabel
+            ownerId={props.ownerId}
             suppressClick
             showTooltip={false}
           />
-          <span>Created by {name()}</span>
         </div>
       }
     >
