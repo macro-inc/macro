@@ -59,6 +59,9 @@ pub struct WriteResultWire {
     pub revision: String,
     /// Whether this write advanced `revision`.
     pub revision_advanced: bool,
+    /// Known search changes for query responses; absent for conservative refreshes.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub search_changed_buckets: Option<std::collections::BTreeSet<String>>,
     /// Entity keys whose records changed.
     pub changed: Vec<String>,
     /// Registered operation ids affected by the change (origin excluded).
@@ -366,6 +369,7 @@ fn wire_write_result(ops: &OpInterner, result: WriteResult) -> WriteResultWire {
     WriteResultWire {
         revision: result.revision.to_string(),
         revision_advanced: result.revision_advanced,
+        search_changed_buckets: result.search_changed_buckets,
         changed: result
             .changed
             .into_iter()

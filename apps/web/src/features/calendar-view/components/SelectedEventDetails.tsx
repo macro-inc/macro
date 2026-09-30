@@ -62,9 +62,11 @@ interface SelectedEventDetailsProps {
 export function SelectedEventDetails(props: SelectedEventDetailsProps) {
   const calendarsQuery = useVisibleCalendarsQuery();
   const defaultReminders = (event: CalendarEvent) =>
-    calendarsQuery.data?.find(
-      (calendar) => calendar.id === reminderCalendarIdOf(event)
-    )?.defaultReminders;
+    calendarsQuery.isSuccess
+      ? calendarsQuery.data?.find(
+          (calendar) => calendar.id === reminderCalendarIdOf(event)
+        )?.defaultReminders
+      : undefined;
   const popoverSelection = createMemo(
     () => {
       const event = props.event();

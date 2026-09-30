@@ -161,6 +161,95 @@ replacing the Macro session. After process death mid-flow, restart authenticatio
 orphaned callbacks must not silently log in the replacement process. Macro logout
 does not sign out of Google/GitHub in the system browser.
 
+iOS retains its existing auth/keyboard plugins. Android uses `android_mobile_plugin`
+for live window/IME insets, committed system Back, content-URI sharing, clipboard
+images, and file export; it does not build the old keyboard scaffold.
+
+## Input, navigation, and files
+
+The Android mobile plugin publishes window insets from the native WebView. The
+WebView keeps its full edge-to-edge size under the keyboard, as on iOS: resizing it
+made Chromium relayout the whole document on top of the CSS work. Instead the
+plugin publishes the keyboard height and JS shrinks the layout root through
+`--dvh` and lifts fixed sheets by `--virtual-keyboard-height`, so nothing subtracts
+the keyboard twice. Native density can change before Chromium updates its CSS
+viewport, so insets are scaled by the WebView width (which the keyboard never
+changes) and re-applied on WebView resize as well as native inset events. Every
+root custom-property write recalculates style for the whole document, so only
+changed values are written.
+System bars and cutouts remain separate safe-area values; floating keyboards with
+no bottom inset do not consume viewport height. Insets refresh after layout,
+rotation, and resume. Font scale, density, layout direction, and navigation-mode
+changes are handled in the current Activity so Tauri retains a live WebView and
+unsent drafts. See [Android's inset guidance](https://developer.android.com/develop/ui/views/layout/edge-to-edge).
+
+Committed Back hides the IME first, then uses the existing overlay Escape handlers,
+then mobile pane history. At the root it backgrounds the task. Canceled predictive
+Back gestures do not dispatch navigation. The native share composer asks before
+discarding on Back/outside dismissal; Keep editing retains its current contents.
+Android editors use normal Lexical caret handling, without the iOS cursor plugin.
+
+Incoming SEND/SEND_MULTIPLE text, URLs, and `content://` streams enter an atomic
+private-cache queue. Providers are read while their URI grant is valid; names and
+reported sizes are not trusted as paths or byte counts. Staging limits each intent
+to 500 MiB total and 100 attachments. Files are checksummed while copying;
+PDFs and other documents use the regular document-creation flow with native
+streaming PUT and the S3 checksum header. Media uses the static-file uploader.
+Failed uploads stay visible with a Retry action and block sending until resolved.
+Missing or corrupt batches report an error and do not strand later shares.
+The queue retains original bytes until send/cancel, survives process restarts and
+login, and keeps a second share behind the active composer. Abandoned staging is
+removed after 24 hours. Ordinary attachment selection continues to use the WebView
+file input and Android's picker; no parallel photo-picker adapter is introduced.
+
+Blob downloads use chunked native export and Android's Save dialog. Large transfers
+show progress and can be canceled before the system chooser opens; canceled Save
+dialogs do not report success. Email clipboard attachments use native bytes and
+their actual size/checksum, including the email attachment-size limit. Image sharing
+and copying use FileProvider content URIs with temporary read grants. Exported
+files remain in a narrow private-cache provider directory for asynchronous
+receivers and expire after 24 hours. The provider also exposes app-specific
+Pictures for the WebView camera-capture fallback; it does not expose external
+storage roots. The app removes device-info's unused legacy read/write-storage and
+battery-stat permissions from the merged manifest. Downloads already authenticated/fetched by the app preserve those
+bytes rather than reopening a URL in an unauthenticated external browser.
+
+From `apps/web`, after installing the current debug APK and letting Macro load:
+
+```sh
+ANDROID_SERIAL=<dedicated-emulator-serial> bun tests/native/android/smoke.mjs
+bunx vitest run src/lib/core/mobile/androidWindowInsets.test.ts src/lib/core/mobile/androidBack.test.tsx src/lib/core/mobile/androidFiles.test.ts src/lib/service-clients/service-storage/util/upload-native.test.ts src/features/channel/Input/tests/upload-attachments.test.ts
+```
+
+Use a dedicated emulator with no pending personal share. The smoke test injects a
+temporary input, exercises native clipboard/export and incoming-share commands,
+verifies font-scale and display-density changes retain the WebView/draft and
+keep bottom controls inside the CSS viewport at tablet/foldable-sized windows, force-stops/relaunches
+Macro, and writes results/screenshots under
+`/tmp/macro-task03-smoke`. It never sends a message; a signed-in share composer can
+upload the test attachment as it normally does. In Gboard's settings, Physical
+keyboard → Show on-screen keyboard must be enabled to test the docked IME; the
+system setting alone can leave Gboard showing only its physical-keyboard toolbar.
+
+The plugin's tests use an isolated package (`com.macro.mobile.test`) and never
+clear Macro's data. From the generated Gradle project, build/run them with:
+
+```sh
+./gradlew :tauri-plugin-android-mobile:testDebugUnitTest :tauri-plugin-android-mobile:assembleDebugAndroidTest
+adb -s <serial> install -r ../../../android_mobile_plugin/android/build/outputs/apk/androidTest/debug/tauri-plugin-android-mobile-debug-androidTest.apk
+adb -s <serial> shell am instrument -w com.macro.mobile.test/androidx.test.runner.AndroidJUnitRunner
+```
+
+These instrumented tests exercise Android content providers, duplicate URIs,
+multiple streams with text, delayed consumption/recreation, missing files,
+permission failures, MIME fallback, bounded large streams, and corrupt queues. Keep device qualification separate
+from these checks: test real channel/email/AI/document editors, selection and
+formatting, non-Latin IME composition, emoji/dictation, hardware keyboards,
+TalkBack/large text, Samsung Keyboard, cloud providers/large files, rotation,
+three-button/gesture navigation, canceled predictive Back, and tablet/foldable
+windows before closing task 03. An API 36 emulator cannot establish the whole
+physical-device matrix.
+
 ## App Links
 
 App Links require a domain association for `com.macro.app.prod` and the certificate

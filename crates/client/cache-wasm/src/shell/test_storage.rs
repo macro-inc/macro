@@ -90,8 +90,9 @@ impl Storage for BrowserStorage {
     async fn load_search_documents(
         &self,
         profile: SearchProfile,
+        bucket: &str,
     ) -> Result<Vec<SearchDocument>, Self::Error> {
-        self.inner.load_search_documents(profile).await
+        self.inner.load_search_documents(profile, bucket).await
     }
 
     async fn browse_search_documents(

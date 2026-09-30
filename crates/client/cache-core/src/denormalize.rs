@@ -7,6 +7,7 @@
 //! field is a cache miss (Phase 1: no partial results — nullability-based
 //! partials are a later phase; the metadata is already generated).
 
+use crate::deps::DependencyTracker;
 use crate::document::{
     FieldNode, MissingVariable, Operation, Selection, resolve_args, resolved_args_key,
 };
@@ -70,7 +71,7 @@ pub fn denormalize(
     op: &Operation,
     variables: &serde_json::Map<String, Json>,
     source: &impl RecordSource,
-    deps: &mut BTreeSet<EntityKey<'static>>,
+    deps: &mut impl DependencyTracker,
 ) -> Result<ReadOutcome, DenormalizeError> {
     denormalize_with_entity_resolvers(
         op,
@@ -86,7 +87,7 @@ pub fn denormalize_with_entity_resolvers(
     op: &Operation,
     variables: &serde_json::Map<String, Json>,
     source: &impl RecordSource,
-    deps: &mut BTreeSet<EntityKey<'static>>,
+    deps: &mut impl DependencyTracker,
     entity_resolvers: &EntityResolverLookup,
 ) -> Result<ReadOutcome, DenormalizeError> {
     denormalize_record_with_entity_resolvers(
@@ -107,7 +108,7 @@ pub fn denormalize_record(
     selections: &[Selection],
     variables: &serde_json::Map<String, Json>,
     source: &impl RecordSource,
-    deps: &mut BTreeSet<EntityKey<'static>>,
+    deps: &mut impl DependencyTracker,
 ) -> Result<ReadOutcome, DenormalizeError> {
     denormalize_record_with_entity_resolvers(
         key,
@@ -126,7 +127,7 @@ fn denormalize_record_with_entity_resolvers(
     selections: &[Selection],
     variables: &serde_json::Map<String, Json>,
     source: &impl RecordSource,
-    deps: &mut BTreeSet<EntityKey<'static>>,
+    deps: &mut impl DependencyTracker,
     entity_resolvers: &EntityResolverLookup,
 ) -> Result<ReadOutcome, DenormalizeError> {
     ReadSession::new(key, type_name, selections).resume(
@@ -184,7 +185,7 @@ impl<'a> ReadSession<'a> {
         &mut self,
         variables: &serde_json::Map<String, Json>,
         source: &impl RecordSource,
-        deps: &mut BTreeSet<EntityKey<'static>>,
+        deps: &mut impl DependencyTracker,
         entity_resolvers: &EntityResolverLookup,
         plans: &mut ReadPlans<'a>,
     ) -> Result<ReadOutcome, DenormalizeError> {
@@ -229,10 +230,10 @@ impl<'a> ReadSession<'a> {
     }
 }
 
-struct Walk<'a, 'document, S: RecordSource> {
+struct Walk<'a, 'document, S: RecordSource, D: DependencyTracker> {
     variables: &'a serde_json::Map<String, Json>,
     source: &'a S,
-    deps: &'a mut BTreeSet<EntityKey<'static>>,
+    deps: &'a mut D,
     entity_resolvers: &'a EntityResolverLookup,
     plans: &'a mut ReadPlans<'document>,
     pending: &'a mut Vec<PendingRecord<'document>>,
@@ -241,14 +242,14 @@ struct Walk<'a, 'document, S: RecordSource> {
     retain_output: bool,
 }
 
-impl<'document, S: RecordSource> Walk<'_, 'document, S> {
+impl<'document, S: RecordSource, D: DependencyTracker> Walk<'_, 'document, S, D> {
     fn read_record(
         &mut self,
         key: &EntityKey<'static>,
         type_name: &'document str,
         selections: &'document [Selection],
     ) -> Result<Json, DenormalizeError> {
-        self.deps.insert(key.clone());
+        self.deps.record(key);
         let Some(record) = self.source.get(key) else {
             self.pending.push(PendingRecord {
                 key: key.clone(),
@@ -259,6 +260,7 @@ impl<'document, S: RecordSource> Walk<'_, 'document, S> {
             return Ok(Json::Null);
         };
         let concrete = record.typename().unwrap_or(type_name);
+        self.deps.field(key, concrete, "__typename");
         self.read_fields(key, &record.fields, concrete, selections)
     }
 
@@ -306,14 +308,26 @@ impl<'document, S: RecordSource> Walk<'_, 'document, S> {
     ) -> Result<Option<Json>, DenormalizeError> {
         match &field.source {
             FieldSource::Typename => Ok(Some(Json::String(concrete.to_owned()))),
+            FieldSource::MissingArguments => {
+                self.mark_miss(owner, field.node.name.clone());
+                Ok(None)
+            }
             FieldSource::Missing(key) => {
+                self.deps.field(owner, concrete, key);
                 self.mark_miss(owner, key.to_string());
                 Ok(None)
             }
-            FieldSource::Entity { key, type_name } => self
-                .read_record(key, type_name, &field.node.selection_set)
-                .map(Some),
+            FieldSource::Entity {
+                key,
+                type_name,
+                storage_key,
+            } => {
+                self.deps.field(owner, concrete, storage_key);
+                self.read_record(key, type_name, &field.node.selection_set)
+                    .map(Some)
+            }
             FieldSource::Stored { key, type_name } => {
+                self.deps.field(owner, concrete, key);
                 let Some(value) = fields.get(key.as_ref()) else {
                     self.mark_miss(owner, key.to_string());
                     return Ok(None);

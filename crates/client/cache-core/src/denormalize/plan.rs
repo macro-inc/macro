@@ -12,6 +12,7 @@ pub(super) struct Field<'a> {
 
 pub(super) enum FieldSource<'a> {
     Typename,
+    MissingArguments,
     Missing(Cow<'a, str>),
     Stored {
         key: Cow<'a, str>,
@@ -20,6 +21,7 @@ pub(super) enum FieldSource<'a> {
     Entity {
         key: EntityKey<'static>,
         type_name: &'static str,
+        storage_key: Cow<'a, str>,
     },
 }
 
@@ -83,7 +85,7 @@ fn compile_field<'a>(
         Err(_) if resolver.is_some() => {
             return Ok(Field {
                 node,
-                source: FieldSource::Missing(Cow::Borrowed(&node.name)),
+                source: FieldSource::MissingArguments,
             });
         }
         Err(error) => return Err(error.into()),
@@ -96,6 +98,7 @@ fn compile_field<'a>(
         Some(resolver) => match resolver.entity_key(&arguments) {
             Some(key) => FieldSource::Entity {
                 key,
+                storage_key,
                 type_name: meta::type_meta(&resolver.target_type)
                     .expect("compiled resolver target exists")
                     .name,

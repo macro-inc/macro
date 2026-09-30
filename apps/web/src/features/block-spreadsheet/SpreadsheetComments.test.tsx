@@ -292,37 +292,26 @@ it('opens notification targets at the linked range and keeps deleted-sheet threa
   ).toBeTruthy();
 });
 
-it('keeps sidebar and floating composer attachments independent', async () => {
+it('uses discussion for sidebar comments and keeps selection comments in the grid', () => {
   mount();
   fireEvent.click(screen.getByRole('button', { name: 'Comments' }));
+  const panel = screen.getByRole('complementary');
+  expect(panel.querySelector('input[aria-label="Comment draft"]')).toBeNull();
+  expect(screen.getByText('Discussion')).toBeTruthy();
+  expect(screen.queryByText('Cell comments')).toBeNull();
+  expect(
+    screen.queryByText('Comments attached to a sheet selection')
+  ).toBeNull();
+
   selection = { anchor: 'D9', focus: 'D9' };
   fireEvent.click(screen.getByRole('button', { name: 'Comment' }));
-  const panel = screen.getByRole('complementary');
-  fireEvent.input(panel.querySelector('input')!, {
-    target: { value: 'Sidebar draft' },
-  });
-  fireEvent.click(
-    [...panel.querySelectorAll('button')].find(
-      (button) => button.textContent === 'Post'
-    )!
-  );
-  await waitFor(() =>
-    expect(mocks.send).toHaveBeenCalledWith(
-      expect.objectContaining({
-        parent: { type: 'document', id: 'doc' },
-        message: expect.objectContaining({
-          anchor: { type: 'spreadsheet', ...anchor },
-        }),
-      })
-    )
-  );
   expect(screen.getByRole('dialog').getAttribute('aria-label')).toBe(
     'Comments on Budget · D9'
   );
   expect(screen.getByRole('dialog').querySelector('input')).toBeTruthy();
 });
 
-it('mounts a workbook discussion on the document parent without legacy comment links', () => {
+it('mounts discussion on the document parent without legacy comment links', () => {
   mount();
   fireEvent.click(screen.getByRole('button', { name: 'Comments' }));
   expect(mocks.discussion).toHaveBeenCalledWith(
@@ -332,7 +321,7 @@ it('mounts a workbook discussion on the document parent without legacy comment l
       targetId: null,
     })
   );
-  expect(screen.getByText('Workbook discussion')).toBeTruthy();
+  expect(screen.getByText('Discussion')).toBeTruthy();
 });
 
 it.each(['root-id', 'reply-id'])(
@@ -361,7 +350,7 @@ it.each(['root-id', 'reply-id'])(
   }
 );
 
-it('clears a previous range highlight for a workbook link and preserves the draft range', async () => {
+it('clears a previous range highlight when opening a workbook link', () => {
   mocks.data.push({
     ...mocks.data[0],
     id: 'workbook-root',
@@ -369,9 +358,6 @@ it('clears a previous range highlight for a workbook link and preserves the draf
   });
   mocks.target = 'reply-id';
   mount();
-  const input = screen.getByRole('textbox') as HTMLInputElement;
-  fireEvent.input(input, { target: { value: 'Range draft' } });
-  selection = { anchor: 'D9', focus: 'D9' };
 
   mocks.target = 'workbook-reply';
   mocks.rootId = 'workbook-root';
@@ -381,19 +367,44 @@ it('clears a previous range highlight for a workbook link and preserves the draf
   expect(mocks.discussion).toHaveBeenCalledWith(
     expect.objectContaining({ targetId: 'workbook-reply' })
   );
-  expect(screen.getByRole('textbox')).toBe(input);
-  expect(input.value).toBe('Range draft');
-  fireEvent.click(screen.getByRole('button', { name: 'Post' }));
-  await waitFor(() =>
-    expect(mocks.send).toHaveBeenCalledWith(
-      expect.objectContaining({
-        message: expect.objectContaining({
-          content: 'Range draft',
-          anchor: { type: 'spreadsheet', ...anchor },
-        }),
-      })
-    )
-  );
+});
+
+it('filters cell comments by open and resolved state', () => {
+  mocks.data.push({
+    ...mocks.data[0],
+    id: 'resolved-root',
+    content: 'Already handled',
+    state: {
+      ...mocks.data[0].state,
+      root_id: 'resolved-root',
+      resolved: true,
+    },
+  });
+  mount();
+  fireEvent.click(screen.getByRole('button', { name: 'Comments' }));
+
+  expect(screen.getByText('Check assumptions')).toBeTruthy();
+  expect(screen.queryByText('Already handled')).toBeNull();
+
+  fireEvent.click(screen.getByRole('radio', { name: 'Resolved' }));
+  expect(screen.queryByText('Check assumptions')).toBeNull();
+  expect(screen.getByText('Already handled')).toBeTruthy();
+
+  fireEvent.click(screen.getByRole('radio', { name: 'All' }));
+  expect(screen.getByText('Check assumptions')).toBeTruthy();
+  expect(screen.getByText('Already handled')).toBeTruthy();
+});
+
+it('reveals a resolved cell comment opened from a notification', () => {
+  mocks.data[0].state.resolved = true;
+  mocks.target = 'reply-id';
+  mount();
+
+  expect(
+    (screen.getByRole('radio', { name: 'Resolved' }) as HTMLInputElement)
+      .checked
+  ).toBe(true);
+  expect(screen.getByText('Check assumptions')).toBeTruthy();
 });
 
 it('clears a previous range navigation error when opening a workbook link', () => {

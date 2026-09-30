@@ -5,6 +5,40 @@ fn key(s: &str) -> EntityKey<'static> {
 }
 
 #[test]
+fn unchanged_records_replace_field_proof_and_allow_record_only_registration() {
+    let viewer = key("GraphqlUser:viewer");
+    let records: BTreeSet<_> = [viewer.clone()].into();
+    let mut index = DepIndex::new();
+    let changes = |field: &str| [(viewer.clone(), [field.to_owned()].into())].into();
+    for field in ["soup(a)", "soup(b)"] {
+        index.set_query_deps(
+            1,
+            QueryDependencies {
+                records: records.clone(),
+                viewer_fields: changes(field),
+            },
+        );
+        assert_eq!(index.ops_for_changes(&records, &changes(field)), [1].into());
+    }
+    assert!(
+        index
+            .ops_for_changes(&records, &changes("soup(a)"))
+            .is_empty()
+    );
+    index.set_op_deps(1, records.clone());
+    assert_eq!(
+        index.ops_for_changes(&records, &changes("soup(a)")),
+        [1].into()
+    );
+    index.remove_op(1);
+    assert!(
+        index
+            .ops_for_changes(&records, &changes("soup(a)"))
+            .is_empty()
+    );
+}
+
+#[test]
 fn tracks_and_removes() {
     let mut idx = DepIndex::new();
     idx.set_op_deps(1, [key("A"), key("B")].into());

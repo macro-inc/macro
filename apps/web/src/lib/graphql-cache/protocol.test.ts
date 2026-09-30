@@ -145,6 +145,16 @@ describe('cache worker message validators', () => {
       },
       { kind: 'ops-affected', opIds: ['client:7'], keys: ['User:1'] },
       { kind: 'cache-changed', revision: INITIAL_CACHE_REVISION },
+      {
+        kind: 'cache-changed',
+        revision: INITIAL_CACHE_REVISION,
+        searchChangedBuckets: [],
+      },
+      {
+        kind: 'cache-changed',
+        revision: INITIAL_CACHE_REVISION,
+        searchChangedBuckets: ['note'],
+      },
       { kind: 'cache-hydrated', revision: INITIAL_CACHE_REVISION },
       {
         kind: 'cache-hydrated',
@@ -195,6 +205,8 @@ describe('cache worker message validators', () => {
     { kind: 'ops-affected', opIds: [7], keys: [] },
     { kind: 'ops-affected', opIds: [], keys: [], extra: true },
     { kind: 'cache-changed', keys: [] },
+    { kind: 'cache-changed', revision: '1', searchChangedBuckets: 'note' },
+    { kind: 'cache-changed', revision: '1', searchChangedBuckets: [1] },
     { kind: 'cache-hydrated', revision: 1 },
     { kind: 'cache-hydrated', revision: '1', extra: true },
     { kind: 'cache-hydrated', revision: '1', searchChangedBuckets: 'note' },

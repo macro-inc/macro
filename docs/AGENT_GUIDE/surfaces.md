@@ -75,6 +75,10 @@ visible; local results do not trigger the tab-loading bar. A fresh server respon
 still replaces that result, and initial loads without usable data retain normal loading
 indicators. A transport failure does not hide usable current-query local results,
 including empty results; HTTP responses and GraphQL errors still surface.
+To check reconnect behavior, load a non-Mail list online, let background hydration
+advance its cache while offline, then reconnect without delivering a fresh network
+response. The newer local result must remain visible; connectivity alone must not
+restore the older network snapshot. A fresh network response can take authority again.
 
 This is a best-effort display, not proof that every matching entity is cached. Outside
 the supported cached-Mail slice below, loading more follows the original server cursors
@@ -463,6 +467,14 @@ Browser WASM and native cache builds must include the regenerated schema metadat
 native offline archive support therefore requires a full app build, not just OTA.
 
 ### Cached Mail filtering
+
+Performance check: switch Signal → All twice against a large synchronized cache.
+Dense local pages use bounded sort-index candidates rather than sorting the entire
+mailbox. Sparse filters and large timestamp ties retain the exact fallback plan.
+A filter result, row fragments, and final revision that agree must be accepted even
+when background hydration advanced past the revision observed before the request;
+that alone must not trigger another filter scan. Also verify local Load more,
+same-timestamp ordering, and pending archive/read changes.
 
 With GraphQL caching enabled (browser or native Tauri) and the email metadata backfill synchronized,
 All, Signal, Noise, Drafts, Sent, Calendar, and Shared support tab changes and new
@@ -872,6 +884,32 @@ The path selects the Month, Week, or Day period, and choosing another period upd
 that path. Calendar navigation defaults to Day on phones and Week on desktop; the most
 recent choice is remembered locally for navigation that does not specify a period. An
 opened event is reflected in the pane-owned `sN.calendar.eventId` search parameter.
+
+Period selection updates its label and route immediately. The active grid redraws
+on a deferred task; hidden neighboring periods follow on separate tasks. Calendar
+grids stay mounted and undimmed while occurrences load. An uncached range never
+shows events from the previous range. After a short delay, representative event
+skeletons appear without adding synthetic FullCalendar events. Week/Day use sparse
+blocks with varied start times and durations, plus separate all-day bars. Month mixes
+filled bars for all-day/multi-day-style entries with single subtle text lines for
+single-day timed-style entries, without placeholder dots or time chips. Patterns stay
+stable for each date and clear the date headers. Skeletons preserve the grid, scroll
+position, and navigation.
+Quick loads skip the skeletons. Real events lay out underneath during the brief
+minimum display, then fade in as the skeletons fade out. Changing period during a
+load carries feedback into the new cells without restarting the appearance delay.
+Background refreshes retain current events without skeletons or a transient loading
+pill. Provider sync and errors still show their own states. Verify delayed occurrence
+responses: switch Month/Week/Day rapidly and navigate without blanking the grid.
+Confirm mixed event shapes, stable positions, clean handoff, and an uncovered Retry.
+Reduced-motion mode disables pulses and transitions. The page stays busy until the
+handoff starts. Hidden pages do not animate. Resize to confirm skeleton alignment.
+
+A single period arrow retains its slide. Rapid arrow clicks and period hotkeys
+accumulate against the requested date and interrupt unfinished slides, without
+waiting for event responses or hidden-page redraws. Verify repeated forward clicks
+and mixed directions reach the cumulative date while events are still loading.
+Touch swipes retain their page-readiness gates.
 
 Quick-call creation, incoming invitations, Live lists, Macro meeting links, and
 the `/app/meet/*` routes require the PostHog flag `enable-quick-calls`. While the

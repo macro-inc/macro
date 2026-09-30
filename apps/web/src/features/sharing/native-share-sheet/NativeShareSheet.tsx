@@ -7,16 +7,13 @@ import {
   createMentionsTracker,
   FormatButtons,
   Input,
-  type InputAttachmentData,
-  type InputAttachmentKind,
-  type InputAttachmentTracker,
   type InputSnapshot,
   uploadInputAttachments,
 } from '@channel/Input';
 import { ChannelInputContainer } from '@channel/Input/ChannelInputContainer';
 import { buildPostMessageRequest } from '@channel/Input/message-payload';
-import { getAttachmentKindFromFile } from '@channel/Input/utils/file-helpers';
 import { hasSendableInputContent } from '@channel/Input/utils/sendable-content';
+import { ConfirmDrawer } from '@components/app/mobile/ConfirmDrawer';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
@@ -28,27 +25,23 @@ import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import type { WithCustomUserInput } from '@core/user';
 import { invalidateContacts } from '@core/user/contactService';
 import { getDestinationFromOptions } from '@core/util/destination';
-import { throwOnErr } from '@core/util/result';
 import {
   chatRuleset,
   handleFileFolderDrop,
   uploadFile,
 } from '@core/util/upload';
-import type {
-  PendingShareFile,
-  UploadPendingShareFileArgs,
-} from '@macro/tauri';
+import type { PendingShareFile } from '@macro/tauri';
 import { useShareTarget, useTauri } from '@macro/tauri';
 import { invalidateListChannels } from '@queries/channel/channels';
 import {
   useGetOrCreateDirectMessageMutation,
   useGetOrCreatePrivateChannelMutation,
 } from '@queries/channel/get-or-create-dm';
+import { usePrepareSharedMediaMutation } from '@queries/channel/share-upload';
 import {
   newMessageId,
   useSendMessageMutation,
 } from '@queries/messages/mutations';
-import { staticFileClient } from '@service-static-files/client';
 import { isIOS } from '@solid-primitives/platform';
 import { Button } from '@ui';
 import {
@@ -58,8 +51,12 @@ import {
   ErrorBoundary,
   on,
   onCleanup,
+  onMount,
   Show,
 } from 'solid-js';
+
+import { createNativeShareSend } from './createNativeShareSend';
+import { uploadPendingShareAttachment } from './uploadPendingShareAttachment';
 
 // Use the current staged file tokens as the share-session identity.
 function pendingShareBatchKey(files: readonly PendingShareFile[]): string {
@@ -77,102 +74,6 @@ function pendingShareInitialText(files: readonly PendingShareFile[]): string {
     .map(normalizedSharedText)
     .filter((text) => text.length > 0)
     .join('\n');
-}
-
-function getPendingShareAttachmentKind(
-  file: Pick<PendingShareFile, 'name' | 'mimeType'>
-): InputAttachmentKind {
-  return getAttachmentKindFromFile({
-    name: file.name,
-    type: file.mimeType,
-  });
-}
-
-type ShareSheetAttachmentKind = Extract<InputAttachmentKind, 'image' | 'video'>;
-
-function buildPendingAttachment(
-  file: PendingShareFile,
-  pendingId: string,
-  kind: ShareSheetAttachmentKind
-): InputAttachmentData {
-  return {
-    id: pendingId,
-    name: file.name,
-    kind,
-    pending: true,
-    previewSrc: kind === 'image' ? file.previewSrc : undefined,
-  };
-}
-
-function buildUploadedAttachment(
-  file: PendingShareFile,
-  staticFileId: string,
-  kind: ShareSheetAttachmentKind
-): InputAttachmentData {
-  return {
-    id: staticFileId,
-    name: file.name,
-    kind,
-    previewSrc: file.previewSrc,
-  };
-}
-
-async function uploadPendingShareAttachment(options: {
-  file: PendingShareFile;
-  tracker: InputAttachmentTracker;
-  uploadPendingShareFile:
-    | ((args: UploadPendingShareFileArgs) => Promise<void>)
-    | undefined;
-  isActive: () => boolean;
-}) {
-  const kind = getPendingShareAttachmentKind(options.file);
-  // The iOS share extension only hands the app images and videos today, and
-  // this upload path only creates static-file attachments for those media types.
-  if (kind === 'document') {
-    toast.failure(`Can't share ${options.file.name} from iOS yet`);
-    return;
-  }
-
-  const pendingId = `pending-share:${options.file.token}`;
-
-  options.tracker.addAttachment(
-    buildPendingAttachment(options.file, pendingId, kind)
-  );
-
-  try {
-    const result = await throwOnErr(() =>
-      staticFileClient.makePresignedUrl({
-        file_name: options.file.name,
-        content_type: options.file.mimeType,
-      })
-    );
-
-    if (!options.uploadPendingShareFile) {
-      throw new Error('Missing native shared file uploader');
-    }
-
-    await options.uploadPendingShareFile({
-      token: options.file.token,
-      uploadUrl: result.upload_url,
-      mimeType: options.file.mimeType,
-    });
-
-    if (!options.isActive()) return;
-
-    options.tracker.removeAttachment(pendingId);
-    options.tracker.addAttachment(
-      buildUploadedAttachment(options.file, result.id, kind)
-    );
-  } catch (error) {
-    if (!options.isActive()) return;
-
-    options.tracker.removeAttachment(pendingId);
-    console.error('failed to upload iOS shared file', {
-      file: options.file,
-      error,
-    });
-    toast.failure(`Failed to upload ${options.file.name}`);
-  }
 }
 
 function ShareSheetHeaderActions(props: {
@@ -217,15 +118,16 @@ function ShareSheetComposerError(_props: { error: unknown }) {
   );
 }
 
-function IosShareSheetComposer(props: {
-  batchKey: string;
-  handleCancel: () => void;
-}) {
+function NativeShareSheetComposer(props: { handleCancel: () => void }) {
   const shareTarget = useShareTarget();
+  const batchTokens = (shareTarget?.pendingShareFiles() ?? []).map(
+    (file) => file.token
+  );
   const userId = useUserId();
   const sendMessage = useSendMessageMutation();
   const { all: destinationOptions } = useCombinedRecipients();
   const attachmentTracker = createInputAttachmentTracker();
+  const prepareMedia = usePrepareSharedMediaMutation();
   const composerId = crypto.randomUUID();
   const mentionsTracker = createMentionsTracker();
   const [scrollContainer, setScrollContainer] = createSignal<HTMLElement>();
@@ -238,45 +140,47 @@ function IosShareSheetComposer(props: {
     WithCustomUserInput<'user' | 'contact' | 'channel'>[]
   >([]);
 
-  createEffect(
-    on(
-      () => props.batchKey,
-      () => {
-        const files = shareTarget?.pendingShareFiles() ?? [];
-        if (files.length === 0) return;
-
-        let active = true;
-        onCleanup(() => {
-          active = false;
-        });
-
-        void (async () => {
-          await Promise.allSettled(
-            files
-              .filter(
-                (file) =>
-                  !file.isSharedText && normalizedSharedText(file).length === 0
-              )
-              .map((file) =>
-                uploadPendingShareAttachment({
-                  file,
-                  tracker: attachmentTracker,
-                  uploadPendingShareFile: shareTarget?.uploadPendingShareFile,
-                  isActive: () => active,
-                })
-              )
-          );
-        })();
-      }
-    )
-  );
+  const [failedFiles, setFailedFiles] = createSignal<PendingShareFile[]>([]);
+  const [uploading, setUploading] = createSignal(false);
+  let active = true;
+  onCleanup(() => {
+    active = false;
+  });
+  const uploadSharedFiles = async (files: PendingShareFile[]) => {
+    if (uploading()) return;
+    setUploading(true);
+    const failed: PendingShareFile[] = [];
+    // Bound simultaneous native uploads and retain failures for an explicit retry.
+    for (const file of files) {
+      if (!active) break;
+      const result = await uploadPendingShareAttachment({
+        file,
+        tracker: attachmentTracker,
+        prepareMedia: prepareMedia.mutateAsync,
+        uploadPendingShareFile: shareTarget?.uploadPendingShareFile,
+        isActive: () => active,
+      });
+      if (result === 'failed') failed.push(file);
+    }
+    if (active) {
+      setFailedFiles(failed);
+      setUploading(false);
+    }
+  };
+  onMount(() => {
+    void uploadSharedFiles(
+      (shareTarget?.pendingShareFiles() ?? []).filter(
+        (file) => !file.isSharedText && normalizedSharedText(file).length === 0
+      )
+    );
+  });
 
   const resolveDestinationChannelId = async () => {
     const options = selectedOptions();
 
     if (options.length === 0) {
       toast.failure('Select a recipient');
-      throw new Error('No recipient selected for iOS share sheet');
+      throw new Error('No recipient selected for native share sheet');
     }
 
     const destination = getDestinationFromOptions(options);
@@ -287,7 +191,7 @@ function IosShareSheetComposer(props: {
 
     if (destination.users.length === 0) {
       toast.failure('Select a valid recipient');
-      throw new Error('No valid recipients selected for iOS share sheet');
+      throw new Error('No valid recipients selected for native share sheet');
     }
 
     try {
@@ -306,33 +210,40 @@ function IosShareSheetComposer(props: {
     }
   };
 
-  const handleSend = async (snapshot: InputSnapshot) => {
-    const senderId = userId();
-    if (!senderId) {
-      toast.failure('Failed to send message');
-      throw new Error('Missing sender id for iOS share sheet send');
-    }
+  const sendShare = createNativeShareSend<InputSnapshot>({
+    clear: async () => {
+      invalidateListChannels();
+      invalidateContacts();
+      await shareTarget?.clearPendingShareFiles(batchTokens);
+    },
+    send: async (snapshot) => {
+      if (uploading() || failedFiles().length > 0) {
+        throw new Error(
+          'Finish uploading the shared attachments before sending'
+        );
+      }
+      const senderId = userId();
+      if (!senderId) {
+        toast.failure('Failed to send message');
+        throw new Error('Missing sender id for native share sheet send');
+      }
 
-    const channelId = await resolveDestinationChannelId();
-    const message = buildPostMessageRequest({ snapshot });
+      const channelId = await resolveDestinationChannelId();
+      const message = buildPostMessageRequest({ snapshot });
 
-    await sendMessage.mutateAsync({
-      parent: { type: 'channel', id: channelId },
-      message,
-      senderId,
-      optimisticId: newMessageId(),
-    });
-
-    invalidateListChannels();
-    invalidateContacts();
-
-    void shareTarget?.clearPendingShareFiles();
-  };
+      await sendMessage.mutateAsync({
+        parent: { type: 'channel', id: channelId },
+        message,
+        senderId,
+        optimisticId: newMessageId(),
+      });
+    },
+  });
 
   const inputState = createInputState({
     initialInput: {
       mode: 'channel',
-      id: `ios-share-input-${composerId}`,
+      id: `native-share-input-${composerId}`,
       placeholder: 'Add a message',
       value: pendingShareInitialText(shareTarget?.pendingShareFiles() ?? []),
     },
@@ -348,11 +259,11 @@ function IosShareSheetComposer(props: {
       });
     },
     clearInput: () => markdownEditor.controls.clear(),
-    callbacks: { onSend: handleSend },
+    callbacks: { onSend: sendShare.send },
   });
 
   const markdownEditor = createConfiguredChannelMarkdownEditor({
-    namespace: `ios-share-input-${composerId}`,
+    namespace: `native-share-input-${composerId}`,
     resolveAppLink: useMacroMentionLinkResolver(),
     enableMentions: true,
     scrollContainer,
@@ -389,13 +300,19 @@ function IosShareSheetComposer(props: {
   };
 
   const canSend = () =>
+    sendShare.canSend() &&
+    !uploading() &&
+    failedFiles().length === 0 &&
     selectedOptions().length > 0 &&
     !inputState.view().hasPendingAttachments &&
     hasSendableInputContent(inputState.view());
 
   const handleHeaderSend = () => {
     void inputState.commands.send().catch((error) => {
-      console.error('failed to send from iOS share sheet header action', error);
+      console.error(
+        'failed to send from native share sheet header action',
+        error
+      );
     });
   };
 
@@ -409,6 +326,21 @@ function IosShareSheetComposer(props: {
           handleCancel={props.handleCancel}
           handleSend={handleHeaderSend}
         />
+        <Show when={failedFiles().length > 0}>
+          <div
+            role="alert"
+            class="mx-6 mb-3 flex items-center justify-between gap-3 text-sm text-failure"
+          >
+            <span>{failedFiles().length} attachment(s) couldn't upload.</span>
+            <Button
+              variant="ghost"
+              disabled={uploading()}
+              onClick={() => void uploadSharedFiles(failedFiles())}
+            >
+              {uploading() ? 'Retrying…' : 'Retry'}
+            </Button>
+          </div>
+        </Show>
         <MobileDrawer.Label>Recipients</MobileDrawer.Label>
         <MobileDrawer.Section>
           <div class="shrink-0 p-2">
@@ -486,19 +418,23 @@ function IosShareSheetComposer(props: {
   );
 }
 
-export function IosShareSheet() {
+export function NativeShareSheet() {
   const tauri = useTauri();
   const shareTarget = useShareTarget();
+  const [confirmDiscard, setConfirmDiscard] = createSignal(false);
 
   const pendingFiles = () => shareTarget?.pendingShareFiles() ?? [];
   const shareBatchKey = () => pendingShareBatchKey(pendingFiles());
-  const isOpen = () => pendingFiles().length > 0 && tauri?.os === 'ios';
+  const isOpen = () =>
+    pendingFiles().length > 0 &&
+    (tauri?.os === 'ios' || tauri?.os === 'android');
   const [awaitingFirstInteraction, setAwaitingFirstInteraction] =
     createSignal(false);
 
   createEffect(
     on(isOpen, (open) => {
       if (!open) {
+        setConfirmDiscard(false);
         setAwaitingFirstInteraction(false);
         return;
       }
@@ -520,11 +456,12 @@ export function IosShareSheet() {
   );
 
   const handleCancel = () => {
+    setConfirmDiscard(false);
     void shareTarget?.clearPendingShareFiles();
   };
 
   return (
-    <Show when={tauri?.os === 'ios'}>
+    <Show when={tauri?.os === 'ios' || tauri?.os === 'android'}>
       <MobileDrawer
         side="bottom"
         open={isOpen()}
@@ -540,24 +477,38 @@ export function IosShareSheet() {
 
           if (closeGuardActive) return;
 
-          if (!open && isOpen()) handleCancel();
+          if (!open && isOpen()) {
+            if (tauri?.os === 'android') setConfirmDiscard(true);
+            else handleCancel();
+          }
         }}
       >
         <MobileDrawer.Portal>
           <MobileDrawer.Overlay />
           <MobileDrawer.Content aria-label="Share to Macro" targetHeight={80}>
             <MobileDrawer.Handle />
+            {/* Keyed on the batch so each incoming share remounts the composer. */}
             <Show when={isOpen() ? shareBatchKey() : undefined} keyed>
-              {(batchKey) => (
-                <IosShareSheetComposer
-                  batchKey={batchKey}
-                  handleCancel={handleCancel}
-                />
+              {(_batchKey) => (
+                <NativeShareSheetComposer handleCancel={handleCancel} />
               )}
             </Show>
           </MobileDrawer.Content>
         </MobileDrawer.Portal>
       </MobileDrawer>
+      <ConfirmDrawer
+        open={confirmDiscard()}
+        onOpenChange={setConfirmDiscard}
+        title="Discard this share?"
+        body="Your message and shared attachments will be removed."
+        cancelLabel="Keep editing"
+        confirmLabel="Discard"
+        tone="danger"
+        onConfirm={() => {
+          setConfirmDiscard(false);
+          handleCancel();
+        }}
+      />
     </Show>
   );
 }

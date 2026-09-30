@@ -32,7 +32,7 @@ fn nested_task_completion_hydration_invalidates_task_searches() {
             let document_key = EntityKey::entity("GraphqlSoupDocument", &["task"]);
             let records = engine
                 .storage()
-                .get_batch(&[document_key.clone()])
+                .get_batch(std::slice::from_ref(&document_key))
                 .await
                 .unwrap();
             // Task subtypes have no id: normalization embeds the object in

@@ -1,4 +1,6 @@
 use super::*;
+use crate::deps::QueryDependencies;
+use crate::document::Document;
 use crate::record_selection::RecordSelection;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -187,4 +189,87 @@ fn a_field_miss_survives_later_record_hydration() {
         matches!(session.resume(&variables, &source, &mut deps, &resolvers, &mut plans).unwrap(), ReadOutcome::Miss { entity, field } if entity == thread_key && field == "id")
     );
     assert_eq!(deps, [thread_key, key("hot"), key("cold")].into());
+}
+
+#[test]
+fn resumed_reads_retain_argument_qualified_viewer_fields() {
+    let document = Document::parse(
+        "query Page { user { id page: soup(input: {initial: {limit: 1}}) { items { __typename id } } } }",
+    ).unwrap();
+    let operation = document.operation(Some("Page")).unwrap();
+    let root = EntityKey::root();
+    let viewer = EntityKey("GraphqlUser:viewer".into());
+    let item = EntityKey("GraphqlSoupDocument:item".into());
+    let page_key = field_key("soup", Some(r#"{"input":{"initial":{"limit":1}}}"#));
+    let mut source = CountingSource::default();
+    source.records.insert(
+        root.clone(),
+        Record {
+            fields: [("user".into(), CacheValue::Ref(viewer.clone()))].into(),
+        },
+    );
+    let mut session = ReadSession::new(&root, meta::QUERY_ROOT_TYPE, &operation.selection_set);
+    let mut deps = QueryDependencies::default();
+    let mut plans = ReadPlans::default();
+    let variables = serde_json::Map::new();
+    let resolvers = EntityResolverLookup::default();
+    assert!(matches!(
+        session.resume(&variables, &source, &mut deps, &resolvers, &mut plans).unwrap(),
+        ReadOutcome::NeedRecords(keys) if keys == [viewer.clone()].into()
+    ));
+    source.records.insert(
+        viewer.clone(),
+        Record {
+            fields: [
+                ("id".into(), CacheValue::String("viewer".into())),
+                (
+                    page_key.clone(),
+                    CacheValue::Object(
+                        [(
+                            "items".into(),
+                            CacheValue::List(vec![CacheValue::Ref(item.clone())]),
+                        )]
+                        .into(),
+                    ),
+                ),
+            ]
+            .into(),
+        },
+    );
+    assert!(matches!(
+        session.resume(&variables, &source, &mut deps, &resolvers, &mut plans).unwrap(),
+        ReadOutcome::NeedRecords(keys) if keys == [item.clone()].into()
+    ));
+    let viewer_reads = source.reads.borrow()[&viewer];
+    source.records.insert(
+        item.clone(),
+        Record {
+            fields: [
+                (
+                    "__typename".into(),
+                    CacheValue::String("GraphqlSoupDocument".into()),
+                ),
+                ("id".into(), CacheValue::String("item".into())),
+            ]
+            .into(),
+        },
+    );
+    let ReadOutcome::Complete(data) = session
+        .resume(&variables, &source, &mut deps, &resolvers, &mut plans)
+        .unwrap()
+    else {
+        panic!("hydrated query completes")
+    };
+    assert_eq!(
+        data,
+        serde_json::json!({"user": {"id": "viewer", "page": {"items": [
+            {"__typename": "GraphqlSoupDocument", "id": "item"}
+        ]}}})
+    );
+    assert_eq!(source.reads.borrow()[&viewer], viewer_reads);
+    assert_eq!(
+        deps.viewer_fields[&viewer],
+        ["__typename".into(), "id".into(), page_key].into()
+    );
+    assert_eq!(deps.records, [root, viewer, item].into());
 }

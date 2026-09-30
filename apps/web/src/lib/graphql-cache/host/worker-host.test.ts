@@ -1159,6 +1159,34 @@ describe('createWorkerCacheHost', () => {
     }
   );
 
+  it.each(
+    [[], ['note']].map((searchChangedBuckets) => ({ searchChangedBuckets }))
+  )(
+    'forwards query-write metadata and ignores it on reset: $searchChangedBuckets',
+    async ({ searchChangedBuckets }) => {
+      const host = createWorkerCacheHost({ scope: 'scope-1' });
+      const listener = vi.fn();
+      host.onCacheChanged(listener);
+      await host.currentRevision();
+      requireAdapter().push({
+        kind: 'cache-changed',
+        revision: INITIAL_CACHE_REVISION,
+        searchChangedBuckets,
+      });
+      expect(listener).toHaveBeenLastCalledWith(INITIAL_CACHE_REVISION, {
+        searchChangedBuckets,
+      });
+      requireAdapter().push({
+        kind: 'cache-changed',
+        revision: INITIAL_CACHE_REVISION,
+        searchChangedBuckets,
+        reset: true,
+      });
+      expect(listener).toHaveBeenLastCalledWith(INITIAL_CACHE_REVISION);
+      host.dispose();
+    }
+  );
+
   it('delivers hydration only to opted-in subscribers and cleans them up', async () => {
     const host = createWorkerCacheHost({ scope: 'scope-1' });
     const foreground = vi.fn();

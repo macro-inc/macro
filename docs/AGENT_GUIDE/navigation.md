@@ -11,6 +11,45 @@ queued mutations should resume promptly, without waiting for the old poll or
 local retry timer; durable leases and server-retry deadlines still apply.
 Switching tabs or navigating an in-app route is not a back/forward-cache restore.
 
+## Android system navigation and sharing
+
+In the Android app, Back first hides the keyboard, then dismisses the active
+menu/drawer, then returns through mobile pane history. Root Back backgrounds the
+app. Check that a canceled predictive Back gesture leaves the current screen and
+draft untouched. After changing orientation or window size, focused inputs and
+sheet actions should stay above the keyboard without an extra blank keyboard-sized
+gap. Font-size and display-size changes should retain the active draft and update
+safe areas. Also change display size with the keyboard hidden: bottom composers
+must remain visible before the keyboard is opened again. Editors expose labeled
+multiline textboxes for TalkBack.
+
+With the keyboard closed, the Android dock sits above the measured system
+navigation inset with the usual 12px gutter. Check both gesture and three-button
+navigation, including after rotation and display-size changes. Opening the
+keyboard leaves only the usual gutter above it. iOS retains its existing 28px
+bottom padding with the keyboard closed and 12px with it open.
+
+Sharing text, links, images, or documents from another Android app opens Share to
+Macro after login. A second incoming share waits behind the current one. Back or
+outside dismissal asks **Discard this share?**; **Keep editing** preserves the
+message and attachments. Failed uploads show **Retry** and block Send until they
+succeed. Send stays disabled while posting and after success, including when
+native queue cleanup fails; retrying cleanup must not post the message again.
+Test rapid repeated taps with delayed cleanup and retry after a failed send.
+On Android and iOS, if a send finishes after its sheet is canceled, cleanup must
+leave any newer share pending with its attachments intact.
+**Cancel** explicitly discards the current share. Send
+is a real channel/DM mutation: do not use it in verification without authorization.
+Android attachment controls open the system picker. File downloads open Android's
+Save dialog; image share actions open its share chooser. Canceling either should
+return to the existing editor without changing its draft. Large exports show
+preparation progress and **Cancel**; a canceled save must not report success.
+
+The native share sheet is shared with iOS. When testing iOS email attachments,
+paste an image and select one from Photos: plugins without a native checksum
+must hash the staged image bytes, retain the real attachment size, and upload
+successfully rather than hashing the empty JavaScript placeholder.
+
 ## Direct URLs (all under the frontend origin)
 
 | Route | Surface |
@@ -481,8 +520,12 @@ search cached entities without waiting for a server search. Background hydration
 updates an already-open menu only when a bucket it uses changes. Email/body/tag-only
 hydration must not reread History or the cached channel list; a newly hydrated note
 refreshes History and matching menus, and a channel/DM refreshes channel consumers.
-Renames, ownership/recency changes, and moves between buckets must still appear
-without retyping. Older cache runtimes without bucket metadata refresh conservatively. For an empty search, scroll toward the end (or use
+Ordinary query responses use the same bucket scoping. A project-search response
+that only caches another viewer Soup page must not refresh History, channel lists,
+or unrelated active query pages. Renames, ownership/recency changes, and moves
+between buckets must still appear without retyping in every affected view.
+Older cache runtimes without bucket metadata, mutations, and identity resets
+refresh conservatively. For an empty search, scroll toward the end (or use
 Down); mentions offer **View all** for a category and then load more local pages.
 Counts describe loaded results, not the full server corpus. Scans through
 incomplete or already-visible cache hits are bounded per action; continue
@@ -492,7 +535,10 @@ another pagination attempt. Missing items may still be uncached, but should appe
 after hydration without retyping, including channels outside the first cached
 page. Cmd+K's
 local search excludes unsupported email hits before limiting entity results;
-email mentions keep their separate search-service path.
+email mentions keep their separate search-service path. Text search loads only
+its requested cache buckets, so a document-only category must not read the email
+catalog. Switching categories still discovers previously unopened buckets;
+renames, subtype moves, DM priority, and stable tie ordering remain unchanged.
 
 Cmd+K merges cached and locally available items before applying recency order.
 An empty query prefers when an item was last viewed, falling back to its update

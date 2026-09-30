@@ -8,8 +8,8 @@ mod owner_grants;
 use crate::domain::{
     models::{
         Agent, AgentChannelScope, AgentMcpServer, AgentMcpServers, AuthenticatedBot, Bot,
-        BotChannel, BotChannelType, BotId, BotKind, BotOwner, BotProfile, BotToken,
-        BotTokenCandidate, CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest,
+        BotChannel, BotChannelType, BotId, BotKind, BotOwner, BotOwnerProfile, BotProfile,
+        BotToken, BotTokenCandidate, CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest,
         CreateChannelScopedBotRequest, HarnessFacts, HarnessId, HarnessOwner, PatchBotRequest,
         UpdateAgentRequest,
     },
@@ -44,6 +44,21 @@ fn owner_columns(owner: BotOwner) -> (Option<String>, Option<Uuid>) {
     match owner {
         BotOwner::User { user_id } => (Some(user_id), None),
         BotOwner::Team { team_id } => (None, Some(team_id)),
+    }
+}
+
+fn require_persisted_owner(
+    bot_id: Uuid,
+    owner_user_id: Option<String>,
+    team_id: Option<Uuid>,
+) -> anyhow::Result<BotOwner> {
+    match (owner_user_id, team_id) {
+        (Some(user_id), None) => Ok(BotOwner::User { user_id }),
+        (None, Some(team_id)) => Ok(BotOwner::Team { team_id }),
+        (owner_user_id, team_id) => Err(anyhow::anyhow!(
+            "bot {bot_id} has owner_user_id={owner_user_id:?} team_id={team_id:?}"
+        )
+        .context("persisted bot must have exactly one owner")),
     }
 }
 
@@ -942,6 +957,51 @@ impl BotRepo for PgBotsRepo {
                 },
             )
         }));
+        Ok(profiles)
+    }
+
+    async fn get_owner_profiles(
+        &self,
+        bot_ids: &[BotId],
+    ) -> Result<HashMap<BotId, BotOwnerProfile>, Self::Err> {
+        if bot_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let mut profiles = bot_ids
+            .iter()
+            .filter_map(|id| bot_id::system_bot(*id).map(|bot| (*id, BotOwnerProfile::system(bot))))
+            .collect::<HashMap<_, _>>();
+        let ids = bot_ids
+            .iter()
+            .copied()
+            .filter_map(bot_id::NonSystemBotId::new)
+            .map(|id| id.get().as_uuid())
+            .collect::<Vec<_>>();
+        if ids.is_empty() {
+            return Ok(profiles);
+        }
+
+        let rows = sqlx::query!(
+            r#"
+            SELECT id, name, avatar_url, deleted_at, owner_user_id, team_id
+            FROM bots
+            WHERE id = ANY($1)
+            "#,
+            &ids,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("failed to get bot owner profiles")?;
+
+        for row in rows {
+            let id = BotId::new_from_uuid(row.id);
+            let owner = require_persisted_owner(row.id, row.owner_user_id, row.team_id)?;
+            profiles.insert(
+                id,
+                BotOwnerProfile::persisted(id, row.name, row.avatar_url, row.deleted_at, owner),
+            );
+        }
         Ok(profiles)
     }
 

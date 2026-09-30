@@ -5,9 +5,9 @@ mod tests;
 
 use crate::domain::{
     models::{
-        AddChannelBotRequest, Agent, Bot, BotChannel, BotChannelListCaller, BotId, BotToken,
-        CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest, CreateBotTokenResponse,
-        PatchBotRequest, UpdateAgentRequest,
+        AddChannelBotRequest, Agent, Bot, BotChannel, BotChannelListCaller, BotId, BotOwnerProfile,
+        BotToken, CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest,
+        CreateBotTokenResponse, PatchBotRequest, UpdateAgentRequest,
     },
     ports::{BotError, BotService},
 };
@@ -18,6 +18,7 @@ use axum::{
     response::IntoResponse,
     routing::{delete, get, patch, post, put},
 };
+use axum_extra::extract::Query;
 use entity_access::{
     domain::{
         models::{EntityAccessReceipt, MemberParticipantRole},
@@ -31,6 +32,7 @@ use macro_authorization::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
+use serde::Deserialize;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -117,6 +119,16 @@ pub struct ChannelBotPath {
     pub bot_id: BotId,
 }
 
+/// Query for `GET /bots/profiles`.
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct BotOwnerProfilesQuery {
+    /// Bot ids. Repeat the key: `?ids=<uuid>&ids=<uuid>`.
+    #[param(style = Form, explode)]
+    #[serde(default)]
+    pub ids: Vec<BotId>,
+}
+
 /// Bot channel path.
 #[derive(Debug, serde::Deserialize)]
 pub struct BotChannelPath {
@@ -144,6 +156,10 @@ where
         .route("/bots", get(list_bots_handler::<S, Svc, Auth>))
         .route("/bots", post(create_bot_handler::<S, Svc, Auth>))
         .route("/bots/me", get(get_self_bot_handler::<S, Svc, Auth>))
+        .route(
+            "/bots/profiles",
+            get(get_bot_owner_profiles_handler::<S, Svc, Auth>),
+        )
         .route("/bots/{bot_id}", get(get_bot_handler::<S, Svc, Auth>))
         .route("/bots/{bot_id}", patch(patch_bot_handler::<S, Svc, Auth>))
         .route("/bots/{bot_id}", delete(delete_bot_handler::<S, Svc, Auth>))
@@ -349,6 +365,36 @@ pub async fn get_self_bot_handler<
             .get_self(authorization.authorization.bot_id)
             .await?,
     ))
+}
+
+/// Handler for `GET /bots/profiles`.
+///
+/// Returns display fields and the sponsor for each requested bot. Not a
+/// manageability check: any authenticated user or internal caller may look up
+/// ids they already have.
+#[utoipa::path(
+    get,
+    tag = "bots",
+    operation_id = "get_bot_owner_profiles",
+    path = "/bots/profiles",
+    params(BotOwnerProfilesQuery),
+    responses(
+        (status = 200, body = Vec<BotOwnerProfile>),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn get_bot_owner_profiles_handler<
+    S: BotService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<BotsRouterState<S, Svc, Auth>>,
+    _authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Query(query): Query<BotOwnerProfilesQuery>,
+) -> Result<Json<Vec<BotOwnerProfile>>, BotsHandlerErr> {
+    Ok(Json(state.service.get_owner_profiles(&query.ids).await?))
 }
 
 async fn get_bot_handler<
