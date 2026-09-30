@@ -133,7 +133,7 @@ function AgentBlockContent(props: {
         <div class="size-full overflow-hidden flex">
           {/* Collapsed by default, like the other conversation-shaped blocks —
             the transcript wants the width; `]` or the header button opens it. */}
-          <SidePanel.Layout defaultOpen={false}>
+          <SidePanel.Layout defaultOpen={false} floating>
             <AgentSidePanelSections />
             <AgentSplitHeader
               session={session()}

@@ -74,6 +74,7 @@ export function EmailThreadHostView(props: EmailThreadHostViewProps) {
         <>
           {props.chrome?.({ createTask })}
           <SidePanel.Layout
+            floating
             defaultOpen={false}
             headerToggle={props.sidePanelHeaderToggle}
           >

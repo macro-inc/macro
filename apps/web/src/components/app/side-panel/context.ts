@@ -9,7 +9,7 @@ export type SidePanelSectionEntry = {
    * order render after ordered ones, in their registration order.
    */
   order?: number;
-  component: () => JSX.Element;
+  component: (floating: boolean) => JSX.Element;
 };
 
 export type SidePanelContextType = {
@@ -20,7 +20,6 @@ export type SidePanelContextType = {
   hasSections: Accessor<boolean>;
   /**
    * Whether the side panel is open for the current layout mode.
-   * In wide mode this controls the split; in narrow mode it controls the overlay.
    */
   isOpen: Accessor<boolean>;
   /** Set the open state for the current layout mode. */
@@ -32,12 +31,13 @@ export type SidePanelContextType = {
   /** Which section IDs are currently expanded in the accordion. */
   openSectionIds: Accessor<string[]>;
   /**
-   * True when the layout is mobile or narrower than the split threshold.
-   * In this mode the side panel renders as a full-screen overlay rather than
-   * a side-by-side split.
+   * Floating panels are always overlays. Legacy docked panels also use
+   * an overlay on narrow layouts.
    */
-  isNarrow: Accessor<boolean>;
-  setIsNarrow: Setter<boolean>;
+  isOverlayMode: Accessor<boolean>;
+  setIsOverlayMode: Setter<boolean>;
+  /** Whether the panel is rendered as a single floating bubble. */
+  isFloating: Accessor<boolean>;
 };
 
 export const SidePanelContext = createContext<SidePanelContextType>();

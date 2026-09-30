@@ -100,7 +100,7 @@ export function CallDetailActions(props: {
 /** Keep side-panel state alive across call-record query updates. */
 export function CallDetailRoot(props: ParentProps<{ callId: string }>) {
   return (
-    <SidePanel.Root persistKey={`call:${props.callId}`}>
+    <SidePanel.Root floating persistKey={`call:${props.callId}`}>
       {props.children}
     </SidePanel.Root>
   );
@@ -118,7 +118,7 @@ function LoadedCallContent(props: {
     }
   });
   return (
-    <SidePanel.Layout headerToggle={false}>
+    <SidePanel.Layout headerToggle={false} floating>
       <CallSidePanelSections callId={props.callId} record={props.record} />
       <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
         <CallRecordingBody

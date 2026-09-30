@@ -9,7 +9,6 @@ import { Accordion } from '@kobalte/core/accordion';
 import ArrowLeft from '@phosphor/arrow-left.svg';
 import CaretRight from '@phosphor/caret-right.svg';
 import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
-import InfoIcon from '@phosphor/info.svg';
 import SidePanelIcon from '@phosphor/sidebar-simple.svg';
 import { Button, Panel, Scroll } from '@ui';
 import { cn } from '@ui/utils/classname';
@@ -29,6 +28,7 @@ import {
   Suspense,
   useContext,
 } from 'solid-js';
+import { Transition } from 'solid-transition-group';
 import { HeaderIsland } from '../split-layout/components/HeaderIsland';
 import { SplitHeaderRight } from '../split-layout/components/SplitHeader';
 import { useSplitPanel } from '../split-layout/layoutUtils';
@@ -70,7 +70,11 @@ function createWideOpenState(
  * Layout row while still operating on the same panel.
  */
 function Root(
-  props: ParentProps<{ defaultOpen?: boolean; persistKey?: string }>
+  props: ParentProps<{
+    defaultOpen?: boolean;
+    persistKey?: string;
+    floating?: boolean;
+  }>
 ) {
   const splitPanel = useSplitPanel();
   const content = splitPanel?.handle.content();
@@ -87,19 +91,25 @@ function Root(
     persistKey,
     props.defaultOpen ?? true
   );
-  const [isNarrowOpen, setIsNarrowOpen] = createSignal(false);
-  const [isNarrow, setIsNarrow] = createSignal(isMobile());
+  const [isOverlayOpen, setIsOverlayOpen] = createSignal(false);
+  // Stay closed until the layout has measured its actual split width.
+  const [isOverlayMode, setIsOverlayMode] = createSignal(true);
+  const updateLayoutMode: Setter<boolean> = (next) => {
+    const overlay = typeof next === 'function' ? next(isOverlayMode()) : next;
+    if (overlay !== isOverlayMode()) setIsOverlayOpen(false);
+    return setIsOverlayMode(overlay);
+  };
 
-  const isOpen = () => (isNarrow() ? isNarrowOpen() : isWideOpen());
+  const isOpen = () => (isOverlayMode() ? isOverlayOpen() : isWideOpen());
   const setIsOpen = (next: boolean | ((prev: boolean) => boolean)) => {
-    const setter = isNarrow() ? setIsNarrowOpen : setIsWideOpen;
+    const setter = isOverlayMode() ? setIsOverlayOpen : setIsWideOpen;
     setter(typeof next === 'function' ? next : () => next);
   };
   const toggle = () => setIsOpen((prev) => !prev);
 
   // Let global chrome shortcuts (cmd+.) hide/show this panel alongside the
   // app sidebar.
-  onCleanup(registerSidePanelInstance({ setIsOpen, isNarrow }));
+  onCleanup(registerSidePanelInstance({ setIsOpen, isOverlayMode }));
 
   const register = (entry: SidePanelSectionEntry) => {
     setSections((prev) => {
@@ -142,10 +152,11 @@ function Root(
     isOpen,
     setIsOpen,
     toggle,
-    isNarrow,
-    setIsNarrow,
+    isOverlayMode,
+    setIsOverlayMode: updateLayoutMode,
     setOpenSectionIds: setOpenIds,
     openSectionIds: openIds,
+    isFloating: () => props.floating ?? false,
   };
 
   return (
@@ -168,6 +179,8 @@ function Layout(
     defaultOpen?: boolean;
     persistKey?: string;
     headerToggle?: boolean;
+    /** Render the panel over the block instead of reserving horizontal space. */
+    floating?: boolean;
   }>
 ) {
   const parentContext = useContext(SidePanelContext);
@@ -190,7 +203,8 @@ function Layout(
             setOpenIds={ctx.setOpenSectionIds}
             isOpen={ctx.isOpen}
             setIsOpen={ctx.setIsOpen}
-            setIsNarrow={ctx.setIsNarrow}
+            setIsOverlayMode={ctx.setIsOverlayMode}
+            floating={props.floating ?? ctx.isFloating()}
           >
             {props.children}
           </SidePanelLayoutInner>
@@ -203,7 +217,11 @@ function Layout(
     <Show
       when={parentContext}
       fallback={
-        <Root defaultOpen={props.defaultOpen} persistKey={props.persistKey}>
+        <Root
+          defaultOpen={props.defaultOpen}
+          persistKey={props.persistKey}
+          floating={props.floating}
+        >
           <Panels />
         </Root>
       }
@@ -220,7 +238,8 @@ function SidePanelLayoutInner(
     setOpenIds: (ids: string[]) => void;
     isOpen: Accessor<boolean>;
     setIsOpen: (next: boolean | ((prev: boolean) => boolean)) => void;
-    setIsNarrow: Setter<boolean>;
+    setIsOverlayMode: Setter<boolean>;
+    floating: boolean;
   }>
 ) {
   const resolved = children(() => props.children);
@@ -235,13 +254,16 @@ function SidePanelLayoutInner(
   );
   const hasSections = createMemo(() => props.sections().length > 0);
 
-  createEffect(() => props.setIsNarrow(isNarrow()));
+  createEffect(() => props.setIsOverlayMode(props.floating || isNarrow()));
 
   const showSplit = createMemo(
-    () => !isNarrow() && hasSections() && props.isOpen()
+    () => !props.floating && !isNarrow() && hasSections() && props.isOpen()
   );
   const showOverlay = createMemo(
-    () => isNarrow() && hasSections() && props.isOpen()
+    () => !props.floating && isNarrow() && hasSections() && props.isOpen()
+  );
+  const showFloating = createMemo(
+    () => props.floating && hasSections() && props.isOpen()
   );
 
   return (
@@ -295,6 +317,41 @@ function SidePanelLayoutInner(
           </Scroll>
         </div>
       </Show>
+      <Show when={props.floating}>
+        <div class="absolute inset-0 z-split-panel-chrome pointer-events-none">
+          <Show when={showFloating()}>
+            <div
+              class="absolute inset-0 pointer-events-auto bg-transparent"
+              onClick={() => props.setIsOpen(false)}
+            />
+          </Show>
+          <Transition
+            appear
+            enterActiveClass="transition-[opacity,translate] duration-120 ease-out motion-reduce:duration-0"
+            enterClass="opacity-0 translate-x-1"
+            enterToClass="opacity-100 translate-x-0"
+            exitActiveClass="transition-opacity duration-70 ease-out motion-reduce:duration-0"
+            exitClass="opacity-100"
+            exitToClass="opacity-0"
+          >
+            <Show when={showFloating()}>
+              <aside
+                aria-label="Block details"
+                inert={!showFloating()}
+                class="absolute right-3 top-3 flex max-h-[calc(100%-1.5rem)] w-[min(320px,calc(100%-1.5rem))] max-w-full flex-col overflow-hidden rounded-xl border border-edge-frame bg-surface shadow-xl pointer-events-auto"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <SidePanelOutlet
+                  floating
+                  sections={props.sections}
+                  openIds={props.openIds}
+                  setOpenIds={props.setOpenIds}
+                />
+              </aside>
+            </Show>
+          </Transition>
+        </div>
+      </Show>
     </>
   );
 }
@@ -320,14 +377,9 @@ function Toggle() {
         hotkey={TOKENS.block.toggleSidePanel}
         onClick={() => ctx.toggle()}
       >
-        <Show
-          when={ctx.isNarrow()}
-          fallback={<SidePanelIcon class={cn(ctx.isOpen() && 'text-accent')} />}
-        >
-          <InfoIcon
-            class={cn('size-4', !isMobile() && ctx.isOpen() && 'text-accent')}
-          />
-        </Show>
+        <SidePanelIcon
+          class={cn('rotate-180', ctx.isOpen() && 'text-accent')}
+        />
       </Button>
     </Show>
   );
@@ -368,6 +420,7 @@ function SidePanelHeaderToggle() {
 }
 
 function SidePanelOutlet(props: {
+  floating?: boolean;
   sections: Accessor<SidePanelSectionEntry[]>;
   openIds: Accessor<string[]>;
   setOpenIds: (ids: string[]) => void;
@@ -382,18 +435,36 @@ function SidePanelOutlet(props: {
     })
   );
 
+  const Sections = () => (
+    <Accordion
+      multiple
+      collapsible
+      value={props.openIds()}
+      onChange={(value) => props.setOpenIds(value as string[])}
+      class={cn(
+        'flex flex-col min-h-0',
+        props.floating ? 'p-0 gap-0' : 'p-2 gap-2'
+      )}
+    >
+      <For each={sortedSections()}>
+        {(section) => section.component(props.floating ?? false)}
+      </For>
+    </Accordion>
+  );
+
   return (
-    <Scroll class="flex flex-col min-h-0">
-      <Accordion
-        multiple
-        collapsible
-        value={props.openIds()}
-        onChange={(value) => props.setOpenIds(value as string[])}
-        class="p-2 flex flex-col gap-2 min-h-0"
-      >
-        <For each={sortedSections()}>{(section) => section.component()}</For>
-      </Accordion>
-    </Scroll>
+    <Show
+      when={props.floating}
+      fallback={
+        <Scroll class="flex flex-col min-h-0">
+          <Sections />
+        </Scroll>
+      }
+    >
+      <div class="min-h-0 overflow-y-auto overscroll-contain">
+        <Sections />
+      </div>
+    </Show>
   );
 }
 
@@ -432,36 +503,54 @@ function Section(
       title: props.title,
       defaultOpen: props.defaultOpen ?? false,
       order: props.order,
-      component: () => (
-        <Accordion.Item value={props.id}>
-          <Panel
-            depth={2}
-            style={{ height: 'auto' }}
-            class="rounded-xl bg-surface"
+      component: (floating) => (
+        <Accordion.Item
+          value={props.id}
+          class={cn(floating && 'border-b border-edge-muted last:border-b-0')}
+        >
+          <Show
+            when={floating}
+            fallback={
+              <Panel
+                depth={2}
+                style={{ height: 'auto' }}
+                class="rounded-xl bg-surface"
+              >
+                <SectionContent />
+              </Panel>
+            }
           >
-            <Accordion.Header class="group flex items-center">
-              <Accordion.Trigger class="px-2 py-3 flex flex-1 min-w-0 items-center gap-2 text-xs hover:underline">
-                <CaretRight class="size-3 text-ink-muted transition-transform duration-90 group-data-expanded:rotate-90" />
-                <span>{props.title}</span>
-              </Accordion.Trigger>
-              <Show when={props.actions}>
-                <div class="shrink-0 pr-2">{props.actions}</div>
-              </Show>
-            </Accordion.Header>
-            <Accordion.Content class="group/content overflow-hidden data-expanded:animate-accordion-down data-closed:animate-accordion-up">
-              <Suspense fallback={<Loading />}>
-                <div class="px-2 pb-2 text-sm opacity-0 group-data-expanded/content:opacity-100 transition-opacity duration-150 ease-out">
-                  {props.children}
-                </div>
-              </Suspense>
-            </Accordion.Content>
-          </Panel>
+            <SectionContent />
+          </Show>
         </Accordion.Item>
       ),
     });
     onCleanup(() => ctx.unregister(props.id));
   });
   return null;
+
+  function SectionContent() {
+    return (
+      <>
+        <Accordion.Header class="group flex items-center">
+          <Accordion.Trigger class="px-2 py-3 flex flex-1 min-w-0 items-center justify-between gap-2 text-xs text-ink-muted hover:underline">
+            <span>{props.title}</span>
+            <CaretRight class="size-3 shrink-0 transition-transform duration-90 group-data-expanded:rotate-90" />
+          </Accordion.Trigger>
+          <Show when={props.actions}>
+            <div class="shrink-0 pr-2">{props.actions}</div>
+          </Show>
+        </Accordion.Header>
+        <Accordion.Content class="group/content overflow-hidden data-expanded:animate-accordion-down data-closed:animate-accordion-up">
+          <Suspense fallback={<Loading />}>
+            <div class="px-2 pb-2 text-sm opacity-0 group-data-expanded/content:opacity-100 transition-opacity duration-150 ease-out">
+              {props.children}
+            </div>
+          </Suspense>
+        </Accordion.Content>
+      </>
+    );
+  }
 }
 
 /** Hook to access the SidePanel context for toggling visibility */
@@ -474,7 +563,7 @@ function useSidePanel() {
     isOpen: ctx.isOpen,
     setIsOpen: ctx.setIsOpen,
     toggle: ctx.toggle,
-    isNarrow: ctx.isNarrow,
+    isOverlayMode: ctx.isOverlayMode,
     hasSections: ctx.hasSections,
     setOpenSectionIds: ctx.setOpenSectionIds,
     openSectionIds: ctx.openSectionIds,

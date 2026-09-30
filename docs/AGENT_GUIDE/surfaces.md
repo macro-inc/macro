@@ -1716,3 +1716,19 @@ New conversations confirm selected model and effort settings before sending the
 first message. If startup reports a rejected setting or timeout, the first prompt
 has not been sent. See [effort capabilities](../AGENT_EFFORT.md) for the harness
 contracts and test coverage.
+
+### Floating block information panels
+
+Block information panels float over the right side of the block without changing
+the content width or its centered position. A single rounded bubble fits its
+contents, with `edge-muted` dividers between sections. Its height is capped at
+the block height with internal scrolling. At every width it starts closed and
+acts as a split-local overlay menu. The top-right sidebar icon, rotated 180 degrees,
+opens it, and clicking outside dismisses it. Opening is never restored from saved
+preferences or triggered by the global chrome shortcut. The 320px bubble enters
+with a slight slide from the right and a 120ms fade;
+closing fades it out in 70ms.
+This applies across Markdown/tasks,
+snippets, email, calls, agents, pull requests, projects, and all file blocks
+including PDFs, images, code, video, canvas, and unknown file types. CRM company
+and contact views keep their existing treatment.

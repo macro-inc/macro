@@ -218,7 +218,7 @@ export function EmailDetailView(props: {
   };
 
   return (
-    <SidePanel.Root defaultOpen={false}>
+    <SidePanel.Root floating defaultOpen={false}>
       <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
         <ViewShell.TopBar class="touch:flex">
           <ViewBreadcrumbs.Outlet
