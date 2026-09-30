@@ -115,7 +115,7 @@ fn test_internal_fetch_rewrites_localhost_to_localstack() {
     let input = "http://localhost:4566/doc-storage/macro%7Cteo%40macro.com/doc/1";
     let expected = "http://localstack:4566/doc-storage/macro%7Cteo%40macro.com/doc/1";
 
-    let result = transform_internal_url(input, "http://localstack:4566");
+    let result = transform_internal_url(input, "http://localstack:4566", None);
     assert_eq!(result, expected);
 }
 
@@ -124,7 +124,7 @@ fn test_internal_fetch_preserves_query_params() {
     let input = "http://localhost:4566/doc-storage/key?versionId=123";
     let expected = "http://localstack:4566/doc-storage/key?versionId=123";
 
-    let result = transform_internal_url(input, "http://localstack:4566");
+    let result = transform_internal_url(input, "http://localstack:4566", None);
     assert_eq!(result, expected);
 }
 
@@ -133,7 +133,7 @@ fn test_internal_fetch_localstack_is_idempotent() {
     let input = "http://localstack:4566/doc-storage/key";
     let expected = "http://localstack:4566/doc-storage/key";
 
-    let result = transform_internal_url(input, "http://localstack:4566");
+    let result = transform_internal_url(input, "http://localstack:4566", None);
     assert_eq!(result, expected);
 }
 
@@ -142,7 +142,7 @@ fn test_internal_fetch_leaves_remote_url_untouched() {
     let input = "https://d123.cloudfront.net/doc-storage/key?Signature=abc";
     let expected = "https://d123.cloudfront.net/doc-storage/key?Signature=abc";
 
-    let result = transform_internal_url(input, "http://localstack:4566");
+    let result = transform_internal_url(input, "http://localstack:4566", None);
     assert_eq!(result, expected);
 }
 
@@ -158,7 +158,7 @@ fn named_instance_uses_public_port_and_preserves_signature_and_encoded_key() {
             "http://localhost:29806/static-file-storage/file/pasted%20image.png?X-Amz-Signature=test&x-id=PutObject"
         );
         assert_eq!(
-            transform_internal_url(&public, "http://localstack:4566"),
+            transform_internal_url(&public, "http://localstack:4566", None),
             "http://localstack:4566/static-file-storage/file/pasted%20image.png?X-Amz-Signature=test&x-id=PutObject"
         );
     }
@@ -168,7 +168,37 @@ fn named_instance_uses_public_port_and_preserves_signature_and_encoded_key() {
 fn host_process_keeps_its_configured_localstack_endpoint_for_internal_fetch() {
     let input = "http://localhost:29806/doc-storage/key";
     assert_eq!(
-        transform_internal_url(input, "http://localhost:29806"),
+        transform_internal_url(input, "http://localhost:29806", None),
         input
     );
+}
+
+#[test]
+fn https_storage_proxy_round_trips_encoded_keys_and_presigned_queries() {
+    let endpoint = "https://dev-machine:21909/local-storage";
+    let internal = "http://localstack:4566/doc-storage/macro%7Cuser%40example.com/image/10?X-Amz-Signature=test&x-id=PutObject";
+    let public = transform_local_url(internal, Some(endpoint));
+    assert_eq!(
+        public,
+        "https://dev-machine:21909/local-storage/doc-storage/macro%7Cuser%40example.com/image/10?X-Amz-Signature=test&x-id=PutObject"
+    );
+    assert_eq!(
+        transform_internal_url(&public, "http://localstack:4566", Some(endpoint)),
+        internal
+    );
+}
+
+#[test]
+fn storage_proxy_rewrite_is_scoped_to_its_origin_and_path() {
+    let endpoint = "https://dev-machine:21909/local-storage";
+    for input in [
+        "https://other-machine:21909/local-storage/doc-storage/key",
+        "https://dev-machine:21909/local-storage-other/key",
+        "https://dev-machine:21909/dss/documents/key",
+    ] {
+        assert_eq!(
+            transform_internal_url(input, "http://localstack:4566", Some(endpoint)),
+            input
+        );
+    }
 }

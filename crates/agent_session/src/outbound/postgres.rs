@@ -21,7 +21,7 @@ use crate::domain::model::{
     ClaimOutcome, CreateAgentSessionParams, ExternalSession, LeaseView, ManagerFence, Message,
     ReplicaAddress, ReplicaId, SandboxSize, SessionBot, SessionClaim, SessionManager,
     SessionPreviewCandidate, SessionStatus, StoredAgentSessionLog, StoredQueuedAction,
-    ThreadSession, cursor_run_checkpoint,
+    ThreadSession, cursor_run_checkpoint, session_owner_user,
 };
 use crate::domain::ports::{
     AgentSessionLogRepo, AgentSessionRepo, ExternalSessionRepo, REPLICA_STALE_AFTER,
@@ -40,9 +40,10 @@ use entity_access_db_utils::{
     AccessLevel, EntityAccessSourceType, EntityType, delete_entity_access_rows,
     insert_entity_access_row,
 };
+use entity_registry::BotFacts;
 use entity_registry_db_utils::{
-    NewEntityRecord, RegisteredEntityType, WriteOutcome, delete_entity, insert_entity,
-    touch_updated,
+    EntityRegistryError, NewEntityRecord, OwnedEntityRegistrar, RegisteredEntityType, WriteOutcome,
+    delete_entity, touch_updated,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -51,15 +52,26 @@ use sqlx::PgPool;
 use std::num::NonZeroUsize;
 
 /// Postgres implementation of [`AgentSessionRepo`] and [`AgentSessionLogRepo`].
-#[derive(Debug, Clone)]
-pub struct PgAgentSessionRepo {
+#[derive(Clone)]
+pub struct PgAgentSessionRepo<B> {
     pool: PgPool,
+    registrar: OwnedEntityRegistrar<B>,
 }
 
-impl PgAgentSessionRepo {
-    /// Create a Postgres agent session repository.
-    pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+impl<B> std::fmt::Debug for PgAgentSessionRepo<B> {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("PgAgentSessionRepo")
+            .field("pool", &self.pool)
+            .finish_non_exhaustive()
+    }
+}
+
+impl<B: BotFacts> PgAgentSessionRepo<B> {
+    /// Create a Postgres agent session repository that registers owners
+    /// through `registrar`.
+    pub fn new(pool: PgPool, registrar: OwnedEntityRegistrar<B>) -> Self {
+        Self { pool, registrar }
     }
 }
 
@@ -280,7 +292,7 @@ impl TryFrom<AgentSessionRow> for AgentSession {
     }
 }
 
-impl AgentSessionRepo for PgAgentSessionRepo {
+impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
     async fn create(&self, params: CreateAgentSessionParams) -> Result<AgentSession> {
         let CreateAgentSessionParams {
             id,
@@ -303,9 +315,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         // The owner's grant is a user access row, and the session lands in
         // the owner's history: this store still holds user-owned sessions,
         // even though the denormalized owner_id no longer references "User".
-        let owner_user = owner_id
-            .as_user()
-            .ok_or_else(|| AgentSessionError::OwnerNotUser(owner_id.owner_type()))?;
+        let owner_user = session_owner_user(&owner_id)?;
 
         // The session row and its access grants land together: a crash between
         // the two would leave a session nobody - not even its owner -
@@ -315,6 +325,17 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             .begin()
             .await
             .context("begin agent session create")?;
+
+        let known_owner = sqlx::query_scalar!(
+            r#"SELECT id FROM "User" WHERE id = $1"#,
+            owner_user.as_ref(),
+        )
+        .fetch_optional(&mut *transaction)
+        .await
+        .context("failed to confirm the session owner")?;
+        if known_owner.is_none() {
+            return Err(AgentSessionError::UnknownOwner);
+        }
 
         let (status, status_event_name) = status_columns(&SessionStatus::NoMessages);
         // An inline @macro mention is a one-shot on the message. It stays out
@@ -376,27 +397,20 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             },
         )?;
 
-        insert_entity_access_row(
-            &mut transaction,
-            &id.as_uuid(),
-            EntityType::AgentSession,
-            owner_user.as_ref(),
-            EntityAccessSourceType::User,
-            AccessLevel::Owner,
-        )
-        .await
-        .context("failed to grant the owner access to the agent session")?;
-
-        insert_entity(
-            &mut transaction,
-            NewEntityRecord::new(
-                id.as_uuid(),
-                RegisteredEntityType::AgentSession,
-                owner_id.clone(),
-            ),
-        )
-        .await
-        .map_err(|error| registry_unknown(error, "failed to register the agent session"))?;
+        self.registrar
+            .register_owned_entity(
+                &mut transaction,
+                NewEntityRecord::new(
+                    id.as_uuid(),
+                    RegisteredEntityType::AgentSession,
+                    owner_id.clone(),
+                ),
+            )
+            .await
+            .map_err(|error| match *error.current_context() {
+                EntityRegistryError::RegistrationConflict => AgentSessionError::SessionIdTaken(id),
+                _ => registry_unknown(error, "failed to register the agent session"),
+            })?;
 
         // The channel the bot was invoked in can steer the session: the
         // invocation was public there, so that audience is. Read from the
@@ -1085,7 +1099,7 @@ impl TryFrom<AgentSessionLogRow> for StoredAgentSessionLog {
     }
 }
 
-impl ExternalSessionRepo for PgAgentSessionRepo {
+impl<B: BotFacts + 'static> ExternalSessionRepo for PgAgentSessionRepo<B> {
     #[tracing::instrument(skip(self), err)]
     async fn upsert(&self, id: AgentSessionId, external: ExternalSession) -> Result<()> {
         sqlx::query!(
@@ -1148,7 +1162,7 @@ impl ExternalSessionRepo for PgAgentSessionRepo {
     }
 }
 
-impl AgentSessionLogRepo for PgAgentSessionRepo {
+impl<B: BotFacts + 'static> AgentSessionLogRepo for PgAgentSessionRepo<B> {
     async fn create(&self, log: AgentSessionLog) -> Result<StoredAgentSessionLog> {
         self.create_projected(log, None, None, None).await
     }
@@ -1501,7 +1515,7 @@ impl AgentSessionLogRepo for PgAgentSessionRepo {
     }
 }
 
-impl SessionOwnership for PgAgentSessionRepo {
+impl<B: BotFacts + 'static> SessionOwnership for PgAgentSessionRepo<B> {
     async fn claim(&self, session: AgentSessionId, replica: ReplicaId) -> Result<ClaimOutcome> {
         // One statement: the replica's heartbeat row is upserted in the CTE
         // (a claim can never reference a replica the store has not seen),
@@ -1680,7 +1694,7 @@ impl SessionOwnership for PgAgentSessionRepo {
 
 /// Folding reads the log through `agent_fold`'s own port; this adapter
 /// already speaks [`AgentSessionLogRepo`], so bridging is one line.
-impl agent_fold::domain::ports::LogRepo for PgAgentSessionRepo {
+impl<B: BotFacts + 'static> agent_fold::domain::ports::LogRepo for PgAgentSessionRepo<B> {
     async fn list_by_session(
         &self,
         session: AgentSessionId,
@@ -1697,7 +1711,7 @@ impl agent_fold::domain::ports::LogRepo for PgAgentSessionRepo {
 /// A participant who has left keeps their row, with `left_at` set - so the
 /// filter is what stops a former member being sent a session they can no
 /// longer open.
-impl SessionAudience for PgAgentSessionRepo {
+impl<B: BotFacts + 'static> SessionAudience for PgAgentSessionRepo<B> {
     async fn viewers(
         &self,
         agent_session_id: AgentSessionId,

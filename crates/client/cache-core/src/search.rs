@@ -12,6 +12,9 @@ use std::cmp::Ordering;
 use std::collections::BTreeSet;
 use thiserror::Error;
 
+mod changes;
+pub(crate) use changes::{collect_search_changes, snapshot_search_fields};
+
 /// Current compact projection profile used by Quick Access, Cmd-K and entity
 /// mention pickers. Profile names are persisted and therefore versioned.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -178,7 +181,10 @@ pub fn project_search_documents(key: &EntityKey<'static>, record: &Record) -> Ve
     project_quick_access(key, record).into_iter().collect()
 }
 
-fn project_quick_access(key: &EntityKey<'static>, record: &Record) -> Option<SearchDocument> {
+fn quick_access_fields<'a>(
+    key: &'a EntityKey<'_>,
+    record: &'a Record,
+) -> Option<(&'a str, &'static str, &'static [&'static str])> {
     if key.is_root() || key.as_ref().starts_with("__meta:") || !is_present(record) {
         return None;
     }
@@ -200,6 +206,14 @@ fn project_quick_access(key: &EntityKey<'static>, record: &Record) -> Option<Sea
         _ => return None,
     };
 
+    text_fields
+        .iter()
+        .any(|field| record.fields.contains_key(*field))
+        .then_some((typename, bucket, text_fields))
+}
+
+fn project_quick_access(key: &EntityKey<'static>, record: &Record) -> Option<SearchDocument> {
+    let (typename, bucket, text_fields) = quick_access_fields(key, record)?;
     let search_text = normalize_search_text(
         text_fields
             .iter()
@@ -209,14 +223,6 @@ fn project_quick_access(key: &EntityKey<'static>, record: &Record) -> Option<Sea
             .join(" | ")
             .as_str(),
     );
-    if search_text.is_empty()
-        && !text_fields
-            .iter()
-            .any(|field| record.fields.contains_key(*field))
-    {
-        return None;
-    }
-
     Some(SearchDocument {
         profile: SearchProfile::QuickAccessV1,
         record_key: key.clone(),

@@ -524,6 +524,30 @@ export type SpreadsheetOperation =
       columns: SpreadsheetColumnWidth[];
       type: 'resize_columns';
     };
+export type AspectRatio =
+  | 'square'
+  | 'landscape'
+  | 'portrait'
+  | 'widescreen'
+  | 'tall';
+/**
+ * A reference photo already stored in Macro.
+ */
+export type ImageReferenceInput =
+  | {
+      /**
+       * The Macro document ID.
+       */
+      id: string;
+      type: 'document';
+    }
+  | {
+      /**
+       * Uploaded file ID from the /file/<id> segment of its attachment URL.
+       */
+      id: string;
+      type: 'staticFile';
+    };
 /**
  * Entity types that can be returned by the list entities AI tool.
  */
@@ -3508,6 +3532,63 @@ export interface EditTagResponse {
    * Human-readable summary.
    */
   summary: string;
+}
+/**
+ * Generate or edit an image with Google's Nano Banana image model and save the result as a new image document in Macro. Use for pictures, illustrations, diagram concepts, logo ideas, mockups, or edits based on reference photos. When the user supplies photos or asks to modify an existing image, pass them in referenceImages; describing a photo in the prompt alone does not send it to the image model. Describe the subject, style, composition, lighting, and any text to render; only the prompt is required. Refer to reference images by their order (image 1, image 2, image 3) when explaining how to use them. Returns the new document ID to cite inline. Generation takes several seconds.
+ */
+export interface GenerateImage {
+  /**
+   * Detailed description of the image to generate: subject, style (photo, illustration, flat vector...), composition, colours, mood, and any text that must appear.
+   */
+  prompt: string;
+  /**
+   * Optional short descriptive name for the saved image, for example `sunset-lighthouse`. The file extension is added from the generated format. No directory path. Omit to name the image after the prompt.
+   */
+  fileName?: string | null;
+  /**
+   * Shape of the image. Omit for the model default (square). `widescreen` (16:9) suits banners and slides, `tall` (9:16) suits phone screens and stories.
+   */
+  aspectRatio?: AspectRatio | null;
+  /**
+   * Optional destination project (folder) ID. Requires edit access. Omit to save to the user's top-level files.
+   */
+  projectId?: string | null;
+  /**
+   * Up to three reference photos, in the order used by the prompt. Use type document with a Macro image document ID, or type staticFile with the UUID from /file/<id> in an uploaded attachment's source URL. Use the actual IDs supplied in the conversation or by tools; do not invent IDs. Omit for text-only generation.
+   *
+   * @maxItems 3
+   */
+  referenceImages?:
+    | []
+    | [ImageReferenceInput]
+    | [ImageReferenceInput, ImageReferenceInput]
+    | [ImageReferenceInput, ImageReferenceInput, ImageReferenceInput]
+    | null;
+}
+/**
+ * Where the generated image landed. Does not echo the image bytes.
+ */
+export interface GenerateImageResponse {
+  /**
+   * ID of the new image document.
+   */
+  documentId: string;
+  /**
+   * Saved filename, including its extension.
+   */
+  fileName: string;
+  /**
+   * IANA media type of the image, e.g. `image/png`.
+   */
+  mimeType: string;
+  /**
+   * Size of the image in bytes.
+   */
+  sizeBytes: number;
+  /**
+   * Commentary the model produced alongside the image, when any.
+   */
+  note?: string | null;
 }
 /**
  * Get the channel-specific webhook URLs for a bot the current user can manage. A bot has one URL per channel it can access. POST message content to a returned webhookUrl and authenticate with a token minted from the chat card or bot settings after IssueBotCredential or CreateBot; send it in the returned credentialHeader and send credentialScope in credentialScopeHeader. If no URLs are returned, add the bot to a channel with ManageBotChannelAccess or recreate it with CreateBot and channelId.

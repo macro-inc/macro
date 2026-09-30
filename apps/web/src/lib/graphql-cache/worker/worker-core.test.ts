@@ -5,6 +5,7 @@ const loadCacheWasmMock = vi.hoisted(() => vi.fn());
 
 vi.mock('./wasm-module', () => ({ loadCacheWasm: loadCacheWasmMock }));
 
+import { cacheDatabaseIdentity } from './coordinator-protocol';
 import { CacheWorkerCore } from './worker-core';
 
 describe('CacheWorkerCore', () => {
@@ -1017,6 +1018,7 @@ describe('CacheWorkerCore', () => {
         reset: false,
         data: { cursor: 'next' },
         revisionAdvanced,
+        searchChangedBuckets: ['note'],
       });
       loadCacheWasmMock.mockResolvedValue({
         openCache: vi.fn().mockResolvedValue({ hydrateQuery }),
@@ -1056,7 +1058,13 @@ describe('CacheWorkerCore', () => {
         )
       ).toEqual(
         revisionAdvanced
-          ? [{ kind: 'cache-hydrated', revision: INITIAL_CACHE_REVISION }]
+          ? [
+              {
+                kind: 'cache-hydrated',
+                revision: INITIAL_CACHE_REVISION,
+                searchChangedBuckets: ['note'],
+              },
+            ]
           : []
       );
       expect(messages.at(-1)).toEqual({
@@ -1131,6 +1139,176 @@ describe('CacheWorkerCore', () => {
     await Promise.all([read, drain]);
     expect(order).toEqual(['read:start', 'read:done', 'response', 'close']);
   });
+
+  it.each([
+    [false, 'openCacheWithOutcome'],
+    [true, 'openCacheForRecoveryWithOutcome'],
+  ] as const)(
+    'asks for the storage grant from inside the WASM open (recovery: %s)',
+    async (recoveryOpen, openName) => {
+      const order: string[] = [];
+      const open = vi.fn(
+        async (
+          _scope: string,
+          _hotCapacity: number | undefined,
+          grant?: () => Promise<void>
+        ) => {
+          order.push('owner-lock');
+          await grant?.();
+          order.push('storage');
+          return { engine: {}, outcome: 'opened-existing' };
+        }
+      );
+      loadCacheWasmMock.mockResolvedValue({ [openName]: open });
+      const messages: unknown[] = [];
+      const core = new CacheWorkerCore({
+        recoveryOpen,
+        onOwnerLockAcquired: async () => {
+          order.push('grant');
+        },
+      });
+
+      await core.handleRequest(
+        { postMessage: (message: unknown) => messages.push(message) },
+        { id: 1, kind: 'init', scope: 'scope-1' }
+      );
+
+      expect(order).toEqual(['owner-lock', 'grant', 'storage']);
+      expect(messages).toEqual([{ id: 1, ok: true, result: null }]);
+    }
+  );
+
+  it('refuses a WASM open that never asked for the storage grant', async () => {
+    loadCacheWasmMock.mockResolvedValue({
+      openCacheWithOutcome: vi.fn(async () => ({
+        engine: {},
+        outcome: 'opened-existing',
+      })),
+    });
+    const messages: unknown[] = [];
+    const core = new CacheWorkerCore({
+      onOwnerLockAcquired: async () => undefined,
+    });
+
+    await core.handleRequest(
+      { postMessage: (message: unknown) => messages.push(message) },
+      { id: 1, kind: 'init', scope: 'scope-1' }
+    );
+
+    expect(messages).toEqual([
+      {
+        id: 1,
+        ok: false,
+        error: 'cache WASM does not support the owner-lock grant',
+      },
+    ]);
+  });
+
+  const busyOwnerLock = () =>
+    Object.assign(new Error('owner lock is held by another context'), {
+      cacheOwnerLockUnavailable: true,
+    });
+
+  const initMessages = async (core: CacheWorkerCore): Promise<unknown[]> => {
+    const messages: unknown[] = [];
+    await core.handleRequest(
+      { postMessage: (message: unknown) => messages.push(message) },
+      { id: 1, kind: 'init', scope: 'scope-1' }
+    );
+    return messages;
+  };
+
+  it.each([
+    [false, 'openCacheWithOutcome'],
+    [true, 'openCacheForRecoveryWithOutcome'],
+  ] as const)(
+    'opens only a free owner lock, asking before each retry (recovery: %s)',
+    async (recoveryOpen, openName) => {
+      const open = vi
+        .fn()
+        .mockRejectedValueOnce(busyOwnerLock())
+        .mockRejectedValueOnce(busyOwnerLock())
+        .mockImplementation(
+          async (
+            _scope: string,
+            _hotCapacity: number | undefined,
+            grant?: () => Promise<void>
+          ) => {
+            await grant?.();
+            return { engine: {}, outcome: 'opened-existing' };
+          }
+        );
+      loadCacheWasmMock.mockResolvedValue({
+        [openName]: open,
+        cacheDatabaseIdentity,
+      });
+      const onOwnerLockBusy = vi.fn(async (_attempt: number) => undefined);
+      const core = new CacheWorkerCore({
+        recoveryOpen,
+        onOwnerLockAcquired: async () => undefined,
+        onOwnerLockBusy,
+      });
+
+      expect(await initMessages(core)).toEqual([
+        { id: 1, ok: true, result: null },
+      ]);
+      expect(onOwnerLockBusy.mock.calls).toEqual([[1], [2]]);
+      // Every attempt declines to queue behind another holder.
+      expect(open.mock.calls.map((call) => call[3])).toEqual([
+        true,
+        true,
+        true,
+      ]);
+    }
+  );
+
+  it('gives up on a busy owner lock when told to stop retrying', async () => {
+    const open = vi.fn().mockRejectedValue(busyOwnerLock());
+    loadCacheWasmMock.mockResolvedValue({
+      openCacheWithOutcome: open,
+      cacheDatabaseIdentity,
+    });
+    const core = new CacheWorkerCore({
+      onOwnerLockAcquired: async () => undefined,
+      onOwnerLockBusy: async () => {
+        throw new Error('owner lock stayed unavailable');
+      },
+    });
+
+    expect(await initMessages(core)).toEqual([
+      { id: 1, ok: false, error: 'owner lock stayed unavailable' },
+    ]);
+    expect(open).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    [
+      'predates storage versions',
+      {},
+      'cache WASM predates storage-versioned databases; rebuild it',
+    ],
+    [
+      'names another version',
+      { cacheDatabaseIdentity: () => 'graphql-cache:scope-1:s0.v0.t0' },
+      'cache WASM storage version does not match this build',
+    ],
+  ])(
+    'refuses a WASM build that %s before opening anything',
+    async (_label, identity, error) => {
+      const open = vi.fn();
+      loadCacheWasmMock.mockResolvedValue({
+        openCacheWithOutcome: open,
+        ...identity,
+      });
+      const core = new CacheWorkerCore({
+        onOwnerLockAcquired: async () => undefined,
+        onOwnerLockBusy: async () => undefined,
+      });
+
+      expect(await initMessages(core)).toEqual([{ id: 1, ok: false, error }]);
+      expect(open).not.toHaveBeenCalled();
+    }
+  );
 
   it('uses atomic recovery-open instead of opening before a reset', async () => {
     const openCache = vi.fn();
@@ -1698,6 +1876,35 @@ describe('CacheWorkerCore', () => {
     expect(messages.slice(-2)).toEqual([
       { id: 2, ok: false, error: 'cache storage reset required' },
       { id: 3, ok: false, error: 'cache storage reset required' },
+    ]);
+  });
+
+  it('reports an open that gave up on busy database files', async () => {
+    const busyError = Object.assign(
+      new Error('OPFS sync handle open failed (NoModificationAllowedError)'),
+      { cacheStorageBusy: true as const }
+    );
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockRejectedValue(busyError),
+    });
+    const onStorageBusy = vi.fn();
+    const onStorageResetRequired = vi.fn();
+    const messages: unknown[] = [];
+    const core = new CacheWorkerCore({ onStorageBusy, onStorageResetRequired });
+
+    await core.handleRequest(
+      { postMessage: (message: unknown) => messages.push(message) },
+      { id: 1, kind: 'init', scope: 'scope-1' }
+    );
+
+    expect(onStorageBusy).toHaveBeenCalledOnce();
+    expect(onStorageResetRequired).not.toHaveBeenCalled();
+    expect(messages).toEqual([
+      {
+        id: 1,
+        ok: false,
+        error: 'OPFS sync handle open failed (NoModificationAllowedError)',
+      },
     ]);
   });
 });

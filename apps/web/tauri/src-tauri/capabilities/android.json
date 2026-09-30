@@ -7,6 +7,7 @@
     "main"
   ],
   "permissions": [
-    "android-auth:allow-authenticate"
+    "android-auth:allow-authenticate",
+    "android-push:default"
   ]
 }

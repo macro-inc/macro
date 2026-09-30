@@ -4,12 +4,10 @@ import {
   createThreadRepliesFetchGate,
   THREAD_REPLIES_FETCH_DEBOUNCE_MS,
 } from '../create-thread-replies-fetch-gate';
-import { DEFAULT_VISIBLE_REPLY_GROUP_COUNT } from '../utils/thread-reply-indicator-helpers';
 
 type FixtureOptions = {
   isExpanded?: boolean;
   isFindBarOpen?: boolean;
-  replyCount?: number;
   targetReplyId?: string;
   targetThreadId?: string;
 };
@@ -33,7 +31,6 @@ describe('createThreadRepliesFetchGate', () => {
       dispose = rootDispose;
       enabled = createThreadRepliesFetchGate({
         threadId: () => 'thread-1',
-        replyCount: () => options.replyCount ?? 0,
         isExpanded: () => options.isExpanded ?? false,
         isFindBarOpen: () => options.isFindBarOpen ?? false,
         targetThreadId: () => options.targetThreadId,
@@ -48,17 +45,11 @@ describe('createThreadRepliesFetchGate', () => {
     await Promise.resolve();
   };
 
-  it('waits 300ms before enabling an ordinary thread reply fetch', async () => {
-    const fixture = createFixture({
-      replyCount: DEFAULT_VISIBLE_REPLY_GROUP_COUNT + 1,
-    });
+  it('does not fetch full replies merely because a collapsed thread stays mounted', async () => {
+    const fixture = createFixture();
     await flushEffects();
-
+    vi.advanceTimersByTime(THREAD_REPLIES_FETCH_DEBOUNCE_MS * 10);
     expect(fixture.enabled()).toBe(false);
-    vi.advanceTimersByTime(THREAD_REPLIES_FETCH_DEBOUNCE_MS - 1);
-    expect(fixture.enabled()).toBe(false);
-    vi.advanceTimersByTime(1);
-    expect(fixture.enabled()).toBe(true);
   });
 
   it('also debounces expansion and non-find-bar reply navigation', async () => {

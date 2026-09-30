@@ -19,6 +19,8 @@ bots = { path = "../../crates/bots", default-features = false, features = ["outb
 channels = { path = "../../crates/channels", default-features = false, features = ["outbound", "ports"] }
 database_env_vars = { path = "../../crates/database_env_vars" }
 entity_access = { path = "../../crates/entity_access" }
+entity_registry = { path = "../../crates/entity_registry/entity_registry", default-features = false }
+entity_registry_db_utils = { path = "../../crates/entity_registry/entity_registry_db_utils" }
 kafka_util = { path = "../../crates/kafka_util" }
 lexical_client = { path = "../../crates/lexical_client" }
 macro_config = { path = "../../crates/macro_config" }

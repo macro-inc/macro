@@ -71,6 +71,7 @@ pub struct ApiStates<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes
     claude_auth: Router,
     sharing: Router,
     routine_sessions: Router,
+    capabilities: Router,
     changes: AgentChangesRouterState<Changes, Access, Auth>,
 }
 
@@ -97,8 +98,15 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
             claude_auth: Router::new(),
             sharing: Router::new(),
             routine_sessions: Router::new(),
+            capabilities: Router::new(),
             changes,
         }
+    }
+
+    /// Attach model-specific harness capability discovery routes.
+    pub fn with_capabilities(mut self, router: Router) -> Self {
+        self.capabilities = router;
+        self
     }
 
     /// Attach the optional owner-authenticated Claude demo connection routes.
@@ -217,6 +225,7 @@ where
         .merge(agent_repositories_router(states.repositories))
         .merge(states.claude_auth)
         .merge(states.routine_sessions)
+        .merge(states.capabilities)
         .nest("/runtime", runtime_gateway_router(states.gateway))
 }
 

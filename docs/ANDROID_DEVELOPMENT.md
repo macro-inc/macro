@@ -97,6 +97,27 @@ its fingerprint to production associations before testing Play-installed links.
 ## Firebase
 
 Debug builds work without Firebase configuration for auth/navigation development.
+Remote notifications require the matching Firebase configuration and Google Play
+services on the device. Notification permission alone does not register the
+device: sign in to Macro and enable notifications in Settings. Android 13 and
+newer show a runtime permission prompt; older versions use the app's system
+notification setting. The **Activity** channel can also be disabled separately.
+
+The Android push plugin receives data-only FCM messages and owns their display,
+replacement, and clearing. Taps are saved until the authenticated frontend can
+receive them. Logout disables the native receiver and clears its saved display
+and tap state before attempting network unregistration. The receiver checks the
+payload's recipient against the registered account to reject delayed pushes
+from an earlier session.
+
+For verification, test foreground, background, and ordinary process death
+separately. Background the app, then use `adb shell am kill com.macro.app.prod`
+for the process-dead case. Android force-stop is a different state that prevents
+FCM delivery until the user opens the app again. Also test permission and channel
+revocation, logout/account switching, repeated delivery, notification taps, and
+read/done clearing. Silent clearing uses normal-priority FCM and may be delayed
+by Doze. A local display test alone does not verify backend event delivery.
+
 The launcher requires package **com.macro.app.prod** and validates these projects:
 
 | Build command | Firebase project |

@@ -4,6 +4,13 @@ The document header has separate Share, Copy Share Link, and Side Panel buttons.
 They are borderless with a soft rounded background on hover. Share opens the
 sharing dialog; copying a link is a separate action.
 
+On a local HTTPS stack, document and image downloads use `/local-storage/`
+on the app's HTTPS origin. A request to HTTP localhost indicates a stale
+storage URL or stack configuration; hard-refresh after updating the stack.
+Markdown also needs a successful `/sync/document/.../connect` WebSocket upgrade.
+A 403 there indicates the sync origin check, which the local proxy handles for
+HTTPS machine hostnames; verify the proxy configuration before retrying.
+
 ## Spreadsheets
 
 Spreadsheets are an internal pilot controlled by the `enable-spreadsheets` PostHog

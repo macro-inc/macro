@@ -7,8 +7,11 @@ use std::collections::HashMap;
 
 use crate::domain::models::android::FCMMessage;
 use crate::domain::models::apple::{APNSPushNotification, VoipPushPayload};
-use crate::domain::models::mobile::{MessageAttributes, PushType, SnsTarget};
+use crate::domain::models::mobile::{MessageAttributes, PushType};
 use crate::domain::ports::NotificationSender;
+
+mod payload;
+pub use payload::SnsTarget;
 
 /// Mobile push notification adapter.
 ///
@@ -83,12 +86,11 @@ impl<P: MobilePushOps + Send + Sync + 'static> NotificationSender for MobilePush
         &self,
         endpoint_arn: &str,
         notification: &FCMMessage<T>,
-        attributes: &MessageAttributes,
+        _attributes: &MessageAttributes,
     ) -> Result<String, Report> {
         let target = SnsTarget::Android(notification);
-        let sns_attributes = build_sns_attributes(&self.apns_bundle_id, attributes);
         self.push_service
-            .push_notification(endpoint_arn, &target, sns_attributes)
+            .push_notification(endpoint_arn, &target, HashMap::new())
             .await
     }
 }

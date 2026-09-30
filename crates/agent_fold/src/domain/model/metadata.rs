@@ -5,6 +5,7 @@ use specta::Type;
 
 use super::PendingInteraction;
 use super::elicitation::PendingElicitation;
+use crate::domain::session_config::SessionConfigOption;
 
 /// Which ACP agent produced a session's log.
 ///
@@ -55,6 +56,9 @@ pub struct SessionMetadata {
     pub model: Option<String>,
     /// The models the runtime offers, in the order it listed them.
     pub supported_models: Vec<ModelOption>,
+    /// Every setting the ACP agent currently advertises. The list is replaced
+    /// whole whenever ACP returns a new `configOptions` snapshot.
+    pub config_options: Vec<SessionConfigOption>,
     /// Session title, when the harness reports one.
     pub title: Option<String>,
     /// The slash commands the harness most recently advertised, in the order

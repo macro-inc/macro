@@ -535,6 +535,37 @@ describe('createTauriCacheHost', () => {
     }
   );
 
+  it.each(
+    [[], ['note']].map((searchChangedBuckets) => ({ searchChangedBuckets }))
+  )(
+    'forwards native bucket metadata $searchChangedBuckets across windows',
+    async ({ searchChangedBuckets }) => {
+      const host = createTauriCacheHost({ scope: 'scope-1' });
+      const listener = vi.fn();
+      host.onCacheChanged(listener, { includeHydration: true });
+      invokeMock.mockImplementation(async (command: string) =>
+        command === 'graphql_cache_hydrate'
+          ? {
+              kind: 'void',
+              revision: '7',
+              revisionAdvanced: true,
+              searchChangedBuckets,
+            }
+          : null
+      );
+      await host.hydrateQuery({ query: '{ x }', data: { x: 1 } });
+      expect(emitMock).toHaveBeenCalledWith('graphql-cache://cache-hydrated', {
+        revision: '7',
+        searchChangedBuckets,
+      });
+      eventCallbacks.get('graphql-cache://cache-hydrated')?.({
+        payload: { revision: '7', searchChangedBuckets },
+      });
+      expect(listener).toHaveBeenCalledWith('7', { searchChangedBuckets });
+      host.dispose();
+    }
+  );
+
   it('delivers cross-window hydration only to opted-in listeners', async () => {
     const host = createTauriCacheHost({ scope: 'scope-1' });
     const foreground = vi.fn();
