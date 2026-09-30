@@ -1094,6 +1094,19 @@ recently updated visible skill documents plus built-ins; `SearchSkills` finds a
 skill by name, including older skills outside that list. A skill mention's id can
 also be passed directly to `ReadSkill`.
 
+## Configuring agents from a conversation
+
+The built-in **Configure Agent** skill walks an agent through changing another
+agent's instructions or settings on the user's behalf. `ListAgents` returns every
+agent the user can manage with its current instructions, runtime, model, channel
+scope, connected apps, permission choice, and coding/chat mode; `ConfigureAgent`
+patches only the fields it is given. Instructions are replaced whole, so the skill
+has the agent edit the current text and send the complete result. Changes reach
+sessions opened afterwards; running sessions keep the instructions they started
+with. Both tools render as expandable rows in chat, agent sessions, and channel
+replies; the profile fields (name, handle, description, picture) stay with
+`ConfigureBot`.
+
 The chat's **Read skill** tool row expands to show the full instructions. When
 verifying this flow, invoke a saved skill by name, confirm the agent reads it,
 and expand the row to inspect the returned content. Document access permissions
