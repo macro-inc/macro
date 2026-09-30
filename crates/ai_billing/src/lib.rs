@@ -34,12 +34,15 @@
 //! whose paid access comes through a team subscription. Each team seat uses
 //! only its own plan allowance; credits and overage are shared by the payer.
 
+pub mod composition;
 pub mod domain;
 pub mod inbound;
 pub mod outbound;
 
+pub use ai_usage::{AiFeature, AiUsageEnforcement};
 pub use domain::{
-    AllowanceDecision, BillingError, BillingPeriod, BillingService, BillingSettings,
-    CREDIT_PACKS_CENTS, DenyReason, Entitlement, PayerScope, PlanTier, TARGET_GROSS_MARGIN_BPS,
-    UsageSnapshot, list_rate_cents,
+    AdmissionFuture, AiAdmissionError, AiAdmissionService, AllowanceDecision,
+    BillingAdmissionService, BillingError, BillingPeriod, BillingService, BillingSettings,
+    CREDIT_PACKS_CENTS, DenyReason, DisabledAiAdmissionService, Entitlement, PayerScope, PlanTier,
+    TARGET_GROSS_MARGIN_BPS, UsageSnapshot, list_rate_cents,
 };

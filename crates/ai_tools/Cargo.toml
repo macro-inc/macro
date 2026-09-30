@@ -8,6 +8,7 @@ version = "0.1.0"
 test-support = []
 
 [dependencies]
+ai_billing = { path = "../ai_billing" }
 initiative = { path = "../initiative", default-features = false, features = ["postgres", "resources", "toolset"] }
 initiative_documents = { path = "../initiative_documents" }
 activity = { path = "../activity", default-features = false, features = ["ai_tools", "outbound"] }
