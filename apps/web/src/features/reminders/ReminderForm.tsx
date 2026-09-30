@@ -107,9 +107,12 @@ function toDateInput(date: Date): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
-/** `HH:MM` for a date in local time — the value a `<input type="time">` takes. */
+/** Native local time, retaining seconds when the instant carries them. */
 function toTimeInput(date: Date): string {
-  return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  const minuteTime = `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return date.getSeconds() === 0
+    ? minuteTime
+    : `${minuteTime}:${pad(date.getSeconds())}`;
 }
 
 /** Whether two picker recurrences say the same thing, ignoring day order. */
@@ -365,8 +368,7 @@ export function ReminderForm(props: ReminderFormProps) {
   });
 
   // What the schedule controls were seeded to, so an untouched edit can be told
-  // from a real change without depending on second-level precision the pickers
-  // do not carry.
+  // from a real change at the native picker's second-level precision.
   const initialRepeat = seed.repeat;
   const initialOnceDate = seed.onceDate;
   const initialOnceTime = seed.onceTime;
@@ -431,8 +433,7 @@ export function ReminderForm(props: ReminderFormProps) {
       return (
         typedWhenIsValid() &&
         date !== undefined &&
-        Math.trunc(date.getTime() / 60_000) ===
-          Math.trunc(initialOnceInstant.getTime() / 60_000)
+        date.getTime() === initialOnceInstant.getTime()
       );
     }
     return (
@@ -879,7 +880,10 @@ export function ReminderForm(props: ReminderFormProps) {
                           class="h-9 w-full rounded-md border border-edge-muted bg-control px-2 hover:bg-hover focus-visible:border-accent"
                           onChange={(value) => {
                             setWhenQuery('');
-                            setSelectedOnceInstant(undefined);
+                            const selected = selectedOnceInstant();
+                            if (!selected || toDateInput(selected) !== value) {
+                              setSelectedOnceInstant(undefined);
+                            }
                             setOnceDate(value);
                           }}
                         />

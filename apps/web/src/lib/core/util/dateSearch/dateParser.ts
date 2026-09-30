@@ -56,9 +56,8 @@ export function parseDurationString(input: string): ParsedDuration | null {
   // Date-language fields commonly phrase a duration as "in 30 minutes".
   // Keep the duration grammar itself small while accepting that natural
   // prefix everywhere the shared parser is used.
-  const s = normalized.startsWith('in ')
-    ? normalized.slice(3).trim()
-    : normalized;
+  const hasNaturalPrefix = normalized.startsWith('in ');
+  const s = hasNaturalPrefix ? normalized.slice(3).trim() : normalized;
   if (!s) return null;
 
   const firstLetter = s.search(/[a-z]/);
@@ -66,6 +65,11 @@ export function parseDurationString(input: string): ParsedDuration | null {
 
   const numPart = s.slice(0, firstLetter).trim();
   let unitPart = s.slice(firstLetter).trim() as TimeUnit;
+
+  // The duration DSL historically uses bare `m` for months, but in natural
+  // phrasing (`in 30m`) that abbreviation conventionally means minutes. Keep
+  // bare `30m` backward-compatible; `in 2mo` and `in 2 months` stay months.
+  if (hasNaturalPrefix && unitPart === 'm') unitPart = 'min';
 
   // Resolve word aliases to short units
   if (!UNITS.has(unitPart) && unitPart in UNIT_ALIASES) {

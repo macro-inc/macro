@@ -86,6 +86,24 @@ describe('one-shot scheduling', () => {
     });
   });
 
+  it('treats natural "in 30m" shorthand as minutes, not months', () => {
+    const { onSubmit } = renderForm({ initialDescription: 'Follow up' });
+
+    fireEvent.input(
+      screen.getByPlaceholderText('Try “tomorrow 9am” or “in 30 minutes”'),
+      { target: { value: 'in 30m' } }
+    );
+    fireEvent.click(
+      screen.getByText('in 30m (30 minutes from now)').closest('button')!
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Set reminder' }));
+
+    expect(onSubmit.mock.calls[0]?.[0].schedule).toEqual({
+      type: 'once',
+      remindAt: '2026-09-21T12:30:00.000Z',
+    });
+  });
+
   it('offers quick presets with their actual resolved times', () => {
     const { onSubmit } = renderForm({ initialDescription: 'Follow up' });
 
@@ -157,7 +175,7 @@ describe('one-shot scheduling', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Choose date & time' }));
     const time = screen.getByLabelText('Time') as HTMLInputElement;
 
-    expect(time.value).toBe('12:37');
+    expect(time.value).toBe('12:37:23');
     expect(time.step).toBe('1');
     expect(time.form?.checkValidity()).toBe(true);
     (
@@ -166,6 +184,51 @@ describe('one-shot scheduling', () => {
     expect(onSubmit.mock.calls[0]?.[0].schedule).toEqual({
       type: 'once',
       remindAt: '2026-09-21T12:37:23.000Z',
+    });
+  });
+
+  it('preserves preset seconds when only the Custom date changes', () => {
+    vi.setSystemTime(new Date('2026-09-21T12:07:23.000Z'));
+    const { onSubmit } = renderForm({ initialDescription: 'Exact follow up' });
+
+    fireEvent.click(screen.getByRole('button', { name: /In 30m.*12:37 PM/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Choose date & time' }));
+    fireEvent.click(screen.getByLabelText('Custom reminder date'));
+    fireEvent.click(screen.getByRole('gridcell', { name: '22' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Set reminder' }));
+
+    expect(onSubmit.mock.calls[0]?.[0].schedule).toEqual({
+      type: 'once',
+      remindAt: '2026-09-22T12:37:23.000Z',
+    });
+  });
+
+  it('saves a seconds-only edit as a schedule change', () => {
+    const original = {
+      type: 'once' as const,
+      remindAt: '2026-09-22T14:37:23.000Z',
+    };
+    const { onSubmit } = renderForm({
+      initialDescription: 'Exact follow up',
+      initialSchedule: original,
+      initialRemindAt: original.remindAt,
+      submitLabel: 'Save',
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Choose date & time' }));
+    fireEvent.input(screen.getByLabelText('Time'), {
+      target: { value: '14:37:24' },
+    });
+    const save = screen.getByRole('button', { name: 'Save' });
+    expect((save as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(save);
+
+    expect(onSubmit).toHaveBeenCalledWith({
+      description: 'Exact follow up',
+      schedule: {
+        type: 'once',
+        remindAt: '2026-09-22T14:37:24.000Z',
+      },
     });
   });
 
@@ -245,6 +308,42 @@ describe('one-shot scheduling', () => {
         submitLabel: 'Save',
       });
 
+      fireEvent.input(screen.getByLabelText('Reminder description'), {
+        target: { value: 'After the clocks change' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+      expect(onSubmit).toHaveBeenCalledWith({
+        description: 'After the clocks change',
+        schedule: secondFold,
+      });
+    } finally {
+      if (originalTimezone === undefined) delete process.env.TZ;
+      else process.env.TZ = originalTimezone;
+    }
+  });
+
+  it('keeps the second fall-back-hour instant when confirming the same date', () => {
+    const originalTimezone = process.env.TZ;
+    process.env.TZ = 'America/New_York';
+    try {
+      vi.setSystemTime(new Date('2026-10-31T12:00:00-04:00'));
+      const secondFold = {
+        type: 'once' as const,
+        remindAt: '2026-11-01T06:30:00.000Z',
+      };
+      const { onSubmit } = renderForm({
+        initialDescription: 'Before the clocks change',
+        initialSchedule: secondFold,
+        initialRemindAt: secondFold.remindAt,
+        submitLabel: 'Save',
+      });
+
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Choose date & time' })
+      );
+      fireEvent.click(screen.getByLabelText('Custom reminder date'));
+      fireEvent.click(screen.getByRole('gridcell', { selected: true }));
       fireEvent.input(screen.getByLabelText('Reminder description'), {
         target: { value: 'After the clocks change' },
       });
