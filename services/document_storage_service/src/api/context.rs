@@ -411,7 +411,10 @@ pub(crate) type DssMessagesState =
 
 /// Document discussion delivery shared by the message service and PDF annotation edits.
 pub(crate) type DssDiscussionDelivery = messages::domain::delivery::DiscussionDelivery<
-    messages::outbound::pg_discussion_context::PgDiscussionContext,
+    messages::outbound::pg_discussion_context::ParentDiscussionContext<
+        initiative::domain::lookup::InitiativeLookup<initiative::outbound::PgInitiativeRepo>,
+        PropertiesService,
+    >,
     messages::outbound::entity_access_audience::EntityAccessMessageAudience<EntityAccessService>,
     messages::outbound::connection_gateway::ConnectionGatewayMessages,
     messages::outbound::notification_sender::MessageNotificationSender<NotificationIngressType>,

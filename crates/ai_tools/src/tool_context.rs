@@ -295,7 +295,7 @@ pub fn build_channel_tool_context_with_side_effects(
         clients,
         dispatcher.clone(),
     );
-    build_channel_tool_context_with_dispatcher(pool, dispatcher, lexical_client, messages)
+    build_channel_tool_context_with_dispatcher(pool, dispatcher, messages)
 }
 
 /// Build the shared message service with the same delivery as the
