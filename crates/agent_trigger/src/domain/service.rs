@@ -5,6 +5,11 @@ use std::collections::HashSet;
 #[cfg(test)]
 mod test;
 
+#[cfg(feature = "admission")]
+use ai_billing::{AiAdmissionService, AiFeature, DisabledAiAdmissionService};
+#[cfg(feature = "admission")]
+use std::sync::Arc;
+
 use agent_session::domain::error::Result;
 use agent_session::domain::model::{AgentSession, AgentSessionId, ThreadSession};
 use agent_session::domain::ports::AgentSessionRepo;
@@ -170,6 +175,8 @@ pub struct AgentTriggerService<Repo, Bots, Teams, Channels, Replies, Judge, Hist
     replies: Replies,
     judge: Judge,
     history: History,
+    #[cfg(feature = "admission")]
+    admission: Arc<dyn AiAdmissionService>,
 }
 
 impl<Repo, Bots, Teams, Channels, Replies, Judge, History>
@@ -185,7 +192,7 @@ where
 {
     /// Creates a trigger service backed by session, bot, membership, and
     /// participation lookups.
-    pub const fn new(
+    pub fn new(
         sessions: Repo,
         bots: Bots,
         teams: Teams,
@@ -202,7 +209,17 @@ where
             replies,
             judge,
             history,
+            #[cfg(feature = "admission")]
+            admission: Arc::new(DisabledAiAdmissionService),
         }
+    }
+
+    /// Configure admission for implicit classification, including image captions.
+    /// Explicit mentions and deterministic reply routing are admitted downstream.
+    #[cfg(feature = "admission")]
+    pub fn with_admission(mut self, admission: Arc<dyn AiAdmissionService>) -> Self {
+        self.admission = admission;
+        self
     }
 
     /// Whether `posted` may address `bot_id` under the bot's current scope.
@@ -428,9 +445,9 @@ where
         };
         // Only a user implicitly addresses an agent; bot traffic must always
         // mention explicitly, or bots would relay each other forever.
-        if posted.sender.as_user().is_none() {
+        let Some(_user) = posted.sender.as_user() else {
             return Ok(None);
-        }
+        };
         let mut candidates = Vec::new();
         for session in self.sessions.find_all_for_thread(thread_id).await? {
             if session.thread_parent.as_ref() == Some(&posted.parent)
@@ -467,6 +484,15 @@ where
                 return Ok(None);
             }
         };
+
+        // The judge may caption attachments before classifying. Admit the whole
+        // optional operation before entering that port, never retrying through a
+        // different model on rejection. Returning no event preserves broker ack.
+        #[cfg(feature = "admission")]
+        if let Err(error) = self.admission.admit(_user, AiFeature::Automation).await {
+            tracing::info!(code = error.code(), "skipping agent trigger inference");
+            return Ok(None);
+        }
 
         if self
             .is_addressed_to_agent(posted, &self.transcript(posted, invocation, &session).await)
