@@ -27,6 +27,7 @@ import {
   on,
   onCleanup,
   splitProps,
+  untrack,
   useContext,
 } from 'solid-js';
 import { render } from 'solid-js/web';
@@ -272,6 +273,22 @@ function createFullCalendarController(
   >();
   const [listenForContentRegistrationChange, notifyContentRegistrationChange] =
     createSignal<void>(undefined, { equals: false });
+  let appliedOptions: CalendarOptions | undefined;
+  const handleDatesSet = (info: DatesSetArg) => {
+    setDateInfo(info);
+    untrack(getOptions).datesSet?.(info);
+  };
+  // Metadata identities must stay stable across event-only updates. Rebuilding
+  // them causes FullCalendar to remount unrelated headers and content slots.
+  const customRenderingMetaMap = createMemo(() => {
+    listenForContentRegistrationChange();
+    return Object.fromEntries(
+      [...contentRegistrations].map(([name, registration]) => [
+        name,
+        createSolidRenderingMeta(registration.generator, registration.owner),
+      ])
+    );
+  });
 
   const requestResize = () => {
     if (isUnmounting() || !calendar()) return;
@@ -294,12 +311,11 @@ function createFullCalendarController(
   };
 
   const buildOptions = createMemo(() => {
-    listenForContentRegistrationChange();
     return buildCalendarOptions(
       getOptions(),
-      contentRegistrations,
+      customRenderingMetaMap(),
       handleCustomRendering,
-      setDateInfo
+      handleDatesSet
     );
   });
 
@@ -308,8 +324,29 @@ function createFullCalendarController(
     if (!calendarInstance) return;
 
     const nextOptions = buildOptions();
+    const next = nextOptions.options as Record<string, unknown>;
+    const previous = (appliedOptions ?? {}) as Record<string, unknown>;
+    const changedOptionNames = [
+      ...new Set([...Object.keys(previous), ...Object.keys(next)]),
+    ].filter((name) => !Object.is(previous[name], next[name]));
+    const removedOptionNames = Object.keys(previous).filter(
+      (name) => !(name in next)
+    );
+    if (changedOptionNames.length === 0 && removedOptionNames.length === 0)
+      return;
+    appliedOptions = nextOptions.options;
     customRenderingManager.retainGeneratorNames(nextOptions.contentOptionNames);
-    calendarInstance.resetOptions(nextOptions.options);
+    // FullCalendar merges deltas over existing overrides. Removing a prop needs
+    // a full replacement to restore defaults, not an explicit undefined value.
+    if (removedOptionNames.length > 0) {
+      calendarInstance.resetOptions(nextOptions.options);
+      return;
+    }
+    // Event-only updates must not refine every option or remount content slots.
+    calendarInstance.resetOptions(
+      Object.fromEntries(changedOptionNames.map((name) => [name, next[name]])),
+      changedOptionNames
+    );
   };
 
   createEffect(on(getOptions, resetOptions, { defer: true }));
@@ -324,6 +361,7 @@ function createFullCalendarController(
       setResizeFrame(undefined);
     }
     calendar()?.destroy();
+    appliedOptions = undefined;
     setCalendar(undefined);
     setDateInfo(undefined);
     setHostElement(undefined);
@@ -346,6 +384,7 @@ function createFullCalendarController(
       setIsUnmounting(false);
       setHostElement(element);
       const initialOptions = buildOptions();
+      appliedOptions = initialOptions.options;
       customRenderingManager.retainGeneratorNames(
         initialOptions.contentOptionNames
       );
@@ -389,24 +428,13 @@ function createFullCalendarController(
 
 function buildCalendarOptions(
   rootOptions: FullCalendarOptions,
-  contentRegistrations: Map<SolidContentOptionName, ContentRegistration>,
+  customRenderingMetaMap: Record<string, SolidRenderingMeta>,
   handleCustomRendering: (rendering: AnyCustomRendering) => void,
-  setDateInfo: (dateInfo: DatesSetArg) => void
+  handleDatesSet: (dateInfo: DatesSetArg) => void
 ): BuiltCalendarOptions {
   const options = { ...rootOptions } as Record<string, unknown>;
-  const externalDatesSet = rootOptions.datesSet;
-  const customRenderingMetaMap: Record<string, SolidRenderingMeta> = {};
-
-  options.datesSet = (dateInfo: DatesSetArg) => {
-    setDateInfo(dateInfo);
-    externalDatesSet?.(dateInfo);
-  };
-
-  for (const [optionName, registration] of contentRegistrations) {
-    customRenderingMetaMap[optionName] = createSolidRenderingMeta(
-      registration.generator,
-      registration.owner
-    );
+  options.datesSet = handleDatesSet;
+  for (const optionName of Object.keys(customRenderingMetaMap)) {
     delete options[optionName];
   }
 

@@ -842,6 +842,32 @@ that path. Calendar navigation defaults to Day on phones and Week on desktop; th
 recent choice is remembered locally for navigation that does not specify a period. An
 opened event is reflected in the pane-owned `sN.calendar.eventId` search parameter.
 
+Period selection updates its label and route immediately. The active grid redraws
+on a deferred task; hidden neighboring periods follow on separate tasks. Calendar
+grids stay mounted and undimmed while occurrences load. An uncached range never
+shows events from the previous range. After a short delay, representative event
+skeletons appear without adding synthetic FullCalendar events. Week/Day use sparse
+blocks with varied start times and durations, plus separate all-day bars. Month mixes
+filled bars for all-day/multi-day-style entries with single subtle text lines for
+single-day timed-style entries, without placeholder dots or time chips. Patterns stay
+stable for each date and clear the date headers. Skeletons preserve the grid, scroll
+position, and navigation.
+Quick loads skip the skeletons. Real events lay out underneath during the brief
+minimum display, then fade in as the skeletons fade out. Changing period during a
+load carries feedback into the new cells without restarting the appearance delay.
+Background refreshes retain current events without skeletons or a transient loading
+pill. Provider sync and errors still show their own states. Verify delayed occurrence
+responses: switch Month/Week/Day rapidly and navigate without blanking the grid.
+Confirm mixed event shapes, stable positions, clean handoff, and an uncovered Retry.
+Reduced-motion mode disables pulses and transitions. The page stays busy until the
+handoff starts. Hidden pages do not animate. Resize to confirm skeleton alignment.
+
+A single period arrow retains its slide. Rapid arrow clicks and period hotkeys
+accumulate against the requested date and interrupt unfinished slides, without
+waiting for event responses or hidden-page redraws. Verify repeated forward clicks
+and mixed directions reach the cumulative date while events are still loading.
+Touch swipes retain their page-readiness gates.
+
 Quick-call creation, incoming invitations, Live lists, Macro meeting links, and
 the `/app/meet/*` routes require the PostHog flag `enable-quick-calls`. While the
 flag loads or is off, those controls stay hidden and meeting routes do not mount
