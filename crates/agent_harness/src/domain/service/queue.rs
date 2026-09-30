@@ -600,7 +600,22 @@ where
             return Ok(CommandOutcome::Completed);
         }
         let session = self.sessions.get_session(session_id).await?;
-        self.admit_session(&session).await?;
+        if let Err(error) = self.admit_session(&session).await {
+            // Forwarding acknowledges bus acceptance before this worker runs.
+            // Publish even an ingress refusal so the submitting replica hears it.
+            if let HarnessError::Admission(failure) = &error {
+                self.publish_command_rejected(
+                    session_id,
+                    command.id,
+                    command.actor.clone(),
+                    None,
+                    *failure,
+                )
+                .await;
+            }
+            self.reject_waiting_on_denial(session_id, &error).await?;
+            return Err(error);
+        }
         let prompt = match &command.action {
             AgentAction::Prompt(prompt) => Some(prompt.prompt.clone()),
             _ => None,
@@ -709,6 +724,7 @@ where
         actor: Option<&MacroUserIdStr<'static>>,
         announce: Option<AnnounceOrigin>,
     ) -> Result<()> {
+        self.revalidate_queue(session_id).await?;
         if let Err(error) = self
             .deliver(
                 session_id,
@@ -728,6 +744,9 @@ where
             );
         }
 
+        // Stop may have waited for a runtime reconnect; check again before
+        // posting a pending reply for the waiting follow-up.
+        self.revalidate_queue(session_id).await?;
         // Front of the queue, so the next prompt turn is this one's.
         let prompted_message_id = self.sessions.next_prompt_message_id(session_id).await?;
         let announcement = self
@@ -762,7 +781,7 @@ where
 
     /// Persist after a working-copy mutation. A failed write reloads the last
     /// good row so this process does not keep a queue the store never saw.
-    async fn persist_or_rollback(&self, session_id: AgentSessionId) -> Result<()> {
+    pub(super) async fn persist_or_rollback(&self, session_id: AgentSessionId) -> Result<()> {
         if let Err(error) = self.write_queue(session_id).await {
             if let Err(reload) = self.reload_queue(session_id).await {
                 tracing::error!(
@@ -778,15 +797,15 @@ where
 
     /// Put a claimed entry back and persist. A persist failure here loses the
     /// in-flight item on the next restart — the same as losing the turn mark.
-    async fn requeue_claimed(&self, session_id: AgentSessionId, entry: QueuedEntry) {
+    async fn requeue_claimed(&self, session_id: AgentSessionId, entry: QueuedEntry) -> Result<()> {
         self.queues.requeue_front(session_id, entry);
-        if let Err(error) = self.write_queue(session_id).await {
+        self.write_queue(session_id).await.inspect_err(|error| {
             tracing::error!(
                 error = ?error,
                 %session_id,
                 "failed to persist a requeued agent session action"
             );
-        }
+        })
     }
 
     /// Replace the working copy from the session store.
@@ -866,6 +885,10 @@ where
             self.publish_queue(session_id).await;
             return Ok(Dispatch::QueueEmpty);
         }
+        if self.queues.list(session_id).is_empty() {
+            return Ok(Dispatch::QueueEmpty);
+        }
+        self.revalidate_queue(session_id).await?;
         let Some(mut entry) = self.queues.claim_next(session_id) else {
             return Ok(Dispatch::QueueEmpty);
         };
@@ -883,7 +906,7 @@ where
         let prompted_message_id = match self.sessions.next_prompt_message_id(session_id).await {
             Ok(message_id) => message_id,
             Err(error) => {
-                self.requeue_claimed(session_id, entry).await;
+                self.requeue_claimed(session_id, entry).await?;
                 return Err(error.into());
             }
         };
@@ -902,10 +925,15 @@ where
             )
             .await
         {
-            self.requeue_claimed(session_id, entry).await;
+            self.requeue_claimed(session_id, entry).await?;
             return Err(error);
         }
 
+        if let Err(error) = self.admit_session_id(session_id).await {
+            self.requeue_claimed(session_id, entry).await?;
+            self.reject_waiting_on_denial(session_id, &error).await?;
+            return Err(error);
+        }
         if entry.announced.is_none() {
             let announcement = match self
                 .announcement(
@@ -919,7 +947,7 @@ where
             {
                 Ok(announcement) => announcement,
                 Err(error) => {
-                    self.requeue_claimed(session_id, entry).await;
+                    self.requeue_claimed(session_id, entry).await?;
                     return Err(error);
                 }
             };
@@ -927,7 +955,7 @@ where
                 match self.announcer.announce(announcement).await {
                     Ok(announced) => entry.announced = Some(announced.message_id),
                     Err(error) => {
-                        self.requeue_claimed(session_id, entry).await;
+                        self.requeue_claimed(session_id, entry).await?;
                         return Err(error);
                     }
                 }
@@ -964,7 +992,8 @@ where
                 Ok(Dispatch::Dispatched)
             }
             Err(error) => {
-                self.requeue_claimed(session_id, entry).await;
+                self.requeue_claimed(session_id, entry).await?;
+                self.reject_waiting_on_denial(session_id, &error).await?;
                 Err(error)
             }
         }

@@ -6,6 +6,7 @@ use model_owner::Owner;
 #[derive(Default)]
 struct AdmissionMock {
     failure: Mutex<Option<AiAdmissionError>>,
+    responses: Mutex<std::collections::VecDeque<Option<AiAdmissionError>>>,
     calls: Mutex<Vec<(String, AiFeature)>>,
 }
 
@@ -16,7 +17,12 @@ impl AiAdmissionService for AdmissionMock {
         feature: AiFeature,
     ) -> AdmissionFuture<'a> {
         self.calls.lock().unwrap().push((user.to_string(), feature));
-        let failure = *self.failure.lock().unwrap();
+        let failure = self
+            .responses
+            .lock()
+            .unwrap()
+            .pop_front()
+            .unwrap_or(*self.failure.lock().unwrap());
         Box::pin(async move { failure.map_or(Ok(()), Err) })
     }
 }
@@ -82,7 +88,14 @@ fn assert_no_provisioning(service: &TestHarness) {
     assert_eq!(service.inner.containers.resumed(), 0);
     assert!(service.inner.egress.provisioned().is_empty());
     assert!(service.inner.announcer.announced().is_empty());
-    assert!(service.inner.lifecycle_publisher.published().is_empty());
+    assert!(
+        service
+            .inner
+            .lifecycle_publisher
+            .published()
+            .iter()
+            .all(|event| { matches!(event, AgentSessionLifecycleEvent::CommandRejected(_)) })
+    );
 }
 
 #[tokio::test]
@@ -249,6 +262,11 @@ async fn authorized_forwarded_commands_still_require_admission() {
     assert!(matches!(result, Err(HarnessError::Admission(_))));
     assert_eq!(admission.calls.lock().unwrap().len(), 1);
     assert_eq!(service.inner.prompt_context.authorized().len(), 1);
+    let events = service.inner.lifecycle_publisher.published();
+    assert!(
+        matches!(events.as_slice(), [AgentSessionLifecycleEvent::CommandRejected(event)]
+        if event.failure.code == denied().code() && !event.failure.retryable)
+    );
     assert_no_provisioning(&service);
 }
 
@@ -358,6 +376,356 @@ async fn non_spending_controls_and_queue_removal_remain_available() {
         assert!(!matches!(result, Err(HarnessError::Admission(_))));
     }
     assert_eq!(admission.calls.lock().unwrap().len(), 1);
+}
+
+async fn enqueue_waiting(service: &TestHarness, id: AgentSessionId) -> Vec<AgentActionId> {
+    service.inner.busy.admit(id);
+    let mut ids = Vec::new();
+    for prompt in ["first", "second"] {
+        let command = forward_message(prompt);
+        ids.push(command.id);
+        assert_eq!(
+            service
+                .execute_here(id, HarnessCommand::Deliver(command))
+                .await
+                .unwrap(),
+            CommandOutcome::Queued
+        );
+    }
+    ids
+}
+
+fn turn_ended() -> HarnessCommand {
+    HarnessCommand::Turn(TurnSignal::TurnEnded {
+        turn: agent_fold::domain::model::TurnId(0),
+        action_id: None,
+        stop: agent_fold::domain::model::StopReason::EndTurn,
+        last_text: None,
+    })
+}
+
+fn rejected_ids(service: &TestHarness) -> Vec<AgentActionId> {
+    service
+        .inner
+        .lifecycle_publisher
+        .published()
+        .into_iter()
+        .filter_map(|event| match event {
+            AgentSessionLifecycleEvent::CommandRejected(event) => {
+                assert_eq!(event.failure.code, denied().code());
+                assert!(!event.failure.retryable);
+                Some(event.action_id)
+            }
+            AgentSessionLifecycleEvent::TurnStarted(_) => panic!("rejected work started a turn"),
+            _ => None,
+        })
+        .collect()
+}
+
+#[tokio::test]
+async fn enqueue_then_exhaust_rejects_all_waiting_work_once_even_after_restart() {
+    for restart in [false, true] {
+        let (service, repo, admission) = bench(None);
+        let id = session(&repo, BotId::TEST_A, "in-memory", Owner::User(sender())).await;
+        let ids = enqueue_waiting(&service, id).await;
+        *admission.failure.lock().unwrap() = Some(denied());
+        let service = if restart {
+            harness_sharing_repo(repo.clone()).with_admission(admission.clone())
+        } else {
+            service
+        };
+        assert!(matches!(service.execute_here(id, turn_ended()).await,
+            Err(HarnessError::Admission(error)) if error == denied()));
+        assert_eq!(rejected_ids(&service), ids);
+        assert!(!service.inner.busy.is_pending(id));
+        assert!(repo.list_queued_actions(id).await.unwrap().is_empty());
+        assert!(service.inner.queues.list(id).is_empty());
+        assert!(service.inner.prompt_composer.calls().is_empty());
+        assert_no_provisioning(&service);
+        // Empty-queue events neither recheck billing nor repeat rejection facts.
+        let calls = admission.calls.lock().unwrap().len();
+        service.execute_here(id, turn_ended()).await.unwrap();
+        assert_eq!(admission.calls.lock().unwrap().len(), calls);
+        assert_eq!(rejected_ids(&service), ids);
+    }
+}
+
+#[tokio::test]
+async fn billing_outage_preserves_fifo_and_retries_only_on_a_new_event() {
+    let (service, repo, admission) = bench(None);
+    let id = session(&repo, BotId::TEST_A, "in-memory", Owner::User(sender())).await;
+    let ids = enqueue_waiting(&service, id).await;
+    *admission.failure.lock().unwrap() = Some(AiAdmissionError::Unavailable);
+    for _ in 0..3 {
+        let calls = admission.calls.lock().unwrap().len();
+        assert!(matches!(
+            service.execute_here(id, turn_ended()).await,
+            Err(HarnessError::Admission(AiAdmissionError::Unavailable))
+        ));
+        tokio::task::yield_now().await;
+        assert_eq!(admission.calls.lock().unwrap().len(), calls + 1);
+        assert!(!service.inner.busy.is_pending(id));
+        assert_eq!(
+            repo.list_queued_actions(id)
+                .await
+                .unwrap()
+                .iter()
+                .map(|entry| entry.action_id)
+                .collect::<Vec<_>>(),
+            ids
+        );
+        assert!(service.inner.lifecycle_publisher.published().is_empty());
+        assert!(service.inner.prompt_composer.calls().is_empty());
+        assert_no_provisioning(&service);
+    }
+    let restarted = harness_sharing_repo(repo.clone()).with_admission(admission.clone());
+    assert!(matches!(
+        restarted.execute_here(id, turn_ended()).await,
+        Err(HarnessError::Admission(AiAdmissionError::Unavailable))
+    ));
+    *admission.failure.lock().unwrap() = Some(denied());
+    assert!(restarted.execute_here(id, turn_ended()).await.is_err());
+    assert_eq!(rejected_ids(&restarted), ids);
+}
+
+#[tokio::test]
+async fn admission_changes_during_dispatch_never_reach_the_runtime() {
+    for failure in [denied(), AiAdmissionError::Unavailable] {
+        // Fail before composition, before announcement, or after announcement
+        // immediately before delivery. The last case must clean up the reply.
+        for allowed_checks in 0..3 {
+            let (service, repo, admission) = bench(None);
+            let id = session(&repo, BotId::TEST_A, "in-memory", Owner::User(sender())).await;
+            let ids = enqueue_waiting(&service, id).await;
+            *admission.failure.lock().unwrap() = Some(failure);
+            admission
+                .responses
+                .lock()
+                .unwrap()
+                .extend(vec![None; allowed_checks]);
+            assert!(matches!(service.execute_here(id, turn_ended()).await,
+                Err(HarnessError::Admission(error)) if error == failure));
+            assert!(!service.inner.busy.is_pending(id));
+            assert_eq!(service.inner.containers.resumed(), 0);
+            assert!(service.inner.egress.provisioned().is_empty());
+            assert_eq!(
+                service.inner.prompt_composer.calls().len(),
+                usize::from(allowed_checks > 0)
+            );
+            let announced = service.inner.announcer.announced_messages();
+            assert_eq!(announced.len(), usize::from(allowed_checks == 2));
+            let remaining = repo.list_queued_actions(id).await.unwrap();
+            if failure.is_retryable() {
+                assert_eq!(
+                    remaining
+                        .iter()
+                        .map(|entry| entry.action_id)
+                        .collect::<Vec<_>>(),
+                    ids
+                );
+                assert_eq!(
+                    remaining[0].announced_message_id,
+                    announced.first().map(|message| message.message_id)
+                );
+                assert!(service.inner.lifecycle_publisher.published().is_empty());
+                assert!(service.inner.announcer.resolved().is_empty());
+                // Retry while still unavailable must not compose or announce again.
+                assert!(service.execute_here(id, turn_ended()).await.is_err());
+                assert_eq!(service.inner.announcer.announced_messages(), announced);
+                *admission.failure.lock().unwrap() = Some(denied());
+                assert!(service.execute_here(id, turn_ended()).await.is_err());
+            } else {
+                assert!(remaining.is_empty());
+            }
+            assert_eq!(rejected_ids(&service), ids);
+            let resolved = service.inner.announcer.resolved();
+            assert_eq!(resolved.len(), announced.len());
+            if let Some(reply) = resolved.first() {
+                assert_eq!(reply.message_id, announced[0].message_id);
+                assert_eq!(reply.outcome, crate::domain::model::ReplyOutcome::Failed);
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn denying_a_steering_follow_up_does_not_cancel_the_running_turn() {
+    let (service, repo, admission) = bench(None);
+    let id = session(&repo, BotId::TEST_A, "in-memory", Owner::User(sender())).await;
+    let running = crate::domain::queue::InFlightTurn {
+        action_id: AgentActionId::mint(),
+        turn: agent_fold::domain::model::TurnId(0),
+        actor: Some(sender()),
+        announce: None,
+        announcement_message_id: None,
+        dispatched_at: chrono::Utc::now(),
+    };
+    service.inner.busy.mark_turn(id, running.clone());
+    // Enqueue succeeds, but steering's revalidation denies before Stop or chip.
+    admission.responses.lock().unwrap().push_back(None);
+    *admission.failure.lock().unwrap() = Some(denied());
+    let command = forward_message("interrupt");
+    let action_id = command.id;
+    assert!(matches!(
+        service
+            .execute_here(id, HarnessCommand::Deliver(command))
+            .await,
+        Err(HarnessError::Admission(_))
+    ));
+    assert_eq!(
+        service.inner.busy.turn(id).unwrap().action_id,
+        running.action_id
+    );
+    assert_eq!(rejected_ids(&service), [action_id]);
+    assert!(repo.list_queued_actions(id).await.unwrap().is_empty());
+    assert_no_provisioning(&service);
+}
+
+#[tokio::test]
+async fn restored_announced_work_resolves_without_inventing_a_turn() {
+    let (service, repo, admission) = bench(None);
+    let id = session(&repo, BotId::TEST_A, "in-memory", Owner::User(sender())).await;
+    let ids = enqueue_waiting(&service, id).await;
+    // The prompt was announced but billing failed immediately before dispatch.
+    admission.responses.lock().unwrap().extend([None, None]);
+    *admission.failure.lock().unwrap() = Some(AiAdmissionError::Unavailable);
+    assert!(service.execute_here(id, turn_ended()).await.is_err());
+    let announcement = service.inner.announcer.announced_messages()[0];
+    let restarted = harness_sharing_repo(repo.clone()).with_admission(admission.clone());
+    *admission.failure.lock().unwrap() = Some(denied());
+    assert!(restarted.execute_here(id, turn_ended()).await.is_err());
+    assert_eq!(rejected_ids(&restarted), ids);
+    let resolved = restarted.inner.announcer.resolved();
+    assert_eq!(resolved.len(), 1);
+    assert_eq!(resolved[0].message_id, announcement.message_id);
+    assert!(repo.list_queued_actions(id).await.unwrap().is_empty());
+    assert_no_provisioning(&restarted);
+}
+
+#[tokio::test]
+async fn recovery_dispatches_the_original_head_without_duplicate_announcements() {
+    let (service, repo, admission) = bench(None);
+    let id = disconnected_session(&repo, &service.inner.containers).await;
+    let ids = enqueue_waiting(&service, id).await;
+    admission.responses.lock().unwrap().extend([None, None]);
+    *admission.failure.lock().unwrap() = Some(AiAdmissionError::Unavailable);
+    assert!(service.execute_here(id, turn_ended()).await.is_err());
+    assert_eq!(service.inner.announcer.announced().len(), 1);
+    assert_eq!(service.inner.containers.resumed(), 0);
+    *admission.failure.lock().unwrap() = None;
+    let dispatch = service.execute_here(id, turn_ended());
+    let resume = async {
+        while service.inner.containers.resumed() == 0 {
+            tokio::task::yield_now().await;
+        }
+        let container = service.inner.containers.container(id).unwrap();
+        complete_resume(&container).await;
+        container.agent().wait_for_requests(3).await;
+        container
+    };
+    let (result, container) = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        tokio::join!(dispatch, resume)
+    })
+    .await
+    .unwrap();
+    result.unwrap();
+    assert_eq!(
+        prompts(&container.agent()),
+        [vec![ContentBlock::from(context_prompt("first"))]]
+    );
+    assert_eq!(service.inner.busy.turn(id).unwrap().action_id, ids[0]);
+    let remaining = repo.list_queued_actions(id).await.unwrap();
+    assert_eq!(remaining.len(), 1);
+    assert_eq!(remaining[0].action_id, ids[1]);
+    assert_eq!(service.inner.announcer.announced().len(), 1);
+    assert!(service.inner.announcer.resolved().is_empty());
+}
+
+#[tokio::test]
+async fn rejection_persistence_failure_keeps_work_and_defers_reply_resolution() {
+    use crate::domain::queue::QueuedEntry;
+    use agent_session::domain::service::MockAgentSessionService;
+
+    for reload_fails in [false, true] {
+        let id = AgentSessionId::new();
+        let command = forward_message("keep until the rejection is durable");
+        let entry = QueuedEntry {
+            action_id: command.id,
+            action: command.action,
+            actor: command.actor,
+            announce: command.announce,
+            announced: Some(macro_uuid::generate_uuid_v7()),
+            created_at: chrono::Utc::now(),
+        };
+        let stored = entry.to_stored().unwrap();
+        let mut sessions = MockAgentSessionService::new();
+        sessions
+            .expect_replace_queued_actions()
+            .times(2)
+            .returning(|_, entries| {
+                assert!(entries.is_empty());
+                Box::pin(async {
+                    Err(AgentSessionError::Unknown(anyhow::anyhow!(
+                        "write unavailable"
+                    )))
+                })
+            });
+        sessions
+            .expect_list_queued_actions()
+            .times(2)
+            .returning(move |_| {
+                let stored = stored.clone();
+                Box::pin(async move {
+                    if reload_fails {
+                        Err(AgentSessionError::Unknown(anyhow::anyhow!(
+                            "read unavailable"
+                        )))
+                    } else {
+                        Ok(vec![stored])
+                    }
+                })
+            });
+        let service = AgentHarnessService::new(
+            sessions,
+            MockContainerManager::new(),
+            AnnouncerMock::new(),
+            TestConnections::new(MirrorBindings, RuntimeRegistry::new()),
+            PromptContextMock::default(),
+            PromptComposerMock::default(),
+            EgressProvisionerMock::new(),
+            NoPeers,
+            KindDefaultPolicies,
+            HarnessDefaultCodingAgents,
+            HarnessDefaults::new(SessionDefaults {
+                bot_id: BotId::TEST_A,
+                model: "model".into(),
+                harness: "in-memory".into(),
+                repo_url: None,
+            }),
+            RecordingLifecyclePublisher::new(),
+            crate::domain::pending::PendingCommands::new(),
+            PromptMentionsMock::new(),
+            NotifierMock::new(),
+        );
+        service.inner.queues.enqueue(id, entry.clone()).unwrap();
+        service.inner.busy.admit(id);
+        for _ in 0..2 {
+            assert!(matches!(
+                service
+                    .inner
+                    .reject_waiting_on_denial(id, &HarnessError::Admission(denied()))
+                    .await,
+                Err(HarnessError::Session(AgentSessionError::Unknown(_)))
+            ));
+            assert!(!service.inner.busy.is_pending(id));
+            let waiting = service.inner.queues.snapshot(id);
+            assert_eq!(waiting.len(), 1);
+            assert_eq!(waiting[0].action_id, entry.action_id);
+            assert_eq!(waiting[0].announced, entry.announced);
+            assert!(service.inner.lifecycle_publisher.published().is_empty());
+            assert!(service.inner.announcer.resolved().is_empty());
+        }
+    }
 }
 
 #[test]

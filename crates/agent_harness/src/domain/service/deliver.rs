@@ -58,6 +58,10 @@ where
             announce: _,
         } = command;
 
+        if action.occupies_turn() {
+            self.admit_session_id(session_id).await?;
+        }
+
         match self
             .sessions
             .send_action(session_id, actor.clone(), action.clone(), id)
@@ -136,6 +140,9 @@ where
                         )
                         .await?;
                     self.restore_queue(session_id).await?;
+                }
+                if action.occupies_turn() {
+                    self.admit_session(&session).await?;
                 }
                 self.sessions
                     .send_action(session_id, actor, action, id)
@@ -282,11 +289,27 @@ where
         let Some(turn) = turn else {
             return;
         };
-        let (Some(message_id), Some(origin), Some(triggered_by)) = (
+        self.resolve_announced_reply(
+            session_id,
             turn.announcement_message_id,
             turn.announce.as_ref(),
             turn.actor.as_ref(),
-        ) else {
+            outcome,
+        )
+        .await;
+    }
+
+    /// Resolve an announcement even when its queued command never opened a turn.
+    pub(super) async fn resolve_announced_reply(
+        &self,
+        session_id: AgentSessionId,
+        message_id: Option<macro_uuid::Uuid>,
+        origin: Option<&AnnounceOrigin>,
+        actor: Option<&MacroUserIdStr<'static>>,
+        outcome: ReplyOutcome,
+    ) {
+        let (Some(message_id), Some(origin), Some(triggered_by)) = (message_id, origin, actor)
+        else {
             return;
         };
         let session = match self.sessions.get_session(session_id).await {
