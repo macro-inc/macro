@@ -464,6 +464,14 @@ native offline archive support therefore requires a full app build, not just OTA
 
 ### Cached Mail filtering
 
+Performance check: switch Signal → All twice against a large synchronized cache.
+Dense local pages use bounded sort-index candidates rather than sorting the entire
+mailbox. Sparse filters and large timestamp ties retain the exact fallback plan.
+A filter result, row fragments, and final revision that agree must be accepted even
+when background hydration advanced past the revision observed before the request;
+that alone must not trigger another filter scan. Also verify local Load more,
+same-timestamp ordering, and pending archive/read changes.
+
 With GraphQL caching enabled (browser or native Tauri) and the email metadata backfill synchronized,
 All, Signal, Noise, Drafts, Sent, Calendar, and Shared support tab changes and new
 filter combinations while offline: account selection
