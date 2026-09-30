@@ -2,6 +2,7 @@
 // Uses the installed debug APK and its real native bridge; sends no messages.
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { screenPointForInput, testShareTokens } from './smoke-utils.mjs';
 
 const serial = process.env.ANDROID_SERIAL;
 if (!serial)
@@ -99,6 +100,51 @@ const invoke = (command, args = {}) =>
     `window.__TAURI_INTERNALS__.invoke(${JSON.stringify(`plugin:android-mobile|${command}`)},${JSON.stringify(args)})`
   );
 const results = {};
+const runId = crypto.randomUUID();
+const imageName = `smoke-${runId}.png`;
+const sharedText = `https://example.com/android-smoke/${runId}`;
+const shareTokens = new Set();
+let sharesStarted = false;
+let exportToken;
+let clipboardPath;
+
+function trackShares(files) {
+  for (const token of testShareTokens(files, { imageName, sharedText })) {
+    shareTokens.add(token);
+  }
+  return files;
+}
+
+async function pendingShares() {
+  return trackShares((await invoke('getPendingShares')).files);
+}
+
+async function discoverTestShares() {
+  // The second batch may still be behind another share, or an assertion may
+  // fail before its tokens reach JS. Read atomic manifests without dequeuing.
+  // Wait for already-dispatched intents on the plugin's serial worker.
+  await pendingShares();
+  const directory = 'cache/android-share-inbox';
+  const names = text(
+    await adbRun('shell', 'run-as', packageName, 'ls', directory)
+  );
+  for (const name of names.split('\n')) {
+    if (!/^[a-f0-9-]+\.json$/.test(name)) continue;
+    const files = JSON.parse(
+      text(
+        await adbRun(
+          'shell',
+          'run-as',
+          packageName,
+          'cat',
+          `${directory}/${name}`
+        )
+      )
+    );
+    trackShares(files);
+  }
+}
+
 await mkdir(output, { recursive: true });
 await connect(true);
 const keyboardSetting = text(
@@ -165,7 +211,23 @@ try {
     field.style.cssText='position:fixed;top:100px;left:20px;width:300px;height:80px;z-index:2147483647;background:white;color:black;font-size:20px';
     document.body.append(field);
   })()`);
-  await adbRun('shell', 'input', 'tap', '250', '340');
+  const geometry = await evaluate(`(() => {
+    const rect = document.getElementById('android-smoke-input').getBoundingClientRect();
+    const viewport = window.visualViewport;
+    return {rect: {left:rect.left,top:rect.top,width:rect.width,height:rect.height},
+      viewport: {left:viewport?.offsetLeft ?? 0,top:viewport?.offsetTop ?? 0,
+        width:viewport?.width ?? innerWidth,height:viewport?.height ?? innerHeight}};
+  })()`);
+  const hierarchyPath = `/data/local/tmp/macro-android-smoke-${runId}.xml`;
+  let hierarchy;
+  try {
+    await adbRun('shell', 'uiautomator', 'dump', hierarchyPath);
+    hierarchy = text(await adbRun('shell', 'cat', hierarchyPath));
+  } finally {
+    await adbRun('shell', 'rm', '-f', hierarchyPath);
+  }
+  const { x, y } = screenPointForInput(hierarchy, packageName, geometry);
+  await adbRun('shell', 'input', 'tap', String(x), String(y));
   let shown;
   for (let attempt = 0; attempt < 40; attempt++) {
     shown = await invoke('getInsets');
@@ -297,12 +359,14 @@ try {
   const png =
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=';
   const { token } = await invoke('beginExport', {
-    name: 'smoke.png',
+    name: imageName,
     mimeType: 'image/png',
   });
+  exportToken = token;
   await invoke('appendExport', { token, data: png });
   await invoke('finishExport', { token, action: 'copy' });
   const clipboard = await invoke('stageClipboardImage');
+  clipboardPath = clipboard.previewPath;
   assert.equal(clipboard.size, 68);
   assert.equal(clipboard.mimeType, 'image/png');
   const copied = await adbRun(
@@ -316,7 +380,8 @@ try {
   results.clipboard = { exactBytes: true, size: clipboard.size };
   console.log('Clipboard bytes passed');
 
-  const uri = `content://${packageName}.fileprovider/exports/${token}/smoke.png`;
+  const uri = `content://${packageName}.fileprovider/exports/${token}/${imageName}`;
+  sharesStarted = true;
   await adbRun(
     'shell',
     'am',
@@ -332,8 +397,9 @@ try {
     uri
   );
   await pause(500);
-  const first = (await invoke('getPendingShares')).files;
+  const first = await pendingShares();
   assert.equal(first.length, 1);
+  assert.equal(first[0].name, imageName);
   assert.equal(first[0].size, 68);
   let uploaded;
   const receiver = Bun.serve({
@@ -366,10 +432,7 @@ try {
   } finally {
     receiver.stop(true);
   }
-  assert.equal(
-    (await invoke('getPendingShares')).files[0].token,
-    first[0].token
-  );
+  assert.equal((await pendingShares())[0].token, first[0].token);
   await adbRun(
     'shell',
     'am',
@@ -382,11 +445,11 @@ try {
     'text/plain',
     '--es',
     'android.intent.extra.TEXT',
-    'https://example.com/android-smoke'
+    sharedText
   );
   await pause(500);
   assert.equal(
-    (await invoke('getPendingShares')).files[0].token,
+    (await pendingShares())[0].token,
     first[0].token,
     'Second share must not replace an open draft'
   );
@@ -394,28 +457,59 @@ try {
   await adbRun('shell', 'am', 'start', '-n', `${packageName}/.MainActivity`);
   await connect();
   assert.equal(
-    (await invoke('getPendingShares')).files[0].token,
+    (await pendingShares())[0].token,
     first[0].token,
     'Cold startup retains the share exactly once'
   );
-  await invoke('clearShares', { tokens: first.map((file) => file.token) });
-  const second = (await invoke('getPendingShares')).files;
+  await invoke('clearShares', {
+    tokens: testShareTokens(first, { imageName, sharedText }),
+  });
+  const second = await pendingShares();
   assert.equal(second.length, 1);
-  assert.equal(second[0].sharedText, 'https://example.com/android-smoke');
-  await invoke('clearShares', { tokens: second.map((file) => file.token) });
+  assert.equal(second[0].sharedText, sharedText);
+  await invoke('clearShares', {
+    tokens: testShareTokens(second, { imageName, sharedText }),
+  });
   assert.equal((await invoke('getPendingShares')).files.length, 0);
   results.shares = { queued: true, survivedColdStart: true, cleared: true };
-  await adbRun('shell', 'run-as', packageName, 'rm', clipboard.previewPath);
-  await adbRun(
-    'shell',
-    'run-as',
-    packageName,
-    'rm',
-    `cache/android-exports/${token}/smoke.png`
-  );
   await writeFile(`${output}/results.json`, JSON.stringify(results, null, 2));
   console.log(JSON.stringify(results, null, 2));
 } finally {
+  // A failure in one cleanup must not skip the others or display restoration.
+  const clean = async (action) => {
+    try {
+      await action();
+    } catch (error) {
+      console.error('Smoke cleanup failed:', error);
+      process.exitCode = 1;
+    }
+  };
+  if (sharesStarted) {
+    await clean(discoverTestShares);
+  }
+  if (shareTokens.size > 0) {
+    await clean(() => invoke('clearShares', { tokens: [...shareTokens] }));
+  }
+  if (clipboardPath) {
+    await clean(() =>
+      adbRun('shell', 'run-as', packageName, 'rm', '-f', clipboardPath)
+    );
+  }
+  if (exportToken) {
+    await clean(() => invoke('discardExport', { token: exportToken }));
+    // Finished exports are no longer in the plugin's active map, and the map
+    // is lost on restart. Remove just this run's export directory.
+    await clean(() =>
+      adbRun(
+        'shell',
+        'run-as',
+        packageName,
+        'rm',
+        '-rf',
+        `cache/android-exports/${exportToken}`
+      )
+    );
+  }
   try {
     await evaluate(`document.getElementById('android-smoke-input')?.remove()`);
   } catch {}

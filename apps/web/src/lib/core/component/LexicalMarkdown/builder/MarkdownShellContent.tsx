@@ -5,7 +5,7 @@ export function MarkdownShellContent(props: {
   connectRoot: (element: HTMLDivElement) => void;
   disabled: boolean;
   showPlaceholder: boolean;
-  placeholder: string;
+  placeholder: string | undefined;
 }) {
   return (
     <>
@@ -16,14 +16,14 @@ export function MarkdownShellContent(props: {
         role="textbox"
         aria-multiline="true"
         aria-readonly={props.disabled}
-        aria-label={props.placeholder === '...' ? 'Message' : props.placeholder}
+        aria-label={props.placeholder || 'Message'}
       />
       <Show when={props.showPlaceholder}>
         <div
           data-markdown-placeholder
           class="pointer-events-none text-ink-placeholder absolute top-0"
         >
-          <p class="my-1.5 pointer-events-none">{props.placeholder}</p>
+          <p class="my-1.5 pointer-events-none">{props.placeholder ?? '...'}</p>
         </div>
       </Show>
     </>

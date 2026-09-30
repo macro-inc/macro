@@ -27,12 +27,20 @@ Sharing text, links, images, or documents from another Android app opens Share t
 Macro after login. A second incoming share waits behind the current one. Back or
 outside dismissal asks **Discard this share?**; **Keep editing** preserves the
 message and attachments. Failed uploads show **Retry** and block Send until they
-succeed. **Cancel** explicitly discards the current share. Send
+succeed. Send stays disabled while posting and after success, including when
+native queue cleanup fails; retrying cleanup must not post the message again.
+Test rapid repeated taps with delayed cleanup and retry after a failed send.
+**Cancel** explicitly discards the current share. Send
 is a real channel/DM mutation: do not use it in verification without authorization.
 Android attachment controls open the system picker. File downloads open Android's
 Save dialog; image share actions open its share chooser. Canceling either should
 return to the existing editor without changing its draft. Large exports show
 preparation progress and **Cancel**; a canceled save must not report success.
+
+The native share sheet is shared with iOS. When testing iOS email attachments,
+paste an image and select one from Photos: plugins without a native checksum
+must hash the staged image bytes, retain the real attachment size, and upload
+successfully rather than hashing the empty JavaScript placeholder.
 
 ## Direct URLs (all under the frontend origin)
 

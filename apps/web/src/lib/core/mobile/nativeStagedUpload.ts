@@ -1,3 +1,4 @@
+import { contentHash } from '@core/util/hash';
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 
 /**
@@ -82,6 +83,22 @@ export async function uploadNativeStagedFileToPresignedUrl(
 /** Native placeholders have no JS bytes; use their staged byte count for limits. */
 export function getUploadFileSize(file: File): number {
   return getNativeStagedUpload(file)?.size ?? file.size;
+}
+
+/** Older iOS staging plugins expose the original bytes but no digest. */
+export async function getNativeStagedUploadChecksum(
+  file: NativeStagedUpload
+): Promise<string> {
+  if (file.sha256) return file.sha256;
+  if (!file.previewSrc) throw new Error('Native attachment bytes unavailable');
+  // Use the WebView's asset protocol, not the native HTTP client, for local files.
+  const response = await fetch(file.previewSrc);
+  if (!response.ok) throw new Error('Unable to read native attachment');
+  const bytes = await response.arrayBuffer();
+  if (bytes.byteLength !== file.size)
+    throw new Error('Native attachment size mismatch');
+  file.sha256 = await contentHash(bytes);
+  return file.sha256;
 }
 
 /** S3 expects the native SHA-256 digest as base64 rather than hexadecimal. */

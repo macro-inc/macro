@@ -6,6 +6,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.util.Base64
+import android.util.Log
 import androidx.activity.result.ActivityResult
 import androidx.core.content.FileProvider
 import app.tauri.annotation.InvokeArg
@@ -31,6 +32,7 @@ import java.util.concurrent.Executors
 
 /** Chunked JS Blob transfer keeps large exports out of a single IPC message. */
 class MobileExports(private val activity: Activity) {
+    private companion object { const val TAG = "MacroMobile" }
     private data class Export(val file: File, val mimeType: String)
     private val worker = Executors.newSingleThreadExecutor()
     private val active = mutableMapOf<String, Export>()
@@ -51,7 +53,10 @@ class MobileExports(private val activity: Activity) {
                 file.createNewFile()
                 active[token] = Export(file, args.mimeType.ifBlank { "application/octet-stream" })
                 invoke.resolve(JSObject().apply { put("token", token) })
-            } catch (_: Exception) { invoke.reject("Unable to create export") }
+            } catch (error: Exception) {
+                Log.w(TAG, "Unable to create export", error)
+                invoke.reject("Unable to create export")
+            }
         }
     }
 
@@ -65,7 +70,10 @@ class MobileExports(private val activity: Activity) {
                 require(export.file.length() + bytes.size <= MobileFiles.MAX_FILE_BYTES)
                 export.file.appendBytes(bytes)
                 invoke.resolve()
-            } catch (_: Exception) { invoke.reject("Unable to write export") }
+            } catch (error: Exception) {
+                Log.w(TAG, "Unable to write export", error)
+                invoke.reject("Unable to write export")
+            }
         }
     }
 
@@ -113,7 +121,8 @@ class MobileExports(private val activity: Activity) {
                         // Receivers may read asynchronously; retain until the 24-hour cleanup.
                         invoke.resolve(JSObject().apply { put("canceled", false) })
                     }
-                } catch (_: Exception) {
+                } catch (error: Exception) {
+                    Log.w(TAG, "Unable to complete file action ${args.action}", error)
                     if (saving == export) saving = null
                     export.file.parentFile?.deleteRecursively()
                     invoke.reject("No application could complete this file action")
@@ -138,8 +147,10 @@ class MobileExports(private val activity: Activity) {
                     output.use { destination -> export.file.inputStream().use { it.copyTo(destination) } }
                 }
                 invoke.resolve(JSObject().apply { put("canceled", canceled) })
-            } catch (_: Exception) { invoke.reject("Unable to save file") }
-            finally { export.file.parentFile?.deleteRecursively() }
+            } catch (error: Exception) {
+                Log.w(TAG, "Unable to save file", error)
+                invoke.reject("Unable to save file")
+            } finally { export.file.parentFile?.deleteRecursively() }
         }
     }
 }

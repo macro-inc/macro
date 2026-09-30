@@ -133,12 +133,13 @@ export async function upload(
     fileTypeOrExtension = fileExtension ?? '';
   }
   const isZip = fileTypeOrExtension === 'zip';
+  const staged = getNativeStagedUpload(file);
 
   if (!options?.skipAnalytics) {
     analytics.track('upload_file', {
       fileType: fileTypeOrExtension,
       fileName: file.name,
-      fileSize: file.size,
+      fileSize: staged?.size ?? file.size,
       destination: 'dss',
       folder: isZip,
     });
@@ -151,7 +152,6 @@ export async function upload(
     ? createUploadToast(`Uploading ${name}`)
     : null;
 
-  const staged = getNativeStagedUpload(file);
   const buffer = staged ? undefined : await file.arrayBuffer();
   const sha =
     staged?.sha256 ?? (buffer ? await contentHash(buffer) : undefined);
@@ -165,7 +165,8 @@ export async function upload(
           nativeUploadChecksum(sha)
         );
         return true;
-      } catch {
+      } catch (error) {
+        console.error('Native staged upload failed', error);
         return false;
       }
     }

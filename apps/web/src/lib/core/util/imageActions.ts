@@ -57,12 +57,12 @@ export async function copyImageToClipboard(
     if (!blob) throw new Error('No blob');
 
     if (isPlatform('android')) {
-      await exportAndroidFileWithProgress(
+      const { canceled } = await exportAndroidFileWithProgress(
         blob,
         `image.${extensionForImageBlob(blob)}`,
         'copy'
       );
-      toast.success('Copied to clipboard');
+      if (!canceled) toast.success('Copied to clipboard');
       return;
     }
 

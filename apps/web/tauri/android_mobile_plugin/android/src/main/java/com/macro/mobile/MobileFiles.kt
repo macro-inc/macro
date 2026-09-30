@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.OpenableColumns
+import android.util.Log
 import android.webkit.MimeTypeMap
 import androidx.core.content.IntentCompat
 import app.tauri.annotation.InvokeArg
@@ -26,6 +27,7 @@ class TokensArgs { var tokens: List<String> = emptyList() }
 /** Copies granted content URIs while their grant is alive. Never resolves a URI
  * to an external filesystem path, nor trusts provider names or reported sizes. */
 class MobileFiles(private val activity: Activity) {
+    private companion object { const val TAG = "MacroMobile" }
     private val worker = Executors.newSingleThreadExecutor()
     private val inbox = File(activity.cacheDir, "android-share-inbox")
     // These directories/token prefixes are the existing Rust streaming-upload contract.
@@ -218,7 +220,10 @@ class MobileFiles(private val activity: Activity) {
 
     fun getPendingShares(invoke: Invoke) = worker.execute {
         try { invoke.resolve(readPendingShares()) }
-        catch (_: Exception) { invoke.reject("Unable to read pending shares") }
+        catch (error: Exception) {
+            Log.w(TAG, "Unable to read pending shares", error)
+            invoke.reject("Unable to read pending shares")
+        }
     }
 
     internal fun acknowledge(tokens: Set<String>) {
@@ -254,7 +259,10 @@ class MobileFiles(private val activity: Activity) {
                 acknowledge(tokens)
                 invoke.resolve()
                 done()
-            } catch (_: Exception) { invoke.reject("Unable to clear shared files") }
+            } catch (error: Exception) {
+                Log.w(TAG, "Unable to clear shared files", error)
+                invoke.reject("Unable to clear shared files")
+            }
         }
     }
 
@@ -281,7 +289,10 @@ class MobileFiles(private val activity: Activity) {
                 }
                 cleanup()
                 invoke.resolve(JSObject(stage(uri, pasteboard, "paste-stage-").toString()))
-            } catch (_: Exception) { invoke.reject("Unable to read clipboard image") }
+            } catch (error: Exception) {
+                Log.w(TAG, "Unable to read clipboard image", error)
+                invoke.reject("Unable to read clipboard image")
+            }
         }
     }
 }

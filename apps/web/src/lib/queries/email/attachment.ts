@@ -1,6 +1,7 @@
 import { toast } from '@core/component/Toast/Toast';
 import {
   getNativeStagedUpload,
+  getNativeStagedUploadChecksum,
   nativeUploadChecksum,
   uploadNativeStagedFileToPresignedUrl,
 } from '@core/mobile/nativeStagedUpload';
@@ -50,10 +51,9 @@ export const useUploadDraftAttachmentsMutation = (
       for (const attachment of params.attachments) {
         const staged = getNativeStagedUpload(attachment);
         const arrayBuffer = staged ? undefined : await attachment.arrayBuffer();
-        const sha =
-          staged?.sha256 ??
-          (arrayBuffer ? await contentHash(arrayBuffer) : undefined);
-        if (!sha) throw new Error('Missing native attachment checksum');
+        const sha = staged
+          ? await getNativeStagedUploadChecksum(staged)
+          : await contentHash(arrayBuffer!);
 
         const result = await throwOnErr(
           async () =>

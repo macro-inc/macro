@@ -28,7 +28,7 @@ import { ReminderComposerModal } from '@app/features/reminders/ReminderComposerM
 import { MobileSettingsProvider } from '@app/features/settings/context/mobile-settings';
 import { MobileSettings } from '@app/features/settings/MobileSettings';
 import { useOnboardingV4Flag } from '@app/features/setup/flow/useOnboardingV4Flag';
-import { IosShareSheet } from '@app/features/sharing/ios-share-sheet/IosShareSheet';
+import { NativeShareSheet } from '@app/features/sharing/native-share-sheet/NativeShareSheet';
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { mountGlobalFocusListener } from '@app/signal/focus';
 import { AutomationComposer } from '@block-automation/component';
@@ -221,7 +221,7 @@ function LayoutInner(props: RouteSectionProps) {
             <PropertyEditorModal />
           </Suspense>
           <GlobalBulkEditEntityModal />
-          <IosShareSheet />
+          <NativeShareSheet />
           <MacroMcpSetupModal />
           <CreateChannelModal />
           <CreateCompanyModal />

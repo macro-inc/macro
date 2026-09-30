@@ -2,11 +2,13 @@ import { invoke } from '@tauri-apps/api/core';
 
 const EXPORT_CHUNK_BYTES = 256 * 1024;
 
+export type AndroidFileAction = 'save' | 'share' | 'open' | 'copy';
+
 /** Exports already-fetched bytes, including authenticated downloads and Blob URLs. */
 export async function exportAndroidFile(
   blob: Blob,
   name: string,
-  action: 'save' | 'share' | 'open' | 'copy' = 'save',
+  action: AndroidFileAction = 'save',
   options?: { signal?: AbortSignal; onProgress?: (fraction: number) => void }
 ): Promise<{ canceled: boolean }> {
   options?.signal?.throwIfAborted();
@@ -42,6 +44,9 @@ export async function exportAndroidFile(
       action,
     });
   } finally {
-    await invoke('plugin:android-mobile|discardExport', { token });
+    // Cleanup failures must not mask the export result or its error.
+    await invoke('plugin:android-mobile|discardExport', { token }).catch(
+      (error) => console.error('Unable to discard Android export', error)
+    );
   }
 }

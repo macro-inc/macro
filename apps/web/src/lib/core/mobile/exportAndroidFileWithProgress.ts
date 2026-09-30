@@ -1,12 +1,12 @@
 import { toast } from '@core/component/Toast/Toast';
 import { createSignal } from 'solid-js';
-import { exportAndroidFile } from './androidFiles';
+import { type AndroidFileAction, exportAndroidFile } from './androidFiles';
 
 /** Keep long Blob transfers visible and cancelable before launching a file action. */
 export async function exportAndroidFileWithProgress(
   blob: Blob,
   name: string,
-  action: 'save' | 'share' | 'open' | 'copy' = 'save'
+  action: AndroidFileAction = 'save'
 ): Promise<{ canceled: boolean }> {
   if (blob.size < 1024 * 1024) return exportAndroidFile(blob, name, action);
   const controller = new AbortController();

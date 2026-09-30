@@ -7,17 +7,8 @@
     "main"
   ],
   "permissions": [
-    "android-mobile:allow-register-listener",
-    "android-mobile:allow-remove-listener",
     "android-auth:allow-authenticate",
-    "android-mobile:allow-getInsets",
-    "android-mobile:allow-getPendingShares",
-    "android-mobile:allow-clearShares",
-    "android-mobile:allow-stageClipboardImage",
-    "android-mobile:allow-beginExport",
-    "android-mobile:allow-appendExport",
-    "android-mobile:allow-finishExport",
-    "android-mobile:allow-discardExport",
+    "android-mobile:default",
     "android-push:default"
   ]
 }

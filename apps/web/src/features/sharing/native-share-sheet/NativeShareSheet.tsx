@@ -55,6 +55,7 @@ import {
   Show,
 } from 'solid-js';
 
+import { createNativeShareSend } from './createNativeShareSend';
 import { uploadPendingShareAttachment } from './uploadPendingShareAttachment';
 
 // Use the current staged file tokens as the share-session identity.
@@ -117,7 +118,7 @@ function ShareSheetComposerError(_props: { error: unknown }) {
   );
 }
 
-function IosShareSheetComposer(props: { handleCancel: () => void }) {
+function NativeShareSheetComposer(props: { handleCancel: () => void }) {
   const shareTarget = useShareTarget();
   const userId = useUserId();
   const sendMessage = useSendMessageMutation();
@@ -148,7 +149,7 @@ function IosShareSheetComposer(props: { handleCancel: () => void }) {
     const failed: PendingShareFile[] = [];
     // Bound simultaneous native uploads and retain failures for an explicit retry.
     for (const file of files) {
-      if (!active) return;
+      if (!active) break;
       const success = await uploadPendingShareAttachment({
         file,
         tracker: attachmentTracker,
@@ -176,7 +177,7 @@ function IosShareSheetComposer(props: { handleCancel: () => void }) {
 
     if (options.length === 0) {
       toast.failure('Select a recipient');
-      throw new Error('No recipient selected for iOS share sheet');
+      throw new Error('No recipient selected for native share sheet');
     }
 
     const destination = getDestinationFromOptions(options);
@@ -187,7 +188,7 @@ function IosShareSheetComposer(props: { handleCancel: () => void }) {
 
     if (destination.users.length === 0) {
       toast.failure('Select a valid recipient');
-      throw new Error('No valid recipients selected for iOS share sheet');
+      throw new Error('No valid recipients selected for native share sheet');
     }
 
     try {
@@ -206,36 +207,40 @@ function IosShareSheetComposer(props: { handleCancel: () => void }) {
     }
   };
 
-  const handleSend = async (snapshot: InputSnapshot) => {
-    if (uploading() || failedFiles().length > 0) {
-      throw new Error('Finish uploading the shared attachments before sending');
-    }
-    const senderId = userId();
-    if (!senderId) {
-      toast.failure('Failed to send message');
-      throw new Error('Missing sender id for iOS share sheet send');
-    }
+  const sendShare = createNativeShareSend<InputSnapshot>({
+    clear: async () => {
+      invalidateListChannels();
+      invalidateContacts();
+      await shareTarget?.clearPendingShareFiles();
+    },
+    send: async (snapshot) => {
+      if (uploading() || failedFiles().length > 0) {
+        throw new Error(
+          'Finish uploading the shared attachments before sending'
+        );
+      }
+      const senderId = userId();
+      if (!senderId) {
+        toast.failure('Failed to send message');
+        throw new Error('Missing sender id for native share sheet send');
+      }
 
-    const channelId = await resolveDestinationChannelId();
-    const message = buildPostMessageRequest({ snapshot });
+      const channelId = await resolveDestinationChannelId();
+      const message = buildPostMessageRequest({ snapshot });
 
-    await sendMessage.mutateAsync({
-      parent: { type: 'channel', id: channelId },
-      message,
-      senderId,
-      optimisticId: newMessageId(),
-    });
-
-    invalidateListChannels();
-    invalidateContacts();
-
-    void shareTarget?.clearPendingShareFiles();
-  };
+      await sendMessage.mutateAsync({
+        parent: { type: 'channel', id: channelId },
+        message,
+        senderId,
+        optimisticId: newMessageId(),
+      });
+    },
+  });
 
   const inputState = createInputState({
     initialInput: {
       mode: 'channel',
-      id: `ios-share-input-${composerId}`,
+      id: `native-share-input-${composerId}`,
       placeholder: 'Add a message',
       value: pendingShareInitialText(shareTarget?.pendingShareFiles() ?? []),
     },
@@ -251,11 +256,11 @@ function IosShareSheetComposer(props: { handleCancel: () => void }) {
       });
     },
     clearInput: () => markdownEditor.controls.clear(),
-    callbacks: { onSend: handleSend },
+    callbacks: { onSend: sendShare.send },
   });
 
   const markdownEditor = createConfiguredChannelMarkdownEditor({
-    namespace: `ios-share-input-${composerId}`,
+    namespace: `native-share-input-${composerId}`,
     resolveAppLink: useMacroMentionLinkResolver(),
     enableMentions: true,
     scrollContainer,
@@ -292,6 +297,7 @@ function IosShareSheetComposer(props: { handleCancel: () => void }) {
   };
 
   const canSend = () =>
+    sendShare.canSend() &&
     !uploading() &&
     failedFiles().length === 0 &&
     selectedOptions().length > 0 &&
@@ -300,7 +306,10 @@ function IosShareSheetComposer(props: { handleCancel: () => void }) {
 
   const handleHeaderSend = () => {
     void inputState.commands.send().catch((error) => {
-      console.error('failed to send from iOS share sheet header action', error);
+      console.error(
+        'failed to send from native share sheet header action',
+        error
+      );
     });
   };
 
@@ -406,7 +415,7 @@ function IosShareSheetComposer(props: { handleCancel: () => void }) {
   );
 }
 
-export function IosShareSheet() {
+export function NativeShareSheet() {
   const tauri = useTauri();
   const shareTarget = useShareTarget();
   const [confirmDiscard, setConfirmDiscard] = createSignal(false);
@@ -475,9 +484,10 @@ export function IosShareSheet() {
           <MobileDrawer.Overlay />
           <MobileDrawer.Content aria-label="Share to Macro" targetHeight={80}>
             <MobileDrawer.Handle />
+            {/* Keyed on the batch so each incoming share remounts the composer. */}
             <Show when={isOpen() ? shareBatchKey() : undefined} keyed>
               {(_batchKey) => (
-                <IosShareSheetComposer handleCancel={handleCancel} />
+                <NativeShareSheetComposer handleCancel={handleCancel} />
               )}
             </Show>
           </MobileDrawer.Content>

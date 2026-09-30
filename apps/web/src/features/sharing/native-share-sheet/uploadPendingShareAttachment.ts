@@ -25,7 +25,7 @@ function getPendingShareAttachmentKind(
 
 type ShareSheetAttachmentKind = Extract<InputAttachmentKind, 'image' | 'video'>;
 
-function buildUploadedAttachment(
+function buildMediaAttachment(
   file: PendingShareFile,
   staticFileId: string,
   kind: ShareSheetAttachmentKind
@@ -83,7 +83,7 @@ export async function uploadPendingShareAttachment(options: {
         uploadUrl: result.upload_url,
         mimeType: options.file.mimeType,
       });
-      attachment = buildUploadedAttachment(options.file, result.id, kind);
+      attachment = buildMediaAttachment(options.file, result.id, kind);
     }
     if (!attachment) throw new Error('Unable to prepare shared attachment');
     if (!options.isActive()) return false;

@@ -86,7 +86,7 @@ There is also a concrete configuration mismatch to resolve: [lib.rs](../apps/web
 
 ### 8. Add receiving shares from other Android apps — P1, medium
 
-**Confirmed:** [share_target.rs](../apps/web/tauri/src-tauri/src/share_target.rs) selects the no-op implementation outside iOS. [ShareTargetProvider](../apps/web/src/lib/tauri/ShareTargetProvider.tsx) and [IosShareSheet](../apps/web/src/features/sharing/ios-share-sheet/IosShareSheet.tsx) explicitly exclude Android. The manifest has no SEND/SEND_MULTIPLE filters.
+**Confirmed:** [share_target.rs](../apps/web/tauri/src-tauri/src/share_target.rs) selects the no-op implementation outside iOS. [ShareTargetProvider](../apps/web/src/lib/tauri/ShareTargetProvider.tsx) and [NativeShareSheet](../apps/web/src/features/sharing/native-share-sheet/NativeShareSheet.tsx) explicitly exclude Android. The manifest has no SEND/SEND_MULTIPLE filters.
 
 **Do:** support Android share intents for text, URLs, images, and files; stage `content://` resources while permission grants remain valid; handle multiple files, MIME types, size limits, cancellation, cleanup, cold start, and an authentication detour. Reuse the destination picker/upload logic after removing iOS-specific assumptions. Scope FileProvider paths to the data actually shared.
 
