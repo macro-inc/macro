@@ -1,5 +1,6 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { defineRoute, useRouteParams } from '@app/lib/split-router';
+import type { SplitContent } from '@components/app/split-layout/layoutManager';
 import {
   useSplitDisplayName,
   useSplitPanelOrThrow,
@@ -11,29 +12,28 @@ import {
 } from '@components/app/split-layout/split-router/app-route-shell';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { enableReminders } from '@core/constant/featureFlags';
-import { lazy, Show } from 'solid-js';
+import { Show } from 'solid-js';
 import { z } from 'zod';
-import { getViewPreset } from '../next-soup/sidebar/soup-filter-presets';
+import { emailTabSearch, emailTabSearchCodec } from '../email-view/email-route';
 import { ReminderDetails } from './ReminderEditorSplit';
 import { REMINDER_DETAIL_ROUTE_ID } from './reminder-navigation';
 
-const SoupView = lazy(async () => ({
-  default: (await import('../next-soup/soup-view/soup-view')).SoupView,
-}));
-
-function RemindersView() {
-  usePageViewTracking('reminders');
-  const preset = getViewPreset('reminders');
-  return (
-    <SoupView
-      viewName="Reminders"
-      initialFilters={preset?.filters}
-      initialClientFilters={preset?.clientFilters}
-      initialGroupBy={preset?.groupBy}
-      disableLocalSearch
-    />
-  );
-}
+/**
+ * Reminders live under Email as a tab rather than in a view of their own.
+ * `/reminders` stays routable for existing links and notifications and lands
+ * on that tab; `RedirectSplit` carries the tab through the split's search.
+ */
+const remindersTabContent: SplitContent = {
+  type: 'component',
+  id: 'mail',
+  entryMetadata: {
+    search: {
+      [emailTabSearch.namespace]: emailTabSearchCodec.serialize({
+        tab: 'reminders',
+      }),
+    },
+  },
+};
 
 export const RemindersRouteView = withAuth(() => {
   const reminders = useFeatureFlag(enableReminders);
@@ -43,7 +43,7 @@ export const RemindersRouteView = withAuth(() => {
         when={reminders().enabled}
         fallback={<RedirectSplit to={{ type: 'component', id: 'home' }} />}
       >
-        <RemindersView />
+        <RedirectSplit to={remindersTabContent} />
       </Show>
     </Show>
   );

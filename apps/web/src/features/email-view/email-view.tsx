@@ -23,9 +23,9 @@ import {
 } from './components/EmailHeader';
 import { EmailList } from './components/EmailList';
 import { EmailSidebar } from './components/EmailSidebar';
-import { EMAIL_TABS } from './constants';
 import { EmailViewProvider, useEmailView } from './email-view-context';
 import type { EmailTab, EmailViewStateOptions } from './types';
+import { useVisibleEmailTabs } from './use-visible-email-tabs';
 
 export type EmailViewProps = {
   /** Explicit navigation state. When present, it wins over entry restoration. */
@@ -90,13 +90,11 @@ function EmailDesktopLayout(
   );
 }
 
-const MOBILE_EMAIL_TABS: PillTabItem<EmailTab>[] = EMAIL_TABS.map((tab) => ({
-  value: tab.id,
-  label: tab.label,
-}));
-
 function EmailMobileLayout(props: ParentProps) {
   const { state, setTab } = useEmailView();
+  const tabs = useVisibleEmailTabs();
+  const pillTabs = (): PillTabItem<EmailTab>[] =>
+    tabs().map((tab) => ({ value: tab.id, label: tab.label }));
 
   return (
     <>
@@ -107,7 +105,7 @@ function EmailMobileLayout(props: ParentProps) {
             class="-ml-(--mobile-chrome-gutter) w-[100cqw] max-w-none flex-none"
             contentClass="px-(--mobile-chrome-gutter)"
             leading={<EmailFilterDrawer />}
-            items={MOBILE_EMAIL_TABS}
+            items={pillTabs()}
             value={state.tab}
             onChange={setTab}
           />

@@ -12,6 +12,7 @@ export const emailTabSearch = {
       'sent',
       'scheduled',
       'calendar',
+      'reminders',
       'drafts',
       'shared',
       'all',

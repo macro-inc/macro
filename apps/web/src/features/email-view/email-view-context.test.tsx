@@ -11,6 +11,8 @@ const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
   useRouteParams: vi.fn(),
   useEmailLinksQuery: vi.fn(),
+  remindersEnabled: true,
+  searchTab: 'important' as 'important' | 'reminders',
 }));
 
 vi.mock('@app/components/list', () => ({
@@ -25,13 +27,26 @@ vi.mock(
 vi.mock('@app/features/soup/collection/list-navigation-source', () => ({
   registerListNavigationSource: () => {},
 }));
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({
+    enabled: mocks.remindersEnabled,
+    loading: false,
+    payload: undefined,
+  }),
+}));
 vi.mock('@app/lib/persistence', () => ({
   makePersistedState: <T,>(store: T) => store,
 }));
 vi.mock('@app/lib/split-router', () => ({
   useNavigate: () => mocks.navigate,
   useRouteParams: () => mocks.useRouteParams(),
-  createSearchParams: () => [{ tab: 'important' }],
+  createSearchParams: () => [
+    {
+      get tab() {
+        return mocks.searchTab;
+      },
+    },
+  ],
 }));
 vi.mock('@components/app/createPreviewSelectionGuard', () => ({
   createPreviewSelectionGuard: () =>
@@ -67,9 +82,11 @@ vi.mock('./email-route', () => ({
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  mocks.remindersEnabled = true;
+  mocks.searchTab = 'important';
 });
 
-function mount() {
+function mount(initialState: { tab?: 'reminders' } = {}) {
   const [linksQuery, setLinksQuery] = createStore({
     isSuccess: false,
     data: { links: [] as { id: string }[] },
@@ -89,12 +106,29 @@ function mount() {
     return null;
   }
   render(() => (
-    <EmailViewProvider initialState={{ inboxIds: ['saved-inbox'] }}>
+    <EmailViewProvider
+      initialState={{ inboxIds: ['saved-inbox'], ...initialState }}
+    >
       <ReadContext />
     </EmailViewProvider>
   ));
   return { view, setLinksQuery };
 }
+
+describe('email view reminders tab', () => {
+  it('lands on a linked Reminders tab while the flag is on', () => {
+    mocks.searchTab = 'reminders';
+    const { view } = mount({ tab: 'reminders' });
+    expect(view.state.tab).toBe('reminders');
+  });
+
+  it('falls back to Signal when the flag is off', () => {
+    mocks.searchTab = 'reminders';
+    mocks.remindersEnabled = false;
+    const { view } = mount({ tab: 'reminders' });
+    expect(view.state.tab).toBe('important');
+  });
+});
 
 describe('email view inbox reconciliation', () => {
   it.each([{ links: [] }, { links: [{ id: 'remaining-inbox' }] }])(

@@ -42,9 +42,12 @@ const VALID_MARK_DONE_LIST_VIEWS: `${ListView}-${string}`[] = [
   // stay in place and flip to the done state exactly like mail "All".
   'mail-calendar',
   'mail-shared',
-  // Completing a reminder is the whole point of the Reminders view: without
-  // it the only way to clear one is to delete it. Done is listed too so a
-  // reminder marked by mistake can be reopened from where it landed.
+  // Completing a reminder is the whole point of the Reminders tab: without
+  // it the only way to clear one is to delete it. Its Done status is the same
+  // tab, so a reminder marked by mistake can be reopened from where it landed.
+  'mail-reminders',
+  // The standalone Reminders view the tab replaced; its route now redirects
+  // there, but the list-view presets still exist.
   'reminders-active',
   'reminders-scheduled',
   'reminders-done',

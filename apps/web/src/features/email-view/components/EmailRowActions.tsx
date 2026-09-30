@@ -63,6 +63,8 @@ export function EmailStarAction(props: {
 }
 
 export function EmailRowActions(props: {
+  /** What the row is; only the labels differ. Defaults to email. */
+  subject?: 'email' | 'reminder';
   archived: boolean;
   canArchive: boolean;
   pending: boolean;
@@ -70,12 +72,23 @@ export function EmailRowActions(props: {
   onCommands: () => void;
   onFocus: () => void;
 }) {
+  // Archiving an email and completing a reminder are the same mark-done
+  // action underneath; the words follow the row.
+  const archiveLabel = () =>
+    props.subject === 'reminder'
+      ? props.archived
+        ? 'Mark reminder not done'
+        : 'Mark reminder done'
+      : props.archived
+        ? 'Unarchive email'
+        : 'Archive email';
+
   return (
     <EmailActionGroup onFocus={props.onFocus}>
       <Button
         variant="ghost"
         size="icon-sm"
-        label={props.archived ? 'Unarchive email' : 'Archive email'}
+        label={archiveLabel()}
         class="text-ink-extra-muted"
         disabled={!props.canArchive || props.pending}
         onClick={props.onArchive}

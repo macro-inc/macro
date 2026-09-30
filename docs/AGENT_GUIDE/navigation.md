@@ -42,7 +42,7 @@ Switching tabs or navigating an in-app route is not a back/forward-cache restore
 | `/app/coders/<uuid>` | Code session with the Agents sidebar |
 | `/app/agents/chat/<uuid>` | Legacy AI chat opened in the Agents workspace (`/app/agent-chats/<uuid>` remains a compatibility alias) |
 | `/app/calls` | Calls list |
-| `/app/reminders` | Reminders list (requires the Reminders flag) |
+| `/app/reminders` | Redirects to the Email view's **Reminders** tab (`/app/mail?s0.mail.tab=reminders`; requires the Reminders flag) |
 | `/app/reminder/<uuid>` | Lightweight reminder details; the same reminder opened from Home or another split reuses its existing route owner |
 | `/app/companies` | Customers (CRM; needs a team) |
 | `/app/activity` | Activity heatmap + feed |
@@ -70,8 +70,9 @@ Returning to Home's list clears the prior target, so reopening an item without
 a specific location does not replay the previous search hit.
 
 Reminder navigation is native-route only: list, Home, notifications, commands,
-copied links, and new browser tabs use `/app/reminders`,
-`/app/home/reminder/<uuid>`, or `/app/reminder/<uuid>`. Imperative callers use
+copied links, and new browser tabs use `/app/reminders` (which lands on the
+Email view's Reminders tab), `/app/home/reminder/<uuid>`, or
+`/app/reminder/<uuid>`. Imperative callers use
 `openReminderDetail` so Split Manager sends the typed destination through the
 app content navigator. The standalone and Home routes claim the same reminder
 identity, and callers must never treat a reminder ID as a document ID. Startup
@@ -239,9 +240,9 @@ The outer sidebar is an icon rail; labels appear in tooltips.
   global search. Hold Shift while selecting `Search everything` to open it in a
   new split, including when Search is already active. This left-click menu shares
   its surface and item styling with the sidebar right-click menus.
-- Nav: `Home`, `Drive`, `Email`, `Chat`, `Tasks`, `Reminders`, `Calendar`,
-  `Agents`, `Customers`. Reminders, Calendar, and Customers appear only when
-  their features are enabled.
+- Nav: `Home`, `Drive`, `Email`, `Chat`, `Tasks`, `Calendar`, `Agents`,
+  `Customers`. Calendar and Customers appear only when their features are
+  enabled. Reminders have no rail button: they are a tab of the Email view.
 - Bottom: button named after the user (their name, or email when unset) — menu
   with `Command menu (Ctrl K)`, `Settings (Ctrl ;)`, `Log out`.
 

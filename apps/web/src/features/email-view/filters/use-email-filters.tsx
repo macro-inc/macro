@@ -5,12 +5,18 @@ import { useTagFilterGroup } from '@property/tags/use-tag-filter-group';
 import { createMemo } from 'solid-js';
 import { useEmailView } from '../email-view-context';
 import type { EmailFilterGroupId } from '../types';
-import { EMAIL_FILTER_GROUPS } from './email-facets';
+import {
+  EMAIL_FILTER_GROUPS,
+  type EmailFilterGroup as EmailFilterGroupDefinition,
+  REMINDER_FILTER_GROUPS,
+} from './email-facets';
 
 type EmailFilterGroup = ListFilterGroup<EmailFilterGroupId, string>;
 
-const STATIC_FILTER_GROUPS: EmailFilterGroup[] = EMAIL_FILTER_GROUPS.map(
-  (group) => ({
+const toFilterGroups = (
+  groups: EmailFilterGroupDefinition[]
+): EmailFilterGroup[] =>
+  groups.map((group) => ({
     ...group,
     options: group.options.map((option) => ({
       ...option,
@@ -18,18 +24,26 @@ const STATIC_FILTER_GROUPS: EmailFilterGroup[] = EMAIL_FILTER_GROUPS.map(
         ? () => <EntityIcon targetType={option.iconType} size="xs" />
         : undefined,
     })),
-  })
-);
+  }));
+
+const STATIC_FILTER_GROUPS = toFilterGroups(EMAIL_FILTER_GROUPS);
+const STATIC_REMINDER_FILTER_GROUPS = toFilterGroups(REMINDER_FILTER_GROUPS);
 
 /** Shared selection semantics for the desktop menu and mobile drawer. */
 export function useEmailFilters() {
   const { state, setFacets } = useEmailView();
   const tagGroup = useTagFilterGroup();
-  // Tags come last: the static groups are short, the tag list grows with use.
-  const groups = createMemo((): EmailFilterGroup[] => [
-    ...STATIC_FILTER_GROUPS,
-    ...(tagGroup().options.length > 0 ? [tagGroup()] : []),
-  ]);
+  // Reminders are not mail: none of the thread filters (or tags) apply, so
+  // the tab offers its status group alone. Tags come last elsewhere: the
+  // static groups are short, the tag list grows with use.
+  const groups = createMemo((): EmailFilterGroup[] =>
+    state.tab === 'reminders'
+      ? STATIC_REMINDER_FILTER_GROUPS
+      : [
+          ...STATIC_FILTER_GROUPS,
+          ...(tagGroup().options.length > 0 ? [tagGroup()] : []),
+        ]
+  );
   const groupFor = (groupId: EmailFilterGroupId) =>
     groups().find((group) => group.id === groupId);
   const activeFilterCount = createMemo(() =>

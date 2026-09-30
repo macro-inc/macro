@@ -1,23 +1,27 @@
 import { describe, expect, it } from 'vitest';
 import { visibleNavItems } from './nav-items';
 
-describe('reminders navigation item', () => {
-  it('exposes the canonical list destination only while enabled', () => {
-    const enabled = visibleNavItems({
-      showCalendar: true,
-      showCustomers: true,
-      showReminders: true,
-    });
-    const disabled = visibleNavItems({
-      showCalendar: true,
-      showCustomers: true,
-      showReminders: false,
-    });
+describe('sidebar rail navigation items', () => {
+  it('reaches reminders through Email rather than a rail button of their own', () => {
+    const items = visibleNavItems({ showCalendar: true, showCustomers: true });
 
-    expect(enabled.find((item) => item.id === 'reminders')).toMatchObject({
-      label: 'Reminders',
-      href: '/reminders',
+    expect(items.some((item) => item.id === 'reminders')).toBe(false);
+    expect(items.find((item) => item.id === 'mail')).toMatchObject({
+      label: 'Email',
+      href: '/mail',
     });
-    expect(disabled.some((item) => item.id === 'reminders')).toBe(false);
+  });
+
+  it('gates the Calendar and Customers buttons', () => {
+    const ids = visibleNavItems({
+      showCalendar: false,
+      showCustomers: false,
+    }).map((item) => item.id);
+
+    expect(ids).not.toContain('calendar');
+    expect(ids).not.toContain('companies');
+    expect(ids).toEqual(
+      expect.arrayContaining(['home', 'documents', 'mail', 'channels'])
+    );
   });
 });

@@ -637,6 +637,20 @@ Opening a row previews its thread like any other email; cancel from the opened
 message's bar. Search and filters are hidden on this tab. Immediate-send undo-window
 queue rows are not scheduled drafts and must not appear.
 
+The Email view's **Reminders** tab (Reminders flag; between Calendar and Drafts,
+bell icon) lists the user's reminders rather than mail, so the inbox scope, tag
+and thread filters do not apply. In place of the filter menu the header shows an
+**Active** / **Scheduled** / **Done** segmented control (radios under **Status** in
+the mobile filter sheet): Active is fired reminders waiting to be marked done,
+newest first; Scheduled is upcoming ones, soonest first; Done is completed ones.
+The search field reads `Search reminders`, and the sidebar and header create
+buttons read `New reminder` and open the New reminder dialog. Rows show the
+reminder's bell icon and description, with a badge for the referenced item; a row
+has no star, and its check-mark action is labelled `Mark reminder done` (or
+`Mark reminder not done` under Done). Marking one done removes it from Active or
+Scheduled immediately. Activating a row opens the reminder (or what it refers
+to) rather than an inline thread. `/app/reminders` redirects here.
+
 With the new app views enabled, mobile and tablet Email use a floating, horizontally
 scrolling row of those tabs, with `Open email filters` at the left. The rest of the
 view is the email list, which scrolls beneath the header and supports pull to refresh

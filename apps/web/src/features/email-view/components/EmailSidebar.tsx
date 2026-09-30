@@ -1,8 +1,8 @@
 import { useViewTabHotkeys, ViewSidebar } from '@app/components/view-shell';
 import { SidebarCreateButton } from '@app/components/view-shell/SidebarCreateButton';
-import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import BellIcon from '@phosphor/bell.svg';
 import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
 import ClockIcon from '@phosphor/clock.svg';
 import EnvelopeIcon from '@phosphor/envelope.svg';
@@ -16,10 +16,14 @@ import { SidebarTagsSection } from '@property/tags/SidebarTagsSection';
 import { pressHandlers } from '@ui';
 import { type Component, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { composeEmail } from '../compose-email';
-import { EMAIL_TAB_IDS, EMAIL_TABS, type EmailTabItem } from '../constants';
+import type { EmailTabItem } from '../constants';
 import { useEmailView } from '../email-view-context';
 import type { EmailTab } from '../types';
+import { useEmailCreateAction } from '../use-email-create-action';
+import {
+  useVisibleEmailTabIds,
+  useVisibleEmailTabs,
+} from '../use-visible-email-tabs';
 import { EmailInboxList } from './EmailInboxSelector';
 
 const TAB_ICONS: Record<EmailTab, Component<{ class?: string }>> = {
@@ -29,6 +33,7 @@ const TAB_ICONS: Record<EmailTab, Component<{ class?: string }>> = {
   sent: PaperPlaneTiltIcon,
   scheduled: ClockIcon,
   calendar: CalendarBlankIcon,
+  reminders: BellIcon,
   drafts: FileIcon,
   shared: UsersThreeIcon,
   all: EnvelopeIcon,
@@ -54,9 +59,11 @@ function Tab(props: { item: EmailTabItem; onNavigate?: () => void }) {
 }
 
 export function EmailNavigation(props: { onNavigate?: () => void }) {
+  const tabs = useVisibleEmailTabs();
+
   return (
     <ViewSidebar.Nav aria-label="Email tabs">
-      <For each={EMAIL_TABS}>
+      <For each={tabs()}>
         {(item) => <Tab item={item} onNavigate={props.onNavigate} />}
       </For>
     </ViewSidebar.Nav>
@@ -65,7 +72,6 @@ export function EmailNavigation(props: { onNavigate?: () => void }) {
 
 export function EmailSidebar() {
   const panel = useSplitPanelOrThrow();
-  const { openWithSplit } = useSplitLayout();
   const {
     state,
     setTab,
@@ -73,11 +79,13 @@ export function EmailSidebar() {
     isSidebarSectionOpen,
     setSidebarSectionOpen,
   } = useEmailView();
+  const createAction = useEmailCreateAction();
+  const tabIds = useVisibleEmailTabIds();
 
   useViewTabHotkeys({
     scopeId: panel.splitHotkeyScope,
     enabled: panel.isPanelActive,
-    ids: () => EMAIL_TAB_IDS,
+    ids: tabIds,
     activeId: () => state.tab,
     setActiveId: setTab,
   });
@@ -97,8 +105,8 @@ export function EmailSidebar() {
         <EmailInboxList />
 
         <SidebarCreateButton
-          label="New email"
-          onCreate={() => composeEmail(openWithSplit, state.inboxIds)}
+          label={createAction().label}
+          onCreate={createAction().run}
         />
 
         <EmailNavigation />

@@ -23,6 +23,11 @@ vi.mock('@queries/favorites/favorites', () => ({
 const scheduledRows = vi.hoisted(() => ({
   current: [] as EmailDataSourceItem[],
 }));
+const reminderRows = vi.hoisted(() => ({
+  current: [] as EmailDataSourceItem[],
+  hasMore: false,
+  loadMore: vi.fn(async () => {}),
+}));
 
 vi.mock('@app/features/soup', async () => ({
   ...(await import('@app/features/soup/filters')),
@@ -58,6 +63,18 @@ vi.mock('./use-scheduled-email-source', () => ({
     hasMore: () => false,
     isLoadingMore: () => false,
     loadMore: async () => {},
+    refresh: async () => {},
+  }),
+}));
+vi.mock('./use-reminder-source', () => ({
+  useReminderSource: () => ({
+    items: () => reminderRows.current,
+    isLoading: () => false,
+    isFetching: () => false,
+    error: () => undefined,
+    hasMore: () => reminderRows.hasMore,
+    isLoadingMore: () => false,
+    loadMore: reminderRows.loadMore,
     refresh: async () => {},
   }),
 }));
@@ -272,6 +289,8 @@ describe('Email list query transitions', () => {
       refetch: vi.fn(async () => {}),
     });
     scheduledRows.current = [];
+    reminderRows.current = [];
+    reminderRows.hasMore = false;
   });
   afterEach(() => dispose?.());
 
@@ -334,6 +353,40 @@ describe('Email list query transitions', () => {
     setState('tab', 'scheduled');
     expect(ids(source)).toEqual(['scheduled']);
     expect(source.hasMore()).toBe(false);
+
+    setState('tab', 'noise');
+    expect(ids(source)).toEqual(['noise']);
+  });
+
+  it('lists the reminder source on the Reminders tab and pages through it', async () => {
+    reminderRows.current = [
+      {
+        kind: 'entity',
+        id: 'reminder-row',
+        entity: {
+          type: 'reminder',
+          id: 'reminder',
+          name: 'Follow up',
+          description: 'Follow up',
+          scheduleType: 'once',
+          nextRunAt: '2026-09-27T12:00:00Z',
+        },
+      } as EmailDataSourceItem,
+    ];
+    reminderRows.hasMore = true;
+    const { source, query, setState } = mount();
+    expect(ids(source)).toEqual(['noise']);
+
+    setState('tab', 'reminders');
+    expect(ids(source)).toEqual(['reminder']);
+    expect(source.hasMore()).toBe(true);
+    await source.loadMore();
+    expect(reminderRows.loadMore).toHaveBeenCalledOnce();
+    expect(query.fetchNextPage).not.toHaveBeenCalled();
+    // The thread query stays dormant: reminders come from their own source.
+    expect(vi.mocked(useSoupAstItemsQuery).mock.calls[0][1]?.().enabled).toBe(
+      false
+    );
 
     setState('tab', 'noise');
     expect(ids(source)).toEqual(['noise']);

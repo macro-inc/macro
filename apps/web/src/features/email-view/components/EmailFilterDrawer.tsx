@@ -12,6 +12,8 @@ export function EmailFilterDrawer() {
   const { state, setInboxIds } = useEmailView();
   const filters = useEmailFilters();
   const showFacetFilters = () => state.tab !== 'scheduled';
+  // Reminders belong to the user, not to a mailbox: no inbox scope there.
+  const showInboxes = () => state.tab !== 'reminders';
 
   return (
     <MobileFilterDrawer
@@ -19,7 +21,7 @@ export function EmailFilterDrawer() {
       label="Email filters"
       activeCount={
         (showFacetFilters() ? filters.activeCount() : 0) +
-        (state.inboxIds === undefined ? 0 : 1)
+        (showInboxes() && state.inboxIds !== undefined ? 1 : 0)
       }
       onClear={() =>
         batch(() => {
@@ -37,7 +39,9 @@ export function EmailFilterDrawer() {
         defaultValue={[INBOX_SECTION_ID, filters.groups()[0].id]}
       >
         <div class="flex flex-col gap-3">
-          <EmailInboxDrawerSection value={INBOX_SECTION_ID} />
+          <Show when={showInboxes()}>
+            <EmailInboxDrawerSection value={INBOX_SECTION_ID} />
+          </Show>
           <Show when={showFacetFilters()}>
             <For each={filters.groups()}>
               {(group) => (

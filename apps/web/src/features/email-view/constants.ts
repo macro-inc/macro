@@ -12,6 +12,9 @@ export const EMAIL_TABS: EmailTabItem[] = [
   { id: 'sent', label: 'Sent' },
   { id: 'scheduled', label: 'Scheduled' },
   { id: 'calendar', label: 'Calendar' },
+  // Flag-gated; every tab surface goes through `useVisibleEmailTabs`, so an
+  // unflagged user never sees it (or reaches it by hotkey).
+  { id: 'reminders', label: 'Reminders' },
   { id: 'drafts', label: 'Drafts' },
   { id: 'shared', label: 'Shared' },
   { id: 'all', label: 'All' },

@@ -14,6 +14,7 @@ import {
 } from '@app/features/soup';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { makePersistedState } from '@app/lib/persistence';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { PullToRefresh } from '@components/app/mobile/PullToRefresh';
 import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -45,7 +46,10 @@ import {
   persistSoupNavigationTouchHighlight,
   soupNavigationTouchHighlight,
 } from '../../next-soup/soup-view/soup-navigation-touch-highlight';
-import { openEntityInSplitFromUnifiedList } from '../../next-soup/utils';
+import {
+  markReminderSeenOnOpen,
+  openEntityInSplitFromUnifiedList,
+} from '../../next-soup/utils';
 import {
   type EmailListActivationMetadata,
   useEmailView,
@@ -76,6 +80,9 @@ export function EmailList(props: EmailListProps) {
   const { state, source, list, registerListActivationHandler, openThread } =
     useEmailView();
   const panel = useSplitPanelOrThrow();
+  const notificationSource = useGlobalNotificationSource();
+  // The Reminders tab lists reminders, not threads; the chrome says so.
+  const listLabel = () => (state.tab === 'reminders' ? 'Reminders' : 'Email');
 
   function openEntity(
     entity: EntityData,
@@ -88,6 +95,9 @@ export function EmailList(props: EmailListProps) {
       ? persistSoupNavigationTouchHighlight(options.event)
       : undefined;
 
+    // A reminder has no block of its own to clear its notification, so
+    // opening it is the one signal that it has been seen.
+    markReminderSeenOnOpen(entity, notificationSource);
     void openEntityInSplitFromUnifiedList(entity, {
       splitHandle: panel.handle,
       referredFrom: 'mail',
@@ -114,7 +124,10 @@ export function EmailList(props: EmailListProps) {
     const newSplit =
       metadata?.newSplit === true || metadata?.event?.shiftKey === true;
 
+    // Only a thread opens inline in the view's detail pane; a reminder
+    // navigates to whatever it references.
     if (
+      sourceRow.entity.type === 'email' &&
       !newSplit &&
       metadata?.event?.altKey !== true &&
       openThread(
@@ -313,11 +326,18 @@ export function EmailList(props: EmailListProps) {
   }
 
   function RowActions(props: { row: EmailActionRow }) {
-    const archived = () =>
-      props.row.entity.type === 'email' && props.row.entity.done;
+    const entity = () => props.row.entity;
+    // A reminder's done state is its own column, not its notification's.
+    const archived = () => {
+      const current = entity();
+      if (current.type === 'email') return current.done;
+      if (current.type === 'reminder') return Boolean(current.completedAt);
+      return false;
+    };
 
     return (
       <EmailRowActions
+        subject={entity().type === 'reminder' ? 'reminder' : 'email'}
         archived={archived()}
         canArchive={entityActionViewContext().supportsMarkDone}
         pending={rowActionState.isPending(props.row.rowId)}
@@ -421,7 +441,7 @@ export function EmailList(props: EmailListProps) {
           props.ref?.(element);
         }}
         role="grid"
-        aria-label="Email"
+        aria-label={listLabel()}
         aria-multiselectable="true"
         aria-activedescendant={list.focus.key()}
         tabIndex={0}
@@ -461,7 +481,7 @@ export function EmailList(props: EmailListProps) {
               >
                 <div class="grid min-h-0 flex-1 place-items-center text-ink-muted touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
                   <SpinnerIcon
-                    aria-label="Loading email"
+                    aria-label={`Loading ${listLabel().toLowerCase()}`}
                     class="size-5 animate-spin"
                   />
                 </div>
@@ -472,7 +492,7 @@ export function EmailList(props: EmailListProps) {
                   ref={setEmptyViewport}
                   class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 overflow-y-auto text-sm text-ink-muted touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)"
                 >
-                  <span>Email couldn’t be loaded.</span>
+                  <span>{listLabel()} couldn’t be loaded.</span>
                   <Button
                     variant="outline"
                     size="sm"
@@ -562,7 +582,14 @@ export function EmailList(props: EmailListProps) {
                                     <ListEntity
                                       entity={entityRow().entity}
                                       leadingAction={
-                                        <Show when={!isTouchDevice()}>
+                                        // Favorites are a mailbox notion; a
+                                        // reminder row has nothing to star.
+                                        <Show
+                                          when={
+                                            !isTouchDevice() &&
+                                            entityRow().entity.type === 'email'
+                                          }
+                                        >
                                           <EmailStarAction
                                             starred={isFavorited(
                                               entityRow().entity

@@ -1,6 +1,6 @@
 import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableCrm, enableReminders } from '@core/constant/featureFlags';
+import { enableCrm } from '@core/constant/featureFlags';
 import type { Accessor } from 'solid-js';
 import type { NavItemGates } from './nav-items';
 
@@ -13,10 +13,8 @@ import type { NavItemGates } from './nav-items';
 export function useNavItemGates(): Accessor<NavItemGates> {
   const calendar = useCalendarUiFlag();
   const crm = useFeatureFlag(enableCrm);
-  const reminders = useFeatureFlag(enableReminders);
   return () => ({
     showCalendar: calendar(),
     showCustomers: crm().enabled,
-    showReminders: reminders().enabled,
   });
 }

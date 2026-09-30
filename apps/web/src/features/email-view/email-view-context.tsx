@@ -9,6 +9,7 @@ import { setSidebarSectionCollapsed } from '@app/components/view-shell';
 import { useMobileSearchText } from '@app/features/command/mobile/use-mobile-search-text';
 import { normalizeFacetSelection } from '@app/features/soup';
 import { registerListNavigationSource } from '@app/features/soup/collection/list-navigation-source';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { makePersistedState } from '@app/lib/persistence';
 import {
   createSearchParams,
@@ -20,6 +21,7 @@ import {
   useSplitPanelOrThrow,
   withSplitPanelOwner,
 } from '@components/app/split-layout/layoutUtils';
+import { enableReminders } from '@core/constant/featureFlags';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -320,6 +322,18 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     );
     closeThread();
   };
+
+  // Reminders is flag-gated out of every tab surface (see
+  // `useVisibleEmailTabs`), but a remembered or linked tab can still land on
+  // it. Leaving it there would show a hidden tab's list with nothing selected
+  // in the sidebar, so it falls back once the flag has resolved.
+  const remindersFlag = useFeatureFlag(enableReminders);
+  createEffect(() => {
+    if (state.tab !== 'reminders') return;
+    const flag = remindersFlag();
+    if (flag.loading || flag.enabled) return;
+    setTab(DEFAULT_EMAIL_TAB);
+  });
 
   const setInboxIds = (ids: string[] | undefined) => {
     closeThread();

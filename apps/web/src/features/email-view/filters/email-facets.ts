@@ -14,6 +14,10 @@ import {
 } from '@app/features/soup';
 import type { EntityIconSelector } from '@core/component/EntityIcon';
 import type { EmailEntity, EntityData } from '@entity';
+import {
+  DEFAULT_REMINDER_STATUS,
+  REMINDER_STATUS_GROUP_ID,
+} from '../queries/reminder-query';
 import type { EmailFilterGroupId, EmailFilterOptionId } from '../types';
 
 type EmailFilterOption = {
@@ -114,7 +118,7 @@ export const EMAIL_FACETS: Facet<EmailEntity, EmailFacetContext>[] = [
   },
 ];
 
-type EmailFilterGroup = {
+export type EmailFilterGroup = {
   id: EmailFilterGroupId;
   label: string;
   selectionMode?: 'single' | 'multiple';
@@ -157,5 +161,26 @@ export const EMAIL_FILTER_GROUPS: EmailFilterGroup[] = [
     id: 'calendar',
     label: 'Calendar',
     options: toGroupOptions(EMAIL_CALENDAR_OPTIONS),
+  },
+];
+
+/**
+ * The Reminders tab's only filter: the former standalone view's Active /
+ * Scheduled / Done tabs as one single-select group. Not a facet in the
+ * `EMAIL_FACETS` sense — the tab's own query reads it (see
+ * `reminderStatusFromFacets`) rather than compiling it onto the thread query.
+ * Active stands for "no selection" so a fresh tab opens on what needs you.
+ */
+export const REMINDER_FILTER_GROUPS: EmailFilterGroup[] = [
+  {
+    id: REMINDER_STATUS_GROUP_ID,
+    label: 'Status',
+    selectionMode: 'single',
+    defaultOptionId: DEFAULT_REMINDER_STATUS,
+    options: [
+      { id: 'active', label: 'Active' },
+      { id: 'scheduled', label: 'Scheduled' },
+      { id: 'done', label: 'Done' },
+    ],
   },
 ];

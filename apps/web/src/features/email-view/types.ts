@@ -3,6 +3,8 @@ import type { FacetSelection } from '@app/features/soup';
 /**
  * Existing tab ids match the legacy mail view (`important` is Signal).
  * Favorites extends that list; entity action capabilities use `${view}-${tab}`.
+ * Reminders is not a mailbox slice: it lists the user's reminders, which live
+ * under Email rather than behind a rail button of their own.
  */
 export type EmailTab =
   | 'important'
@@ -13,6 +15,7 @@ export type EmailTab =
   | 'calendar'
   | 'drafts'
   | 'shared'
+  | 'reminders'
   | 'all';
 
 export type EmailFilterGroupId =
@@ -20,7 +23,11 @@ export type EmailFilterGroupId =
   | 'done'
   | 'attachments'
   | 'calendar'
-  | 'tags';
+  | 'tags'
+  | 'reminders';
+
+/** The Reminders tab's one axis, mirroring the former standalone view's tabs. */
+export type ReminderStatusFilter = 'active' | 'scheduled' | 'done';
 
 export type EmailFilterOptionId =
   | 'all'
@@ -31,7 +38,8 @@ export type EmailFilterOptionId =
   | 'attachment-pdf'
   | 'attachment-image'
   | 'attachment-document'
-  | 'has-calendar-invite';
+  | 'has-calendar-invite'
+  | ReminderStatusFilter;
 
 export type EmailViewState = {
   tab: EmailTab;
