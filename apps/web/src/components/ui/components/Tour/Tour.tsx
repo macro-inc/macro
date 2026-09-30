@@ -30,12 +30,7 @@ import {
 import { Portal } from 'solid-js/web';
 import { cn } from '../../utils/classname';
 import { Button, type ButtonProps } from '../Button';
-import {
-  explainTourTarget,
-  matchTourTarget,
-  resolveTourTarget,
-  type TourTarget,
-} from './targets';
+import { matchTourTarget, resolveTourTarget, type TourTarget } from './targets';
 
 type Targets = TourTarget | readonly TourTarget[];
 
@@ -133,8 +128,6 @@ export type TourRootProps<Step extends TourStep> = ParentProps<{
    * so a step never floats unattached while its target is tucked away.
    */
   fallbackEntry?: Targets;
-  /** Names the tour in the dev-only `window.__tours()` report. */
-  debugName?: string;
 }>;
 
 /** Owns step state and target resolution. Renders nothing visible itself. */
@@ -195,22 +188,6 @@ function TourRoot<Step extends TourStep>(props: TourRootProps<Step>) {
     if (props.step === undefined) setOwnIndex(clamped);
     props.onStepChange?.(clamped);
   };
-  if (import.meta.env.DEV) {
-    registerTourDebug(() => {
-      const step = current();
-      return {
-        tour: props.debugName ?? 'tour',
-        step: `${index() + 1} / ${props.steps.length}: ${step.title}`,
-        status: status(),
-        boundary: boundary(),
-        target: toList(step.target).map((t) =>
-          explainTourTarget(t, boundary())
-        ),
-        entries: entries().map((t) => explainTourTarget(t, boundary())),
-      };
-    });
-  }
-
   const dismiss = () => props.onDismiss?.();
   const complete = () => (props.onComplete ?? props.onDismiss)?.();
 
@@ -243,18 +220,6 @@ function TourRoot<Step extends TourStep>(props: TourRootProps<Step>) {
       <Show when={props.steps.length > 0}>{props.children}</Show>
     </TourContext.Provider>
   );
-}
-
-/**
- * Dev-only: `window.__tours()` reports every mounted tour's step, status,
- * and why each target and entry does or doesn't resolve.
- */
-const tourReports = new Set<() => unknown>();
-function registerTourDebug(report: () => unknown) {
-  tourReports.add(report);
-  onCleanup(() => tourReports.delete(report));
-  (window as unknown as { __tours?: () => unknown[] }).__tours = () =>
-    [...tourReports].map((next) => next());
 }
 
 const EDGE = 16;

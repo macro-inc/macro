@@ -51,10 +51,6 @@ the control you want isn't registered, register it (step 2).
   it, and the target never registers. Create the ref in the component body
   and decide inside a callback:
   `const target = tourTarget(X);` then `ref={(el) => { if (cond) target(el); }}`.
-- If a step floats unexpectedly, run `window.__tours()` in the dev console.
-  It reports the step, status, and for each target and entry whether it's
-  registered, sized, inside the split, or hidden by an inert ancestor.
-  `registered: 0` means the ref never ran.
 - If the element already has a ref, call both:
   `ref={(el) => { existing(el); target(el); }}` with
   `const target = tourTarget(...)` created in the component body, or use
