@@ -186,3 +186,31 @@ fn a_row_bot_without_a_user_owns_only_in_verified_team_scope_behind_the_gate() {
         );
     }
 }
+
+#[test]
+fn missing_or_false_gate_disables_non_user_owners() {
+    assert_eq!(
+        NonUserOwners::from_config_value(None),
+        Ok(NonUserOwners::Disabled)
+    );
+    assert_eq!(
+        NonUserOwners::from_config_value(Some("false")),
+        Ok(NonUserOwners::Disabled)
+    );
+}
+
+#[test]
+fn true_gate_enables_non_user_owners() {
+    assert_eq!(
+        NonUserOwners::from_config_value(Some("true")),
+        Ok(NonUserOwners::Enabled)
+    );
+}
+
+#[test]
+fn invalid_gate_value_is_rejected() {
+    assert_eq!(
+        NonUserOwners::from_config_value(Some("yes")).map_err(|error| error.to_string()),
+        Err("provided string was not `true` or `false`".to_owned())
+    );
+}

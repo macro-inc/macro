@@ -104,7 +104,7 @@ async fn main() -> Result<()> {
     )));
 
     let registrar = OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(db.clone())));
-    let repo = Arc::new(PgScheduledActionRepo::new(db.clone(), registrar));
+    let repo = Arc::new(PgScheduledActionRepo::new(db.clone(), registrar.clone()));
 
     let event_repo = Arc::new(PgEventRunRepo::new(db.clone()));
     let access = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
@@ -118,7 +118,7 @@ async fn main() -> Result<()> {
     );
     let runner = Arc::new(AgentTaskRunner::new(
         Arc::clone(&tool_context.chat_tool_context.service),
-        PgChatRepo::new(db.clone()),
+        PgChatRepo::new(db.clone(), registrar),
         memory,
         tool_context,
         notification_ingress,

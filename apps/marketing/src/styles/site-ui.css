@@ -1,0 +1,1828 @@
+/* Frozen website styling. Do not import application styles here. */
+@import "tailwindcss" source(none);
+
+
+
+
+
+@property --a0l { syntax: "<number>"; inherits: true; initial-value:   0.88; }
+@property --a0c { syntax: "<number>"; inherits: true; initial-value:   0.20; }
+@property --a0h { syntax: "<angle>";  inherits: true; initial-value: 145deg; }
+@property --a1l { syntax: "<number>"; inherits: true; initial-value:   0.61; }
+@property --a1c { syntax: "<number>"; inherits: true; initial-value:   0.37; }
+@property --a1h { syntax: "<angle>";  inherits: true; initial-value:  54deg; }
+@property --a2l { syntax: "<number>"; inherits: true; initial-value:   0.61; }
+@property --a2c { syntax: "<number>"; inherits: true; initial-value:   0.37; }
+@property --a2h { syntax: "<angle>";  inherits: true; initial-value:  94deg; }
+@property --a3l { syntax: "<number>"; inherits: true; initial-value:   0.61; }
+@property --a3c { syntax: "<number>"; inherits: true; initial-value:   0.37; }
+@property --a3h { syntax: "<angle>";  inherits: true; initial-value: 144deg; }
+@property --a4l { syntax: "<number>"; inherits: true; initial-value:   0.61; }
+@property --a4c { syntax: "<number>"; inherits: true; initial-value:   0.37; }
+@property --a4h { syntax: "<angle>";  inherits: true; initial-value: 194deg; }
+
+@property --b0l { syntax: "<number>"; inherits: true; initial-value:      0; }
+@property --b0c { syntax: "<number>"; inherits: true; initial-value:      0; }
+@property --b0h { syntax: "<angle>";  inherits: true; initial-value:  14deg; }
+@property --b1l { syntax: "<number>"; inherits: true; initial-value:   0.15; }
+@property --b1c { syntax: "<number>"; inherits: true; initial-value:      0; }
+@property --b1h { syntax: "<angle>";  inherits: true; initial-value:  14deg; }
+@property --b2l { syntax: "<number>"; inherits: true; initial-value:   0.16; }
+@property --b2c { syntax: "<number>"; inherits: true; initial-value:      0; }
+@property --b2h { syntax: "<angle>";  inherits: true; initial-value:  14deg; }
+@property --b3l { syntax: "<number>"; inherits: true; initial-value:   0.18; }
+@property --b3c { syntax: "<number>"; inherits: true; initial-value:      0; }
+@property --b3h { syntax: "<angle>";  inherits: true; initial-value:  14deg; }
+@property --b4l { syntax: "<number>"; inherits: true; initial-value:   0.36; }
+@property --b4c { syntax: "<number>"; inherits: true; initial-value:      0; }
+@property --b4h { syntax: "<angle>";  inherits: true; initial-value:  14deg; }
+
+@property --c0l { syntax: "<number>"; inherits: true; initial-value:      1; }
+@property --c0c { syntax: "<number>"; inherits: true; initial-value:      0; }
+@property --c0h { syntax: "<angle>";  inherits: true; initial-value:  14deg; }
+@property --c1l { syntax: "<number>"; inherits: true; initial-value:   0.90; }
+@property --c1c { syntax: "<number>"; inherits: true; initial-value:      0; }
+@property --c1h { syntax: "<angle>";  inherits: true; initial-value:  14deg; }
+@property --c2l { syntax: "<number>"; inherits: true; initial-value:   0.80; }
+@property --c2c { syntax: "<number>"; inherits: true; initial-value:      0; }
+@property --c2h { syntax: "<angle>";  inherits: true; initial-value:  14deg; }
+@property --c3l { syntax: "<number>"; inherits: true; initial-value:   0.70; }
+@property --c3c { syntax: "<number>"; inherits: true; initial-value:      0; }
+@property --c3h { syntax: "<angle>";  inherits: true; initial-value:  14deg; }
+@property --c4l { syntax: "<number>"; inherits: true; initial-value:   0.60; }
+@property --c4c { syntax: "<number>"; inherits: true; initial-value:      0; }
+@property --c4h { syntax: "<angle>";  inherits: true; initial-value:  14deg; }
+
+/* Foreground lightness selected for readable content on the active accent. */
+@property --accent-contrast-l { syntax: "<number>"; inherits: true; initial-value: 0.2; }
+
+@property --safe-bottom { syntax: "<length>"; inherits: true; initial-value: 0px; }
+@property --safe-right  { syntax: "<length>"; inherits: true; initial-value: 0px; }
+@property --safe-left   { syntax: "<length>"; inherits: true; initial-value: 0px; }
+@property --safe-top    { syntax: "<length>"; inherits: true; initial-value: 0px; }
+@property --app-border-width { syntax: "<length>"; inherits: true; initial-value: 1px; }
+@property --app-ring-width   { syntax: "<length>"; inherits: true; initial-value: 0.5px; }
+
+:root {
+  --app-border-width: 1px;
+  --app-ring-width: 0.5px;
+
+  /* Workspace sidebar geometry. Both icon rails are 26px from the edge.
+     Controls align by their centers, independent of glyph or button size. */
+  --sidebar-gutter: 0.5rem;
+  --sidebar-item-inset: 0.5rem;
+  --sidebar-icon-slot: 1.25rem;
+  --sidebar-icon-size: 1rem;
+  --sidebar-control-size: 1.5rem;
+  --sidebar-row-height: 2rem;
+  --sidebar-row-gap: 0.125rem;
+  --sidebar-label-gap: 0.375rem;
+  --sidebar-section-gap: 1.5rem;
+  --sidebar-section-content-gap: 0.25rem;
+  --sidebar-content-inset: calc(var(--sidebar-gutter) + var(--sidebar-item-inset));
+  --sidebar-local-rail: calc(var(--sidebar-item-inset) + var(--sidebar-icon-slot) / 2);
+  --sidebar-control-overhang: calc((var(--sidebar-icon-slot) - var(--sidebar-control-size)) / 2);
+  --sidebar-action-inset: calc(var(--sidebar-item-inset) + var(--sidebar-control-overhang));
+  --sidebar-header-action-inset: calc(var(--sidebar-gutter) + var(--sidebar-action-inset));
+
+  /* mobile safe areas */
+  --safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--tauri-inset-bottom, 0px));
+  --safe-right: max(env(safe-area-inset-right, 0px), var(--tauri-inset-right, 0px));
+  --safe-left: max(env(safe-area-inset-left, 0px), var(--tauri-inset-left, 0px));
+  --safe-top: max(env(safe-area-inset-top, 0px), var(--tauri-inset-top, 0px));
+
+  /* Mobile chrome sizing knobs. Literal px, not --spacing-derived rem:
+     chrome must not track the OS text-size setting. */
+  /* Gutter shared by the full-frame mobile chrome: the dock row, header
+     island strip, and accessory-region contributions all pad with this so
+     their edges line up, and the bottom-chrome stack reuses it for its gap
+     and bottom inset. Use `px-(--mobile-chrome-gutter)`. */
+  --mobile-chrome-gutter: 12px;
+  /* Gap within the dock row: between its islands and between the buttons
+     inside the compact dock island. */
+  --mobile-chrome-gap: 12px;
+  /* Dock buttons and touch-menu triggers; the compact dock island matches
+     its height to this. */
+  --mobile-chrome-button-size: 46px;
+  /* Icon inside a dock button / touch-menu trigger. */
+  --mobile-chrome-icon-size: 27px;
+
+  /* chat vars */
+  --left-of-connector: calc(var(--message-padding-x) + var(--user-icon-width) * 0.5);
+  --left-of-user-icon: calc(var(--left-of-connector) - var(--user-icon-width) * 0.5);
+  --regular-message-padding-t: .625rem;
+  --message-padding-x: .5rem;
+  --thread-padding-y: .5rem;
+  --user-icon-width: 32px;
+  --thread-shift: 32px;
+  --channel-rail-width: 1px;
+  --channel-rail-clearance: .5rem;
+  --left-of-channel-rail: calc(var(--left-of-connector) - var(--channel-rail-width) / 2);
+  --channel-rail-center: calc(var(--left-of-channel-rail) + var(--channel-rail-width) / 2);
+
+  /* accent - active, hover states, high chroma */
+  --a0: oklch(var(--a0l) var(--a0c) var(--a0h));
+  --a1: oklch(var(--a1l) var(--a1c) var(--a1h));
+  --a2: oklch(var(--a2l) var(--a2c) var(--a2h));
+  --a3: oklch(var(--a3l) var(--a3c) var(--a3h));
+  --a4: oklch(var(--a4l) var(--a4c) var(--a4h));
+
+  /* base - background colors, borders */
+  --b0: oklch(var(--b0l) var(--b0c) var(--b0h));
+  --b1: oklch(var(--b1l) var(--b1c) var(--b1h));
+  --b2: oklch(var(--b2l) var(--b2c) var(--b2h));
+  --b3: oklch(var(--b3l) var(--b3c) var(--b3h));
+  --b4: oklch(var(--b4l) var(--b4c) var(--b4h));
+
+  /* contrast, body & paragraph text, icon stroke & fill */
+  --c0: oklch(var(--c0l) var(--c0c) var(--c0h));
+  --c1: oklch(var(--c1l) var(--c1c) var(--c1h));
+  --c2: oklch(var(--c2l) var(--c2c) var(--c2h));
+  --c3: oklch(var(--c3l) var(--c3c) var(--c3h));
+  --c4: oklch(var(--c4l) var(--c4c) var(--c4h));
+
+  /* scuffed: defualt 0.15, used for transition jamming, currently disabled */
+  --transition: 0s;
+
+  /* Glass chrome, ported from the marketing site's hero CTA ring
+     (solid-site `.home-hero-cta-bar`). The look is four things layered on a
+     translucent surface: a backdrop blur, a bright inner top edge, a dark
+     inner bottom edge, and a 135deg specular rim.
+
+     Split in two so the size scale and the theme stay independent:
+
+     - PALETTE (below, plus a light-mode pass) says which way the light comes
+       from and how strong the effect is at full size. The site is dark-only,
+       so its hard-coded values are the dark half; in a light theme the lift
+       comes from white, not from the (dark) ink color.
+     - GEOMETRY (owned by the utilities) says how big it is: blur/shadow
+       extents, and `--glass-scale` multiplying every palette strength. The
+       utilities set their tokens *on the element*, which would out-specify an
+       inherited light-mode value, so they must never name a color or a
+       strength directly — palette lives here, and only here. */
+  --glass-tint: var(--color-content-1);
+  --glass-shade-color: var(--color-surface-0);
+  --glass-shadow-alpha: 0.55;
+  --glass-highlight-base: 6%;
+  --glass-shade-base: 40%;
+  --glass-rim-strong-base: 13.5%;
+  --glass-rim-soft-base: 9%;
+  --glass-rim-shade-base: 0%;
+  /* Mobile chrome has a continuous rim with two diagonal reflections. */
+  --island-rim-strong: 28%;
+  --island-rim-soft: 12%;
+  --island-rim-faint: 4%;
+
+  /* Depth-0 defaults for content rendered outside a Layer marker. */
+  --layer-surface: var(--color-surface-0);
+  --layer-inset: var(--color-surface-0);
+
+  ::selection {
+    background-color: oklch(from var(--color-ink) l c h / 0.1);
+  }
+
+}
+
+/* Light themes invert where the glass gets its lift: the bright edge is white
+   rather than the (dark) ink color, the bottom edge is a hint of ink rather
+   than a hole punched in black, and the cast shadow is softer so the surface
+   reads as raised instead of cut out. Palette only — the geometry tokens are
+   shared, so every size scales the same way in both themes. */
+html[data-theme-light='true'] {
+  --glass-tint: white;
+  --glass-shade-color: var(--color-content-0);
+  --glass-shadow-alpha: 0.28;
+  --glass-highlight-base: 55%;
+  --glass-shade-base: 8%;
+  --glass-rim-strong-base: 52.5%;
+  --glass-rim-soft-base: 30%;
+  /* A faint ink rim keeps white reflections legible on pale surfaces. */
+  --glass-rim-shade-base: 7%;
+  --island-rim-strong: 75%;
+  --island-rim-soft: 40%;
+  --island-rim-faint: 16%;
+}
+
+html[data-platform='ios'],
+body.tauri-ios {
+  --app-border-width: 1px;
+  --app-ring-width: 1px;
+}
+
+@supports (-webkit-touch-callout: none) {
+  html {
+    --app-border-width: 1px;
+    --app-ring-width: 1px;
+  }
+}
+
+/* These mappings are the complete layer contract; structural semantic colors
+   do not change across layers. */
+[data-layer] {
+  --color-surface: var(--theme-surface, var(--layer-surface));
+  --color-inset: var(--theme-inset, var(--layer-inset));
+}
+
+[data-layer][data-depth='0'] {
+  --layer-surface: var(--color-surface-0);
+  --layer-inset: var(--color-surface-0);
+}
+
+[data-layer][data-depth='1'] {
+  --layer-surface: var(--color-surface-1);
+  --layer-inset: var(--color-surface-0);
+}
+
+[data-layer][data-depth='2'] {
+  --layer-surface: var(--color-surface-2);
+  --layer-inset: var(--color-surface-1);
+}
+
+[data-layer][data-depth='3'] {
+  --layer-surface: var(--color-surface-3);
+  --layer-inset: var(--color-surface-2);
+}
+
+[data-layer][data-depth='4'] {
+  --layer-surface: var(--color-surface-4);
+  --layer-inset: var(--color-surface-3);
+}
+
+/* Capture on a separate element so swapping the palette cannot create a
+   custom-property cycle. Nested InvertUtil boundaries capture the local colors. */
+[data-invert-source] {
+  --invert-surface: var(--color-ink);
+  --invert-ink: var(--color-page);
+  --invert-accent: var(--color-accent);
+  --invert-red: var(--color-red);
+  --invert-orange: var(--color-orange);
+  --invert-amber: var(--color-amber);
+  --invert-yellow: var(--color-yellow);
+  --invert-lime: var(--color-lime);
+  --invert-green: var(--color-green);
+  --invert-teal: var(--color-teal);
+  --invert-cyan: var(--color-cyan);
+  --invert-blue: var(--color-blue);
+  --invert-violet: var(--color-violet);
+  --invert-purple: var(--color-purple);
+  --invert-pink: var(--color-pink);
+  --invert-link: var(--color-link);
+  --invert-link-hover: var(--color-link-hover);
+  --invert-link-visited: var(--color-link-visited);
+  --invert-success: var(--color-success);
+  --invert-warning: var(--color-warning);
+  --invert-failure: var(--color-failure);
+}
+
+[data-invert] {
+  /* Move lightness toward the local foreground. Missing chroma and hue in
+     the target keep the authored palette chromatic instead of mixing to gray. */
+  --invert-palette-target: oklch(from var(--invert-ink) clamp(0.3, l, 0.85) none none);
+  --color-accent: color-mix(in oklch, var(--invert-accent) 20%, var(--invert-palette-target));
+  --color-red: color-mix(in oklch, var(--invert-red) 20%, var(--invert-palette-target));
+  --color-orange: color-mix(in oklch, var(--invert-orange) 20%, var(--invert-palette-target));
+  --color-amber: color-mix(in oklch, var(--invert-amber) 20%, var(--invert-palette-target));
+  --color-yellow: color-mix(in oklch, var(--invert-yellow) 20%, var(--invert-palette-target));
+  --color-lime: color-mix(in oklch, var(--invert-lime) 20%, var(--invert-palette-target));
+  --color-green: color-mix(in oklch, var(--invert-green) 20%, var(--invert-palette-target));
+  --color-teal: color-mix(in oklch, var(--invert-teal) 20%, var(--invert-palette-target));
+  --color-cyan: color-mix(in oklch, var(--invert-cyan) 20%, var(--invert-palette-target));
+  --color-blue: color-mix(in oklch, var(--invert-blue) 20%, var(--invert-palette-target));
+  --color-violet: color-mix(in oklch, var(--invert-violet) 20%, var(--invert-palette-target));
+  --color-purple: color-mix(in oklch, var(--invert-purple) 20%, var(--invert-palette-target));
+  --color-pink: color-mix(in oklch, var(--invert-pink) 20%, var(--invert-palette-target));
+  --color-link: color-mix(in oklch, var(--invert-link) 20%, var(--invert-palette-target));
+  --color-link-hover: color-mix(in oklch, var(--invert-link-hover) 20%, var(--invert-palette-target));
+  --color-link-visited: color-mix(in oklch, var(--invert-link-visited) 20%, var(--invert-palette-target));
+  --color-success: color-mix(in oklch, var(--invert-success) 20%, var(--invert-palette-target));
+  --color-warning: color-mix(in oklch, var(--invert-warning) 20%, var(--invert-palette-target));
+  --color-failure: color-mix(in oklch, var(--invert-failure) 20%, var(--invert-palette-target));
+  --color-accent-contrast: var(--invert-surface);
+  --color-accent-contrast-muted: oklch(from var(--color-accent-contrast) l c h / 0.7);
+  --theme-surface: initial;
+  --theme-inset: initial;
+  --theme-panel: initial;
+  --color-surface-0: var(--invert-surface);
+  --color-surface-1: color-mix(in oklch, var(--invert-surface) 96%, var(--invert-ink));
+  --color-surface-2: color-mix(in oklch, var(--invert-surface) 92%, var(--invert-ink));
+  --color-surface-3: color-mix(in oklch, var(--invert-surface) 88%, var(--invert-ink));
+  --color-surface-4: color-mix(in oklch, var(--invert-surface) 84%, var(--invert-ink));
+  --color-content-0: var(--invert-ink);
+  --color-content-1: color-mix(in oklch, var(--invert-ink) 80%, var(--invert-surface));
+  --color-content-2: color-mix(in oklch, var(--invert-ink) 65%, var(--invert-surface));
+  --color-content-3: color-mix(in oklch, var(--invert-ink) 40%, var(--invert-surface));
+  --color-content-4: color-mix(in oklch, var(--invert-ink) 55%, var(--invert-surface));
+  --color-edge: var(--color-surface-4);
+  --color-edge-muted: var(--color-surface-3);
+  /* Inherited aliases are already resolved; rebind them to the local ramp. */
+  --color-thread-rail: color-mix(in oklch, var(--color-surface-0) 90%, var(--color-content-0));
+  --color-ink: var(--color-content-0);
+  --color-ink-muted: var(--color-content-1);
+  --color-ink-subtle: var(--color-content-2);
+  --color-ink-disabled: var(--color-content-3);
+  --color-ink-placeholder: var(--color-content-4);
+  --color-page: var(--color-surface-0);
+  --color-panel: var(--color-surface-1);
+  --color-dialog: var(--color-surface-2);
+  --color-menu: var(--color-surface-2);
+  --color-menu-glass: color-mix(in oklch, var(--color-menu) 88%, transparent);
+  --color-tooltip: var(--color-surface-2);
+  --color-toast: var(--color-surface-2);
+  --color-input: transparent;
+  --color-input-focus: var(--color-surface-1);
+  --color-message: var(--color-surface-1);
+  --color-composer: var(--color-surface-2);
+  --color-composer-ink: var(--color-ink);
+  --color-composer-placeholder: var(--color-ink-placeholder);
+  --color-composer-action: var(--color-ink);
+  --color-composer-action-ink: var(--color-panel);
+  --color-code-buffer: color-mix(in srgb, var(--color-surface-0) 60%, var(--color-surface-1));
+  --color-inline-code: color-mix(in oklch, var(--color-ink) 5%, transparent);
+  --color-hover: color-mix(in oklch, var(--color-content-0) 3%, transparent);
+  --color-active: color-mix(in oklch, var(--color-content-0) 6%, transparent);
+  --color-chrome: color-mix(in oklch, var(--color-surface-3) 98%, var(--color-content-0));
+
+  --color-ink-extra-muted: var(--color-ink-subtle);
+  --color-skeleton: color-mix(in oklch, var(--color-ink) 10%, transparent);
+  --color-list-hover: var(--color-hover);
+  --color-list-highlighted: var(--color-hover);
+  --color-selected: color-mix(in oklch, var(--color-accent) 8%, transparent);
+  --color-list-selected: var(--color-selected);
+  --color-list-selected-highlighted: color-mix(in oklch, var(--color-accent) 16%, transparent);
+
+  /* Generated compatibility tokens. */
+  --color-accent-bg: color-mix(in oklch, var(--color-accent) 8%, transparent);
+  --color-accent-ink: var(--color-accent);
+  --color-accent-hover: color-mix(in oklch, var(--color-accent) 20%, transparent);
+
+  --color-red-bg: color-mix(in oklch, var(--color-red) 15%, transparent);
+  --color-red-ink: var(--color-red);
+  --color-red-hover: color-mix(in oklch, var(--color-red) 20%, transparent);
+  --color-orange-bg: color-mix(in oklch, var(--color-orange) 15%, transparent);
+  --color-orange-ink: var(--color-orange);
+  --color-orange-hover: color-mix(in oklch, var(--color-orange) 20%, transparent);
+  --color-amber-bg: color-mix(in oklch, var(--color-amber) 15%, transparent);
+  --color-amber-ink: var(--color-amber);
+  --color-amber-hover: color-mix(in oklch, var(--color-amber) 20%, transparent);
+  --color-yellow-bg: color-mix(in oklch, var(--color-yellow) 15%, transparent);
+  --color-yellow-ink: var(--color-yellow);
+  --color-yellow-hover: color-mix(in oklch, var(--color-yellow) 20%, transparent);
+  --color-lime-bg: color-mix(in oklch, var(--color-lime) 15%, transparent);
+  --color-lime-ink: var(--color-lime);
+  --color-lime-hover: color-mix(in oklch, var(--color-lime) 20%, transparent);
+  --color-green-bg: color-mix(in oklch, var(--color-green) 15%, transparent);
+  --color-green-ink: var(--color-green);
+  --color-green-hover: color-mix(in oklch, var(--color-green) 20%, transparent);
+  --color-teal-bg: color-mix(in oklch, var(--color-teal) 15%, transparent);
+  --color-teal-ink: var(--color-teal);
+  --color-teal-hover: color-mix(in oklch, var(--color-teal) 20%, transparent);
+  --color-cyan-bg: color-mix(in oklch, var(--color-cyan) 15%, transparent);
+  --color-cyan-ink: var(--color-cyan);
+  --color-cyan-hover: color-mix(in oklch, var(--color-cyan) 20%, transparent);
+  --color-blue-bg: color-mix(in oklch, var(--color-blue) 15%, transparent);
+  --color-blue-ink: var(--color-blue);
+  --color-blue-hover: color-mix(in oklch, var(--color-blue) 20%, transparent);
+  --color-violet-bg: color-mix(in oklch, var(--color-violet) 15%, transparent);
+  --color-violet-ink: var(--color-violet);
+  --color-violet-hover: color-mix(in oklch, var(--color-violet) 20%, transparent);
+  --color-purple-bg: color-mix(in oklch, var(--color-purple) 15%, transparent);
+  --color-purple-ink: var(--color-purple);
+  --color-purple-hover: color-mix(in oklch, var(--color-purple) 20%, transparent);
+  --color-pink-bg: color-mix(in oklch, var(--color-pink) 15%, transparent);
+  --color-pink-ink: var(--color-pink);
+  --color-pink-hover: color-mix(in oklch, var(--color-pink) 20%, transparent);
+
+  --color-success-bg: color-mix(in oklch, var(--color-success) 15%, transparent);
+  --color-success-ink: var(--color-success);
+  --color-success-hover: color-mix(in oklch, var(--color-success) 20%, transparent);
+  --color-warning-bg: color-mix(in oklch, var(--color-warning) 15%, transparent);
+  --color-warning-ink: var(--color-warning);
+  --color-warning-hover: color-mix(in oklch, var(--color-warning) 20%, transparent);
+  --color-failure-bg: color-mix(in oklch, var(--color-failure) 15%, transparent);
+  --color-failure-ink: var(--color-failure);
+  --color-failure-hover: color-mix(in oklch, var(--color-failure) 20%, transparent);
+  --color-alert: var(--color-warning);
+  --color-alert-bg: var(--color-warning-bg);
+  --color-alert-ink: var(--color-warning-ink);
+
+  /* Entity colors are aliases of the authored named palette. */
+  --color-comment:     var(--color-yellow);
+  --color-comment-bg:  oklch(from var(--color-comment) l c h / 0.15);
+  --color-comment-ink: var(--color-comment);
+
+  --color-calendar:    var(--color-yellow);
+  --color-contact:     var(--color-yellow);
+  --color-canvas:      var(--color-amber);
+  --color-folder:      var(--color-blue);
+  --color-image:       var(--color-yellow);
+  --color-video:       var(--color-violet);
+  --color-write:       var(--color-blue);
+  --color-code:        var(--color-lime);
+  --color-chat:        var(--color-cyan);
+  --color-html:        var(--color-orange);
+  --color-note:        var(--color-violet);
+  --color-task:        var(--color-green);
+  --color-snippet:     var(--color-pink);
+  --color-pdf:         var(--color-red);
+  --color-rss:         var(--color-blue);
+  --color-default:     var(--color-content-1);
+  --color-email:       var(--color-default);
+}
+
+/* Scope the panel semantic itself so nested bg-panel consumers share the same
+   inactive split chrome instead of only tinting the outer panel element.
+   Lower lightness directly: mixing with ink reverses the effect in dark themes. */
+.split-panel-inactive {
+  --color-panel: oklch(
+    from var(--theme-panel, var(--color-surface-1)) calc(l - 0.025) c h
+  );
+}
+
+@theme {
+  /* Reading sizes at a 16px root; rem units preserve accessibility scaling. */
+  --text-base: 0.9375rem;
+  --text-base--line-height: calc(1.5 / 0.9375);
+  --text-sm: 0.875rem;
+  --text-sm--line-height: calc(1.25 / 0.875);
+
+  /* Disable default tailwind color palette */
+   --color-*: initial;
+
+  /* Match the hairline borders: make the default `ring` a 0.5px ring.
+     Explicit widths (ring, ring-2, …) are left untouched. */
+  --default-ring-width: var(--app-ring-width);
+
+  /* Input tokens: the only raw colors stored by a VNext theme. */
+  --color-surface-0: var(--b0);
+  --color-surface-1: var(--b1);
+  --color-surface-2: var(--b2);
+  --color-surface-3: var(--b3);
+  --color-surface-4: var(--b4);
+  --color-content-0: var(--c0);
+  --color-content-1: var(--c1);
+  --color-content-2: var(--c2);
+  --color-content-3: var(--c3);
+  --color-content-4: var(--c4);
+  --color-edge: var(--color-surface-4);
+  --color-edge-muted: var(--color-surface-3);
+  --color-accent: var(--a0);
+  --color-accent-contrast: oklch(var(--accent-contrast-l) var(--c0c) var(--c0h));
+  --color-accent-contrast-muted: oklch(var(--accent-contrast-l) var(--c0c) var(--c0h) / 0.7);
+  --color-red: oklch(63.7% 0.237 25.331);
+  --color-orange: oklch(70.5% 0.213 47.604);
+  --color-amber: oklch(76.9% 0.188 70.08);
+  --color-yellow: oklch(79.5% 0.184 86.047);
+  --color-lime: oklch(76.8% 0.233 130.85);
+  --color-green: oklch(72.3% 0.219 149.579);
+  --color-teal: oklch(70.4% 0.14 182.503);
+  --color-cyan: oklch(71.5% 0.143 215.221);
+  --color-blue: oklch(62.3% 0.214 259.815);
+  --color-violet: oklch(60.6% 0.25 292.717);
+  --color-purple: oklch(62.7% 0.265 303.9);
+  --color-pink: oklch(65.6% 0.241 354.308);
+
+  /* Component-facing semantic assignments. A theme may override the two
+     layer-relative colors; otherwise they resolve through the nearest Layer. */
+  --color-surface: var(--theme-surface, var(--layer-surface));
+  --color-inset: var(--theme-inset, var(--layer-inset));
+  --color-ink: var(--color-content-0);
+  --color-ink-muted: var(--color-content-1);
+  --color-ink-subtle: var(--color-content-2);
+  --color-ink-disabled: var(--color-content-3);
+  --color-ink-placeholder: var(--color-content-4);
+  --color-link: var(--color-accent);
+  --color-link-hover: var(--color-accent);
+  --color-link-visited: var(--color-accent);
+  --color-page: var(--color-surface-0);
+  --color-panel: var(--theme-panel, var(--color-surface-1));
+  --color-control: var(--color-surface-2);
+  --color-edge-frame: color-mix(in oklch, var(--color-content-0) 8%, transparent);
+  --color-edge-button: color-mix(in oklch, var(--color-content-0) 5%, transparent);
+  --color-edge-divider: color-mix(in oklch, var(--color-content-0) 4%, transparent);
+  --color-edge-focus: color-mix(in oklch, var(--color-content-0) 40%, transparent);
+  --color-dialog: var(--color-surface-2);
+  --color-menu: var(--color-surface-2);
+  /* Touch surfaces keep their translucent fill; desktop overrides it below
+     while retaining the shared glass rim and shadow. */
+  --color-menu-glass: color-mix(in oklch, var(--color-menu) 88%, transparent);
+  --color-tooltip: var(--color-surface-2);
+  --color-toast: var(--color-surface-2);
+  --color-input: transparent;
+  --color-input-focus: var(--color-surface-1);
+  --color-message: var(--color-surface-1);
+  --color-composer: var(--color-surface-2);
+  --color-composer-ink: var(--color-ink);
+  --color-composer-placeholder: var(--color-ink-placeholder);
+  --color-composer-action: var(--color-ink);
+  --color-composer-action-ink: var(--color-panel);
+  --color-code-buffer: color-mix(in srgb, var(--color-surface-0) 60%, var(--color-surface-1));
+  --color-inline-code: color-mix(in oklch, var(--color-ink) 5%, transparent);
+  --color-hover: color-mix(in oklch, var(--color-content-0) 3%, transparent);
+  --color-active: color-mix(in oklch, var(--color-content-0) 6%, transparent);
+  --color-selected: color-mix(in oklch, var(--color-accent) 8%, transparent);
+  --color-success: var(--color-green);
+  --color-warning: var(--color-amber);
+  --color-failure: var(--color-red);
+  --color-chrome: color-mix(in oklch, var(--color-surface-3) 98%, var(--color-content-0));
+
+  /* Generated compatibility tokens. */
+  --color-accent-bg: color-mix(in oklch, var(--color-accent) 8%, transparent);
+  --color-accent-ink: var(--color-accent);
+  --color-accent-hover: color-mix(in oklch, var(--color-accent) 20%, transparent);
+
+  --color-red-bg: color-mix(in oklch, var(--color-red) 15%, transparent);
+  --color-red-ink: var(--color-red);
+  --color-red-hover: color-mix(in oklch, var(--color-red) 20%, transparent);
+  --color-orange-bg: color-mix(in oklch, var(--color-orange) 15%, transparent);
+  --color-orange-ink: var(--color-orange);
+  --color-orange-hover: color-mix(in oklch, var(--color-orange) 20%, transparent);
+  --color-amber-bg: color-mix(in oklch, var(--color-amber) 15%, transparent);
+  --color-amber-ink: var(--color-amber);
+  --color-amber-hover: color-mix(in oklch, var(--color-amber) 20%, transparent);
+  --color-yellow-bg: color-mix(in oklch, var(--color-yellow) 15%, transparent);
+  --color-yellow-ink: var(--color-yellow);
+  --color-yellow-hover: color-mix(in oklch, var(--color-yellow) 20%, transparent);
+  --color-lime-bg: color-mix(in oklch, var(--color-lime) 15%, transparent);
+  --color-lime-ink: var(--color-lime);
+  --color-lime-hover: color-mix(in oklch, var(--color-lime) 20%, transparent);
+  --color-green-bg: color-mix(in oklch, var(--color-green) 15%, transparent);
+  --color-green-ink: var(--color-green);
+  --color-green-hover: color-mix(in oklch, var(--color-green) 20%, transparent);
+  --color-teal-bg: color-mix(in oklch, var(--color-teal) 15%, transparent);
+  --color-teal-ink: var(--color-teal);
+  --color-teal-hover: color-mix(in oklch, var(--color-teal) 20%, transparent);
+  --color-cyan-bg: color-mix(in oklch, var(--color-cyan) 15%, transparent);
+  --color-cyan-ink: var(--color-cyan);
+  --color-cyan-hover: color-mix(in oklch, var(--color-cyan) 20%, transparent);
+  --color-blue-bg: color-mix(in oklch, var(--color-blue) 15%, transparent);
+  --color-blue-ink: var(--color-blue);
+  --color-blue-hover: color-mix(in oklch, var(--color-blue) 20%, transparent);
+  --color-violet-bg: color-mix(in oklch, var(--color-violet) 15%, transparent);
+  --color-violet-ink: var(--color-violet);
+  --color-violet-hover: color-mix(in oklch, var(--color-violet) 20%, transparent);
+  --color-purple-bg: color-mix(in oklch, var(--color-purple) 15%, transparent);
+  --color-purple-ink: var(--color-purple);
+  --color-purple-hover: color-mix(in oklch, var(--color-purple) 20%, transparent);
+  --color-pink-bg: color-mix(in oklch, var(--color-pink) 15%, transparent);
+  --color-pink-ink: var(--color-pink);
+  --color-pink-hover: color-mix(in oklch, var(--color-pink) 20%, transparent);
+
+  --color-success-bg: color-mix(in oklch, var(--color-success) 15%, transparent);
+  --color-success-ink: var(--color-success);
+  --color-success-hover: color-mix(in oklch, var(--color-success) 20%, transparent);
+  --color-warning-bg: color-mix(in oklch, var(--color-warning) 15%, transparent);
+  --color-warning-ink: var(--color-warning);
+  --color-warning-hover: color-mix(in oklch, var(--color-warning) 20%, transparent);
+  --color-failure-bg: color-mix(in oklch, var(--color-failure) 15%, transparent);
+  --color-failure-ink: var(--color-failure);
+  --color-failure-hover: color-mix(in oklch, var(--color-failure) 20%, transparent);
+  --color-alert: var(--color-warning);
+  --color-alert-bg: var(--color-warning-bg);
+  --color-alert-ink: var(--color-warning-ink);
+
+  /* Utility outputs. */
+  /* Thread rail segments overlap to form continuous paths, so this must stay
+     opaque or their intersections render darker than the straight runs. */
+  --color-thread-rail: color-mix(in oklch, var(--color-surface) 90%, var(--color-ink));
+  --color-modal-overlay: oklch(0 0 0 / 0.25);
+  --color-drop-shadow: oklch(0.15 0 0 / 0.04);
+  /* Inset hairline that settles an avatar against the surface behind it. It
+     recedes toward the page tone rather than outlining against it, so a photo's
+     edge stops competing with the layout. Per-mode values are below; this
+     default covers first paint, before the mode attribute is written. */
+  --color-avatar-edge: oklch(0 0 0 / 0.4);
+  --color-skeleton: color-mix(in oklch, var(--color-ink) 10%, transparent);
+  --color-list-hover: var(--color-hover);
+  --color-list-highlighted: var(--color-active);
+  --color-list-selected: var(--color-selected);
+  --color-list-selected-highlighted: color-mix(in oklch, var(--color-accent) 16%, transparent);
+
+  /* Temporary compatibility aliases while component classes migrate. */
+  --color-ink-extra-muted: var(--color-ink-subtle);
+  --color-button: var(--color-surface);
+  --color-overlay: var(--color-modal-overlay);
+
+  /* Entity colors are aliases of the authored named palette. */
+  --color-comment:     var(--color-yellow);
+  --color-comment-bg:  oklch(from var(--color-comment) l c h / 0.15);
+  --color-comment-ink: oklch(from var(--color-comment) var(--c1l) c h); /* scuffed */
+
+  --color-calendar:    var(--color-yellow);
+  --color-contact:     var(--color-yellow);
+  --color-canvas:      var(--color-amber);
+  --color-folder:      var(--color-blue);
+  --color-image:       var(--color-yellow);
+  --color-video:       var(--color-violet);
+  --color-write:       var(--color-blue);
+  --color-code:        var(--color-lime);
+  --color-chat:        var(--color-cyan);
+  --color-html:        var(--color-orange);
+  --color-note:        var(--color-violet);
+  --color-task:        var(--color-green);
+  --color-snippet:     var(--color-pink);
+  --color-pdf:         var(--color-red);
+  --color-rss:         var(--color-blue);
+  --color-default:     var(--color-content-1);
+  --color-email:       var(--color-default);
+
+  /* Font families */
+  /* Apple devices get the system font (SF): `-apple-system` and
+     `BlinkMacSystemFont` only resolve on Apple platforms, so everywhere else
+     falls straight through to the bundled Inter. `system-ui` and "Segoe UI"
+     are deliberately absent so Windows never renders text in Segoe; the Segoe
+     entries at the end are emoji/symbol fallbacks only. */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Inter Variable", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-serif: "Playfair Display Variable", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  --font-mono: "Roboto Mono Variable",  monospace;
+  --text-xxs: 0.625rem;
+
+  /* Animations */
+  --animate-slide-in: slideIn 150ms cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-menu-open: menu-open 120ms cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-dialog-overlay-open: dialog-overlay-open 120ms ease-out;
+  --animate-dialog-content-open: dialog-content-open 160ms cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-dialog-fullscreen-open: dialog-fullscreen-open 160ms cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-typing-dot: typing-dot 1s infinite;
+  --animate-swipe-out: swipeOut 100ms ease-out;
+  --animate-swipe-out-left: swipeOutLeft 100ms ease-out;
+  --animate-indeterminate-bar: indeterminate-bar 1.1s ease-in-out infinite;
+  --animate-todo-pulse: todo-pulse 1.6s ease-in-out infinite;
+  --animate-accordion-down: accordion-down 150ms ease-out;
+  --animate-accordion-up: accordion-up 150ms ease-out;
+
+  /* Z-index scale — the single source of truth for stacking. Classes come
+     from these tokens (`--z-index-foo` -> `z-foo`).
+
+     Bands:
+       0- 99  in-page — viewer internals (0-19), app chrome (20-30),
+              cross-panel content (31), floating widgets (90)
+     100-199  modal stack, drag previews, menus
+     200-299  always on top — tooltips, toasts
+
+     Raw `z-{n}` classes are only for elements inside a local stacking
+     context (an ancestor with its own z-index/isolate/transform), where the
+     value is relative to siblings and can't leak into this scale. Anything
+     stacking at page scope must use a token; don't add new raw page-scope
+     values. For a component family with internal layering, wrap the family
+     in one positioned `z-<token>` container: the wrapper slots the whole
+     family into this scale, and the inner raw z-{n} values become contained,
+     local ordering. */
+
+  /* ---- 0-99: in-page --------------------------------------------------- */
+  --z-index-user-highlight:   1;
+  --z-index-annotation-layer: 2;
+  /* Split-view header title strip. Local to the header's own stacking
+     context (Panel.Header is `z-split-panel-chrome` + relative), so a small
+     value suffices. */
+  --z-index-split-header-content: 3;
+  --z-index-placeable:        4;
+  --z-index-highlight-menu:   5;
+  --z-index-viewer-definition-lookup: 6;
+  --z-index-popup-viewer:             7;
+  --z-index-simple-search:    8;
+  --z-index-sign-up-banner:  18;
+  --z-index-viewer-document-loading-spinner: 19;
+
+  /* In-page app chrome (20-30). */
+  /* Content-anchored floating controls (markdown table handles/menus/bars):
+     above the content they annotate, below app chrome. They mount in the
+     editor's local portal so its scroll and overflow clipping carry them
+     under the split header with the content; the family layers internally
+     with raw z-{n}. */
+  --z-index-anchored-controls: 20;
+  --z-index-item-options-menu: 22;
+  /* Full-frame mobile search results sit below the mobile nav bar / float
+     host, so the search input and category tabs float over them. */
+  --z-index-mobile-search:     23;
+  --z-index-mobile-nav-bar:    24;
+  /* Split panel header/side-panel chrome: above the panel's content and the
+     rest of the in-page chrome, below floating widgets. */
+  --z-index-split-panel-chrome: 30;
+  /* PDF margin comments cross the document panel boundary and must remain
+     interactive when they overlap side-panel chrome. */
+  --z-index-pdf-comments: 31;
+
+  /* App-level floating widgets (`z-float`: draggable call controls, incoming
+     calls). Above all other in-page content, below the modal stack. */
+  --z-index-float:          90;
+
+  /* ---- 100-199: modal stack, drag previews, menus ----------------------- */
+  /* Anchored at 100 so nothing in-page can ever cover a modal. */
+  --z-index-modal-overlay: 100;
+  --z-index-modal:         110;
+  --z-index-modal-content: 120;
+  /* Drag previews render above whatever surface the drag started from. */
+  --z-index-drag:          130;
+  /* Dropdowns/popovers (`z-action-menu`). Above modal content so menus opened
+     from inside a modal render on top of it, below tooltips. */
+  --z-index-action-menu:   150;
+
+  /* ---- 200-299: always on top ------------------------------------------ */
+  --z-index-tool-tip:      200;
+  /* Portaled controls opened from a tooltip/hover card must stack above the
+     surface that owns them. */
+  --z-index-nested-action-menu: 205;
+  /* The PDF custom cursor dot must never hide under a hover tooltip. */
+  --z-index-custom-cursor-tooltip: 210;
+  /* Toasts sit above everything (incl. full-screen modals) so they stay visible. */
+  --z-index-toast-region:  250;
+
+  /* Soft drop shadow for floating menus/popovers (use the `shadow-menu` utility). */
+  --shadow-menu: 0 8px 24px -16px rgb(0 0 0 / 0.24), 0 2px 8px -6px rgb(0 0 0 / 0.18);
+
+  /* Shared label column width for side-panel two-column grids so labels line
+     up across sub-panels (Details, Properties, ...). Consumers should use
+     `grid-cols-[var(--sidepanel-label-width,auto)_1fr]` so the column falls
+     back to auto when the variable isn't set. */
+  --sidepanel-label-width: 5.5rem;
+}
+
+/* scuffed: might wan to use signals for this */
+@custom-variant touch (&:where(html[data-touch-device="true"] *));
+@custom-variant not-touch (&:where(html:not([data-touch-device="true"]) *));
+
+/* Restore native feedback suppressed by Tailwind's reset; glass opts out below. */
+html[data-touch-device='true'] {
+  --sidebar-control-size: 2.25rem;
+  -webkit-tap-highlight-color: initial;
+}
+
+html:not([data-touch-device="true"]),
+html:not([data-touch-device="true"]) [data-invert] {
+  --color-menu-glass: var(--color-menu);
+}
+
+@custom-variant mobile {
+  &:where(html[data-touch-device="true"] *) {
+    @media (max-width: 639px) {
+      @slot;
+    }
+  }
+}
+
+/* Matched on any ancestor rather than `html` so a container can scope a mode to
+   its own subtree — the component gallery previews a light theme inside a dark
+   app that way. The theme feature only ever writes the attribute to `<html>`,
+   so app behavior is unchanged. */
+@custom-variant light-mode (&:where([data-theme-light="true"] *));
+@custom-variant dark-mode (&:where([data-theme-light="false"] *));
+
+/* Dark surfaces need a larger ink step for the thread path to remain visible.
+   Both inputs stay opaque, so overlapping rail segments still render evenly. */
+html[data-theme-light='false'] {
+  --color-thread-rail: color-mix(in oklch, var(--color-surface) 70%, var(--color-ink));
+}
+
+/* The avatar hairline follows the surface it sits on: it darkens the edge on
+   dark surfaces and lightens it on light ones, so the avatar settles into the
+   page instead of being ringed against it. Ancestor-scoped for the same reason
+   as the variants above.
+
+   NOTE: turned up to 0.4 so the treatment is obvious while it is being
+   reviewed. The intended production value is 0.08 — change both alphas below
+   (and the @theme default) once the look is settled. */
+[data-theme-light='false'] {
+  --color-avatar-edge: oklch(0 0 0 / 0.4);
+}
+
+[data-theme-light='true'] {
+  --color-avatar-edge: oklch(1 0 0 / 0.4);
+  --color-composer: var(--color-surface-4);
+}
+
+/* Right-side header actions share a quiet, hover-only background. */
+@utility header-actions {
+  & [data-button] {
+    @apply rounded-xl border-0 bg-transparent;
+
+    &:not(:hover):not(:active) {
+      background-image: none;
+    }
+  }
+}
+
+/* Floating "island" chrome shared by the mobile dock buttons, header islands,
+   and other floating mobile controls. Consumers add their own shape classes
+   (e.g. `size-10 rounded-full` or `h-10 rounded-full px-3`). Defined as a
+   utility so it composes with variants — `mobile:island` — instead of
+   hand-prefixing each part. */
+@utility island {
+  /* Dark mode uses glass; light mode keeps its ring and cast shadow. */
+  @apply min-h-[40px] min-w-[40px] bg-chrome text-ink dark-mode:glass light-mode:ring light-mode:ring-edge/70 light-mode:shadow-[0_4px_20px_8px_oklch(0.15_0_0/0.07)];
+
+  --glass-blur: 18px;
+  --glass-saturate: 1.5;
+
+  @variant light-mode {
+    --glass-backdrop: none;
+    --glass-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow),
+      var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  /* A quiet continuous edge, with broad reflections at the upper-left and
+     lower-right. Unlike desktop glass, the rim never disappears entirely
+     between the highlights. Glass owns the rim's geometry and mask. */
+  --glass-rim-background: linear-gradient(
+    135deg,
+    color-mix(in oklch, var(--glass-tint) var(--island-rim-strong), transparent) 0%,
+    color-mix(in oklch, var(--glass-tint) var(--island-rim-soft), transparent) 18%,
+    color-mix(in oklch, var(--glass-tint) var(--island-rim-faint), transparent) 42%,
+    color-mix(in oklch, var(--glass-tint) var(--island-rim-faint), transparent) 58%,
+    color-mix(in oklch, var(--glass-tint) var(--island-rim-soft), transparent) 82%,
+    color-mix(in oklch, var(--glass-tint) var(--island-rim-strong), transparent) 100%
+  );
+}
+
+/* Glass chrome: backdrop blur, a soft cast shadow, and a specular rim drawn as a 1px
+   gradient masked to the border box (a plain `border` can't fade along its
+   length). Shape and background come from the consumer, so this composes with
+   any radius — the rim inherits it — and with variants (`mobile:glass`).
+
+   Desktop glass uses the marketing site's hero-ring geometry. Consumers can
+   override --glass-rim-background to customize the rim without owning its
+   pseudo-element. The palette stays in :root; the gradient reads those tokens. */
+@utility glass {
+  --glass-rim-background: linear-gradient(
+    135deg,
+    color-mix(in oklch, var(--glass-tint) calc(var(--glass-rim-strong-base) * var(--glass-scale)), transparent) 0%,
+    transparent 24%,
+    transparent 76%,
+    color-mix(in oklch, var(--glass-tint) calc(var(--glass-rim-soft-base) * var(--glass-scale)), transparent) 100%
+  );
+  position: relative;
+  /* The masked rim owns the outer edge. Even a transparent border would
+     inset the absolute pseudo-element by a pixel. Override Surface inline
+     borders too, so every glass consumer uses the same border-box geometry. */
+  border-width: 0 !important;
+  /* Standard property only — Lightning CSS adds `-webkit-backdrop-filter`
+     itself when it minifies. Writing the prefix by hand *after* the standard
+     one makes it collapse the pair down to just the prefixed declaration,
+     which Chrome ignores: the glass loses its blur in production builds while
+     still looking right in dev. */
+  --glass-backdrop: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  &:where(html:not([data-touch-device="true"]) *) {
+    --glass-backdrop: none;
+  }
+  --glass-shadow:
+    inset 0 1px 0 color-mix(in oklch, var(--glass-tint) calc(var(--glass-highlight-base) * var(--glass-scale)), transparent),
+    inset 0 -1px 0 color-mix(in oklch, var(--glass-shade-color) calc(var(--glass-shade-base) * var(--glass-scale)), transparent),
+    0 var(--glass-shadow-y) var(--glass-shadow-blur) var(--glass-shadow-spread)
+      oklch(0 0 0 / calc(var(--glass-shadow-alpha) * var(--glass-shadow-scale, var(--glass-scale))));
+  backdrop-filter: var(--glass-backdrop);
+  box-shadow: var(--glass-shadow);
+
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: var(--glass-rim-background);
+    background-color: color-mix(in oklch, var(--glass-shade-color) calc(var(--glass-rim-shade-base) * var(--glass-scale)), transparent);
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  --glass-scale: 1;
+  --glass-blur: 6px;
+  --glass-saturate: 1.25;
+  --glass-shadow-y: 14px;
+  --glass-shadow-blur: 32px;
+  --glass-shadow-spread: -22px;
+}
+
+/* Strip the glass under a variant (e.g. a container query collapsing a pill
+   to a bare icon, where a rim would chip it). Variant-prefixed utilities sort
+   after plain ones, so `@max-2xl/u-list:glass-none` beats a plain `glass`. */
+/* The scrim behind floating dialogs (cmd+k, create, task compose, confirm).
+   Three quiet layers instead of one flat dim: a tenth of black so the page
+   steps back; a wide top-lit wash that mixes the theme accent in at
+   single-digit strength, so the dimmed page warms toward the brand instead of
+   going gray — like room light through tinted glass; and a whisper of
+   backdrop blur with a nudge of saturation, so what's behind reads as depth
+   rather than as competing detail. The accent wash lives in background-image
+   so a heavier coat (bg-modal-overlay) can replace the base color while
+   keeping the sheen. Standard backdrop-filter only — Lightning CSS adds the
+   -webkit- prefix itself (see the note in `glass`). */
+@utility scrim-glass {
+  background-color: oklch(0 0 0 / 0.1);
+  background-image: radial-gradient(
+    120% 90% at 50% -12%,
+    color-mix(in oklch, var(--color-accent) 6%, transparent) 0%,
+    color-mix(in oklch, var(--color-accent) 2%, transparent) 40%,
+    transparent 68%
+  );
+  backdrop-filter: blur(2px) saturate(1.05);
+}
+
+/* Shared phone sheet geometry: match the screen curve with an even outer
+   gutter. Consumers put home-indicator clearance inside their scroll area. */
+@utility mobile-sheet {
+  --mobile-sheet-radius: clamp(36px, 11.2vmin, 48px);
+  --mobile-sheet-safe-padding: max(0px, calc(var(--safe-bottom, 0px) - 8px));
+  border-radius: var(--mobile-sheet-radius);
+
+  @supports (corner-shape: superellipse(1.25)) {
+    corner-shape: superellipse(1.25);
+
+    &::after {
+      corner-shape: inherit;
+    }
+  }
+}
+
+@utility mobile-sheet-open-animation {
+  animation: mobile-sheet-in 340ms cubic-bezier(0.22, 1, 0.36, 1) both;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+@keyframes mobile-sheet-in {
+  from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@utility glass-none {
+  --glass-backdrop: none;
+  --glass-shadow: none;
+  backdrop-filter: none;
+  box-shadow: none;
+  &::after {
+    content: none;
+  }
+}
+
+/* The channel/compose input: the same glass, but the tight menu shadow
+   swaps for a wide, faint ambient one (a la the ChatGPT composer) so the
+   input reads as floating over the conversation rather than popped out of it.
+   Light themes keep the same geometry at a much lower scale so the halo
+   doesn't dominate pale surfaces. */
+@utility glass-input {
+  @apply glass;
+  --glass-shadow-y: 10px;
+  --glass-shadow-blur: 40px;
+  --glass-shadow-spread: -8px;
+  --glass-shadow-scale: 0.5;
+}
+
+/* Shared flat menu appearance, on the existing menu elements. */
+@utility menu-surface {
+  @apply relative min-h-0 rounded-xl border border-edge-frame bg-menu text-ink shadow-none;
+  --color-surface: var(--color-menu);
+}
+
+/* Shared dialog appearance; composers retain their original glass. */
+@utility elevated-surface {
+  @apply glass-input;
+  border-radius: 24px;
+  background-color: var(--color-dialog);
+  color: var(--color-ink);
+}
+
+html[data-theme-light='true'] :is(.glass-input, .elevated-surface) {
+  --glass-shadow-y: 4px;
+  --glass-shadow-blur: 16px;
+  --glass-shadow-spread: -10px;
+  --glass-shadow-scale: 0.18;
+}
+
+/* Hairline that settles a round image against the surface behind it, darkening
+   the edge on dark surfaces and lightening it on light ones (see
+   --color-avatar-edge). Applied by `Avatar`; anything drawing an image chip can
+   reuse it, whatever its shape.
+
+   An outline, not a ring: outlines paint after every descendant, so this shows
+   over a `size-full` image, where an inset box-shadow would sit underneath it.
+   A negative offset pulls it inside the border box so the footprint is
+   unchanged, outlines follow `border-radius` so it traces whatever shape the
+   host has, and it leaves box-shadow free for AvatarGroup's separator ring. */
+@utility avatar-edge {
+  outline: 1px solid var(--color-avatar-edge);
+  outline-offset: -1px;
+}
+
+/* Background utilities supply the same live color to the host and its glass
+   layer. Keep arbitrary colors typed (bg-[color:...] / bg-(color:...)); an
+   inline glass fill uses --glass-fill. Unrelated backgrounds render normally. */
+@utility bg-* {
+  --glass-fill: --value(--color-*, [color], "transparent");
+  --glass-fill: color-mix(in oklab, --value(--color-*, [color]) calc(--modifier(number) * 1%), transparent);
+  --glass-fill: color-mix(in oklab, --value(--color-*, [color]) calc(--modifier([number]) * 100%), transparent);
+  --glass-fill: color-mix(in oklab, --value(--color-*, [color]) --modifier([percentage]), transparent);
+}
+
+@utility bg-current {
+  --glass-fill: currentColor;
+}
+
+@utility bg-inherit {
+  --glass-fill: inherit;
+}
+
+/* Each control owns its fill; pseudo-elements inherit it normally. */
+@layer base {
+  :is(button, a, [role='button'], [role='tab'], [data-mobile-dock-island], [data-header-island], [data-slot='button-group']) {
+    --glass-fill: transparent;
+  }
+}
+
+@property --press-light {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
+
+@property --press-spread {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0.45;
+}
+
+@property --press-expansion {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+
+/* Persistent paint layers belong to the material, including native controls.
+   ::before paints the live fill, shadow and tap-centered sheen; ::after keeps
+   the glass rim. No child nodes, computed-style snapshots or release cleanup.
+   Keep this scope in sync with glassPress.ts's surface selection. */
+html[data-touch-device='true'] :is(
+  [data-mobile-dock-island],
+  [data-header-island],
+  [data-slot='button-group'].glass,
+  :is(button, a, [role='button'], [role='tab']):is(.glass, .island, [class~='touch:island'])
+) {
+  /* The shimmer replaces native tap feedback only on these press surfaces. */
+  -webkit-tap-highlight-color: transparent;
+  --press-expansion: 0px;
+  position: relative;
+  isolation: isolate;
+  overflow: visible;
+  background-color: transparent !important;
+  backdrop-filter: none;
+  box-shadow: none;
+  scale: 1;
+  transform-origin: center;
+  transition: scale 300ms cubic-bezier(0.22, 1, 0.36, 1),
+    --press-expansion 300ms cubic-bezier(0.22, 1, 0.36, 1);
+
+  & button {
+    scale: 1 !important;
+  }
+
+  &::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    pointer-events: none;
+    background-color: var(--glass-fill);
+    background-image: radial-gradient(
+      circle calc(var(--press-shimmer-size, 100px) * var(--press-spread) / 2)
+      at calc(var(--press-x, 50%) + var(--press-expansion)) calc(var(--press-y, 50%) + var(--press-expansion)),
+      color-mix(in oklch, var(--glass-tint) calc(12% * var(--press-light)), transparent),
+      color-mix(in oklch, var(--glass-tint) calc(5% * var(--press-light)), transparent) 45%,
+      transparent 100%
+    );
+    backdrop-filter: var(--glass-backdrop, none);
+    box-shadow: var(--glass-shadow, none);
+    transition: --press-light 220ms ease-out,
+      --press-spread 350ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  &::before, &::after {
+    inset: calc(-1 * var(--press-expansion));
+    border-radius: inherit;
+  }
+
+  & svg {
+    scale: 1;
+    transform-origin: center;
+    transform-box: view-box;
+    transition: scale 300ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  &[data-glass-press]::before {
+    --press-light: 1;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    &[data-glass-press='round'] {
+      scale: var(--press-scale);
+    }
+    &[data-glass-press='wide'] {
+      --press-expansion: var(--press-outset);
+
+      & svg {
+        scale: 1.08;
+      }
+    }
+    &[data-glass-press]::before {
+      --press-spread: 1;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    &, &::before, &::after, & svg {
+      transition: none;
+    }
+  }
+}
+
+@layer base {
+  html {
+    overflow: hidden;
+  }
+
+  /* `-apple-system-body` opts the root font-size into iOS/iPadOS Dynamic Type
+     so rem-based sizing respects the user's accessibility text-size setting.
+     On desktop Safari the same keyword resolves to the macOS system body size
+     (~13px) instead of the browser default 16px, shrinking every rem-based
+     dimension and making the app look zoomed out next to Chrome. Limit it to
+     coarse-pointer (touch) devices — matching the app's own isTouchDevice()
+     definition — so desktop Safari keeps the standard 16px root. */
+  @media (pointer: coarse) {
+    html {
+      font: -apple-system-body;
+    }
+  }
+
+  body {
+    @apply overflow-clip overscroll-none relative m-0 p-0 font-sans text-base optical-auto;
+    font-feature-settings: "dlig" 1, "calt" 1;
+    background-color: var(--color-surface);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    color: var(--color-ink);
+    height: 100dvh;
+    width: 100dvw;
+  }
+
+
+  /* scuffed: stops text from being selectable by default for mobile usage */
+  :where(*, ::before, ::after) {
+    user-select: none;
+  }
+
+  :where(input, textarea, select, p *, p span, .pdfViewer *, .markdown-content *, [contenteditable], .md *) {
+    user-select: text;
+  }
+
+  /* iOS answers a long-press on an image with its own callout ("Share", "Save
+     to Photos", "Copy"), which preempts the app's own long-press affordances
+     (e.g. the channel message action drawer). Suppress it everywhere; the
+     zero-specificity selector lets a component opt back in if it ever needs
+     the native menu. */
+  :where(img) {
+    -webkit-touch-callout: none;
+  }
+
+  :where(*) {
+    scrollbar-width: none;
+  }
+
+  *:focus-visible {
+    position: relative;
+  }
+
+  code {
+    @apply font-mono;
+  }
+}
+
+@keyframes magic-chip-shimmer {
+  0% {
+    background-position: 120% 0;
+  }
+  100% {
+    background-position: -120% 0;
+  }
+}
+
+.magic-chip-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--color-ink-extra-muted) 40%,
+    var(--color-ink) 50%,
+    var(--color-ink-extra-muted) 60%
+  );
+  background-size: 250% 100%;
+  background-clip: text;
+  color: transparent;
+  animation: magic-chip-shimmer 1.8s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .magic-chip-shimmer {
+    animation: none;
+    background: none;
+    color: var(--color-ink-muted);
+  }
+}
+
+/* The three dots leading an open agent turn that has nothing to expand yet.
+   A staggered ripple on the shimmer's period, so the row reads as one motion,
+   not two. */
+@keyframes agent-working-wave {
+  0%,
+  60%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
+.agent-working-wave > * {
+  animation: agent-working-wave 1.8s ease-in-out infinite;
+}
+
+.agent-working-wave > :nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.agent-working-wave > :nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-working-wave > * {
+    animation: none;
+    opacity: 0.55;
+  }
+}
+
+@keyframes skeleton-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.skeleton-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    oklch(from var(--color-ink) l c h / 0.08),
+    transparent
+  );
+  animation: skeleton-shimmer 1.4s infinite;
+}
+
+@keyframes slideIn {
+  from { transform: translateX(calc(100% + 16px)); }
+  to   { transform: translateX(0                ); }
+}
+
+@keyframes swipeOut {
+  from { transform: translateX(var(--kb-toast-swipe-end-x)); }
+  to   { transform: translateX(calc(100% + 16px))          ; }
+}
+
+@keyframes swipeOutLeft {
+  from { transform: translateX(var(--kb-toast-swipe-end-x)); }
+  /* Fade as well as slide: the mobile region is centered, so a leftward exit
+     can travel over page content instead of off-screen (e.g. on a tablet). */
+  to   { transform: translateX(calc(-100% - 16px)); opacity: 0; }
+}
+
+@keyframes menu-open {
+  from {
+    opacity: 0;
+    transform: translateY(-2px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes dialog-overlay-open {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes dialog-content-open {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes dialog-fullscreen-open {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes accordion-down {
+  from { height: 0; }
+  to   { height: var(--kb-accordion-content-height); }
+}
+
+@keyframes accordion-up {
+  from { height: var(--kb-accordion-content-height); }
+  to   { height: 0; }
+}
+
+@keyframes typing-dot {
+  0%   { transform: scale(1)   translateY(0   ); }
+  50%  { transform: scale(1.5) translateY(-2px); }
+  100% { transform: scale(1)   translateY(0   ); }
+}
+
+@keyframes indeterminate-bar {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(350%); }
+}
+
+/* Ported from opencode's `--animate-pulse-scale` (github.com/sst/opencode, MIT © 2025 opencode). */
+@keyframes todo-pulse {
+  0%, 100% { transform: scale(1);   opacity: 1;   }
+  50%      { transform: scale(0.6); opacity: 0.5; }
+}
+
+@keyframes incoming-call-shake {
+  0%, 60%, 100% { transform: rotate(0); }
+  10%, 30%, 50% { transform: rotate(-12deg); }
+  20%, 40%      { transform: rotate(12deg); }
+}
+
+.incoming-call-shake {
+  transform-origin: center;
+  animation: incoming-call-shake 1.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .incoming-call-shake {
+    animation: none;
+  }
+}
+
+/* Big hammer fix for cursor pointer. */
+@utility cursor-pointer {
+  cursor: default;
+}
+
+a {
+  cursor: default;
+}
+
+/* utils for patterned bg images */
+@utility pattern-* {
+  --pattern-color: --value(--color-*);
+}
+
+/* Paint a translucent scrim as a background *image* so it layers on top of the
+   element's background-color instead of replacing it. Handy for hover/press
+   feedback on buttons with a solid or tinted background: the base color shows
+   through instead of being washed out by lowering its opacity.
+   Accepts a theme color (e.g. `overlay-hover`) or an arbitrary color value. */
+@utility overlay-* {
+  --tw-overlay: --value(--color-*, [color], [*]);
+  background-image: linear-gradient(var(--tw-overlay), var(--tw-overlay));
+}
+
+/* utils for striped bg images */
+@utility pattern-diagonal-* {
+  background-size: --value(integer)px --value(integer)px;
+  background-image: linear-gradient(
+    -45deg,
+    transparent 10%,
+    var(--pattern-color) 10%,
+    var(--pattern-color) 20%,
+    transparent 20%,
+    transparent 60%,
+    var(--pattern-color) 60%,
+    var(--pattern-color) 70%,
+    transparent 70%,
+    transparent
+  );
+}
+
+@utility optical-* {
+  font-optical-sizing: none;
+  font-variation-settings: "opsz" --value(integer);
+}
+
+@utility optical-auto {
+  font-variation-settings: unset;
+  font-optical-sizing: auto;
+}
+
+/* Hairline borders app-wide. We override Tailwind's default 1px width utilities
+   so every default border uses the configured app border width, including
+   single-side borders, without having to sprinkle a modifier on each element.
+   Explicit widths (border-2, border-4, …) are intentionally left untouched. */
+@utility border {
+  border-width: var(--app-border-width);
+}
+@utility border-x {
+  border-inline-width: var(--app-border-width);
+}
+@utility border-y {
+  border-block-width: var(--app-border-width);
+}
+@utility border-s {
+  border-inline-start-width: var(--app-border-width);
+}
+@utility border-e {
+  border-inline-end-width: var(--app-border-width);
+}
+@utility border-t {
+  border-top-width: var(--app-border-width);
+}
+@utility border-r {
+  border-right-width: var(--app-border-width);
+}
+@utility border-b {
+  border-bottom-width: var(--app-border-width);
+}
+@utility border-l {
+  border-left-width: var(--app-border-width);
+}
+
+@utility hover-transition-bg {
+  transition: background-color var(--transition);
+  &:hover { transition: none; }
+}
+
+@utility hover-transition-border {
+  transition: border-color var(--transition);
+  &:hover { transition: none; }
+}
+
+@utility scrollbar-hidden {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+    height: 0;
+    width: 0;
+  }
+}
+
+/* Shared text-field styling so inputs look the same across every settings tab.
+   Apply to an <input>; pair with a width utility (e.g. `w-full`) as needed. */
+@utility settings-input {
+  @apply h-9 px-3 rounded-full border border-edge-frame bg-control text-base text-ink outline-none transition-colors duration-120 motion-reduce:transition-none;
+  &:is(textarea) {
+    @apply rounded-xl;
+  }
+  /* Matches the composer/chat placeholder token so hint text reads the same
+     faintness everywhere, rather than settings sitting more prominent. */
+  &::placeholder {
+    @apply text-ink-placeholder;
+  }
+  &:focus-visible {
+    @apply ring-2 ring-edge-muted;
+  }
+  /* State styling owned by the utility so call sites toggle an attribute instead
+     of fighting the border/text classes. `aria-invalid` after `:focus` so the
+     error border wins even while focused; `:disabled` reads as a muted field. */
+  &[aria-invalid="true"] {
+    @apply border-failure;
+  }
+  &:disabled {
+    @apply text-ink-muted opacity-70;
+  }
+}
+
+/* Subtle, inset divider between settings rows (Account/Appearance/Email/Agent).
+   Apply to a list container whose direct children are full-width rows with px-6
+   padding; draws the line under every row except the last. */
+@utility settings-row-dividers {
+  & > *:not(:last-child) {
+    position: relative;
+    &::after {
+      content: "";
+      position: absolute;
+      inset-inline: calc(var(--spacing) * 6);
+      bottom: 0;
+      height: 1px;
+      background-color: var(--color-edge-divider);
+      pointer-events: none;
+    }
+  }
+}
+
+/* Row-level variant of `settings-row-dividers` for lists that render rows
+   individually (e.g. virtualized). Apply to the row; gate on "not the last row". */
+@utility settings-row-divider {
+  position: relative;
+  &::after {
+    content: "";
+    position: absolute;
+    inset-inline: calc(var(--spacing) * 6);
+    bottom: 0;
+    height: 1px;
+    background-color: var(--color-edge-divider);
+    pointer-events: none;
+  }
+}
+
+@utility no-select-children {
+  * {
+    user-select: none;
+  }
+}
+
+@utility select-children {
+  * {
+    user-select: text;
+  }
+}
+
+@utility bg-modal-overlay {
+  --pattern-color: color-mix(in srgb, var(--color-overlay), var(--color-ink) 2%);
+  background-color: var(--color-overlay);
+}
+
+@utility portal-scope {
+  --documentation: "Set this element as a bounding scope for the ScopedPortal component";
+}
+
+@utility menu-open-animation {
+  transform-origin: var(--kb-popper-content-transform-origin, top center);
+  animation: var(--animate-menu-open);
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+@utility dialog-overlay-open-animation {
+  animation: var(--animate-dialog-overlay-open);
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+@utility dialog-content-open-animation {
+  transform-origin: center;
+  animation: var(--animate-dialog-content-open);
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+@utility dialog-fullscreen-open-animation {
+  animation: var(--animate-dialog-fullscreen-open);
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+@utility macro-message-width {
+  max-width: 100%;
+  width: 100%;
+  @media (min-width: 640px) {
+    max-width: 920px;
+    min-width: 250px;
+  }
+}
+
+@utility channel-rail-left {
+  border-left-style: solid;
+  border-left-width: var(--channel-rail-width);
+}
+
+@utility channel-rail-bottom {
+  border-bottom-style: solid;
+  border-bottom-width: var(--channel-rail-width);
+}
+
+@utility macro-message-padding {
+  @container (width < 936px) { padding-inline: calc(var(--spacing) * 4); }
+}
+
+@utility macro-message-margin {
+  @container (width < 936px) { margin-inline: calc(var(--spacing) * 4); }
+  @container (width < 640px) { margin-inline: calc(var(--spacing) * 2); }
+}
+
+/** isolate the app-root stacking context from the kobalte dialog and modal stacking context */
+#root { isolation: isolate; }
+
+@media (min-width: 640px) {
+  :root {
+    --thread-shift: 40px;
+  }
+}
+
+/* Mobile bottom chrome: accessory contributions animate in when they mount
+   or swap (enter-only; losers unmount immediately). The Portal wrapper div
+   is the region slot's direct child. */
+[data-float-region='accessory'] > * {
+  animation: float-region-in 150ms ease-out;
+}
+@keyframes float-region-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@media (pointer: coarse) {
+  .md-table-cell-resizer {
+    background-color: #adf;
+    mix-blend-mode: color;
+  }
+}
+
+/* Hide Kobalte's popper positioner until floating-UI has computed the position. */
+/* Without this, the card briefly appears at top:0 left:0 on first open. */
+[data-popper-positioner]:not([style*='translate']) {
+  pointer-events: none !important;
+  will-change: transform, opacity;
+  opacity: 0 !important;
+}
+
+/* Tighter channel message rhythm: the base markdown theme's first/last
+   paragraph margins (6px) read airy in a chat list. 2px puts grouped lines
+   4px apart while inter-paragraph spacing inside a message is unchanged. */
+.channel-markdown > .md-p:first-child { margin-top: --spacing(0.5); }
+.channel-markdown > .md-p:last-child { margin-bottom: --spacing(0.5); }
+
+/* Channel message hover + selection-cursor highlight */
+/* Suppressed on touch devices */
+/* Background-only — borders/rings are reserved for structural UI edges. */
+/* Hover reads as the lighter neutral tint; the selection cursor reads as the
+   heavier neutral tint so the two states are visually distinct. Hover is
+   suppressed on the selected message so its selection tint always shows
+   through. */
+html:not([data-touch-device="true"]) [data-message]:not([data-selected]):hover {
+  @apply bg-hover rounded-md;
+}
+
+[data-message][data-selected] {
+  @apply bg-active rounded-md;
+}
+
+[data-message][data-targeted] {
+  @apply bg-accent/30 rounded-md;
+}
+[data-message][data-selected][data-targeted],
+html:not([data-touch-device="true"]) [data-message][data-targeted]:hover{
+  @apply bg-accent/40 rounded-md;
+}
+
+/* A released target fades its accent out instead of cutting off. Duration
+   mirrors TARGETED_FADE_OUT_MS in features/channel/Message/Root.tsx. */
+[data-message][data-targeted-fading] {
+  animation: targeted-message-accent-fade-out 500ms ease-out both;
+}
+
+/* A selected message keeps its selection after release, so its fade starts
+   from the targeted accent and lands on the selection tint. */
+[data-message][data-selected][data-targeted-fading] {
+  animation-name: targeted-message-accent-fade-out-selected;
+}
+
+@keyframes targeted-message-accent-fade-out {
+  from {
+    background-color: oklch(from var(--color-accent) l c h / 30%);
+    border-radius: var(--radius-sm);
+  }
+  to {
+    background-color: oklch(from var(--color-accent) l c h / 0%);
+    border-radius: var(--radius-sm);
+  }
+}
+
+@keyframes targeted-message-accent-fade-out-selected {
+  from {
+    background-color: oklch(from var(--color-accent) l c h / 40%);
+    border-radius: var(--radius-sm);
+  }
+  to {
+    background-color: var(--color-active);
+    border-radius: var(--radius-sm);
+  }
+}
+
+@keyframes long-press-message-highlight {
+  from {
+    background-color: oklch(from var(--color-active) l c h / 0%);
+    border-radius: var(--radius-sm);
+  }
+  to {
+    background-color: oklch(from var(--color-active) l c h);
+    border-radius: var(--radius-sm);
+  }
+}
+
+/* Channel message long-press animation */
+.channel-message-long-press-highlight [data-swipe-content],
+[data-message].channel-message-long-press-highlight {
+  animation: long-press-message-highlight 400ms ease-in both;
+}
+
+.channel-message-swipe-to-reply-row[data-swipe-interacting] [data-swipe-content] {
+  animation: long-press-message-highlight 100ms ease-in both;
+}
+
+/* Immediate touch feedback for mobile soup entity rows */
+[data-soup-entity].touch-highlight [data-swipe-content],
+[data-soup-entity].touch-highlight .soup-list-entity {
+  background-color: var(--color-hover);
+  transition: none;
+}
+
+:focus-visible {
+  outline: none;
+}
+
+input[type="time"]::-webkit-calendar-picker-indicator {
+  --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1em' height='1em' viewBox='0 0 256 256'%3E%3C!-- Icon from Phosphor by Phosphor Icons - https://github.com/phosphor-icons/core/blob/main/LICENSE --%3E%3Cpath fill='currentColor' d='M128 24a104 104 0 1 0 104 104A104.11 104.11 0 0 0 128 24m0 192a88 88 0 1 1 88-88a88.1 88.1 0 0 1-88 88m64-88a8 8 0 0 1-8 8h-56a8 8 0 0 1-8-8V72a8 8 0 0 1 16 0v48h48a8 8 0 0 1 8 8'/%3E%3C/svg%3E");
+  -webkit-mask: var(--icon) no-repeat;
+  background-color: currentColor;
+  -webkit-mask-size: 100% 100%;
+  mask: var(--icon) no-repeat;
+  background-image: none;
+  mask-size: 100% 100%;
+  color: inherit;
+  height: 1em;
+  width: 1em;
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+[type="file"]:focus {
+  outline: none;
+}
+
+.chat-markdown-container .table-container,
+.chat-markdown-container .katex-display,
+.chat-markdown-container pre {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* Empty-state illustration entrance: a one-shot 3D rise that tilts the
+   graphic up into place from its base. The illustration's internal layers
+   stagger-fade on their own (see the <style> inside each SVG). Plays once
+   when the empty state mounts. */
+.empty-state-graphic {
+  animation: empty-state-rise 600ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  transform-origin: center bottom;
+}
+@keyframes empty-state-rise {
+  from {
+    transform: perspective(620px) rotateX(15deg) translateY(9px) scale(0.97);
+  }
+  to {
+    transform: perspective(620px) rotateX(0deg) translateY(0) scale(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .empty-state-graphic {
+    animation: none;
+  }
+}
+
+@source "../features";
+@source "../ui";

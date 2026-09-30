@@ -5,6 +5,7 @@ import CheckIcon from '@phosphor/check.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import { cn, Dropdown } from '@ui';
 import {
+  type Component,
   createMemo,
   createSignal,
   For,
@@ -30,6 +31,7 @@ type ModelCatalogPickerProps = {
   recommendedId?: string | null;
   options: CatalogModelOption[];
   onSelect: (id: string) => void;
+  modelRow?: Component<ModelRowProps>;
   disabled?: boolean;
   pending?: boolean;
   triggerLabel?: JSX.Element;
@@ -43,14 +45,17 @@ type ModelCatalogPickerProps = {
   placement?: 'top-start' | 'top-end' | 'bottom-start' | 'bottom-end';
 };
 
-function ModelRow(props: {
+export type ModelRowProps = {
   option: CatalogModelOption;
   selected: boolean;
   disabled?: boolean;
   /** Trailing muted text, e.g. the family a search hit belongs to. */
   hint?: string;
   onSelect: () => void;
-}) {
+  onClose?: () => void;
+};
+
+export function ModelRow(props: ModelRowProps) {
   return (
     <Dropdown.Item
       closeOnSelect
@@ -77,7 +82,10 @@ function FamilyList(props: {
   value: string | null;
   disabled?: boolean;
   onSelect: (id: string) => void;
+  row: Component<ModelRowProps>;
+  onClose?: () => void;
 }) {
+  const Row = props.row;
   return (
     <For each={props.families}>
       {(family) => (
@@ -87,8 +95,9 @@ function FamilyList(props: {
           </Show>
           <For each={family.options}>
             {(option) => (
-              <ModelRow
+              <Row
                 option={option}
+                onClose={props.onClose}
                 selected={option.id === props.value}
                 disabled={props.disabled}
                 onSelect={() => props.onSelect(option.id)}
@@ -124,24 +133,53 @@ function focusSearchAfterMenuOpen(input: () => HTMLInputElement | undefined) {
  *      + rAF in `focusSearchAfterMenuOpen` waits past that onMount.
  *   2. SubTrigger `onPointerMove` keeps calling `focusWithoutScrolling` on
  *      the agent row, so any mouse move while hovering it yanks focus back.
- *      Reclaim on blur; Escape / click-outside close the sub first, which
- *      unregisters this listener before focus leaves the tree.
+ *      Keep startup autofocus on search, then reclaim only when that parent
+ *      trigger steals focus. Model rows and their nested effort menus must
+ *      retain focus once the user navigates them.
  */
 function keepSearchFocused(input: () => HTMLInputElement | undefined) {
   focusSearchAfterMenuOpen(input);
+  const menu = input()?.closest('[role="menu"]');
+  let navigating = false;
+  const onNavigate = (event: Event) => {
+    if (
+      event.target instanceof Element &&
+      event.target.closest('[role="menuitem"]')
+    ) {
+      navigating = true;
+    }
+  };
+  for (const type of ['pointermove', 'pointerdown', 'keydown']) {
+    menu?.addEventListener(type, onNavigate, true);
+  }
   const onBlur = () => {
     queueMicrotask(() => {
       const search = input();
-      if (search?.isConnected && document.activeElement !== search) {
+      const triggerId = menu?.getAttribute('aria-labelledby');
+      const active = document.activeElement;
+      // Kobalte may focus its selected row after the search's initial focus.
+      // Once the user navigates the catalog, leave those rows in control.
+      const initialRowFocus =
+        !navigating && menu && active?.closest('[role="menu"]') === menu;
+      if (
+        search?.isConnected &&
+        (triggerId === active?.id || initialRowFocus)
+      ) {
         search.focus();
       }
     });
   };
   input()?.addEventListener('blur', onBlur);
-  onCleanup(() => input()?.removeEventListener('blur', onBlur));
+  onCleanup(() => {
+    input()?.removeEventListener('blur', onBlur);
+    for (const type of ['pointermove', 'pointerdown', 'keydown']) {
+      menu?.removeEventListener(type, onNavigate, true);
+    }
+  });
 }
 
 export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
+  const [open, setOpen] = createSignal(false);
   let searchRef: HTMLInputElement | undefined;
 
   const selected = () =>
@@ -149,17 +187,25 @@ export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
   const displayValue = () => selected()?.label ?? props.placeholder ?? 'Model';
 
   return (
-    <Dropdown placement={props.placement ?? 'top-start'}>
+    <Dropdown
+      open={open()}
+      onOpenChange={setOpen}
+      placement={props.placement ?? 'top-start'}
+    >
       <Dropdown.Trigger
         variant="ghost"
         size="sm"
         class={cn(
-          'h-9 justify-between rounded-lg border border-edge-muted bg-transparent px-3 text-left text-sm text-ink hover:bg-ink/3',
+          'h-9 justify-between border border-edge-muted bg-transparent px-3 text-left text-sm text-ink hover:bg-ink/3',
           props.triggerClass
         )}
         aria-label={props.ariaLabel}
         aria-busy={props.pending || undefined}
-        title={displayValue()}
+        title={
+          typeof props.triggerLabel === 'string'
+            ? props.triggerLabel
+            : displayValue()
+        }
         disabled={props.disabled || props.pending}
       >
         <ModelIcon model={props.value} />
@@ -185,7 +231,12 @@ export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
           recommendedId={props.recommendedId}
           options={props.options}
           disabled={props.disabled || props.pending}
-          onSelect={props.onSelect}
+          onSelect={(id) => {
+            props.onSelect(id);
+            setOpen(false);
+          }}
+          onClose={() => setOpen(false)}
+          modelRow={props.modelRow}
           emptyMessage={props.emptyMessage}
           searchPlaceholder={props.searchPlaceholder}
           searchRef={(element) => {
@@ -203,6 +254,7 @@ export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
 export function ModelCatalogMenu(
   props: Pick<
     ModelCatalogPickerProps,
+    | 'modelRow'
     | 'value'
     | 'recommendedId'
     | 'options'
@@ -218,9 +270,11 @@ export function ModelCatalogMenu(
      * submenus, which never fire the root menu's `onOpenAutoFocus`.
      */
     autoFocusSearch?: boolean;
+    onClose?: () => void;
   }
 ) {
   let searchEl: HTMLInputElement | undefined;
+  const Row = props.modelRow ?? ModelRow;
   const [query, setQuery] = createSignal('');
   onMount(() => {
     if (props.autoFocusSearch) keepSearchFocused(() => searchEl);
@@ -307,6 +361,8 @@ export function ModelCatalogMenu(
                   value={props.value}
                   disabled={props.disabled}
                   onSelect={props.onSelect}
+                  row={Row}
+                  onClose={props.onClose}
                 />
               </Dropdown.Group>
             }
@@ -316,8 +372,9 @@ export function ModelCatalogMenu(
                 <Dropdown.GroupLabel>Recommended</Dropdown.GroupLabel>
                 <For each={catalog().recommended}>
                   {(option) => (
-                    <ModelRow
+                    <Row
                       option={option}
+                      onClose={props.onClose}
                       hint={modelFamilyHint(option)}
                       selected={option.id === props.value}
                       disabled={props.disabled}
@@ -346,7 +403,7 @@ export function ModelCatalogMenu(
                     </Dropdown.Item>
                   }
                 >
-                  <Dropdown.Sub>
+                  <Dropdown.Sub overlap>
                     <Dropdown.SubTrigger>
                       <span class="truncate">More models</span>
                       <span class="flex shrink-0 items-center gap-1 text-xs text-ink-extra-muted">
@@ -369,6 +426,8 @@ export function ModelCatalogMenu(
                           value={props.value}
                           disabled={props.disabled}
                           onSelect={props.onSelect}
+                          row={Row}
+                          onClose={props.onClose}
                         />
                       </Dropdown.Group>
                     </Dropdown.SubContent>
@@ -387,8 +446,9 @@ export function ModelCatalogMenu(
           </Dropdown.GroupLabel>
           <For each={filtered()}>
             {(option) => (
-              <ModelRow
+              <Row
                 option={option}
+                onClose={props.onClose}
                 hint={modelFamilyHint(option)}
                 selected={option.id === props.value}
                 disabled={props.disabled}

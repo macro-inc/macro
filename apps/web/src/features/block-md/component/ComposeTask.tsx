@@ -1033,7 +1033,7 @@ export function ComposeTask(props: ComposeTaskProps) {
             label="Create More"
           />
           <EntityComposer.Submit
-            variant="outline"
+            variant="strong"
             onClick={handleCreateTask}
             disabled={title().trim().length === 0 || isCreating()}
             hasContent={title().trim().length > 0}

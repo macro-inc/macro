@@ -192,7 +192,7 @@ export const SoupViewCreateButton = () => {
     <Button
       variant="accent"
       class={cn(
-        'border-0 rounded-full px-3 py-2 pl-1 font-semibold',
+        'border-0 px-3 py-2 pl-1 font-semibold',
         props.hideLabel && 'pr-1'
       )}
       size="sm"
@@ -210,7 +210,7 @@ export const SoupViewCreateButton = () => {
       <Dropdown.Trigger
         variant="accent"
         class={cn(
-          'border-0 rounded-full px-3 py-2 pl-1 font-semibold',
+          'border-0 px-3 py-2 pl-1 font-semibold',
           props.hideLabel && 'pr-1'
         )}
       >

@@ -78,12 +78,7 @@ function setup(ids = ['other']) {
 }
 
 describe('websocket channel unread cache writes', () => {
-  it.each([
-    'channel_message_send',
-    'channel_message_reply',
-    'channel_mention',
-    'document_mention',
-  ])(
+  it.each(['channel_message_send', 'channel_mention', 'document_mention'])(
     'links %s and admits its channel to an empty badge page',
     async (eventType) => {
       const host = setup([]);
@@ -127,6 +122,34 @@ describe('websocket channel unread cache writes', () => {
     }
   );
 
+  it.each([null, 'thread'])(
+    'writes a conversation witness only for top-level mentions (thread=%s)',
+    async (threadId) => {
+      const host = setup(['channel']);
+      await cacheNewChannelUnread(
+        host,
+        {
+          ...notification,
+          eventType: 'channel_mention',
+          metadata: {
+            __typename: 'GraphqlChannelMentionMetadata',
+            channelMentionMessageId: 'message',
+            channelMentionMessageContent: 'Hello',
+            channelMentionThreadId: threadId,
+            channelMentionChannelType: 'PRIVATE',
+            channelMentionHasAttachments: false,
+            channelMentionSenderDisplayName: null,
+            channelMentionChannelName: 'Channel',
+            channelMentionSenderProfilePictureUrl: null,
+          },
+        },
+        () => true
+      );
+      expect(host.writeQuery).toHaveBeenCalledTimes(threadId === null ? 1 : 0);
+      if (threadId !== null) expect(host.readQuery).not.toHaveBeenCalled();
+    }
+  );
+
   it('preserves other badge identities without replaying their notification states, and stays bounded', async () => {
     const host = setup(['other', 'oldest']);
     await cacheNewChannelUnread(host, notification, () => true);
@@ -153,6 +176,8 @@ describe('websocket channel unread cache writes', () => {
     { state: 'SEEN' as const },
     { state: 'DONE' as const },
     { eventType: 'call_started' },
+    { eventType: 'channel_message_reply' },
+    { eventType: 'channel_message_reaction' },
     { eventType: 'channel_invite' },
     { entityType: 'DOCUMENT' as const },
   ])('does not admit non-message or read evidence: %j', async (patch) => {
@@ -194,11 +219,14 @@ describe('websocket channel unread cache writes', () => {
   });
 
   it('uses exactly the same argument-keyed relationship as the channel list and badge', () => {
-    const argumentsOf = (document: DocumentNode) => {
+    const argumentsOf = (
+      document: DocumentNode,
+      alias = 'unreadNotifications'
+    ) => {
       let argumentsKey: string | undefined;
       visit(document, {
         Field(node) {
-          if (node.alias?.value === 'unreadNotifications') {
+          if (node.alias?.value === alias) {
             argumentsKey = node.arguments
               ?.map((argument) => print(argument))
               .join('\n');

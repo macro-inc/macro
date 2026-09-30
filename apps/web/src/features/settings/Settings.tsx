@@ -243,7 +243,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
 
   const moveToSplitButton = () => (
     <Button
-      class="p-1 rounded-md"
+      class="p-1"
       label="Move to split"
       onClick={() => moveSettingsToSplit()}
     >
@@ -306,7 +306,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
         <Show when={!isMobile()}>
           <SplitHeaderRight>
             <Button
-              class="p-1 rounded-lg"
+              class="p-1"
               label="Open fullscreen"
               onClick={() => moveSettingsToSolo()}
             >

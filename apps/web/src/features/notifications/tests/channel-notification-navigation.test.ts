@@ -158,6 +158,26 @@ it.each(['channel_invite', 'call_started'] as const)(
   }
 );
 
+it('reports an ordinary channel notification applied after preview activation', async () => {
+  const { layout, activate } = setup('preview');
+  const onApplied = vi.fn();
+
+  await openNotification(
+    {
+      entity_id: 'channel',
+      notification_metadata: { tag: 'channel_invite', content: {} },
+    } as UnifiedNotification,
+    layout,
+    false,
+    undefined,
+    undefined,
+    { onApplied }
+  );
+
+  expect(activate).toHaveBeenCalledOnce();
+  expect(onApplied).toHaveBeenCalledOnce();
+});
+
 it.each(['split', 'closed'] as const)(
   'preserves notification navigation when the channel is %s',
   async (location) => {

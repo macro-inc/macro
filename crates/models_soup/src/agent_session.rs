@@ -32,6 +32,9 @@ pub struct SoupAgentSession<T = ()> {
     /// The user-facing name of the session
     pub name: String,
 
+    /// Whether the session is archived and read-only.
+    pub is_archived: bool,
+
     /// Who the session belongs to
     #[cfg_attr(feature = "schema", schema(value_type = String))]
     pub owner_id: Owner,

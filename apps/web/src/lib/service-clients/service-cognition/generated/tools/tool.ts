@@ -8,6 +8,10 @@ import * as schemas from './schemas';
 import type * as types from './types';
 
 type ToolParserMap = {
+  AssignTasksToInitiative: {
+    call: types.AssignTasksToInitiative;
+    response: types.AssignTasksToInitiativeResponse;
+  };
   BashCodeExecution: {
     call: types.BashCodeExecution;
     response: types.BashCodeExecutionResponse;
@@ -266,6 +270,10 @@ type ToolParserMap = {
     call: types.TextEditorCodeExecution;
     response: types.TextEditorCodeExecutionResponse;
   };
+  UnassignTasksFromInitiative: {
+    call: types.UnassignTasksFromInitiative;
+    response: types.UnassignTasksFromInitiativeResponse;
+  };
   UpdateCalendarEvent: {
     call: types.UpdateCalendarEvent;
     response: types.ToolCalendarEvent;
@@ -289,6 +297,10 @@ type ToolParserMap = {
 };
 
 const toolParserMap = {
+  AssignTasksToInitiative: {
+    call: schemas.AssignTasksToInitiative,
+    response: schemas.AssignTasksToInitiativeResponse,
+  },
   BashCodeExecution: {
     call: schemas.BashCodeExecution,
     response: schemas.BashCodeExecutionResponse,
@@ -574,6 +586,10 @@ const toolParserMap = {
     call: schemas.TextEditorCodeExecution,
     response: schemas.TextEditorCodeExecutionResponse,
   },
+  UnassignTasksFromInitiative: {
+    call: schemas.UnassignTasksFromInitiative,
+    response: schemas.UnassignTasksFromInitiativeResponse,
+  },
   UpdateCalendarEvent: {
     call: schemas.UpdateCalendarEvent,
     response: schemas.ToolCalendarEvent,
@@ -611,6 +627,10 @@ type NamedRawTool = {
 };
 
 type ToolDataMap = {
+  AssignTasksToInitiative: {
+    call: types.AssignTasksToInitiative;
+    response: types.AssignTasksToInitiativeResponse;
+  };
   BashCodeExecution: {
     call: types.BashCodeExecution;
     response: types.BashCodeExecutionResponse;
@@ -868,6 +888,10 @@ type ToolDataMap = {
   TextEditorCodeExecution: {
     call: types.TextEditorCodeExecution;
     response: types.TextEditorCodeExecutionResponse;
+  };
+  UnassignTasksFromInitiative: {
+    call: types.UnassignTasksFromInitiative;
+    response: types.UnassignTasksFromInitiativeResponse;
   };
   UpdateCalendarEvent: {
     call: types.UpdateCalendarEvent;

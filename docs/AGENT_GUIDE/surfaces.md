@@ -9,9 +9,22 @@ keeps loaded items visible. Wait for real rows before navigating or selecting.
 
 ## Top bars
 
-Right-aligned split-header actions (including Calendar's touch/preview New event
-and Channel's Call and Ask Macro) are borderless with a rounded-xl background on
-hover. Channel header tabs use fully rounded tracks and selected pills.
+Low-emphasis right-aligned split-header actions (including Calendar's touch/preview
+New event and Channel's idle Call and Ask Macro) are borderless with a rounded-xl
+background on hover. Emphasized variants retain their treatment, including an
+active call's green ink and outline frame. Channel header tabs use fully rounded tracks and
+selected pills. Button sizes do not change variant colors or framing; individual
+framed controls default to glass on touch and flat on desktop. Use `glass={true}`
+to enable glass on all devices, or `glass={false}` to disable it everywhere.
+Embedded and low-emphasis actions use `ghost`; inline calendar-invitation text
+actions remove the transparent border to keep their text alignment.
+
+## Dialog actions
+
+Cancel uses a ghost button. Confirm, save, and create actions use strong: the
+outline surface and border with semibold text, without inverted colors. Disabled
+and pending primary actions retain the strong variant. Mobile confirmation drawers
+use the same action hierarchy.
 
 ## User cards
 
@@ -1145,7 +1158,8 @@ Join-preview and in-call controls use the standard Macro icon buttons. Pause
 over the microphone, camera, or background group to reveal an animated settings popover
 above the call toolbar; click its caret to keep it open. Brief pointer passes
 do not open settings, and moving into the popover keeps it open. Settings
-respect reduced-motion preferences.
+respect reduced-motion preferences. The toolbar and settings panels use Macro's
+shared glass surface in both light and dark themes.
 Audio settings include microphone, speaker, and noise suppression. Camera
 settings include the camera selector. Clicking the background icon toggles the
 selected effect off/on, restoring the last blur strength or image (Strong blur
@@ -1155,6 +1169,11 @@ and touch access. Click outside or press Escape to close the settings.
 The controls also work by keyboard and touch.
 
 ### Sharing a call
+
+With quick calls enabled, channel calls use the same **Copy Meeting Url** button
+as instant and scheduled calls. Clicking it creates the share link and copies it;
+opening the call tab alone does not create a link. If loading fails, click again
+to retry. If clipboard access fails, a selectable URL appears below the button.
 
 A channel call's **Share** dialog has a `Team access` control (None or View) for the same canonical
 team share. Its side panel has a `Sharing` section with one `Share with team` checkbox, and the
@@ -1537,6 +1556,20 @@ session were not exercised by that UI check.
 
 ## Notifications
 
+On native Android, enable notifications in Settings while signed in. Android 13+
+also asks for system permission; the system's **Activity** notification channel
+must be enabled. Remote push owns system notification display after registration,
+so the same WebSocket event should not create a second local notification. Tapping
+a notification opens its target; simply receiving one does not navigate. Check
+this with the app foregrounded, backgrounded, and after ordinary process death.
+Logout clears delivered notifications and disables receipt for the old account.
+After a transient native listener failure, verify that notification taps recover
+without restarting the app. Android alerts without display text show
+`New notification`; silent read/done clears must remain silent.
+Also verify logout and notification opt-out while registration is pending: late
+backend or native completions must leave the receiver disabled. If a new account
+signs in before cleanup finishes, its registration must remain active afterward.
+
 Toast regions are labeled `Notifications (alt+T)`; five empty live regions always exist in
 the a11y tree (ignore them when parsing snapshots).
 
@@ -1618,3 +1651,24 @@ action is unavailable.
 focus to its trigger. Busy overlapping events are labeled, while cancelled, declined,
 and free events do not count as conflicts. Calendar 12/24-hour preferences apply to
 already-open invitation cards as well as the calendar view.
+
+### Agent reasoning effort
+
+Open the model selector and hover a model to choose its reasoning effort in the
+submenu. Keyboard users open it with Right Arrow; touch users tap the model.
+Cursor and Macro's in-memory agent load the hovered model's own advertised
+choices. The selected label includes the effort, such as `Sonnet 5 · High`;
+there is no separate effort control in the input box. Models without effort
+support remain selectable through `Use <model>` (or a desktop click/Enter).
+Default keeps the model's existing behavior.
+
+In an open session, choosing a different model's effort confirms the model first,
+then validates and applies effort. Wait for the selector to become available
+again. If the model succeeds but effort is rejected, the new model remains
+selected with its confirmed effort; the error is shown and no unsupported
+setting is presented as accepted.
+
+New conversations confirm selected model and effort settings before sending the
+first message. If startup reports a rejected setting or timeout, the first prompt
+has not been sent. See [effort capabilities](../AGENT_EFFORT.md) for the harness
+contracts and test coverage.

@@ -11,14 +11,16 @@ use super::models::{
     OVERAGE_LIMIT_MIN_CENTS, OverageChargeStatus, PayerScope, PeriodAllowance, PlanTier, Result,
     SeatAllowance, SeatUsage, SubscriptionScope, UsageSnapshot,
 };
+use super::period::{PeriodSync, SubscriptionPeriod};
 use super::ports::{
     BillingRepo, BillingService, CreditCheckoutRequest, EntitlementSource, OverageChargeRequest,
     PaymentGateway, PendingCharge, UsageReader,
 };
 use chrono::{DateTime, Utc};
 use macro_env::Environment;
-use macro_user_id::user_id::MacroUserIdStr;
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use macro_uuid::Uuid;
+use std::sync::Arc;
 use teams::domain::open_seat_release::OpenSeatRelease;
 
 /// The billing service over its four ports.
@@ -29,6 +31,7 @@ pub struct BillingServiceImpl<E, U, R, P> {
     repo: R,
     payments: P,
     environment: Environment,
+    period_sync: Option<Arc<dyn PeriodSync>>,
 }
 
 impl<E, U, R, P> BillingServiceImpl<E, U, R, P> {
@@ -40,7 +43,15 @@ impl<E, U, R, P> BillingServiceImpl<E, U, R, P> {
             repo,
             payments,
             environment,
+            period_sync: None,
         }
+    }
+
+    /// Install verified renewal activation at the composition root only after the
+    /// producer and rollout gates pass. Absence never authorizes the new policy.
+    pub fn with_period_sync(mut self, period_sync: Arc<dyn PeriodSync>) -> Self {
+        self.period_sync = Some(period_sync);
+        self
     }
 }
 
@@ -184,7 +195,15 @@ where
                     .usage
                     .list_rate_usage_cents_by_user(&users, *period)
                     .await?;
-                let used = usage_for(user, &usage);
+                let seats = self
+                    .repo
+                    .legacy_seats(&entitlement.payer, *period, seats)
+                    .await?;
+                let used = if seats.iter().any(|seat| seat.user.as_ref() == user.as_ref()) {
+                    usage_for(user, &usage)
+                } else {
+                    0
+                };
                 let chargeable = chargeable_usage_cents(&seats, &usage);
                 let ledger = self
                     .repo
@@ -251,6 +270,13 @@ where
         let usage = self
             .usage
             .list_rate_usage_cents_by_user(&users, period)
+            .await?;
+        // Read policy AFTER analytics. V1 execution requires a committed binding,
+        // so any V1 analytics just observed must now be excluded. Filtering before
+        // the usage read would race renewal activation and could double bill.
+        let seats = self
+            .repo
+            .legacy_seats(&entitlement.payer, period, seats)
             .await?;
         let chargeable_cents = chargeable_usage_cents(&seats, &usage);
         if chargeable_cents == 0 {
@@ -576,9 +602,21 @@ where
         payer: &MacroUserIdStr<'_>,
         start: DateTime<Utc>,
         end: DateTime<Utc>,
+        verified: Option<SubscriptionPeriod>,
     ) -> Result<()> {
         if start >= end {
             tracing::warn!("ignoring inverted subscription period");
+            return Ok(());
+        }
+        if let Some(facts) = verified {
+            if facts.period != (BillingPeriod { start, end }) {
+                tracing::warn!("ignoring mismatched verified subscription period");
+                return Ok(());
+            }
+            if let Some(sync) = &self.period_sync {
+                sync.sync(payer.clone().into_owned(), facts).await?;
+            }
+            // Item-level policy periods do not change the legacy payer anchor.
             return Ok(());
         }
         self.repo.set_period(payer, start, end).await

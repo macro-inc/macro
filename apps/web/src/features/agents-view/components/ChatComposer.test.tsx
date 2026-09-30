@@ -1,4 +1,5 @@
 import type { InputAttachmentData } from '@channel/Input/types';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { $createQuoteNode, QuoteNode } from '@lexical/rich-text';
 import { fireEvent, render, screen } from '@solidjs/testing-library';
 import {
@@ -11,6 +12,10 @@ import {
 import { createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatComposer, ChatSessionInput } from './ChatComposer';
+
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: vi.fn(() => false),
+}));
 
 const editor = vi.hoisted(() => ({
   lexical: undefined as LexicalEditor | undefined,
@@ -121,6 +126,7 @@ beforeEach(() => {
     }
   );
   vi.clearAllMocks();
+  vi.mocked(isTouchDevice).mockReturnValue(false);
   editor.text = '';
   editor.enter = undefined;
   editor.change = undefined;
@@ -181,6 +187,56 @@ describe('Chat session input', () => {
     editor.enter?.(undefined, editor.text);
     expect(send).toHaveBeenCalledWith('Another request', []);
     expect(stop).toHaveBeenCalledOnce();
+  });
+
+  describe('on a touch device', () => {
+    beforeEach(() => {
+      vi.mocked(isTouchDevice).mockReturnValue(true);
+    });
+
+    it('leaves Enter to the virtual keyboard and sends only from the button', () => {
+      const send = vi.fn();
+      render(() => <ChatSessionInput onSend={send} />);
+      type('first line');
+      // Not captured, so the editor inserts a newline instead of sending.
+      expect(editor.enter?.(undefined, editor.text)).toBe(false);
+      expect(send).not.toHaveBeenCalled();
+      expect(editor.clear).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+      expect(send).toHaveBeenCalledWith('first line', []);
+    });
+
+    it('does not advance the queue from Enter either', () => {
+      const stop = vi.fn();
+      render(() => (
+        <ChatSessionInput
+          busy
+          hasQueuedMessages
+          onSend={vi.fn()}
+          onStop={stop}
+        />
+      ));
+      expect(editor.enter?.(undefined, '')).toBe(false);
+      expect(stop).not.toHaveBeenCalled();
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Send next queued message' })
+      );
+      expect(stop).toHaveBeenCalledOnce();
+    });
+
+    it('applies to a new conversation as well', () => {
+      const send = vi.fn();
+      render(() => (
+        <ChatComposer
+          draft="Describe this"
+          onDraftChange={vi.fn()}
+          selector={null}
+          onSend={send}
+        />
+      ));
+      expect(editor.enter?.(undefined, 'Describe this')).toBe(false);
+      expect(send).not.toHaveBeenCalled();
+    });
   });
 
   it('registers and cleans up session focus and quote handlers', () => {

@@ -44,7 +44,7 @@ function SingleSelectDropdown<TId extends string>(
     >
       <Dropdown.Trigger
         ref={props.triggerRef}
-        variant="outline"
+        variant="ghost"
         size="md"
         square
         class={props.class}
@@ -192,7 +192,7 @@ export function ListFilterDropdown<
         fallback={
           <Dropdown.Trigger
             ref={props.triggerRef}
-            variant="outline"
+            variant="ghost"
             size="md"
             square
             class={props.class}

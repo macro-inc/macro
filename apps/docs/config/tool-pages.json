@@ -1,5 +1,6 @@
 [
   "AI/mcp/tools/index",
+  "AI/mcp/tools/assign-tasks-to-initiative",
   "AI/mcp/tools/bash-code-execution",
   "AI/mcp/tools/bulk-set-entity-property-options",
   "AI/mcp/tools/calculate-spreadsheet",
@@ -81,6 +82,7 @@
   "AI/mcp/tools/set-task-initiative",
   "AI/mcp/tools/subagent",
   "AI/mcp/tools/text-editor-code-execution",
+  "AI/mcp/tools/unassign-tasks-from-initiative",
   "AI/mcp/tools/update-calendar-event",
   "AI/mcp/tools/update-initiative",
   "AI/mcp/tools/update-initiative-sharing",

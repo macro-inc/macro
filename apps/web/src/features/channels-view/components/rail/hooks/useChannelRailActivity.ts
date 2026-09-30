@@ -2,6 +2,7 @@ import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { compareDateDesc, type DateValue } from '@core/util/date';
 import type { ChannelEntity } from '@entity';
 import { notificationIsRead } from '@entity/utils/notification';
+import { isUnreadChannelMessageNotification } from '@notifications/top-level-channel-notification';
 import { type Accessor, createEffect, createMemo, onCleanup } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import type { ChannelsGroup } from '../../../types';
@@ -83,6 +84,7 @@ export function useChannelRailActivity(
             (notification) =>
               notification.entity_type === 'channel' &&
               legacyChannelIds.has(notification.entity_id) &&
+              isUnreadChannelMessageNotification(notification) &&
               !notificationIsRead(notification)
           )
       );
@@ -135,6 +137,7 @@ export function useChannelRailActivity(
     notificationSource.subscribe((notification) => {
       if (
         notification.entity_type !== 'channel' ||
+        !isUnreadChannelMessageNotification(notification) ||
         notificationIsRead(notification)
       ) {
         return;

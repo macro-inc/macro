@@ -511,7 +511,7 @@ export const SoupView = (props: SoupViewProps) => {
                       <Button
                         size="icon-md"
                         variant="ghost"
-                        class="p-0.5 rounded-sm text-ink-extra-muted hover:text-ink-muted @max-[380px]/split-header:hidden"
+                        class="p-0.5 text-ink-extra-muted hover:text-ink-muted @max-[380px]/split-header:hidden"
                         label="View documentation"
                         onClick={() => openExternalUrl(url())}
                       >
@@ -612,7 +612,7 @@ export const SoupView = (props: SoupViewProps) => {
                             <Button
                               size="icon-md"
                               variant="outline"
-                              class="p-1 size-7 rounded-lg ml-2"
+                              class="p-1 size-7 ml-2"
                               onClick={() => setNarrowSearchExpanded(true)}
                               depth={2}
                             >

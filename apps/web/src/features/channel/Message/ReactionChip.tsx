@@ -92,7 +92,7 @@ export function ReactionChip(props: ReactionChipProps) {
             size="sm"
             variant={props.selected ? 'accent' : 'outline'}
             class={cn(
-              'flex flex-row items-center h-7 min-w-7 gap-1 rounded-full',
+              'flex flex-row items-center h-7 min-w-7 gap-1',
               !props.interactive && 'pointer-events-auto'
             )}
             disabled={!props.interactive}

@@ -1,16 +1,14 @@
+import { authorizeGithub } from '@core/auth/authorize-github';
 import { toast } from '@core/component/Toast/Toast';
 import { useIsAuthenticated } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
-import { getNativeMobilePlatform } from '@core/util/platform';
 import IconGoogle from '@icon/macro-google.svg';
 import GithubIcon from '@icon/mcp-github.svg';
 import {
-  invalidateGithubLinkStatus,
   useGithubLinkStatusQuery,
   useInitGithubLinkMutation,
 } from '@queries/auth';
 import { useEmailLinksQuery } from '@queries/email/link';
-import { invoke } from '@tauri-apps/api/core';
 import { Button } from '@ui';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 
@@ -59,42 +57,12 @@ export function OnboardingConnectAccounts() {
       toast.success('GitHub connected (debug)');
       return;
     }
-    const isIos = getNativeMobilePlatform() === 'ios';
     try {
-      const authorizationUrl = await initGithubLink.mutateAsync(
-        isIos ? 'macro://github-link-callback' : window.location.href
+      const linked = await authorizeGithub(
+        (callbackUrl) => initGithubLink.mutateAsync(callbackUrl),
+        'Failed to connect GitHub'
       );
-
-      if (!isIos) {
-        // Web / non-iOS native: the OAuth callback redirects back to original_url.
-        window.location.href = authorizationUrl;
-        return;
-      }
-
-      // iOS: run the OAuth inline in an ASWebAuthenticationSession via the Tauri
-      // auth plugin; the GitHub link is completed server-side when the callback
-      // fires, so we just refresh the status afterwards.
-      const auth = await invoke<{
-        success: boolean;
-        token?: string;
-        error?: string;
-      }>('plugin:auth|authenticate', {
-        payload: {
-          authUrl: authorizationUrl,
-          callbackScheme: 'macro',
-          ephemeralSession: true,
-        },
-      });
-
-      if (!auth.success) {
-        if (auth.error !== 'User canceled login') {
-          toast.failure('Failed to connect GitHub');
-        }
-        return;
-      }
-
-      await invalidateGithubLinkStatus();
-      toast.success('GitHub connected');
+      if (linked) toast.success('GitHub connected');
     } catch (error) {
       console.error('connect github failed', error);
       toast.failure('Failed to connect GitHub');

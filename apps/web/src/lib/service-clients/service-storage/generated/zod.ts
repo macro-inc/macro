@@ -14344,6 +14344,11 @@ export const getItemsSoupResponse = zod
                         'The runtime snapshotted when the session was created.'
                       ),
                     id: zod.uuid().describe('The agent session uuid'),
+                    isArchived: zod
+                      .boolean()
+                      .describe(
+                        'Whether the session is archived and read-only.'
+                      ),
                     name: zod
                       .string()
                       .describe('The user-facing name of the session'),
@@ -18717,6 +18722,11 @@ export const postItemsSoupResponse = zod
                         'The runtime snapshotted when the session was created.'
                       ),
                     id: zod.uuid().describe('The agent session uuid'),
+                    isArchived: zod
+                      .boolean()
+                      .describe(
+                        'Whether the session is archived and read-only.'
+                      ),
                     name: zod
                       .string()
                       .describe('The user-facing name of the session'),
@@ -22498,6 +22508,11 @@ export const postItemsSoupAstResponse = zod
                         'The runtime snapshotted when the session was created.'
                       ),
                     id: zod.uuid().describe('The agent session uuid'),
+                    isArchived: zod
+                      .boolean()
+                      .describe(
+                        'Whether the session is archived and read-only.'
+                      ),
                     name: zod
                       .string()
                       .describe('The user-facing name of the session'),
@@ -26657,6 +26672,11 @@ export const postItemsSoupAstGroupedResponse = zod
                               'The runtime snapshotted when the session was created.'
                             ),
                           id: zod.uuid().describe('The agent session uuid'),
+                          isArchived: zod
+                            .boolean()
+                            .describe(
+                              'Whether the session is archived and read-only.'
+                            ),
                           name: zod
                             .string()
                             .describe('The user-facing name of the session'),
@@ -30442,6 +30462,11 @@ export const postItemsSoupAstGroupedResponse = zod
                               'The runtime snapshotted when the session was created.'
                             ),
                           id: zod.uuid().describe('The agent session uuid'),
+                          isArchived: zod
+                            .boolean()
+                            .describe(
+                              'Whether the session is archived and read-only.'
+                            ),
                           name: zod
                             .string()
                             .describe('The user-facing name of the session'),

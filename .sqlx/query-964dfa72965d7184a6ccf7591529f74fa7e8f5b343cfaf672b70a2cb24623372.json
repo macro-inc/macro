@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE agent_session\n            SET is_archived = $2,\n                modified_at = CASE\n                    WHEN is_archived IS DISTINCT FROM $2 THEN NOW()\n                    ELSE modified_at\n                END\n            WHERE id = $1\n            RETURNING modified_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "modified_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "964dfa72965d7184a6ccf7591529f74fa7e8f5b343cfaf672b70a2cb24623372"
+}

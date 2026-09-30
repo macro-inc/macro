@@ -4,7 +4,7 @@ import { createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const source = vi.hoisted(() => ({
-  notifications: vi.fn(() => []),
+  notifications: vi.fn<NotificationSource['notifications']>(() => []),
   subscribe: vi.fn(() => () => {}),
   withLocalState: vi.fn<NonNullable<NotificationSource['withLocalState']>>(),
 }));
@@ -45,6 +45,34 @@ afterEach(() => {
 });
 
 describe('bounded channel unread indicators', () => {
+  it('ignores reply mentions while retaining older top-level mentions in legacy rows', () => {
+    const mention = (id: string, threadId?: string) =>
+      ({
+        id,
+        entity_type: 'channel',
+        entity_id: id,
+        state: 'unseen',
+        created_at: '2026-01-01',
+        notification_metadata: {
+          tag: 'channel_mention',
+          content: { messageId: 'message', threadId },
+        },
+      }) as ReturnType<NotificationSource['notifications']>[number];
+    source.notifications.mockReturnValue([
+      mention('reply', 'root'),
+      mention('root'),
+    ]);
+    const activity = createRoot((cleanup) => {
+      dispose = cleanup;
+      return useChannelRailActivity(
+        () => [row('reply', undefined), row('root', undefined)],
+        calls
+      );
+    });
+    expect([...activity.unreadChannelIds()]).toEqual(['root']);
+    expect(activity.unreadCount('channels')).toBe(1);
+  });
+
   it.each(['seen', 'done'] as const)(
     'clears dots, counts, and activity targets immediately on local %s, and restores them on rollback',
     (state) => {

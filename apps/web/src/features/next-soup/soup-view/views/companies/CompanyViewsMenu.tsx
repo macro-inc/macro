@@ -66,7 +66,7 @@ const SavedViewRow = (props: {
             size="icon-sm"
             label={props.isDefault ? 'Remove default' : 'Set as default'}
             class={cn(
-              'size-6 shrink-0 rounded-md p-1 text-ink-muted',
+              'size-6 shrink-0 p-1 text-ink-muted',
               !props.isDefault &&
                 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100'
             )}
@@ -82,7 +82,7 @@ const SavedViewRow = (props: {
         variant="ghost"
         size="icon-sm"
         label="Copy link"
-        class="size-6 shrink-0 rounded-md p-1 text-ink-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+        class="size-6 shrink-0 p-1 text-ink-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
         onClick={props.onCopyLink}
       >
         <LinkIcon class="size-3.5" />
@@ -95,7 +95,7 @@ const SavedViewRow = (props: {
             variant="ghost"
             size="icon-sm"
             label="Delete view"
-            class="size-6 shrink-0 rounded-md p-1 text-ink-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+            class="size-6 shrink-0 p-1 text-ink-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
             onClick={() => onDelete()()}
           >
             <TrashIcon class="size-3.5" />

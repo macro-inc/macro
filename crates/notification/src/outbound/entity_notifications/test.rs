@@ -137,6 +137,7 @@ async fn filters_before_limit_per_entity_and_preserves_full_reads(pool: PgPool) 
         states: vec![NotificationState::Unseen],
         event_types: vec![Message::TYPE_NAME.into()],
         limit: Some(1),
+        ..Default::default()
     };
     let entities = vec![
         channel.clone(),
@@ -201,4 +202,123 @@ async fn filters_before_limit_per_entity_and_preserves_full_reads(pool: PgPool) 
     .await
     .unwrap();
     assert!(empty[&channel].is_empty());
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Mention {
+    message_id: String,
+    thread_id: Option<String>,
+}
+impl Notification for Mention {
+    const TYPE_NAME: &'static str = "channel_mention";
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+struct LegacyMention {
+    message_id: String,
+    thread_id: String,
+}
+impl Notification for LegacyMention {
+    const TYPE_NAME: &'static str = "channel_mention";
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Reaction {
+    message_id: String,
+}
+impl Notification for Reaction {
+    const TYPE_NAME: &'static str = "channel_message_reaction";
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn top_level_filter_finds_older_mentions_before_limiting(pool: PgPool) {
+    let viewer = MacroUserIdStr::try_from_email("viewer@test.com").unwrap();
+    let channel = EntityType::Channel.with_entity_string(Uuid::now_v7().to_string());
+    let root = insert(
+        &pool,
+        &viewer,
+        channel.clone(),
+        None,
+        Mention {
+            message_id: "root".into(),
+            thread_id: None,
+        },
+    )
+    .await;
+    let reply = insert(
+        &pool,
+        &viewer,
+        channel.clone(),
+        None,
+        Mention {
+            message_id: "reply".into(),
+            thread_id: Some("root".into()),
+        },
+    )
+    .await;
+    insert(&pool, &viewer, channel.clone(), None, Call).await;
+    insert(
+        &pool,
+        &viewer,
+        channel.clone(),
+        None,
+        LegacyMention {
+            message_id: "legacy-reply".into(),
+            thread_id: "root".into(),
+        },
+    )
+    .await;
+    insert(
+        &pool,
+        &viewer,
+        channel.clone(),
+        None,
+        Reaction {
+            message_id: "root".into(),
+        },
+    )
+    .await;
+    let query = EntityNotificationQuery {
+        states: vec![NotificationState::Unseen],
+        top_level_messages_only: true,
+        limit: Some(1),
+        ..Default::default()
+    };
+    let result = get_filtered_entity_notifications(
+        &pool,
+        viewer.clone(),
+        vec![channel.clone()],
+        query.clone(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(result[&channel].len(), 1);
+    assert_eq!(result[&channel][0].notification_id, root);
+    pool.mark_notifications_seen(&viewer, &[root])
+        .await
+        .unwrap();
+    let result =
+        get_filtered_entity_notifications(&pool, viewer.clone(), vec![channel.clone()], query)
+            .await
+            .unwrap();
+    assert!(
+        result[&channel].is_empty(),
+        "reply mentions, reactions, and calls do not badge the channel"
+    );
+    let full =
+        get_filtered_entity_notifications(&pool, viewer, vec![channel.clone()], Default::default())
+            .await
+            .unwrap();
+    assert_eq!(
+        full[&channel].len(),
+        5,
+        "full hydration keeps every notification"
+    );
+    assert!(
+        full[&channel]
+            .iter()
+            .any(|row| row.notification_id == reply && row.state == NotificationState::Unseen)
+    );
 }

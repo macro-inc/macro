@@ -63,12 +63,17 @@ export function SpreadsheetSheetDialog(props: {
           </p>
         </Show>
         <div class="mt-5 flex justify-end gap-2">
-          <Button size="sm" type="button" onClick={props.onClose}>
+          <Button
+            variant="ghost"
+            size="sm"
+            type="button"
+            onClick={props.onClose}
+          >
             Cancel
           </Button>
           <Button
             size="sm"
-            variant={props.dialog?.kind === 'delete' ? 'danger' : 'accent'}
+            variant="strong"
             type="submit"
             disabled={!canConfirm()}
           >
@@ -176,12 +181,12 @@ export function SpreadsheetImportDialog(props: {
           </p>
         </Show>
         <div class="mt-5 flex justify-end gap-2">
-          <Button size="sm" onClick={props.onClose}>
+          <Button variant="ghost" size="sm" onClick={props.onClose}>
             Cancel
           </Button>
           <Button
             size="sm"
-            variant="accent"
+            variant="strong"
             disabled={props.readonly}
             onClick={props.onConfirm}
           >

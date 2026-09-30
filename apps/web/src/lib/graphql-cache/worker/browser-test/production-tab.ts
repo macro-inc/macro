@@ -13,6 +13,10 @@ const parameters = new URLSearchParams(location.search);
 const tabId = parameters.get('tabId') ?? '';
 const scope = parameters.get('scope') ?? '';
 if (!tabId || !scope) throw new Error('missing production harness parameters');
+// A named build gets its own coordinator, as each deployed build does, and
+// reports its build time so the newer build can take the database over.
+const build = parameters.get('build');
+const buildTime = Number(parameters.get('buildTime') ?? 0);
 
 const QUERY = `query Soup($input: SoupInput!) {
   user {
@@ -49,6 +53,19 @@ const pending = new Map<number, (response: CacheResponse) => void>();
 const adapter = createCacheCoordinatorPageAdapter({
   scope,
   tabId,
+  buildTime,
+  ...(build
+    ? {
+        createSharedWorker: (workerScope: string) =>
+          new SharedWorker(
+            new URL('../cache.coordinator.shared-worker.ts', import.meta.url),
+            {
+              type: 'module',
+              name: `graphql-cache-coordinator:${workerScope}:build-${build}`,
+            }
+          ),
+      }
+    : {}),
   createDedicatedWorker: (_workerScope, ownerEpoch) =>
     new Worker(
       new URL('./production-cache.engine-worker.ts', import.meta.url),
@@ -67,6 +84,15 @@ const adapter = createCacheCoordinatorPageAdapter({
   },
   onProtocolError: (error) => {
     report({ kind: 'protocol-error', error: error.message });
+  },
+  onCacheUnavailable: (reason) => {
+    report({ kind: 'cache-unavailable', reason });
+  },
+  onCacheSuperseded: (reason) => {
+    report({ kind: 'cache-superseded', reason });
+    // What the app's host does: leave like a navigating page, which stops
+    // this tab's engine so the newer build can open the database.
+    void adapter.dispose({ graceful: false, preserveDatabase: true });
   },
 });
 
@@ -202,6 +228,17 @@ const handleCommand = (command: ProductionHarnessCommand): void => {
       }
       currentWorker.terminate();
       report({ kind: 'command-result', commandId: value.commandId, ok: true });
+    })
+    .with({ kind: 'navigate-away' }, (value) => {
+      void (async () => {
+        await adapter.dispose({ graceful: false, preserveDatabase: true });
+        report({
+          kind: 'command-result',
+          commandId: value.commandId,
+          ok: true,
+        });
+        setTimeout(() => window.close());
+      })();
     })
     .exhaustive();
 };

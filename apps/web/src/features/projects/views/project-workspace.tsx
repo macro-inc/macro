@@ -4,14 +4,16 @@ import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
 import { PropertyValuePill } from '@property/component/PropertyValuePill';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { EntityPropertiesSection } from '@property/side-panel/properties/EntityPropertiesSection';
-import { Button, Dialog } from '@ui';
+import { Button } from '@ui';
 import { createSignal, For, type JSX, Match, Show, Switch } from 'solid-js';
+import { DeleteProjectsDialog } from '../components/delete-projects-dialog';
 import {
   type ProjectSource,
   type ProjectsContext,
   useProjectsContext,
 } from '../context/projects-context';
 import {
+  canDeleteProject,
   canEditProject,
   type ProjectDetail,
   type ProjectSection,
@@ -86,7 +88,7 @@ export function ProjectWorkspace(props: {
           )}
         </Show>
       </SidePanel.Section>
-      <Show when={props.project.access === 'owner'}>
+      <Show when={canDeleteProject(props.project)}>
         <SidePanel.Section id="actions" title="Actions" order={3}>
           <Button
             size="sm"
@@ -180,47 +182,20 @@ export function ProjectWorkspace(props: {
         </div>
       </div>
       <Show when={deleting()}>
-        <Dialog
-          open
+        <DeleteProjectsDialog
+          count={1}
+          pending={props.commands.pending()}
+          error={error()}
           onOpenChange={(open) => {
-            if (!open && !props.commands.pending()) setDeleting(false);
+            if (!open) setDeleting(false);
           }}
-          class="max-w-md"
-        >
-          <div class="flex flex-col gap-4 p-5">
-            <Dialog.Title>Delete project?</Dialog.Title>
-            <p class="text-sm text-ink-muted">
-              The project and its activity will be deleted. Its tasks will
-              remain in your workspace.
-            </p>
-            <Show when={error()}>
-              {(message) => (
-                <p role="alert" class="text-sm text-failure">
-                  {message()}
-                </p>
-              )}
-            </Show>
-            <div class="flex justify-end gap-2">
-              <Button
-                disabled={props.commands.pending()}
-                onClick={() => setDeleting(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                disabled={props.commands.pending()}
-                onClick={() =>
-                  void run(async () => {
-                    await props.commands.delete(props.project.id);
-                    props.onDelete();
-                  })
-                }
-              >
-                Delete project
-              </Button>
-            </div>
-          </div>
-        </Dialog>
+          onDelete={() =>
+            void run(async () => {
+              await props.commands.delete(props.project.id);
+              props.onDelete();
+            })
+          }
+        />
       </Show>
     </SidePanel.Layout>
   );

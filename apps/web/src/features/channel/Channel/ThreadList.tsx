@@ -57,6 +57,8 @@ export type ThreadListScrollState = {
   distanceFromTop: number;
   distanceFromBottom: number;
   viewportSize: number;
+  /** Intersecting rows, excluding overscan and floating header/composer insets. */
+  visibleRange?: { first: string; last: string };
 };
 
 export type ThreadListScrollSnapshot = {
@@ -456,6 +458,16 @@ export function ThreadList(props: ThreadListProps) {
           : 0;
     }
     previousScrollOffset = distanceFromTop;
+    const visibleRows = virtualizer
+      .getVirtualItems()
+      .filter(
+        (item) =>
+          item.end + shortListOffset() > distanceFromTop + insets().start &&
+          item.start + shortListOffset() <
+            distanceFromTop + el.clientHeight - insets().end
+      );
+    const firstVisible = visibleRows.at(0);
+    const lastVisible = visibleRows.at(-1);
     const state: ThreadListScrollState = {
       didInitialScroll: lifecycle.isReady(),
       isNearBottom: nearBottom,
@@ -464,6 +476,10 @@ export function ThreadList(props: ThreadListProps) {
       distanceFromTop,
       distanceFromBottom,
       viewportSize: el.clientHeight,
+      visibleRange:
+        firstVisible && lastVisible
+          ? { first: String(firstVisible.key), last: String(lastVisible.key) }
+          : undefined,
     };
     // Capture both before invoking callers, which may synchronously navigate.
     const snapshot = state.didInitialScroll
