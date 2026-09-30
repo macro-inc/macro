@@ -281,8 +281,7 @@ async fn added_reaction_carries_author_notification_context() {
     delivery.publish(reaction).await.unwrap();
 
     let events = log.events.lock().unwrap();
-    let [ChannelEvent::ReactionAdded { notification, .. }] = events.as_slice()
-    else {
+    let [ChannelEvent::ReactionAdded { notification, .. }] = events.as_slice() else {
         panic!("expected reaction notification context, got {events:?}");
     };
     assert_eq!(notification.emoji, "👍");

@@ -10,9 +10,9 @@ use axum::{
 use chrono::{DateTime, Utc};
 use entity_access::domain::{
     models::{
-        AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo,
-        EditAccessLevel, EntityAccessReceipt, EntityPermission, EntityType, MemberTeamRole,
-        RequiredPermission, UserTeamInfo, ViewAccessLevel,
+        AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, EditAccessLevel,
+        EntityAccessReceipt, EntityPermission, EntityType, MemberTeamRole, RequiredPermission,
+        UserTeamInfo, ViewAccessLevel,
     },
     ports::EntityAccessService,
 };
@@ -30,9 +30,7 @@ use serde_json::{Value, json};
 use tower::ServiceExt;
 use uuid::Uuid;
 
-use super::{
-    CrmCompanyAccessLevelExtractor, CrmContactAccessLevelExtractor,
-};
+use super::{CrmCompanyAccessLevelExtractor, CrmContactAccessLevelExtractor};
 use crate::{
     domain::{
         auth::{CrmCompanyReceipt, CrmContactReceipt, CrmTeamReceipt},
@@ -99,7 +97,6 @@ impl FakeEntityAccessService {
             calls: Arc::new(Mutex::new(Vec::new())),
         }
     }
-
 
     fn calls(&self) -> Vec<EntityAccessCall> {
         self.calls.lock().expect("calls lock poisoned").clone()
@@ -651,4 +648,3 @@ async fn credential_failures_happen_before_permission_lookup() {
         assert!(access.calls().is_empty());
     }
 }
-

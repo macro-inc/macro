@@ -244,7 +244,6 @@ impl CompaniesRepositoryImpl {
 
         Ok((winner, false))
     }
-
 }
 
 impl CompaniesRepository for CompaniesRepositoryImpl {

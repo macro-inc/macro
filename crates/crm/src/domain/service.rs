@@ -14,9 +14,7 @@ use crate::domain::{
     },
 };
 use chrono::{DateTime, Utc};
-use entity_access::domain::models::{
-    EditAccessLevel, MemberTeamRole, ViewAccessLevel,
-};
+use entity_access::domain::models::{EditAccessLevel, MemberTeamRole, ViewAccessLevel};
 
 /// The CrmService exposes operations over CRM records (companies, their
 /// domains and contacts).

@@ -2765,5 +2765,4 @@ impl ChannelRepo for PgChannelsRepo {
         };
         Ok(activity)
     }
-
 }

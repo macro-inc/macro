@@ -66,13 +66,13 @@ use messages::outbound::broker::MessageTopicEvent;
 use super::{
     call::{CallEventDescription, CallIndexAction, describe_call_event},
     channel::{ChannelEventDescription, ChannelIndexAction, describe_channel_event},
-    message::{MessageEventDescription, MessageIndexAction, describe_message_event},
     chat::{ChatEventDescription, ChatIndexAction, describe_chat_event},
     document::{
         DocumentEventDescription, DocumentIndexAction, describe_document_event,
         stored_extractor_message, sync_extractor_message,
     },
     email::{EmailEventDescription, EmailIndexAction, describe_email_event},
+    message::{MessageEventDescription, MessageIndexAction, describe_message_event},
     project::{
         ProjectEventDescription, ProjectIndexAction, collect_project_ids, describe_project_event,
     },
@@ -738,9 +738,8 @@ fn channel_event_cases() -> Vec<(ChannelTopicEvent, ChannelEventDescription)> {
 
 fn message_event_cases() -> Vec<(MessageTopicEvent, MessageEventDescription)> {
     use messages::domain::events::{
-        MessageAttachmentCreatedMetadata, MessageAttachmentRemovedMetadata,
-        MessageDeletedMetadata, MessageMentionedMetadata, MessagePatchedMetadata,
-        MessagePostedMetadata,
+        MessageAttachmentCreatedMetadata, MessageAttachmentRemovedMetadata, MessageDeletedMetadata,
+        MessageMentionedMetadata, MessagePatchedMetadata, MessagePostedMetadata,
     };
     let sender = channel_sender();
     let channel = MessageParent::Channel(CHANNEL_ID);

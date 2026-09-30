@@ -9,12 +9,12 @@ use std::time::Duration;
 
 use channels::domain::broker_events::ChannelMacroEvent;
 use documents::domain::events::DocumentMacroEvent;
-use messages::outbound::broker::{MessageMacroEvent, MessageTopicEvent};
 use kafka_util::{GroupName, KafkaEventConsumer};
 use macro_event_broker::{
     EventBrokerError, EventConsumer, KafkaConsumerAdapter, MacroEvent as _,
     MacroEventCollection as _, MacroEventConsumerService, MessageWrapper,
 };
+use messages::outbound::broker::{MessageMacroEvent, MessageTopicEvent};
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message};
 use rootcause::Report;

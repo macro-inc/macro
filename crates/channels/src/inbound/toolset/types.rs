@@ -1,7 +1,7 @@
 //! Shared channel AI tool input/output types.
 use messages::domain::{
-    models::{CountedReaction, Message, MessageAttachment},
     models::MessageListItem,
+    models::{CountedReaction, Message, MessageAttachment},
 };
 
 use chrono::{DateTime, Utc};

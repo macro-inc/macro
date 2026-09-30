@@ -13,10 +13,7 @@ use channels::domain::{
         AttachmentEntityReference, ChannelAttachmentType, ChannelParticipant, ChannelType,
         CreateChannelRequest, CreateChannelResponse, Sender,
     },
-    ports::{
-        ChannelAttachmentsPage, ChannelMessagesErr, ChannelMutationErr,
-        ChannelService,
-    },
+    ports::{ChannelAttachmentsPage, ChannelMessagesErr, ChannelMutationErr, ChannelService},
 };
 use entity_access::domain::models::{
     AdminTeamRole, EntityAccessReceipt, EntityType, MemberTeamRole, OwnerTeamRole,

@@ -430,7 +430,11 @@ impl IncomingEvent {
                 MessageFact::Mentioned(data) => {
                     let channel_id = channel_parent(&data.parent)?;
                     require_human(Some(&data.sender), false)?;
-                    (EventName::ChannelMentioned, channel_id, Some(data.message_id))
+                    (
+                        EventName::ChannelMentioned,
+                        channel_id,
+                        Some(data.message_id),
+                    )
                 }
                 MessageFact::Patched(data) => {
                     let channel_id = channel_parent(&data.parent)?;

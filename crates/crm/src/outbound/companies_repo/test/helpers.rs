@@ -311,4 +311,3 @@ pub(super) async fn insert_contact(
     .await?;
     Ok(contact_id)
 }
-

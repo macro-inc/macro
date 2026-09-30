@@ -23,9 +23,7 @@ use entity_access::domain::models::{
 };
 use uuid::Uuid;
 
-use crate::domain::{
-    model::{CrmError, CrmPermissionRole},
-};
+use crate::domain::model::{CrmError, CrmPermissionRole};
 
 #[cfg(test)]
 mod test;
@@ -271,4 +269,3 @@ impl<T: RequiredPermission> CrmTeamReceipt<T> {
         }
     }
 }
-

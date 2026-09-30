@@ -205,4 +205,3 @@ fn extract_contact_id(path_params: &HashMap<String, String>) -> Result<Uuid, Ext
         ))?;
     Uuid::parse_str(raw_id).map_err(|_| ExtractorError::BadRequest("invalid CRM contact ID format"))
 }
-
