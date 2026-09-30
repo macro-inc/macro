@@ -132,3 +132,70 @@ extra routes, or mount native-only UI. Pair those checks with the
 `MaybeTauriProvider` from `@macro/tauri` to keep native-specific wiring
 localized while rendering everything through the shared `src` entry
 point.
+
+## Desktop memory recording (macOS)
+
+The frontend tags traces and logs with `app.runtime=tauri`, `app.platform`,
+`service.instance.id` (a new UUID per native launch), `macro.native.pid`, and
+`macro.native.version`. The shared `service.name=web-app` remains unchanged.
+Browser sessions instead have `app.runtime=browser`.
+
+Quit an existing Macro instance first, then launch the built **app bundle**:
+
+```sh
+open -a /absolute/path/to/macro.app --args --record-memory \
+  --otel-traces-url https://macro-prox-prod.macroverse.workers.dev/i/otlp/v1/traces
+```
+
+For dev telemetry use `https://macro-prox-dev.macroverse.workers.dev/i/otlp/v1/traces`;
+for a local collector use its full HTTP `/v1/traces` URL. The endpoint is required
+and applies to this launch only; the corresponding `/v1/logs` endpoint is derived
+from it. No collector credentials are embedded in the app. Selecting a telemetry
+endpoint does not change which backend the frontend uses.
+
+Recording explicitly enables the frontend OTel SDK regardless of the normal
+PostHog/build-time enablement gate and uses an always-on sampler for emitted
+frontend spans. This does not override sampling/drop policies in a downstream
+collector or backend, or add traces to operations that have no instrumentation.
+The title bar shows `Recording <short ID>`; the full `macro.recording.id` and
+`service.instance.id` appear in the startup telemetry log. Quit to stop recording.
+Launching again creates new IDs. A second launch while Macro is already running
+is handled by the existing single-instance plugin and does **not** enable recording
+in the running instance. Automatic bundle updates are disabled for a recording
+launch so the measured frontend stays on the embedded build.
+
+A native thread samples once per second, retaining at most one hour in memory.
+The frontend drains the samples, emits timestamped `app.memory.sample` spans, and
+attaches the latest reading to every frontend span at start and at end (the latter
+attributes end in `.end`). Readings older than five seconds are tagged `stale` and
+are not attached as current memory. Buffer overflow is reported in a telemetry
+warning. Reloads reuse the native session; a per-webview sessionStorage cursor
+avoids replaying samples already handed to the exporter. Export uses the existing
+bounded, best-effort OTel batch transport; this is not a durable local recording,
+and abrupt exit, export failures, or buffer overflow can lose telemetry.
+
+Memory fields (bytes):
+
+- `macro.memory.native.{rss_bytes,footprint_bytes}`: Rust host process.
+- `macro.memory.web_content.{rss_bytes,footprint_bytes}`: frontend WebContent processes.
+- `macro.memory.gpu.*` / `macro.memory.network.*`: attributed WebKit helpers.
+- `macro.memory.frontend.footprint_bytes`: sum of measured WebKit helper footprints.
+- `macro.memory.app.footprint_bytes`: native + frontend footprint sum, present only
+  when the native host and WebContent were measured with no helper-read failures.
+- `macro.memory.frontend.status`: `available`, `partial`, or `unavailable`.
+- `macro.memory.timestamp_ms` / `sample_age_ms`: native sample time and its age.
+
+These are process memory measurements, not JavaScript heap/allocation profiles.
+RSS and macOS physical footprint have different accounting; sums are explicitly
+process sums and need not equal Activity Monitor's app total.
+
+macOS sampling uses `proc_pid_rusage`. WebKit helpers are XPC processes, so PPID
+alone is insufficient. Attribution resolves the optional private libSystem SPI
+`responsibility_get_pid_responsible_for_pid` at runtime and includes only known
+WebKit helpers whose responsible PID is this app. If the SPI, permissions, or
+attribution are unavailable, frontend coverage is explicitly unavailable. Never
+sum every WebKit process on the machine. Launch through `open`/LaunchServices:
+executing the binary directly from a terminal may attribute helpers to Terminal.
+Memory recording is currently macOS-only; normal runtime identification works on
+all Tauri platforms. The private attribution API is a compatibility consideration
+for future App Store distribution.
