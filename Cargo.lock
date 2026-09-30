@@ -963,6 +963,7 @@ dependencies = [
  "chrono",
  "macro_authorization",
  "macro_db_migrator",
+ "macro_env_var",
  "macro_user_id",
  "macro_uuid",
  "rootcause",

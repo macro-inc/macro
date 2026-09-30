@@ -15,10 +15,12 @@
 //! [`FinancialUsage`] capability. [`financial`] defines immutable provider evidence,
 //! exact public usage/customer money, and fail-closed capability selection.
 
+pub mod config;
 pub mod domain;
 pub mod inbound;
 pub mod outbound;
 
+pub use domain::counting::{AiUsageEnforcement, NON_BILLABLE_AI_FEATURES, is_billable_feature};
 pub use domain::financial;
 pub use domain::financial_service::{
     CacheWritePolicy, CounterSemantics, FinancialRateCatalog, FinancialUsageRepo,
