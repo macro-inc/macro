@@ -677,10 +677,11 @@ function TourNext(props: TourButtonProps & { doneLabel?: JSX.Element }) {
 function TourClose(props: TourButtonProps) {
   const tour = useTour();
   const [local, others] = splitProps(props, ['children']);
+  // Text children name the button; only the icon form needs a label.
   return (
     <Button
       size="icon-sm"
-      label="Dismiss tour"
+      label={local.children === undefined ? 'Dismiss tour' : undefined}
       {...others}
       onClick={tour.dismiss}
     >
