@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 
 use chrono::Utc;
 
+use super::counting::AiUsageEnforcement;
 use super::ports::*;
 
 /// The existing Macro-admin policy for usage reporting and price changes.
@@ -23,12 +24,23 @@ fn require_admin(actor: &macro_user_id::user_id::MacroUserIdStr<'_>) -> Result<(
 #[derive(Clone)]
 pub struct UsageServiceImpl<Repo> {
     repo: Repo,
+    enforcement: AiUsageEnforcement,
 }
 
 impl<Repo> UsageServiceImpl<Repo> {
-    /// Construct the service over a storage repository.
+    /// Construct the service with prospective quota counting disabled.
     pub fn new(repo: Repo) -> Self {
-        Self { repo }
+        Self {
+            repo,
+            enforcement: AiUsageEnforcement::Disabled,
+        }
+    }
+
+    /// Set the policy used to count new usage toward user quotas.
+    /// Existing rows and admin analytics are unaffected.
+    pub fn with_enforcement(mut self, enforcement: AiUsageEnforcement) -> Self {
+        self.enforcement = enforcement;
+        self
     }
 }
 
@@ -48,7 +60,12 @@ where
         usage.cost_usd = tracing::field::Empty,
         usage.priced = tracing::field::Empty,
     ))]
-    async fn record_event(repo: &Repo, event: UsageEvent) -> Result<()> {
+    async fn record_event(
+        repo: &Repo,
+        enforcement: AiUsageEnforcement,
+        event: UsageEvent,
+    ) -> Result<()> {
+        let count_usage = enforcement.should_count(&event.user, event.feature);
         // Store and price by the bare api id; chat hands us `provider/model`.
         let model = normalize_model_id(&event.model).to_string();
         let mut cost = Usage {
@@ -74,7 +91,7 @@ where
             cost,
         };
 
-        repo.insert_usage(&row).await
+        repo.insert_usage(&row, count_usage).await
     }
 
     /// Resolve pricing and persist `event`, returning once the row is written.
@@ -82,7 +99,7 @@ where
     /// [`UsageRecorder::record`] is the fire-and-forget form. Callers that
     /// need to act after the row exists (billing settlement) await this one.
     pub async fn record_now(&self, event: UsageEvent) -> Result<()> {
-        Self::record_event(&self.repo, event).await
+        Self::record_event(&self.repo, self.enforcement, event).await
     }
 }
 
@@ -92,9 +109,10 @@ where
 {
     fn record(&self, event: UsageEvent) {
         let repo = self.repo.clone();
+        let enforcement = self.enforcement;
         // Recording must never fail or delay the originating call.
         tokio::spawn(tracing::Instrument::in_current_span(async move {
-            if let Err(e) = Self::record_event(&repo, event).await {
+            if let Err(e) = Self::record_event(&repo, enforcement, event).await {
                 tracing::error!(error = ?e, "failed to record ai usage");
             }
         }));

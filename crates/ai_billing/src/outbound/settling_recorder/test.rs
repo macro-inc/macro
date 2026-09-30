@@ -18,7 +18,7 @@ struct FakeUsageRepo {
 }
 
 impl UsageRepo for FakeUsageRepo {
-    async fn insert_usage(&self, _usage: &CompletionUsage) -> UsageResult<()> {
+    async fn insert_usage(&self, _usage: &CompletionUsage, _count_usage: bool) -> UsageResult<()> {
         let attempt = self.attempts.fetch_add(1, Ordering::SeqCst);
         if self.fail_first && attempt == 0 {
             return Err(UsageError::Other(anyhow::anyhow!(
