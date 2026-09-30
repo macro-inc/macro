@@ -1,4 +1,5 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { HeaderActionButton } from '@components/app/HeaderActionButton';
 import type { SplitHandle } from '@components/app/split-layout/layoutManager';
 import { DEFAULT_MODEL } from '@core/component/AI/constant';
 import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
@@ -179,15 +180,11 @@ export function ChatWithAgentButton(props: {
 
 export function AskMacroButton(props: { entity: ChatWithAgentEntity }) {
   return (
-    <Button
+    <HeaderActionButton
       onClick={() => openChatWithAgent(props.entity)}
-      variant="ghost"
-      size="sm"
-      depth={2}
-      class="gap-1.5 border border-edge-muted px-2"
-    >
-      <AgentIcon />
-      <span class="text-xs font-medium">Ask Macro</span>
-    </Button>
+      tooltip="Ask Macro"
+      label="Ask Macro"
+      icon={<AgentIcon />}
+    />
   );
 }

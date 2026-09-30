@@ -91,6 +91,7 @@ vi.mock('@ui', () => ({
   ),
   Layer: (props: { children: JSX.Element }) => props.children,
   Badge: () => null,
+  badgeTriggerClasses: () => '',
 }));
 
 function field(id: string, value: string | null = null): Property {

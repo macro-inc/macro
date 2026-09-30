@@ -4,6 +4,7 @@ export type SidePanelSectionEntry = {
   id: string;
   title: JSX.Element;
   defaultOpen: boolean;
+  footer?: boolean;
   /**
    * Render order — lower numbers appear first. Sections without an explicit
    * order render after ordered ones, in their registration order.
@@ -13,6 +14,8 @@ export type SidePanelSectionEntry = {
 };
 
 export type SidePanelContextType = {
+  headerActionsMount: Accessor<HTMLDivElement | undefined>;
+  setHeaderActionsMount: Setter<HTMLDivElement | undefined>;
   register: (entry: SidePanelSectionEntry) => void;
   unregister: (id: string) => void;
   sections: Accessor<SidePanelSectionEntry[]>;

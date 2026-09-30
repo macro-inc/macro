@@ -1,5 +1,4 @@
 import { ViewShell } from '@app/components/view-shell';
-import { ChatWithAgentButton } from '@app/features/chat/ChatWithAgentButton';
 import { SidePanel } from '@components/app/side-panel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
@@ -71,21 +70,14 @@ export function CallDetailActions(props: {
   }));
 
   return (
-    <div class="ml-auto flex shrink-0 items-center gap-2">
+    <div class="ml-auto flex shrink-0 items-center gap-1">
       <Show when={!isMobile() && !props.record.isActive && canCallAgain()}>
         <Button variant="outline" size="sm" onClick={callAgain}>
           <PhoneCallIcon class="size-4" />
           Call Again
         </Button>
       </Show>
-      <ChatWithAgentButton
-        entity={{
-          type: 'document',
-          id: props.callId,
-          name: props.name,
-          fileType: 'call',
-        }}
-      />
+      <SidePanel.HeaderActionsOutlet />
       <ShareTrigger
         onClick={openShare}
         id={props.callId}

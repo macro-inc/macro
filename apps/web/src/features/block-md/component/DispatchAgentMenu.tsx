@@ -285,9 +285,9 @@ export function DispatchAgentButton(
     <Dropdown open={open()} onOpenChange={setOpen}>
       <ButtonGroup
         variant="ghost"
-        size={props.showPrimaryLabel ? 'sm' : 'icon-sm'}
+        size={props.showPrimaryLabel ? 'md' : 'icon-sm'}
         depth={2}
-        class="rounded-full border border-edge-muted"
+        class="rounded-full"
       >
         <Button
           onClick={executeLastUsed}
@@ -296,10 +296,10 @@ export function DispatchAgentButton(
         >
           <Dynamic
             component={lastUsed().buttonIcon ?? lastUsed().icon}
-            class="size-3!"
+            class="size-3.5!"
           />
           <Show when={props.showPrimaryLabel}>
-            <span class="max-w-36 truncate text-xs font-medium">
+            <span class="max-w-36 truncate @max-[600px]/split-header:hidden">
               {lastUsed().name}
             </span>
           </Show>

@@ -226,11 +226,12 @@ export function EmailDetailView(props: {
             aria-label="Email location"
             fallback={<EntityDetailBreadcrumbSkeleton />}
           />
-          <div class="ml-auto flex shrink-0 items-center gap-2">
+          <div class="ml-auto flex shrink-0 items-center gap-1">
             <div ref={setControlsMount} class="flex items-center gap-0.5" />
             <div class="touch:hidden">
               <ListNavigationButtons navigation={listNavigation} />
             </div>
+            <SidePanel.HeaderActionsOutlet />
             <Show when={ENABLE_EMAIL_SHARING}>
               <ShareTrigger
                 onClick={openShare}

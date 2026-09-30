@@ -93,13 +93,8 @@ export function EmailThreadHostView(props: EmailThreadHostViewProps) {
 function ThreadActions(props: { title: string; onCreateTask: () => void }) {
   const context = useEmailThreadState();
   return (
-    <SidePanel.Section
-      id="email-ai-actions"
-      title="Actions"
-      defaultOpen
-      order={0}
-    >
-      <div class="m-px flex items-center justify-start gap-2">
+    <SidePanel.HeaderActions>
+      <div class="flex shrink-0 items-center gap-1">
         <Show when={context.thread()?.db_id}>
           {(id) => (
             <AskMacroButton
@@ -111,6 +106,6 @@ function ThreadActions(props: { title: string; onCreateTask: () => void }) {
           <EmailTaskButton onClick={props.onCreateTask} />
         </Show>
       </div>
-    </SidePanel.Section>
+    </SidePanel.HeaderActions>
   );
 }

@@ -30,7 +30,7 @@ import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { useTagsQuery } from '@queries/properties/tags';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import { Badge, Button, Layer } from '@ui';
+import { Badge, Button, badgeTriggerClasses, Layer } from '@ui';
 import { cn } from '@ui/utils/classname';
 import {
   createEffect,
@@ -373,7 +373,12 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
           </Show>
 
           <Show when={props.canEdit && props.showAddProperty !== false}>
-            <div class="mt-2">
+            <div
+              class={cn(
+                'flex items-center',
+                filteredPinnedProperties().length > 0 && 'mt-2'
+              )}
+            >
               <AddPinnedPropertyButton />
             </div>
           </Show>
@@ -387,17 +392,18 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
 function AddPinnedPropertyButton() {
   const { openPropertySelector } = usePropertiesContext();
   return (
-    <Button
+    <button
       type="button"
-      variant="ghost"
-      size="sm"
-      noTouchResize
       onClick={openPropertySelector}
-      class="m-px"
+      class={badgeTriggerClasses({
+        variant: 'outline',
+        size: 'sm',
+        class: 'm-px gap-1.5',
+      })}
     >
       <Plus class="size-3" />
       <span>Add property</span>
-    </Button>
+    </button>
   );
 }
 

@@ -80,7 +80,8 @@ function DriveDetailTopBar() {
         aria-label="File location"
         fallback={<EntityDetailBreadcrumbSkeleton />}
       />
-      <div class="ml-auto flex shrink-0 items-center gap-2">
+      <div class="ml-auto flex shrink-0 items-center gap-1">
+        <SidePanel.HeaderActionsOutlet />
         <Show when={activeDetail()}>
           {(detail) => (
             <ShareTrigger

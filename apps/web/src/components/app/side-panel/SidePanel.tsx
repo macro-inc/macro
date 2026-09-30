@@ -28,6 +28,7 @@ import {
   Suspense,
   useContext,
 } from 'solid-js';
+import { Portal } from 'solid-js/web';
 import { Transition } from 'solid-transition-group';
 import { HeaderIsland } from '../split-layout/components/HeaderIsland';
 import { SplitHeaderRight } from '../split-layout/components/SplitHeader';
@@ -84,6 +85,8 @@ function Root(
     (content?.type === 'component' ? content.id : content?.type);
   const [sections, setSections] = createSignal<SidePanelSectionEntry[]>([]);
   const [openIds, setOpenIds] = createSignal<string[]>([]);
+  const [headerActionsMount, setHeaderActionsMount] =
+    createSignal<HTMLDivElement>();
   // Independent open state per mode so wide and narrow can have different
   // defaults (and the user's preference in one mode doesn't bleed into the
   // other after a resize).
@@ -97,7 +100,7 @@ function Root(
   const updateLayoutMode: Setter<boolean> = (next) => {
     const overlay = typeof next === 'function' ? next(isOverlayMode()) : next;
     if (overlay !== isOverlayMode()) setIsOverlayOpen(false);
-    return setIsOverlayMode(overlay);
+    return setIsOverlayMode(() => overlay);
   };
 
   const isOpen = () => (isOverlayMode() ? isOverlayOpen() : isWideOpen());
@@ -145,6 +148,8 @@ function Root(
   }
 
   const ctx: SidePanelContextType = {
+    headerActionsMount,
+    setHeaderActionsMount,
     register,
     unregister,
     sections,
@@ -385,6 +390,29 @@ function Toggle() {
   );
 }
 
+/** Keeps action state in the owning block while rendering it before Share. */
+function HeaderActions(props: ParentProps) {
+  const ctx = useContext(SidePanelContext);
+  return (
+    <Show when={ctx?.headerActionsMount()}>
+      {(mount) => <Portal mount={mount()}>{props.children}</Portal>}
+    </Show>
+  );
+}
+
+function HeaderActionsOutlet() {
+  const ctx = useContext(SidePanelContext);
+  onCleanup(() => ctx?.setHeaderActionsMount(undefined));
+  return (
+    <Show when={ctx}>
+      <div
+        ref={ctx?.setHeaderActionsMount}
+        class="flex shrink-0 items-center gap-1 empty:hidden [&>div]:contents"
+      />
+    </Show>
+  );
+}
+
 function SidePanelHeaderToggle() {
   const panel = useSplitPanel();
   const ctx = useContext(SidePanelContext);
@@ -446,7 +474,7 @@ function SidePanelOutlet(props: {
         props.floating ? 'p-0 gap-0' : 'p-2 gap-2'
       )}
     >
-      <For each={sortedSections()}>
+      <For each={sortedSections().filter((section) => !section.footer)}>
         {(section) => section.component(props.floating ?? false)}
       </For>
     </Accordion>
@@ -458,14 +486,49 @@ function SidePanelOutlet(props: {
       fallback={
         <Scroll class="flex flex-col min-h-0">
           <Sections />
+          <Footers />
         </Scroll>
       }
     >
       <div class="min-h-0 overflow-y-auto overscroll-contain">
         <Sections />
+        <Footers />
       </div>
     </Show>
   );
+
+  function Footers() {
+    return (
+      <For each={sortedSections().filter((section) => section.footer)}>
+        {(section) => section.component(props.floating ?? false)}
+      </For>
+    );
+  }
+}
+
+/** Unheaded metadata always follows the panel's interactive sections. */
+function Footer(props: ParentProps) {
+  const ctx = useContext(SidePanelContext);
+  if (!ctx)
+    throw new Error('<SidePanel.Footer> must be inside <SidePanel.Root>');
+  onMount(() => {
+    ctx.register({
+      id: 'metadata-footer',
+      title: 'Metadata',
+      defaultOpen: false,
+      footer: true,
+      component: () => (
+        <footer
+          aria-label="Metadata"
+          class="border-t border-edge-muted px-3 py-3 text-xs leading-relaxed text-ink-extra-muted"
+        >
+          <Suspense fallback={<Loading />}>{props.children}</Suspense>
+        </footer>
+      ),
+    });
+    onCleanup(() => ctx.unregister('metadata-footer'));
+  });
+  return null;
 }
 
 /**
@@ -687,7 +750,10 @@ export const SidePanel = {
   Root,
   Layout,
   Toggle,
+  HeaderActions,
+  HeaderActionsOutlet,
   Section,
+  Footer,
   Grid,
   Row,
   Pill,

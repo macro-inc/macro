@@ -14,6 +14,7 @@ import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler'
 import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
 import { createCallback } from '@solid-primitives/rootless';
 import { createMemo, Show } from 'solid-js';
+import { EntityMetadata } from './EntityMetadata';
 import { SidePanel } from './SidePanel';
 
 export function FileSidePanelSections() {
@@ -54,16 +55,11 @@ export function DocumentFileSidePanelSections(
   );
 }
 
-export function FileDetailsSection(props: { order?: number }) {
+export function FileDetailsSection(_props: { order?: number }) {
   return (
-    <SidePanel.Section
-      id="details"
-      title="Details"
-      defaultOpen
-      order={props.order}
-    >
+    <SidePanel.Footer>
       <BlockDetailsSectionContent />
-    </SidePanel.Section>
+    </SidePanel.Footer>
   );
 }
 
@@ -72,14 +68,9 @@ export function DocumentFileDetailsSection(props: {
   order?: number;
 }) {
   return (
-    <SidePanel.Section
-      id="details"
-      title="Details"
-      defaultOpen
-      order={props.order}
-    >
+    <SidePanel.Footer>
       <DetailsSectionContent documentId={props.documentId} />
-    </SidePanel.Section>
+    </SidePanel.Footer>
   );
 }
 
@@ -160,14 +151,11 @@ function DetailsSectionContent(props: { documentId: string }) {
   const metadata = createMemo(() => query.data);
 
   return (
-    <SidePanel.Grid>
-      <Show when={metadata()?.owner}>
-        {(ownerId) => (
-          <SidePanel.Row label="Owner">
-            <OwnerValue ownerId={ownerId()} />
-          </SidePanel.Row>
-        )}
-      </Show>
+    <EntityMetadata
+      ownerId={metadata()?.owner}
+      createdAt={metadata()?.createdAt}
+      updatedAt={metadata()?.updatedAt}
+    >
       <Show
         when={(() => {
           const id = metadata()?.projectId;
@@ -176,26 +164,13 @@ function DetailsSectionContent(props: { documentId: string }) {
         })()}
       >
         {(folder) => (
-          <SidePanel.Row label="Folder">
+          <div class="flex items-center gap-1">
+            Folder
             <FolderLink projectId={folder().id} projectName={folder().name} />
-          </SidePanel.Row>
+          </div>
         )}
       </Show>
-      <Show when={metadata()?.createdAt}>
-        {(created) => (
-          <SidePanel.Row label="Created">
-            <DateValueDisplay value={created()} />
-          </SidePanel.Row>
-        )}
-      </Show>
-      <Show when={metadata()?.updatedAt}>
-        {(updated) => (
-          <SidePanel.Row label="Last updated">
-            <DateValueDisplay value={updated()} />
-          </SidePanel.Row>
-        )}
-      </Show>
-    </SidePanel.Grid>
+    </EntityMetadata>
   );
 }
 

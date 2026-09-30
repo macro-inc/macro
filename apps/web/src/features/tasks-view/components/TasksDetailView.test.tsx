@@ -36,6 +36,7 @@ vi.mock('@components/app/side-panel', () => ({
   SidePanel: {
     Root: (props: ParentProps) => props.children,
     Toggle: () => null,
+    HeaderActionsOutlet: () => null,
   },
 }));
 vi.mock('@components/app/split-layout/layoutUtils', () => ({

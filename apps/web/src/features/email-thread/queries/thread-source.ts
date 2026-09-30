@@ -10,6 +10,8 @@ export function toEmailThread(thread: ApiThread): EmailThread {
   return {
     access_level: thread.access_level,
     db_id: thread.db_id,
+    created_at: thread.created_at,
+    updated_at: thread.updated_at,
     inbox_visible: thread.inbox_visible,
     is_read: thread.is_read,
     latest_inbound_message_ts: thread.latest_inbound_message_ts,

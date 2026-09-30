@@ -1,6 +1,7 @@
 import { projectRouteId } from '@app/features/projects/core/route';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useChannelParticipants } from '@channel/use-channel-participants';
+import { HeaderActionButton } from '@components/app/HeaderActionButton';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { useIsAuthenticated } from '@core/auth';
 import {
@@ -1656,9 +1657,9 @@ export function ShareTrigger(props: {
                 : `Share ${blockType()}`)
         }
       >
-        <Button
-          variant="ghost"
-          size="md"
+        <HeaderActionButton
+          label="Share"
+          icon={<IconShared />}
           onClick={() => {
             if (!isAuthenticated()) {
               openLoginModal();
@@ -1667,10 +1668,7 @@ export function ShareTrigger(props: {
               props.onClick();
             }
           }}
-        >
-          <IconShared />
-          Share
-        </Button>
+        />
       </Tooltip>
 
       <Button

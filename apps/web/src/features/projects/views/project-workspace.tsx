@@ -1,5 +1,5 @@
 import { SidePanel } from '@components/app/side-panel';
-import { EntityDetailsGrid } from '@components/app/side-panel/EntityDetailsGrid';
+import { EntityMetadata } from '@components/app/side-panel/EntityMetadata';
 import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
 import { PropertyValuePill } from '@property/component/PropertyValuePill';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
@@ -59,13 +59,13 @@ export function ProjectWorkspace(props: {
 
   return (
     <SidePanel.Layout headerToggle={false}>
-      <SidePanel.Section id="details" title="Details" defaultOpen order={0}>
-        <EntityDetailsGrid
+      <SidePanel.Footer>
+        <EntityMetadata
           ownerId={props.project.ownerId}
           createdAt={props.project.createdAt}
           updatedAt={props.project.updatedAt}
         />
-      </SidePanel.Section>
+      </SidePanel.Footer>
       <SidePanel.Section
         id="properties"
         title="Properties"
@@ -89,9 +89,12 @@ export function ProjectWorkspace(props: {
         </Show>
       </SidePanel.Section>
       <Show when={canDeleteProject(props.project)}>
-        <SidePanel.Section id="actions" title="Actions" order={3}>
+        <SidePanel.HeaderActions>
           <Button
+            variant="ghost"
             size="sm"
+            depth={2}
+            class="gap-1.5 border border-edge-muted px-2"
             onClick={() => {
               setError(undefined);
               setDeleting(true);
@@ -99,7 +102,7 @@ export function ProjectWorkspace(props: {
           >
             Delete project
           </Button>
-        </SidePanel.Section>
+        </SidePanel.HeaderActions>
       </Show>
       <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
         <Show when={error()}>

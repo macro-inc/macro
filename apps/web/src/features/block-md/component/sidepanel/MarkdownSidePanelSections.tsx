@@ -10,7 +10,7 @@ import {
   SidePanel,
   useSidePanel,
 } from '@components/app/side-panel';
-import { EntityDetailsGrid } from '@components/app/side-panel/EntityDetailsGrid';
+import { EntityMetadata } from '@components/app/side-panel/EntityMetadata';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
@@ -70,12 +70,7 @@ import { DispatchAgentButton } from '../DispatchAgentMenu';
 import { useMarkdownName } from '../MarkdownNameProvider';
 import { TaskDuplicateMatchesSidePanelSection } from '../TaskDuplicateMatches';
 
-/**
- * Renders all three SidePanel sections for the markdown block:
- * - Properties (always shown)
- * - Details (always shown)
- * - Stats (hidden for tasks)
- */
+/** Registers markdown header actions, panel sections, and metadata footer. */
 export function MarkdownSidePanelSections() {
   const { documentId, kind, permissions } = useMarkdownDocument();
   const canEdit = permissions.canEdit;
@@ -91,13 +86,8 @@ export function MarkdownSidePanelSections() {
 
   return (
     <>
-      <SidePanel.Section
-        id="document-ai-actions"
-        title="Actions"
-        defaultOpen
-        order={0}
-      >
-        <div class="m-px flex items-center justify-start gap-2">
+      <SidePanel.HeaderActions>
+        <div class="flex shrink-0 items-center gap-1">
           <AskMacroButton
             entity={{
               type: 'document',
@@ -110,10 +100,13 @@ export function MarkdownSidePanelSections() {
             <DispatchAgentButton showPrimaryLabel />
           </Show>
         </div>
-      </SidePanel.Section>
-      <SidePanel.Section id="details" title="Details" defaultOpen order={10}>
+      </SidePanel.HeaderActions>
+      <SidePanel.Footer>
+        <Show when={!isTask()}>
+          <StatsSectionContent />
+        </Show>
         <DetailsSectionContent documentId={documentId()} />
-      </SidePanel.Section>
+      </SidePanel.Footer>
       <Show when={isSnippet()}>
         <SnippetSharingOwnerSectionConditional documentId={documentId()} />
       </Show>
@@ -136,11 +129,6 @@ export function MarkdownSidePanelSections() {
           documentName={displayName() ?? ''}
         />
       </SidePanel.Section>
-      <Show when={!isTask()}>
-        <SidePanel.Section id="stats" title="Stats" order={30}>
-          <StatsSectionContent />
-        </SidePanel.Section>
-      </Show>
       <Show when={isFeatureEnabled(enableHistoryComponent)}>
         <SidePanel.Section id="history" title="History" order={35}>
           <HistorySectionContent />
@@ -369,19 +357,20 @@ function DetailsGrid(props: {
   updatedAt: () => DateValue | null | undefined;
 }) {
   return (
-    <EntityDetailsGrid
+    <EntityMetadata
       ownerId={props.owner()}
       createdAt={props.createdAt()}
       updatedAt={props.updatedAt()}
     >
       <Show when={props.folder()}>
         {(folder) => (
-          <SidePanel.Row label="Folder">
+          <div class="flex items-center gap-1">
+            Folder
             <FolderLink projectId={folder().id} projectName={folder().name} />
-          </SidePanel.Row>
+          </div>
         )}
       </Show>
-    </EntityDetailsGrid>
+    </EntityMetadata>
   );
 }
 
@@ -491,31 +480,24 @@ function StatsSectionContent() {
   const md = state.editor.md;
 
   return (
-    <Show
-      when={md.wordcountStats}
-      fallback={
-        <div class="text-ink-muted text-xs py-2">No stats available</div>
-      }
-    >
+    <Show when={md.wordcountStats}>
       {(stats) => (
         <Wordcount.Root stats={stats()}>
-          <SidePanel.Grid>
-            <SidePanel.Row label="Words">
-              <Wordcount.Words />
-            </SidePanel.Row>
-            <SidePanel.Row label="Characters">
-              <Wordcount.Characters />
-            </SidePanel.Row>
+          <div class="mb-1 flex flex-col gap-1">
+            <div>
+              <Wordcount.Words /> words · <Wordcount.Characters /> characters
+            </div>
             <Show when={md.progressStats}>
               {(progressStats) => (
                 <Show when={progressStats().total > 0}>
-                  <SidePanel.Row label="Progress">
+                  <div class="flex items-center gap-2">
+                    Progress
                     <ProgressMeter stats={progressStats()} />
-                  </SidePanel.Row>
+                  </div>
                 </Show>
               )}
             </Show>
-          </SidePanel.Grid>
+          </div>
         </Wordcount.Root>
       )}
     </Show>

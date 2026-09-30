@@ -1719,6 +1719,17 @@ contracts and test coverage.
 
 ### Floating block information panels
 
+Actions live in the top bar immediately before Share, with consistent compact
+buttons (labels collapse on narrow headers). There are no Actions sections in
+information panels. Markdown/tasks include Ask Macro and task dispatch; email
+includes Ask Macro and Create task; PDF and calls include Ask Macro; native
+projects expose Delete project with its existing confirmation dialog.
+
+Standard metadata is quiet, non-collapsible text at the bottom of each panel,
+separated by a muted divider. Owner and available timestamps share one format;
+Markdown adds word/character counts. There is no standard Details or Stats
+disclosure. Agent runtime information remains in its dedicated Session section.
+
 Block information panels float over the right side of the block without changing
 the content width or its centered position. A single rounded bubble fits its
 contents, with `edge-muted` dividers between sections. Its height is capped at

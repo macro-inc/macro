@@ -627,7 +627,7 @@ export function SplitHeader(props: {
             }}
           />
 
-          <div class="header-actions h-full grow shrink flex items-center justify-end gap-0.5 px-2 touch:px-0 touch:gap-2">
+          <div class="header-actions h-full grow shrink flex items-center justify-end gap-1 px-2 touch:px-0 touch:gap-2">
             <div
               class="contents"
               ref={(ref) => {

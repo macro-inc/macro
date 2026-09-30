@@ -89,7 +89,8 @@ function HomeEntityDetailBody(props: {
       <Show when={props.target.type !== 'channel'}>
         <ViewShell.TopBar>
           <ViewBreadcrumbs.Outlet aria-label="Home location" />
-          <div class="ml-auto">
+          <div class="ml-auto flex items-center gap-1">
+            <SidePanel.HeaderActionsOutlet />
             <SidePanel.Toggle />
           </div>
         </ViewShell.TopBar>
