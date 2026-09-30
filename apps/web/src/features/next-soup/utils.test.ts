@@ -58,6 +58,7 @@ const operationMocks = vi.hoisted(() => {
     ),
     invalidateRemindersById: vi.fn(),
     invalidateSoupEntity: vi.fn(async () => {}),
+    openExternalUrl: vi.fn(),
     setReminderCompleted: vi.fn(async () => {}),
     updateNotificationsForEntities: vi.fn(
       async (): Promise<Array<{ id: string }>> => []
@@ -80,6 +81,10 @@ vi.mock('@service-connection/websocket', () => ({
 vi.mock('@queries/email/integration', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@queries/email/integration')>()),
   archiveEmailThread: operationMocks.archive,
+}));
+vi.mock('@core/util/url', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/util/url')>()),
+  openExternalUrl: operationMocks.openExternalUrl,
 }));
 vi.mock('@queries/client', () => ({
   queryClient: {
@@ -125,8 +130,10 @@ vi.mock('@core/constant/featureFlags', async (importOriginal) => {
   return {
     ...actual,
     enableCalendarUi: { key: 'enable-calendar-ui' },
+    enableReminders: { key: 'enable-reminders' },
     isFeatureEnabled: (flag: Parameters<typeof actual.isFeatureEnabled>[0]) =>
-      'key' in flag && flag.key === 'enable-calendar-ui'
+      'key' in flag &&
+      (flag.key === 'enable-calendar-ui' || flag.key === 'enable-reminders')
         ? true
         : actual.isFeatureEnabled(flag),
   };
@@ -153,6 +160,7 @@ import {
   getDocumentCommentTarget,
   getRowClickFallbackLocation,
   markChannelNotificationsSeenOnOpen,
+  openEntityInNewTab,
   openEntityInSplitFromUnifiedList,
   resolveMarkEntitiesDoneVariables,
 } from './utils';
@@ -171,6 +179,48 @@ afterEach(() => {
   setGlobalSplitManager(undefined);
   vi.clearAllMocks();
   vi.mocked(isTouchDevice).mockReturnValue(false);
+});
+
+describe('reminder navigation', () => {
+  const reminder = {
+    type: 'reminder',
+    id: 'reminder-1',
+    name: 'Review reminder navigation',
+  } as EntityData;
+
+  it.each([false, true])(
+    'uses the reminder route for list opening (new split: %s)',
+    async (openInNewSplit) => {
+      const openWithSplit = vi.fn(() => ({ status: 'navigating' as const }));
+      setGlobalSplitManager({
+        activeSplit: () => undefined,
+        openWithSplit,
+      } as unknown as SplitManager);
+
+      await openEntityInSplitFromUnifiedList(reminder, { openInNewSplit });
+
+      expect(openWithSplit).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          type: 'component',
+          id: 'reminder-detail',
+          params: { reminderId: 'reminder-1' },
+        }),
+        expect.objectContaining({
+          activate: true,
+          preferNewSplit: openInNewSplit,
+          search: {},
+        })
+      );
+    }
+  );
+
+  it('uses the same reminder component URL for a new browser tab', () => {
+    openEntityInNewTab({ entity: reminder });
+
+    expect(operationMocks.openExternalUrl).toHaveBeenCalledExactlyOnceWith(
+      expect.stringMatching(/\/app\/reminder\/reminder-1$/)
+    );
+  });
 });
 
 describe('agent session search navigation', () => {
@@ -364,7 +414,7 @@ describe('channel unread clicks', () => {
     created_at: '2026-09-23T12:00:00Z',
   };
 
-  it('targets the newest unread reply even when the rail has an empty cached witness', async () => {
+  it('opens at latest even with unread replies and an empty cached witness', async () => {
     fetchChannelNotifications.mockResolvedValue([
       older,
       newer,
@@ -383,16 +433,15 @@ describe('channel unread clicks', () => {
       unreadNotifications: [],
     });
     const selection = channelPreviewSelection(channel.id, {
-      target: getChannelEntityTarget(channel, { scopeChannelThreads: false }),
+      target: getChannelEntityTarget(channel, {
+        channelNavigation: 'latest',
+      }),
     });
 
-    expect(selection.target).toEqual({
-      messageId: 'newer',
-      threadId: 'thread',
-    });
+    expect(selection.target).toBeUndefined();
   });
 
-  it('honors local reads while refreshing a stale empty rail row on every click', async () => {
+  it('keeps opening at latest across local reads and new arrivals', async () => {
     fetchChannelNotifications.mockResolvedValue([older, newer]);
     const row = {
       type: 'channel' as const,
@@ -407,13 +456,12 @@ describe('channel unread clicks', () => {
       const channel = await hydrateChannelNotificationSelection(row, (n) =>
         readIds.has(n.id) ? asRead(n) : n
       );
-      return getChannelEntityTarget(channel, { scopeChannelThreads: false });
+      return getChannelEntityTarget(channel, {
+        channelNavigation: 'latest',
+      });
     };
 
-    expect(await click()).toMatchObject({
-      kind: 'message',
-      messageId: 'older',
-    });
+    expect(await click()).toEqual({ kind: 'latest' });
     readIds.add(older.id);
     expect(await click()).toEqual({ kind: 'latest' });
 
@@ -422,11 +470,7 @@ describe('channel unread clicks', () => {
       newer,
       replyNotification('incoming', 'new-arrival', 'thread'),
     ]);
-    expect(await click()).toMatchObject({
-      kind: 'message',
-      messageId: 'new-arrival',
-      threadId: 'thread',
-    });
+    expect(await click()).toEqual({ kind: 'latest' });
     expect(fetchChannelNotifications).toHaveBeenCalledTimes(3);
   });
 
@@ -486,19 +530,20 @@ describe('channel unread clicks', () => {
       notifications: () => [newer],
     };
     const selection = channelPreviewSelection('channel-1', {
-      target: getChannelEntityTarget(entity, { scopeChannelThreads: false }),
+      target: getChannelEntityTarget(entity, {
+        channelNavigation: 'latest',
+      }),
       notifications: entity.notifications,
     });
     expect(selection).toMatchObject({
       type: 'channel',
       id: 'channel-1',
-      target: { messageId: 'newer', threadId: 'thread' },
     });
     expect(selection).not.toHaveProperty('kind');
-    expect(selection.target).not.toHaveProperty('kind');
+    expect(selection.target).toBeUndefined();
   });
 
-  it('reads current unread state on every click without revisiting read targets', () => {
+  it('opens at latest regardless of current unread state', () => {
     let notifications = [older, newer, { ...newer, id: 'mention' }];
     const row: ChannelPreviewSelection = {
       type: 'channel',
@@ -506,19 +551,11 @@ describe('channel unread clicks', () => {
       notifications: () => notifications,
     };
     const click = () =>
-      getChannelEntityTarget(row, { scopeChannelThreads: false });
-    expect(click()).toEqual({
-      kind: 'message',
-      messageId: 'newer',
-      threadId: 'thread',
-    });
+      getChannelEntityTarget(row, { channelNavigation: 'latest' });
+    expect(click()).toEqual({ kind: 'latest' });
 
     notifications = [older, asRead(newer), asRead({ ...newer, id: 'mention' })];
-    expect(click()).toEqual({
-      kind: 'message',
-      messageId: 'older',
-      threadId: undefined,
-    });
+    expect(click()).toEqual({ kind: 'latest' });
 
     notifications = notifications.map(asRead);
     expect(click()).toEqual({ kind: 'latest' });
@@ -536,10 +573,10 @@ describe('channel unread clicks', () => {
         },
       },
     } as UnifiedNotification);
-    expect(click()).toMatchObject({ kind: 'message', messageId: 'incoming' });
+    expect(click()).toEqual({ kind: 'latest' });
   });
 
-  it('uses new arrivals immediately while older notifications remain unread', () => {
+  it('keeps opening at latest when new notifications arrive', () => {
     let notifications = [older];
     const row: ChannelPreviewSelection = {
       type: 'channel',
@@ -547,12 +584,12 @@ describe('channel unread clicks', () => {
       notifications: () => notifications,
     };
     expect(
-      getChannelEntityTarget(row, { scopeChannelThreads: false })
-    ).toMatchObject({ messageId: 'older' });
+      getChannelEntityTarget(row, { channelNavigation: 'latest' })
+    ).toEqual({ kind: 'latest' });
     notifications = [older, newer];
     expect(
-      getChannelEntityTarget(row, { scopeChannelThreads: false })
-    ).toMatchObject({ messageId: 'newer' });
+      getChannelEntityTarget(row, { channelNavigation: 'latest' })
+    ).toEqual({ kind: 'latest' });
   });
 
   it('preserves Home row targets, including an already-read thread reply', () => {
@@ -1070,7 +1107,7 @@ describe('getChannelEntityTarget', () => {
   });
 
   it.each(['channel_mention', 'channel_message_reply'] as const)(
-    'leaves thread %s unread when Chat opens the parent channel without reading the global feed',
+    'leaves threaded %s unread when Chat opens without reading the global feed',
     (tag) => {
       const notification = {
         ...sendNotification('thread-notification', 'message'),
@@ -1087,14 +1124,15 @@ describe('getChannelEntityTarget', () => {
         {
           ...notificationSourceWithBulkMarkAsRead(bulkMarkAsRead),
           notificationsByEntity,
-        }
+        },
+        { channelReadScope: 'top-level' }
       );
       expect(bulkMarkAsRead).not.toHaveBeenCalled();
       expect(notificationsByEntity).not.toHaveBeenCalled();
     }
   );
 
-  it('marks unstacked notifications on repeated Chat opens, skipping thread stacks and local reads', () => {
+  it('marks top-level notifications on repeated Chat opens, skipping replies and local reads', () => {
     const send = sendNotification('send', 'top-level');
     const root = sendNotification('root', 'root');
     const reply = replyNotification('reply', 'reply-message', 'root');
@@ -1122,11 +1160,44 @@ describe('getChannelEntityTarget', () => {
       withLocalOverrides: (notification) =>
         readIds.has(notification.id) ? asRead(notification) : notification,
     };
-    const notifications = [send, root, reply, mention, read, done];
+    const reaction = {
+      ...sendNotification('reaction', 'root'),
+      notification_event_type: 'channel_message_reaction',
+      notification_metadata: {
+        tag: 'channel_message_reaction',
+        content: { messageId: 'root' },
+      },
+    } as UnifiedNotification;
+    const replyReaction = {
+      ...reaction,
+      id: 'reply-reaction',
+      notification_metadata: {
+        tag: 'channel_message_reaction',
+        content: { messageId: 'reply', threadId: 'root' },
+      },
+    } as UnifiedNotification;
+    const notifications = [
+      send,
+      root,
+      reply,
+      mention,
+      reaction,
+      replyReaction,
+      read,
+      done,
+    ];
     const channel = channelRow({ notifications });
-    const open = () => markChannelNotificationsSeenOnOpen(channel, source);
+    const open = () =>
+      markChannelNotificationsSeenOnOpen(channel, source, {
+        channelReadScope: 'top-level',
+      });
     open();
-    expect(bulkMarkAsRead).toHaveBeenCalledExactlyOnceWith([send]);
+    expect(bulkMarkAsRead).toHaveBeenCalledExactlyOnceWith([
+      send,
+      root,
+      mention,
+      reaction,
+    ]);
     open();
     expect(bulkMarkAsRead).toHaveBeenCalledTimes(1);
     notifications.push(
@@ -1134,7 +1205,7 @@ describe('getChannelEntityTarget', () => {
     );
     open();
     expect(bulkMarkAsRead).toHaveBeenCalledTimes(1);
-    const incoming = sendNotification('incoming', 'new-message');
+    const incoming = sendNotification('incoming', 'new-root');
     notifications.push(incoming);
     open();
     expect(bulkMarkAsRead).toHaveBeenCalledTimes(2);
@@ -1271,7 +1342,8 @@ describe('getChannelEntityTarget', () => {
         openInNewSplit,
         notificationSource:
           notificationSourceWithBulkMarkAsRead(bulkMarkAsRead),
-        scopeChannelThreads: false,
+        channelNavigation: 'latest',
+        channelReadScope: 'top-level',
       });
 
       expect(openWithSplit).toHaveBeenCalledWith(
@@ -1292,14 +1364,17 @@ describe('getChannelEntityTarget', () => {
     }
   );
 
-  it('marks only top-level routed channel notifications after the destination is applied', async () => {
-    const unread = sendNotification('deferred-send', 'message');
-    const reply = replyNotification('deferred', 'reply-message', 'root');
+  it('marks top-level notifications only once after deferred conversation navigation applies', async () => {
+    const root = sendNotification('root', 'root-message');
+    const reply = replyNotification('reply', 'reply-message', 'root-message');
     const bulkMarkAsRead = vi.fn(async () => {});
     let onApplied: (() => void) | undefined;
     setGlobalSplitManager({
       activeSplit: vi.fn(),
-      getOrchestrator: vi.fn(() => ({})),
+      getOrchestrator: vi.fn(() => ({
+        getBlockHandle: vi.fn(async () => undefined),
+      })),
+      getSplitByContent: vi.fn(),
       openWithSplit: (
         ...[_content, options]: Parameters<SplitManager['openWithSplit']>
       ) => {
@@ -1307,22 +1382,23 @@ describe('getChannelEntityTarget', () => {
         return { status: 'navigating' };
       },
     } as unknown as SplitManager);
-
     await openEntityInSplitFromUnifiedList(
-      channelRow({ notifications: [unread, reply] }),
+      channelRow({ notifications: [root, reply] }),
       {
         notificationSource:
           notificationSourceWithBulkMarkAsRead(bulkMarkAsRead),
-        scopeChannelThreads: false,
+        channelNavigation: 'latest',
+        channelReadScope: 'top-level',
       }
     );
     expect(bulkMarkAsRead).not.toHaveBeenCalled();
     expect(onApplied).toBeDefined();
     onApplied!();
-    expect(bulkMarkAsRead).toHaveBeenCalledExactlyOnceWith([unread]);
+    onApplied!();
+    expect(bulkMarkAsRead).toHaveBeenCalledExactlyOnceWith([root]);
   });
 
-  it('keeps the unread reply target without marking the thread read on a Chat open', async () => {
+  it('opens a conversation at latest without clearing unread replies', async () => {
     const reply = replyNotification('reply-target', 'reply-message', 'root');
     const openWithSplit = vi.fn(() => ({ status: 'opened' }));
     setGlobalSplitManager({
@@ -1333,23 +1409,21 @@ describe('getChannelEntityTarget', () => {
       getSplitByContent: vi.fn(),
       openWithSplit,
     } as unknown as SplitManager);
-    const bulkMarkAsRead = vi.fn(async () => {
-      reply.state = 'seen';
-    });
+    const bulkMarkAsRead = vi.fn(async () => {});
     await openEntityInSplitFromUnifiedList(
       channelRow({ notifications: [reply] }),
       {
         notificationSource:
           notificationSourceWithBulkMarkAsRead(bulkMarkAsRead),
-        scopeChannelThreads: false,
+        channelNavigation: 'latest',
+        channelReadScope: 'top-level',
       }
     );
-    expect(targetSearch(openWithSplit, 'channels')).toMatchObject({
-      messageId: ['reply-message'],
-      threadId: ['root'],
-    });
+    expect(openWithSplit.mock.calls[0]).toEqual([
+      expect.anything(),
+      expect.objectContaining({ search: undefined, reopen: 'latest' }),
+    ]);
     expect(bulkMarkAsRead).not.toHaveBeenCalled();
-    expect(reply.state).toBe('unseen');
   });
 
   it('uses the global source for channels without an attached notification edge', () => {
@@ -1396,9 +1470,9 @@ describe('getChannelEntityTarget', () => {
     expect(bulkMarkAsRead).not.toHaveBeenCalled();
   });
 
-  it.each([true, false])(
-    'keeps parent-channel reads thread-scoped regardless of target scope (%s)',
-    async (scopeChannelThreads) => {
+  it.each(['latest', 'notification'] as const)(
+    'keeps inbox-row reads thread-scoped regardless of navigation (%s)',
+    async (channelNavigation) => {
       const parentNotification = {
         ...sendNotification('parent-send', 'message'),
         created_at: '2026-09-23T12:00:00Z',
@@ -1421,7 +1495,8 @@ describe('getChannelEntityTarget', () => {
         channelRow({ notifications: [parentNotification, threadNotification] }),
         {
           openInNewSplit: true,
-          scopeChannelThreads,
+          channelNavigation,
+          channelReadScope: 'inbox-row',
           notificationSource:
             notificationSourceWithBulkMarkAsRead(bulkMarkAsRead),
         }
@@ -1432,13 +1507,15 @@ describe('getChannelEntityTarget', () => {
         expect.objectContaining({ preferNewSplit: true })
       );
       const search = targetSearch(openWithSplit, 'channels');
-      expect(search).toMatchObject({
-        messageId: [scopeChannelThreads ? 'message' : 'reply'],
-        seek: [expect.any(String)],
-      });
-      expect(search?.threadId).toEqual(
-        scopeChannelThreads ? undefined : ['thread-root']
-      );
+      if (channelNavigation === 'latest') {
+        expect(search).toBeUndefined();
+      } else {
+        expect(search).toMatchObject({
+          messageId: ['message'],
+          seek: [expect.any(String)],
+        });
+        expect(search?.threadId).toBeUndefined();
+      }
       expect(bulkMarkAsRead).toHaveBeenCalledExactlyOnceWith([
         parentNotification,
       ]);

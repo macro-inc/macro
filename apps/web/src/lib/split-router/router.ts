@@ -830,6 +830,7 @@ export function createSplitRouter<TSplitId>(
       const targetId =
         target === 'new-split' ? undefined : (target as TSplitId);
       if (targetId !== undefined && isCurrentDestination(targetId, next)) {
+        navigateOptions.onApplied?.();
         return;
       }
       transitionEntry({

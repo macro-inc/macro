@@ -82,6 +82,9 @@ function makeQuery(initial: EntityData[], hasMore = true) {
           soupPageTimestamp(entities(), 'touched_by_me'),
       };
     },
+    get isPending() {
+      return loading();
+    },
     get isLoading() {
       return loading();
     },

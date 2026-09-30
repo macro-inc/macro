@@ -4,11 +4,11 @@
  * agent_harness_service
  * OpenAPI spec version: 0.1.0
  */
-import type { AgentActionOneOfNineType } from './agentActionOneOfNineType';
+import type { AgentActionOneOfOnetwoType } from './agentActionOneOfOnetwoType';
 
 /**
  * Interrupt whatever the agent is doing.
  */
-export type AgentActionOneOfNine = {
-  type: AgentActionOneOfNineType;
+export type AgentActionOneOfOnetwo = {
+  type: AgentActionOneOfOnetwoType;
 };

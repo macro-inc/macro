@@ -14,10 +14,8 @@ import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import {
   createContext,
-  createEffect,
   createMemo,
   createSignal,
-  on,
   onMount,
   Show,
   useContext,
@@ -26,6 +24,7 @@ import { ChannelsViewProvider, useChannelsView } from './channels-view-context';
 import { ChannelDetailView } from './components/ChannelDetailView';
 import { ChannelsMobileView } from './components/ChannelsMobileView';
 import { ChannelsRail } from './components/rail/ChannelsRail';
+import { createChannelDetail } from './primitives/create-channel-detail';
 import {
   type ChannelsSources,
   deduplicateChannels,
@@ -33,6 +32,7 @@ import {
   useChannelByIdQuery,
   useChannelsSources,
 } from './queries';
+import { createChannelDetailSource } from './queries/channel-detail-source';
 import { createChannelSearchSource } from './queries/channel-search-source';
 
 const ChannelSourcesContext =
@@ -203,7 +203,7 @@ function ChannelsViewRoot() {
 function ChannelDetailRouteContent() {
   const { selectedChannel } = useChannelsView();
   const notificationSource = useGlobalNotificationSource();
-  const channelId = () => selectedChannel()?.id;
+  const channelId = createMemo(() => selectedChannel()?.id);
   const sources = useContext(ChannelSourcesContext);
   const loaded = createMemo(() =>
     resolveSelectedChannel(
@@ -218,79 +218,73 @@ function ChannelDetailRouteContent() {
         : []
     )
   );
-  const needsFullEdge = createMemo(
-    on(
-      channelId,
-      () =>
-        loaded() === undefined ||
-        (loaded()?.unreadNotifications?.length ?? 0) > 0
-    )
-  );
-  const query = useChannelByIdQuery(
+  const source = createChannelDetailSource({
     channelId,
-    () =>
-      channelId() !== undefined && (needsFullEdge() || loaded() === undefined)
-  );
-  const hydrated = createMemo((previous: ReturnType<typeof loaded>) => {
-    const selection = selectedChannel();
-    if (!selection || selection.type !== 'channel') return;
-    const cached = loaded();
-    if (cached && !needsFullEdge())
-      return { ...cached, target: selection.target, notifications: () => [] };
-    if (
-      !query.isEnabled ||
-      query.isLoading ||
-      query.isFetching ||
-      query.error
-    ) {
-      return previous?.id === selection.id ? previous : undefined;
-    }
-    const full = resolveSelectedChannel(selection.id, [], query.data?.entities);
-    if (!full) return;
+    cached: loaded,
+    createQuery: useChannelByIdQuery,
+  });
+  const detail = createChannelDetail({
+    selection: selectedChannel,
+    cached: loaded,
+    source,
+    markRead: (channel) =>
+      markChannelNotificationsSeenOnOpen(
+        withEntityNotifications(channel, notificationSource),
+        notificationSource,
+        { channelReadScope: 'top-level' }
+      ),
+  });
+  const visibleChannel = createMemo(() => {
+    const view = detail.view();
+    if (view.status !== 'ready') return;
     return withEntityNotifications(
-      { ...full, target: selection.target },
+      { ...view.channel, target: selectedChannel()?.target },
       notificationSource
     );
   });
-  const unavailable = () =>
-    Boolean(query.error) ||
-    (query.isEnabled && !query.isLoading && !query.isFetching && !hydrated());
+  const unavailable = () => detail.view().status === 'unavailable';
   const retry = async () => {
     try {
-      await query.refresh();
+      await detail.refresh();
     } catch {
-      /* Query state presents the failure. */
+      /* The source presents the failure. */
     }
   };
-  const readyId = createMemo(() => hydrated()?.id);
-  createEffect(
-    on(readyId, () => {
-      const channel = hydrated();
-      if (channel && channel.isParticipant !== false)
-        markChannelNotificationsSeenOnOpen(channel, notificationSource);
-    })
-  );
 
   return (
     <DebugSuspense name="ChannelsView.detail-content">
       <Show
-        when={hydrated()}
+        when={visibleChannel()}
         fallback={
-          <div class="flex size-full flex-col items-center justify-center gap-2 text-ink-muted">
-            <h2>
-              {unavailable()
-                ? 'Conversation unavailable'
-                : 'Loading conversation'}
-            </h2>
-            <Show when={unavailable()}>
-              <button type="button" onClick={retry}>
-                Retry
-              </button>
-            </Show>
-          </div>
+          <>
+            <ViewShell.TopBar>
+              <span class="truncate text-sm font-semibold">
+                {loaded()?.name ?? 'Conversation'}
+              </span>
+            </ViewShell.TopBar>
+            <div
+              class="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 text-ink-muted"
+              role="status"
+            >
+              <h2>
+                {unavailable()
+                  ? 'Conversation unavailable'
+                  : 'Loading conversation'}
+              </h2>
+              <Show when={unavailable()}>
+                <button type="button" onClick={retry}>
+                  Retry
+                </button>
+              </Show>
+            </div>
+          </>
         }
       >
-        {(channel) => <ChannelDetailView channel={channel()} />}
+        {(channel) => (
+          <div class="flex size-full min-h-0 flex-col">
+            <ChannelDetailView channel={channel()} target={detail.target()} />
+          </div>
+        )}
       </Show>
     </DebugSuspense>
   );

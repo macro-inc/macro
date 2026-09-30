@@ -25,8 +25,8 @@ pub use completion::{complete, complete_about_image, complete_with_history};
 pub use convert::{merge_consecutive_parts, to_rig_messages};
 pub use error::AgentError;
 pub use hook::{FinishedUserTool, PendingUserTool, UserToolFinisher};
-pub use model::PredefinedModel;
 pub use model::metering::{MeteringContext, MeteringError, ProviderSupport, WireProtocol};
+pub use model::{PredefinedModel, ReasoningEffort};
 pub use stream::{ChatCompletionStream, McpInfo, StreamPart, ToolCall, ToolResponse, Usage};
 pub use tool_adapter::{DynToolSetAdapter, ToolsetToolAdapter, normalize_request_schema};
 

@@ -78,6 +78,7 @@ tauri-plugin-haptics = "2"
 jni = "0.21"
 rustls-platform-verifier = "0.6"
 tauri-plugin-android-auth = { path = "../android_auth_plugin" }
+tauri-plugin-android-push = { path = "../android_push_plugin" }
 
 [target.'cfg(target_os = "ios")'.dependencies]
 tauri-plugin-auth = { git = "https://github.com/macro-inc/tauri-plugins", rev = "6ddd6600e20436388f169e936b610fe93944b7b0" }

@@ -4,7 +4,8 @@ use agent::StreamPart;
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
     ContentBlock, InitializeRequest, NewSessionRequest, PromptRequest, ResourceLink,
-    SessionNotification, TextContent,
+    SessionConfigKind, SessionConfigOptionCategory, SessionConfigSelectOptions,
+    SessionConfigValueId, SessionNotification, SetSessionConfigOptionRequest, TextContent,
 };
 use agent_client_protocol::{Client, ConnectionTo};
 use rig_agent::agent::StreamingError;
@@ -57,7 +58,7 @@ where
     let session_id = AgentSessionId::new();
     store.insert(
         session_id,
-        crate::domain::session::SessionState::new("test-model".into()),
+        crate::domain::session::SessionState::new("anthropic/claude-sonnet-5".into()),
     );
     let state = Arc::new(AgentState {
         session_id,
@@ -151,14 +152,68 @@ async fn new_session_advertises_the_engine_supported_models() {
 
     let selection = agent_fold::domain::model_selection::model_selection(&config_options)
         .expect("session/new should advertise a model select");
-    assert_eq!(selection.current, "test-model");
+    assert_eq!(selection.current, "anthropic/claude-sonnet-5");
     assert_eq!(
         selection
             .options
             .iter()
             .map(|model| (model.id.as_str(), model.name.as_str()))
             .collect::<Vec<_>>(),
-        vec![("test-model", "test-model"), ("other-model", "other-model")]
+        vec![
+            ("anthropic/claude-sonnet-5", "anthropic/claude-sonnet-5"),
+            ("other-model", "other-model")
+        ]
+    );
+
+    let effort = config_options
+        .iter()
+        .find(|option| option.id.to_string() == REASONING_EFFORT_CONFIG_ID)
+        .expect("session/new should advertise reasoning effort");
+    assert_eq!(
+        effort.category,
+        Some(SessionConfigOptionCategory::ThoughtLevel)
+    );
+    let SessionConfigKind::Select(effort) = &effort.kind else {
+        panic!("reasoning effort should be a select");
+    };
+    assert_eq!(effort.current_value.to_string(), "default");
+    let SessionConfigSelectOptions::Ungrouped(options) = &effort.options else {
+        panic!("reasoning effort should be ungrouped");
+    };
+    assert_eq!(
+        options
+            .iter()
+            .map(|option| option.value.to_string())
+            .collect::<Vec<_>>(),
+        ["default", "low", "medium", "high", "xhigh", "max"]
+    );
+}
+
+#[tokio::test]
+async fn changing_reasoning_effort_applies_to_the_next_turn() {
+    let engine = Arc::new(ScriptedEngine::new(vec![]));
+    let (_notifications, _config_options, ()) =
+        with_agent(Arc::clone(&engine), async |connection, session| {
+            connection
+                .send_request(SetSessionConfigOptionRequest::new(
+                    session.clone(),
+                    REASONING_EFFORT_CONFIG_ID,
+                    SessionConfigValueId::new("low"),
+                ))
+                .block_task()
+                .await
+                .expect("the effort selection should be accepted");
+            connection
+                .send_request(text_prompt(&session, "be quick"))
+                .block_task()
+                .await
+                .expect("the prompt should complete");
+        })
+        .await;
+
+    assert_eq!(
+        engine.requests()[0].reasoning_effort,
+        agent::ReasoningEffort::Low
     );
 }
 
@@ -326,7 +381,7 @@ async fn turns_accumulate_history_and_send_the_model() {
 
     let requests = engine.requests();
     assert_eq!(requests.len(), 2);
-    assert_eq!(requests[0].model, "test-model");
+    assert_eq!(requests[0].model, "anthropic/claude-sonnet-5");
     assert_eq!(requests[0].messages, vec!["first".to_owned()]);
     // The second turn carries the first turn's prompt and reply.
     assert_eq!(
@@ -555,7 +610,7 @@ async fn session_new_dials_the_advertised_servers_except_macros_own() {
     let session_id = AgentSessionId::new();
     store.insert(
         session_id,
-        crate::domain::session::SessionState::new("test-model".into()),
+        crate::domain::session::SessionState::new("anthropic/claude-sonnet-5".into()),
     );
     let state = Arc::new(AgentState {
         session_id,
@@ -648,7 +703,7 @@ where
     let session_id = AgentSessionId::new();
     store.insert(
         session_id,
-        crate::domain::session::SessionState::new("test-model".into()),
+        crate::domain::session::SessionState::new("anthropic/claude-sonnet-5".into()),
     );
     let state = Arc::new(AgentState {
         session_id,
@@ -1171,3 +1226,78 @@ async fn ask_without_form_support_explains_instead_of_asking() {
 
 mod model_selection;
 mod telemetry;
+
+#[tokio::test]
+async fn effort_is_validated_and_model_changes_return_complete_options() {
+    let engine = Arc::new(ScriptedEngine::new(vec![]));
+    with_agent(engine, async |connection, session| {
+        let selected = connection
+            .send_request(SetSessionConfigOptionRequest::new(
+                session.clone(),
+                REASONING_EFFORT_CONFIG_ID,
+                "max",
+            ))
+            .block_task()
+            .await
+            .expect("Sonnet accepts max");
+        assert_eq!(
+            selected.config_options.len(),
+            2,
+            "effort response retains model control"
+        );
+        let changed = connection
+            .send_request(SetSessionConfigOptionRequest::new(
+                session.clone(),
+                MODEL_CONFIG_ID,
+                "other-model",
+            ))
+            .block_task()
+            .await
+            .expect("model accepted");
+        assert_eq!(
+            changed.config_options.len(),
+            1,
+            "unsupported model removes effort control"
+        );
+        assert!(
+            connection
+                .send_request(SetSessionConfigOptionRequest::new(
+                    session.clone(),
+                    REASONING_EFFORT_CONFIG_ID,
+                    "low"
+                ))
+                .block_task()
+                .await
+                .is_err()
+        );
+        assert!(
+            connection
+                .send_request(SetSessionConfigOptionRequest::new(
+                    session.clone(),
+                    MODEL_CONFIG_ID,
+                    "unknown-model"
+                ))
+                .block_task()
+                .await
+                .is_err()
+        );
+        let restored = connection
+            .send_request(SetSessionConfigOptionRequest::new(
+                session,
+                MODEL_CONFIG_ID,
+                "anthropic/claude-sonnet-5",
+            ))
+            .block_task()
+            .await
+            .unwrap();
+        let SessionConfigKind::Select(effort) = &restored.config_options[1].kind else {
+            panic!("effort select");
+        };
+        assert_eq!(
+            effort.current_value.to_string(),
+            "default",
+            "invalid effort is reset on model change"
+        );
+    })
+    .await;
+}

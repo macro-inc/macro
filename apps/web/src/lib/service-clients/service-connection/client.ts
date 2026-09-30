@@ -11,6 +11,12 @@ import {
 } from 'solid-js';
 
 import type { TrackEntityMessage } from './generated/schemas/trackEntityMessage';
+import {
+  reportHeartbeatLapse,
+  reportHeartbeatResumed,
+  reportReopenOnReconnect,
+  reportTrack,
+} from './presence-telemetry';
 import { clearStream } from './stream';
 import { ws } from './websocket';
 
@@ -23,6 +29,7 @@ interface TrackedEntity {
   heartbeat: ReturnType<typeof setInterval>;
   /** When this tab last told the gateway it is watching, by `open` or `ping`. */
   lastSeen: number;
+  lapseReported: boolean;
   refreshCallbacks: Map<EntityRefresh, number>;
 }
 const trackedEntities: Map<EntityId, TrackedEntity> = new Map();
@@ -50,13 +57,18 @@ export const connectionGatewayClient = {
                 ...args,
                 action: 'ping',
               });
+            else reportLapseOnce(args);
           }, 20_000),
           lastSeen: Date.now(),
+          lapseReported: false,
           refreshCallbacks: new Map(),
         });
       }
     } else if (args.action === 'ping') {
-      if (tracked) tracked.lastSeen = Date.now();
+      if (tracked) {
+        tracked.lastSeen = Date.now();
+        tracked.lapseReported = false;
+      }
     } else if (args.action === 'close') {
       if (!tracked) return ok({});
       else if (tracked.count > 1) {
@@ -68,6 +80,7 @@ export const connectionGatewayClient = {
         clearStream(args.entity_id);
       }
     }
+    if (args.action !== 'ping') reportTrack(args, args.action, isSocketOpen());
     ws.send({
       type: 'track_entity',
       ...args,
@@ -75,6 +88,24 @@ export const connectionGatewayClient = {
     return ok({});
   },
 };
+
+// The underlying socket is unassigned until the first URL resolves.
+const isSocketOpen = () => {
+  try {
+    return ws.readyState === WebSocket.OPEN;
+  } catch {
+    return false;
+  }
+};
+
+function reportLapseOnce(entity: EntityTarget) {
+  const tracked = trackedEntities.get(entity.entity_id);
+  if (!tracked || tracked.lapseReported) return;
+  const lapsedMs = Date.now() - tracked.lastSeen;
+  if (lapsedMs < GATEWAY_ACTIVITY_WINDOW_MS) return;
+  tracked.lapseReported = true;
+  reportHeartbeatLapse(entity, lapsedMs);
+}
 
 /** Share tracking and heartbeats; refresh once on subscription, reconnect, and refocus after a long absence. */
 export function useEntitySubscription(
@@ -118,6 +149,7 @@ export function useEntitySubscription(
  */
 export function useReopenTrackedEntitiesOnReconnect(): void {
   createReconnectEffect(ws, () => {
+    reportReopenOnReconnect(trackedEntities.size);
     for (const [entity_id, tracked] of trackedEntities) {
       const entity = { entity_id, entity_type: tracked.entityType };
       ws.send({
@@ -146,8 +178,9 @@ export function useRefreshTrackedEntitiesOnFocus(): void {
         const now = Date.now();
         for (const [entity_id, tracked] of trackedEntities) {
           const entity = { entity_id, entity_type: tracked.entityType };
-          const missedEvents =
-            now - tracked.lastSeen >= GATEWAY_ACTIVITY_WINDOW_MS;
+          const pausedMs = now - tracked.lastSeen;
+          const missedEvents = pausedMs >= GATEWAY_ACTIVITY_WINDOW_MS;
+          if (missedEvents) reportHeartbeatResumed(entity, pausedMs);
           void connectionGatewayClient.trackEntity({
             ...entity,
             action: 'ping',
