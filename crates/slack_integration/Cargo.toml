@@ -23,8 +23,10 @@ chrono = { workspace = true }
 entity_access = { path = "../entity_access", optional = true, default-features = false }
 futures = { workspace = true, optional = true }
 macro_user_id = { path = "../macro_user_id" }
+mention_utils = { path = "../mention_utils" }
 rootcause = { workspace = true, optional = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 sha2 = { workspace = true }
 sqlx = { workspace = true, optional = true }
 thiserror = { workspace = true }
@@ -34,5 +36,3 @@ utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
-[dev-dependencies]
-serde_json = { workspace = true }

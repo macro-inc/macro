@@ -17073,6 +17073,7 @@ dependencies = [
  "entity_access",
  "futures",
  "macro_user_id",
+ "mention_utils",
  "rootcause",
  "serde",
  "serde_json",
