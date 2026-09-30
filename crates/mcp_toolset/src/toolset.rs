@@ -30,8 +30,22 @@ pub enum Error {
 pub struct ConnectedServer {
     /// The server segment of every mangled name, e.g. `Linear`.
     pub name: String,
-    /// The open session, kept alive for as long as the toolset is.
+    /// The open session. Listing its tools is this toolset's job.
     pub client: McpServer,
+}
+
+/// A server whose tools are already listed, sharing its session with whoever
+/// else holds the `Arc`.
+///
+/// Dropping the toolset built from these does not close the session while
+/// another owner, such as a pool, still holds it.
+pub struct ListedServer {
+    /// The server segment of every mangled name, e.g. `Linear`.
+    pub name: String,
+    /// The open session.
+    pub client: Arc<McpServer>,
+    /// Tools `tools/list` already returned for `client`.
+    pub tools: Vec<Tool>,
 }
 
 struct RegisteredTool {
@@ -53,7 +67,10 @@ pub struct RemoteMcpToolSet(Arc<Registered>);
 struct Registered {
     tools: BTreeMap<MangledName, RegisteredTool>,
     /// Kept alive so the background transport tasks aren't cancelled.
-    _connections: Vec<McpServer>,
+    ///
+    /// Shared with any pool that handed the sessions in, so this toolset
+    /// dropping is not what closes them.
+    _connections: Vec<Arc<McpServer>>,
     /// Who the servers belong to, for correlating tool-call failures in logs.
     subject: Option<String>,
 }
@@ -85,42 +102,40 @@ impl RemoteMcpToolSet {
         let mut tools = BTreeMap::new();
         let mut connections = Vec::new();
         for (server_name, client, server_tools) in listings.into_iter().flatten() {
-            for tool in server_tools {
-                let Mangled {
-                    name: mangled,
-                    sanitized,
-                } = Mangled::new(&server_name, &tool.name);
+            register_server(
+                &mut tools,
+                &mut connections,
+                &server_name,
+                Arc::new(client),
+                server_tools,
+                &subject,
+            );
+        }
 
-                if sanitized {
-                    tracing::warn!(
-                        subject = ?subject,
-                        server = %server_name,
-                        tool = %tool.name,
-                        %mangled,
-                        "sanitized tool name to satisfy the provider tool-name pattern"
-                    );
-                }
+        Self(Arc::new(Registered {
+            tools,
+            _connections: connections,
+            subject,
+        }))
+    }
 
-                if tools.contains_key(&mangled) {
-                    tracing::warn!(
-                        subject = ?subject,
-                        server = %server_name,
-                        tool = %tool.name,
-                        %mangled,
-                        "skipping duplicate tool"
-                    );
-                    continue;
-                }
-
-                tools.insert(
-                    mangled,
-                    RegisteredTool {
-                        peer: client.peer().clone(),
-                        tool,
-                    },
-                );
-            }
-            connections.push(client);
+    /// Register tools that were already listed on `servers`.
+    ///
+    /// `subject` names whose servers these are, for logs only. The sessions
+    /// stay open until the last `Arc` drops, so a pool can hand the same
+    /// session to every turn without another handshake.
+    pub fn from_listed(servers: Vec<ListedServer>, subject: Option<String>) -> Self {
+        let mut tools = BTreeMap::new();
+        let mut connections = Vec::new();
+        for server in servers {
+            register_server(
+                &mut tools,
+                &mut connections,
+                &server.name,
+                server.client,
+                server.tools,
+                &subject,
+            );
         }
 
         Self(Arc::new(Registered {
@@ -191,6 +206,52 @@ impl RemoteMcpToolSet {
             .await
             .map_err(|e| Error::ToolCall(e.to_string()))
     }
+}
+
+fn register_server(
+    tools: &mut BTreeMap<MangledName, RegisteredTool>,
+    connections: &mut Vec<Arc<McpServer>>,
+    server_name: &str,
+    client: Arc<McpServer>,
+    server_tools: Vec<Tool>,
+    subject: &Option<String>,
+) {
+    for tool in server_tools {
+        let Mangled {
+            name: mangled,
+            sanitized,
+        } = Mangled::new(server_name, &tool.name);
+
+        if sanitized {
+            tracing::warn!(
+                subject = ?subject,
+                server = %server_name,
+                tool = %tool.name,
+                %mangled,
+                "sanitized tool name to satisfy the provider tool-name pattern"
+            );
+        }
+
+        if tools.contains_key(&mangled) {
+            tracing::warn!(
+                subject = ?subject,
+                server = %server_name,
+                tool = %tool.name,
+                %mangled,
+                "skipping duplicate tool"
+            );
+            continue;
+        }
+
+        tools.insert(
+            mangled,
+            RegisteredTool {
+                peer: client.peer().clone(),
+                tool,
+            },
+        );
+    }
+    connections.push(client);
 }
 
 impl<Context: Send + Sync + 'static> ToolSet<Context> for RemoteMcpToolSet {

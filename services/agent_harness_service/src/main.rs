@@ -431,12 +431,16 @@ async fn run() -> anyhow::Result<()> {
     // against it, so the two must be the same string.
     let egress_base_url = AgentHarnessEgressUrl::new()?.to_string();
 
-    // Every session's MCP tools, listed for its telemetry the way the harness
-    // itself lists them: through the egress proxy, in process.
+    // One connector for the agent and the telemetry catalog. It pools each
+    // server's session for the life of the egress token, so a replaced agent
+    // task and the catalog's listing reuse the handshake instead of opening
+    // a second set of clients and dropping them when the listing ends.
+    let mcp_connector = Arc::new(AcpMcpConnector::new(EgressMcpClient::new(
+        Arc::clone(&egress),
+        &egress_base_url,
+    )));
     let tool_catalog: Arc<dyn agent_session::domain::ports::SessionToolCatalog> =
-        Arc::new(McpToolCatalog::new(Arc::new(AcpMcpConnector::new(
-            EgressMcpClient::new(Arc::clone(&egress), &egress_base_url),
-        ))));
+        Arc::new(McpToolCatalog::new(Arc::clone(&mcp_connector)));
     let sessions = sessions.with_tool_catalog(Arc::clone(&tool_catalog));
 
     let tool_context =
@@ -449,15 +453,8 @@ async fn run() -> anyhow::Result<()> {
     // their model context from the same log every frame lands in.
     let frames = Arc::new(LogFrameSource::new(session_repo.clone()));
     let inmem = InMemRuntime {
-        manager: InMemAgentManager::new(
-            Arc::clone(&inmem_model_engine),
-            frames,
-            Arc::new(AcpMcpConnector::new(EgressMcpClient::new(
-                Arc::clone(&egress),
-                &egress_base_url,
-            ))),
-        )
-        .with_dev_commands(enable_dev_commands),
+        manager: InMemAgentManager::new(Arc::clone(&inmem_model_engine), frames, mcp_connector)
+            .with_dev_commands(enable_dev_commands),
     };
     // The sandbox provider serves every bot but the in-memory one, which the
     // router pulls out by bot id before the provider ever sees it.
