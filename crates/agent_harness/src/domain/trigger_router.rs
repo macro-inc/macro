@@ -10,7 +10,7 @@ use agent_runtime_protocol::domain::action::AgentAction;
 
 use super::model::{
     AgentKind, AgentRuntimeConfig, AnnounceOrigin, AnnouncePrompt, DeliverAction, HarnessCommand,
-    MentionOrigin, OpenSession, StaticFileLinks,
+    MentionOrigin, OpenSession, SessionOrigin, StaticFileLinks, TaskAssignmentOrigin,
 };
 
 /// What one trigger event asks this deployment to do.
@@ -66,15 +66,12 @@ pub fn route_agent_trigger(
                 HarnessCommand::Open(OpenSession {
                     bot_id: assigned.bot_id,
                     runtime,
-                    origin: MentionOrigin {
-                        reuse_origin_message: true,
+                    origin: SessionOrigin::TaskAssignment(TaskAssignmentOrigin {
                         parent: assigned.parent,
-                        thread_id: assigned.discussion_id,
-                        message_id: assigned.discussion_id,
-                        sender: assigned.actor,
-                        content: assigned.prompt,
-                        attachments: Vec::new(),
-                    },
+                        discussion_id: assigned.discussion_id,
+                        actor: assigned.actor,
+                        prompt: assigned.prompt,
+                    }),
                 }),
             ))
         }
@@ -95,8 +92,7 @@ pub fn route_agent_trigger(
                 HarnessCommand::Open(OpenSession {
                     bot_id,
                     runtime,
-                    origin: MentionOrigin {
-                        reuse_origin_message: false,
+                    origin: SessionOrigin::Mention(MentionOrigin {
                         parent: message.parent,
                         // A top-level mention roots its own thread; a mention
                         // inside a thread answers into that thread.
@@ -105,7 +101,7 @@ pub fn route_agent_trigger(
                         sender,
                         content: message.content,
                         attachments: links.prompt_attachments(&message.attachments),
-                    },
+                    }),
                 }),
             ))
         }

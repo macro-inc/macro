@@ -48,7 +48,7 @@ use crate::domain::error::HarnessError;
 use crate::domain::model::{
     AgentKind, AgentRuntimeConfig, AnnounceOrigin, CommandOutcome, CommentAnchor, ContextMessage,
     ContextThread, ConversationContext, DeclinedMention, DeliverAction, HarnessCommand,
-    HarnessDefaults, MentionOrigin, OpenSession, SessionBlocker, SessionDefaults,
+    HarnessDefaults, MentionOrigin, OpenSession, SessionBlocker, SessionDefaults, SessionOrigin,
     SessionRepository, SpawnContainer,
 };
 use crate::domain::ports::{
@@ -97,16 +97,29 @@ fn open_command() -> OpenSession {
             instructions: String::new(),
             mcp_servers: AgentMcpServers::OwnerConnections,
         },
-        origin: MentionOrigin {
-            reuse_origin_message: false,
+        origin: SessionOrigin::Mention(MentionOrigin {
             parent: MessageParent::Channel(macro_uuid::generate_uuid_v7()),
             thread_id,
             message_id: thread_id,
             sender: sender(),
             content: "@claude fix the failing test".to_owned(),
             attachments: vec![],
-        },
+        }),
     }
+}
+
+fn mention_origin(command: &OpenSession) -> &MentionOrigin {
+    let SessionOrigin::Mention(origin) = &command.origin else {
+        panic!("expected a mention");
+    };
+    origin
+}
+
+fn mention_origin_mut(command: &mut OpenSession) -> &mut MentionOrigin {
+    let SessionOrigin::Mention(origin) = &mut command.origin else {
+        panic!("expected a mention");
+    };
+    origin
 }
 
 /// A prompt arriving from a channel that is not the session's own, so it is
@@ -626,8 +639,14 @@ async fn disconnected_session(
     repo: &InMemoryAgentSessionRepo,
     containers: &MockContainerManager,
 ) -> AgentSessionId {
-    let OpenSession { origin, .. } = open_command();
-    disconnected_session_owned_by(repo, containers, model_owner::Owner::User(origin.sender)).await
+    let command = open_command();
+    let origin = mention_origin(&command);
+    disconnected_session_owned_by(
+        repo,
+        containers,
+        model_owner::Owner::User(origin.sender.clone()),
+    )
+    .await
 }
 
 /// [`disconnected_session`] for an arbitrary owner: the in-memory repo stores
@@ -638,7 +657,8 @@ async fn disconnected_session_owned_by(
     containers: &MockContainerManager,
     owner: model_owner::Owner,
 ) -> AgentSessionId {
-    let OpenSession { origin, .. } = open_command();
+    let command = open_command();
+    let origin = mention_origin(&command);
     // The coder bot: resume-on-disconnect only exists for managed sessions.
     let bot_id = bot_id::MACRO_CODER_BOT_ID;
     let id = AgentSessionId::new();
@@ -683,7 +703,7 @@ async fn open_creates_announces_and_delivers_the_mention() {
     let (service, repo, containers, announcer, _runtimes) = harness();
     let command = open_command();
     let id = AgentSessionId::new();
-    let origin = command.origin.clone();
+    let origin = mention_origin(&command).clone();
 
     let open = service.execute(id, HarnessCommand::Open(command));
     let drive = async {
@@ -713,6 +733,7 @@ async fn open_creates_announces_and_delivers_the_mention() {
     assert_eq!(session.harness, "opencode");
     let announced = announcer.announced();
     assert_eq!(announced.len(), 1);
+    assert!(!announced[0].reuse_origin_message);
     assert_eq!(announced[0].origin_parent, origin.parent);
     assert_eq!(announced[0].origin_thread_id, origin.thread_id);
     assert_eq!(announced[0].triggered_by, origin.sender);
@@ -738,7 +759,7 @@ async fn claude_cloud_only_accepts_control_from_the_subscription_owner() {
     let mut command = open_command();
     command.runtime.kind = AgentKind::ClaudeCloud;
     command.runtime.harness = "claude-cloud".into();
-    let owner = command.origin.sender.clone();
+    let owner = command.origin.actor().clone();
     let id = AgentSessionId::new();
     let open = service.execute(id, HarnessCommand::Open(command));
     let drive = async {
@@ -964,7 +985,7 @@ async fn open_sends_context_and_agent_instructions_in_the_first_prompt() {
     );
     let mut command = open_command();
     command.runtime.instructions = "Diagnose first.".to_owned();
-    let raw = command.origin.content.clone();
+    let raw = mention_origin(&command).content.clone();
     let id = AgentSessionId::new();
 
     let open = service.execute(id, HarnessCommand::Open(command));
@@ -1045,7 +1066,7 @@ async fn open_sends_the_comment_anchor_the_prompt_was_posted_on() {
         composer.clone(),
     );
     let command = open_command();
-    let raw = command.origin.content.clone();
+    let raw = mention_origin(&command).content.clone();
     let id = AgentSessionId::new();
 
     let open = service.execute(id, HarnessCommand::Open(command));
@@ -1104,7 +1125,7 @@ async fn a_mention_its_sender_is_not_set_up_for_is_declined_in_the_thread() {
         command.bot_id = bot_id;
         command.runtime.kind = kind;
         command.runtime.harness = harness_slug.to_owned();
-        let origin = command.origin.clone();
+        let origin = mention_origin(&command).clone();
 
         let outcome = service
             .execute(id, HarnessCommand::Open(command))
@@ -1725,7 +1746,7 @@ async fn live_sandboxed_coder_session(
 ) -> ContainerMock {
     let mut command = open_command();
     command.bot_id = bot_id::MACRO_CODER_BOT_ID;
-    command.origin.sender = staff_sender();
+    mention_origin_mut(&mut command).sender = staff_sender();
     let open = service.execute(id, HarnessCommand::Open(command));
     let drive = async {
         loop {
@@ -4329,7 +4350,7 @@ async fn codex_channel_mention_provisions_egress_without_advertising_mcp() {
             servers: Vec::new(),
         },
     };
-    command.origin.content = "@codex inspect the repository".into();
+    mention_origin_mut(&mut command).content = "@codex inspect the repository".into();
     let id = AgentSessionId::new();
     let open = service.execute(id, HarnessCommand::Open(command));
     let drive = async {

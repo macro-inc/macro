@@ -414,10 +414,10 @@ where
     #[tracing::instrument(err, skip(self, command), fields(
         %session_id,
         bot_id = %command.bot_id,
-        message_id = %command.origin.message_id,
-        parent = ?command.origin.parent,
-        thread_id = %command.origin.thread_id,
-        agent.trigger.kind = "mention",
+        message_id = tracing::field::Empty,
+        parent = tracing::field::Empty,
+        thread_id = tracing::field::Empty,
+        agent.trigger.kind = command.origin.kind(),
         agent.session.id = tracing::field::Empty,
     ))]
     pub(super) async fn open(
@@ -430,46 +430,38 @@ where
             runtime,
             origin,
         } = command;
-        tracing::Span::current().record("agent.session.id", tracing::field::display(session_id));
-        // The mention was observed, but the sender's access is checked now:
-        // a user removed from the parent since posting opens nothing.
+        let actor = origin.actor().clone();
+        let announcement = origin.announcement();
+        let span = tracing::Span::current();
+        span.record("agent.session.id", tracing::field::display(session_id));
+        span.record(
+            "message_id",
+            tracing::field::display(announcement.message_id),
+        );
+        span.record("parent", tracing::field::debug(&announcement.parent));
+        span.record("thread_id", tracing::field::display(announcement.thread_id));
+        // Recheck access after the triggering event: a user removed from the
+        // parent since mentioning or assigning the agent opens nothing.
         self.prompt_context
-            .authorize_origin(
-                &origin.sender,
-                &AnnounceOrigin {
-                    reuse_origin_message: origin.reuse_origin_message,
-                    parent: origin.parent.clone(),
-                    thread_id: origin.thread_id,
-                    message_id: origin.message_id,
-                },
-            )
+            .authorize_origin(&actor, &announcement)
             .await?;
 
         // Asked before anything exists for the session: a row whose spawn is
         // bound to fail would be marked disconnected and leave the thread
         // with a chip that never answers. Declining is the bot's reply
         // instead - what the mentioner has to connect, where to do it.
-        if let Some(blocker) = self
-            .containers
-            .preflight(runtime.kind, &origin.sender)
-            .await?
-        {
+        if let Some(blocker) = self.containers.preflight(runtime.kind, &actor).await? {
             tracing::info!(
                 bot_id = %bot_id,
-                sender = %origin.sender,
+                sender = %actor,
                 ?blocker,
-                "declining a mention its sender is not set up for"
+                "declining a session its owner is not set up for"
             );
             self.announcer
                 .decline(DeclinedMention {
                     bot_id,
-                    origin: AnnounceOrigin {
-                        reuse_origin_message: origin.reuse_origin_message,
-                        parent: origin.parent,
-                        thread_id: origin.thread_id,
-                        message_id: origin.message_id,
-                    },
-                    triggered_by: origin.sender,
+                    origin: announcement,
+                    triggered_by: actor,
                     blocker,
                 })
                 .await?;
@@ -477,7 +469,7 @@ where
         }
 
         let defaults = self.defaults.for_bot(bot_id);
-        let sandbox_size = self.sessions.user_sandbox_size(&origin.sender).await?;
+        let sandbox_size = self.sessions.user_sandbox_size(&actor).await?;
         // The same profile the create menu snapshots: a mention states nothing
         // about how the runtime should work, so the bot's configured
         // instructions are what it opens with, exactly as a dedicated session
@@ -492,7 +484,7 @@ where
         // credentials, so there is nowhere else it could correctly come from.
         let egress = self
             .egress
-            .provision(session_id, &origin.sender, &runtime.mcp_servers)
+            .provision(session_id, &actor, &runtime.mcp_servers)
             .await?;
 
         let session = self
@@ -500,10 +492,10 @@ where
             .create_session(CreateAgentSessionParams {
                 repo_branch: None,
                 id: session_id,
-                owner_id: Owner::User(origin.sender.clone()),
+                owner_id: Owner::User(actor.clone()),
                 bot_id,
-                thread_id: Some(origin.thread_id),
-                originating_message_id: Some(origin.message_id),
+                thread_id: Some(announcement.thread_id),
+                originating_message_id: Some(announcement.message_id),
                 model: runtime.model.clone(),
                 harness: runtime
                     .kind
@@ -522,7 +514,7 @@ where
                 // advertised, for as long as the session lives.
                 mcp_servers: runtime.mcp_servers.clone(),
                 egress_token_hash: Some(egress.session_token_hash),
-                // This open came from the trigger pipeline seeing the mention.
+                // This open came from an observed trigger event.
             })
             .await?;
         self.publish_opened(&session).await;
@@ -576,14 +568,9 @@ where
             session_id,
             DeliverAction {
                 id: AgentActionId::mint(),
-                action: AgentAction::prompt_with_attachments(origin.content, origin.attachments),
-                actor: Some(origin.sender),
-                announce: Some(AnnounceOrigin {
-                    reuse_origin_message: origin.reuse_origin_message,
-                    parent: origin.parent,
-                    thread_id: origin.thread_id,
-                    message_id: origin.message_id,
-                }),
+                action: origin.into_action(),
+                actor: Some(actor),
+                announce: Some(announcement),
             },
         )
         .await?;
