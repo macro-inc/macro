@@ -9,7 +9,10 @@ use std::{future::Future, pin::Pin, sync::Arc};
 mod test;
 
 /// Public admission failure. Internal billing diagnostics are logged, never carried here.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, thiserror::Error,
+)]
+#[serde(rename_all = "snake_case")]
 pub enum AiAdmissionError {
     /// The user's allowance policy refuses new work.
     #[error("{}", .0.message())]

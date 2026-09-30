@@ -26,7 +26,7 @@ roles_and_permissions = { path = "../../crates/roles_and_permissions", default-f
 teams = { path = "../../crates/teams", default-features = false, features = ["outbound"] }
 activity = { path = "../../crates/activity", default-features = false }
 agent_runtime_protocol = { path = "../../crates/agent_runtime_protocol", default-features = false }
-agent_session = { path = "../../crates/agent_session", default-features = false }
+agent_session = { path = "../../crates/agent_session", default-features = false, features = ["admission"] }
 bot_id = { path = "../../crates/bot_id" }
 bots = { path = "../../crates/bots", default-features = false, features = ["outbound"] }
 channel_sender = { path = "../../crates/channel_sender" }

@@ -283,6 +283,16 @@ async fn owner_is_required_and_validated_in_every_command() {
 #[tokio::test]
 async fn domain_denials_are_preserved_as_content_free_error_codes() {
     for (error, status) in [
+        (
+            RoutineSessionError::Admission(ai_billing::AiAdmissionError::Denied(
+                ai_billing::DenyReason::AllowanceExhausted,
+            )),
+            StatusCode::PAYMENT_REQUIRED,
+        ),
+        (
+            RoutineSessionError::Admission(ai_billing::AiAdmissionError::Unavailable),
+            StatusCode::SERVICE_UNAVAILABLE,
+        ),
         (RoutineSessionError::InvalidCommand, StatusCode::BAD_REQUEST),
         (RoutineSessionError::Forbidden, StatusCode::FORBIDDEN),
         (
