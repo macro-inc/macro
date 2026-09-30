@@ -22,7 +22,7 @@ function Card() {
   return (
     <>
       <div class="mb-3 flex items-center gap-1 text-ink-muted">
-        <Tour.Progress class="mr-auto text-[10px]" />
+        <Tour.Progress class="mr-auto text-xs" />
         <Tour.Previous />
         <Tour.Next />
         <Tour.Close />

@@ -79,13 +79,6 @@ export type TourContextValue<Step extends TourStep = TourStep> = {
    * first isn't shown, e.g. a feature that isn't set up yet.
    */
   isFallback: Accessor<boolean>;
-  /**
-   * The last index of the run of steps, starting at the current one, that
-   * wait on the same entry. Equal to `index()` when the step has no entry.
-   */
-  pathEnd: Accessor<number>;
-  /** Skips the rest of the current path, completing if nothing follows. */
-  skipPath: () => void;
   /** The entry the current step is waiting on, when waiting. */
   entry: Accessor<HTMLElement | undefined>;
   boundary: Accessor<HTMLElement | undefined>;
@@ -154,21 +147,6 @@ function TourRoot<Step extends TourStep>(props: TourRootProps<Step>) {
     return !!matched && matched !== toList(current().target)[0];
   };
 
-  const entryKey = (step: Step) =>
-    toList(step.entry)
-      .map((entry) => entry.id)
-      .join('|');
-  const pathEnd = () => {
-    const key = entryKey(current());
-    let end = index();
-    if (!key) return end;
-    while (
-      end + 1 < props.steps.length &&
-      entryKey(props.steps[end + 1]) === key
-    )
-      end++;
-    return end;
-  };
   const entries = () => {
     const step = current();
     if (step.target === undefined) return toList(step.entry);
@@ -206,9 +184,6 @@ function TourRoot<Step extends TourStep>(props: TourRootProps<Step>) {
     status,
     target,
     isFallback,
-    pathEnd,
-    skipPath: () =>
-      pathEnd() >= props.steps.length - 1 ? complete() : goTo(pathEnd() + 1),
     entry,
     boundary,
     titleId,

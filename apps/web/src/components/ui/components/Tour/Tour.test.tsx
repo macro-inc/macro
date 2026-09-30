@@ -375,30 +375,6 @@ describe('Tour', () => {
     expect(tour.isFallback()).toBe(true);
   });
 
-  it('skips the run of steps that wait on the same entry', () => {
-    let tour!: ReturnType<typeof useTour>;
-    function Probe() {
-      tour = useTour();
-      return null;
-    }
-    const shared = { entry: T.entry };
-    render(() => (
-      <Tour.Root
-        steps={[
-          { ...shared, target: T.first, title: '1', description: '' },
-          { ...shared, target: T.second, title: '2', description: '' },
-          { target: T.hidden, title: '3', description: '' },
-        ]}
-      >
-        <Probe />
-      </Tour.Root>
-    ));
-    expect(tour.pathEnd()).toBe(1);
-    tour.skipPath();
-    expect(tour.index()).toBe(2);
-    expect(tour.pathEnd()).toBe(2);
-  });
-
   it('renders the same parts inline with Tour.Panel', () => {
     render(() => (
       <Tour.Root steps={steps}>
