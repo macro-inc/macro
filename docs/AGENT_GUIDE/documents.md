@@ -327,6 +327,10 @@ nodes — use the snapshot itself to verify content. For formatting checks, run
 
 Body placeholder advertises: `/` for block commands, `@` to reference files, `;` for snippets.
 Markdown auto-format works while typing (`#` heading, `[]` checklist, `>` quote).
+On Android, use the software keyboard to check `:` emoji, `/` commands, `;`
+snippets, and `#` tags where enabled. Each should open once and filter as you
+type. Tapping an emoji or command applies it; a second `#` closes the tags menu
+and leaves literal `##` for Markdown headings.
 
 AI text-writing operations require a paragraph/list-item or text-run ID. A
 table, row, cell, or list-container ID is rejected with guidance to choose a
@@ -336,6 +340,9 @@ table cells is preserved in paragraphs when the editor opens the document.
 `@` opens the mention menu wherever the caret starts a word, including directly
 in front of existing text — the menu opens empty there instead of searching for
 the word ahead of the caret. Typed inside a word (`he@llo`) it stays literal text.
+On Android, verify this with the software keyboard: tap `@`, type a name to
+filter, and tap a result to insert a single mention. The menu should remain
+visible above the keyboard while typing.
 
 `Ctrl+F` / `Cmd+F` opens the in-document find bar. Matches include paragraph
 text and inline mention chips (tasks, docs, channels, skills, …) by the title

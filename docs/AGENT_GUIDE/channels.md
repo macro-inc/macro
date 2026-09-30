@@ -102,6 +102,14 @@ only the send control, with no format or discard button; Escape cancels the edit
 The iOS share sheet keeps its editor above the attachment and formatting controls.
 Check this arrangement at both phone and tablet widths.
 
+On Android, tap `@` on the software keyboard in an empty channel composer or
+after a space: the mentions menu should open above the keyboard. Type a name to
+filter, then tap a result to insert one mention without sending the draft.
+An `@` inside a word stays literal text. Check hardware-keyboard input too;
+it should open only one menu.
+The same software-keyboard check applies to `:` for emoji and `/` for formatting
+commands: type a search and tap a result without sending the draft.
+
 The shared `@` menu also offers `Recent agent sessions` after Channels and
 before Companies (the latest 500 accessible sessions, searchable by title or
 persona). These inline chips show the shared

@@ -167,14 +167,16 @@ images, and file export; it does not build the old keyboard scaffold.
 
 ## Input, navigation, and files
 
-The Android mobile plugin handles window insets on the native WebView. In an
-edge-to-edge window, `adjustResize` alone does not resize it on API 36: the plugin
-applies only the remaining IME overlap as a bottom margin and publishes the actual
-laid-out height. CSS uses the resized WebView's `1dvh` for `--dvh`, with no second
-keyboard offset. Native density can change before Chromium updates its CSS
-viewport; using a native dp height directly would move composers offscreen during
-that transition. Insets are converted to the current CSS pixel scale and refreshed
-on WebView resize as well as native inset events.
+The Android mobile plugin publishes window insets from the native WebView. The
+WebView keeps its full edge-to-edge size under the keyboard, as on iOS: resizing it
+made Chromium relayout the whole document on top of the CSS work. Instead the
+plugin publishes the keyboard height and JS shrinks the layout root through
+`--dvh` and lifts fixed sheets by `--virtual-keyboard-height`, so nothing subtracts
+the keyboard twice. Native density can change before Chromium updates its CSS
+viewport, so insets are scaled by the WebView width (which the keyboard never
+changes) and re-applied on WebView resize as well as native inset events. Every
+root custom-property write recalculates style for the whole document, so only
+changed values are written.
 System bars and cutouts remain separate safe-area values; floating keyboards with
 no bottom inset do not consume viewport height. Insets refresh after layout,
 rotation, and resume. Font scale, density, layout direction, and navigation-mode

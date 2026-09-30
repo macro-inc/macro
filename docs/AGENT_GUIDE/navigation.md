@@ -23,6 +23,12 @@ safe areas. Also change display size with the keyboard hidden: bottom composers
 must remain visible before the keyboard is opened again. Editors expose labeled
 multiline textboxes for TalkBack.
 
+With the keyboard closed, the Android dock sits above the measured system
+navigation inset with the usual 12px gutter. Check both gesture and three-button
+navigation, including after rotation and display-size changes. Opening the
+keyboard leaves only the usual gutter above it. iOS retains its existing 28px
+bottom padding with the keyboard closed and 12px with it open.
+
 Sharing text, links, images, or documents from another Android app opens Share to
 Macro after login. A second incoming share waits behind the current one. Back or
 outside dismissal asks **Discard this share?**; **Keep editing** preserves the

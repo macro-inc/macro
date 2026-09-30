@@ -184,6 +184,8 @@ the shimmer.
 - Chat agents' empty input cycles tips about connectors, skills, mentions, and
   agents; coding agents show **Describe what you want to build**. Type `@` for
   mentions and `/` for skills.
+  Check `/` with the Android software keyboard too: the skills menu should open
+  and filter while typing, without sending the draft.
 - Opening a conversation updates the URL based on that conversation's kind:
   `/app/agents/<id>` for Chat sessions, `/app/coders/<id>` for Code sessions,
   and `/app/agent-chats/<id>` for legacy chats. Reload and back/forward restore
