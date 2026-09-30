@@ -587,6 +587,7 @@ where
         session_id: AgentSessionId,
         command: DeliverAction,
     ) -> Result<CommandOutcome> {
+        self.authorize_action(&command).await?;
         let action_id = command.id;
         if self.queues.contains(session_id, action_id) {
             return Ok(CommandOutcome::Queued);
@@ -598,6 +599,8 @@ where
         {
             return Ok(CommandOutcome::Completed);
         }
+        let session = self.sessions.get_session(session_id).await?;
+        self.admit_session(&session).await?;
         let prompt = match &command.action {
             AgentAction::Prompt(prompt) => Some(prompt.prompt.clone()),
             _ => None,

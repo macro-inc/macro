@@ -245,6 +245,10 @@ where
             }
             None
         };
+        self.inner
+            .admit_open(bot_id, &harness, &owner_user)
+            .await
+            .map_err(into_session_error)?;
         let defaults = self.inner.defaults.for_bot(bot_id);
         let sandbox_size = self.inner.sessions.user_sandbox_size(&owner_user).await?;
         let session_id = request.id.unwrap_or_else(AgentSessionId::new);
@@ -441,6 +445,13 @@ where
                 },
             )
             .await?;
+
+        self.admit_open(
+            bot_id,
+            runtime.kind.harness_slug().unwrap_or(&runtime.harness),
+            &origin.sender,
+        )
+        .await?;
 
         // Asked before anything exists for the session: a row whose spawn is
         // bound to fail would be marked disconnected and leave the thread
