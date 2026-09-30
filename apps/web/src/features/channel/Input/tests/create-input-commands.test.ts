@@ -67,6 +67,43 @@ describe('createInputCommands', () => {
     expect(clearComposer).toHaveBeenCalledOnce();
   });
 
+  it('clears the draft before the message is delivered and restores it when send fails', async () => {
+    let value = 'Hello agent';
+    let duringSend = 'unset';
+    const snapshot = (): InputSnapshot => ({
+      value,
+      mentions: [],
+      attachments: [],
+    });
+    const commands = createInputCommands({
+      view: () => ({
+        mode: 'channel',
+        hasPendingAttachments: false,
+      }),
+      snapshot,
+      setIsSending: vi.fn(),
+      setShowFormatRibbon: vi.fn(),
+      reset: () => {
+        value = '';
+      },
+      restoreSnapshot: (next) => {
+        value = next.value;
+      },
+      clearComposer: vi.fn(),
+      removeTrackedAttachment: vi.fn(),
+      callbacks: {
+        onSend: async () => {
+          duringSend = value;
+          throw new Error('offline');
+        },
+      },
+    });
+
+    await expect(commands.send()).rejects.toThrow('offline');
+    expect(duringSend).toBe('');
+    expect(value).toBe('Hello agent');
+  });
+
   it('resets before invoking onClose', () => {
     const events: string[] = [];
     const snapshot: InputSnapshot = {

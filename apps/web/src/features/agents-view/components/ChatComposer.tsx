@@ -23,6 +23,7 @@ import {
   createEffect,
   createSignal,
   type JSX,
+  on,
   onCleanup,
   onMount,
   Show,
@@ -129,11 +130,19 @@ export function ChatComposer(props: {
     container: layout,
   });
 
-  // Apply host-supplied drafts (Home suggestions) to the existing editor.
-  createEffect(() => {
-    if (props.draft !== editor.controls.getMarkdown())
-      editor.controls.setMarkdown(props.draft);
-  });
+  // Host drafts (Home suggestions) replace what's in the editor. Tracking
+  // the editor too writes a stale draft back over a send: the message is
+  // already in the transcript and the same text stays in the box.
+  createEffect(
+    on(
+      () => props.draft,
+      (draft) => {
+        if (draft !== editor.controls.getMarkdown())
+          editor.controls.setMarkdown(draft);
+      },
+      { defer: true }
+    )
+  );
 
   onMount(() => {
     props.registerFocus?.(() => editor.controls.focus());
@@ -160,8 +169,10 @@ export function ChatComposer(props: {
     )
       return;
     const attached = attachments();
-    editor.controls.clear();
+    // Drop the draft first so a host->editor sync cannot put the sent
+    // prompt back after the editor clears.
     props.onDraftChange('');
+    editor.controls.clear();
     props.onSend(prompt, attached);
   };
 

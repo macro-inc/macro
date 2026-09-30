@@ -46,14 +46,24 @@ function purgeLRU() {
 }
 purgeLRU();
 
+// Debounced saves of a draft the user just sent must not land after the
+// composer has already been cleared, or a remount shows the sent message again.
+const chatStateSaveTimeouts: Record<string, ReturnType<typeof setTimeout>> = {};
+
+function cancelChatStateSave(id: string) {
+  const pending = chatStateSaveTimeouts[id];
+  if (!pending) return;
+  clearTimeout(pending);
+  delete chatStateSaveTimeouts[id];
+}
+
 // debounced save chat state
 function useStoreChatState() {
-  const timeouts: Record<string, ReturnType<typeof setTimeout>> = {};
   return (id: string, state: Partial<StoredStuff>) => {
-    if (timeouts[id]) clearTimeout(timeouts[id]);
-    timeouts[id] = setTimeout(() => {
-      const updated_at = Date.now();
-      setPersistentChatState(id, { ...state, used_at: updated_at });
+    cancelChatStateSave(id);
+    chatStateSaveTimeouts[id] = setTimeout(() => {
+      delete chatStateSaveTimeouts[id];
+      setPersistentChatState(id, { ...state, used_at: Date.now() });
     }, 300);
   };
 }
@@ -64,6 +74,7 @@ export function storeChatStateImmediate(
   id: string,
   state: Partial<StoredStuff>
 ) {
+  cancelChatStateSave(id);
   setPersistentChatState(id, { ...state, used_at: Date.now() });
 }
 

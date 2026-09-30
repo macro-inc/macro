@@ -32,7 +32,9 @@ it('retains the complete draft after a failed send and clears it after a success
     const draft = composer.inputState.snapshot();
     expect(await composer.inputState.commands.send()).toBe(false);
     expect(composer.inputState.snapshot()).toEqual(draft);
-    expect(clearEditor).not.toHaveBeenCalled();
+    // The box clears before delivery so a successful send cannot leave a
+    // second copy behind; a failure puts that same draft back.
+    expect(clearEditor).toHaveBeenCalledOnce();
     expect(onSendError).toHaveBeenCalledOnce();
     expect(await composer.inputState.commands.send()).toBe(true);
     expect(send).toHaveBeenLastCalledWith(draft);
@@ -41,7 +43,7 @@ it('retains the complete draft after a failed send and clears it after a success
       attachments: [],
       mentions: [],
     });
-    expect(clearEditor).toHaveBeenCalledOnce();
+    expect(clearEditor).toHaveBeenCalledTimes(2);
   } finally {
     dispose();
   }

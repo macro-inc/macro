@@ -40,6 +40,7 @@ import {
   getChatInputStoredState,
   type StoredStuff,
   storeChatState,
+  storeChatStateImmediate,
 } from '@core/component/AI/util/storage';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { useAiUsageLimitState } from '@core/constant/AiUsageLimitState';
@@ -260,7 +261,15 @@ function ChatInner(props: {
     const inputText = markdownText();
     const attached = input.attachments.attached();
     const model_ = input.model();
-    saveChatState({ attachments: attached, input: inputText, model: model_ });
+    const state = { attachments: attached, input: inputText, model: model_ };
+    // An empty composer is the sent state. Write it now and drop any
+    // debounced copy of the prompt, so a remount cannot put that prompt
+    // back in the box beside the message already in the transcript.
+    if (inputText.length === 0 && attached.length === 0) {
+      storeChatStateImmediate(props.data.chat.id, state);
+      return;
+    }
+    saveChatState(state);
   });
 
   const setPendingLocation = pendingLocationParamsSignal.set;

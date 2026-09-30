@@ -1,12 +1,13 @@
 /**
  * @vitest-environment jsdom
  */
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_MODEL, Model } from '../constant';
 import { resolveChatInputModel } from './parse';
 import {
   getChatInputStoredState,
   getChatStoredModel,
+  storeChatState,
   storeChatStateImmediate,
 } from './storage';
 
@@ -48,6 +49,26 @@ describe('chat input storage: model defaults', () => {
       DEFAULT_MODEL
     );
     expect(getChatStoredModel('input-only')).toBeUndefined();
+  });
+
+  it('drops a pending draft save when the composer is cleared', () => {
+    vi.useFakeTimers();
+    try {
+      storeChatState('chat-a', {
+        input: 'sent prompt',
+        model: Model.gpt56,
+        attachments: [],
+      });
+      storeChatStateImmediate('chat-a', {
+        input: '',
+        model: Model.gpt56,
+        attachments: [],
+      });
+      vi.advanceTimersByTime(300);
+      expect(getChatInputStoredState('chat-a').input).toBe('');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('preserves a historical provider for icons without selecting an unavailable model', () => {

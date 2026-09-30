@@ -14,6 +14,8 @@ type CreateInputCommandsDeps = {
   setIsSending: (value: boolean) => void;
   setShowFormatRibbon: (updater: (prev: boolean) => boolean) => void;
   reset: () => void;
+  /** Puts a failed send's draft back after the optimistic clear. */
+  restoreSnapshot?: (snapshot: InputSnapshot) => void;
   clearComposer?: () => void;
   removeTrackedAttachment: (id: string) => void;
   attachFiles?: (files: File[]) => Promise<void> | void;
@@ -37,11 +39,17 @@ export function createInputCommands(
       const current = deps.snapshot();
       if (!hasSendableInputContent(current)) return false;
       deps.setIsSending(true);
+      // Clear before delivery. The optimistic message paints as soon as
+      // onSend mutates, and waiting for that promise lets the sent text
+      // stay in the box — a second copy — until the request settles.
+      deps.reset();
+      deps.clearComposer?.();
       try {
         await deps.callbacks.onSend(current);
-        deps.reset();
-        deps.clearComposer?.();
         return true;
+      } catch (error) {
+        deps.restoreSnapshot?.(current);
+        throw error;
       } finally {
         deps.setIsSending(false);
       }
