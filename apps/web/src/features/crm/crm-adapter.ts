@@ -7,6 +7,7 @@ import { enableCrmLists } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { getInitialsFromName } from '@core/user';
 import { idToEmail } from '@core/user/util';
+import { queryReadyGate } from '@queries/gate';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
@@ -79,17 +80,16 @@ const CrmRecordTasks = lazy(async () => ({
  */
 function withRowNotifications(source: ItemListSource): ItemListSource {
   const notificationSource = useGlobalNotificationSource();
-  // Gated on `isPending`: reading `data` earlier would suspend the tab.
-  const data = createMemo(() => {
-    const page = source.isPending ? undefined : source.data;
-    return (
-      page && {
-        entities: page.entities.map((entity) =>
-          withEntityNotifications(entity, notificationSource)
-        ),
-      }
-    );
-  });
+  // Reading `data` before the first page resolves would suspend the tab.
+  const data = createMemo(() =>
+    queryReadyGate(source)
+      ? {
+          entities: source.data.entities.map((entity) =>
+            withEntityNotifications(entity, notificationSource)
+          ),
+        }
+      : undefined
+  );
   return {
     get isPending() {
       return source.isPending;
