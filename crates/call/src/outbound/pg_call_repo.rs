@@ -121,6 +121,41 @@ fn collect_tag_option_ids(expr: &Expr<CallLiteral>, ids: &mut Vec<String>) {
     }
 }
 
+/// Extract `(property definition, referenced entity id)` pairs from
+/// entity-reference `CallLiteral::Property` literals, e.g. a call's Companies
+/// property referencing a CRM company. Like tags, structure is flattened: a
+/// call matches when any pair matches, which is exact for the positive OR soup
+/// folds in.
+fn extract_entity_ref_filters(filter: &LiteralTree<CallLiteral>) -> (Vec<Uuid>, Vec<String>) {
+    let mut definition_ids = Vec::new();
+    let mut entity_ids = Vec::new();
+    if let Some(expr) = filter {
+        collect_entity_ref_filters(expr, &mut definition_ids, &mut entity_ids);
+    }
+    (definition_ids, entity_ids)
+}
+
+fn collect_entity_ref_filters(
+    expr: &Expr<CallLiteral>,
+    definition_ids: &mut Vec<Uuid>,
+    entity_ids: &mut Vec<String>,
+) {
+    match expr {
+        Expr::Literal(CallLiteral::Property(lit)) => {
+            if let PropertyMatchValue::EntityRef(entity_id) = &lit.value {
+                definition_ids.push(lit.property_definition_id);
+                entity_ids.push(entity_id.to_string());
+            }
+        }
+        Expr::Literal(_) => {}
+        Expr::And(a, b) | Expr::Or(a, b) => {
+            collect_entity_ref_filters(a, definition_ids, entity_ids);
+            collect_entity_ref_filters(b, definition_ids, entity_ids);
+        }
+        Expr::Not(inner) => collect_entity_ref_filters(inner, definition_ids, entity_ids),
+    }
+}
+
 /// Whether the tag filter requires ALL of its options rather than ANY. The
 /// tag filter is folded in as an OR of tag literals for ANY and an AND of tag
 /// literals for ALL (matching the search index's `match_all_tags`), so an
@@ -129,7 +164,9 @@ fn collect_tag_option_ids(expr: &Expr<CallLiteral>, ids: &mut Vec<String>) {
 fn tag_filter_requires_all(filter: &LiteralTree<CallLiteral>) -> bool {
     fn contains_tag(expr: &Expr<CallLiteral>) -> bool {
         match expr {
-            Expr::Literal(CallLiteral::Property(_)) => true,
+            Expr::Literal(CallLiteral::Property(lit)) => {
+                matches!(lit.value, PropertyMatchValue::SelectOption(_))
+            }
             Expr::Literal(_) => false,
             Expr::And(a, b) | Expr::Or(a, b) => contains_tag(a) || contains_tag(b),
             Expr::Not(inner) => contains_tag(inner),
@@ -1621,6 +1658,8 @@ impl CallRepository for PgCallRepo {
         let tag_option_ids = extract_tag_option_ids(filter);
         let has_tag_filter = !tag_option_ids.is_empty();
         let match_all_tags = tag_filter_requires_all(filter);
+        let (ref_definition_ids, ref_entity_ids) = extract_entity_ref_filters(filter);
+        let has_entity_ref_filter = !ref_definition_ids.is_empty();
 
         let rows = sqlx::query!(
             r#"
@@ -1696,6 +1735,14 @@ impl CallRepository for PgCallRepo {
                         CROSS JOIN LATERAL jsonb_array_elements_text(ep.values -> 'value') AS elem
                     ))
                 ))
+                AND ($12::bool IS FALSE OR EXISTS (
+                    SELECT 1 FROM entity_properties ep
+                    JOIN UNNEST($13::uuid[], $14::text[]) AS f(property_definition_id, entity_id)
+                        ON f.property_definition_id = ep.property_definition_id
+                    WHERE ep.entity_id = c.id::text
+                      AND ep.entity_type = 'CALL_RECORD'
+                      AND ep.values -> 'value' @> jsonb_build_array(jsonb_build_object('entity_id', f.entity_id))
+                ))
                 UNION ALL
                 SELECT
                     cr.id AS call_id,
@@ -1757,6 +1804,14 @@ impl CallRepository for PgCallRepo {
                         CROSS JOIN LATERAL jsonb_array_elements_text(ep.values -> 'value') AS elem
                     ))
                 ))
+                AND ($12::bool IS FALSE OR EXISTS (
+                    SELECT 1 FROM entity_properties ep
+                    JOIN UNNEST($13::uuid[], $14::text[]) AS f(property_definition_id, entity_id)
+                        ON f.property_definition_id = ep.property_definition_id
+                    WHERE ep.entity_id = cr.id::text
+                      AND ep.entity_type = 'CALL_RECORD'
+                      AND ep.values -> 'value' @> jsonb_build_array(jsonb_build_object('entity_id', f.entity_id))
+                ))
             )
             SELECT
                 call_id as "call_id!",
@@ -1792,6 +1847,9 @@ impl CallRepository for PgCallRepo {
             has_tag_filter,
             &tag_option_ids,
             match_all_tags,
+            has_entity_ref_filter,
+            &ref_definition_ids,
+            &ref_entity_ids,
         )
         .fetch_all(&self.pool)
         .await?;

@@ -242,9 +242,10 @@ struct GraphqlFilterPropertiesLiteral {
     value: GraphqlFilterPropertyMatchValue,
 }
 
-impl IntoFilterExpr<PropertiesLiteral> for GraphqlFilterPropertiesLiteral {
-    fn into_expr(self) -> InputResult<Expr<PropertiesLiteral>> {
-        Ok(Expr::val(PropertiesLiteral {
+impl GraphqlFilterPropertiesLiteral {
+    /// Convert this input into the domain literal.
+    fn into_literal(self) -> InputResult<PropertiesLiteral> {
+        Ok(PropertiesLiteral {
             property_definition_id: parse_id(self.property_definition_id, "propertyDefinitionId")?,
             entity_type: self
                 .entity_type
@@ -254,7 +255,13 @@ impl IntoFilterExpr<PropertiesLiteral> for GraphqlFilterPropertiesLiteral {
                     InputError::new(format!("unsupported entityType {entity_type:?}"))
                 })?,
             value: self.value.into_ast()?,
-        }))
+        })
+    }
+}
+
+impl IntoFilterExpr<PropertiesLiteral> for GraphqlFilterPropertiesLiteral {
+    fn into_expr(self) -> InputResult<Expr<PropertiesLiteral>> {
+        self.into_literal().map(Expr::val)
     }
 }
 
@@ -650,6 +657,10 @@ enum GraphqlDocumentLiteral {
     CreatedAt(GraphqlDateLiteral),
     /// The updated at option.
     UpdatedAt(GraphqlDateLiteral),
+    /// An entity-property condition on the document or task.
+    Property(GraphqlFilterPropertiesLiteral),
+    /// Uploaded from an email attachment sent by, or to, a matching address.
+    EmailAttachmentParticipant(GraphqlEmailValue),
 }
 
 impl IntoFilterExpr<DocumentLiteral> for GraphqlDocumentLiteral {
@@ -678,6 +689,10 @@ impl IntoFilterExpr<DocumentLiteral> for GraphqlDocumentLiteral {
             Self::IsEmailAttachment(value) => DocumentLiteral::IsEmailAttachment(value),
             Self::CreatedAt(date) => DocumentLiteral::CreatedAt(date.into_ast()?),
             Self::UpdatedAt(date) => DocumentLiteral::UpdatedAt(date.into_ast()?),
+            Self::Property(property) => DocumentLiteral::Property(property.into_literal()?),
+            Self::EmailAttachmentParticipant(value) => {
+                DocumentLiteral::EmailAttachmentParticipant(value.into_ast()?)
+            }
         };
         Ok(Expr::val(literal))
     }

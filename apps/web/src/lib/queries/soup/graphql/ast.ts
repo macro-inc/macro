@@ -299,6 +299,10 @@ function mapDocumentLiteral(literal: unknown): GraphqlDocumentLiteralInput {
       return { createdAt: mapDateLiteral(value) };
     case 'ua':
       return { updatedAt: mapDateLiteral(value) };
+    case 'prop':
+      return { property: mapPropertiesLiteral(value) };
+    case 'eap':
+      return { emailAttachmentParticipant: mapEmailValue(value) };
     default:
       unsupported(`document literal ${field}`);
   }

@@ -57,6 +57,26 @@ fn extract_tag_option_ids_collects_select_options_across_or() {
 }
 
 #[test]
+fn entity_ref_literals_are_not_tags() {
+    let companies = Uuid::from_u128(0xc);
+    let company = Uuid::from_u128(0xac);
+    let filter: LiteralTree<CallLiteral> = Some(Arc::new(Expr::and(
+        Expr::Literal(tag_property_literal(Uuid::from_u128(1))),
+        Expr::Literal(entity_ref_property_literal(companies, company)),
+    )));
+
+    assert_eq!(
+        super::extract_tag_option_ids(&filter),
+        vec![Uuid::from_u128(1).to_string()]
+    );
+    assert!(!super::tag_filter_requires_all(&filter));
+    assert_eq!(
+        super::extract_entity_ref_filters(&filter),
+        (vec![companies], vec![company.to_string()])
+    );
+}
+
+#[test]
 fn extract_tag_option_ids_empty_for_non_property_filter() {
     assert!(super::extract_tag_option_ids(&status_filter(CallStatus::Attended)).is_empty());
     assert!(super::extract_tag_option_ids(&None).is_empty());
@@ -1924,6 +1944,74 @@ async fn get_call_records_by_user_call_ids_filter_narrows_results(
         records.is_empty(),
         "no call should match an unrelated call id"
     );
+    Ok(())
+}
+
+fn entity_ref_property_literal(definition_id: Uuid, entity_id: Uuid) -> CallLiteral {
+    use item_filters::ast::properties::{EntityRefId, PropertiesLiteral, PropertyMatchValue};
+    CallLiteral::Property(PropertiesLiteral {
+        property_definition_id: definition_id,
+        entity_type: None,
+        value: PropertyMatchValue::EntityRef(EntityRefId::new(entity_id.to_string()).unwrap()),
+    })
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_call_records_by_user_entity_ref_filter_matches_referencing_calls(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+    let companies = Uuid::from_u128(0x00000001_0000_0000_0000_00000000000c);
+    let acme = Uuid::from_u128(0xac);
+    let globex = Uuid::from_u128(0x61);
+    sqlx::query(
+        r#"INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
+           VALUES ($1, $2, 'CALL_RECORD', $3, $4)"#,
+    )
+    .bind(Uuid::now_v7())
+    .bind(CALL_ARCHIVED.to_string())
+    .bind(companies)
+    .bind(serde_json::json!({
+        "type": "EntityReference",
+        "value": [{ "entity_type": "COMPANY", "entity_id": acme.to_string() }]
+    }))
+    .execute(&pool)
+    .await?;
+
+    let filter: LiteralTree<CallLiteral> = Some(Arc::new(Expr::Literal(
+        entity_ref_property_literal(companies, acme),
+    )));
+    let records = repo
+        .get_call_records_by_user(USER_A.deref().copied(), 10, &filter)
+        .await?;
+    assert_eq!(
+        records.iter().map(|r| r.call_id).collect::<Vec<_>>(),
+        vec![CALL_ARCHIVED]
+    );
+
+    // Any referenced entity matches; another definition or entity does not.
+    let filter: LiteralTree<CallLiteral> = Some(Arc::new(Expr::or(
+        Expr::Literal(entity_ref_property_literal(companies, globex)),
+        Expr::Literal(entity_ref_property_literal(companies, acme)),
+    )));
+    let records = repo
+        .get_call_records_by_user(USER_A.deref().copied(), 10, &filter)
+        .await?;
+    assert_eq!(records.len(), 1);
+
+    for literal in [
+        entity_ref_property_literal(companies, globex),
+        entity_ref_property_literal(Uuid::from_u128(0x13), acme),
+    ] {
+        let filter: LiteralTree<CallLiteral> = Some(Arc::new(Expr::Literal(literal)));
+        let records = repo
+            .get_call_records_by_user(USER_A.deref().copied(), 10, &filter)
+            .await?;
+        assert!(records.is_empty(), "unexpected match: {records:?}");
+    }
     Ok(())
 }
 
