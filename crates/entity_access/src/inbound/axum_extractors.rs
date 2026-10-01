@@ -23,6 +23,7 @@ mod pin;
 mod principal;
 mod project;
 mod reminder;
+mod scheduled_action;
 mod team;
 mod thread;
 
@@ -40,6 +41,7 @@ pub use pin::PinAccessLevelExtractor;
 pub use principal::principal_entity_access_receipt;
 pub use project::{ProjectAccessLevelExtractor, ProjectBodyAccessLevelExtractorV2};
 pub use reminder::ReminderAccessExtractor;
+pub use scheduled_action::ScheduledActionAccessExtractor;
 pub use team::{MacroUserTeamExtractorV2, OptionalMacroUserTeamExtractorV2};
 pub use thread::ThreadAccessLevelExtractor;
 

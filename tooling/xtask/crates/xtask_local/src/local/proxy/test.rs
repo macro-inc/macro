@@ -16,6 +16,7 @@ fn vite_routes_cover_every_backend_prefix_and_no_frontend_routes() {
         "/lexical",
         "/ai-editing",
         "/static-file",
+        "/local-storage",
     ] {
         assert!(prefixes.contains(&prefix));
     }
@@ -117,6 +118,8 @@ fn document_content_services_are_available_through_the_proxy() {
 
     assert!(caddy.contains("uri strip_prefix /sync"));
     assert!(caddy.contains("reverse_proxy sync-service:8787"));
+    assert!(caddy.contains("header_up Origin http://localhost:3000"));
+    assert!(!caddyfile(Mode::Dev, false).contains("header_up Origin"));
     assert!(caddy.contains("handle_path /lexical/*"));
     assert!(caddy.contains("reverse_proxy lexical-service:8096"));
     assert!(caddy.contains("handle_path /ai-editing/*"));
@@ -134,6 +137,8 @@ fn static_file_block_is_mode_specific() {
     assert!(!local.contains("route /static-file/*"));
     assert!(caddyfile(Mode::Dev, false).contains("handle_path /static-file/*"));
     assert!(!caddyfile(Mode::Dev, false).contains("/static-file-storage"));
+    assert!(local.contains("handle_path /local-storage/*"));
+    assert!(!caddyfile(Mode::Dev, false).contains("handle_path /local-storage/*"));
 }
 
 /// Drift gate across the Rust↔TypeScript seam: every proxied service's prefix

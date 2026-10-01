@@ -33,6 +33,34 @@ bytes reached storage; previews, DOCX conversion, Markdown initialization, and
 indexing may finish asynchronously. Invalid contents, oversized files, and folder
 permission failures should display a failed tool call without a successful result.
 
+## Generating images with AI
+
+`GenerateImage` takes a text prompt, renders it with Google's Nano Banana image
+model, and saves the result as an image document. Optional arguments: a short file
+name (otherwise the opening words of the prompt name the document), an aspect ratio
+(`square`, `landscape`, `portrait`, `widescreen`, `tall`), and a project ID (edit
+access required). The file extension comes from the generated format, so
+`fileName: "lighthouse"` yields `lighthouse.png`.
+
+For edits or variations, attach photos with the existing paperclip or use Macro
+image documents the user can view. Pass up to three references in `referenceImages`,
+for example `[{"type":"staticFile","id":"<UUID>"},{"type":"document","id":"<UUID>"}]`.
+For an uploaded photo, use the UUID from `/file/<id>` in its attachment URL;
+for a document, use its document ID. Describe the edit in `prompt`, referring to
+image 1, image 2, and image 3 in array order. A description alone does not send
+the photo to the image model. The result is saved as a new document.
+
+The result appears as a standalone image card outside grouped tool calls. A
+rounded header shows the filename above the image preview; clicking the card
+opens the image document in a new app split. The card fits the image's scaled
+width without side padding, preserves its aspect ratio, and truncates long
+filenames in the header. The preview loads once the upload
+is ready, with a placeholder while it is being prepared. Any commentary the
+model added appears below the image.
+Refused prompts, provider failures, and hosts without a Google Generative AI key
+display a failed tool call; the error tells the agent whether to rephrase, retry,
+or stop.
+
 ## Where chats live
 
 The Agents conversation list shows row skeletons after a short delay on first
@@ -184,6 +212,8 @@ the shimmer.
 - Chat agents' empty input cycles tips about connectors, skills, mentions, and
   agents; coding agents show **Describe what you want to build**. Type `@` for
   mentions and `/` for skills.
+  Check `/` with the Android software keyboard too: the skills menu should open
+  and filter while typing, without sending the draft.
 - Opening a conversation updates the URL based on that conversation's kind:
   `/app/agents/<id>` for Chat sessions, `/app/coders/<id>` for Code sessions,
   and `/app/agent-chats/<id>` for legacy chats. Reload and back/forward restore
@@ -268,6 +298,7 @@ is available, the AI composer returns with its draft intact, including in
 documents without a comment composer. Type a
 prompt, optionally choose a model or
 attach context, and tap **Send** to create the chat and send its first message.
+Enter on the virtual keyboard adds a line to the draft rather than sending it.
 The paperclip (**Attach files**) opens the device file chooser directly, including
 in the native iPhone app; it does not open a Macro file browser. Select supported
 files to upload and attach them, or cancel to return to the unchanged draft.
@@ -561,6 +592,11 @@ agent or opening repository settings; sending clears the attachment previews.
 Expanded queued prompts
 list their attached file names under the text; editing a queued prompt keeps them.
 
+On a local stack, the in-memory agent reads uploaded image attachments from local
+storage and sends their bytes to the model. The provider does not need access to
+the stack's private hostname. This also applies to images in earlier turns when
+resuming a conversation after a service restart.
+
 Cursor walkthrough files the run re-hosts appear in the transcript after the
 answer: screenshots as images, recordings as video players, and `.txt` / `.log`
 files as an inline `txt` code block (not a download link). Larger or non-UTF-8
@@ -570,7 +606,11 @@ On mobile the composer (and any queued prompts above it) floats in the bottom
 accessory region above the dock — same placement as channel and AI chat — so it
 stays tappable and clear of the home indicator. The box is full width; the text
 sits on top and a footer row holds the model (left, as a provider logo and
-name, e.g. `✳ Sonnet 5 ⌄`) and **Send** (right). Tapping the model opens a
+name, e.g. `✳ Sonnet 5 ⌄`) and **Send** (right). On touch devices Enter on the
+virtual keyboard inserts a newline and never sends; only **Send** submits, the
+same as channel composers. This also applies to the Agents workspace session
+and new-conversation inputs and to the mobile **Ask AI** composer. On desktop
+Enter still sends and Shift+Enter inserts a newline. Tapping the model opens a
 bottom sheet listing every model the same way, with a check on the current one
 — pick a row to switch. Models read as names even when the runtime reports
 only ids: Macro Agent's `anthropic/claude-sonnet-5` shows as **Sonnet 5**. On desktop the

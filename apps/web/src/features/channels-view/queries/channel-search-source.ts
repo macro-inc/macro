@@ -38,7 +38,7 @@ export function createChannelSearchSource(options: {
             channel_types: match(options.scope())
               .with('direct_messages', () => ['direct_message'])
               .with('channels', () => ['public', 'private', 'team'])
-              .with('recents', 'search', () => undefined)
+              .with('recents', 'search', 'threads', () => undefined)
               .exhaustive(),
           },
         },
@@ -63,9 +63,11 @@ export function createChannelSearchSource(options: {
         ...channel,
         ...loadedById.get(channel.id),
       }));
-    // Recent search includes both channels and DMs, even without message metadata.
+    // Recent and Threads search include both channels and DMs, even without
+    // message metadata.
+    const scope = options.scope();
     return filterChannelsForScope(
-      options.scope() === 'recents' ? 'search' : options.scope(),
+      scope === 'recents' || scope === 'threads' ? 'search' : scope,
       matches
     );
   });

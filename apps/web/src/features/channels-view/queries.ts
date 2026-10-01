@@ -4,20 +4,36 @@ import {
   defineQueryFilters,
   queryStateFrom,
 } from '@app/features/next-soup/filters/filter-store';
+import { useUserId } from '@core/context/user';
 import { compareDateDesc } from '@core/util/date';
-import { type ChannelEntity, type EntityData, isChannelEntity } from '@entity';
+import {
+  type ChannelEntity,
+  type EntityData,
+  isChannelEntity,
+  isChannelThreadEntity,
+} from '@entity';
 import {
   type SoupAstItemsQueryArgs,
   type SoupAstParams,
   useSoupAstItemsQuery,
 } from '@queries/soup/items';
 import { type Accessor, createEffect, createMemo } from 'solid-js';
+import { channelThreadsQueryArgs } from './core/channel-threads-query';
 import type {
   ChannelListSort,
-  ChannelsGroup,
   ChannelsQueryScope,
+  ChannelsSortGroup,
 } from './types';
 import { channelHasMessages, isDirectMessage } from './utils';
+
+/** Threads per page the Threads rail reads to find their channels. */
+const THREAD_CHANNELS_PAGE_SIZE = 100;
+/**
+ * Pages the rail loads on its own. A few busy channels can fill the first
+ * page, leaving a list too short to scroll, so it keeps paging up to this cap;
+ * scrolling the rail loads the rest.
+ */
+const THREAD_CHANNELS_AUTO_PAGES = 5;
 
 const CHANNELS_QUERY_PARAMS = {
   limit: 100,
@@ -31,7 +47,10 @@ type ChannelsQueryDefinition = {
 
 export type ChannelsDataSource = ListDataSource<ChannelEntity>;
 
-export type ChannelsSourceScope = ChannelsQueryScope | 'search';
+/** Scopes backed by a channel list query. */
+type ChannelsListScope = ChannelsQueryScope | 'search';
+
+export type ChannelsSourceScope = ChannelsListScope | 'threads';
 
 export type ChannelsSources = Record<ChannelsSourceScope, ChannelsDataSource>;
 
@@ -71,10 +90,10 @@ export const CHANNELS_QUERY_DEFINITIONS = {
     }),
     matches: () => true,
   },
-} satisfies Record<ChannelsSourceScope, ChannelsQueryDefinition>;
+} satisfies Record<ChannelsListScope, ChannelsQueryDefinition>;
 
 export function channelsQueryArgs(
-  scope: ChannelsSourceScope,
+  scope: ChannelsListScope,
   sortMethod?: ChannelListSort
 ): SoupAstItemsQueryArgs {
   const definition = CHANNELS_QUERY_DEFINITIONS[scope];
@@ -89,7 +108,7 @@ export function channelsQueryArgs(
 }
 
 export function filterChannelsForScope(
-  scope: ChannelsSourceScope,
+  scope: ChannelsListScope,
   channels: readonly ChannelEntity[]
 ): ChannelEntity[] {
   return channels.filter(CHANNELS_QUERY_DEFINITIONS[scope].matches);
@@ -188,8 +207,115 @@ export function resolveSelectedChannel(
   );
 }
 
+function sortChannels(
+  channels: readonly ChannelEntity[],
+  sort: ChannelListSort
+): ChannelEntity[] {
+  const sortDate = (channel: ChannelEntity) =>
+    sort === 'created_at'
+      ? channel.createdAt
+      : sort === 'viewed_at'
+        ? channel.viewedAt
+        : channel.updatedAt;
+
+  return channels
+    .slice()
+    .sort((left, right) => compareDateDesc(sortDate(left), sortDate(right)));
+}
+
+/**
+ * The Threads rail: channels and DMs holding threads the user takes part in.
+ * Channels have no thread filter, so the rail pages through the user's
+ * threads and loads the distinct channels they belong to.
+ */
+function useThreadChannelsDataSource(
+  enabled: Accessor<boolean>,
+  sortMethod: Accessor<ChannelListSort>
+): ChannelsDataSource {
+  const userId = useUserId();
+  const threadsQuery = useSoupAstItemsQuery(
+    () => {
+      const args = channelThreadsQueryArgs(userId() ?? '', undefined);
+      return {
+        ...args,
+        params: { ...args.params, limit: THREAD_CHANNELS_PAGE_SIZE },
+      };
+    },
+    () => ({ enabled: enabled() && Boolean(userId()), staleTime: 30_000 })
+  );
+  // Drive the paginated query on its own until the cap, like
+  // `useChannelsByIdsQuery`, so later-page conversations appear without scroll.
+  createEffect(() => {
+    if (
+      !threadsQuery.isEnabled ||
+      threadsQuery.isLoading ||
+      threadsQuery.isFetching ||
+      threadsQuery.error ||
+      !threadsQuery.hasNextPage ||
+      (threadsQuery.data?.entities.length ?? 0) >=
+        THREAD_CHANNELS_PAGE_SIZE * THREAD_CHANNELS_AUTO_PAGES
+    )
+      return;
+    void threadsQuery.fetchNextPage();
+  });
+  const channelIds = createMemo<string[]>((previous) => {
+    if (!threadsQuery.isEnabled || threadsQuery.isLoading) return previous;
+    const ids = new Set<string>();
+    for (const entity of threadsQuery.data?.entities ?? []) {
+      if (isChannelThreadEntity(entity) && !entity.deletedAt)
+        ids.add(entity.channelId);
+    }
+    return [...ids];
+  }, []);
+  const channelsQuery = useChannelsByIdsQuery(channelIds);
+  const items = createMemo<ChannelEntity[]>((previous) => {
+    if (channelIds().length === 0) return [];
+    if (!channelsQuery.isEnabled || channelsQuery.isLoading) return previous;
+    const byId = new Map(
+      (channelsQuery.data?.entities ?? [])
+        .filter(isChannelEntity)
+        .map((channel) => [channel.id, channel])
+    );
+    return sortChannels(
+      channelIds().flatMap((id) => byId.get(id) ?? []),
+      sortMethod()
+    );
+  }, []);
+
+  return {
+    items,
+    isLoading: () =>
+      items().length === 0 &&
+      ((threadsQuery.isEnabled && threadsQuery.isLoading) ||
+        (channelsQuery.isEnabled && channelsQuery.isLoading)),
+    isFetching: () =>
+      (threadsQuery.isEnabled && threadsQuery.isFetching) ||
+      (channelsQuery.isEnabled && channelsQuery.isFetching),
+    error: () =>
+      (threadsQuery.isEnabled ? threadsQuery.error : null) ??
+      (channelsQuery.isEnabled ? channelsQuery.error : null) ??
+      undefined,
+    hasMore: () => threadsQuery.isEnabled && threadsQuery.hasNextPage,
+    isLoadingMore: () =>
+      threadsQuery.isEnabled && threadsQuery.isFetchingNextPage,
+    loadMore: async () => {
+      if (
+        !threadsQuery.isEnabled ||
+        threadsQuery.isFetchingNextPage ||
+        !threadsQuery.hasNextPage
+      )
+        return;
+      await threadsQuery.fetchNextPage();
+    },
+    refresh: async () => {
+      if (!threadsQuery.isEnabled) return;
+      await threadsQuery.refresh();
+    },
+  };
+}
+
 function useChannelsDataSource(
-  scope: ChannelsSourceScope,
+  scope: ChannelsListScope,
   enabled: Accessor<boolean>,
   sortMethod: Accessor<ChannelListSort | undefined>
 ): ChannelsDataSource {
@@ -211,18 +337,10 @@ function useChannelsDataSource(
 
     if (scope === 'recents') return channels;
 
-    const activeSort =
-      sortMethod() ?? CHANNELS_QUERY_DEFINITIONS[scope].params.sort_method;
-    const sortDate = (channel: ChannelEntity) =>
-      activeSort === 'created_at'
-        ? channel.createdAt
-        : activeSort === 'viewed_at'
-          ? channel.viewedAt
-          : channel.updatedAt;
-
-    return channels
-      .slice()
-      .sort((left, right) => compareDateDesc(sortDate(left), sortDate(right)));
+    return sortChannels(
+      channels,
+      sortMethod() ?? CHANNELS_QUERY_DEFINITIONS[scope].params.sort_method
+    );
   }, []);
 
   return {
@@ -248,7 +366,7 @@ function useChannelsDataSource(
 
 export function useChannelsSources(
   enabled: (scope: ChannelsSourceScope) => boolean,
-  sortBy: (group: ChannelsGroup) => ChannelListSort
+  sortBy: (group: ChannelsSortGroup) => ChannelListSort
 ): ChannelsSources {
   return {
     channels: useChannelsDataSource(
@@ -270,6 +388,10 @@ export function useChannelsSources(
       'search',
       () => enabled('search'),
       () => undefined
+    ),
+    threads: useThreadChannelsDataSource(
+      () => enabled('threads'),
+      () => sortBy('threads')
     ),
   };
 }

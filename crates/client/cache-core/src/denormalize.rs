@@ -7,6 +7,7 @@
 //! field is a cache miss (Phase 1: no partial results — nullability-based
 //! partials are a later phase; the metadata is already generated).
 
+use crate::deps::DependencyTracker;
 use crate::document::{
     FieldNode, MissingVariable, Operation, Selection, resolve_args, resolved_args_key,
 };
@@ -14,8 +15,13 @@ use crate::entity_resolver::EntityResolverLookup;
 use crate::meta;
 use crate::value::{CacheValue, EntityKey, Record, field_key};
 use serde_json::Value as Json;
+use std::borrow::Cow;
 use std::collections::BTreeSet;
 use thiserror::Error;
+
+mod plan;
+pub(crate) use plan::ReadPlans;
+use plan::{Field, FieldSource};
 
 /// Synchronous view over records available right now (hot tier + any
 /// batch-fetched records).
@@ -65,7 +71,7 @@ pub fn denormalize(
     op: &Operation,
     variables: &serde_json::Map<String, Json>,
     source: &impl RecordSource,
-    deps: &mut BTreeSet<EntityKey<'static>>,
+    deps: &mut impl DependencyTracker,
 ) -> Result<ReadOutcome, DenormalizeError> {
     denormalize_with_entity_resolvers(
         op,
@@ -81,7 +87,7 @@ pub fn denormalize_with_entity_resolvers(
     op: &Operation,
     variables: &serde_json::Map<String, Json>,
     source: &impl RecordSource,
-    deps: &mut BTreeSet<EntityKey<'static>>,
+    deps: &mut impl DependencyTracker,
     entity_resolvers: &EntityResolverLookup,
 ) -> Result<ReadOutcome, DenormalizeError> {
     denormalize_record_with_entity_resolvers(
@@ -102,7 +108,7 @@ pub fn denormalize_record(
     selections: &[Selection],
     variables: &serde_json::Map<String, Json>,
     source: &impl RecordSource,
-    deps: &mut BTreeSet<EntityKey<'static>>,
+    deps: &mut impl DependencyTracker,
 ) -> Result<ReadOutcome, DenormalizeError> {
     denormalize_record_with_entity_resolvers(
         key,
@@ -121,176 +127,257 @@ fn denormalize_record_with_entity_resolvers(
     selections: &[Selection],
     variables: &serde_json::Map<String, Json>,
     source: &impl RecordSource,
-    deps: &mut BTreeSet<EntityKey<'static>>,
+    deps: &mut impl DependencyTracker,
     entity_resolvers: &EntityResolverLookup,
 ) -> Result<ReadOutcome, DenormalizeError> {
-    let mut walk = Walk {
+    ReadSession::new(key, type_name, selections).resume(
         variables,
         source,
         deps,
         entity_resolvers,
-        missing_records: BTreeSet::new(),
-        miss: None,
-    };
-    let data = walk.read_record(key, type_name, selections)?;
-
-    if !walk.missing_records.is_empty() {
-        return Ok(ReadOutcome::NeedRecords(walk.missing_records));
-    }
-    if let Some((entity, field)) = walk.miss {
-        return Ok(ReadOutcome::Miss { entity, field });
-    }
-    match data {
-        Some(json) => Ok(ReadOutcome::Complete(json)),
-        None => Ok(ReadOutcome::Miss {
-            entity: key.clone(),
-            field: "(record)".to_string(),
-        }),
-    }
+        &mut ReadPlans::default(),
+    )
 }
 
-struct Walk<'a, S: RecordSource> {
-    variables: &'a serde_json::Map<String, Json>,
-    source: &'a S,
-    deps: &'a mut BTreeSet<EntityKey<'static>>,
-    entity_resolvers: &'a EntityResolverLookup,
-    missing_records: BTreeSet<EntityKey<'static>>,
-    /// First field-level miss encountered.
+/// A response under construction. Only absent record branches are suspended;
+/// completed fields and list positions survive storage hydration rounds.
+/// The source must remain an immutable logical snapshot until completion.
+pub(crate) struct ReadSession<'a> {
+    data: Json,
+    pending: Vec<PendingRecord<'a>>,
     miss: Option<(EntityKey<'static>, String)>,
 }
 
-impl<'a, S: RecordSource> Walk<'a, S> {
-    /// Reads a full record by key. Returns `None` when the outcome is
-    /// already determined to be incomplete (missing record / miss noted).
+#[derive(Clone, PartialEq, Eq)]
+enum ResponsePath<'a> {
+    Field(&'a str),
+    Index(usize),
+}
+
+struct PendingRecord<'a> {
+    key: EntityKey<'static>,
+    type_name: &'a str,
+    selections: &'a [Selection],
+    // An overwritten duplicate field still contributes dependencies and misses,
+    // but must never replace the later field's output when it finishes.
+    destination: Option<Vec<ResponsePath<'a>>>,
+}
+
+impl<'a> ReadSession<'a> {
+    pub(crate) fn new(
+        key: &EntityKey<'static>,
+        type_name: &'a str,
+        selections: &'a [Selection],
+    ) -> Self {
+        Self {
+            data: Json::Null,
+            pending: vec![PendingRecord {
+                key: key.clone(),
+                type_name,
+                selections,
+                destination: Some(Vec::new()),
+            }],
+            miss: None,
+        }
+    }
+
+    pub(crate) fn resume(
+        &mut self,
+        variables: &serde_json::Map<String, Json>,
+        source: &impl RecordSource,
+        deps: &mut impl DependencyTracker,
+        entity_resolvers: &EntityResolverLookup,
+        plans: &mut ReadPlans<'a>,
+    ) -> Result<ReadOutcome, DenormalizeError> {
+        for pending in std::mem::take(&mut self.pending) {
+            let retain_output = pending.destination.is_some();
+            let mut walk = Walk {
+                variables,
+                source,
+                deps,
+                entity_resolvers,
+                plans,
+                pending: &mut self.pending,
+                miss: &mut self.miss,
+                path: pending.destination.unwrap_or_default(),
+                retain_output,
+            };
+            let data = walk.read_record(&pending.key, pending.type_name, pending.selections)?;
+            if retain_output {
+                let mut slot = &mut self.data;
+                for segment in walk.path {
+                    slot = match segment {
+                        ResponsePath::Field(field) => slot.get_mut(field),
+                        ResponsePath::Index(index) => slot.get_mut(index),
+                    }
+                    .expect("suspended response slot remains present");
+                }
+                *slot = data;
+            }
+        }
+        if !self.pending.is_empty() {
+            return Ok(ReadOutcome::NeedRecords(
+                self.pending
+                    .iter()
+                    .map(|pending| pending.key.clone())
+                    .collect(),
+            ));
+        }
+        if let Some((entity, field)) = self.miss.take() {
+            return Ok(ReadOutcome::Miss { entity, field });
+        }
+        Ok(ReadOutcome::Complete(self.data.take()))
+    }
+}
+
+struct Walk<'a, 'document, S: RecordSource, D: DependencyTracker> {
+    variables: &'a serde_json::Map<String, Json>,
+    source: &'a S,
+    deps: &'a mut D,
+    entity_resolvers: &'a EntityResolverLookup,
+    plans: &'a mut ReadPlans<'document>,
+    pending: &'a mut Vec<PendingRecord<'document>>,
+    miss: &'a mut Option<(EntityKey<'static>, String)>,
+    path: Vec<ResponsePath<'document>>,
+    retain_output: bool,
+}
+
+impl<'document, S: RecordSource, D: DependencyTracker> Walk<'_, 'document, S, D> {
     fn read_record(
         &mut self,
         key: &EntityKey<'static>,
-        type_name: &str,
-        selections: &[Selection],
-    ) -> Result<Option<Json>, DenormalizeError> {
-        self.deps.insert(key.clone());
+        type_name: &'document str,
+        selections: &'document [Selection],
+    ) -> Result<Json, DenormalizeError> {
+        self.deps.record(key);
         let Some(record) = self.source.get(key) else {
-            self.missing_records.insert(key.clone());
-            return Ok(None);
+            self.pending.push(PendingRecord {
+                key: key.clone(),
+                type_name,
+                selections,
+                destination: self.retain_output.then(|| self.path.clone()),
+            });
+            return Ok(Json::Null);
         };
-        // Clone is cheap relative to the walk; keeps borrows simple.
-        let record = record.clone();
-        let concrete = record.typename().unwrap_or(type_name).to_string();
-        self.read_fields(key, &record.fields, &concrete, selections)
+        let concrete = record.typename().unwrap_or(type_name);
+        self.deps.field(key, concrete, "__typename");
+        self.read_fields(key, &record.fields, concrete, selections)
     }
 
-    /// Reads selected fields out of a record's or embedded object's map.
     fn read_fields(
         &mut self,
         owner: &EntityKey<'static>,
         fields: &std::collections::BTreeMap<String, CacheValue>,
         concrete: &str,
-        selections: &[Selection],
-    ) -> Result<Option<Json>, DenormalizeError> {
-        let mut field_nodes = Vec::new();
-        collect_fields(selections, concrete, &mut field_nodes);
-
+        selections: &'document [Selection],
+    ) -> Result<Json, DenormalizeError> {
+        let fields_plan =
+            self.plans
+                .fields(selections, concrete, self.variables, self.entity_resolvers)?;
+        let pending_start = self.pending.len();
         let mut out = serde_json::Map::new();
-        for f in field_nodes {
-            if f.name == "__typename" {
-                out.insert(f.response_key.clone(), Json::String(concrete.to_string()));
-                continue;
+        for planned_field in fields_plan.iter() {
+            let field = planned_field.node;
+            self.path.push(ResponsePath::Field(&field.response_key));
+            if self.pending.len() > pending_start && out.contains_key(&field.response_key) {
+                for pending in &mut self.pending[pending_start..] {
+                    if pending
+                        .destination
+                        .as_ref()
+                        .is_some_and(|path| path.starts_with(&self.path))
+                    {
+                        pending.destination = None;
+                    }
+                }
             }
-            // Validate the field exists in the schema (drift protection).
-            let fmeta = meta::field_meta(concrete, &f.name).ok_or_else(|| {
-                DenormalizeError::UnknownField {
-                    type_name: concrete.to_string(),
-                    field: f.name.clone(),
-                }
-            })?;
-            let entity_resolver = self.entity_resolvers.get(concrete, &f.name);
-            let arguments = match resolve_args(f, self.variables) {
-                Ok(arguments) => arguments,
-                Err(_) if entity_resolver.is_some() => {
-                    self.mark_miss(owner, f.name.clone());
-                    continue;
-                }
-                Err(error) => return Err(error.into()),
-            };
-            let args_key = resolved_args_key(f, &arguments);
-            let storage_key = field_key(&f.name, args_key.as_deref());
-
-            if let Some(entity_resolver) = entity_resolver {
-                let Some(target_key) = entity_resolver.entity_key(&arguments) else {
-                    self.mark_miss(owner, storage_key);
-                    continue;
-                };
-                let json =
-                    self.read_record(&target_key, &entity_resolver.target_type, &f.selection_set)?;
-                if let Some(json) = json {
-                    out.insert(f.response_key.clone(), json);
-                }
-                continue;
-            }
-
-            let Some(value) = fields.get(&storage_key) else {
-                self.mark_miss(owner, storage_key);
-                continue;
-            };
-            let json = self.read_value(owner, f, fmeta.ty.name, value)?;
-            match json {
-                Some(j) => {
-                    out.insert(f.response_key.clone(), j);
-                }
-                None => continue, // incomplete subtree already noted
+            let value = self.read_field(owner, fields, concrete, planned_field)?;
+            self.path.pop();
+            if let Some(value) = value {
+                out.insert(field.response_key.clone(), value);
             }
         }
-        Ok(Some(Json::Object(out)))
+        Ok(Json::Object(out))
+    }
+
+    fn read_field(
+        &mut self,
+        owner: &EntityKey<'static>,
+        fields: &std::collections::BTreeMap<String, CacheValue>,
+        concrete: &str,
+        field: &Field<'document>,
+    ) -> Result<Option<Json>, DenormalizeError> {
+        match &field.source {
+            FieldSource::Typename => Ok(Some(Json::String(concrete.to_owned()))),
+            FieldSource::MissingArguments => {
+                self.mark_miss(owner, field.node.name.clone());
+                Ok(None)
+            }
+            FieldSource::Missing(key) => {
+                self.deps.field(owner, concrete, key);
+                self.mark_miss(owner, key.to_string());
+                Ok(None)
+            }
+            FieldSource::Entity {
+                key,
+                type_name,
+                storage_key,
+            } => {
+                self.deps.field(owner, concrete, storage_key);
+                self.read_record(key, type_name, &field.node.selection_set)
+                    .map(Some)
+            }
+            FieldSource::Stored { key, type_name } => {
+                self.deps.field(owner, concrete, key);
+                let Some(value) = fields.get(key.as_ref()) else {
+                    self.mark_miss(owner, key.to_string());
+                    return Ok(None);
+                };
+                self.read_value(owner, field.node, type_name, value)
+                    .map(Some)
+            }
+        }
     }
 
     fn mark_miss(&mut self, owner: &EntityKey<'static>, field: String) {
         if self.miss.is_none() {
-            self.miss = Some((owner.clone(), field));
+            *self.miss = Some((owner.clone(), field));
         }
     }
 
     fn read_value(
         &mut self,
         owner: &EntityKey<'static>,
-        field: &FieldNode,
-        named_type: &str,
+        field: &'document FieldNode,
+        named_type: &'static str,
         value: &CacheValue,
-    ) -> Result<Option<Json>, DenormalizeError> {
+    ) -> Result<Json, DenormalizeError> {
         Ok(match value {
-            CacheValue::Null => Some(Json::Null),
-            CacheValue::Bool(b) => Some(Json::Bool(*b)),
-            CacheValue::Number(n) => Some(Json::Number(n.to_json())),
-            CacheValue::String(s) => Some(Json::String(s.clone())),
-            CacheValue::Opaque(j) => {
-                Some(
-                    serde_json::from_str(j).map_err(|_| DenormalizeError::Shape {
-                        type_name: named_type.to_string(),
-                        field: field.name.clone(),
-                    })?,
-                )
+            CacheValue::Null => Json::Null,
+            CacheValue::Bool(value) => Json::Bool(*value),
+            CacheValue::Number(value) => Json::Number(value.to_json()),
+            CacheValue::String(value) => Json::String(value.clone()),
+            CacheValue::Opaque(value) => {
+                serde_json::from_str(value).map_err(|_| DenormalizeError::Shape {
+                    type_name: named_type.to_string(),
+                    field: field.name.clone(),
+                })?
             }
             CacheValue::List(items) => {
                 let mut out = Vec::with_capacity(items.len());
-                let mut complete = true;
-                for item in items {
-                    match self.read_value(owner, field, named_type, item)? {
-                        Some(j) => out.push(j),
-                        None => complete = false,
-                    }
+                for (index, item) in items.iter().enumerate() {
+                    self.path.push(ResponsePath::Index(index));
+                    out.push(self.read_value(owner, field, named_type, item)?);
+                    self.path.pop();
                 }
-                if complete {
-                    Some(Json::Array(out))
-                } else {
-                    None
-                }
+                Json::Array(out)
             }
             CacheValue::Ref(key) => self.read_record(key, named_type, &field.selection_set)?,
             CacheValue::Object(map) => {
                 let concrete = match map.get("__typename") {
-                    Some(CacheValue::String(t)) => t.clone(),
-                    _ => named_type.to_string(),
+                    Some(CacheValue::String(typename)) => typename.as_str(),
+                    _ => named_type,
                 };
-                self.read_fields(owner, map, &concrete, &field.selection_set)?
+                self.read_fields(owner, map, concrete, &field.selection_set)?
             }
         })
     }
@@ -319,3 +406,6 @@ fn collect_fields<'a>(
         }
     }
 }
+
+#[cfg(test)]
+mod test;

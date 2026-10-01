@@ -52,11 +52,15 @@ export function CrmExport(props: {
     stageId: SYSTEM_PROPERTY_IDS.STAGE,
     ownerPropertyId: SYSTEM_PROPERTY_IDS.COMPANY_OWNER,
   });
-  function download() {
+  async function download() {
     const data = rows();
     if (!data || !selectedColumns().length) return;
-    downloadCsv(createCrmCsv(selectedColumns(), data), filename());
-    props.onClose();
+    const { saved } = await downloadCsv(
+      createCrmCsv(selectedColumns(), data),
+      filename()
+    );
+    // Keep the dialog open when the platform save flow is canceled or fails.
+    if (saved) props.onClose();
   }
   return (
     <Dialog
@@ -293,7 +297,7 @@ export function CrmExport(props: {
                   metadataLoading() ||
                   metadataError()
                 }
-                onClick={() => (rows() ? download() : void prepare())}
+                onClick={() => void (rows() ? download() : prepare())}
               >
                 {pending()
                   ? 'Preparing…'

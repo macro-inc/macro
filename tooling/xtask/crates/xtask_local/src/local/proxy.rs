@@ -59,6 +59,7 @@ pub fn frontend_path_prefixes() -> Vec<&'static str> {
             "/lexical",
             "/ai-editing",
             "/static-file",
+            "/local-storage",
         ])
         .collect()
 }
@@ -111,8 +112,17 @@ fn caddyfile(mode: Mode, static_frontend: bool) -> String {
     // every service allowlist. `run_dev` still fans out to the shared-dev
     // gateway, so it keeps service CORS as-is.
     let cors_block = if mode == Mode::Local { LOCAL_CORS } else { "" };
+    // Sync actively rejects unknown origins, including HTTPS machine names,
+    // before upgrading a socket. Local CORS is owned by this proxy; normalize
+    // only the local worker's upstream origin to its existing dev allowlist.
+    let sync_origin = if mode == Mode::Local {
+        "            header_up Origin http://localhost:3000\n"
+    } else {
+        ""
+    };
+    let special_routes = SPECIAL_ROUTES.replace("SYNC_ORIGIN_HEADER", sync_origin);
     format!(
-        "{CADDY_HEAD}{cors_block}{routes}{SPECIAL_ROUTES}{mailpit_block}{static_block}{frontend_block}{CADDY_TAIL}{preview_block}",
+        "{CADDY_HEAD}{cors_block}{routes}{special_routes}{mailpit_block}{static_block}{frontend_block}{CADDY_TAIL}{preview_block}",
         routes = service_routes(mode)
     )
 }
@@ -245,7 +255,8 @@ const SPECIAL_ROUTES: &str = r#"    @websocket path /websocket /websocket/*
     @sync path /sync /sync/*
     handle @sync {
         uri strip_prefix /sync
-        reverse_proxy sync-service:8787
+        reverse_proxy sync-service:8787 {
+SYNC_ORIGIN_HEADER        }
     }
     # Analytics/telemetry proxy worker (PostHog and OTLP traces/logs).
     # No prefix strip: the worker itself routes on the /i/{ph,dd,otlp} prefix,
@@ -276,7 +287,10 @@ const MAILPIT_ROUTE: &str = r#"    # Mailpit serves itself under /mailpit (MP_WE
 
 /// Local: /api and /internal go to the service, everything else to the S3 bucket
 /// via LocalStack (mirrors infra/local/nginx/static-file-cdn.conf).
-const STATIC_FILE_LOCAL: &str = r#"    handle_path /static-file/* {
+const STATIC_FILE_LOCAL: &str = r#"    handle_path /local-storage/* {
+        reverse_proxy localstack:4566
+    }
+    handle_path /static-file/* {
         # Keep service dispatch before the S3 rewrite inside this exclusive handle.
         route {
             @svc path /api/* /internal/*

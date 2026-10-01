@@ -16,7 +16,7 @@ const ids = [
 const nil = '00000000-0000-0000-0000-000000000000';
 const snapshotQuery = `query Snapshot {
   user { id soup(input: { initial: { limit: 20 } }) { items {
-    __typename id cacheProjection
+    __typename id cacheProjection isFavorited
     properties { id }
     notifications { id entityId entityType state }
     ... on GraphqlSoupProject { ownerId parentId createdAt updatedAt }
@@ -101,6 +101,7 @@ const snapshot = (
             id: entityId,
             cacheProjection: null,
             properties: [],
+            isFavorited: false,
             ownerId: 'macro|viewer@example.com',
             parentId: null,
             createdAt: '2025-01-01T00:00:00Z',

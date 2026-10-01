@@ -9,8 +9,10 @@ import SidebarIcon from '@phosphor/sidebar-simple.svg';
 import StackIcon from '@phosphor/stack.svg';
 import ImportIcon from '@phosphor/upload-simple.svg';
 import { Button, Tooltip } from '@ui';
+import { tourTarget } from '@ui/components/Tour';
 import { createSignal, For, Show } from 'solid-js';
 import { CRM_VIEWS } from '../core/navigation';
+import { COMPANIES_TOUR } from '../tour';
 
 export function CrmSidebar(props: {
   active: string;
@@ -52,7 +54,7 @@ export function CrmSidebar(props: {
         }
       />
       <ViewSidebar.Content>
-        <div class="px-1.5">
+        <div ref={tourTarget(COMPANIES_TOUR.layout)} class="px-1.5">
           <TabsInset
             aria-label="Company layout"
             fullWidth
@@ -74,7 +76,10 @@ export function CrmSidebar(props: {
             <CollapsibleSection.Indicator />
           </CollapsibleSection.Trigger>
           <CollapsibleSection.Content>
-            <ViewSidebar.Nav aria-label="Company views">
+            <ViewSidebar.Nav
+              aria-label="Company views"
+              ref={tourTarget(COMPANIES_TOUR.views)}
+            >
               <For each={CRM_VIEWS}>
                 {(view) => (
                   <Tooltip label={view.description} placement="right">

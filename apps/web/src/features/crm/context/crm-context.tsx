@@ -25,7 +25,7 @@ import type {
 } from './crm-sources';
 
 export type CrmContext = {
-  downloadCsv(content: string, filename: string): void;
+  downloadCsv(content: string, filename: string): Promise<{ saved: boolean }>;
   contactInitials(name: string | null | undefined, email: string): string;
   userEmail(id: string): string;
   copyViewLink(config: import('../core/saved-view').CrmViewConfig): void;

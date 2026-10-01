@@ -9,6 +9,7 @@ mod filter_scope_semantics;
 mod page_retention;
 mod predicate_cost;
 mod projection_writes;
+mod search_bucket_cost;
 mod search_projection;
 mod startup;
 use cache_core::normalize::RecordUpdates;
@@ -50,7 +51,7 @@ fn quick_access_document(name: &str, timestamp: u64) -> Record {
     document
 }
 
-fn queued(label: &str) -> NewQueuedMutation {
+pub(super) fn queued(label: &str) -> NewQueuedMutation {
     NewQueuedMutation {
         uuid: uuid::Uuid::new_v4(),
         mutation: StoredMutation::new(
@@ -93,7 +94,7 @@ fn pending_projection(key: &str, owner: &str, updated_at: i64) -> PendingOptimis
     }
 }
 
-fn authoritative_projection(key: &str, owner: &str) -> predicate_index::IndexDocument {
+pub(super) fn authoritative_projection(key: &str, owner: &str) -> predicate_index::IndexDocument {
     let token = |value| Token::new(value).unwrap();
     predicate_index::IndexDocument {
         record_key: PredicateRecordKey::new(key).unwrap(),
@@ -220,7 +221,7 @@ fn search_projection_is_write_through_and_queries_use_projection_indexes() {
         );
 
         let loaded = storage
-            .load_search_documents(SearchProfile::QuickAccessV1)
+            .load_search_documents(SearchProfile::QuickAccessV1, "document")
             .await
             .unwrap();
         assert_eq!(loaded.len(), 2);
@@ -313,7 +314,7 @@ fn search_projection_is_write_through_and_queries_use_projection_indexes() {
             .unwrap();
         assert!(
             storage
-                .load_search_documents(SearchProfile::QuickAccessV1)
+                .load_search_documents(SearchProfile::QuickAccessV1, "document")
                 .await
                 .unwrap()
                 .is_empty()
@@ -345,7 +346,7 @@ fn search_projection_batches_large_writes_and_keeps_the_last_duplicate() {
 
         storage.put_batch(entries).await.unwrap();
         let loaded = storage
-            .load_search_documents(SearchProfile::QuickAccessV1)
+            .load_search_documents(SearchProfile::QuickAccessV1, "document")
             .await
             .unwrap();
         assert_eq!(loaded.len(), record_count - 1);
@@ -370,7 +371,7 @@ fn search_projection_batches_large_writes_and_keeps_the_last_duplicate() {
             .unwrap();
         assert!(
             storage
-                .load_search_documents(SearchProfile::QuickAccessV1)
+                .load_search_documents(SearchProfile::QuickAccessV1, "document")
                 .await
                 .unwrap()
                 .is_empty()

@@ -55,6 +55,7 @@ function email(id: string, day: number): EmailEntity {
     isRead: false,
     isDraft: false,
     isImportant: true,
+    isSignal: true,
     done: false,
     updatedAt: timestamp,
     notifiedAt: timestamp,
@@ -146,6 +147,41 @@ describe('Home data source', () => {
   afterEach(() => {
     dispose?.();
     vi.useRealTimers();
+  });
+
+  it('excludes Noise and unclassified emails from recent activity, even when important or drafted', () => {
+    const activity = makeQuery(
+      [
+        { ...email('noise', 10), isSignal: false },
+        { ...email('noise-draft', 10), isSignal: false, isDraft: true },
+        { ...email('unclassified', 10), isSignal: undefined },
+        { ...email('signal', 10), isImportant: false },
+      ],
+      false
+    );
+    const { source, setState } = mount(
+      makeQuery([email('received', 9)], false),
+      activity
+    );
+    expect(ids(source)).toEqual(['signal', 'received']);
+    setState('facets', { read: ['unread'], type: ['email'] });
+    expect(ids(source)).toEqual(['signal', 'received']);
+
+    activity.setEntities([{ ...email('signal', 10), isSignal: false }]);
+    expect(ids(source)).toEqual(['received']);
+  });
+
+  it('continues pagination through a page containing only Noise activity', async () => {
+    const notifications = makeQuery([email('received', 1)], false);
+    const activity = makeQuery([{ ...email('noise', 10), isSignal: false }]);
+    const { source } = mount(notifications, activity);
+    expect(ids(source)).toEqual([]);
+    expect(source.hasMore()).toBe(true);
+    await source.loadMore();
+    expect(activity.fetchNextPage).toHaveBeenCalledOnce();
+    activity.setEntities((previous) => [...previous, email('signal', 9)]);
+    activity.setMore(false);
+    expect(ids(source)).toEqual(['signal', 'received']);
   });
 
   it('does not treat older cache-only rows as fetched page coverage', async () => {

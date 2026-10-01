@@ -6,6 +6,7 @@ import {
 } from '@app/features/calendar/components/CalendarPagerContext';
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
 import { RangeUnavailableBanner } from '@app/features/calendar/components/RangeUnavailableBanner';
+import { ViewTour } from '@app/features/tours/ViewTour';
 import { createSizeBreakpoints } from '@app/util/create-size-breakpoints';
 import {
   useSplitDisplayName,
@@ -16,6 +17,7 @@ import { isMobile } from '@core/mobile/isMobile';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Layer } from '@ui';
 import { Pager, PagerSwipeGestures } from '@ui/components/Pager';
+import { tourTarget } from '@ui/components/Tour';
 import {
   createEffect,
   createSignal,
@@ -27,6 +29,7 @@ import {
   Suspense,
   Switch,
 } from 'solid-js';
+import { CALENDAR_TOUR, calendarTour } from '../tour';
 import { CalendarSidebar } from './CalendarSidebar';
 import { Header } from './Header';
 import { Page } from './Page';
@@ -117,7 +120,10 @@ function CalendarPages() {
 
 function CalendarPageContent() {
   return (
-    <div class="calendar-view-content flex min-w-0 min-h-0 flex-1 flex-col">
+    <div
+      ref={tourTarget(CALENDAR_TOUR.grid)}
+      class="calendar-view-content flex min-w-0 min-h-0 flex-1 flex-col"
+    >
       <CalendarPages />
     </div>
   );
@@ -164,6 +170,7 @@ function WorkspaceContent() {
               </Show>
               <ViewShell.Main>
                 <Header presentation="workspace" />
+                <ViewTour tour={calendarTour} />
                 <ViewShell.Content class="flex min-h-0 flex-1">
                   <CalendarPageContent />
                 </ViewShell.Content>

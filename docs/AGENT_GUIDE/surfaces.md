@@ -75,6 +75,10 @@ visible; local results do not trigger the tab-loading bar. A fresh server respon
 still replaces that result, and initial loads without usable data retain normal loading
 indicators. A transport failure does not hide usable current-query local results,
 including empty results; HTTP responses and GraphQL errors still surface.
+To check reconnect behavior, load a non-Mail list online, let background hydration
+advance its cache while offline, then reconnect without delivering a fresh network
+response. The newer local result must remain visible; connectivity alone must not
+restore the older network snapshot. A fresh network response can take authority again.
 
 This is a best-effort display, not proof that every matching entity is cached. Outside
 the supported cached-Mail slice below, loading more follows the original server cursors
@@ -121,6 +125,37 @@ that entity's last operation in the batch. Emitted `SoupUpdated` items are non-n
 If viewer-scoped hydration finds no item, the backend logs and omits that update;
 it does not imply deletion. Only explicit `GraphqlCacheDeletion` events remove records.
 
+## In-app reminder alerts
+
+With reminders enabled, an unseen reminder notification produces a persistent
+alert while the Macro tab is visible, including when DevTools, the address bar,
+or another window has keyboard focus. Browser notification permission is not
+required. Returning to a hidden tab also surfaces unseen reminders from the
+loaded notification feed. Alerts do not activate the full notification history
+query: live arrivals are buffered independently while the tab is hidden.
+Multiple occurrences share one alert, with up to three descriptions and a count
+of the rest; normal save/copy toasts do not replace it.
+
+**Open reminder** opens the reminder details, including standalone reminders.
+For a group, **View reminders** opens the reminders list. Opening acknowledges
+the alert only after navigation applies; a rejected or superseded navigation
+leaves the card actionable. Opening or closing acknowledges it only in this
+browser account; it does not complete, delete, or snooze a reminder.
+Acknowledgements survive reloads and synchronize between tabs on the same origin.
+A later occurrence of a recurring reminder alerts again.
+Seeing or completing its notification elsewhere also removes it from the alert.
+
+Existing item-level notification mutes and snoozes also hide matching reminder
+alerts. Snoozing does not acknowledge the occurrence: an unseen alert can return
+when the snooze expires, without requiring another network event. The alert does
+not add a new per-occurrence Snooze control.
+
+When verifying, intercept notification responses in an owned browser tab and
+inject unseen reminder fixtures instead of scheduling real hosted reminders.
+Check permission denied, a burst of reminders before history loads, hide/show,
+reload after dismissal, mute/unmute, snooze expiry, and desktop/mobile widths. This foreground path does not deliver browser
+push when Macro is closed.
+
 ## Home (desktop) / Notifications (mobile) — `/app/home`
 
 Touch devices render the Inbox as **Notifications**: a floating Signal/Noise
@@ -155,8 +190,13 @@ incomplete predicate-index facts into authoritative membership evidence.
 
 On desktop with the new app views enabled, Home defaults to a Signal feed merging
 notifications with Activity's `touched_by_me` recents, including sent emails and
-AI chats. Each entity appears once, ordered by its latest notification or own
-action. On desktop, the funnel button to the right of **Home** opens **Filter Home**.
+AI chats. Recent emails must be classified as Signal by the server; touching a
+Noise email must not bring it into Home, including through local search. Verify
+that a recently viewed Noise email stays absent while a Signal email and recent
+chat remain visible, and that loading older rows still works through pages of
+Noise-only email activity. Each entity appears once, ordered by its latest
+notification or own action. On desktop, the funnel button to the right of **Home**
+opens **Filter Home**.
 The menu shares the legacy compact submenus: **Status** offers **Unread**, **Read**,
 and **All** as single-select radio items with a checkmark on the right of the selected
 option, and **Type** contains the entity checkboxes. Status closes the menu
@@ -432,6 +472,14 @@ Browser WASM and native cache builds must include the regenerated schema metadat
 native offline archive support therefore requires a full app build, not just OTA.
 
 ### Cached Mail filtering
+
+Performance check: switch Signal → All twice against a large synchronized cache.
+Dense local pages use bounded sort-index candidates rather than sorting the entire
+mailbox. Sparse filters and large timestamp ties retain the exact fallback plan.
+A filter result, row fragments, and final revision that agree must be accepted even
+when background hydration advanced past the revision observed before the request;
+that alone must not trigger another filter scan. Also verify local Load more,
+same-timestamp ordering, and pending archive/read changes.
 
 With GraphQL caching enabled (browser or native Tauri) and the email metadata backfill synchronized,
 All, Signal, Noise, Drafts, Sent, Calendar, and Shared support tab changes and new
@@ -842,6 +890,32 @@ that path. Calendar navigation defaults to Day on phones and Week on desktop; th
 recent choice is remembered locally for navigation that does not specify a period. An
 opened event is reflected in the pane-owned `sN.calendar.eventId` search parameter.
 
+Period selection updates its label and route immediately. The active grid redraws
+on a deferred task; hidden neighboring periods follow on separate tasks. Calendar
+grids stay mounted and undimmed while occurrences load. An uncached range never
+shows events from the previous range. After a short delay, representative event
+skeletons appear without adding synthetic FullCalendar events. Week/Day use sparse
+blocks with varied start times and durations, plus separate all-day bars. Month mixes
+filled bars for all-day/multi-day-style entries with single subtle text lines for
+single-day timed-style entries, without placeholder dots or time chips. Patterns stay
+stable for each date and clear the date headers. Skeletons preserve the grid, scroll
+position, and navigation.
+Quick loads skip the skeletons. Real events lay out underneath during the brief
+minimum display, then fade in as the skeletons fade out. Changing period during a
+load carries feedback into the new cells without restarting the appearance delay.
+Background refreshes retain current events without skeletons or a transient loading
+pill. Provider sync and errors still show their own states. Verify delayed occurrence
+responses: switch Month/Week/Day rapidly and navigate without blanking the grid.
+Confirm mixed event shapes, stable positions, clean handoff, and an uncovered Retry.
+Reduced-motion mode disables pulses and transitions. The page stays busy until the
+handoff starts. Hidden pages do not animate. Resize to confirm skeleton alignment.
+
+A single period arrow retains its slide. Rapid arrow clicks and period hotkeys
+accumulate against the requested date and interrupt unfinished slides, without
+waiting for event responses or hidden-page redraws. Verify repeated forward clicks
+and mixed directions reach the cumulative date while events are still loading.
+Touch swipes retain their page-readiness gates.
+
 Quick-call creation, incoming invitations, Live lists, Macro meeting links, and
 the `/app/meet/*` routes require the PostHog flag `enable-quick-calls`. While the
 flag loads or is off, those controls stay hidden and meeting routes do not mount
@@ -891,22 +965,30 @@ Reminder. Inline Calendar previews retain their host's chrome without adding
 another sidebar; their left header island has a compact New menu because the
 bottom New action follows the foreground host view.
 
-The in-view desktop Calendar header follows Drive's two-level layout: the slim
-top bar shows the viewed month and year and, when the sidebar is closed, a
-compact `New` menu. At wide widths, the row beneath puts `Search events` on
-the left and a labeled `Today` button followed by the rounded period selector
-and previous/next arrows on the right. The idle search field places its hotkey
-beside the placeholder. A query reveals the icon-only Exact-match toggle at
-wide widths; in narrow splits, Exact and Filters appear after focusing search.
-The filter button stays before Clear. The filter menu opens below the button,
-aligned to its right edge: Search in is single-select, while Status, Organizer,
-and Attendee allow multiple values. Organizer and Attendee virtualize their
-contact lists; selected contacts stay in place, while custom email addresses
-appear first. Adding a valid email clears the contact search. Filter selections
-apply immediately, and only these filters mark the filter button, not Exact
-mode. Clicking search opens a calendar-search hint until at least three
-characters are entered; searches show skeleton rows while loading. Empty
-results show an illustrated empty state. Result titles show a calendar-color
+The in-view desktop Calendar header uses one responsive top bar. The viewed
+month and year stay on the left in a heading that scales from 16px in narrow
+splits to a maximum of 24px, with a compact `New` menu when the sidebar is closed.
+An icon-only ghost `Search events` button sits on the right, before a slightly
+larger gap and the `Today`, period selector, and previous/next controls.
+Click Search or press Cmd/Ctrl+F to expand and focus the wider inline search field.
+The field slides out with a short width transition and focuses immediately.
+The results popup stays hidden until the field contains non-whitespace text,
+then fades and slides in once expansion is nearly complete. Clearing the field
+hides the popup without collapsing search. Reduced-motion preferences skip
+both transitions.
+Close search, Escape, selecting a result, or clicking outside collapses it back
+to the icon without clearing the query. Activating a period control also
+collapses search after the action runs. Escape and Close restore focus to the
+Search button. The expanded field exposes Filters and, after typing, the
+icon-only Exact-match toggle. The filter button stays before Close. The filter
+menu opens below the button, aligned to its right edge: Search in is
+single-select, while Status, Organizer, and Attendee allow multiple values.
+Organizer and Attendee virtualize their contact lists; selected contacts stay
+in place, while custom email addresses appear first. Adding a valid email clears
+the contact search. Filter selections apply immediately, and only these filters
+mark the filter button, not Exact mode. Search opens a calendar-search hint
+until at least three characters are entered; searches show skeleton rows while
+loading. Empty results show an illustrated empty state. Result titles show a calendar-color
 swatch when the event is loaded in the visible range, falling back to the
 default calendar color otherwise. A result shows its location after the
 date/time when available. Each result offers at most one rounded Join action:
@@ -920,14 +1002,19 @@ occurrence details before showing Join. Selecting a result preserves the search
 text. Availability lives in the desktop sidebar's Upcoming events section and
 in the mobile header.
 
-Resizing the split keeps the same search field mounted in the fixed-height
-header row. At narrow widths the row hides `Today` and the period selector,
-then the navigation arrows when space becomes scarce; focusing search also
-hides the remaining controls to give the field room. Its clear button remains
-available when a query is present. The `New` menu stays in the desktop top
-bar. Touch devices keep the month selector and header controls without separate
-create or call buttons in the right island. The desktop sidebar's mini
-calendar remains navigable by date and month.
+The period controls move into a separate row below 600px of calendar-pane width,
+with `New` on the left and navigation on the right. With a docked sidebar, the
+header needs fewer controls and stays inline down to 480px. This avoids wrapping
+and immediately unwrapping when the sidebar hides. Expanded search does not
+force early wrapping; its results popup stays directly below the search field.
+Below 1040px, search slides over the month title without moving any controls or
+changing the header height. `New` stays outside the search overlay. Resizing the
+pane keeps the search field mounted and preserves its query and focus. Today
+and New retain their text labels until the controls row runs out of room, then
+become icon buttons.
+Touch devices keep the month selector and header controls without separate
+create or call buttons in the right island. Mobile header islands omit Search.
+The desktop sidebar's mini calendar remains navigable by date and month.
 
 Active Quick Calls you created, participated in, or were invited to appear above your
 next five events (including ones in progress), whether or not they have call links.
@@ -1570,7 +1657,7 @@ Also verify logout and notification opt-out while registration is pending: late
 backend or native completions must leave the receiver disabled. If a new account
 signs in before cleanup finishes, its registration must remain active afterward.
 
-Toast regions are labeled `Notifications (alt+T)`; five empty live regions always exist in
+Toast regions are labeled `Notifications (alt+T)`; seven empty live regions always exist in
 the a11y tree (ignore them when parsing snapshots).
 
 Staff Noise emails still create in-app notification rows, but do not send a new-notification

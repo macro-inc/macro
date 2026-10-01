@@ -625,6 +625,15 @@ export const enableChannelTags = defineFlag({
   env: 'ENABLE_CHANNEL_TAGS',
 });
 
+// The Chat view's Threads tab: channel threads filtered by conversation.
+// On in development; PostHog decides elsewhere. Override with
+// VITE_ENABLE_CHANNEL_THREADS_PREVIEW.
+export const enableChannelThreadsPreview = defineFlag({
+  key: 'enable-channel-threads-preview',
+  env: 'ENABLE_CHANNEL_THREADS_PREVIEW',
+  default: onInDev,
+});
+
 // The "Activity" section in the entity side panel: the entity's recent
 // activity timeline from the GraphQL activity log (who did what, when).
 // Purely additive — when off, the section never mounts and no activity
@@ -724,4 +733,14 @@ export const enableUnifiedDocumentDiscussions = defineFlag({
   key: 'enable-unified-document-discussions',
   env: 'ENABLE_UNIFIED_DOCUMENT_DISCUSSIONS',
   default: onInDev,
+});
+
+/**
+ * Automatic in-app feature tours on desktop views (`features/tours`). Follows
+ * PostHog everywhere, including the local dev server; set
+ * VITE_ENABLE_IN_APP_TOURS=true to turn tours on locally.
+ */
+export const enableInAppTours = defineFlag({
+  key: 'enable-in-app-tours',
+  env: 'ENABLE_IN_APP_TOURS',
 });

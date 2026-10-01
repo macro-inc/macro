@@ -42,6 +42,7 @@ import {
 } from './DocumentComments';
 import { editDocumentHandler } from './EditDocument';
 import { editTagHandler } from './EditTag';
+import { generateImageHandler } from './GenerateImage';
 import { getThreadHandler } from './GetThread';
 import {
   createImportEntityHandler,
@@ -157,6 +158,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ContentSearch: contentSearchHandler,
   CreateDocument: createDocumentHandler,
   UploadFile: uploadFileHandler,
+  GenerateImage: generateImageHandler,
   CreateProject: createProjectHandler,
   CreateReminder: createReminderHandler,
   CreateTag: createTagHandler,

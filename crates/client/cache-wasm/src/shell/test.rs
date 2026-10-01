@@ -12,6 +12,75 @@ wasm_bindgen_test_configure!(run_in_dedicated_worker);
 mod mail_projection;
 
 #[wasm_bindgen_test]
+fn read_response_conversion_preserves_json_and_revision_strings() {
+    let data = serde_json::json!({
+        "text": "line\n\"quoted\" 🙂",
+        "nested": [null, true, {"value": 1.25}],
+        "maxInteger": 9_007_199_254_740_991_i64,
+        "minInteger": -9_007_199_254_740_991_i64,
+        "largeFloat": 15_588_948_318_755_801_000_f64,
+        "negativeZero": -0.0_f64,
+    });
+    let hit = JsReadResult::Hit { data: data.clone() };
+    let actual = read_response_to_js(&hit, [&data]).unwrap();
+    assert_eq!(
+        js_sys::JSON::stringify(&actual).unwrap(),
+        js_sys::JSON::stringify(&to_js(&hit).unwrap()).unwrap()
+    );
+    let js_data = js_sys::Reflect::get(&actual, &"data".into()).unwrap();
+    assert!(js_sys::Object::is(
+        &js_sys::Reflect::get(&js_data, &"negativeZero".into()).unwrap(),
+        &JsValue::from_f64(-0.0)
+    ));
+    assert_eq!(
+        js_sys::Reflect::get(&js_data, &"largeFloat".into())
+            .unwrap()
+            .as_f64(),
+        Some(15_588_948_318_755_801_000_f64)
+    );
+    let records = JsRecordSelectionResult {
+        revision: u64::MAX.to_string(),
+        records: vec![cache_core::record_selection::SelectedRecord {
+            record_key: EntityKey("Thing:one".into()),
+            record: data,
+        }],
+    };
+    assert_eq!(
+        js_sys::JSON::stringify(
+            &read_response_to_js(&records, records.records.iter().map(|r| &r.record)).unwrap()
+        )
+        .unwrap(),
+        js_sys::JSON::stringify(&to_js(&records).unwrap()).unwrap()
+    );
+    assert_eq!(
+        js_sys::JSON::stringify(
+            &read_response_to_js(&JsReadResult::Miss, std::iter::empty()).unwrap()
+        )
+        .unwrap(),
+        js_sys::JSON::stringify(&to_js(&JsReadResult::Miss).unwrap()).unwrap()
+    );
+}
+
+#[wasm_bindgen_test]
+fn read_response_conversion_preserves_unsafe_integer_errors() {
+    for number in [
+        serde_json::json!(9_007_199_254_740_992_u64),
+        serde_json::json!(-9_007_199_254_740_992_i64),
+        serde_json::json!(i64::MIN),
+        serde_json::json!(u64::MAX),
+    ] {
+        let data = serde_json::json!({"nested": [{"value": number}]});
+        let response = JsReadResult::Hit { data: data.clone() };
+        assert_eq!(
+            read_response_to_js(&response, [&data])
+                .unwrap_err()
+                .as_string(),
+            to_js(&response).unwrap_err().as_string()
+        );
+    }
+}
+
+#[wasm_bindgen_test]
 fn build_info_reports_compiled_versions_without_opening_storage() {
     let info: serde_json::Value =
         serde_wasm_bindgen::from_value(cache_build_info().unwrap()).unwrap();
@@ -89,6 +158,7 @@ const SOUP_WITH_PROJECTION_QUERY: &str = r#"query SoupWithProjection($input: Sou
         soup(input: $input) {
             nextCursor
             items {
+                isFavorited
                 properties { id propertyDefinitionId value { __typename ... on GraphqlSelectOptionPropertyValue { optionIds } } }
                 __typename
                 id
@@ -114,6 +184,7 @@ const SOUP_BACKFILL_WITH_PROJECTION_QUERY: &str = r#"query SoupBackfill($input: 
         soup(input: $input) {
             nextCursor
             items {
+                isFavorited
                 properties { id propertyDefinitionId value { __typename ... on GraphqlSelectOptionPropertyValue { optionIds } } }
                 __typename
                 id
@@ -138,6 +209,7 @@ const SOUP_UPDATES_WITH_PROJECTION_SUBSCRIPTION: &str = r#"subscription SoupUpda
         __typename
         ... on SoupUpdated {
             item {
+                isFavorited
                 properties { id propertyDefinitionId value { __typename ... on GraphqlSelectOptionPropertyValue { optionIds } } }
                 __typename
                 id
@@ -213,6 +285,7 @@ fn empty_js_write_result() -> JsWriteResult {
     JsWriteResult {
         revision: "0".to_string(),
         revision_advanced: false,
+        search_changed_buckets: None,
         changed: Vec::new(),
         affected_ops: Vec::new(),
         reset: false,
@@ -388,6 +461,7 @@ fn projected_document_item_with_facts(
         "__typename": "GraphqlSoupDocument",
         "id": document_id,
         "notifications": [],
+        "isFavorited": false,
         "properties": if status_option_ids.is_empty() { serde_json::json!([]) } else { serde_json::json!([{
             "id": format!("status:{document_id}"),
             "propertyDefinitionId": "00000001-0000-0000-0000-000000000002",
@@ -2195,4 +2269,397 @@ async fn calls_serialize_and_owner_lock_excludes_a_second_open() {
         .await
         .expect("close releases owner lock");
     close_and_destroy(&reopened, SCOPE).await;
+}
+
+#[wasm_bindgen_test]
+async fn cached_fragment_plans_preserve_identity_and_recover_from_invalid_requests() {
+    let engine = fresh_engine("cache-wasm-fragment-plans").await;
+    resolved(engine.write_query(
+        write_context(None),
+        QUERY.into(),
+        Some("Soup".into()),
+        js(variables()),
+        js(soup_data("doc-1")),
+        None,
+    ))
+    .await;
+    let keys = || js(serde_json::json!(["GraphqlSoupDocument:doc-1"]));
+    for _ in 0..2 {
+        let selected: serde_json::Value = from_js(
+            resolved(engine.read_records_by_keys(
+                RECORD_FRAGMENT.into(),
+                "CachedDocument".into(),
+                keys(),
+            ))
+            .await,
+        );
+        assert_eq!(selected["records"][0]["record"]["id"], "doc-1");
+    }
+    assert!(
+        JsFuture::from(engine.read_records_by_keys(
+            RECORD_FRAGMENT.into(),
+            "Missing".into(),
+            keys(),
+        ))
+        .await
+        .is_err()
+    );
+    let changed: serde_json::Value = from_js(
+        resolved(engine.read_records_by_keys(
+            "fragment CachedDocument on GraphqlSoupDocument { __typename }".into(),
+            "CachedDocument".into(),
+            keys(),
+        ))
+        .await,
+    );
+    assert!(changed["records"][0]["record"].get("id").is_none());
+    let original: serde_json::Value = from_js(
+        resolved(engine.read_records_by_keys(
+            RECORD_FRAGMENT.into(),
+            "CachedDocument".into(),
+            keys(),
+        ))
+        .await,
+    );
+    assert_eq!(original["records"][0]["record"]["id"], "doc-1");
+    resolved(engine.close()).await;
+}
+
+async fn run_js(body: &str, argument: &str) -> JsValue {
+    let script = js_sys::Function::new_with_args("name", body);
+    let promise = script
+        .call1(&JsValue::UNDEFINED, &JsValue::from_str(argument))
+        .expect("test script runs")
+        .dyn_into::<js_sys::Promise>()
+        .expect("test script returns a promise");
+    JsFuture::from(promise).await.expect("test script settles")
+}
+
+async fn opfs_file_exists(name: &str) -> bool {
+    run_js(
+        "return (async () => {
+          const root = await navigator.storage.getDirectory();
+          try { await root.getFileHandle(name); return true; }
+          catch (error) { if (error.name === 'NotFoundError') return false; throw error; }
+        })()",
+        name,
+    )
+    .await
+    .as_bool()
+    .expect("existence is boolean")
+}
+
+async fn remove_opfs_file(name: &str) {
+    run_js(
+        "return (async () => {
+          const root = await navigator.storage.getDirectory();
+          await root.removeEntry(name).catch(() => undefined);
+        })()",
+        name,
+    )
+    .await;
+}
+
+async fn owner_lock_available(scope: &str) -> bool {
+    let identity = database_identity(scope);
+    let lock = format!("macro:turso-opfs:v1:{}:{identity}", identity.len());
+    run_js(
+        "return navigator.locks.request(
+          name, { mode: 'exclusive', ifAvailable: true }, (lock) => lock !== null
+        )",
+        &lock,
+    )
+    .await
+    .as_bool()
+    .expect("lock probe is boolean")
+}
+
+async fn close_opened(result: &JsValue) {
+    let engine = js_sys::Reflect::get(result, &JsValue::from_str("engine")).expect("engine");
+    let close = js_sys::Reflect::get(&engine, &JsValue::from_str("close"))
+        .expect("close")
+        .dyn_into::<js_sys::Function>()
+        .expect("close is callable");
+    let closing = close
+        .call0(&engine)
+        .expect("close starts")
+        .dyn_into::<js_sys::Promise>()
+        .expect("close returns a promise");
+    JsFuture::from(closing).await.expect("engine closes");
+}
+
+#[wasm_bindgen_test(async)]
+async fn outcome_opens_touch_opfs_only_after_their_storage_grant() {
+    const SCOPE: &str = "cache-wasm-storage-grant";
+    let database = database_identity(SCOPE);
+    let wal = format!("{database}-wal");
+    for recovery in [false, true] {
+        remove_opfs_file(&database).await;
+        remove_opfs_file(&wal).await;
+
+        // Refusing the grant releases the owner lock without touching OPFS.
+        let refused = js_sys::Function::new_no_args(
+            "return Promise.reject(new Error('storage grant refused'))",
+        );
+        let error = if recovery {
+            open_cache_for_recovery_with_outcome(SCOPE.into(), None, Some(refused), None).await
+        } else {
+            open_cache_with_outcome(SCOPE.into(), None, Some(refused), None).await
+        }
+        .expect_err("a refused grant fails the open");
+        assert_eq!(
+            error
+                .dyn_into::<js_sys::Error>()
+                .expect("error object")
+                .message(),
+            "storage grant refused"
+        );
+        assert!(owner_lock_available(SCOPE).await);
+        assert!(!opfs_file_exists(&database).await);
+
+        // A granted open finds storage untouched when it asks.
+        let observed = Rc::new(RefCell::new(None));
+        let observer = observed.clone();
+        let file = database.clone();
+        let grant = Closure::wrap(Box::new(move || -> js_sys::Promise {
+            let observer = observer.clone();
+            let file = file.clone();
+            future_to_promise(async move {
+                *observer.borrow_mut() = Some(opfs_file_exists(&file).await);
+                Ok(JsValue::UNDEFINED)
+            })
+        }) as Box<dyn FnMut() -> js_sys::Promise>)
+        .into_js_value()
+        .unchecked_into::<js_sys::Function>();
+        let opened = if recovery {
+            open_cache_for_recovery_with_outcome(SCOPE.into(), None, Some(grant), None).await
+        } else {
+            open_cache_with_outcome(SCOPE.into(), None, Some(grant), None).await
+        }
+        .expect("a granted open succeeds");
+        assert_eq!(*observed.borrow(), Some(false));
+        assert!(opfs_file_exists(&database).await);
+        close_opened(&opened).await;
+    }
+    destroy_cache(SCOPE.into()).await.expect("destroy cache");
+}
+
+async fn hold_web_lock(lock: &str) {
+    run_js(
+        "return new Promise((granted) => {
+          const request = navigator.locks.request(name, { mode: 'exclusive' }, () =>
+            new Promise((release) => {
+              globalThis.cacheWasmHeldLock = { release, request };
+              granted(true);
+            })
+          );
+        })",
+        lock,
+    )
+    .await;
+}
+
+async fn release_held_web_lock() {
+    run_js(
+        "return (async () => {
+          const held = globalThis.cacheWasmHeldLock;
+          delete globalThis.cacheWasmHeldLock;
+          held.release();
+          await held.request;
+        })()",
+        "",
+    )
+    .await;
+}
+
+fn owner_lock_for(identity: &str) -> String {
+    format!("macro:turso-opfs:v1:{}:{identity}", identity.len())
+}
+
+async fn remove_opfs_pair(identity: &str) {
+    remove_opfs_file(identity).await;
+    remove_opfs_file(&format!("{identity}-wal")).await;
+}
+
+async fn create_opfs_file(name: &str) {
+    run_js(
+        "return (async () => {
+          const root = await navigator.storage.getDirectory();
+          await root.getFileHandle(name, { create: true });
+        })()",
+        name,
+    )
+    .await;
+}
+
+/// Renames a closed main/WAL pair, as if another storage version wrote it.
+async fn move_opfs_pair(from: &str, to: &str) {
+    run_js(
+        "return (async () => {
+          const [from, to] = JSON.parse(name);
+          const root = await navigator.storage.getDirectory();
+          for (const suffix of ['', '-wal']) {
+            await (await root.getFileHandle(from + suffix)).move(to + suffix);
+          }
+        })()",
+        &serde_json::json!([from, to]).to_string(),
+    )
+    .await;
+}
+
+async fn queue_one_mutation(engine: &CacheEngine) {
+    resolved(engine.enqueue_optimistic_mutation(
+        None,
+        "00000000-0000-4000-8000-000000000011".into(),
+        PROPERTY_MUTATION.into(),
+        Some("SetEntityProperty".into()),
+        js(mutation_variables()),
+        js(serde_json::json!({
+            "setEntityProperty": { "id": "prop-1", "displayName": "Queued" }
+        })),
+        JsValue::UNDEFINED,
+        JsValue::UNDEFINED,
+        1.0,
+        "stale-owner".into(),
+        0.0,
+        100.0,
+    ))
+    .await;
+}
+
+async fn stale_cleanup(scope: &str, identity: &str) -> serde_json::Value {
+    from_js(
+        remove_stale_cache_database(scope.into(), identity.into())
+            .await
+            .expect("stale cleanup settles"),
+    )
+}
+
+#[wasm_bindgen_test]
+fn stale_identities_are_only_this_scopes_other_databases() {
+    let scope = "scope-a";
+    let own = cache_database_identity(scope.into());
+    assert_eq!(
+        own,
+        cache_database_name(scope, cache_turso::STORAGE_SCHEMA_VERSION)
+    );
+    assert!(!is_stale_identity(scope, &own));
+    // The unversioned name is stale only once this build's versions move on.
+    assert_eq!(
+        is_stale_identity(scope, "graphql-cache:scope-a"),
+        own != "graphql-cache:scope-a"
+    );
+    assert!(is_stale_identity(scope, "graphql-cache:scope-a:s1.v2.t3"));
+    let versioned = |storage: u32| {
+        format!(
+            "graphql-cache:scope-a:s{}.v{}.t{storage}",
+            cache_core::codec::CACHE_SCHEMA_COMPATIBILITY_EPOCH,
+            cache_core::codec::CACHE_FORMAT_VERSION,
+        )
+    };
+    let current = versioned(cache_turso::STORAGE_SCHEMA_VERSION);
+    // Another spelling of this build's own versions is never opened again.
+    assert_eq!(is_stale_identity(scope, &current), own != current);
+    let newer = versioned(cache_turso::STORAGE_SCHEMA_VERSION + 1);
+    for other in [
+        // A newer build may come back after a rollback, so it keeps its file.
+        newer.as_str(),
+        "graphql-cache:scope-a:s99.v0.t0",
+        "graphql-cache:scope-b:s1.v2.t3",
+        "graphql-cache:scope-ab",
+        "graphql-cache:scope-a-wal",
+        "graphql-cache:scope-a:s1.v2",
+        "graphql-cache:scope-a:s1.v2.t3.x",
+        "graphql-cache:scope-a:sx.v2.t3",
+        "graphql-cache:scope-a:s1.v.t3",
+    ] {
+        assert!(!is_stale_identity(scope, other), "{other}");
+    }
+}
+
+#[wasm_bindgen_test(async)]
+async fn outcome_opens_can_decline_to_wait_for_a_held_owner_lock() {
+    const SCOPE: &str = "cache-wasm-if-available";
+    let database = database_identity(SCOPE);
+    remove_opfs_pair(&database).await;
+    hold_web_lock(&owner_lock_for(&database)).await;
+    for recovery in [false, true] {
+        let error = if recovery {
+            open_cache_for_recovery_with_outcome(SCOPE.into(), None, None, Some(true)).await
+        } else {
+            open_cache_with_outcome(SCOPE.into(), None, None, Some(true)).await
+        }
+        .expect_err("a held owner lock declines the open");
+        assert_eq!(
+            js_sys::Reflect::get(&error, &JsValue::from_str("cacheOwnerLockUnavailable"))
+                .expect("marker lookup"),
+            JsValue::TRUE
+        );
+        assert!(!opfs_file_exists(&database).await);
+    }
+    release_held_web_lock().await;
+    let opened = open_cache_with_outcome(SCOPE.into(), None, None, Some(true))
+        .await
+        .expect("a free owner lock opens");
+    close_opened(&opened).await;
+    destroy_cache(SCOPE.into()).await.expect("destroy cache");
+}
+
+#[wasm_bindgen_test(async)]
+async fn stale_databases_are_removed_only_when_unused_and_empty() {
+    const SCOPE: &str = "cache-wasm-stale-cleanup";
+    let own = database_identity(SCOPE);
+    let unversioned = legacy_cache_database_name(SCOPE);
+    let queued = format!("{unversioned}:s0.v0.t0");
+    let older = format!("{unversioned}:s0.v0.t1");
+    let partial = format!("{unversioned}:s0.v0.t2");
+    for identity in [&own, &unversioned, &queued, &older, &partial] {
+        remove_opfs_pair(identity).await;
+    }
+
+    // An older build's database still queues a mutation, so it is kept.
+    let engine = fresh_engine(SCOPE).await;
+    queue_one_mutation(&engine).await;
+    resolved(engine.close()).await;
+    move_opfs_pair(&own, &queued).await;
+    assert_eq!(
+        stale_cleanup(SCOPE, &queued).await,
+        serde_json::json!({ "outcome": "queued-mutations", "queuedMutations": 1 })
+    );
+    assert!(opfs_file_exists(&queued).await);
+
+    // A live engine of that build holds its lock, so nothing is opened.
+    hold_web_lock(&owner_lock_for(&queued)).await;
+    assert_eq!(
+        stale_cleanup(SCOPE, &queued).await,
+        serde_json::json!({ "outcome": "in-use" })
+    );
+    release_held_web_lock().await;
+
+    // An empty older database and a one-sided pair are deleted outright.
+    let engine = fresh_engine(SCOPE).await;
+    resolved(engine.close()).await;
+    move_opfs_pair(&own, &older).await;
+    assert_eq!(
+        stale_cleanup(SCOPE, &older).await,
+        serde_json::json!({ "outcome": "removed" })
+    );
+    create_opfs_file(&format!("{partial}-wal")).await;
+    assert_eq!(
+        stale_cleanup(SCOPE, &partial).await,
+        serde_json::json!({ "outcome": "removed" })
+    );
+    for identity in [&older, &partial] {
+        assert!(!opfs_file_exists(identity).await);
+        assert!(!opfs_file_exists(&format!("{identity}-wal")).await);
+    }
+
+    // This build's own database and other scopes' databases are refused.
+    for identity in [own.clone(), legacy_cache_database_name("another-scope")] {
+        remove_stale_cache_database(SCOPE.into(), identity)
+            .await
+            .expect_err("not a stale database of this scope");
+    }
+    remove_opfs_pair(&queued).await;
+    remove_opfs_pair(&own).await;
 }

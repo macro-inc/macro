@@ -2,8 +2,8 @@
 edition = "2024"
 name = "cache-wasm"
 publish = false
-# Rebuild for entity-only Soup hydration and bounded page retention.
-version = "0.6.30"
+# Rebuild with read-path optimizations, scoped invalidation, and bounded filter selection.
+version = "0.6.36"
 
 [features]
 default = []
