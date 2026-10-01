@@ -118,6 +118,9 @@ export function invalidateRemindersById(
   { refetch = false }: { refetch?: boolean } = {}
 ) {
   if (ids.length === 0) return;
+  // A mirror completion also changes its email workflow. Invalidate once per
+  // batch so a just-opened composer cannot reuse a five-minute-old revision.
+  void queryClient.invalidateQueries({ queryKey: reminderKeys.email._def });
   void queryClient.invalidateQueries({
     queryKey: reminderKeys.collection._def,
   });
@@ -136,6 +139,7 @@ export function invalidateRemindersById(
 
 /** Invalidate every reminder list, plus one detail when the id is known. */
 function invalidateReminders(id?: string) {
+  void queryClient.invalidateQueries({ queryKey: reminderKeys.email._def });
   void queryClient.invalidateQueries({
     queryKey: reminderKeys.collection._def,
   });

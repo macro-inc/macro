@@ -1,11 +1,23 @@
 import type { EntityData } from '@entity';
 import type { Reminder } from '@service-storage/generated/schemas/reminder';
 import { describe, expect, it } from 'vitest';
+import { queryClient } from '../client';
+import { reminderKeys } from './keys';
 import {
+  invalidateRemindersById,
   reminderEntityType,
   reminderSoupPatch,
   reminderTarget,
 } from './reminders';
+
+it('invalidates cached email revisions after a reminder completion batch', () => {
+  const key = reminderKeys.email('completion-regression-thread').queryKey;
+  queryClient.setQueryData(key, { revision: 'before-completion' });
+  expect(queryClient.getQueryState(key)?.isInvalidated).toBe(false);
+  invalidateRemindersById(['mirror-1', 'mirror-2']);
+  expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true);
+  queryClient.removeQueries({ queryKey: key });
+});
 
 const entity = (type: EntityData['type'], id = 'e1') =>
   ({ type, id, name: 'Thing' }) as EntityData;
