@@ -1235,8 +1235,15 @@ async fn run() -> anyhow::Result<()> {
 
     // Held by value here and behind an `Arc` in the router state: the impl is a
     // pool handle, so cloning is cheap and `SoupImpl` needs an owned service.
+    // Additional connections for guards spanning email I/O. HTTP requests and
+    // dispatch share this budget, independently of the main data pool.
+    let followup_lock_capacity = match config.environment {
+        Environment::Production => 32,
+        Environment::Develop => 16,
+        Environment::Local => 8,
+    };
     let email_followups = reminders::domain::email_followup::service::EmailFollowupService::new(
-        PgRemindersRepo::new(db.clone()),
+        PgRemindersRepo::with_followup_lock_capacity(db.clone(), followup_lock_capacity),
         email_service.clone(),
     );
     let reminders_service =

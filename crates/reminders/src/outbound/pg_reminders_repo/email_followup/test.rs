@@ -796,6 +796,32 @@ async fn corrupt_email_reconciliation_does_not_suppress_generic_sweep(pool: PgPo
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn independent_followups_use_configured_pool_capacity(pool: PgPool) {
+    let repo = PgRemindersRepo::with_followup_lock_capacity(pool.clone(), 8);
+    let mut guards = Vec::new();
+    for _ in 0..8 {
+        guards.push(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(1),
+                repo.lock_followup(&user(), Uuid::now_v7()),
+            )
+            .await
+            .expect("unrelated followups must use the configured concurrency budget")
+            .unwrap(),
+        );
+    }
+    // Saturated lock holders must still be able to perform their data writes.
+    let connection = tokio::time::timeout(std::time::Duration::from_secs(1), pool.acquire())
+        .await
+        .expect("lock holders must not consume the data pool")
+        .unwrap();
+    drop(connection);
+    for guard in guards {
+        guard.rollback().await.unwrap();
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn busy_thread_waiters_leave_lock_pool_available(pool: PgPool) {
     // A different process owns the busy key. Four waiters used to occupy every
     // connection in this process's lock pool while blocked inside PostgreSQL.
