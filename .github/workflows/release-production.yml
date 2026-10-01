@@ -81,8 +81,16 @@ jobs:
           VITE_OTEL_ENV: prod
         run: |
           set -euo pipefail
+          cargo tauri --version
+          # Tauri has shipped both switch-only and value-taking APK/AAB flags.
+          # Nix and local installations can differ; select APK-only with either CLI.
+          android_help=$(cargo tauri android build --help)
+          apk_args=(--apk)
+          if [[ "$android_help" == *'--apk <APK>'* ]]; then
+            apk_args=(--apk true --aab false)
+          fi
           just android-build --firebase-config "$RUNNER_TEMP/android-google-services.json" \
-            --apk true --aab false --ci --config "$RUNNER_TEMP/android-release.json" \
+            "${apk_args[@]}" --ci --config "$RUNNER_TEMP/android-release.json" \
             2>&1 | tee "$RUNNER_TEMP/android-build.log"
       - name: Preserve Android build log
         if: always()
