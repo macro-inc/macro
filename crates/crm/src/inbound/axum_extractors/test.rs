@@ -367,7 +367,7 @@ impl CrmService for FakeCrmService {
         &self,
         _access: &CrmTeamReceipt<MemberTeamRole>,
         _query: &str,
-        _limit: u8,
+        _limit: u16,
     ) -> Result<Vec<CrmContact>, CrmError> {
         panic!("unexpected search_contacts call")
     }

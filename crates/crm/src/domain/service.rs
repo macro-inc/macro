@@ -328,7 +328,7 @@ pub trait CrmService: Clone + Send + Sync + 'static {
         &self,
         access: &CrmTeamReceipt<MemberTeamRole>,
         query: &str,
-        limit: u8,
+        limit: u16,
     ) -> impl Future<Output = Result<Vec<CrmContact>, CrmError>> + Send;
 
     /// Fetch the CRM contact matching `email` in the caller's team. The team
@@ -385,8 +385,9 @@ const MAX_DOMAIN_CHARS: usize = 253;
 /// Maximum accepted length for a contact email (RFC 3696 errata limit).
 const MAX_EMAIL_CHARS: usize = 320;
 
-/// Most contacts one [`CrmService::search_contacts`] call returns.
-pub const MAX_CONTACT_SEARCH_LIMIT: u8 = 50;
+/// Most contacts one [`CrmService::search_contacts`] call returns. Large
+/// enough for the Quick Access feed of a team's recent contacts.
+pub const MAX_CONTACT_SEARCH_LIMIT: u16 = 500;
 
 /// Validates a user-supplied display name: trims whitespace; must be
 /// non-blank and within [`MAX_DISPLAY_NAME_CHARS`].
@@ -854,7 +855,7 @@ where
         &self,
         access: &CrmTeamReceipt<MemberTeamRole>,
         query: &str,
-        limit: u8,
+        limit: u16,
     ) -> Result<Vec<CrmContact>, CrmError> {
         self.companies_repository
             .search_contacts_for_team(
@@ -1098,7 +1099,7 @@ impl CrmService for NoOpCrmService {
         &self,
         _access: &CrmTeamReceipt<MemberTeamRole>,
         _query: &str,
-        _limit: u8,
+        _limit: u16,
     ) -> Result<Vec<CrmContact>, CrmError> {
         Ok(Vec::new())
     }

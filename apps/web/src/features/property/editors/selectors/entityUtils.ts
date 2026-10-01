@@ -31,8 +31,7 @@ export type EntityTypeItemMap = {
   TASK: EntityItem<TaskEntity>;
   THREAD: EntityItem<EmailEntity>;
   COMPANY: EntityItem<CrmCompanyEntity>;
-  // CRM contacts come from the CRM contact search, not quickAccess.
-  CONTACT: never;
+  CONTACT: EntityItem<CrmContactEntity>;
   // Native projects use the initiative picker, separate from folder quick access.
   INITIATIVE: never;
   // Call records aren't entity-reference targets in quickAccess.
@@ -54,7 +53,7 @@ function entityTypeToBuckets(entityType: EntityType): readonly Bucket[] {
     .with('THREAD', () => ['email'] as const) // Note: emails aren't in quickAccess yet, handled separately
     .with('INITIATIVE', () => [] as const)
     .with('COMPANY', () => ['crm_company'] as const)
-    .with('CONTACT', () => [] as const) // Contacts aren't in quickAccess
+    .with('CONTACT', () => ['crm_contact'] as const)
     .with('CALL_RECORD', () => [] as const) // Call records aren't in quickAccess
     .with('CALENDAR_EVENT', () => [] as const) // Calendar events aren't in quickAccess
     .exhaustive();
@@ -145,17 +144,6 @@ export function getEntitySearchText(entity: CombinedEntity): string {
   }
 
   return entity.data.name ?? '';
-}
-
-/** Wraps CRM contacts from the CRM contact search as selector entities. */
-export function crmContactsToEntities(
-  contacts: CrmContactEntity[]
-): CombinedEntity[] {
-  return contacts.map((contact) => ({
-    kind: 'entity',
-    id: contact.id,
-    data: contact,
-  }));
 }
 
 /** Gets the EntityType string for an entity */

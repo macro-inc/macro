@@ -38,7 +38,7 @@ export class CrmNamespace {
    * contains `query` (case-insensitive), most recently interacted first.
    * An empty query lists the most recent contacts.
    *
-   * @param opts.limit Maximum contacts to return (1-50, default 20).
+   * @param opts.limit Maximum contacts to return (1-500, default 20).
    */
   async searchContacts(
     query: string,

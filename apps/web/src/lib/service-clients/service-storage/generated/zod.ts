@@ -4233,7 +4233,7 @@ export const searchContactsQueryParams = zod.object({
     .number()
     .min(searchContactsQueryLimitMin)
     .nullish()
-    .describe('Maximum contacts to return (1-50, default 20).'),
+    .describe('Maximum contacts to return (1-500, default 20).'),
 });
 
 export const searchContactsResponse = zod

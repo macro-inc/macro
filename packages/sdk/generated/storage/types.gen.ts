@@ -12952,7 +12952,7 @@ export type SearchContactsData = {
          */
         query?: string;
         /**
-         * Maximum contacts to return (1-50, default 20).
+         * Maximum contacts to return (1-500, default 20).
          */
         limit?: number | null;
     };

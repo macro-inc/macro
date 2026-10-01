@@ -13,7 +13,7 @@ use crate::domain::{auth::CrmTeamReceipt, model::CrmError, service::CrmService};
 use super::{CrmRouterState, list_company_contacts::CrmContactResponse};
 
 /// Contacts returned when the request omits `limit`.
-const DEFAULT_LIMIT: u8 = 20;
+const DEFAULT_LIMIT: u16 = 20;
 
 /// Query parameters for searching the caller's team's CRM contacts.
 #[derive(Debug, Deserialize, IntoParams, ToSchema)]
@@ -22,8 +22,8 @@ pub struct SearchContactsParams {
     /// Empty lists the most recently interacted contacts.
     #[serde(default)]
     pub query: String,
-    /// Maximum contacts to return (1-50, default 20).
-    pub limit: Option<u8>,
+    /// Maximum contacts to return (1-500, default 20).
+    pub limit: Option<u16>,
 }
 
 /// Response from searching CRM contacts.

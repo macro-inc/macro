@@ -391,8 +391,10 @@ Discard unsent test drafts rather than sending them.
 
 With CRM enabled, any task, document or call can point at CRM records through the
 `Companies` and `Contacts` system properties: side panel `Properties` →
-`Add property`. The `Companies` picker lists Quick Access companies; the
-`Contacts` picker searches the team's contacts by email or name. Values show the
+`Add property`. Both pickers list Quick Access records: the team's companies and
+its most recently interacted contacts, filtered by name, domain or email. CRM
+contacts have their own Quick Access bucket, apart from people, and are not
+offered in `@` mentions or the command menu. Values show the
 record's name and open the company or contact. An entity can carry the property
 without listing it (set at creation or through the API); adding that property
 pins the existing value rather than clearing it. Calls are linked automatically

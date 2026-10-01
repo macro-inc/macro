@@ -1,4 +1,3 @@
-import { useCrmContactSearch } from '@app/features/crm/record-adapter';
 import { UserIcon } from '@core/component/UserIcon';
 import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { useEmail, useUserId } from '@core/context/user';
@@ -31,7 +30,6 @@ import {
 import {
   type CombinedEntity,
   createEntitySearchConfig,
-  crmContactsToEntities,
   getEntitySearchText,
   getEntityTimestampedItem,
   getEntityType,
@@ -182,12 +180,6 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     })
   );
 
-  // CRM contacts aren't in quickAccess; the CRM contact search supplies them.
-  const crmContacts = useCrmContactSearch(
-    searchTerm,
-    () => props.config.specificEntityType === 'CONTACT'
-  );
-
   // Server search results mapped to our format
   const serverEmails = createMemo((): CombinedEntity[] => {
     if (emailSearchQuery.status !== 'success' || !emailSearchQuery.data) {
@@ -223,10 +215,6 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     // For THREAD type, use email data (not in quickAccess yet)
     if (specificEntityType === 'THREAD') {
       return emails().map(threadMapper);
-    }
-
-    if (specificEntityType === 'CONTACT') {
-      return crmContactsToEntities(crmContacts());
     }
 
     // Convert quickAccess items to CombinedEntity
