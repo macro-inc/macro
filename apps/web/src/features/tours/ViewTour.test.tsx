@@ -21,6 +21,27 @@ vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => ({ enabled: flagOn() }),
 }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => wiring.userId }));
+
+// Account-backed progress is covered in queries/tour-progress.test.tsx; here
+// it's an in-memory stand-in so the tests exercise the tour UI.
+const progress = vi.hoisted(() => ({
+  store: new Map<string, unknown>(),
+  localOnly: [] as boolean[],
+}));
+const [progressReady, setProgressReady] = createSignal(true);
+vi.mock('./queries/tour-progress', () => ({
+  createTourProgress: (props: { tourId: string; localOnly: boolean }) => {
+    progress.localOnly.push(props.localOnly);
+    return {
+      ready: () => progressReady(),
+      stored: () =>
+        props.localOnly ? undefined : progress.store.get(props.tourId),
+      save: (value: unknown) => {
+        if (!props.localOnly) progress.store.set(props.tourId, value);
+      },
+    };
+  },
+}));
 vi.mock('@core/constant/SettingsState', () => ({
   useSettingsState: () => ({ openSettingsInSplit: wiring.settings }),
 }));
@@ -60,15 +81,15 @@ const linear = defineViewTour({
   connector: { kind: 'mcp', label: 'Linear', tools: ['Linear'] },
   steps,
 });
-const key = (id: string) => `macro:tour:${id}:tour-user`;
-const saved = (id: string) =>
-  JSON.parse(localStorage.getItem(key(id)) ?? 'null');
+const saved = (id: string) => progress.store.get(id);
 
 beforeEach(() => {
   vi.stubEnv('DEV', false);
   setDesktop(true);
   setFlagOn(true);
-  localStorage.clear();
+  setProgressReady(true);
+  progress.store.clear();
+  progress.localOnly = [];
   wiring.userId = 'tour-user';
   wiring.links = [];
   wiring.native = [];
@@ -117,17 +138,21 @@ describe('ViewTour', () => {
     expect(screen.getByRole('dialog', { name: 'Second step' })).toBeTruthy();
   });
 
-  it('starts fresh when saved progress is unreadable', () => {
-    localStorage.setItem(key('plain'), 'hidden');
+  it('waits for saved progress before showing anything', () => {
+    setProgressReady(false);
+    progress.store.set('plain', { status: 'dismissed' });
     render(() => <ViewTour tour={plain} />);
-    expect(screen.getByRole('dialog', { name: 'First step' })).toBeTruthy();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    setProgressReady(true);
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 
-  it('reopens on localhost without touching saved dismissals', () => {
+  it('reopens on localhost without touching saved progress', () => {
     vi.stubEnv('DEV', true);
     vi.stubGlobal('location', { hostname: 'localhost' });
-    localStorage.setItem(key('plain'), JSON.stringify({ status: 'dismissed' }));
+    progress.store.set('plain', { status: 'dismissed' });
     render(() => <ViewTour tour={plain} />);
+    expect(progress.localOnly).toEqual([true]);
     expect(screen.getByRole('dialog')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
     expect(saved('plain')).toEqual({ status: 'dismissed' });
@@ -140,7 +165,7 @@ describe('ViewTour', () => {
     setDesktop(false);
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(document.querySelector('iframe')).toBeNull();
-    expect(localStorage.getItem(key('video'))).toBeNull();
+    expect(saved('video')).toBeUndefined();
     setDesktop(true);
     expect(screen.getByRole('dialog')).toBeTruthy();
   });

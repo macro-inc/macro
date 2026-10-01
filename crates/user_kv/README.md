@@ -2,8 +2,8 @@
 
 A generic per-user key-value store. Each entry is a JSON object owned by one
 user and addressed by a `namespace` and a `key`, e.g. namespace `tours`, key
-`calendar`. Use it for small app state that doesn't need its own typed table, such as
-in-app tour progress.
+`calendar`. Use it for small app state that doesn't need its own typed table.
+In-app tour progress is the first use.
 
 ## Rules
 
@@ -41,3 +41,6 @@ values over the size limit.
   `isSuccess` so a pending query never suspends the view.
 - `usePutUserKvMutation()` writes an entry, updating the cached namespace
   optimistically and rolling back on failure.
+
+See `apps/web/src/features/tours/queries/tour-progress.ts` for a complete
+example, including validating values on read.

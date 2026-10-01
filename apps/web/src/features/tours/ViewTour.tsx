@@ -4,7 +4,6 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableInAppTours } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
-import { createUserScopedStorage } from '@core/util/userScopedStorage';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { useMcpServersQuery } from '@queries/mcp-servers';
 import { usePipedreamConnectionsQuery } from '@queries/pipedream-connectors';
@@ -13,11 +12,13 @@ import { Button } from '@ui';
 import { Tour, useTour } from '@ui/components/Tour';
 import { createSignal, type JSX, Match, Show, Switch } from 'solid-js';
 import { ViewTourVideo } from './components/ViewTourVideo';
+import type { TourProgress } from './core/progress';
 import type {
   ViewTourConnector,
   ViewTour as ViewTourDefinition,
   ViewTourStep,
 } from './core/view-tour';
+import { createTourProgress } from './queries/tour-progress';
 import './view-tour.css';
 
 /** Tours are a desktop affordance: wide viewports with a fine pointer. */
@@ -31,7 +32,7 @@ export type ViewTourProps = {
 
 /**
  * A view's automatic tour. Mount it once inside the view; it stays within
- * the view's split, and its progress is saved per user on this browser.
+ * the view's split, and its progress is saved to the user's account.
  */
 export function ViewTour(props: ViewTourProps) {
   const userId = useUserId();
@@ -48,54 +49,48 @@ const isLocalTesting = () =>
   import.meta.env.DEV &&
   ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname);
 
-/**
- * Saved per user and tour on this browser: finished or dismissed tours stay
- * hidden, and an unfinished tour resumes at the step the user last reached.
- */
-type TourProgress =
-  | { status: 'completed' | 'dismissed' }
-  | { status: 'active'; step: number };
-
-function readProgress(raw: string | null): TourProgress | undefined {
-  if (!raw) return undefined;
-  try {
-    const value = JSON.parse(raw) as Partial<TourProgress & { step: unknown }>;
-    if (value.status === 'completed' || value.status === 'dismissed')
-      return { status: value.status };
-    if (value.status === 'active' && typeof value.step === 'number')
-      return { status: 'active', step: value.step };
-  } catch {
-    // Unreadable progress starts the tour fresh.
-  }
-  return undefined;
-}
-
 function DismissibleTour(props: ViewTourProps & { userId: string }) {
-  const storage = createUserScopedStorage(`macro:tour:${props.tour.id}`);
   // Localhost reopens tours from the start on every mount so they can be
   // iterated on, and leaves saved progress alone.
-  const localTesting = isLocalTesting();
-  const saved = localTesting
-    ? undefined
-    : readProgress(storage.read(props.userId));
+  const progress = createTourProgress({
+    tourId: props.tour.id,
+    userId: props.userId,
+    localOnly: isLocalTesting(),
+  });
+  // Mount only once progress is known, so a finished tour never flashes up.
+  return (
+    <Show when={progress.ready()}>
+      <ProgressTour
+        {...props}
+        initial={progress.stored()}
+        onSave={progress.save}
+      />
+    </Show>
+  );
+}
+
+function ProgressTour(
+  props: ViewTourProps & {
+    initial: TourProgress | undefined;
+    onSave: (progress: TourProgress) => void;
+  }
+) {
   const [closed, setClosed] = createSignal(
-    saved?.status === 'completed' || saved?.status === 'dismissed'
+    props.initial?.status === 'completed' ||
+      props.initial?.status === 'dismissed'
   );
   const [step, setStep] = createSignal(
-    saved?.status === 'active'
-      ? Math.min(saved.step, props.tour.steps.length - 1)
+    props.initial?.status === 'active'
+      ? Math.min(props.initial.step, props.tour.steps.length - 1)
       : 0
   );
-  const save = (progress: TourProgress) => {
-    if (!localTesting) storage.write(props.userId, JSON.stringify(progress));
-  };
   const changeStep = (next: number) => {
     setStep(next);
-    save({ status: 'active', step: next });
+    props.onSave({ status: 'active', step: next });
   };
   const close = (status: 'completed' | 'dismissed') => {
     setClosed(true);
-    save({ status });
+    props.onSave({ status });
   };
 
   return (

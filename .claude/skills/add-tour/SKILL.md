@@ -148,8 +148,9 @@ list):
 - Unit behavior of the primitive lives in `Tour/Tour.test.tsx` and app behavior
   in `features/tours/ViewTour.test.tsx`; add cases there when you change them.
 - The primitive's gallery page is `Tour/Tour.docs.tsx`.
-- Progress is saved per user in local storage under `macro:tour:<id>`
-  (`completed`, `dismissed`, or the active step). Changing a tour's steps
+- Progress is saved to the user's account in the `user_kv` store, namespace
+  `tours`, key = the tour `id` (`completed`, `dismissed`, or the active step;
+  see `features/tours/core/progress.ts`). The `id` must be a lowercase slug. Changing a tour's steps
   doesn't reset it for users who finished it; bump the `id` only if everyone
   must see the new version.
 - Check it in a browser with `VITE_ENABLE_IN_APP_TOURS=true`: on localhost

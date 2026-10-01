@@ -51,11 +51,14 @@ to close the video, and dismissing the tour removes it.
 
 ## Progress
 
-Progress is saved per user and view in this browser's local storage, not on
-the server. Got it on the last step (or skipping past it) saves the tour as
+Progress is saved to the user's account, so it follows them across browsers
+and devices. Got it on the last step (or skipping past it) saves the tour as
 completed; Dismiss, or Escape while focus is inside the card, saves it as
-dismissed.
-Either keeps it hidden. An unfinished tour resumes at the step last reached.
-Other views keep their own tours. On localhost, 127.0.0.1, and IPv6 loopback
-in development, tours start from the first step on every mount and saved
-progress is left alone.
+dismissed. Either keeps it hidden. An unfinished tour resumes at the step last
+reached. Other views keep their own tours.
+
+A tour appears only after progress has loaded, and not at all if it can't
+load. Progress older builds kept in this browser's local storage is uploaded
+the first time a tour loads. On localhost, 127.0.0.1, and IPv6 loopback in
+development, tours start from the first step on every mount and saved progress
+is left alone.
