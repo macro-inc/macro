@@ -114,7 +114,7 @@ describe('upcoming calendar events source', () => {
       occurrence(day, { title: 'Office', eventType: 'working_location' })
     );
     const allDay = {
-      kind: 'all_day' as const,
+      kind: 'allDay' as const,
       startDate: '2026-09-23',
       endDate: '2026-09-24',
     };
