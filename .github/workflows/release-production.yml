@@ -44,7 +44,7 @@ jobs:
       - name: Checkout release
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
-          ref: ${{ inputs.release_tag || github.sha }}
+          ref: ${{ inputs.release_tag && format('refs/tags/{0}', inputs.release_tag) || github.sha }}
           persist-credentials: false
       - name: Install Android SDK components
         shell: bash
