@@ -1,7 +1,7 @@
 import { channelsSearch } from '@app/features/channels-view/channels-route';
 import { useMobileSearchText } from '@app/features/command/mobile/use-mobile-search-text';
 import { driveSearch } from '@app/features/drive-view/primitives/drive-search';
-import { reminderSourceContent } from '@app/features/reminders/reminder-navigation';
+import { reminderSourceContent } from '@app/features/reminders/reminder-source';
 import type { FacetSelection } from '@app/features/soup/filters/facets/types';
 import { makePersistedState } from '@app/lib/persistence';
 import {

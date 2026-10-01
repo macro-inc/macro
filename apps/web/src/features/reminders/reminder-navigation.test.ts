@@ -13,8 +13,8 @@ import {
   reminderDetailPath,
   reminderDetailUrl,
   reminderIdFromDetailContent,
-  reminderSourceContent,
 } from './reminder-navigation';
+import { reminderSourceContent } from './reminder-source';
 
 vi.mock('@core/constant/allBlocks', () => ({
   itemToBlockName: (item: {

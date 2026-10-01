@@ -92,6 +92,11 @@ export const makeCreateReminderAction = (
         )?.row;
       openReminderComposer(entity, {
         onCreated: async () => {
+          // A hosted email view owns pagination and its navigation history.
+          if (options?.onEmailSaved) {
+            await options.onEmailSaved();
+            return;
+          }
           if (opts.advances) {
             soup.selection.clear();
             soup.focus.set(next?.id);
@@ -100,7 +105,6 @@ export const makeCreateReminderAction = (
               entity: next?.original,
             });
           }
-          if (!opts.advances) await options?.onEmailSaved?.();
         },
       });
       return;

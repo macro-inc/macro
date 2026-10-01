@@ -19,8 +19,8 @@ import {
   openReminderDetail,
   reminderDetailDestination,
   reminderDetailUrl,
-  reminderSourceContent,
 } from '@app/features/reminders/reminder-navigation';
+import { reminderSourceContent } from '@app/features/reminders/reminder-source';
 import { reviewsHostedContent } from '@app/features/reviews-view/reviews-hosted-content';
 import { withListNavigationSource } from '@app/features/soup/collection/list-navigation-source';
 import {
