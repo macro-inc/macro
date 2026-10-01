@@ -45,6 +45,7 @@ vi.mock('../context/AgentSessionContext', () => ({
     messages: () => [],
     metadata: () => undefined,
     pending: () => false,
+    initialInput: 'Document context',
     queue: {
       entries: () => [
         { actionId: 'queued-1', kind: 'prompt', prompt: 'Queued request' },
@@ -80,6 +81,12 @@ beforeEach(() => {
   mocks.issue.mockResolvedValue({ isErr: () => false });
 });
 afterEach(cleanup);
+
+it('passes opening context to the composer without issuing it', () => {
+  render(() => <AgentComposer />);
+  expect(mocks.input?.initialInput).toBe('Document context');
+  expect(mocks.issue).not.toHaveBeenCalled();
+});
 
 describe('view-only session controls', () => {
   it('disables and guards prompt, model, stop, queue, and attachment actions', () => {

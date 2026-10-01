@@ -23,7 +23,7 @@ import { openMobileAskAi } from './open-mobile-ask-ai';
 function submitAskAi() {
   const query = SearchState.query().trim();
   if (!query) return;
-  openMobileAskAi(query);
+  void openMobileAskAi(query);
   SearchState.close();
 }
 

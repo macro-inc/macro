@@ -61,6 +61,20 @@ Refused prompts, provider failures, and hosts without a Google Generative AI key
 display a failed tool call; the error tells the agent whether to rephrase, retry,
 or stop.
 
+## Ask AI entry points
+
+**Ask AI** in search (including Tab), the command menu, and mobile search opens
+an agent session. A nonempty search query is sent as the first prompt once the
+session is ready; an empty search opens an empty composer. Desktop search replaces
+its current split, while command-menu and mobile actions open a new split.
+
+**Ask Macro** and **Chat with Agent** on documents, PDFs, spreadsheets, email,
+channels, calls, and projects also open agent sessions. Their entity mention stays
+in the composer as an unsent draft. Spreadsheet mentions retain the current sheet
+and selected range; channel-message actions retain the referenced message.
+Add a question and press Send to submit that context. These actions do not create
+legacy cognition chats, regardless of the Agents workspace feature flag.
+
 ## Where chats live
 
 The Agents conversation list shows row skeletons after a short delay on first
@@ -314,9 +328,9 @@ The composer has one editable field. Its placeholder appears only while empty;
 placeholder updates and disabled-state changes preserve the editor and draft.
 
 The **Ask AI** button beside the mobile search field sends the typed query.
-With `enable-chat-v3-agents` on, it opens an agent session (`/app/agent/<id>`)
-and delivers the query as the first prompt. With the flag off, it opens a
-cognition chat (`/app/chat/<uuid>`) and sends the query.
+It opens an agent session and delivers the query as the first prompt, regardless
+of `enable-chat-v3-agents`. Mobile uses the agent session surface at
+`/app/agent/<id>`; desktop uses the Agents workspace.
 
 Almost every list surface (Home, Agents, Files, Tasks, Customers, Email) has a bottom
 composer with placeholder **`Ask AI, @mention anything`**. Click it, `type_text` the message,
@@ -451,10 +465,10 @@ existing UI does not promise a dedicated quota dialog outside development mode.
 
 ## Start a doc-scoped chat
 
-Open a doc → side panel `Actions` → `Ask Macro`. Opens a chat pane with the document already
-attached as context (it appears as a link chip in the composer). New-chat pane shows tips:
-`@mention anything` to attach entities, `Ctrl+Enter` to send in the background (you get
-notified when the AI responds). Legacy Home background sends preserve the submitted tool selection.
+Open a doc → side panel `Actions` → `Ask Macro`. Opens an agent session with the
+document already mentioned as context (a link chip in the composer). The mention
+is an unsent draft: add a question, then Send. Legacy Home background sends
+preserve the submitted tool selection.
 
 ## Composer anatomy (a11y)
 

@@ -282,7 +282,7 @@ must be saved before persistent comments are available.
 ## Ask Macro about a spreadsheet
 
 **Ask Macro** sits immediately left of **Share**. Select the relevant cells, then
-click it to open a new chat in a split beside the workbook. The composer starts
+click it to open a new agent session in a split beside the workbook. The composer starts
 with the workbook mention followed by one space; nothing sends automatically.
 The mention captures the active sheet ID/name and normalized selected range at
 click time. Changing the selection later does not change that draft attachment.

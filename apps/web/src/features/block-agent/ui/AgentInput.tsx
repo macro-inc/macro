@@ -44,6 +44,8 @@ export type QuoteInsert = (text: string) => void;
 
 export interface AgentInputProps {
   placeholder?: string;
+  /** Context to seed in the composer without sending it. */
+  initialInput?: string;
   /** The agent is working: the send button becomes a stop square. */
   busy?: boolean;
   /**
@@ -112,7 +114,7 @@ export interface AgentInputProps {
 }
 
 export function AgentInput(props: AgentInputProps) {
-  const [markdown, setMarkdown] = createSignal('');
+  const [markdown, setMarkdown] = createSignal(props.initialInput ?? '');
   const [isDraggedOver, setIsDraggedOver] = createSignal(false);
   let containerRef: HTMLDivElement | undefined;
   const [layout, setLayout] = createSignal<HTMLDivElement>();
@@ -357,6 +359,7 @@ export function AgentInput(props: AgentInputProps) {
                 >
                   <ComposerEditor
                     config={editor}
+                    initialValue={props.initialInput}
                     disabled={props.readOnly}
                     placeholder={
                       props.placeholder ??

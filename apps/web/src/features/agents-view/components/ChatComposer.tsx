@@ -349,7 +349,7 @@ export function ChatComposer(props: {
 
 /** Adapt the session's controls to the same input used for a new Chat. */
 export function ChatSessionInput(props: AgentInputProps) {
-  const [draft, setDraft] = createSignal('');
+  const [draft, setDraft] = createSignal(props.initialInput ?? '');
   return (
     <ChatComposer
       draft={draft()}
