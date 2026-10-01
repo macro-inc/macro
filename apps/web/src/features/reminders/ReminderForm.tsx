@@ -82,6 +82,8 @@ export interface ReminderFormProps {
   placeholder: string;
   /** A standalone reminder has no entity to name it after, so it needs a title. */
   descriptionRequired?: boolean;
+  /** Attached creation keeps a personal note optional and secondary. */
+  optionalNote?: boolean;
   /** A card or chip for the entity this reminder is about, shown above the title. */
   reference?: JSX.Element;
   submitLabel: string;
@@ -384,11 +386,13 @@ export function ReminderForm(props: ReminderFormProps) {
   const whenLabelId = createUniqueId();
   const whenInputId = createUniqueId();
   const whenOptionsId = createUniqueId();
+  const [noteOpen, setNoteOpen] = createSignal(false);
+  let whenRef: HTMLInputElement | undefined;
   let titleRef: HTMLInputElement | undefined;
   let errorRef: HTMLDivElement | undefined;
   let customControlsRef: HTMLDivElement | undefined;
   onMount(() => {
-    if (props.autofocus) titleRef?.focus();
+    if (props.autofocus) (props.optionalNote ? whenRef : titleRef)?.focus();
   });
 
   const pickedOnceDateTime = () =>
@@ -713,28 +717,45 @@ export function ReminderForm(props: ReminderFormProps) {
             class="flex min-w-0 flex-col gap-3"
             disabled={props.pending}
           >
-            <div class="flex flex-col gap-2">
-              <label
-                for={descriptionId}
-                class="text-xs font-medium text-ink-muted"
-              >
-                Reminder
-              </label>
-              <Input
-                id={descriptionId}
-                ref={titleRef}
-                type="text"
-                value={description()}
-                onInput={(event) => setDescription(event.currentTarget.value)}
-                placeholder={props.placeholder}
-                aria-label="Reminder description"
-                // Counts UTF-16 code units where the service counts characters, so this
-                // only ever stops short of the real limit, never past it. The
-                // description resolvers apply the exact cap.
-                maxLength={REMINDER_DESCRIPTION_MAX_LENGTH}
-                size="lg"
-              />
-            </div>
+            <Show
+              when={!props.optionalNote || noteOpen()}
+              fallback={
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  class="self-start"
+                  onClick={() => {
+                    setNoteOpen(true);
+                    queueMicrotask(() => titleRef?.focus());
+                  }}
+                >
+                  Add a note
+                </Button>
+              }
+            >
+              <div class="flex flex-col gap-2">
+                <label
+                  for={descriptionId}
+                  class="text-xs font-medium text-ink-muted"
+                >
+                  {props.optionalNote ? 'Note' : 'Reminder'}
+                </label>
+                <Input
+                  id={descriptionId}
+                  ref={titleRef}
+                  type="text"
+                  value={description()}
+                  onInput={(event) => setDescription(event.currentTarget.value)}
+                  placeholder={props.placeholder}
+                  aria-label="Reminder description"
+                  // Counts UTF-16 code units where the service counts characters, so this
+                  // only ever stops short of the real limit, never past it. The
+                  // description resolvers apply the exact cap.
+                  maxLength={REMINDER_DESCRIPTION_MAX_LENGTH}
+                  size="lg"
+                />
+              </div>
+            </Show>
 
             <Show when={repeat() === 'once'}>
               <section
@@ -750,6 +771,7 @@ export function ReminderForm(props: ReminderFormProps) {
                 </label>
                 <Input
                   id={whenInputId}
+                  ref={whenRef}
                   type="text"
                   value={whenQuery()}
                   onInput={(event) => setWhenQuery(event.currentTarget.value)}

@@ -68,6 +68,7 @@ async fn replacement_removals<S: PredicateIndexStorage>(storage: S) {
                     link_patches: &[],
                     revalidations: &[],
                     created_at_ms: 1,
+                    identity_bindings: &[],
                 },
                 optimistic_updates(updates),
             )
@@ -159,6 +160,7 @@ async fn optional_sorts<S: PredicateIndexStorage>(storage: S) {
                 link_patches: &[],
                 revalidations: &[],
                 created_at_ms: 1,
+                identity_bindings: &[],
             },
             optimistic_updates(updates),
         )

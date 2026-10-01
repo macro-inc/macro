@@ -1,9 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Device-info contributes legacy permissions; SAF/content grants and
+         app-private exports need none of them. BATTERY_STATS is privileged. -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" tools:node="remove" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" tools:node="remove" />
+    <uses-permission android:name="android.permission.BATTERY_STATS" tools:node="remove" />
 
-    <!-- AndroidTV support -->
-    <uses-feature android:name="android.software.leanback" android:required="false" />
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
 
     <application
         android:icon="@mipmap/ic_launcher"
@@ -11,16 +15,22 @@
         android:theme="@style/Theme.app"
         android:usesCleartextTraffic="${usesCleartextTraffic}">
         <activity
-            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|fontScale|density|layoutDirection|navigation"
             android:launchMode="singleTask"
             android:label="@string/main_activity_title"
             android:name=".MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize"
+            android:enableOnBackInvokedCallback="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
-                <!-- AndroidTV support -->
-                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
             </intent-filter>
             <!-- DEEP LINK PLUGIN. AUTO-GENERATED. DO NOT REMOVE. -->
             <intent-filter >
@@ -41,9 +51,9 @@
                 <data android:scheme="https" />
                 <data android:scheme="http" />
                 <data android:host="macro.com" />
+                <data android:path="/app" />
                 
-                
-                <data android:pathPrefix="/app" />
+                <data android:pathPrefix="/app/" />
                 
             </intent-filter>
             <intent-filter android:autoVerify="true" >
@@ -53,9 +63,9 @@
                 <data android:scheme="https" />
                 <data android:scheme="http" />
                 <data android:host="dev.macro.com" />
+                <data android:path="/app" />
                 
-                
-                <data android:pathPrefix="/app" />
+                <data android:pathPrefix="/app/" />
                 
             </intent-filter>
             <intent-filter android:autoVerify="true" >
@@ -65,9 +75,9 @@
                 <data android:scheme="https" />
                 <data android:scheme="http" />
                 <data android:host="staging.macro.com" />
+                <data android:path="/app" />
                 
-                
-                <data android:pathPrefix="/app" />
+                <data android:pathPrefix="/app/" />
                 
             </intent-filter>
             <!-- DEEP LINK PLUGIN. AUTO-GENERATED. DO NOT REMOVE. -->

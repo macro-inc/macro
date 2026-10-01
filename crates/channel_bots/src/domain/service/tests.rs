@@ -98,6 +98,41 @@ fn expect_placeholder(api: &mut MockMessageServiceApi) {
 }
 
 #[tokio::test]
+async fn rejected_responses_never_call_the_provider_and_explicit_requests_show_the_failure() {
+    for failure in admission_failures() {
+        for trigger_kind in [BotTrigger::Mention, BotTrigger::Inferred] {
+            let trigger = message(1, None, "help with this");
+            let mut event = invocation(&trigger);
+            event.trigger = trigger_kind;
+            let mut api = MockMessageServiceApi::new();
+            configure_reads(&mut api, &trigger, thread(trigger.clone(), vec![]));
+            if trigger_kind == BotTrigger::Mention {
+                api.expect_post().once().returning(move |access, input| {
+                    assert_eq!(access.acting_user_id(), Some(&user()));
+                    assert!(input.content.contains(failure.code()));
+                    assert!(input.content.contains(&failure.to_string()));
+                    assert!(!input.content.contains(THINKING_MESSAGE));
+                    assert_eq!(
+                        input.notification_policy,
+                        PostMessageNotificationPolicy::Default
+                    );
+                    Ok(message(2, input.thread_id, &input.content))
+                });
+            }
+            let responder = responder("must not run");
+            let admission = Admission::new(Err(failure));
+            handler(api, Arc::new(Access::default()), responder.clone())
+                .with_admission(admission.clone())
+                .handle(&event)
+                .await
+                .expect("quota failures are handled, not redelivered");
+            assert!(responder.prompts.lock().unwrap().is_empty());
+            assert_eq!(admission.calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+        }
+    }
+}
+
+#[tokio::test]
 async fn document_invocation_reads_its_thread_and_delivers_a_bot_reply_with_comment_policy() {
     let root = message(1, None, "Selected paragraph discussion");
     let trigger = message(2, Some(root.id), "@macro explain this");
@@ -119,10 +154,13 @@ async fn document_invocation_reads_its_thread_and_delivers_a_bot_reply_with_comm
         ))
     });
     let responder = responder("the answer");
+    let admission = Admission::new(Ok(()));
     handler(api, Arc::new(Access::default()), responder.clone())
+        .with_admission(admission.clone())
         .handle(&invocation(&trigger))
         .await
         .unwrap();
+    assert_eq!(admission.calls.load(std::sync::atomic::Ordering::SeqCst), 1);
     let prompts = responder.prompts.lock().unwrap();
     assert!(prompts[0].contains("discussion-document"));
     assert!(prompts[0].contains("mentioned you (@macro) in a document discussion."));

@@ -18,6 +18,29 @@ fn config_values() -> Value {
 }
 
 #[test]
+fn ai_usage_enforcement_defaults_off_and_requires_a_boolean() {
+    let config: Config = serde_json::from_value(config_values()).unwrap();
+    assert_eq!(
+        config.enable_ai_usage_enforcement,
+        ai_usage::AiUsageEnforcement::Disabled
+    );
+    for (value, expected) in [
+        (false, ai_usage::AiUsageEnforcement::Disabled),
+        (true, ai_usage::AiUsageEnforcement::Enabled),
+    ] {
+        let mut values = config_values();
+        values["ENABLE_AI_USAGE_ENFORCEMENT"] = json!(value);
+        let config: Config = serde_json::from_value(values).unwrap();
+        assert_eq!(config.enable_ai_usage_enforcement, expected);
+    }
+    for value in [json!("enabled"), json!(1)] {
+        let mut values = config_values();
+        values["ENABLE_AI_USAGE_ENFORCEMENT"] = value;
+        assert!(serde_json::from_value::<Config>(values).is_err());
+    }
+}
+
+#[test]
 fn event_routines_default_off_and_reuse_existing_brokers() {
     let config: Config = serde_json::from_value(config_values()).unwrap();
     assert!(!config.event_routines_enabled);

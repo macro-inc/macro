@@ -315,6 +315,7 @@ export function TaskList(props: TaskListProps) {
       alternateDescription: 'Open in new split',
     },
     disclosure: {
+      isHeader: (row) => row.kind === 'group-header',
       getKey: (row) =>
         row.kind === 'section-header' ? undefined : row.groupId,
       isExpanded: isGroupExpanded,

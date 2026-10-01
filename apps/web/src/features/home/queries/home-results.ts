@@ -85,6 +85,9 @@ export function mergeHomeEntities(
       // Cache inserts from other users are not the viewer's own activity.
       ...recents
         .filter((entity) => homeTimestamp(entity.touchedAt) !== undefined)
+        // Activity is unfiltered. Only server-classified Signal emails may
+        // enter Home through this source, including cached/local search rows.
+        .filter((entity) => entity.type !== 'email' || entity.isSignal === true)
         .map((entity) => ({
           ...entity,
           sortTs: entity.touchedAt,

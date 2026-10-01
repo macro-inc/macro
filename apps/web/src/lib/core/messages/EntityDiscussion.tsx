@@ -49,6 +49,8 @@ function MobileMessageComposer(props: {
 export function EntityDiscussion(props: {
   parent: MessageParent;
   canWrite: boolean;
+  /** Delete comments the caller did not write. Document owners set this. */
+  canModerate?: boolean;
   /** Where copied message links open: the entity's block and id. */
   link: { type: string; id: string };
   label?: string;
@@ -106,6 +108,7 @@ export function EntityDiscussion(props: {
         <EntityConversation
           parent={props.parent}
           canWrite={props.canWrite}
+          canModerate={props.canModerate}
           targetId={commentId()}
           targetCleared={targetCleared()}
           onClearTarget={() => setClearedKey(scrollRequest()?.key)}

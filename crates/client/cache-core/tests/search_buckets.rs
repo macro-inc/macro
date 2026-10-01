@@ -278,6 +278,7 @@ fn optimistic_bucket_moves_overlay_borrowed_catalogs_through_settlement() {
                         operation_name: None,
                         variables: &variables,
                         data: &response,
+                        identity_bindings: &[],
                         link_patches: &[],
                         revalidations: &[],
                         created_at_ms: 1,

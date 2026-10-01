@@ -3,6 +3,7 @@ use chrono::Utc;
 use entity_access::domain::models::{AccessLevel, EntityAccessAuth};
 use std::sync::{Arc, Mutex};
 
+mod event_posts;
 mod initiative;
 
 #[derive(Clone)]
@@ -16,6 +17,7 @@ struct Repo {
     edits: Arc<Mutex<Vec<EditMessage>>>,
     reaction_changed: bool,
     file_type: Option<String>,
+    concurrent_create: bool,
 }
 
 impl Repo {
@@ -58,6 +60,9 @@ impl MessageRepository for Repo {
         Ok(true)
     }
     async fn get(&self, parent: &MessageParent, id: Uuid) -> Result<Option<Message>, MessageError> {
+        if self.concurrent_create && self.creates.lock().unwrap().is_empty() {
+            return Ok(None);
+        }
         let mut message = std::iter::once(&self.message)
             .chain(&self.replies)
             .find(|message| message.parent == *parent && message.id == id)
@@ -110,7 +115,12 @@ impl MessageRepository for Repo {
         })
     }
     async fn create(&self, command: CreateMessage) -> Result<Message, MessageError> {
+        if command.input.id == Some(self.message.id) {
+            self.creates.lock().unwrap().push(command);
+            return Err(MessageError::Conflict);
+        }
         let mut message = self.message.clone();
+        message.id = command.input.id.unwrap_or(message.id);
         message.parent = command.parent.clone();
         message.sender_id = command.actor.clone();
         message.content = command.input.content.clone();
@@ -243,6 +253,7 @@ fn fixture() -> Repo {
         edits: Arc::default(),
         reaction_changed: true,
         file_type: Some("md".into()),
+        concurrent_create: false,
     }
 }
 
@@ -445,6 +456,32 @@ async fn a_reply_author_can_delete_their_reply_but_not_the_root_above_it() {
         published[0].change,
         MessageChange::MessageDeleted { .. }
     ));
+}
+
+#[tokio::test]
+async fn document_owner_can_delete_another_authors_reply() {
+    let mut repo = fixture();
+    repo.replies = vec![reply_from(&repo.message, 7, "macro|other@example.com")];
+    let service = MessageService::new(repo.clone(), Events::default());
+    let denied = service
+        .delete(
+            access("macro|editor@example.com", "doc", AccessLevel::Edit),
+            repo.replies[0].id,
+            None,
+        )
+        .await;
+    assert!(matches!(denied, Err(MessageError::Forbidden)));
+    assert!(repo.deletes.lock().unwrap().is_empty());
+    service
+        .delete(
+            access("macro|owner@example.com", "doc", AccessLevel::Owner),
+            repo.replies[0].id,
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(*repo.deletes.lock().unwrap(), vec![repo.replies[0].id]);
+    assert!(repo.thread_deletes.lock().unwrap().is_empty());
 }
 
 #[tokio::test]

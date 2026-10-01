@@ -20,6 +20,7 @@ import {
   reminderDetailDestination,
   reminderDetailUrl,
 } from '@app/features/reminders/reminder-navigation';
+import { reminderSourceContent } from '@app/features/reminders/reminder-source';
 import { reviewsHostedContent } from '@app/features/reviews-view/reviews-hosted-content';
 import { withListNavigationSource } from '@app/features/soup/collection/list-navigation-source';
 import {
@@ -100,6 +101,7 @@ import {
 import { isTopLevelChannelNotification } from '@notifications/top-level-channel-notification';
 import { hydrateChannelNotificationSelection } from '@queries/channel/notification-selection';
 import { queryClient } from '@queries/client';
+import { updateEmailThreadLabel } from '@queries/email/cache-cleanup';
 import {
   archiveEmailThread,
   type EmailArchiveDisposition,
@@ -129,6 +131,10 @@ import {
   removeSoupEntitiesFromDoneFilteredQueries,
 } from '@queries/soup/cache';
 import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
+import {
+  type GraphqlSoupDoneOverlay,
+  hideGraphqlSoupEntitiesAsDone,
+} from '@queries/soup/graphql/optimistic-done';
 import { emailClient } from '@service-email/client';
 import { isAfter } from 'date-fns';
 import { match } from 'ts-pattern';
@@ -269,7 +275,15 @@ export const openEntityInNewTab = ({
   location ??= getRowClickFallbackLocation(entity);
   if (entity.type === 'reminder') {
     if (!isFeatureEnabled(enableReminders)) return;
-    openExternalUrl(reminderDetailUrl(entity.id));
+    const source = reminderSourceContent(entity);
+    openExternalUrl(
+      source
+        ? new URL(
+            `/app/${source.type}/${encodeURIComponent(source.id)}`,
+            window.location.origin
+          ).toString()
+        : reminderDetailUrl(entity.id)
+    );
     return;
   }
 
@@ -706,6 +720,26 @@ export const openEntityInSplitFromUnifiedList = async (
       sourceContent?.type === 'component' && isListViewID(sourceContent.id)
         ? sourceContent.id
         : undefined;
+    const source = reminderSourceContent(entity);
+    if (source) {
+      const hostedContent = driveHostedContent(source, {
+        allowDocuments: !isTouchDevice(),
+      });
+      const referredFrom = options.referredFrom ?? sourceListView;
+      let content = hostedContent ?? source;
+      if (splitHandle && referredFrom && isListViewID(referredFrom)) {
+        content = withListNavigationSource(content, splitHandle);
+      }
+      splitManager.openWithSplit(content, {
+        allowDuplicate: allowDuplicate || hostedContent !== undefined,
+        activate: true,
+        handle: splitHandle,
+        preferNewSplit: openInNewSplit,
+        mergeHistory,
+        referredFrom: options.referredFrom ?? sourceListView,
+      });
+      return;
+    }
     openReminderDetail(entity.id, {
       manager: splitManager,
       handle: splitHandle,
@@ -989,7 +1023,10 @@ function getEntitySplitContent(entity: EntityData) {
         return { type: 'contact' as const, id: entity.id };
       })
       .with({ type: 'reminder' }, (entity) => {
-        return reminderDetailDestination(entity.id).content;
+        return (
+          reminderSourceContent(entity) ??
+          reminderDetailDestination(entity.id).content
+        );
       })
       // Calendar events open the singleton Calendar application view; the open
       // path branches before reaching here, so this only serves duplicate checks.
@@ -1213,7 +1250,7 @@ export function trashEmails(targets: TrashEmailTarget[]): TrashEmailsHandle {
       const outcomes = await Promise.allSettled(
         ids.map((id, i) =>
           throwOnErr(() =>
-            emailClient.updateThreadLabel({
+            updateEmailThreadLabel({
               thread_id: id,
               label_id: labelIds[i]!,
               value: true,
@@ -1231,7 +1268,7 @@ export function trashEmails(targets: TrashEmailTarget[]): TrashEmailsHandle {
             outcomes[i]?.status === 'fulfilled'
               ? [
                   throwOnErr(() =>
-                    emailClient.updateThreadLabel({
+                    updateEmailThreadLabel({
                       thread_id: id,
                       label_id: labelIds[i]!,
                       value: false,
@@ -1280,7 +1317,7 @@ export function trashEmails(targets: TrashEmailTarget[]): TrashEmailsHandle {
             const labelId = threadTrashLabelIds.get(id);
             if (!labelId) return Promise.resolve();
             return throwOnErr(() =>
-              emailClient.updateThreadLabel({
+              updateEmailThreadLabel({
                 thread_id: id,
                 label_id: labelId,
                 value: false,
@@ -1467,6 +1504,7 @@ export function applyEntitiesDoneOptimistic(args: {
   };
 
   let soupTxn: ReturnType<typeof removeSoupEntities> | null = null;
+  let graphqlDone: GraphqlSoupDoneOverlay | null = null;
   let emailRowTxns: { rollback: () => void }[] = [];
   let reminderRowTxns: { rollback: () => void }[] = [];
   const completedStamp = new Date().toISOString();
@@ -1478,6 +1516,15 @@ export function applyEntitiesDoneOptimistic(args: {
     soupTxn =
       entityIds.length > 0
         ? removeSoupEntitiesFromDoneFilteredQueries(entityIdSet)
+        : null;
+    // GraphQL lists never read the REST caches patched here. The entity
+    // notification mutation waits for the server, and even the optimistic
+    // archive only drops a row after its durable enqueue and a list
+    // re-evaluation, so hide the rows locally until the cache catches up.
+    graphqlDone?.release();
+    graphqlDone =
+      entityIds.length > 0
+        ? hideGraphqlSoupEntitiesAsDone({ entityIds, notificationIds })
         : null;
     // Rows that remain visible flip to the done state.
     emailRowTxns = emailIds.map((id) =>
@@ -1512,6 +1559,8 @@ export function applyEntitiesDoneOptimistic(args: {
     emailRowTxns = [];
     soupTxn?.rollback();
     soupTxn = null;
+    graphqlDone?.release();
+    graphqlDone = null;
   };
 
   const rollback = () => {

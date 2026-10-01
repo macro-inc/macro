@@ -1,5 +1,5 @@
-import { Company } from '@companies/Company/Company';
-import { CrmCopyLinkButton } from '@companies/components/CrmCopyLinkButton';
+import { Company } from '@app/features/crm/crm-company';
+import { CrmCopyLinkButton } from '@app/features/crm/crm-link';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import { SplitHeaderRight } from '@components/app/split-layout/components/SplitHeader';
 import { useBlockId } from '@core/block';

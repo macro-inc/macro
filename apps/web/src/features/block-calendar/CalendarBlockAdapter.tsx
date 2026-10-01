@@ -87,7 +87,7 @@ function CalendarBlockAdapter(props: CalendarBlockProps) {
     const request = targetRequest();
     if (
       !request ||
-      occurrencesQuery.isLoading ||
+      !occurrencesQuery.isSuccess ||
       occurrencesQuery.isPlaceholderData
     ) {
       return undefined;

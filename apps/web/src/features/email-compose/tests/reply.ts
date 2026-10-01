@@ -27,7 +27,10 @@ export function mountReplyComposer(
         inboxes: composeContext.accounts.inboxes,
       },
       { type: 'replying_to', messageId: parent.db_id },
-      { getMessageById: () => parent, getDraftForMessageReply: () => undefined }
+      {
+        getMessageById: () => parent,
+        getDraftForMessageReply: () => callbacks.draft,
+      }
     );
     const state = createReplyComposer(
       {
@@ -56,6 +59,7 @@ export function mountReplyComposer(
     state.onContentChange('Ready to send');
     return {
       ...state,
+      editor,
       sendActionDisabled: createMemo(state.sendActionDisabled),
       dispose,
       edit(text: string) {

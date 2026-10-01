@@ -22,18 +22,8 @@ if [[ -n "$firebase_config" ]]; then
   [[ -f "$firebase_config" ]] || { echo "Firebase configuration file not found" >&2; exit 1; }
 fi
 
-firebase_environment=prod
-[[ "$action" != "dev" ]] || firebase_environment=dev
 firebase_destination=tauri/src-tauri/gen/android/app/google-services.json
-firebase_default="tauri/src-tauri/firebase/$firebase_environment/google-services.json"
-if [[ -z "$firebase_config" && -f "$firebase_default" ]]; then
-  firebase_config="$firebase_default"
-elif [[ -z "$firebase_config" && -f "$firebase_destination" ]]; then
-  firebase_config="$firebase_destination"
-fi
-if [[ -n "$firebase_config" ]]; then
-  bun scripts/android-firebase.ts "$action" "$firebase_config" "$firebase_destination"
-fi
+bun scripts/android-firebase.ts "$action" "${firebase_config:---doppler}" "$firebase_destination"
 
 if [[ "$(uname)" == "Darwin" ]]; then
   export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"

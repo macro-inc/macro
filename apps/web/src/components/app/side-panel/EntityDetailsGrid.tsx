@@ -1,6 +1,5 @@
-import { UserIcon } from '@core/component/UserIcon';
-import { getDisplayName, tryMacroId } from '@core/user';
 import { type DateValue, formatDate } from '@core/util/date';
+import { OwnerLabel } from '@entity/owner/owner-display';
 import ClockIcon from '@phosphor/clock.svg';
 import { type ParentProps, Show } from 'solid-js';
 import { SidePanel } from './SidePanel';
@@ -19,10 +18,7 @@ export function EntityDetailsGrid(
         {(owner) => (
           <SidePanel.Row label="Owner">
             <SidePanel.Pill>
-              <UserIcon id={owner()} size="sm" showTooltip suppressClick />
-              <span class="truncate">
-                {getDisplayName(tryMacroId(owner()))}
-              </span>
+              <OwnerLabel ownerId={owner()} suppressClick />
             </SidePanel.Pill>
           </SidePanel.Row>
         )}

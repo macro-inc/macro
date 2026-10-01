@@ -2862,6 +2862,85 @@ async fn a_refused_create_keeps_its_repository_and_carries_the_prompt_forward() 
     assert_eq!(follow_up, "thanks");
 }
 
+#[cfg(feature = "postgres")]
+struct RefusedChooser;
+
+#[cfg(feature = "postgres")]
+impl RepositoryChooser for RefusedChooser {
+    async fn choose(&self, _: &str, _: &Path) -> Result<SessionIntent, rootcause::Report> {
+        Err(
+            rootcause::report!(agent_session::domain::error::AiAdmissionError::Unavailable)
+                .into_dynamic(),
+        )
+    }
+}
+
+#[cfg(feature = "postgres")]
+#[tokio::test]
+async fn admission_refusal_is_typed_aborted_and_never_sent_to_cursor() {
+    use agent_session::domain::error::AiAdmissionError;
+    let cursor = FakeCursor::new();
+    let service = CursorSessionService::new(
+        cursor.clone(),
+        RecordingNotifier::new(),
+        RefusedChooser,
+        Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
+        NoArtifactStore,
+    );
+    let id = service.new_session(Path::new(""), vec![]);
+    for _ in 0..2 {
+        let error = service.prompt(&id, "do the thing").await.unwrap_err();
+        assert!(matches!(
+            error,
+            SessionError::Admission(AiAdmissionError::Unavailable)
+        ));
+        assert_eq!(error.to_string(), AiAdmissionError::Unavailable.to_string());
+    }
+    assert!(cursor.calls().is_empty());
+    let session = service.session(&id).unwrap();
+    let state = session.state.lock().unwrap();
+    assert!(
+        state.rejected_prompts.is_empty(),
+        "quota-refused work cannot hitch a ride on a later prompt"
+    );
+    assert!(state.intent.is_none());
+    assert_eq!(
+        state
+            .journal_entries
+            .iter()
+            .filter(|entry| matches!(entry.input, JournalInput::PromptAborted(_)))
+            .count(),
+        2
+    );
+}
+
+#[cfg(feature = "postgres")]
+#[tokio::test]
+async fn existing_cursor_agent_runs_even_when_macro_helper_admission_would_fail() {
+    let cursor = FakeCursor::new();
+    let service = CursorSessionService::new(
+        cursor.clone(),
+        RecordingNotifier::new(),
+        RefusedChooser,
+        Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
+        NoArtifactStore,
+    );
+    let id = SessionId::new("existing");
+    service.restore_session(id.clone(), Some(CursorAgentId::new("agent-existing")), None);
+    crate::testing::script_legacy_history(&cursor);
+    service.replay_session(&id).await.unwrap().complete();
+    let events = cursor.script_stream();
+    events.send(finished("run")).unwrap();
+    events.send(CursorEvent::Done).unwrap();
+    service.prompt(&id, "continue").await.unwrap();
+    assert!(
+        cursor
+            .calls()
+            .iter()
+            .any(|call| matches!(call, CursorCall::CreateRun(..)))
+    );
+}
+
 #[tokio::test]
 async fn repository_setup_failure_is_retryable_and_not_reported_as_prompt_ambiguity() {
     struct UnavailableChooser;

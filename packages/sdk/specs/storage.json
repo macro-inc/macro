@@ -1421,6 +1421,55 @@
         }
       }
     },
+    "/call/join/{token}/participants": {
+      "get": {
+        "tags": ["call::inbound::axum_router::meetings"],
+        "summary": "Read a standalone meeting preview without admitting a guest to the room.",
+        "operationId": "meeting_guest_participants",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeetingParticipants"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/call/meetings": {
       "get": {
         "tags": ["call::inbound::axum_router::meetings"],
@@ -1804,6 +1853,107 @@
             }
           },
           "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/call/meetings/join/{token}/participants": {
+      "get": {
+        "tags": ["call::inbound::axum_router::meetings"],
+        "summary": "Read the participant preview for an authenticated invitation holder.",
+        "operationId": "meeting_participants",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeetingParticipants"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/call/meetings/prepare": {
+      "post": {
+        "tags": ["call::inbound::axum_router::meetings"],
+        "summary": "Reserve a room while the authenticated caller configures a new call.",
+        "operationId": "meeting_prepare",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeetingPreparation"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/call/meetings/prepare/{preparation_id}": {
+      "delete": {
+        "tags": ["call::inbound::axum_router::meetings"],
+        "summary": "Cancel an unused room; the domain owns ownership and activation checks.",
+        "operationId": "meeting_cancel_preparation",
+        "parameters": [
+          {
+            "name": "preparation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
             "description": "",
             "content": {
               "application/json": {
@@ -14156,6 +14306,124 @@
         }
       }
     },
+    "/reminders/email/{thread_id}": {
+      "get": {
+        "tags": ["reminders"],
+        "summary": "Read an email follow-up and reconcile inbound reply cancellation.",
+        "operationId": "get_email_followup",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailFollowupResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["reminders"],
+        "summary": "Schedule, edit or remove one email follow-up as an idempotent operation.",
+        "operationId": "set_email_followup",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailFollowupCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailFollowup"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/reminders/{id}": {
       "get": {
         "tags": ["reminders"],
@@ -15890,6 +16158,21 @@
               "metadata": {
                 "$ref": "#/components/schemas/TurnEndedMetadata",
                 "description": "The runtime answered a turn."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An accepted command was refused before runtime execution.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["agent_session.command_rejected"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/CommandRejectedMetadata",
+                "description": "An accepted command was refused before runtime execution."
               }
             }
           },
@@ -20120,6 +20403,60 @@
           }
         }
       },
+      "CommandFailure": {
+        "type": "object",
+        "description": "Sanitized public details of a command refused before runtime execution.",
+        "required": ["code", "message", "retryable"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Stable public denial or unavailability code."
+          },
+          "message": {
+            "type": "string",
+            "description": "Public explanation, never an internal error report."
+          },
+          "retryable": {
+            "type": "boolean",
+            "description": "Whether retrying later may succeed without a policy change."
+          }
+        }
+      },
+      "CommandRejectedMetadata": {
+        "type": "object",
+        "description": "An accepted command was refused before it could start a runtime turn.",
+        "required": ["identity", "action_id", "failure"],
+        "properties": {
+          "action_id": {
+            "$ref": "#/components/schemas/AgentActionId",
+            "description": "The command that will not execute."
+          },
+          "actor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "Who submitted the command, if acting on a user's behalf."
+              }
+            ]
+          },
+          "announcement_message_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The command's thread announcement, when one was created."
+          },
+          "failure": {
+            "$ref": "#/components/schemas/CommandFailure",
+            "description": "Safe details for clients and downstream consumers."
+          },
+          "identity": {
+            "$ref": "#/components/schemas/SessionIdentity",
+            "description": "The session."
+          }
+        }
+      },
       "Comment": {
         "type": "object",
         "required": ["commentId", "threadId", "owner", "text"],
@@ -20903,6 +21240,11 @@
         "type": "object",
         "description": "Inputs for creating a meeting without starting its RTC room.",
         "properties": {
+          "preparationId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Optional unused room reserved by this actor on the setup screen."
+          },
           "scheduledEnd": {
             "type": ["string", "null"],
             "format": "date-time",
@@ -23518,6 +23860,136 @@
           }
         }
       },
+      "EmailFollowup": {
+        "type": "object",
+        "description": "Public status shown on email and in the Reminders editor.",
+        "required": [
+          "reminderId",
+          "threadId",
+          "linkId",
+          "condition",
+          "remindAt",
+          "revision",
+          "state"
+        ],
+        "properties": {
+          "condition": {
+            "$ref": "#/components/schemas/EmailReminderCondition",
+            "description": "Condition, defaulting to no reply for new follow-ups."
+          },
+          "linkId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Canonical owned/delegated inbox."
+          },
+          "remindAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Confirmed schedule."
+          },
+          "reminderId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Its ordinary reminder, used by the existing alert/management surfaces."
+          },
+          "revision": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Last accepted operation; edits/removal compare this to prevent stale undo."
+          },
+          "state": {
+            "$ref": "#/components/schemas/FollowupState",
+            "description": "Durable lifecycle progress."
+          },
+          "threadId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Conversation identity."
+          }
+        }
+      },
+      "EmailFollowupCommand": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Create or edit one follow-up. An edit requires the displayed revision.",
+            "required": ["operationId", "remindAt", "condition", "type"],
+            "properties": {
+              "condition": {
+                "$ref": "#/components/schemas/EmailReminderCondition",
+                "description": "Reply condition."
+              },
+              "expectedRevision": {
+                "type": ["string", "null"],
+                "format": "uuid",
+                "description": "None for creation, the current revision for edits."
+              },
+              "operationId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Unique request identity retained across network retries."
+              },
+              "remindAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "One future instant; conditional recurrence is deliberately absent."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["set"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Cancel and restore the conversation without leaving a future alert.",
+            "required": ["operationId", "expectedRevision", "type"],
+            "properties": {
+              "expectedRevision": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Reject removal if a newer edit has replaced this operation."
+              },
+              "operationId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Unique request identity."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["remove"]
+              },
+              "undo": {
+                "type": "boolean",
+                "description": "Undo restores original visibility; ordinary Remove returns to inbox."
+              }
+            }
+          }
+        ],
+        "description": "Idempotent email command. Reusing an operation ID with different data fails."
+      },
+      "EmailFollowupResponse": {
+        "type": "object",
+        "description": "Lookup response, including an email with no follow-up yet.",
+        "properties": {
+          "followup": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EmailFollowup",
+                "description": "Most recent specialized follow-up, if any."
+              }
+            ]
+          }
+        }
+      },
+      "EmailReminderCondition": {
+        "type": "string",
+        "description": "When an email follow-up should return the conversation.",
+        "enum": ["if_no_reply", "regardless"]
+      },
       "EmptyResponse": {
         "type": "object",
         "description": "Empty response is required due to custom fetch forcing `response.json()`"
@@ -24577,6 +25049,18 @@
             "description": "The sha of the file."
           }
         }
+      },
+      "FollowupState": {
+        "type": "string",
+        "description": "Durable progress of an email operation.",
+        "enum": [
+          "archiving",
+          "pending",
+          "returning",
+          "returned",
+          "cancelled",
+          "removed"
+        ]
       },
       "ForeignEntity": {
         "type": "object",
@@ -26316,6 +26800,52 @@
           "canInvite": {
             "type": "boolean",
             "description": "True for the owner of an uncancelled standalone meeting."
+          }
+        }
+      },
+      "MeetingParticipant": {
+        "type": "object",
+        "description": "Minimal waiting-room display data, without account identities or call content.",
+        "required": ["displayName"],
+        "properties": {
+          "avatarUrl": {
+            "type": ["string", "null"],
+            "description": "Profile image, when available for a Macro member."
+          },
+          "displayName": {
+            "type": "string",
+            "description": "Name displayed in the waiting room."
+          }
+        }
+      },
+      "MeetingParticipants": {
+        "type": "object",
+        "description": "People currently connected to a meeting's room.",
+        "required": ["participants"],
+        "properties": {
+          "participants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MeetingParticipant"
+            },
+            "description": "Human attendees only; transcription agents are excluded."
+          }
+        }
+      },
+      "MeetingPreparation": {
+        "type": "object",
+        "description": "An empty room reservation, not a started call or an invitation.",
+        "required": ["id", "expiresAt"],
+        "properties": {
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "After this deadline Start falls back to ordinary room creation."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Also the reserved RTC room's UUID and prospective call ID."
           }
         }
       },

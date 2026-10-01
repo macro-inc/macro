@@ -3,6 +3,7 @@ import {
   buildFlatSoupRows,
   buildGroupedSoupRows,
   createSearchState,
+  createSoupRowStore,
   createTagFacetContext,
   deduplicateSoupEntities,
   isSoupRowVisible,
@@ -218,60 +219,64 @@ export function useTasksDataSource(
     return results;
   }, []);
 
-  const rows = createMemo<SoupRow<TaskEntityWithProperties>[]>((previous) => {
-    if (
-      !search.isSearching() &&
-      (query.isLoading ||
-        (!options.taskIds && query.isPlaceholderData && previous.length > 0))
-    ) {
-      return previous;
-    }
-
-    const groups = search.isSearching() ? undefined : query.data?.groups;
-    const currentTasks = tasks();
-    if (!groups || state.groupBy === 'none') {
-      return buildFlatSoupRows(currentTasks);
-    }
-
-    const tasksById = new Map(currentTasks.map((task) => [task.id, task]));
-    const taskGroups: SoupGroup<TaskEntityWithProperties>[] = [];
-
-    for (const group of groups) {
-      const initialTasks = group.itemIds.flatMap((id) => {
-        const task = tasksById.get(id);
-        return task ? [task] : [];
-      });
-      const continuationTasks = continuations
-        .entities(group.key)
-        .filter(
-          (task) =>
-            (!options.taskIds || options.taskIds().includes(task.id)) &&
-            taskMatchesView(task, viewContext())
-        );
-      const entities = sortItems(
-        deduplicateSoupEntities([...initialTasks, ...continuationTasks]),
-        state.sort,
-        TASK_SORT_DEFINITIONS
-      );
-      const taskGroup: SoupGroup<TaskEntityWithProperties> = {
-        id: group.key,
-        label: group.label,
-        entities,
-        count: group.totalCount,
-      };
-
-      if (continuations.hasMore(group.key)) {
-        taskGroup.loadMore = {
-          scopeId: `tasks:${group.key}`,
-          isLoading: continuations.isLoading(group.key),
-        };
+  const builtRows = createMemo<SoupRow<TaskEntityWithProperties>[]>(
+    (previous) => {
+      if (
+        !search.isSearching() &&
+        (query.isLoading ||
+          (!options.taskIds && query.isPlaceholderData && previous.length > 0))
+      ) {
+        return previous;
       }
 
-      taskGroups.push(taskGroup);
-    }
+      const groups = search.isSearching() ? undefined : query.data?.groups;
+      const currentTasks = tasks();
+      if (!groups || state.groupBy === 'none') {
+        return buildFlatSoupRows(currentTasks);
+      }
 
-    return buildGroupedSoupRows(taskGroups);
-  }, []);
+      const tasksById = new Map(currentTasks.map((task) => [task.id, task]));
+      const taskGroups: SoupGroup<TaskEntityWithProperties>[] = [];
+
+      for (const group of groups) {
+        const initialTasks = group.itemIds.flatMap((id) => {
+          const task = tasksById.get(id);
+          return task ? [task] : [];
+        });
+        const continuationTasks = continuations
+          .entities(group.key)
+          .filter(
+            (task) =>
+              (!options.taskIds || options.taskIds().includes(task.id)) &&
+              taskMatchesView(task, viewContext())
+          );
+        const entities = sortItems(
+          deduplicateSoupEntities([...initialTasks, ...continuationTasks]),
+          state.sort,
+          TASK_SORT_DEFINITIONS
+        );
+        const taskGroup: SoupGroup<TaskEntityWithProperties> = {
+          id: group.key,
+          label: group.label,
+          entities,
+          count: group.totalCount,
+        };
+
+        if (continuations.hasMore(group.key)) {
+          taskGroup.loadMore = {
+            scopeId: `tasks:${group.key}`,
+            isLoading: continuations.isLoading(group.key),
+          };
+        }
+
+        taskGroups.push(taskGroup);
+      }
+
+      return buildGroupedSoupRows(taskGroups);
+    },
+    []
+  );
+  const rows = createSoupRowStore(builtRows);
 
   const items = createMemo(() => {
     if (options.enabled?.() === false) return [];

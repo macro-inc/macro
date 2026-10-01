@@ -130,6 +130,23 @@ describe('a block id that is already a session', () => {
 });
 
 describe('an id whose create is in flight', () => {
+  it('keeps initial context as a draft after startup without issuing a prompt', async () => {
+    const placeholder = startPendingSession({
+      initialInput: 'Document context ',
+    });
+    await createRoot(async (dispose) => {
+      const resolved = resolveSessionId(() => placeholder);
+      expect(resolved.initialInput()).toBe('Document context ');
+      expect(resolved.pendingPrompt()).toBeUndefined();
+      create.resolve?.();
+      await flush();
+      expect(resolved.initialInput()).toBe('Document context ');
+      expect(resolved.pending()).toBe(false);
+      expect(create.control).not.toHaveBeenCalled();
+      dispose();
+    });
+  });
+
   it('has no session until the create lands, then is that session', async () => {
     const placeholder = startPendingSession();
     await createRoot(async (dispose) => {

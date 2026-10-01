@@ -220,7 +220,9 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
         let content = if announcement.is_coding {
             self.lexical
                 .compose_agent_announcement(
-                    &announcement_reply_target(&announcement),
+                    (!announcement.reuse_origin_message)
+                        .then(|| announcement_reply_target(&announcement))
+                        .as_ref(),
                     &announcement_chip(&announcement),
                 )
                 .await
@@ -233,6 +235,23 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
                 .await
         }
         .map_err(|error| HarnessError::Announce(rootcause::report!(error).into()))?;
+        if announcement.reuse_origin_message {
+            self.messages
+                .patch(
+                    access,
+                    announcement.origin_message_id,
+                    MessagePatch {
+                        content: Some(content),
+                        notification_policy: PatchMessageNotificationPolicy::Default,
+                        ..Default::default()
+                    },
+                )
+                .await
+                .map_err(|error| HarnessError::Announce(rootcause::report!(error).into()))?;
+            return Ok(AnnouncedMessage {
+                message_id: announcement.origin_message_id,
+            });
+        }
         let posted = self
             .messages
             .post(
@@ -319,6 +338,21 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
             .compose_agent_connection_prompt(&connection_prompt(declined.blocker))
             .await
             .map_err(|error| HarnessError::Announce(rootcause::report!(error).into()))?;
+        if declined.origin.reuse_origin_message {
+            self.messages
+                .patch(
+                    access,
+                    declined.origin.message_id,
+                    MessagePatch {
+                        content: Some(content),
+                        notification_policy: PatchMessageNotificationPolicy::NotifyAsPostedMessage,
+                        ..Default::default()
+                    },
+                )
+                .await
+                .map_err(|error| HarnessError::Announce(rootcause::report!(error).into()))?;
+            return Ok(());
+        }
         self.messages
             .post(
                 access,

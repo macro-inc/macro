@@ -215,6 +215,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tauri-plugin-android-auth",
+ "tauri-plugin-android-mobile",
  "tauri-plugin-android-push",
  "tauri-plugin-auth",
  "tauri-plugin-call-kit",
@@ -232,7 +233,6 @@ dependencies = [
  "tauri-plugin-os",
  "tauri-plugin-pasteboard",
  "tauri-plugin-photo-library",
- "tauri-plugin-safe-area-insets",
  "tauri-plugin-single-instance",
  "tauri-plugin-virtual-keyboard",
  "tauri-plugin-websocket",
@@ -6576,6 +6576,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "tauri-plugin-android-mobile"
+version = "0.1.0"
+dependencies = [
+ "tauri",
+ "tauri-plugin",
+]
+
+[[package]]
 name = "tauri-plugin-android-push"
 version = "0.1.0"
 dependencies = [
@@ -6842,18 +6850,6 @@ dependencies = [
  "staged_upload_constants",
  "tauri",
  "tauri-plugin",
-]
-
-[[package]]
-name = "tauri-plugin-safe-area-insets"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "653b425316a0e9563995286eb5b0fa44490583486b7a0925859b33ec5be07f0e"
-dependencies = [
- "serde",
- "tauri",
- "tauri-plugin",
- "thiserror 2.0.18",
 ]
 
 [[package]]

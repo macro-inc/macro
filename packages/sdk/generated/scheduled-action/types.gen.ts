@@ -82,6 +82,21 @@ export type AgentTaskAgent = {
 };
 
 /**
+ * Public admission error payload. Handlers with additional fields can reuse the
+ * domain error's code and message and [`admission_status`].
+ */
+export type AiAdmissionErrorBody = {
+    /**
+     * Stable denial or unavailability code.
+     */
+    code: string;
+    /**
+     * Human-readable explanation, without internal billing diagnostics.
+     */
+    error: string;
+};
+
+/**
  * Exactly one representation is accepted, even if mixed fields agree or are null.
  */
 export type CreateScheduledAction = ActionConfiguration | LegacyActionConfiguration;
@@ -418,12 +433,20 @@ export type ExecuteScheduledActionNowData = {
 export type ExecuteScheduledActionNowErrors = {
     400: string;
     401: string;
+    /**
+     * AI allowance exhausted
+     */
+    402: AiAdmissionErrorBody;
     404: string;
     /**
      * Action is already running
      */
     409: string;
     500: string;
+    /**
+     * AI usage validation unavailable; retry later
+     */
+    503: AiAdmissionErrorBody;
 };
 
 export type ExecuteScheduledActionNowError = ExecuteScheduledActionNowErrors[keyof ExecuteScheduledActionNowErrors];

@@ -1,7 +1,7 @@
 query Soup($input: SoupInput!) {
 	user {
 		id
-		emailLinks @cacheOnly { id emailAddress photoUrl }
+		emailLinks @cacheOnly { ...MailAccountFields }
 		soup(input: $input) {
 			items {
 				...SoupItemFields
@@ -14,7 +14,7 @@ query Soup($input: SoupInput!) {
 query SoupBackfill($input: SoupInput!) {
 	user {
 		id @cacheOnly
-		emailLinks @cacheOnly { id emailAddress photoUrl }
+		emailLinks @cacheOnly { ...MailAccountFields }
 		soup(input: $input) {
 			items @cacheOnly {
 				...SoupItemFields
@@ -38,7 +38,7 @@ query SoupBackfill($input: SoupInput!) {
 query SoupMailBackfill($input: SoupInput!) {
 	user {
 		id @cacheOnly
-		emailLinks @cacheOnly { id emailAddress photoUrl }
+		emailLinks @cacheOnly { ...MailAccountFields }
 		soup(input: $input) {
 			items @cacheOnly { ...SoupItemFields }
 			nextCursor
@@ -49,7 +49,7 @@ query SoupMailBackfill($input: SoupInput!) {
 query SoupSharedMailBackfill($input: SoupInput!) {
 	user {
 		id @cacheOnly
-		emailLinks @cacheOnly { id emailAddress photoUrl }
+		emailLinks @cacheOnly { ...MailAccountFields }
 		soup(input: $input) {
 			items @cacheOnly { ...SoupItemFields }
 			scopeIds: items { __typename id }
@@ -61,7 +61,7 @@ query SoupSharedMailBackfill($input: SoupInput!) {
 query MailAccounts {
 	user {
 		id
-		emailLinks { id emailAddress photoUrl }
+		emailLinks { ...MailAccountFields }
 	}
 }
 
@@ -80,7 +80,8 @@ fragment MailPreviewFields on GraphqlMailPreviewMessage {
 fragment MailItemFields on GraphqlSoupEntity {
 	...SoupItemFields
 	... on GraphqlSoupEmailThread {
-		mailAllPreview { ...MailPreviewFields }
+		mailDraftState { ...EmailDraftStateFields }
+        mailAllPreview { ...MailPreviewFields }
 		mailDraftPreview { ...MailPreviewFields }
 		mailSentPreview { ...MailPreviewFields }
 	}
@@ -184,7 +185,8 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 		inboxVisible
 		linkId
 		latestInboundMessageTs
-		mailAllPreview @cacheOnly { ...MailPreviewFields }
+		mailDraftState @cacheOnly { ...EmailDraftStateFields }
+        mailAllPreview @cacheOnly { ...MailPreviewFields }
 		mailDraftPreview @cacheOnly { ...MailPreviewFields }
 		mailSentPreview @cacheOnly { ...MailPreviewFields }
 		emailName: name
@@ -756,4 +758,15 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 		agentSessionMentionedMentionedBy: mentionedBy
 		agentSessionMentionedActionId: actionId
 	}
+}
+
+fragment MailAccountFields on GraphqlEmailLink {
+  id
+  macroId
+  emailAddress
+  photoUrl
+  isPrimary
+  needsReauth
+  draftIsSignal
+  settings { signature signatureOnRepliesForwards }
 }

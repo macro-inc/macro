@@ -129,6 +129,7 @@ export function ProjectsCollection(props: {
       alternateDescription: 'Open project in new split',
     },
     disclosure: {
+      isHeader: (row) => row.kind === 'group-header',
       getKey: (row) =>
         row.kind === 'section-header' ? undefined : row.groupId,
       isExpanded: collection.disclosure.isExpanded,

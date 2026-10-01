@@ -1,9 +1,6 @@
 import { useViewShell, ViewShell } from '@app/components/view-shell';
 import { CopyAvailabilityButton } from '@app/features/calendar/availability/CopyAvailabilityButton';
-import {
-  type CalendarPageId,
-  useCalendarPager,
-} from '@app/features/calendar/components/CalendarPagerContext';
+import { useCalendarPager } from '@app/features/calendar/components/CalendarPagerContext';
 import { CalendarSettingsDropdown } from '@app/features/calendar/components/CalendarSettingsDropdown';
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
 import { MonthDrawer } from '@app/features/calendar/components/MonthDrawer';
@@ -28,7 +25,6 @@ import ListIcon from '@phosphor/list.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, cn } from '@ui';
-import { usePager } from '@ui/components/Pager';
 import { tourTarget } from '@ui/components/Tour';
 import {
   createMemo,
@@ -85,7 +81,6 @@ export function Header(props: { presentation: 'workspace' | 'preview' }) {
   // PreviewFrame owns its own top bar and may sit inside another view shell.
   const shell = props.presentation === 'workspace' ? useViewShell() : undefined;
   const calendarPager = useCalendarPager();
-  const pager = usePager<CalendarPageId>();
   const calendarView = useCalendarView();
   const initialDate = new Date();
   const [headerElement, setHeaderElement] = createSignal<HTMLElement>();
@@ -146,13 +141,13 @@ export function Header(props: { presentation: 'workspace' | 'preview' }) {
   useCalendarHotkeys({
     scopeId: panel.splitHotkeyScope,
     changeView: calendarPager.changeView,
-    previousPeriod: pager.previous,
-    nextPeriod: pager.next,
+    previousPeriod: calendarPager.previousPeriod,
+    nextPeriod: calendarPager.nextPeriod,
     navigateToToday: calendarPager.navigateToToday,
   });
 
   const currentDate = createMemo(
-    () => calendarPager.activeDateInfo()?.view.calendar.getDate() ?? initialDate
+    () => calendarPager.navigationDate() ?? initialDate
   );
   const dateTitle = createMemo(() => formatMonthTitle(currentDate()));
   const periodLabel = createMemo(() =>
@@ -201,7 +196,7 @@ export function Header(props: { presentation: 'workspace' | 'preview' }) {
       class="border-transparent bg-transparent"
       label={`Previous ${periodLabel()}`}
       hotkey={TOKENS.calendar.period.previous}
-      onClick={() => void pager.previous()}
+      onClick={calendarPager.previousPeriod}
     >
       <CaretLeftIcon class="size-5" />
     </Button>
@@ -213,7 +208,7 @@ export function Header(props: { presentation: 'workspace' | 'preview' }) {
       class="border-transparent bg-transparent"
       label={`Next ${periodLabel()}`}
       hotkey={TOKENS.calendar.period.next}
-      onClick={() => void pager.next()}
+      onClick={calendarPager.nextPeriod}
     >
       <CaretRightIcon class="size-5" />
     </Button>

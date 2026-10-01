@@ -190,12 +190,27 @@ export function SplitPanel(props: SplitPanelProps) {
       }}
     >
       <Suspense fallback={<ContentLoading />}>
-        <SoupViewContextProvider soup={nextSoup}>
+        <Show
+          when={
+            props.split.mount.kind === 'component' &&
+            props.split.mount.meta.ownsCollectionState
+          }
+          fallback={
+            <SoupViewContextProvider soup={nextSoup}>
+              <SplitRouter.Outlet
+                splitId={props.handle.id}
+                fallback={() => (
+                  <Dynamic component={props.split.mount.element} />
+                )}
+              />
+            </SoupViewContextProvider>
+          }
+        >
           <SplitRouter.Outlet
             splitId={props.handle.id}
             fallback={() => <Dynamic component={props.split.mount.element} />}
           />
-        </SoupViewContextProvider>
+        </Show>
       </Suspense>
     </SplitPanelControllerProvider>
   );

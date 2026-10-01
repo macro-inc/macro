@@ -1022,6 +1022,8 @@ enum GraphqlChannelThreadLiteral {
     Participant(String),
     /// Exact notification state for the requester.
     NotificationState(GraphqlNotificationState),
+    /// Whether the thread has at least one undeleted reply.
+    HasReplies(bool),
 }
 
 impl IntoFilterExpr<ChannelThreadLiteral> for GraphqlChannelThreadLiteral {
@@ -1037,6 +1039,7 @@ impl IntoFilterExpr<ChannelThreadLiteral> for GraphqlChannelThreadLiteral {
                 ChannelThreadLiteral::Participant(parse_macro_user_id(participant, "participant")?)
             }
             Self::NotificationState(state) => ChannelThreadLiteral::NotificationState(state.into()),
+            Self::HasReplies(has_replies) => ChannelThreadLiteral::HasReplies(has_replies),
         };
         Ok(Expr::val(literal))
     }

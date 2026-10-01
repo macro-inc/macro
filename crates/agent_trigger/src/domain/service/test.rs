@@ -1,5 +1,9 @@
 use super::*;
 
+#[cfg(feature = "admission")]
+mod admission;
+mod task_assignment;
+
 use agent_session::domain::error::AgentSessionError;
 use agent_session::domain::model::{AgentSession, AgentSessionId, SessionStatus, ThreadSession};
 use agent_session::domain::ports::MockAgentSessionRepo;

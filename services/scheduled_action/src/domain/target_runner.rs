@@ -49,6 +49,9 @@ impl<Model: ScheduledAgentRunner, Sessions: RoutineSessions> ScheduledAgentRunne
         let task = task(action)?;
         let (bot_id, model) = match task.resolve_target()? {
             ResolvedTaskTarget::Model { .. } => return self.model.prepare(action, handle).await,
+            // The session/harness service owns funding classification and gates
+            // managed work before provisioning; external targets are not charged
+            // as scheduler-owned model execution.
             ResolvedTaskTarget::Agent { bot_id, model } => (bot_id, model),
         };
         let identity = session_action(action, handle, bot_id)?;
@@ -69,6 +72,9 @@ impl<Model: ScheduledAgentRunner, Sessions: RoutineSessions> ScheduledAgentRunne
                 Ok(())
             }
             Ok(_) => Err(RoutineSessionError::SessionMismatch.into()),
+            // A definitive admission refusal created no session. Preserve the
+            // shared type for HTTP mapping and resource-free executor cleanup.
+            Err(RoutineSessionError::Admission(error)) => Err(error.into()),
             Err(error) => {
                 // ModelMismatch proves the requested owner/session was established.
                 // Other ambiguous failures may have persisted it too; a safe,

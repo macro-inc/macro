@@ -816,26 +816,7 @@ impl Storage for TursoStorage {
                 return Ok(Vec::new());
             }
             let connection = self.connection();
-            driver::read_transaction(&connection, || {
-                let mut statement = driver::prepare(&connection, RECORD_GET)?;
-                let mut records = Vec::with_capacity(keys.len());
-                for key in &keys {
-                    let rows = driver::query_prepared(
-                        &mut statement,
-                        vec![text(&key.typename), text(&key.id)],
-                    )?;
-                    match rows.as_slice() {
-                        [] => records.push(None),
-                        [row] => {
-                            records.push(Some(decode_record(&required_blob(row, 0)?).map_err(
-                                |_| TursoStorageError::reset(PhysicalResetReason::Codec),
-                            )?))
-                        }
-                        _ => return Err(invariant()),
-                    }
-                }
-                Ok(records)
-            })
+            driver::read_transaction(&connection, || record_batch::read(&connection, &keys))
         })();
         self.latch_result(result)
     }
@@ -1027,14 +1008,19 @@ impl Storage for TursoStorage {
                 }
                 let collision = driver::query(
                     &connection,
-                    "SELECT id, lease_expires_at_ms FROM mutation_queue WHERE uuid = ?1 AND superseded = 0",
+                    "SELECT m.id, m.lease_expires_at_ms, m.attempt_count, o.optimistic_data_json FROM mutation_queue m JOIN optimistic_layers o ON o.mutation_id = m.id WHERE m.uuid = ?1 AND m.superseded = 0",
                     vec![text(&entry.uuid.to_string())],
                 )?;
                 let kind = match collision.as_slice() {
                     [] => MutationUpsertKind::Inserted,
-                    [row] if row.len() == 2 => {
+                    [row] if row.len() == 4 => {
                         let existing = mutation_id_from_row(required_i64(row, 0)?)?;
-                        if nullable_i64(row, 1)?.is_some_and(|expiry| expiry > now_ms) {
+                        if cache_core::queue::collision_stays_active(
+                            nullable_i64(row, 1)?,
+                            now_ms,
+                            required_i64(row, 2)? > 0,
+                            &required_text(row, 3)?,
+                        ) {
                             require_changed(
                                 driver::execute(
                                     &connection,
@@ -1482,21 +1468,20 @@ impl PredicateIndexStorage for TursoStorage {
             let optimistic = optimistic_query_status(&connection, query)?;
             // Incomplete authority and unknown shadows are not candidates, but
             // they must not prevent unrelated known-good rows from updating.
-            let (sql, parameters) =
-                compile_predicate_selection(query, &optimistic.uncertain_ids, true);
-            let candidates = driver::query(&connection, &sql, parameters)?
-                .into_iter()
-                .map(|row| {
-                    if row.len() != 2 {
-                        return Err(invariant());
-                    }
-                    Ok(predicate_index::ReferenceHit {
-                        record_key: PredicateRecordKey::new(required_text(&row, 0)?)
-                            .map_err(|_| invariant())?,
-                        sort_value: required_i64(&row, 1)?,
+            let candidates =
+                bounded_selection::select(&connection, query, &optimistic.uncertain_ids, true)?
+                    .into_iter()
+                    .map(|row| {
+                        if row.len() != 2 {
+                            return Err(invariant());
+                        }
+                        Ok(predicate_index::ReferenceHit {
+                            record_key: PredicateRecordKey::new(required_text(&row, 0)?)
+                                .map_err(|_| invariant())?,
+                            sort_value: required_i64(&row, 1)?,
+                        })
                     })
-                })
-                .collect::<Result<Vec<_>, TursoStorageError>>()?;
+                    .collect::<Result<Vec<_>, TursoStorageError>>()?;
             let keys: Vec<_> = baseline
                 .iter()
                 .map(|entry| entry.record_key.clone())
@@ -1594,8 +1579,7 @@ impl PredicateIndexStorage for TursoStorage {
             if optimistic.incomplete {
                 return Ok(PredicateQueryResult::Incomplete);
             }
-            let (sql, parameters) = compile_predicate_sql(query);
-            let rows = driver::query(&connection, &sql, parameters)?;
+            let rows = bounded_selection::select(&connection, query, &[], false)?;
             let mut keys = Vec::with_capacity(rows.len());
             for row in rows {
                 if row.len() != 1 {
@@ -4966,9 +4950,11 @@ impl TursoStorage {
 }
 
 mod alternatives;
+mod bounded_selection;
 mod conjunction;
 mod integrity;
 mod page_retention;
+mod record_batch;
 
 #[cfg(all(test, target_arch = "wasm32"))]
 mod browser_test;

@@ -125,6 +125,19 @@ fn build_room_composite_egress_request(
 
 impl CallRtcClient for LivekitRtcClient {
     #[tracing::instrument(err, skip(self))]
+    async fn prepare_room(&self, room_name: &str) -> anyhow::Result<()> {
+        self.room_client
+            .create_room(
+                room_name,
+                CreateRoomOptions {
+                    empty_timeout: 300,
+                    ..Default::default()
+                },
+            )
+            .await?;
+        Ok(())
+    }
+    #[tracing::instrument(err, skip(self))]
     async fn create_room(&self, room_name: &str) -> anyhow::Result<()> {
         self.room_client
             .create_room(
@@ -269,20 +282,41 @@ impl CallRtcClient for LivekitRtcClient {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn list_participant_identities(
+    async fn list_meeting_participants(
         &self,
         room_name: &str,
-    ) -> anyhow::Result<Option<Vec<String>>> {
+    ) -> anyhow::Result<Option<Vec<crate::domain::meetings::MeetingRtcParticipant>>> {
         match self.room_client.list_participants(room_name).await {
             Ok(participants) => Ok(Some(
                 participants
                     .into_iter()
-                    .map(|participant| participant.identity)
+                    .map(
+                        |participant| crate::domain::meetings::MeetingRtcParticipant {
+                            identity: participant.identity,
+                            name: participant.name,
+                        },
+                    )
                     .collect(),
             )),
             Err(error) if is_not_found(&error) => Ok(None),
             Err(error) => Err(error.into()),
         }
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn list_participant_identities(
+        &self,
+        room_name: &str,
+    ) -> anyhow::Result<Option<Vec<String>>> {
+        Ok(self
+            .list_meeting_participants(room_name)
+            .await?
+            .map(|participants| {
+                participants
+                    .into_iter()
+                    .map(|participant| participant.identity)
+                    .collect()
+            }))
     }
 
     #[tracing::instrument(err, skip(self, s3_config))]
