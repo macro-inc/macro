@@ -580,6 +580,10 @@ preview replies per thread. Expand a thread to load its replies;
 `Load earlier comments` pages backward. Live updates preserve unsent replies
 and edits while updating the surrounding thread.
 
+Discussion and comment headers include the date for older messages (for example,
+`Yesterday at 4:37 PM` or `09/24/26 at 4:37 PM`). Regular channel timelines retain
+their date dividers and time-only message headers.
+
 When verifying `@` mentions, compare the same person query in the document body
 and the Discussion composer: shared contacts use the same recent-interaction
 ranking. The desktop menu keeps up to three People results visible while other
