@@ -2708,12 +2708,14 @@ async fn get_call_participants_with_team_members_returns_distinct_users(
 
 // -- get_call_record_people ---------------------------------------------------
 
+/// Inserts an hour-long event starting at `starts_at` and returns its id.
 async fn insert_calendar_event_with_attendees(
     pool: &Pool<Postgres>,
     owner_id: &str,
     location: &str,
+    starts_at: &str,
     attendees: &[&str],
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Uuid> {
     let link_id = Uuid::now_v7();
     sqlx::query(
         r#"
@@ -2732,13 +2734,17 @@ async fn insert_calendar_event_with_attendees(
             id, owner_id, source_link_id, ical_uid, title, location,
             canonical_source_kind, starts_at, ends_at
         )
-        VALUES ($1, $2, $3, $1::text, 'Intro', $4, 'google', now(), now() + interval '1 hour')
+        VALUES (
+            $1, $2, $3, $1::text, 'Intro', $4, 'google',
+            $5::timestamptz, $5::timestamptz + interval '1 hour'
+        )
         "#,
     )
     .bind(event_id)
     .bind(owner_id)
     .bind(link_id)
     .bind(location)
+    .bind(starts_at)
     .execute(pool)
     .await?;
     for email in attendees {
@@ -2748,7 +2754,7 @@ async fn insert_calendar_event_with_attendees(
             .execute(pool)
             .await?;
     }
-    Ok(())
+    Ok(event_id)
 }
 
 #[sqlx::test(
@@ -2817,25 +2823,56 @@ async fn get_call_record_people_includes_meeting_owner_and_calendar_invitees(
         .bind(CALL_ARCHIVED)
         .execute(&pool)
         .await?;
+    // The fixture's archived call ran 2024-01-01 10:00-10:05.
+    const LINK: &str = "https://macro.com/app/meet/join/tok-crm-link";
     insert_calendar_event_with_attendees(
         &pool,
         USER_C.deref().as_ref(),
-        "https://macro.com/app/meet/join/tok-crm-link",
+        LINK,
+        "2024-01-01 10:00:00+00",
         &["Ext@Acme.com", "user-c@test.com"],
     )
     .await?;
-    // The owner's events without the link and other owners' copies are ignored.
+    // A weekly series started earlier, whose occurrence overlaps the call.
+    let series = insert_calendar_event_with_attendees(
+        &pool,
+        USER_C.deref().as_ref(),
+        LINK,
+        "2023-12-04 10:00:00+00",
+        &["weekly@initech.com"],
+    )
+    .await?;
+    sqlx::query(
+        r#"INSERT INTO calendar_event_occurrences (event_id, owner_id, occurrence_key, starts_at, ends_at)
+           VALUES ($1, $2, 'weekly-2024-01-01', '2024-01-01 09:30:00+00', '2024-01-01 10:30:00+00')"#,
+    )
+    .bind(series)
+    .bind(USER_C.deref().as_ref())
+    .execute(&pool)
+    .await?;
+    // The same reused link at another time, the owner's events without the
+    // link, and other owners' copies are ignored.
+    insert_calendar_event_with_attendees(
+        &pool,
+        USER_C.deref().as_ref(),
+        LINK,
+        "2024-01-08 10:00:00+00",
+        &["later@globex.com"],
+    )
+    .await?;
     insert_calendar_event_with_attendees(
         &pool,
         USER_C.deref().as_ref(),
         "Room 1",
+        "2024-01-01 10:00:00+00",
         &["other@acme.com"],
     )
     .await?;
     insert_calendar_event_with_attendees(
         &pool,
         USER_D.deref().as_ref(),
-        "https://macro.com/app/meet/join/tok-crm-link",
+        LINK,
+        "2024-01-01 10:00:00+00",
         &["stranger@acme.com"],
     )
     .await?;
@@ -2854,7 +2891,10 @@ async fn get_call_record_people_includes_meeting_owner_and_calendar_invitees(
     );
     let mut invitee_emails = people.invitee_emails;
     invitee_emails.sort();
-    assert_eq!(invitee_emails, vec!["ext@acme.com", "user-c@test.com"]);
+    assert_eq!(
+        invitee_emails,
+        vec!["ext@acme.com", "user-c@test.com", "weekly@initech.com"]
+    );
     Ok(())
 }
 

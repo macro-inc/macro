@@ -2,7 +2,8 @@
 -- on them. New records are linked when they are archived by
 -- crm::outbound::call_link::PgCallCrmLinker; this applies the same rules:
 -- people are the Macro participants, the meeting owner, and the invitees of
--- the owner's calendar event carrying the meeting link; matches come from the
+-- the owner's calendar event carrying the meeting link (the event, or one of
+-- its occurrences, overlapping the call); matches come from the
 -- CRMs of those accounts' teams (CRM enabled), never match the team's own
 -- members, and skip hidden records. Existing values are left unchanged.
 WITH accounts AS (
@@ -22,9 +23,22 @@ emails AS (
     JOIN call_meetings m ON m.id = cr.meeting_id
     JOIN calendar_events e ON e.owner_id = m.user_id
     JOIN calendar_event_attendees a ON a.event_id = e.id
-    WHERE STRPOS(e.location, m.share_token) > 0
-       OR STRPOS(e.description, m.share_token) > 0
-       OR STRPOS(e.conference_url, m.share_token) > 0
+    WHERE (
+            STRPOS(e.location, m.share_token) > 0
+            OR STRPOS(e.description, m.share_token) > 0
+            OR STRPOS(e.conference_url, m.share_token) > 0
+        )
+      AND (
+            (e.starts_at IS NOT NULL
+                AND tstzrange(e.starts_at, e.ends_at) && tstzrange(cr.started_at, cr.ended_at))
+            OR EXISTS (
+                SELECT 1 FROM calendar_event_occurrences o
+                WHERE o.event_id = e.id
+                  AND o.owner_id = e.owner_id
+                  AND NOT o.is_cancelled
+                  AND o.timed_span && tstzrange(cr.started_at, cr.ended_at)
+            )
+        )
 ),
 teams AS (
     SELECT DISTINCT a.call_record_id, tu.team_id
