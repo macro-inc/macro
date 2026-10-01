@@ -30,6 +30,7 @@ import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { useTagsQuery } from '@queries/properties/tags';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
+import type { TagScope } from '@service-properties/generated/schemas/tagScope';
 import { Badge, Button, Layer } from '@ui';
 import { cn } from '@ui/utils/classname';
 import {
@@ -82,6 +83,8 @@ export interface EntityTagsSectionProps {
   entityType: EntityType;
   canEdit: boolean;
   order?: number;
+  /** Tag sets the section shows and offers; defaults to personal and team. */
+  tagScopes?: readonly TagScope[];
 }
 
 export function EntityTagsSection(props: EntityTagsSectionProps) {
@@ -104,6 +107,7 @@ export function EntityTagsSection(props: EntityTagsSectionProps) {
                 entityType={props.entityType}
                 canEdit={props.canEdit}
                 triggerVariant="pill"
+                scopes={props.tagScopes}
               />
             </div>
           </Suspense>

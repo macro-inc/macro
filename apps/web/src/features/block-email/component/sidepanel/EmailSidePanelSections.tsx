@@ -8,7 +8,11 @@ import { SidePanel } from '@components/app/side-panel';
 import { References } from '@core/component/References';
 import { queryReadyGate } from '@queries/gate';
 import { useAttachmentReferencesQuery } from '@queries/storage/attachment-references';
+import type { TagScope } from '@service-properties/generated/schemas/tagScope';
 import { Show, Suspense } from 'solid-js';
+
+// Email is personal, so only the reader's own tags belong in its side panel.
+const EMAIL_TAG_SCOPES: readonly TagScope[] = ['user'];
 
 interface EmailSidePanelSectionsProps {
   threadId: string;
@@ -26,6 +30,7 @@ export function EmailSidePanelSections(props: EmailSidePanelSectionsProps) {
         entityType="THREAD"
         canEdit={canEdit()}
         order={20}
+        tagScopes={EMAIL_TAG_SCOPES}
       />
       <SidePanel.Section
         id="properties"

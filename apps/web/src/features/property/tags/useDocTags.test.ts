@@ -156,3 +156,92 @@ describe('tag assignment identity', () => {
     }
   );
 });
+
+describe('scoped tag sets', () => {
+  const teamDefinition: PropertyDefinitionDetailResponse = {
+    ...definition,
+    id: 'team-tag-def',
+    scope: 'team',
+    team_id: 'team-1',
+  };
+  const teamProperty: Property = {
+    ...property,
+    propertyId: 'assignment-2',
+    propertyDefinitionId: teamDefinition.id,
+    value: ['shared'],
+  };
+
+  beforeEach(() => {
+    mocks.properties.mockReturnValue([property, teamProperty]);
+    mocks.tagSets.mockReturnValue([
+      ...mocks.tagSets(),
+      {
+        scope: 'team',
+        definition: teamDefinition,
+        options: [
+          {
+            id: 'shared',
+            propertyDefinitionId: teamDefinition.id,
+            displayOrder: 0,
+            value: { type: 'string', value: 'shared' },
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('shows every scope by default', () => {
+    const tags = createRoot((cleanup) => {
+      dispose = cleanup;
+      return useDocTags('thread-1', 'THREAD');
+    });
+
+    expect(tags.scopes).toEqual(['user', 'team']);
+    expect(tags.tagSets().map((set) => set.scope)).toEqual(['user', 'team']);
+    expect(tags.appliedTags().map((tag) => tag.optionId)).toEqual([
+      'cool',
+      'shared',
+    ]);
+  });
+
+  it('hides team tags and their set when limited to personal tags', () => {
+    const tags = createRoot((cleanup) => {
+      dispose = cleanup;
+      return useDocTags('thread-1', 'THREAD', { scopes: ['user'] });
+    });
+
+    expect(tags.scopes).toEqual(['user']);
+    expect(tags.tagSets().map((set) => set.scope)).toEqual(['user']);
+    expect(tags.appliedTags().map((tag) => tag.optionId)).toEqual(['cool']);
+    expect(tags.isApplied('shared')).toBe(false);
+  });
+
+  it('leaves applied team tags alone when a personal-only selection is saved', async () => {
+    const tags = createRoot((cleanup) => {
+      dispose = cleanup;
+      return useDocTags('thread-1', 'THREAD', { scopes: ['user'] });
+    });
+
+    await tags.setTagSelection(new Set());
+    expect(mocks.mutateAsync).toHaveBeenCalledOnce();
+    expect(mocks.mutateAsync.mock.calls[0][0].properties).toEqual([
+      expect.objectContaining({
+        assignmentId: 'assignment-1',
+        currentOptionIds: ['cool'],
+        nextOptionIds: [],
+      }),
+    ]);
+  });
+
+  it('refuses to apply a tag from a hidden scope', async () => {
+    const tags = createRoot((cleanup) => {
+      dispose = cleanup;
+      return useDocTags('thread-1', 'THREAD', { scopes: ['user'] });
+    });
+
+    await expect(tags.applyTag('team', 'shared')).rejects.toThrow(
+      'not available'
+    );
+    expect(mocks.mutateAsync).not.toHaveBeenCalled();
+  });
+});
