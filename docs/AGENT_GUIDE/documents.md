@@ -393,7 +393,9 @@ With CRM enabled, any task, document or call can point at CRM records through th
 `Companies` and `Contacts` system properties: side panel `Properties` →
 `Add property`. The `Companies` picker lists Quick Access companies; the
 `Contacts` picker searches the team's contacts by email or name. Values show the
-record's name and open the company or contact. Calls are linked automatically
+record's name and open the company or contact. An entity can carry the property
+without listing it (set at creation or through the API); adding that property
+pins the existing value rather than clearing it. Calls are linked automatically
 when they end, from their participants and the invitees of the calendar event
 carrying the meeting link; verify on a finished call's `Properties`.
 
