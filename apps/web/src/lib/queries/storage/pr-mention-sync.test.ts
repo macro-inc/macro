@@ -1,3 +1,7 @@
+/**
+ * @vitest-environment jsdom
+ */
+
 import type { ForeignEntity } from '@service-storage/generated/schemas';
 import { QueryObserver } from '@tanstack/query-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -17,7 +21,7 @@ vi.mock('@queries/client', async () => {
 });
 
 import { queryClient } from '@queries/client';
-import { pullRequestMentionKeys } from './keys';
+import { documentGithubPullRequestsKeys, pullRequestMentionKeys } from './keys';
 import {
   handlePullRequestUpdated,
   invalidatePullRequestMentions,
@@ -103,5 +107,25 @@ describe('PR gateway updates', () => {
     );
     expect(fetch).toHaveBeenCalledTimes(1);
     unsubscribe();
+  });
+
+  it('invalidates task PR queries when a PR is updated', async () => {
+    const taskId = '019f0000-0000-7000-8000-000000000002';
+    const taskPrKey = documentGithubPullRequestsKeys.list(taskId).queryKey;
+
+    // Set up a task with cached PR data
+    const cachedResponse = { pullRequests: [] };
+    queryClient.setQueryData(taskPrKey, cachedResponse);
+
+    // Mark the query as fresh so we can verify invalidation
+    const state = queryClient.getQueryState(taskPrKey);
+    expect(state?.isInvalidated).toBe(false);
+
+    // Handle PR update
+    await handlePullRequestUpdated(entity);
+
+    // Verify the task PR query was invalidated
+    const updatedState = queryClient.getQueryState(taskPrKey);
+    expect(updatedState?.isInvalidated).toBe(true);
   });
 });
