@@ -57,6 +57,9 @@ width without side padding, preserves its aspect ratio, and truncates long
 filenames in the header. The preview loads once the upload
 is ready, with a placeholder while it is being prepared. Any commentary the
 model added appears below the image.
+In a channel thread, where the bot's reply is plain message text with a
+mention chip rather than a tool card, the same image card renders beneath the
+message for every image document the reply mentions (see channels.md).
 Refused prompts, provider failures, and hosts without a Google Generative AI key
 display a failed tool call; the error tells the agent whether to rephrase, retry,
 or stop.

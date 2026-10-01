@@ -255,7 +255,16 @@ for a tool draft, `Decline · Submit · Open in session` (or `Open` for a URL) f
 Only the session's owner can act; other viewers see the question read-only and the header
 names who is being waited on. Once answered, the area shows the agent's passage again.
 Agent replies may contain mention chips (`<m-document-mention>`) that render like any
-other channel mention. With GraphQL enabled, document mentions and preview cards load
+other channel mention. A mention of an image document (PNG, JPG, GIF, SVG, WebP —
+including a picture the bot made with `GenerateImage`) also unfurls beneath the
+message text as an image card: a header with the filename above the picture,
+inside the message's `[data-message-mentioned-images]` element. The chip stays;
+clicking the card opens the image document in a split. The same image mentioned
+twice unfurls once, mentions of other document types, channels, and chats never
+unfurl, and inaccessible images show nothing. This applies to every channel
+message, not only bot replies, so a person sharing an image document by `@`
+mention sees the same card. The preview shows `Preparing preview` until storage
+has the bytes. With GraphQL enabled, document mentions and preview cards load
 in bounded batches, including task status/priority/assignees and the viewer's edit
 permission. Task badges can appear with the initial preview rather than waiting for
 separate properties/document-metadata requests; cached titles may appear first while
