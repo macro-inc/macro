@@ -6,7 +6,7 @@ const EXPLORE_PAGES = [
   { href: '/', label: 'Home' },
   { href: '/pricing', label: 'Pricing' },
   { href: '/partners', label: 'Partners' },
-  { href: 'https://cal.com/team/macro/macro-demo-call', label: 'Book demo' },
+  { href: 'https://cal.com/team/macro/macro-demo-call', label: 'Talk to us' },
 ];
 
 function NavigationGroup(props: {
@@ -167,7 +167,7 @@ export function SiteHeader() {
           target="_blank"
           rel="noreferrer"
         >
-          Book demo
+          Talk to us
         </a>
         <a
           class="site-nav-start"

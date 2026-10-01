@@ -144,13 +144,13 @@ export function WelcomeStep(props: {
         </h1>
         <p
           data-welcome-copy
-          class="mx-auto max-w-sm text-balance text-[13px] leading-[1.8] text-ink-muted md:max-w-none md:text-[clamp(14px,1.4vw,17.5px)]"
+          class="mx-auto max-w-[288px] text-balance text-[13px] leading-[1.8] text-ink-muted sm:max-w-[384px] md:max-w-[480px] md:text-[clamp(14px,1.4vw,17.5px)]"
         >
-          <span class="md:mx-auto md:block md:w-fit md:whitespace-nowrap">
-            Macro brings your email, chat, tasks, docs, agents and customers
+          <span class="md:mx-auto md:block md:w-fit">
+            Your email, chat, tasks, docs, agents and CRM
           </span>{' '}
-          <span class="md:mx-auto md:block md:w-fit md:whitespace-nowrap">
-            into one tab with team level memory for your agents.
+          <span class="md:mx-auto md:block md:w-fit">
+            in one tab with team level memory for agents.
           </span>
         </p>
       </div>
