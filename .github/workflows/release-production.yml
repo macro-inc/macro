@@ -81,6 +81,11 @@ jobs:
           VITE_OTEL_ENV: prod
         run: |
           set -euo pipefail
+          # The Nix environment is already loaded. Do not reload it in nested
+          # bash processes and re-enable its local-development sccache wrapper.
+          # This ephemeral runner has no compiler cache/server to reuse.
+          unset BASH_ENV
+          export RUSTC_WRAPPER=""
           cargo tauri --version
           # Tauri has shipped both switch-only and value-taking APK/AAB flags.
           # Nix and local installations can differ; select APK-only with either CLI.
