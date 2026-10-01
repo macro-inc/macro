@@ -2774,6 +2774,31 @@ async fn get_call_record_people_returns_participants_only_without_a_meeting(
     fixtures(path = "../../../fixtures", scripts("call_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
+async fn get_call_record_people_skips_unparsable_participant_ids(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    sqlx::query(
+        "INSERT INTO call_record_participants (call_record_id, user_id, joined_at) VALUES ($1, 'not-a-user-id', now())",
+    )
+    .bind(CALL_ARCHIVED)
+    .execute(&pool)
+    .await?;
+
+    let people = repo(pool).get_call_record_people(&CALL_ARCHIVED).await?;
+
+    let mut user_ids: Vec<String> = people.user_ids.iter().map(ToString::to_string).collect();
+    user_ids.sort();
+    assert_eq!(
+        user_ids,
+        vec!["macro|user-a@test.com", "macro|user-b@test.com"]
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
 async fn get_call_record_people_includes_meeting_owner_and_calendar_invitees(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {

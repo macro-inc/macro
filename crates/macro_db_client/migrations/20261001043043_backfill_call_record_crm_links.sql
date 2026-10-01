@@ -29,7 +29,7 @@ emails AS (
 teams AS (
     SELECT DISTINCT a.call_record_id, tu.team_id
     FROM accounts a
-    JOIN team_user tu ON tu.user_id = a.user_id
+    JOIN team_user tu ON LOWER(tu.user_id) = LOWER(a.user_id)
     JOIN team_crm_settings s ON s.team_id = tu.team_id AND s.crm_enabled
 ),
 outsiders AS (
@@ -48,7 +48,7 @@ matches AS (
     JOIN crm_domains d ON d.team_id = o.team_id AND LOWER(d.domain) = o.domain
     JOIN crm_companies co ON co.id = d.company_id AND NOT co.hidden
     LEFT JOIN crm_contacts ct
-        ON ct.company_id = co.id AND ct.email = o.email AND NOT ct.hidden
+        ON ct.company_id = co.id AND LOWER(ct.email) = o.email AND NOT ct.hidden
 ),
 links AS (
     SELECT call_record_id,

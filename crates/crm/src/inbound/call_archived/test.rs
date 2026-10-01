@@ -19,9 +19,12 @@ fn people() -> CallPeople {
     }
 }
 
-/// Serves fixed call people, or fails when `people` is `None`.
+/// Serves fixed call people after failing the first `failures` lookups, or
+/// always fails when `people` is `None`.
 struct FakeCalls {
     people: Option<CallPeople>,
+    failures: Mutex<u32>,
+    lookups: Arc<Mutex<u32>>,
 }
 
 impl CallRecordQueryService for FakeCalls {
@@ -33,6 +36,12 @@ impl CallRecordQueryService for FakeCalls {
     }
 
     async fn get_call_record_people(&self, _call_record_id: Uuid) -> Result<CallPeople, CallError> {
+        *self.lookups.lock().unwrap() += 1;
+        let mut failures = self.failures.lock().unwrap();
+        if *failures > 0 {
+            *failures -= 1;
+            return Err(CallError::NotFound("call record".to_string()));
+        }
         self.people
             .clone()
             .ok_or_else(|| CallError::NotFound("call record".to_string()))
@@ -59,15 +68,35 @@ impl CallRecordLinkStore for Arc<RecordingLinks> {
     }
 }
 
+fn consumer_failing(
+    people: Option<CallPeople>,
+    failures: u32,
+) -> (
+    CallArchivedConsumer<FakeCalls, Arc<RecordingLinks>>,
+    Arc<RecordingLinks>,
+    Arc<Mutex<u32>>,
+) {
+    let links = Arc::new(RecordingLinks::default());
+    let lookups = Arc::new(Mutex::new(0));
+    let mut consumer = CallArchivedConsumer::new(CallRecordLinker::new(
+        FakeCalls {
+            people,
+            failures: Mutex::new(failures),
+            lookups: lookups.clone(),
+        },
+        links.clone(),
+    ));
+    consumer.first_retry_delay = std::time::Duration::ZERO;
+    (consumer, links, lookups)
+}
+
 fn consumer(
     people: Option<CallPeople>,
 ) -> (
     CallArchivedConsumer<FakeCalls, Arc<RecordingLinks>>,
     Arc<RecordingLinks>,
 ) {
-    let links = Arc::new(RecordingLinks::default());
-    let consumer =
-        CallArchivedConsumer::new(CallRecordLinker::new(FakeCalls { people }, links.clone()));
+    let (consumer, links, _) = consumer_failing(people, 0);
     (consumer, links)
 }
 
@@ -118,5 +147,28 @@ async fn a_failed_people_lookup_fails_the_event() {
     let (consumer, links) = consumer(None);
 
     assert!(consumer.apply(&archived()).await.is_err());
+    assert!(links.links.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_failed_link_is_retried_until_it_succeeds() {
+    let (consumer, links, lookups) = consumer_failing(Some(people()), 2);
+
+    consumer.apply_with_retries(&archived()).await;
+
+    assert_eq!(*lookups.lock().unwrap(), 3);
+    assert_eq!(
+        *links.links.lock().unwrap(),
+        vec![(CALL_RECORD_ID, people())]
+    );
+}
+
+#[tokio::test]
+async fn a_link_that_keeps_failing_is_given_up_after_the_attempt_limit() {
+    let (consumer, links, lookups) = consumer_failing(None, 0);
+
+    consumer.apply_with_retries(&archived()).await;
+
+    assert_eq!(*lookups.lock().unwrap(), MAX_ATTEMPTS);
     assert!(links.links.lock().unwrap().is_empty());
 }

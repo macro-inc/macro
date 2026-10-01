@@ -252,3 +252,29 @@ async fn keeps_associations_a_user_already_edited(pool: PgPool) {
         vec![chosen.to_string()]
     );
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn matches_accounts_and_contacts_regardless_of_case(pool: PgPool) {
+    let team_id = seed_team(&pool, true).await;
+    let acme = insert_company(&pool, team_id, "acme.com", false).await;
+    let grace = insert_contact(&pool, acme, "Grace@Acme.com").await;
+    let call_record_id = Uuid::now_v7();
+
+    // The member's id differs only by case from `team_user`.
+    linker(&pool)
+        .link_call_record(
+            call_record_id,
+            &people(&["macro|Rep@Ours.com"], &["grace@acme.com"]),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        linked_ids(&pool, call_record_id, SystemPropertyKey::Companies).await,
+        vec![acme.to_string()]
+    );
+    assert_eq!(
+        linked_ids(&pool, call_record_id, SystemPropertyKey::Contacts).await,
+        vec![grace.to_string()]
+    );
+}

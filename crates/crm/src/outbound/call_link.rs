@@ -39,7 +39,13 @@ impl<S: SystemPropertiesService> PgCallCrmLinker<S> {
         &self,
         people: &CallPeople,
     ) -> Result<(Vec<Uuid>, Vec<Uuid>), sqlx::Error> {
-        let user_ids: Vec<String> = people.user_ids.iter().map(ToString::to_string).collect();
+        // Account ids and emails compare case-insensitively, like the other
+        // CRM lookups.
+        let user_ids: Vec<String> = people
+            .user_ids
+            .iter()
+            .map(|user_id| user_id.to_string().to_lowercase())
+            .collect();
         let emails: Vec<String> = people
             .user_ids
             .iter()
@@ -53,7 +59,7 @@ impl<S: SystemPropertiesService> PgCallCrmLinker<S> {
                 SELECT DISTINCT tu.team_id
                 FROM team_user tu
                 JOIN team_crm_settings s ON s.team_id = tu.team_id AND s.crm_enabled
-                WHERE tu.user_id = ANY($1)
+                WHERE LOWER(tu.user_id) = ANY($1)
             ),
             people AS (
                 SELECT DISTINCT LOWER(email) AS email
@@ -74,7 +80,7 @@ impl<S: SystemPropertiesService> PgCallCrmLinker<S> {
             JOIN crm_domains d ON d.team_id = o.team_id AND LOWER(d.domain) = o.domain
             JOIN crm_companies co ON co.id = d.company_id AND NOT co.hidden
             LEFT JOIN crm_contacts ct
-                ON ct.company_id = co.id AND ct.email = o.email AND NOT ct.hidden
+                ON ct.company_id = co.id AND LOWER(ct.email) = o.email AND NOT ct.hidden
             "#,
             &user_ids,
             &emails,

@@ -870,10 +870,16 @@ impl CallRepository for PgCallRepo {
         .fetch_all(&self.pool)
         .await?
         .into_iter()
-        .map(|user_id| {
-            MacroUserIdStr::try_from(user_id).map_err(|e| sqlx::Error::Decode(Box::new(e)))
+        // A malformed stored id names nobody we can match, so skip it rather
+        // than failing the whole lookup for the people who do parse.
+        .filter_map(|user_id| match MacroUserIdStr::try_from(user_id.clone()) {
+            Ok(user_id) => Some(user_id),
+            Err(error) => {
+                tracing::warn!(%call_record_id, user_id, error = ?error, "skipping unparsable call participant id");
+                None
+            }
         })
-        .collect::<Result<_, _>>()?;
+        .collect();
 
         // A meeting link lives in the location, description or conference url
         // of the owner's calendar event; its token is unique, so a substring
