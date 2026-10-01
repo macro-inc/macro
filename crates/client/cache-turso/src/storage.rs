@@ -816,26 +816,7 @@ impl Storage for TursoStorage {
                 return Ok(Vec::new());
             }
             let connection = self.connection();
-            driver::read_transaction(&connection, || {
-                let mut statement = driver::prepare(&connection, RECORD_GET)?;
-                let mut records = Vec::with_capacity(keys.len());
-                for key in &keys {
-                    let rows = driver::query_prepared(
-                        &mut statement,
-                        vec![text(&key.typename), text(&key.id)],
-                    )?;
-                    match rows.as_slice() {
-                        [] => records.push(None),
-                        [row] => {
-                            records.push(Some(decode_record(&required_blob(row, 0)?).map_err(
-                                |_| TursoStorageError::reset(PhysicalResetReason::Codec),
-                            )?))
-                        }
-                        _ => return Err(invariant()),
-                    }
-                }
-                Ok(records)
-            })
+            driver::read_transaction(&connection, || record_batch::read(&connection, &keys))
         })();
         self.latch_result(result)
     }
@@ -4968,6 +4949,7 @@ mod bounded_selection;
 mod conjunction;
 mod integrity;
 mod page_retention;
+mod record_batch;
 
 #[cfg(all(test, target_arch = "wasm32"))]
 mod browser_test;

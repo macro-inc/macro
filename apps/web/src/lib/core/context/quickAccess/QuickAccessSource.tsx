@@ -1,3 +1,7 @@
+import {
+  materializeCachedGraphqlCrmCompanies,
+  useQuickAccessCrmCompaniesQuery,
+} from '@app/features/crm/crm-search';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { itemToSafeName } from '@core/constant/allBlocks';
 import { enableCrm } from '@core/constant/featureFlags';
@@ -22,12 +26,10 @@ import {
   type CachedGraphqlChannel,
   materializeCachedGraphqlChannels,
 } from '@queries/channel/graphql';
-import { materializeCachedGraphqlCrmCompanies } from '@queries/crm/graphql';
 import { queryReadyGate } from '@queries/gate';
 import { materializeCachedGraphqlHistoryItems } from '@queries/history/graphql';
 import { type HistoryItem, useHistoryQuery } from '@queries/history/history';
 import { useQuickAccessAgentSessionsQuery } from '@queries/soup/quick-access-agent-sessions';
-import { useQuickAccessCrmCompaniesQuery } from '@queries/soup/quick-access-crm-companies';
 import { useQuickAccessSkillsQuery } from '@queries/soup/quick-access-skills';
 import { useQuickAccessSnippetsQuery } from '@queries/soup/quick-access-snippets';
 import { useRecentlyViewedSoupQuery } from '@queries/soup/recently-viewed';

@@ -115,6 +115,10 @@ const CHANNEL_RAIL_SECTIONS: ChannelsRailSection[] = [
 const LABEL_KEY_PREFIX = 'label:';
 const BROWSE_QUERY_SCOPES = ['channels', 'direct_messages'] as const;
 const CHANNEL_TAB_IDS: ChannelsTab[] = ['browse', 'recents'];
+const CHANNEL_TAB_IDS_WITH_THREADS: ChannelsTab[] = [
+  ...CHANNEL_TAB_IDS,
+  'threads',
+];
 const DM_LOADING_PREVIEW_OFFSET = 80;
 
 export type ChannelsRailProps = {
@@ -141,6 +145,10 @@ export function ChannelsRail(props: ChannelsRailProps) {
     setSelectedChannel,
     setSortBy,
     setTab,
+    tab,
+    threadsEnabled,
+    threadsChannelId,
+    setThreadsChannelId,
   } = useChannelsView();
 
   const panel = useSplitPanelOrThrow();
@@ -258,7 +266,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
   const listDomId = createUniqueId();
 
   const [sectionScrollRoots, setSectionScrollRoots] = createSignal<
-    Partial<Record<ChannelsRailSection, HTMLDivElement>>
+    Partial<Record<ChannelsRailSection | 'threads', HTMLDivElement>>
   >({});
 
   const [listRoot, setListRoot] = createSignal<HTMLDivElement>();
@@ -406,13 +414,14 @@ export function ChannelsRail(props: ChannelsRailProps) {
     }
 
     return buildChannelRailRows(
-      state.tab,
+      tab(),
       state.expandedGroups,
       {
         favorites: favorites(),
         channels: props.sources.channels.items(),
         direct_messages: props.sources.direct_messages.items(),
         recents: props.sources.recents.items(),
+        threads: props.sources.threads.items(),
       },
       channelSectionRows()
     );
@@ -434,6 +443,19 @@ export function ChannelsRail(props: ChannelsRailProps) {
         previewAfterNavigation.clear();
         const openInNewSplit =
           metadata?.newSplit === true || metadata?.event?.shiftKey === true;
+
+        if (item.kind === 'all-threads') {
+          setThreadsChannelId(undefined);
+          return;
+        }
+
+        // In the Threads tab, conversation rows (including search results)
+        // filter the thread list; they open only into a new split.
+        if (item.kind === 'conversation' && tab() === 'threads') {
+          if (openInNewSplit) activateChannel(item.channel, true);
+          else setThreadsChannelId(item.channel.id);
+          return;
+        }
 
         if (item.kind === 'section') {
           setGroupOpen(item.group, !state.expandedGroups[item.group]);
@@ -500,9 +522,11 @@ export function ChannelsRail(props: ChannelsRailProps) {
           ? sectionScrollRoots().favorites
           : row.kind === 'conversation' && row.group
             ? sectionScrollRoots()[row.group]
-            : state.tab === 'recents'
+            : tab() === 'recents'
               ? listRoot()
-              : undefined;
+              : tab() === 'threads'
+                ? sectionScrollRoots().threads
+                : undefined;
       if (!element || !scrollRoot) return;
 
       const elementBounds = element.getBoundingClientRect();
@@ -540,6 +564,19 @@ export function ChannelsRail(props: ChannelsRailProps) {
     const scrollRoot =
       scope === 'recents' ? listRoot() : sectionScrollRoots()[scope];
     if (scrollRoot?.isConnected) scrollRoot.scrollTop = 0;
+  };
+
+  const scrollThreadsToSelectedOrStart = () => {
+    const items = props.sources.threads.items();
+    const selectedIndex = items.findIndex(
+      (channel) => channel.id === threadsChannelId()
+    );
+    const virtualizer = virtualizers().threads;
+    if (!virtualizer || items.length === 0) return;
+
+    virtualizer.scrollToIndex(selectedIndex >= 0 ? selectedIndex : 0, {
+      align: selectedIndex >= 0 ? 'nearest' : 'start',
+    });
   };
 
   const scrollSearchToSelectedOrStart = () => {
@@ -588,11 +625,13 @@ export function ChannelsRail(props: ChannelsRailProps) {
     const searchOpen = props.searchOpen;
     const sourcesReady = searchOpen
       ? !props.sources.search.isLoading()
-      : state.tab === 'recents'
+      : tab() === 'recents'
         ? !props.sources.recents.isLoading()
-        : BROWSE_QUERY_SCOPES.every(
-            (scope) => !props.sources[scope].isLoading()
-          );
+        : tab() === 'threads'
+          ? !props.sources.threads.isLoading()
+          : BROWSE_QUERY_SCOPES.every(
+              (scope) => !props.sources[scope].isLoading()
+            );
     if (!sourcesReady) return;
 
     const frame = requestAnimationFrame(() => {
@@ -600,8 +639,10 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
       if (searchOpen) {
         scrollSearchToSelectedOrStart();
-      } else if (state.tab === 'recents') {
+      } else if (tab() === 'recents') {
         scrollScopeToSelectedOrStart('recents');
+      } else if (tab() === 'threads') {
+        scrollThreadsToSelectedOrStart();
       } else {
         scrollFavoritesToSelectedOrStart();
         for (const scope of BROWSE_QUERY_SCOPES) {
@@ -616,8 +657,9 @@ export function ChannelsRail(props: ChannelsRailProps) {
   useViewTabHotkeys({
     scopeId: panel.splitHotkeyScope,
     enabled: panel.isPanelActive,
-    ids: () => CHANNEL_TAB_IDS,
-    activeId: () => state.tab,
+    ids: () =>
+      threadsEnabled() ? CHANNEL_TAB_IDS_WITH_THREADS : CHANNEL_TAB_IDS,
+    activeId: () => tab(),
     setActiveId: selectTab,
   });
 
@@ -694,7 +736,11 @@ export function ChannelsRail(props: ChannelsRailProps) {
           previewAfterNavigation.clear();
 
           const row = event.result?.item;
-          if (row?.kind === 'conversation') {
+          if (tab() === 'threads') {
+            if (row?.kind === 'all-threads') setThreadsChannelId(undefined);
+            else if (row?.kind === 'conversation')
+              setThreadsChannelId(row.channel.id);
+          } else if (row?.kind === 'conversation') {
             previewAfterNavigation(row.channel);
           } else if (
             row?.kind === 'favorite' &&
@@ -761,7 +807,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
   const sectionHotkeys = createHotkeyGroup();
   const sectionHotkeysEnabled = () =>
-    panel.isPanelActive() && !props.searchOpen && state.tab === 'browse';
+    panel.isPanelActive() && !props.searchOpen && tab() === 'browse';
 
   registerHotkey({
     hotkey: ']',
@@ -1107,11 +1153,13 @@ export function ChannelsRail(props: ChannelsRailProps) {
   const rail: ChannelsRailContext = {
     railId: listDomId,
     list,
-    tab: () => state.tab,
+    tab,
     selectTab,
     sources: props.sources,
     favorites,
     selectedChannel,
+    threadsEnabled,
+    threadsChannelId,
     isGroupOpen: (group) => state.expandedGroups[group],
     toggleGroup: (group) => setGroupOpen(group, !state.expandedGroups[group]),
     channelTagsEnabled,

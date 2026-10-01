@@ -2,8 +2,8 @@
 edition = "2024"
 name = "cache-wasm"
 publish = false
-# Rebuild for bounded sort-index selection of dense local filter pages.
-version = "0.6.35"
+# Rebuild with read-path optimizations, scoped invalidation, and bounded filter selection.
+version = "0.6.36"
 
 [features]
 default = []

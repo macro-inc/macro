@@ -423,6 +423,30 @@ Deferred navigation waits until the destination is applied; an unavailable split
 must leave unread state unchanged. Join-only channels remain
 blocked after hydration, including on mobile.
 
+### Threads tab
+
+The `enable-channel-threads-preview` feature flag adds a third `Threads` tab.
+It is on in development; `VITE_ENABLE_CHANNEL_THREADS_PREVIEW` overrides it
+locally. The rail shows an `All threads` row above a `Conversations` section
+with the same sort and `+` controls as the All tab's sections. Conversations
+lists only channels and DMs that hold threads the user takes part in; it pages
+through the user's threads and loads their channels, so scrolling the section
+reveals more. Selecting a row filters the main pane instead of opening the
+conversation. `All threads` clears the filter.
+
+The main pane is a virtualized list of channel threads the user takes part in,
+newest reply first. It loads more as it nears the end and returns to the top
+when the selected conversation changes. Messages the user sent that have no
+replies are hidden. Each card shows the root message with its replies collapsed
+the same way as a channel timeline: the first reply groups, then a
+`N more replies` control that expands the rest in place. In `All threads`, each
+card is labelled with its conversation. An icon button (`View in channel`)
+appears at a card's top right on hover or focus, and always on touch; it
+switches back to `All` and opens the channel at that thread. Shift-clicking a
+conversation row opens it in a new split. The filter lives in the view's state,
+not the URL: it survives back/forward within the split and reloads, but a
+copied link opens the Threads tab on `All threads`.
+
 ### Channel labels
 
 Channel labels require the `enable-channel-tags` feature flag. The flag is off
@@ -760,8 +784,14 @@ In the Chat workspace — and wherever a channel opens inline inside another
 view's detail stack (a channel mention followed from the email view, say) — the
 conversation renders an inline detail whose top bar holds the channel avatar
 and name, the same tab strip, live viewer avatars, and the `Call` and
-`Ask Macro` buttons. The title `...` menu (rename, channel picture) is not
-offered there; open the channel as a split (shift-click a rail row) to use it.
+`Ask Macro` buttons. In Chat an ellipsis follows the name and opens the same
+entity actions as right-clicking the conversation's rail row — `Open in new
+split`, `Rename`, `Favorite`/`Unfavorite`, `Snooze notifications…`, `Mute
+notifications`, `Remind me`, `Copy Link`, `Copy ID` — so a channel can be
+favorited without finding its row. A channel inlined in another view's detail
+stack has no such menu. Channel-picture actions are in neither: they belong to
+the split's own title `...` menu, so open the channel as a split (shift-click a
+rail row) to reach them.
 
 `Calls` tab: recordings, transcriptions, and summaries for this channel. Click a
 row to open the call. The search field above the list matches call names and

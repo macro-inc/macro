@@ -5,10 +5,7 @@
 #[cfg(test)]
 mod test;
 
-use crate::denormalize::{
-    DenormalizeError, ReadOutcome, RecordSource, denormalize_record,
-    denormalize_with_entity_resolvers,
-};
+use crate::denormalize::{DenormalizeError, ReadOutcome, ReadPlans, ReadSession, RecordSource};
 use crate::deps::{
     DepIndex, OpId, QueryDependencies, ViewerFieldUpdate, ViewerFields, changed_viewer_fields,
 };
@@ -312,11 +309,15 @@ enum IdentityState {
 /// hardening-phase refinement).
 pub const DEFAULT_HOT_CAPACITY: usize = 10_000;
 
+// Parsed plans contain no cached user data. Bound dynamic document churn while
+// leaving room for the production operation catalog and fragment variants.
+const DOCUMENT_CACHE_CAPACITY: usize = 128;
+
 pub struct Engine<S: Storage> {
     storage: S,
     revision: CacheRevision,
     hot: LruCache<EntityKey<'static>, Record>,
-    docs: HashMap<String, Document>,
+    docs: LruCache<String, Document>,
     deps: DepIndex,
     identity: IdentityState,
     /// Ordered optimistic mutation layers hydrated from durable storage.
@@ -337,7 +338,7 @@ impl<S: Storage> Engine<S> {
             storage,
             revision: CacheRevision::ZERO,
             hot: LruCache::new(NonZeroUsize::new(hot_capacity).expect("capacity > 0")),
-            docs: HashMap::new(),
+            docs: LruCache::new(NonZeroUsize::new(DOCUMENT_CACHE_CAPACITY).unwrap()),
             deps: DepIndex::new(),
             identity: IdentityState::NotHydrated,
             optimistic: Vec::new(),
@@ -649,20 +650,19 @@ impl<S: Storage> Engine<S> {
         let mut known_absent: BTreeSet<EntityKey<'static>> = BTreeSet::new();
         let mut deps = QueryDependencies::default();
 
+        let mut plans = ReadPlans::default();
+        let mut session = ReadSession::new(
+            &EntityKey::root(),
+            crate::meta::QUERY_ROOT_TYPE,
+            &op.selection_set,
+        );
         let outcome = loop {
-            deps.clear();
             let source = EngineSource {
                 hot: &self.hot,
                 fetched: &fetched_base,
                 composed: &composed,
             };
-            match denormalize_with_entity_resolvers(
-                op,
-                variables,
-                &source,
-                &mut deps,
-                &entity_resolvers,
-            )? {
+            match session.resume(variables, &source, &mut deps, &entity_resolvers, &mut plans)? {
                 ReadOutcome::Complete(data) => break ReadResult::Hit { data },
                 ReadOutcome::Miss { .. } => break ReadResult::Miss,
                 ReadOutcome::NeedRecords(missing) => {
@@ -707,13 +707,12 @@ impl<S: Storage> Engine<S> {
             }
         };
 
-        // Promote durable records into the hot tier and refresh recency of
-        // everything this operation touched.
-        for (key, record) in fetched_base {
-            self.hot.put(key, record);
-        }
+        // Refresh borrowed hot records before cold promotions can evict them.
         for key in &deps.records {
             let _ = self.hot.get(key);
+        }
+        for (key, record) in fetched_base {
+            self.hot.put(key, record);
         }
         if let Some(op_id) = op_id {
             self.deps.set_query_deps(op_id, deps);
@@ -766,28 +765,13 @@ impl<S: Storage> Engine<S> {
             })
             .cloned()
             .collect();
-        let key_set: BTreeSet<_> = ordered_keys.iter().cloned().collect();
-        let mut bases = self.load_bases(&key_set).await?;
-        let candidates = ordered_keys
-            .iter()
-            .cloned()
-            .map(|key| {
-                let record = bases.remove(&key);
-                (key, record)
-            })
-            .collect();
         let optimistic = merged_optimistic(&self.optimistic);
         let projected = self
-            .project_record_batch(selection, candidates, &optimistic)
+            .project_record_batch(selection, &ordered_keys, &optimistic)
             .await?;
-        let mut projected: HashMap<_, _> = projected.into_iter().collect();
-        let records = ordered_keys
+        let records = projected
             .into_iter()
-            .filter_map(|record_key| {
-                projected
-                    .remove(&record_key)
-                    .map(|record| SelectedRecord { record_key, record })
-            })
+            .map(|(record_key, record)| SelectedRecord { record_key, record })
             .collect();
         Ok(self.revisioned(records))
     }
@@ -795,34 +779,39 @@ impl<S: Storage> Engine<S> {
     async fn project_record_batch(
         &mut self,
         selection: &RecordSelection,
-        candidates: BTreeMap<EntityKey<'static>, Option<Record>>,
+        candidate_keys: &[EntityKey<'static>],
         optimistic: &BTreeMap<EntityKey<'static>, Record>,
     ) -> Result<Vec<(EntityKey<'static>, Json)>, EngineError<S::Error>> {
-        let candidate_keys: Vec<_> = candidates.keys().cloned().collect();
-        let optimistic_only_candidates: BTreeSet<_> = candidates
-            .iter()
-            .filter_map(|(key, record)| record.is_none().then_some(key.clone()))
-            .collect();
-        let mut fetched_base: HashMap<_, _> = candidates
-            .into_iter()
-            .filter_map(|(key, record)| record.map(|record| (key, record)))
-            .collect();
+        // Borrow hot bases through EngineSource, just like ordinary query reads.
+        // Only cold records and optimistic compositions need owned snapshots.
+        let mut fetched_base = HashMap::new();
         let mut composed = HashMap::new();
         for (key, update) in optimistic {
-            let base = fetched_base.get(key).or_else(|| self.hot.peek(key));
-            if let Some(base) = base {
+            if let Some(base) = self.hot.peek(key) {
                 let mut effective = base.clone();
                 effective.merge(update.clone());
                 composed.insert(key.clone(), effective);
-            } else if optimistic_only_candidates.contains(key) {
-                composed.insert(key.clone(), update.clone());
             }
         }
 
         let variables = serde_json::Map::new();
-        let mut pending: BTreeSet<_> = candidate_keys.iter().cloned().collect();
+        let mut pending: BTreeMap<_, _> = candidate_keys
+            .iter()
+            .map(|key| {
+                (
+                    key.clone(),
+                    ReadSession::new(
+                        key,
+                        record_key_type(key).unwrap_or_default(),
+                        selection.selection_set(),
+                    ),
+                )
+            })
+            .collect();
+        let mut plans = ReadPlans::default();
         let mut completed = BTreeMap::new();
         let mut known_absent = BTreeSet::new();
+        let mut dependencies = BTreeSet::new();
         while !pending.is_empty() {
             let mut missing = BTreeSet::new();
             let source = EngineSource {
@@ -830,17 +819,14 @@ impl<S: Storage> Engine<S> {
                 fetched: &fetched_base,
                 composed: &composed,
             };
-            let current: Vec<_> = pending.iter().cloned().collect();
+            let current: Vec<_> = pending.keys().cloned().collect();
             for key in current {
-                let type_name = record_key_type(&key).unwrap_or_default();
-                let mut dependencies = BTreeSet::new();
-                match denormalize_record(
-                    &key,
-                    type_name,
-                    selection.selection_set(),
+                match pending.get_mut(&key).expect("pending record").resume(
                     &variables,
                     &source,
                     &mut dependencies,
+                    &EntityResolverLookup::default(),
+                    &mut plans,
                 )? {
                     ReadOutcome::Complete(record) => {
                         pending.remove(&key);
@@ -893,12 +879,16 @@ impl<S: Storage> Engine<S> {
             }
         }
 
+        // Keep this read's working set ahead of unrelated hot records.
+        for key in &dependencies {
+            let _ = self.hot.get(key);
+        }
         for (key, record) in fetched_base {
             self.hot.put(key, record);
         }
         Ok(candidate_keys
-            .into_iter()
-            .filter_map(|key| completed.remove(&key).map(|record| (key, record)))
+            .iter()
+            .filter_map(|key| completed.remove(key).map(|record| (key.clone(), record)))
             .collect())
     }
 
@@ -2450,17 +2440,13 @@ impl<S: Storage> Engine<S> {
         self.storage
     }
 
-    /// Memoized document parse. Takes the map (not `&mut self`) so callers
+    /// Memoized document parse. Takes the cache (not `&mut self`) so callers
     /// can keep the returned borrow while using other engine fields.
     fn document<'d>(
-        docs: &'d mut HashMap<String, Document>,
+        docs: &'d mut LruCache<String, Document>,
         query: &str,
     ) -> Result<&'d Document, DocumentError> {
-        use std::collections::hash_map::Entry;
-        match docs.entry(query.to_string()) {
-            Entry::Occupied(e) => Ok(e.into_mut()),
-            Entry::Vacant(e) => Ok(e.insert(Document::parse(query)?)),
-        }
+        docs.try_get_or_insert_ref(query, || Document::parse(query))
     }
 }
 

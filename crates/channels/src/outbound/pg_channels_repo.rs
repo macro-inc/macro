@@ -1065,6 +1065,19 @@ fn push_channel_thread_filter_expr(
         Expr::Literal(ChannelThreadLiteral::Participant(participant)) => {
             push_channel_thread_participant_filter_expr(builder, participant);
         }
+        Expr::Literal(ChannelThreadLiteral::HasReplies(has_replies)) => {
+            // Counts replies the same way as `thread_stats` in the rows query.
+            builder.push(
+                r#"(EXISTS (
+                    SELECT 1
+                    FROM comms_messages reply
+                    WHERE reply.thread_id = m.id
+                      AND reply.deleted_at IS NULL
+                ) = "#,
+            );
+            builder.push_bind(*has_replies);
+            builder.push(")");
+        }
         Expr::Literal(ChannelThreadLiteral::NotificationState(state)) => {
             push_channel_thread_notification_filter_expr(
                 builder,

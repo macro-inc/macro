@@ -1,7 +1,6 @@
 import type { ListView } from '@app/constants/list-views';
 import { GroupDropdown } from '@app/features/next-soup/soup-view/filters-bar/group-dropdown';
 import {
-  COMPANY_GROUP_OPTIONS,
   type GroupOptionId,
   TAG_VIEW_GROUP_OPTIONS,
   TASK_GROUP_OPTIONS,
@@ -14,7 +13,7 @@ import { createMemo, createSignal, Show } from 'solid-js';
 
 export const SoupViewContextGroup = (props: { hideLabel?: boolean }) => {
   const panel = useSplitPanelOrThrow();
-  const { soup, viewMode } = useSoupView();
+  const { soup, extensions } = useSoupView();
   const groupByEnabled = useFeatureFlag(enableSoupGroupBy);
 
   const [groupOpen, setGroupOpen] = createSignal(false);
@@ -57,11 +56,11 @@ export const SoupViewContextGroup = (props: { hideLabel?: boolean }) => {
       </Show>
       {/* The board is inherently grouped by stage columns, so grouping only
           applies to the list mode. */}
-      <Show when={isComponentListView('companies') && viewMode() === 'list'}>
+      <Show when={extensions?.groupOptions?.visible()}>
         <GroupDropdown
           value={value}
           onChange={onChange}
-          options={COMPANY_GROUP_OPTIONS}
+          options={extensions?.groupOptions?.options ?? []}
           open={groupOpen()}
           onOpenChange={setGroupOpen}
           hideLabel={props.hideLabel}

@@ -12,8 +12,10 @@ import {
   setCreateMenuOpen,
 } from '@app/features/command/Launcher';
 import { SearchState } from '@app/features/command/mobile/mobileSearchState';
-import { CreateCompanyModal } from '@app/features/companies/CreateCompanyModal';
-import { CreateContactModal } from '@app/features/companies/CreateContactModal';
+import {
+  CreateCompanyModal,
+  CreateContactModal,
+} from '@app/features/crm/crm-create';
 import { DevStatusBar } from '@app/features/devtools/DevStatusBar';
 import { GlobalBulkEditEntityModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
 import {

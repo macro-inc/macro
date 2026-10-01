@@ -53,10 +53,25 @@ Release builds require the signing configuration below and produce signed artifa
 
 ## Release signing
 
-Obtain the existing upload keystore and signing credentials from the release
-maintainers. Keep them outside the checkout and provision them securely for CI.
+The existing upload keystore and signing credentials are stored in Doppler
+`android-release/prd`, secret `ANDROID_UPLOAD_SIGNING_JSON`. It contains
+`keystore_base64`, `keystore_sha256`, `certificate_sha256`, `package_name`,
+`key_alias`, `key_password`, and `store_password`. Keep them outside the checkout
+and provision them securely for CI.
 Coordinate key replacement with Play Console; do not generate a new key for
 routine builds.
+
+With Doppler access, provision signing from `apps/web` (the private destination
+directory must not already exist):
+
+```sh
+bun scripts/android-release.ts signing /absolute/private/path/android-signing tauri/src-tauri/gen/android/keystore.properties
+```
+
+This validates the package and keystore checksum, writes owner-only files, and
+symlinks Gradle's properties file. It refuses to replace existing configuration.
+The destination's parent must exist. Do not print the secret JSON in terminals or
+CI logs.
 
 Gradle reads ignored `tauri/src-tauri/gen/android/keystore.properties`:
 
@@ -93,6 +108,36 @@ their own qualification; passing this local check does not prove those paths.
 The upload certificate identifies locally signed artifacts. When Google creates
 the Play App Signing key, Play-delivered APKs use that separate certificate; add
 its fingerprint to production associations before testing Play-installed links.
+
+### Production release APKs
+
+`.github/workflows/release-production.yml` builds an ARM64 signed APK alongside
+each production deployment, from the release commit. It uses production services,
+the pinned production Firebase config, and the normal OTA-enabled release build.
+The GitHub Actions `ANDROID_RELEASE_DOPPLER_TOKEN` secret must have read access to
+`android-release/prd`, including both the signing JSON and pinned Firebase secret.
+CI passes this dedicated read-only service token as `DOPPLER_TOKEN` only during
+configuration retrieval. Signing files live in the runner's temporary directory
+and are removed even when the build fails; only APK/checksum files are uploaded.
+
+Release tags must follow `vYYYY.M.D.N`, with a valid date, years 2000–2099, and a
+daily revision from 0–99. Android's `versionCode` is `YYYYMMDDNN` (for example,
+`v2026.9.28.1` becomes `2026092801`), and `versionName` is `2026.9.28-1`.
+New releases must increase the date/revision; a rerun retains the same version.
+Always keep the signing key to allow upgrades over earlier distributed APKs.
+
+Before upload, CI verifies the signing certificate, package/version, ARM64 ABI,
+non-debuggable manifest, and 16 KiB ZIP alignment. Publishing waits for the web,
+cloud-storage, sync-service, and AI editing worker deployments. Android failures
+fail their job without blocking web/backend rollout. CI verification does not
+replace the device qualification described above.
+
+The public GitHub release receives `macro-<tag>-android-arm64.apk` and
+`macro-<tag>-android-arm64.apk.sha256`. Share the APK's release download link;
+recipients do not need GitHub access. They open the downloaded APK and allow
+installation from that browser/file manager when Android prompts. Subsequent
+APKs install as updates when the certificate matches and the version increases.
+Play Store migration must preserve app-signing compatibility with these APKs.
 
 ## Firebase
 

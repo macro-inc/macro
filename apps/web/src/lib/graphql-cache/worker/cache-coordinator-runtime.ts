@@ -15,17 +15,25 @@ import {
 } from './effect-worker-transport';
 
 export interface CacheCoordinatorRuntimeOptions {
-  endpoint?: MessagePort | Window;
+  endpoint: MessagePort;
   router?: CoordinatorRouter;
 }
 
 /** Installs the SharedWorker-side Effect runner around CoordinatorRouter. */
 export function installCacheCoordinatorWorker(
-  options: CacheCoordinatorRuntimeOptions = {}
+  options: CacheCoordinatorRuntimeOptions
 ): EffectWorkerRunnerTransport<CoordinatorToTabEnvelope> {
   const router = options.router ?? new CoordinatorRouter();
   const ports = new Map<number, CoordinatorMessagePort>();
   const closedPortIds = new Set<number>();
+  let stopped = false;
+  const stop = (): void => {
+    if (stopped) return;
+    stopped = true;
+    // Finalizers may call router close synchronously. End this client scope
+    // after the current callback so cleanup cannot recurse into itself.
+    queueMicrotask(() => Effect.runFork(runner.close()));
+  };
   let runner!: EffectWorkerRunnerTransport<CoordinatorToTabEnvelope>;
 
   const portFor = (portId: number): CoordinatorMessagePort => {
@@ -44,12 +52,14 @@ export function installCacheCoordinatorWorker(
           ports.delete(portId);
           closedPortIds.add(portId);
           port.onmessageerror?.({ data: error } as MessageEvent);
+          stop();
         }
       },
       start(): void {},
       close(): void {
         if (ports.get(portId) === port) ports.delete(portId);
         closedPortIds.add(portId);
+        stop();
       },
     };
     closedPortIds.delete(portId);
@@ -58,11 +68,20 @@ export function installCacheCoordinatorWorker(
     return port;
   };
 
+  const disconnectAll = (error?: unknown): void => {
+    for (const [portId, port] of ports) {
+      ports.delete(portId);
+      closedPortIds.add(portId);
+      port.onmessageerror?.({ data: error } as MessageEvent);
+    }
+    stop();
+  };
+
   runner = createEffectWorkerRunnerTransport<
     TabToCoordinatorEnvelope,
     CoordinatorToTabEnvelope
   >({
-    endpoint: options.endpoint ?? (self as unknown as Window),
+    endpoint: options.endpoint,
     onMessage(portId, message) {
       if (closedPortIds.has(portId)) return;
       portFor(portId).onmessage?.({
@@ -76,14 +95,22 @@ export function installCacheCoordinatorWorker(
       closedPortIds.add(portId);
       port?.onmessageerror?.({} as MessageEvent);
     },
-    onError(error) {
-      for (const [portId, port] of ports) {
-        ports.delete(portId);
-        closedPortIds.add(portId);
-        port.onmessageerror?.({ data: error } as MessageEvent);
-      }
-    },
+    onError: disconnectAll,
+    onClose: disconnectAll,
   });
 
   return runner;
+}
+
+/** Give each client its own runner scope. Closing its last port must not call
+ * SharedWorkerGlobalScope.close() while another client is reconnecting. */
+export function installSharedCacheCoordinatorWorker(
+  scope: { onconnect: ((event: MessageEvent) => void) | null },
+  router = new CoordinatorRouter()
+): void {
+  scope.onconnect = (event) => {
+    for (const endpoint of event.ports) {
+      installCacheCoordinatorWorker({ endpoint, router });
+    }
+  };
 }

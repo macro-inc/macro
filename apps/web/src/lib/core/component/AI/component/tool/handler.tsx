@@ -1,4 +1,8 @@
 import {
+  getCompanyHandler,
+  listCompaniesHandler,
+} from '@app/features/crm/crm-tool-renderers';
+import {
   deserializeToolCall,
   deserializeToolResponse,
   type ToolName,
@@ -30,7 +34,6 @@ import {
 import { createDocumentHandler } from './CreateDocument';
 import { createProjectHandler } from './CreateProject';
 import { createTagHandler } from './CreateTag';
-import { getCompanyHandler, listCompaniesHandler } from './Crm';
 import { deleteTagHandler } from './DeleteTag';
 import { displayResultsHandler } from './DisplayResults';
 import {
