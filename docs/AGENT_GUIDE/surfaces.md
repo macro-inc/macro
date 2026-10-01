@@ -1588,6 +1588,40 @@ has Max still sees Max named as its active plan.
 
 ## Settings — `/app/settings/<section>`
 
+### Slack archive import
+
+In **Team → Connections**, **Import from Slack** appears only for team admins
+and owners with `enable-slack-archive-import` enabled. Production rollout stays
+off until explicitly enabled. Select an export ZIP, filter the grouped conversation
+picker, optionally show archived conversations, and use Space to toggle focused
+checkboxes. **Select all visible conversations** preserves selections hidden by
+filters; unchecking it or **Clear visible selection** clears only visible selections.
+Rows show stable Slack IDs
+so duplicate names remain distinguishable. Counts are advisory when available,
+otherwise “not yet counted.” Discovery moves keyboard focus to the filter.
+
+Review email attribution and external membership implications, choose whether to
+include history, and confirm the immutable Slack workspace binding before
+**Import selected channels (N)**. At least one selection is required. File selection
+alone makes no server writes. Close/Escape or cancel before confirmation discards
+the archive and selection without creating a job; reopening requires choosing a
+file again. After confirmation the selected IDs/options are frozen. Closing and
+reopening then retains the upload session; keep Team Settings open until it finishes.
+The dialog restores focus to its opener, and polling should not blank Settings.
+
+Use **Job history** (including older pages) for server progress after a reload.
+It displays the persisted selected names/IDs/kinds, history option and selected
+failures/skips without the ZIP. Unselected channels are not skipped work. Reload
+recovers server tracking, **not interrupted local uploads**; finalize verified work
+with skips or cancel and explicitly confirm a new import/token.
+**Cancel import (keep partial results)** does not delete committed messages or
+channels; running work may finish. An interrupted upload offers **Recover job
+receipt**, then **Finalize with skips** or cancellation. Channel links appear only
+when the server confirms current participation and the viewer's channel list
+confirms access. Verify counters, errors and skip
+reasons at narrow widths, using synthetic exports and a test backend rather than
+importing customer data into hosted dev.
+
 ### Email signatures
 
 In Integrations, **Edit signature** beside an owned inbox expands its editor.

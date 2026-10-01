@@ -1,6 +1,14 @@
 import type { Accessor } from 'solid-js';
-import type { ArchiveLimits, ConversationMetadata } from '../core/export';
-import type { ConversationSeal, PartLimits } from '../core/worker-protocol';
+import type {
+  ArchiveDiscovery,
+  ArchiveLimits,
+  ConversationMetadata,
+} from '../core/export';
+import type {
+  ConversationSeal,
+  PartDescriptor,
+  PartLimits,
+} from '../core/worker-protocol';
 
 export type ImportJobStatus =
   | 'uploading'
@@ -101,6 +109,13 @@ export type ImportUploadDescriptor = {
   byteLength: number;
   recordCount?: number | null;
 };
+/** Bytes for parts prepared so far, not the compressed ZIP size. */
+export type ImportUploadProgress = {
+  loaded: number;
+  total: number;
+  indeterminate: boolean;
+};
+
 export type ImportUploadOptions = {
   signal?: AbortSignal;
   onProgress?: (
@@ -134,6 +149,20 @@ export type ImportUpload = {
     blob: Blob,
     options?: ImportUploadOptions
   ): Promise<'uploaded' | 'already-exists'>;
+};
+
+/** One selected file/session. Callbacks are backpressured and must finish before proceeding. */
+export type ArchiveSource = {
+  discover(file: Blob, limits: ArchiveLimits): Promise<ArchiveDiscovery>;
+  prepare(options: {
+    selectedIds: string[];
+    includeMessageHistory: boolean;
+    partLimits: PartLimits;
+    part(descriptor: PartDescriptor, blob: Blob): Promise<void>;
+    seal(seal: ConversationSeal): Promise<void>;
+  }): Promise<void>;
+  /** Stops pending work, rejects outstanding requests and deletes scratch storage. */
+  dispose(): Promise<void>;
 };
 
 export type ImportCommands = {

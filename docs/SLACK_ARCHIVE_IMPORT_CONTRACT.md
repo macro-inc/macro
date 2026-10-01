@@ -2,9 +2,8 @@
 
 This is repository interface documentation, not an execution plan. The Rust
 source of truth is `crates/slack_integration/src/domain/{models,ports}.rs`.
-The initial package defines contracts and value validation only: no HTTP routes,
-SQL persistence, AWS adapters or queue consumer are implemented yet.
-`services/slack_import_worker` is an inert composition-root skeleton.
+The browser, administrator API, PostgreSQL repository and independent worker share
+these contracts. Persisted selection, not browser state or queue input, owns job scope.
 
 ## Boundaries and authorization
 
@@ -28,7 +27,7 @@ SQL persistence, AWS adapters or queue consumer are implemented yet.
 
 Default features expose models only. `ports` adds capability interfaces;
 `inbound`, `outbound`, `postgres`, `s3`, `sqs`, and `worker` enable their respective
-integration dependencies without implementing adapters. Versions of every
+integration dependencies. Versions of every
 third-party dependency are inherited from the root workspace; none require a
 new third-party version or library. Both packages participate in Hakari and test
 environment setup. The default model dependency graph still includes the shared
@@ -103,13 +102,40 @@ nulls. Missing creation time is resolved once from earliest source message when
 available, otherwise the persisted job creation time; record the corresponding
 warning. Never change a reused target's creation time.
 
-The client generates and durably retains the create token before sending.
+The client generates and retains the create token with its frozen in-memory
+confirmation snapshot before sending.
 Uniqueness is `(team, requesting human admin, token)`. An identical semantic
 payload returns the original job, even after it settles. A different payload
 with the same scoped token conflicts; it never replaces the original selection.
-JSON field ordering does not matter; array ordering is part of the payload, so
-clients retain the original selection/member order on retries. A lost response
-is retried with the same token, not a second create.
+The repository canonicalizes conversation/member ordering (including duplicate
+members) for semantic comparison; clients retry the exact snapshot rather than
+rebuilding it from mutable UI state. A lost response is retried with the same token,
+not a second create. The browser snapshot is not persisted across a page reload;
+job history can recover existing server jobs but cannot resume local uploads.
+
+### Popup confirmation and immutable scope
+
+Choosing a ZIP discovers metadata locally before any create, grant or upload.
+The existing dialog then presents grouped searchable checkboxes keyed by Slack ID,
+including the ID beside duplicate names, archived state and available advisory
+counts. Keyboard focus moves from the disabled file input to the filter. Bulk
+selection/clearing applies only to visible supported rows; filtering and hiding
+archived rows preserve hidden selections. Unsupported DMs are unavailable choices,
+not skipped selected work.
+
+**Import selected channels (N)** requires a nonempty selection and explicit source
+confirmation; history defaults on. This action freezes full selected metadata and
+options in `CreateImport.conversations`, allocates one token, and disables further
+review edits. Repeated clicks cannot create another request. Preparation, bounded
+parts and seals use only that snapshot, while shared users metadata remains required.
+Close/Escape or cancel before confirmation disposes scratch state without server
+writes. Closing after confirmation retains the active session while Settings stays
+mounted. Changing selection requires choosing an archive and confirming a new token.
+
+Only persisted conversation rows authorize registration, completion/sealing and
+worker claims. Unselected IDs have no manifest, outbox event or imported messages;
+links to them never reserve targets or implicitly import them (see reference policy).
+Shape-only imports retain the same selected rows with zero-part seals plus users.
 
 ## Registration and immutable uploads
 
@@ -299,13 +325,24 @@ work only after persisting failure and recomputing the job. A stale dead-letter
 generation must not fail newer work or a current active lease.
 
 `ImportProgress` exposes job ID/status/revision, creation/update/registration
-closure times, users verification, limits, and bounded per-conversation progress.
-Conversation progress includes source ID, authorized target ID or null, seal
+closure times, users verification, limits, immutable `source` confirmation and
+`includeMessageHistory`, and bounded per-selected-conversation progress.
+Conversation progress includes persisted source ID, `name`, `kind`, `archived`,
+target ID or null, seal
 partCount (null = not sealed), verified parts, committed counters, sanitized
 error/warnings and search state. No internal keys, grants, leases or raw errors.
 Counters are cumulative committed `processed`, `imported`, `duplicates`, `skipped`
 and `reactions`; processed equals imported + duplicates + skipped, not reactions.
-Replays/checkpoint retries cannot inflate them.
+Replays/checkpoint retries cannot inflate them. Selected failures/skips remain in
+receipts; unselected channels are never counted as skipped. Names/kinds come from
+persisted source metadata, not inaccessible Macro targets or locally retained ZIPs.
+Polling, reconnect and job history render this same immutable server snapshot.
+The administrator service independently gates target disclosure through a read-only
+port using the **viewing** admin, not the original requester or import-write provenance.
+IDs are conservatively returned only for current active participants (even for
+team-visible channels), never for skipped work. Checks are deduplicated in batches
+of 500; a disclosure failure hides target IDs without failing an already committed
+mutation or hiding source receipts. No access grants or membership changes occur.
 
 `slack_import_updated` notifications carry only team/job/revision/status hints to
 the requesting administrator's gateway entity after access revalidation. Other
