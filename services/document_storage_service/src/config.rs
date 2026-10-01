@@ -85,6 +85,9 @@ maybe_env_vars! {
 #[derive(macro_config::MacroConfig)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Config {
+    /// Default-off quota admission and prospective usage counting.
+    #[macro_config_default(ai_usage::AiUsageEnforcement::Disabled)]
+    pub enable_ai_usage_enforcement: ai_usage::AiUsageEnforcement,
     pub database_url: DatabaseUrl,
     pub database_url_readonly: DatabaseUrlReadonly,
     pub document_storage_bucket: DocumentStorageBucket,
@@ -196,7 +199,12 @@ pub struct Config {
 
 impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
-        macro_config::ConfigLoader::load::<Config>().context("failed to load config")
+        let enforcement = ai_usage::config::load_ai_usage_enforcement()
+            .map_err(|error| anyhow::anyhow!("{error}"))?;
+        let mut config =
+            macro_config::ConfigLoader::load::<Config>().context("failed to load config")?;
+        config.enable_ai_usage_enforcement = enforcement;
+        Ok(config)
     }
 
     pub fn non_user_owners(&self) -> anyhow::Result<NonUserOwners> {

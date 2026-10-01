@@ -287,7 +287,8 @@ impl PreviewService {
         }
         self.authority.active(identity.session).await?;
         let id = PreviewId::generate();
-        let token = random();
+        // OpenSSH rejects usernames beginning with '-', which URL-safe base64 can emit.
+        let token = format!("preview_{}", random());
         let preview = Preview {
             id: id.clone(),
             agent_session_id: identity.session,

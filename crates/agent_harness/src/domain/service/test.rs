@@ -3,6 +3,7 @@
 //! recording announcer. Only the edges are doubles.
 
 mod chat_reply;
+mod quota;
 mod user_cleanup;
 
 use agent_session::domain::service::AgentSessionService as _;
@@ -907,9 +908,9 @@ async fn context_failure_still_calls_composer_with_empty_messages_and_delivers()
     let (result, container) = tokio::join!(open, drive);
 
     result.expect("context lookup is best-effort after Kafka admission");
-    // Authorized twice: once before provisioning, once at dispatch, so a
-    // revocation between the two still stops the prompt.
-    assert_eq!(context.authorized().len(), 2);
+    // Access precedes provisioning and queue admission, and is rechecked at
+    // dispatch so a revocation while queued still stops the prompt.
+    assert_eq!(context.authorized().len(), 3);
     assert_eq!(announcer.announced().len(), 1);
     assert_eq!(
         composer.calls(),

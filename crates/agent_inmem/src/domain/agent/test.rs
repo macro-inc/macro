@@ -8,12 +8,15 @@ use agent_client_protocol::schema::v1::{
     SessionConfigValueId, SessionNotification, SetSessionConfigOptionRequest, TextContent,
 };
 use agent_client_protocol::{Client, ConnectionTo};
+use ai_billing::domain::{
+    AiAdmissionError, AiAdmissionService, DenyReason, DisabledAiAdmissionService,
+};
 use rig_agent::agent::StreamingError;
 use rig_agent::completion::PromptError;
 
 use super::*;
 use crate::domain::engine::TurnEngine;
-use crate::testing::{HangingEngine, ScriptedEngine};
+use crate::testing::{HangingEngine, ScriptedEngine, TestAdmission};
 use macro_user_id::user_id::MacroUserIdStr;
 
 struct Harness {
@@ -54,6 +57,19 @@ async fn with_agent<Engine, Out>(
 where
     Engine: TurnEngine,
 {
+    with_admission(
+        engine,
+        Arc::new(DisabledAiAdmissionService),
+        async |connection, session, _| scenario(connection, session).await,
+    )
+    .await
+}
+
+async fn with_admission<Engine: TurnEngine, Out>(
+    engine: Arc<Engine>,
+    admission: Arc<dyn AiAdmissionService>,
+    scenario: impl AsyncFnOnce(ConnectionTo<Agent>, SessionId, Arc<AgentState>) -> Out,
+) -> (Vec<SessionNotification>, Vec<SessionConfigOption>, Out) {
     let store = Arc::new(SessionStore::new());
     let session_id = AgentSessionId::new();
     store.insert(
@@ -66,6 +82,7 @@ where
             MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
         ),
         engine,
+        admission,
         store,
         active_cancel: std::sync::Mutex::new(Vec::new()),
         turn_lock: tokio::sync::Mutex::new(()),
@@ -76,7 +93,7 @@ where
     });
 
     let (client_channel, agent_channel) = AcpChannel::duplex();
-    let agent = tokio::spawn(serve(state, agent_channel));
+    let agent = tokio::spawn(serve(Arc::clone(&state), agent_channel));
 
     let harness = Arc::new(Harness {
         notifications: std::sync::Mutex::new(Vec::new()),
@@ -122,7 +139,7 @@ where
                     .send_request(NewSessionRequest::new("/"))
                     .block_task()
                     .await?;
-                let out = scenario(connection, session.session_id).await;
+                let out = scenario(connection, session.session_id, state).await;
                 Ok((session.config_options, out))
             },
         )
@@ -143,6 +160,246 @@ fn text_prompt(session: &SessionId, text: &str) -> PromptRequest {
         session.clone(),
         vec![ContentBlock::Text(TextContent::new(text))],
     )
+}
+
+#[tokio::test]
+async fn direct_acp_denials_preserve_history_and_allow_retry() {
+    for failure in [
+        AiAdmissionError::Denied(DenyReason::AllowanceExhausted),
+        AiAdmissionError::Unavailable,
+    ] {
+        let engine = Arc::new(ScriptedEngine::new(vec![StreamPart::Content(
+            "reply".into(),
+        )]));
+        let admission = Arc::new(TestAdmission::new(Ok(())));
+        with_admission(
+            engine.clone(),
+            admission.clone(),
+            async |connection, session, state| {
+                connection
+                    .send_request(text_prompt(&session, "first"))
+                    .block_task()
+                    .await
+                    .unwrap();
+                *admission.result.lock().unwrap() = Err(failure);
+                let error = connection
+                    .send_request(text_prompt(&session, "denied"))
+                    .block_task()
+                    .await
+                    .unwrap_err();
+                let error = serde_json::to_value(error).unwrap();
+                assert_eq!(error["message"], failure.to_string());
+                assert_eq!(error["data"]["code"], failure.code());
+                assert_eq!(error["data"]["retryable"], failure.is_retryable());
+                assert_eq!(engine.requests().len(), 1);
+                assert_eq!(state.store.get(&state.session_id).unwrap().history.len(), 2);
+                assert!(
+                    state
+                        .active_cancel
+                        .lock()
+                        .unwrap()
+                        .iter()
+                        .all(CancellationToken::is_cancelled)
+                );
+
+                // Loading and deterministic configuration still work with exhausted quota.
+                connection
+                    .send_request(ResumeSessionRequest::new(session.clone(), "/"))
+                    .block_task()
+                    .await
+                    .unwrap();
+                connection
+                    .send_request(SetSessionConfigOptionRequest::new(
+                        session.clone(),
+                        MODEL_CONFIG_ID,
+                        SessionConfigValueId::new("other-model"),
+                    ))
+                    .block_task()
+                    .await
+                    .unwrap();
+                assert_eq!(admission.calls.lock().unwrap().len(), 2);
+                *admission.result.lock().unwrap() = Ok(());
+                connection
+                    .send_request(text_prompt(&session, "retry"))
+                    .block_task()
+                    .await
+                    .unwrap();
+            },
+        )
+        .await;
+        assert_eq!(engine.requests()[1].messages, ["first", "reply", "retry"]);
+        assert_eq!(engine.requests()[1].model, "other-model");
+        assert!(
+            admission
+                .calls
+                .lock()
+                .unwrap()
+                .iter()
+                .all(|(user, feature)| user == "macro|owner@macro.com"
+                    && *feature == ai_usage::AiFeature::AgentSession)
+        );
+    }
+}
+
+#[tokio::test]
+async fn deterministic_commands_skip_admission_but_provider_commands_do_not() {
+    let engine = Arc::new(ScriptedEngine::new(vec![]));
+    let admission = Arc::new(TestAdmission::new(Err(AiAdmissionError::Unavailable)));
+    with_admission(
+        engine.clone(),
+        admission.clone(),
+        async |connection, session, _| {
+            for command in ["/compact", "/ask choose | a | b"] {
+                connection
+                    .send_request(text_prompt(&session, command))
+                    .block_task()
+                    .await
+                    .unwrap();
+            }
+            assert!(admission.calls.lock().unwrap().is_empty());
+            // Unknown/development command text that reaches the provider is still gated.
+            connection
+                .send_request(text_prompt(&session, "/develop something"))
+                .block_task()
+                .await
+                .unwrap_err();
+            assert_eq!(admission.calls.lock().unwrap().len(), 1);
+        },
+    )
+    .await;
+    assert!(engine.requests().is_empty());
+}
+
+#[tokio::test]
+async fn queued_turns_check_admission_only_when_they_can_execute() {
+    let engine = Arc::new(ScriptedEngine::new(vec![]));
+    let admission = Arc::new(TestAdmission::new(Ok(())));
+    with_admission(
+        engine.clone(),
+        admission.clone(),
+        async |connection, session, state| {
+            let lock = state.turn_lock.lock().await;
+            let prompt = connection.send_request(text_prompt(&session, "queued"));
+            tokio::time::timeout(Duration::from_secs(5), async {
+                while state.active_cancel.lock().unwrap().is_empty() {
+                    tokio::task::yield_now().await;
+                }
+            })
+            .await
+            .unwrap();
+            assert!(admission.calls.lock().unwrap().is_empty());
+            *admission.result.lock().unwrap() = Err(AiAdmissionError::Unavailable);
+            drop(lock);
+            prompt.block_task().await.unwrap_err();
+            assert!(
+                state
+                    .store
+                    .get(&state.session_id)
+                    .unwrap()
+                    .history
+                    .is_empty()
+            );
+        },
+    )
+    .await;
+    assert!(engine.requests().is_empty());
+}
+
+#[tokio::test]
+async fn cancelling_a_queued_turn_skips_admission_and_engine() {
+    let engine = Arc::new(ScriptedEngine::new(vec![]));
+    let admission = Arc::new(TestAdmission::new(Err(AiAdmissionError::Unavailable)));
+    with_admission(
+        engine.clone(),
+        admission.clone(),
+        async |connection, session, state| {
+            let _lock = state.turn_lock.lock().await;
+            let prompt = connection.send_request(text_prompt(&session, "cancel queued"));
+            tokio::time::timeout(Duration::from_secs(5), async {
+                while state.active_cancel.lock().unwrap().is_empty() {
+                    tokio::task::yield_now().await;
+                }
+            })
+            .await
+            .unwrap();
+            connection
+                .send_notification(CancelNotification::new(session))
+                .unwrap();
+            let response = tokio::time::timeout(Duration::from_secs(5), prompt.block_task())
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(response.stop_reason, StopReason::Cancelled);
+            assert!(
+                state
+                    .store
+                    .get(&state.session_id)
+                    .unwrap()
+                    .history
+                    .is_empty()
+            );
+        },
+    )
+    .await;
+    assert!(engine.requests().is_empty());
+    assert!(admission.calls.lock().unwrap().is_empty());
+}
+
+struct WaitingAdmission(tokio::sync::Notify);
+
+impl AiAdmissionService for WaitingAdmission {
+    fn admit<'a>(
+        &'a self,
+        _: &'a MacroUserIdStr<'_>,
+        _: ai_usage::AiFeature,
+    ) -> ai_billing::domain::AdmissionFuture<'a> {
+        Box::pin(async move {
+            self.0.notify_one();
+            std::future::pending().await
+        })
+    }
+}
+
+#[tokio::test]
+async fn cancel_during_billing_does_not_start_engine_or_write_history() {
+    let engine = Arc::new(ScriptedEngine::new(vec![]));
+    let admission = Arc::new(WaitingAdmission(tokio::sync::Notify::new()));
+    with_admission(
+        engine.clone(),
+        admission.clone(),
+        async |connection, session, state| {
+            let prompt = connection.send_request(text_prompt(&session, "cancel during admission"));
+            tokio::time::timeout(Duration::from_secs(5), admission.0.notified())
+                .await
+                .unwrap();
+            connection
+                .send_notification(CancelNotification::new(session))
+                .unwrap();
+            let response = tokio::time::timeout(Duration::from_secs(5), prompt.block_task())
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(response.stop_reason, StopReason::Cancelled);
+            assert!(
+                state
+                    .store
+                    .get(&state.session_id)
+                    .unwrap()
+                    .history
+                    .is_empty()
+            );
+            assert!(
+                state
+                    .active_cancel
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .all(CancellationToken::is_cancelled)
+            );
+        },
+    )
+    .await;
+    assert!(engine.requests().is_empty());
 }
 
 #[tokio::test]
@@ -618,6 +875,7 @@ async fn session_new_dials_the_advertised_servers_except_macros_own() {
             MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
         ),
         engine: Arc::new(ScriptedEngine::new(Vec::new())),
+        admission: Arc::new(DisabledAiAdmissionService),
         store,
         active_cancel: std::sync::Mutex::new(Vec::new()),
         turn_lock: tokio::sync::Mutex::new(()),
@@ -711,6 +969,7 @@ where
             MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
         ),
         engine,
+        admission: Arc::new(DisabledAiAdmissionService),
         store,
         active_cancel: std::sync::Mutex::new(Vec::new()),
         turn_lock: tokio::sync::Mutex::new(()),

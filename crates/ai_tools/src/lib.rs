@@ -7,6 +7,7 @@ use ai_toolset::schema::{FrontendSchemas, ToolSchemaGenerator, frontend_schemas_
 #[cfg(test)]
 mod test;
 
+pub mod ai_operations;
 mod build_context;
 mod display_results;
 mod schemas;
@@ -41,7 +42,7 @@ use self_knowledge::SelfKnowledge;
 use skills::inbound::toolset::skill_toolset;
 use soup::inbound::toolset::{ListEntities, SoupToolContext};
 use std::sync::Arc;
-use subagent::Subagent;
+use subagent::{Subagent, SubagentContext};
 use teams::inbound::toolset::team_toolset;
 
 #[cfg(any(test, feature = "test-support"))]
@@ -168,7 +169,7 @@ pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
     };
     let toolset = toolset
         .add_subtoolset::<ToolImportToolContext>(import_toolset())
-        .add_tool::<Subagent, ToolServiceContext>();
+        .add_tool::<Subagent, SubagentContext>();
     let toolset = match host {
         AiHost::Chat | AiHost::AgentSession | AiHost::ChannelBot => toolset
             .add_tool::<SearchTools, ToolServiceContext>()

@@ -6,7 +6,7 @@ mod test;
 
 use crate::domain::{BillingService, SettlementTrigger};
 use ai_usage::domain::service::UsageServiceImpl;
-use ai_usage::{SYSTEM_USER_ID, UsageEvent, UsageRecorder, UsageRepo};
+use ai_usage::{UsageEvent, UsageRecorder, UsageRepo};
 use macro_env::Environment;
 use std::sync::Arc;
 use std::time::Duration;
@@ -19,8 +19,8 @@ const RECORD_RETRY_BACKOFF: [Duration; 3] = [
     Duration::from_secs(5),
 ];
 
-/// Wraps the Postgres usage recorder. After each row lands it reads the
-/// payer's position and, when there is uncovered usage, triggers settlement
+/// Wraps the Postgres usage recorder. After a counted row lands in dev it reads
+/// the payer's position and, when there is uncovered usage, triggers settlement
 /// (credit consumption and overage collection) in the service that owns
 /// Stripe. Recording stays best-effort and never delays the completion.
 ///
@@ -36,7 +36,8 @@ pub struct SettlingUsageRecorder<Repo, B, T> {
 }
 
 impl<Repo, B, T> SettlingUsageRecorder<Repo, B, T> {
-    /// Build the recorder. Usage is recorded everywhere; settlement is requested only in dev.
+    /// Build the recorder. Usage is recorded everywhere; only counted usage in
+    /// dev can request settlement. The inner service owns the counting policy.
     pub fn new(
         inner: Arc<UsageServiceImpl<Repo>>,
         billing: Arc<B>,
@@ -62,7 +63,8 @@ where
         let inner = self.inner.clone();
         let billing = self.billing.clone();
         let trigger = self.trigger.clone();
-        let environment = self.environment;
+        let should_settle =
+            matches!(self.environment, Environment::Develop) && inner.counts_usage(&event);
         tokio::spawn(async move {
             let user = event.user.clone();
             let mut backoff = RECORD_RETRY_BACKOFF.iter();
@@ -87,9 +89,7 @@ where
                     }
                 }
             }
-            if !matches!(environment, Environment::Develop)
-                || user.as_ref() == SYSTEM_USER_ID.as_ref()
-            {
+            if !should_settle {
                 return;
             }
             match billing.snapshot(&user).await {

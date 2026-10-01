@@ -440,7 +440,15 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         skill_tool_context,
         schedule_tool_context: NoOpScheduleContext,
         anthropic_tool_context: ai_tools::build_anthropic_tool_context(),
-        recorder: ai_usage::pg_recorder(db.clone()),
+        admission: ai_billing::composition::pg_admission_service(
+            db.clone(),
+            config.environment,
+            config.enable_ai_usage_enforcement,
+        ),
+        recorder: ai_usage::pg_recorder_with_enforcement(
+            db.clone(),
+            config.enable_ai_usage_enforcement,
+        ),
         usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
     };
 

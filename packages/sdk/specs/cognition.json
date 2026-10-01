@@ -1149,8 +1149,28 @@
           "400": {
             "description": "Unknown import source"
           },
+          "402": {
+            "description": "AI allowance exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
+                }
+              }
+            }
+          },
           "500": {
             "description": "Internal server error"
+          },
+          "503": {
+            "description": "AI usage validation unavailable; retry later",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
+                }
+              }
+            }
           }
         }
       }
@@ -2030,6 +2050,16 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "AI usage validation unavailable — retry later",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatMessageError"
+                }
+              }
+            }
           }
         }
       }
@@ -2113,10 +2143,27 @@
             "description": "Unauthorized"
           },
           "402": {
-            "description": "Payment required"
+            "description": "Payment required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StructuredCompletionError"
+                }
+              }
+            }
           },
           "500": {
             "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StructuredCompletionError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "AI usage validation unavailable — retry later",
             "content": {
               "application/json": {
                 "schema": {
@@ -2148,6 +2195,21 @@
           "url": {
             "type": "string",
             "description": "The MCP server's streamable HTTP URL."
+          }
+        }
+      },
+      "AiAdmissionErrorBody": {
+        "type": "object",
+        "description": "Public admission error payload. Handlers with additional fields can reuse the\ndomain error's code and message and [`admission_status`].",
+        "required": ["error", "code"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Stable denial or unavailability code."
+          },
+          "error": {
+            "type": "string",
+            "description": "Human-readable explanation, without internal billing diagnostics."
           }
         }
       },
@@ -2579,7 +2641,7 @@
         "properties": {
           "code": {
             "type": ["string", "null"],
-            "description": "Stable machine-readable code for payment-required errors."
+            "description": "Stable machine-readable code for admission errors (402 or 503)."
           },
           "error": {
             "type": "string"
@@ -4598,7 +4660,7 @@
         "properties": {
           "code": {
             "type": ["string", "null"],
-            "description": "Stable machine-readable code for payment-required errors."
+            "description": "Stable machine-readable code for admission errors (402 or 503)."
           },
           "error": {
             "type": "string"

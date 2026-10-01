@@ -11,9 +11,9 @@ import {
   useContext,
 } from 'solid-js';
 
-/** A channel can supply its complete edge without activating the global feed. */
-export const MessageNotificationSourceContext =
-  createContext<Accessor<UnifiedNotification[]>>();
+/** Share exact unread matches so each message avoids scanning the channel history. */
+export const MessageNotificationIndexContext =
+  createContext<Accessor<ReadonlyMap<string, UnifiedNotification[]>>>();
 
 const MAX_MARK_ATTEMPTS = 3;
 
@@ -27,10 +27,10 @@ export function MarkMessageNotifications(props: {
   // matches metadata.messageId only; the current CHANNEL_MESSAGE entity scope
   // is thread-aware, so targeting a root also includes reply notifications.
   const notificationSource = useGlobalNotificationSource();
-  const scopedNotifications = useContext(MessageNotificationSourceContext);
-  const notifications =
-    scopedNotifications ??
-    useNotificationsForEntity(notificationSource, props.parent);
+  const scopedIndex = useContext(MessageNotificationIndexContext);
+  const notifications = scopedIndex
+    ? () => scopedIndex().get(props.messageId) ?? []
+    : useNotificationsForEntity(notificationSource, props.parent);
   const isMessageNotification = (n: UnifiedNotification) => {
     const content = n.notification_metadata.content;
     return (
@@ -56,7 +56,8 @@ export function MarkMessageNotifications(props: {
   createEffect(() => {
     const unread = notifications().filter(
       (notification) =>
-        isMessageNotification(notification) && notification.state === 'unseen'
+        notification.state === 'unseen' &&
+        (scopedIndex !== undefined || isMessageNotification(notification))
     );
     if (unread.length === 0 || inFlight()) return;
     const ids = JSON.stringify(

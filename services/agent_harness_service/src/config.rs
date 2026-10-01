@@ -62,6 +62,9 @@ fn default_pipedream_environment() -> String {
 #[derive(macro_config::MacroConfig)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Config {
+    /// Default-off quota admission and prospective usage counting.
+    #[macro_config_default(ai_usage::AiUsageEnforcement::Disabled)]
+    pub enable_ai_usage_enforcement: ai_usage::AiUsageEnforcement,
     /// OAuth encryption key; deployments without a key do not advertise sign-in.
     pub claude_oauth_kms_key_id: ClaudeOauthKmsKeyId,
     /// The environment we are in.
@@ -239,7 +242,11 @@ impl Config {
 
     /// Load the configuration from the environment.
     pub fn from_env() -> anyhow::Result<Self> {
-        macro_config::ConfigLoader::load::<Config>()
-            .context("failed to load agent harness service config")
+        let enforcement = ai_usage::config::load_ai_usage_enforcement()
+            .map_err(|error| anyhow::anyhow!("{error}"))?;
+        let mut config = macro_config::ConfigLoader::load::<Config>()
+            .context("failed to load agent harness service config")?;
+        config.enable_ai_usage_enforcement = enforcement;
+        Ok(config)
     }
 }

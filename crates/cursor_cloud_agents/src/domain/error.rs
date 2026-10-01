@@ -8,6 +8,10 @@ use thiserror::Error;
 /// Why a session operation failed.
 #[derive(Debug, Error)]
 pub enum SessionError {
+    /// A Macro-funded hosted helper was refused; the owner's Cursor budget is unrelated.
+    #[cfg(feature = "postgres")]
+    #[error(transparent)]
+    Admission(#[from] agent_session::domain::error::AiAdmissionError),
     /// The client referenced a session this agent never created.
     #[error("unknown session {0}")]
     UnknownSession(SessionId),
@@ -32,6 +36,12 @@ pub enum SessionError {
 
 impl From<rootcause::Report> for SessionError {
     fn from(report: rootcause::Report) -> Self {
+        #[cfg(feature = "postgres")]
+        if let Some(error) =
+            report.downcast_current_context::<agent_session::domain::error::AiAdmissionError>()
+        {
+            return Self::Admission(*error);
+        }
         Self::Cursor(report)
     }
 }

@@ -1,5 +1,7 @@
 use super::*;
 
+#[cfg(feature = "admission")]
+mod admission;
 mod task_assignment;
 
 use agent_session::domain::error::AgentSessionError;

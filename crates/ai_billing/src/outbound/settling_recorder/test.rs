@@ -4,27 +4,32 @@ use crate::domain::{
     UsageSnapshot, ledger::build_snapshot,
 };
 use ai_usage::domain::{Result as UsageResult, UsageError};
-use ai_usage::{AiFeature, CompletionUsage, ModelPricing, UsageApiParams, UsageContext};
+use ai_usage::{
+    AiFeature, AiUsageEnforcement, CompletionUsage, ModelPricing, SYSTEM_USER_ID, UsageApiParams,
+    UsageContext,
+};
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use tokio::sync::Notify;
 
 #[derive(Clone, Default)]
 struct FakeUsageRepo {
     attempts: Arc<AtomicUsize>,
     recorded: Arc<Notify>,
+    counted: Arc<AtomicBool>,
     fail_first: bool,
 }
 
 impl UsageRepo for FakeUsageRepo {
-    async fn insert_usage(&self, _usage: &CompletionUsage) -> UsageResult<()> {
+    async fn insert_usage(&self, _usage: &CompletionUsage, count_usage: bool) -> UsageResult<()> {
         let attempt = self.attempts.fetch_add(1, Ordering::SeqCst);
         if self.fail_first && attempt == 0 {
             return Err(UsageError::Other(anyhow::anyhow!(
                 "transient write failure"
             )));
         }
+        self.counted.store(count_usage, Ordering::SeqCst);
         self.recorded.notify_one();
         Ok(())
     }
@@ -121,6 +126,27 @@ async fn record(
     chargeable_cents: i64,
     fail_first: bool,
 ) -> (usize, usize, usize) {
+    record_with_policy(
+        environment,
+        user,
+        tier,
+        unlimited,
+        chargeable_cents,
+        fail_first,
+        (AiUsageEnforcement::Enabled, AiFeature::Chat),
+    )
+    .await
+}
+
+async fn record_with_policy(
+    environment: Environment,
+    user: MacroUserIdStr<'static>,
+    tier: PlanTier,
+    unlimited: bool,
+    chargeable_cents: i64,
+    fail_first: bool,
+    (enforcement, feature): (AiUsageEnforcement, AiFeature),
+) -> (usize, usize, usize) {
     let repo = FakeUsageRepo {
         fail_first,
         ..Default::default()
@@ -142,21 +168,19 @@ async fn record(
     });
     let trigger = FakeTrigger::default();
     let recorder = SettlingUsageRecorder::new(
-        Arc::new(UsageServiceImpl::new(repo.clone())),
+        Arc::new(UsageServiceImpl::new(repo.clone()).with_enforcement(enforcement)),
         billing.clone(),
         trigger.clone(),
         environment,
     );
-    recorder.record(UsageContext::new(AiFeature::Chat, user).into_event(
-        "test-model".into(),
-        10,
-        10,
-    ));
+    let should_count = enforcement.should_count(&user, feature);
+    recorder.record(UsageContext::new(feature, user).into_event("test-model".into(), 10, 10));
     tokio::time::timeout(Duration::from_secs(2), repo.recorded.notified())
         .await
         .expect("usage must be recorded in every environment, including after a retry");
     // All fake billing/trigger calls are immediately ready; let the recording task finish.
     tokio::task::yield_now().await;
+    assert_eq!(repo.counted.load(Ordering::SeqCst), should_count);
     (
         repo.attempts.load(Ordering::SeqCst),
         billing.snapshots.load(Ordering::SeqCst),
@@ -188,6 +212,33 @@ async fn records_everywhere_but_only_requests_settlement_in_dev() {
             assert_eq!(attempts, if fail_first { 2 } else { 1 });
             assert_eq!(snapshots, expected);
             assert_eq!(requests, expected);
+        }
+    }
+}
+
+#[tokio::test]
+async fn uncounted_usage_never_reads_billing_or_requests_settlement() {
+    for policy in [
+        (AiUsageEnforcement::Disabled, AiFeature::Chat),
+        (AiUsageEnforcement::Enabled, AiFeature::Memory),
+        (AiUsageEnforcement::Enabled, AiFeature::AiProjection),
+        (AiUsageEnforcement::Enabled, AiFeature::CallSummary),
+        (AiUsageEnforcement::Enabled, AiFeature::Dictation),
+    ] {
+        for fail_first in [false, true] {
+            assert_eq!(
+                record_with_policy(
+                    Environment::Develop,
+                    user(),
+                    PlanTier::Premium,
+                    false,
+                    1_000,
+                    fail_first,
+                    policy
+                )
+                .await,
+                (if fail_first { 2 } else { 1 }, 0, 0)
+            );
         }
     }
 }

@@ -156,6 +156,18 @@ bot asks before scheduling a specific clock time. Within the rollout, `@Macro` �
 `@coder` / `@cursor` / `@codex` / `@claude` for everyone — opens
 an agent session; follow-up
 `@` mentions of that bot in the same thread route to it.
+When the backend is configured with AI usage enforcement, a rejected classic
+`@Macro` request gets a thread reply explaining the allowance failure (for example,
+`ai_allowance_exhausted`) or temporary validation failure (`ai_billing_unavailable`),
+without a lingering thinking placeholder. This also applies in document discussions.
+Optional unmentioned follow-up inference, including attached-image descriptions,
+is skipped when admission fails; silence does not mean the request was approved.
+Explicit mentions and reply-target routing still reach downstream execution checks.
+To verify after backend wiring, test an exhausted account and unavailable billing:
+explicit classic mentions should show the failure, while unmentioned follow-ups
+should not generate responses. Repeat with an attached image. Enforcement is off
+by default; browser verification requires a configured backend.
+
 A follow-up sent while that session is still working stops the current turn,
 posts a new Magic Chip on the follow-up message, and steers the agent with
 that text — the chip appears at the follow-up, not after the cancelled turn

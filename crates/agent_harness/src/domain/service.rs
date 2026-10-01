@@ -16,6 +16,7 @@
 #[cfg(test)]
 mod test;
 
+mod admission;
 mod deliver;
 mod lifecycle;
 mod lifecycle_events;
@@ -124,6 +125,7 @@ struct AgentHarnessInner<
     Notifier,
 > {
     sessions: Sessions,
+    admission: Arc<dyn ai_billing::AiAdmissionService>,
     containers: Containers,
     announcer: Announcer,
     runtimes: Runtimes,
@@ -318,6 +320,7 @@ where
         Self {
             inner: Arc::new(AgentHarnessInner {
                 sessions,
+                admission: Arc::new(ai_billing::DisabledAiAdmissionService),
                 containers,
                 announcer,
                 runtimes,
@@ -338,6 +341,14 @@ where
             workers: Arc::new(DashMap::new()),
             repositories: None,
         }
+    }
+
+    /// Configure shared admission before cloning the harness or starting workers.
+    pub fn with_admission(mut self, admission: Arc<dyn ai_billing::AiAdmissionService>) -> Self {
+        Arc::get_mut(&mut self.inner)
+            .expect("configure admission before sharing the harness")
+            .admission = admission;
+        self
     }
 
     /// Enable explicit repository choices, authorized against the owner's reachable repositories.
@@ -498,6 +509,7 @@ where
 fn into_session_error(error: HarnessError) -> AgentSessionError {
     match error {
         HarnessError::Session(error) => error,
+        HarnessError::Admission(error) => AgentSessionError::Admission(error),
         HarnessError::Disconnected(session) => AgentSessionError::Disconnected(session),
         other => AgentSessionError::Unknown(anyhow::anyhow!(other)),
     }

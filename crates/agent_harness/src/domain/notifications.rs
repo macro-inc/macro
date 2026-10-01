@@ -150,6 +150,7 @@ pub fn plan(event: &AgentSessionLifecycleEvent, is_coding: bool) -> Vec<PlannedN
         AgentSessionLifecycleEvent::Opened(_)
         | AgentSessionLifecycleEvent::TurnStarted(_)
         | AgentSessionLifecycleEvent::TurnEnded(_)
+        | AgentSessionLifecycleEvent::CommandRejected(_)
         | AgentSessionLifecycleEvent::InputReceived(_)
         | AgentSessionLifecycleEvent::Stopped(_)
         | AgentSessionLifecycleEvent::Renamed(_)

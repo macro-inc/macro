@@ -84,6 +84,7 @@ export * from './agentSessionResponseThreadId';
 export * from './agentSessionResponseThreadParent';
 export * from './agentSetConfigOptionAction';
 export * from './agentSetModelAction';
+export * from './aiAdmissionErrorBody';
 export * from './botId';
 export * from './capabilityHarnessDto';
 export * from './captureAttemptDto';

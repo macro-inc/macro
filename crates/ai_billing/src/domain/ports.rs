@@ -75,9 +75,10 @@ pub trait EntitlementSource: Send + Sync + 'static {
 pub trait UsageReader: Send + Sync + 'static {
     /// List-rate usage for each of `users` within `period`.
     ///
-    /// [`NON_BILLABLE_AI_FEATURES`](super::models::NON_BILLABLE_AI_FEATURES)
-    /// remain in `ai_usage` for cost tracking but do not consume a user's
-    /// allowance, credits, or overage.
+    /// Only rows with the persisted `count_usage = TRUE` decision consume a user's
+    /// allowance, credits, or overage. Historical and uncounted rows remain available
+    /// for cost tracking. The period is inclusive at the start and exclusive at the end;
+    /// users with no counted rows are omitted, and an empty user list returns no rows.
     fn list_rate_usage_cents_by_user(
         &self,
         users: &[MacroUserIdStr<'static>],
