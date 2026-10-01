@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT DISTINCT LOWER(a.email) AS \"email!\"\n            FROM call_records cr\n            JOIN call_meetings m ON m.id = cr.meeting_id\n            JOIN calendar_events e ON e.owner_id = m.user_id\n            JOIN calendar_event_attendees a ON a.event_id = e.id\n            WHERE cr.id = $1\n              AND (\n                  STRPOS(e.location, m.share_token) > 0\n                  OR STRPOS(e.description, m.share_token) > 0\n                  OR STRPOS(e.conference_url, m.share_token) > 0\n              )\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "email!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "92bc78a7c87c5313699835ad64c8203f4a7c5d58f37645445534400ccbff0a87"
+}

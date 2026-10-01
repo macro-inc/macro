@@ -387,6 +387,16 @@ check that the inserted company mention points to the correct company. Also chec
 searching by domain and that an open picker updates when companies finish hydrating.
 Discard unsent test drafts rather than sending them.
 
+## CRM associations
+
+With CRM enabled, any task, document or call can point at CRM records through the
+`Companies` and `Contacts` system properties: side panel `Properties` →
+`Add property`. The `Companies` picker lists Quick Access companies; the
+`Contacts` picker searches the team's contacts by email or name. Values show the
+record's name and open the company or contact. Calls are linked automatically
+when they end, from their participants and the invitees of the calendar event
+carrying the meeting link; verify on a finished call's `Properties`.
+
 ## Native offline reopening
 
 On native mobile, previously opened Markdown documents/tasks can reopen after an

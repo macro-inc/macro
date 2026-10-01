@@ -22,6 +22,8 @@ const PREVIEWABLE_ENTITY_TYPES: EntityType[] = [
   'CHAT',
   'CHANNEL',
   'THREAD',
+  'COMPANY',
+  'CONTACT',
 ] as const;
 
 type PreviewableEntityType = (typeof PREVIEWABLE_ENTITY_TYPES)[number];
@@ -131,7 +133,6 @@ export function usePropertyEntityDisplay(
       })
       .with('USER', () => user.name())
       .with('CHANNEL', () => channelName() || 'Channel')
-      .with('COMPANY', () => entityId())
       .otherwise(() => {
         const item = preview();
         if (!item || item.loading) return 'Loading...';
@@ -165,8 +166,9 @@ export function usePropertyEntityDisplay(
       .with('PROJECT', () => <CoreEntityIcon targetType="project" size="xs" />)
       .with('CHAT', () => <CoreEntityIcon targetType="chat" size="xs" />)
       .with('COMPANY', () => (
-        <CoreEntityIcon targetType="organization" size="xs" />
+        <CoreEntityIcon targetType="crm_company" size="xs" />
       ))
+      .with('CONTACT', () => <CoreEntityIcon targetType="contact" size="xs" />)
       .with('THREAD', () => <CoreEntityIcon targetType="email" size="xs" />)
       .otherwise(() => {
         if (options && 'fallbackIcon' in options) {
@@ -183,6 +185,8 @@ export function usePropertyEntityDisplay(
       .with('PROJECT', () => 'project')
       .with('TASK', () => 'task')
       .with('THREAD', () => 'email')
+      .with('COMPANY', () => 'company')
+      .with('CONTACT', () => 'contact')
       .with('DOCUMENT', () => {
         const item = preview();
         if (!item || !isAccessiblePreviewItem(item)) {

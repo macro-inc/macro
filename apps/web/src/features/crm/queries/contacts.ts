@@ -49,6 +49,41 @@ export function useCrmContactByEmailQuery(
 }
 
 /**
+ * Searches the caller's team's contacts by email or name via
+ * `GET /crm/contacts`, most recently interacted first, and primes each
+ * contact's detail cache. An empty query lists the most recent contacts.
+ */
+export function useCrmContactSearchQuery(
+  deps: CrmRecordDependencies,
+  query: Accessor<string>,
+  enabled: Accessor<boolean>
+) {
+  return useQuery(
+    () => {
+      const term = query().trim().toLowerCase();
+      return {
+        queryKey: crmKeys.contactSearch(term).queryKey,
+        queryFn: async ({ signal }) => {
+          const { contacts } = await throwOnErr(() =>
+            deps.storage.searchContacts({ query: term, signal })
+          );
+          for (const contact of contacts) {
+            deps.client.setQueryData(
+              crmKeys.contact(contact.id).queryKey,
+              contact
+            );
+          }
+          return contacts;
+        },
+        staleTime: CONTACT_STALE_TIME,
+        enabled: enabled(),
+      };
+    },
+    () => deps.client
+  );
+}
+
+/**
  * Fetches a single CRM contact by id via `GET /crm/contacts/{id}`.
  * The endpoint is role-aware: admins/owners see hidden contacts too,
  * non-admins get 404 on hidden rows. The frontend doesn't branch — it

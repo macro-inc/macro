@@ -363,6 +363,15 @@ impl CrmService for FakeCrmService {
         panic!("unexpected get_contact_for_team call")
     }
 
+    async fn search_contacts(
+        &self,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
+        _query: &str,
+        _limit: u8,
+    ) -> Result<Vec<CrmContact>, CrmError> {
+        panic!("unexpected search_contacts call")
+    }
+
     async fn get_contact_by_email(
         &self,
         _access: &CrmTeamReceipt<MemberTeamRole>,

@@ -27,7 +27,15 @@ axum = [
   "entity_access/ports",
   "ports",
 ]
-default = ["ai_tools", "inbound", "lookup", "outbound", "ports"]
+# Links archived call records to CRM records for the call crate.
+call_link = [
+  "dep:call",
+  "dep:models_properties",
+  "dep:rootcause",
+  "dep:sqlx",
+  "ports",
+]
+default = ["ai_tools", "call_link", "inbound", "lookup", "outbound", "ports"]
 inbound = ["axum", "ports"]
 # Read-only company/contact identity for other domains. Pulls only sqlx + ports.
 lookup = ["dep:messages", "dep:rootcause", "dep:sqlx", "ports"]
@@ -54,6 +62,7 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
 
+call = { path = "../call", default-features = false, features = ["ports"], optional = true }
 entity_access = { path = "../entity_access", default-features = false }
 messages = { path = "../messages", default-features = false, features = ["ports"], optional = true }
 rootcause = { workspace = true, optional = true }

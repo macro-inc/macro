@@ -58,8 +58,8 @@ use super::models::{
     RingStatusResponse, TranscriptSegmentRequest,
 };
 use super::ports::{
-    CallRecordQueryService, CallRepository, CallRtcClient, CallService, CallSummarizer,
-    NoOpVoiceRepository, RecordingStorage, VoiceRepository,
+    CallCrmLinker, CallRecordQueryService, CallRepository, CallRtcClient, CallService,
+    CallSummarizer, NoOpVoiceRepository, RecordingStorage, VoiceRepository,
 };
 
 /// The concrete call service implementation.
@@ -89,6 +89,7 @@ pub struct CallServiceImpl<
     voice_repo: Vr,
     ring_status_base_url: Option<String>,
     event_broker: B,
+    crm_linker: Option<Arc<dyn CallCrmLinker>>,
 }
 
 impl<
@@ -126,6 +127,7 @@ impl<
             voice_repo: NoOpVoiceRepository,
             ring_status_base_url: None,
             event_broker: NoopMacroEventBroker,
+            crm_linker: None,
         }
     }
 }
@@ -170,6 +172,13 @@ impl<
         self
     }
 
+    /// Link archived call records to the CRM records of the people on them.
+    /// When unset, calls are never linked.
+    pub fn with_crm_linker(mut self, crm_linker: Arc<dyn CallCrmLinker>) -> Self {
+        self.crm_linker = Some(crm_linker);
+        self
+    }
+
     /// Attach a VoIP push sender so incoming-call PushKit notifications are
     /// delivered when a new call is created.
     pub fn with_voip_push_sender<V2: VoipPushSender>(
@@ -191,6 +200,7 @@ impl<
             voice_repo: self.voice_repo,
             ring_status_base_url: self.ring_status_base_url,
             event_broker: self.event_broker,
+            crm_linker: self.crm_linker,
         }
     }
 
@@ -214,6 +224,7 @@ impl<
             voice_repo,
             ring_status_base_url: self.ring_status_base_url,
             event_broker: self.event_broker,
+            crm_linker: self.crm_linker,
         }
     }
 
@@ -237,6 +248,7 @@ impl<
             voice_repo: self.voice_repo,
             ring_status_base_url: self.ring_status_base_url,
             event_broker,
+            crm_linker: self.crm_linker,
         }
     }
 
@@ -1191,6 +1203,7 @@ impl<
                     // `call_records` row is persisted.
                     self.spawn_summarize_call(archived.call_id);
                     self.spawn_process_voices_for_call(archived.call_id);
+                    self.spawn_link_crm_records(archived.call_id);
 
                     self.send_call_event(
                         &archived.channel_id,
@@ -2025,6 +2038,29 @@ impl<
         let voice_repo = self.voice_repo.clone();
         tokio::spawn(async move {
             enroll_stable_speaker_voices_for_call_record(&repo, &voice_repo, call_record_id).await;
+        });
+    }
+
+    /// Fire-and-forget spawn linking an archived call record to the CRM
+    /// companies and contacts of the people on it. Errors are logged, never
+    /// propagated. When no linker is configured this is a no-op.
+    fn spawn_link_crm_records(&self, call_record_id: Uuid) {
+        let Some(crm_linker) = self.crm_linker.clone() else {
+            return;
+        };
+        let repo = self.repo.clone();
+        tokio::spawn(async move {
+            let people = match repo.get_call_record_people(&call_record_id).await {
+                Ok(people) => people,
+                Err(error) => {
+                    let error: anyhow::Error = error.into();
+                    tracing::error!(error = ?error, %call_record_id, "failed to load call people for CRM linking");
+                    return;
+                }
+            };
+            if let Err(error) = crm_linker.link_call_record(call_record_id, &people).await {
+                tracing::error!(error = ?error, %call_record_id, "failed to link call record to CRM records");
+            }
         });
     }
 }

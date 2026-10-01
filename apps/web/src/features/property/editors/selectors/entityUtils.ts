@@ -10,6 +10,8 @@ import type { FreshSortConfig, TimestampedItem } from '@core/util/freshSort';
 import type {
   ChannelEntity,
   ChatEntity,
+  CrmCompanyEntity,
+  CrmContactEntity,
   DocumentEntity,
   EmailEntity,
   EntityData,
@@ -28,7 +30,9 @@ export type EntityTypeItemMap = {
   CHAT: EntityItem<ChatEntity>;
   TASK: EntityItem<TaskEntity>;
   THREAD: EntityItem<EmailEntity>;
-  COMPANY: never;
+  COMPANY: EntityItem<CrmCompanyEntity>;
+  // CRM contacts come from the CRM contact search, not quickAccess.
+  CONTACT: never;
   // Native projects use the initiative picker, separate from folder quick access.
   INITIATIVE: never;
   // Call records aren't entity-reference targets in quickAccess.
@@ -49,7 +53,8 @@ function entityTypeToBuckets(entityType: EntityType): readonly Bucket[] {
     .with('TASK', () => ['task'] as const)
     .with('THREAD', () => ['email'] as const) // Note: emails aren't in quickAccess yet, handled separately
     .with('INITIATIVE', () => [] as const)
-    .with('COMPANY', () => [] as const) // Companies aren't in quickAccess
+    .with('COMPANY', () => ['crm_company'] as const)
+    .with('CONTACT', () => [] as const) // Contacts aren't in quickAccess
     .with('CALL_RECORD', () => [] as const) // Call records aren't in quickAccess
     .with('CALENDAR_EVENT', () => [] as const) // Calendar events aren't in quickAccess
     .exhaustive();
@@ -135,8 +140,22 @@ export function getEntitySearchText(entity: CombinedEntity): string {
     if (name === email) return `${email} | ${email}`;
     return `${name} | ${email}`;
   }
+  if (entity.data.type === 'crm_contact') {
+    return `${entity.data.name} | ${entity.data.email}`;
+  }
 
   return entity.data.name ?? '';
+}
+
+/** Wraps CRM contacts from the CRM contact search as selector entities. */
+export function crmContactsToEntities(
+  contacts: CrmContactEntity[]
+): CombinedEntity[] {
+  return contacts.map((contact) => ({
+    kind: 'entity',
+    id: contact.id,
+    data: contact,
+  }));
 }
 
 /** Gets the EntityType string for an entity */
@@ -160,6 +179,10 @@ export function getEntityType(entity: CombinedEntity): EntityType {
       return 'PROJECT';
     case 'email':
       return 'THREAD';
+    case 'crm_company':
+      return 'COMPANY';
+    case 'crm_contact':
+      return 'CONTACT';
     default:
       return (data as EntityData).type.toUpperCase() as EntityType;
   }

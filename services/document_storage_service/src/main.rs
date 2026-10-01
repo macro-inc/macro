@@ -689,7 +689,11 @@ async fn run() -> anyhow::Result<()> {
     )
     .with_summarizer(AiCallSummarizer::new(
         ai_usage::pg_recorder_with_enforcement(db.clone(), config.enable_ai_usage_enforcement),
-    ));
+    ))
+    .with_crm_linker(Arc::new(crm::outbound::call_link::PgCallCrmLinker::new(
+        db.clone(),
+        (*system_properties_service).clone(),
+    )));
     if let Some(secret) = internal_call_secret {
         call_service_builder = call_service_builder.with_internal_call_secret(secret);
     }

@@ -299,6 +299,8 @@ enum GraphqlPropertyEntityType {
     Chat,
     /// Company entity.
     Company,
+    /// CRM contact entity.
+    Contact,
     /// Document entity.
     Document,
     /// Initiative entity.
@@ -329,7 +331,10 @@ impl TryFrom<GraphqlPropertyEntityType> for PropertyEntityType {
             GraphqlPropertyEntityType::Thread => Self::Thread,
             GraphqlPropertyEntityType::User => Self::User,
             GraphqlPropertyEntityType::Initiative => Self::Initiative,
-            other @ GraphqlPropertyEntityType::CallRecord => return Err(other),
+            other
+            @ (GraphqlPropertyEntityType::CallRecord | GraphqlPropertyEntityType::Contact) => {
+                return Err(other);
+            }
         })
     }
 }

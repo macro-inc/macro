@@ -4892,7 +4892,7 @@ export type EntityReference = {
 /**
  * Type of entity that can be referenced by entity properties.
  */
-export type EntityType = 'CALENDAR_EVENT' | 'CALL_RECORD' | 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DOCUMENT' | 'INITIATIVE' | 'PROJECT' | 'TASK' | 'THREAD' | 'USER';
+export type EntityType = 'CALENDAR_EVENT' | 'CALL_RECORD' | 'CHANNEL' | 'CHAT' | 'COMPANY' | 'CONTACT' | 'DOCUMENT' | 'INITIATIVE' | 'PROJECT' | 'TASK' | 'THREAD' | 'USER';
 
 /**
  * A plain old json error response for use with axum.
@@ -8032,6 +8032,16 @@ export type SaveDocumentResponseData = {
      * If the document is an editable file, we provide a presigned url to save the updated file to.
      */
     presignedUrl?: string | null;
+};
+
+/**
+ * Response from searching CRM contacts.
+ */
+export type SearchContactsResponse = {
+    /**
+     * Matching contacts, most recently interacted first.
+     */
+    contacts: Array<CrmContactResponse>;
 };
 
 /**
@@ -12931,6 +12941,36 @@ export type SetCrmCompanyNameResponses = {
 };
 
 export type SetCrmCompanyNameResponse = SetCrmCompanyNameResponses[keyof SetCrmCompanyNameResponses];
+
+export type SearchContactsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Text the contact's email or name must contain (case-insensitive).
+         * Empty lists the most recently interacted contacts.
+         */
+        query?: string;
+        /**
+         * Maximum contacts to return (1-50, default 20).
+         */
+        limit?: number | null;
+    };
+    url: '/crm/contacts';
+};
+
+export type SearchContactsErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SearchContactsError = SearchContactsErrors[keyof SearchContactsErrors];
+
+export type SearchContactsResponses = {
+    200: SearchContactsResponse;
+};
+
+export type SearchContactsResponse2 = SearchContactsResponses[keyof SearchContactsResponses];
 
 export type GetContactByEmailData = {
     body?: never;

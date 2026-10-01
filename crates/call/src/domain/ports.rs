@@ -5,6 +5,7 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::future::Future;
+use std::pin::Pin;
 
 use chrono::{DateTime, Utc};
 
@@ -18,7 +19,7 @@ use notification::domain::models::apple::VoipPushPayload;
 use models_permissions::share_permission::team_share::TeamShareFacts;
 
 use crate::domain::models::{
-    CustomSpeakerAssignment, DeletedCallRecordStorageKeys, EditCallRecordRepoArgs,
+    CallPeople, CustomSpeakerAssignment, DeletedCallRecordStorageKeys, EditCallRecordRepoArgs,
     EditCallRecordRequest, EditCallTranscriptRequest,
 };
 
@@ -237,6 +238,14 @@ pub trait CallRepository: Send + Sync + 'static {
         &self,
         call_id: &Uuid,
     ) -> impl Future<Output = Result<Vec<CallParticipant>, Self::Err>> + Send;
+
+    /// The people on an archived call: its Macro participants, the owner of
+    /// its meeting link, and the invitees of the calendar event carrying that
+    /// link.
+    fn get_call_record_people(
+        &self,
+        call_record_id: &Uuid,
+    ) -> impl Future<Output = Result<CallPeople, Self::Err>> + Send;
 
     /// Get the count of active attendees in a call: Macro participants plus
     /// non-account guests. Archival on room-empty keys off this reaching 0.
@@ -655,6 +664,18 @@ pub trait CallSummarizer: Send + Sync + 'static {
         transcript: Vec<EnrichedCallTranscript>,
         candidate_speakers: Vec<MacroUserIdStr<'static>>,
     ) -> impl Future<Output = Result<Vec<CallTranscriptCustomSpeakerResult>, Self::Err>> + Send;
+}
+
+/// Links archived call records to the CRM companies and contacts of the
+/// people on them. Implemented by the CRM crate, so this crate does not
+/// depend on it.
+pub trait CallCrmLinker: Send + Sync + 'static {
+    /// Associate `call_record_id` with the CRM records matching `people`.
+    fn link_call_record<'a>(
+        &'a self,
+        call_record_id: Uuid,
+        people: &'a CallPeople,
+    ) -> Pin<Box<dyn Future<Output = Result<(), rootcause::Report>> + Send + 'a>>;
 }
 
 /// RTC client port for interacting with the real-time communication service (e.g., LiveKit).

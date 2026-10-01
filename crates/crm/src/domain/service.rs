@@ -320,6 +320,17 @@ pub trait CrmService: Clone + Send + Sync + 'static {
         access: &CrmContactReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<Option<CrmContact>, CrmError>> + Send;
 
+    /// Search the caller's team's contacts by email or name, most recently
+    /// interacted first. The caller's role decides whether hidden contacts
+    /// and hidden parent companies are visible. `limit` is clamped to
+    /// [`MAX_CONTACT_SEARCH_LIMIT`].
+    fn search_contacts(
+        &self,
+        access: &CrmTeamReceipt<MemberTeamRole>,
+        query: &str,
+        limit: u8,
+    ) -> impl Future<Output = Result<Vec<CrmContact>, CrmError>> + Send;
+
     /// Fetch the CRM contact matching `email` in the caller's team. The team
     /// receipt keeps the lookup scoped to an authorized team; the caller's
     /// role decides whether hidden contacts and hidden parent companies are
@@ -373,6 +384,9 @@ const MAX_DOMAIN_CHARS: usize = 253;
 
 /// Maximum accepted length for a contact email (RFC 3696 errata limit).
 const MAX_EMAIL_CHARS: usize = 320;
+
+/// Most contacts one [`CrmService::search_contacts`] call returns.
+pub const MAX_CONTACT_SEARCH_LIMIT: u8 = 50;
 
 /// Validates a user-supplied display name: trims whitespace; must be
 /// non-blank and within [`MAX_DISPLAY_NAME_CHARS`].
@@ -836,6 +850,23 @@ where
     }
 
     #[tracing::instrument(skip(self, access), err)]
+    async fn search_contacts(
+        &self,
+        access: &CrmTeamReceipt<MemberTeamRole>,
+        query: &str,
+        limit: u8,
+    ) -> Result<Vec<CrmContact>, CrmError> {
+        self.companies_repository
+            .search_contacts_for_team(
+                &access.team_id(),
+                query.trim(),
+                i64::from(limit.clamp(1, MAX_CONTACT_SEARCH_LIMIT)),
+                access.include_hidden(),
+            )
+            .await
+    }
+
+    #[tracing::instrument(skip(self, access), err)]
     async fn get_contact_by_email(
         &self,
         access: &CrmTeamReceipt<MemberTeamRole>,
@@ -1061,6 +1092,15 @@ impl CrmService for NoOpCrmService {
         _access: &CrmContactReceipt<ViewAccessLevel>,
     ) -> Result<Option<CrmContact>, CrmError> {
         Ok(None)
+    }
+
+    async fn search_contacts(
+        &self,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
+        _query: &str,
+        _limit: u8,
+    ) -> Result<Vec<CrmContact>, CrmError> {
+        Ok(Vec::new())
     }
 
     async fn get_contact_by_email(
