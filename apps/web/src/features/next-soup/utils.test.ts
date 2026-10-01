@@ -214,6 +214,54 @@ describe('reminder navigation', () => {
     }
   );
 
+  it('opens an attached task in its requested Drive route rather than reusing another document', async () => {
+    const openWithSplit = vi.fn(() => ({ status: 'navigating' as const }));
+    setGlobalSplitManager({
+      activeSplit: () => undefined,
+      openWithSplit,
+    } as unknown as SplitManager);
+    await openEntityInSplitFromUnifiedList(
+      {
+        ...reminder,
+        referencedEntity: {
+          id: 'task-b',
+          type: 'document',
+          fileType: 'md',
+          subType: 'task',
+        },
+      } as EntityData,
+      {}
+    );
+    expect(openWithSplit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'component',
+        id: 'documents',
+        entryMetadata: expect.objectContaining({
+          route: expect.objectContaining({
+            matches: expect.arrayContaining([
+              expect.objectContaining({
+                params: { documentId: 'task-b', documentType: 'task' },
+              }),
+            ]),
+          }),
+        }),
+      }),
+      expect.objectContaining({ allowDuplicate: true })
+    );
+  });
+
+  it('opens an attached email directly in a new tab', () => {
+    openEntityInNewTab({
+      entity: {
+        ...reminder,
+        referencedEntity: { id: 'email-1', type: 'email' },
+      } as EntityData,
+    });
+    expect(operationMocks.openExternalUrl).toHaveBeenCalledWith(
+      expect.stringMatching(/\/app\/email\/email-1$/)
+    );
+  });
+
   it('uses the same reminder component URL for a new browser tab', () => {
     openEntityInNewTab({ entity: reminder });
 

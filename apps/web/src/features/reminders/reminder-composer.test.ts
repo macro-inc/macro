@@ -3,11 +3,13 @@ import type { EntityData } from '@entity';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  chooseReminderTarget,
   closeReminderComposer,
   openReminderComposer,
   openStandaloneReminderComposer,
   reminderComposerOpen,
   reminderComposerState,
+  showReminderEntityPicker,
   takeReminderCreatedHandler,
 } from './reminder-composer';
 
@@ -78,7 +80,7 @@ describe('reminder composer standalone mode', () => {
     openStandaloneReminderComposer();
 
     expect(reminderComposerOpen()).toBe(true);
-    expect(reminderComposerState.standalone).toBe(true);
+    expect(reminderComposerState.choosing).toBe(true);
     expect(reminderComposerState.entity).toBeUndefined();
   });
 
@@ -97,7 +99,7 @@ describe('reminder composer standalone mode', () => {
     openStandaloneReminderComposer();
 
     expect(reminderComposerState.entity).toBeUndefined();
-    expect(reminderComposerState.standalone).toBe(true);
+    expect(reminderComposerState.choosing).toBe(true);
   });
 
   it('drops the standalone flag when opened for an entity', () => {
@@ -137,4 +139,18 @@ describe('reminder composer created handler', () => {
 
     expect(takeReminderCreatedHandler()).toBeUndefined();
   });
+});
+
+it('chooses an entity or freeform without retaining an old target callback', () => {
+  const onCreated = vi.fn();
+  openReminderComposer(doc('old', 'Old task'), { onCreated });
+  showReminderEntityPicker();
+  chooseReminderTarget(doc('new', 'New task'));
+  expect(reminderComposerState.entity?.id).toBe('new');
+  expect(reminderComposerState.choosing).toBeUndefined();
+  expect(takeReminderCreatedHandler()).toBeUndefined();
+  showReminderEntityPicker();
+  chooseReminderTarget();
+  expect(reminderComposerState.entity).toBeUndefined();
+  expect(reminderComposerState.standalone).toBe(true);
 });

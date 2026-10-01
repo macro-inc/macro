@@ -100,7 +100,7 @@ export const makeCreateReminderAction = (
               entity: next?.original,
             });
           }
-          await options?.onEmailSaved?.();
+          if (!opts.advances) await options?.onEmailSaved?.();
         },
       });
       return;

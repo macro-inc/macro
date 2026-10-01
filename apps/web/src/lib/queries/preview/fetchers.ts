@@ -1,4 +1,7 @@
-import { fetchCrmCompanyPreviews } from '@app/features/crm/preview-adapter';
+import {
+  fetchCrmCompanyPreviews,
+  fetchCrmContactPreviews,
+} from '@app/features/crm/preview-adapter';
 import { itemToSafeName } from '@core/constant/allBlocks';
 import {
   enableGraphqlSoup,
@@ -401,6 +404,7 @@ export async function fetchRestPreviewBatch(
     doFetch(fetchProjectPreviews, filterMapToId(items, 'project')),
     doFetch(fetchEmailPreviews, filterMapToId(items, 'email')),
     doFetch(fetchCrmCompanyPreviews, filterMapToId(items, 'crm_company')),
+    doFetch(fetchCrmContactPreviews, filterMapToId(items, 'crm_contact')),
     doFetch(fetchCalendarEventPreviews, filterMapToId(items, 'calendar_event')),
   ]);
   const resultMap = new Map<string, PreviewItem>();

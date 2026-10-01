@@ -2,14 +2,14 @@ import type { EntityData, ReminderEntity } from '@entity';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  openEntityInSplitFromUnifiedList: vi.fn(),
+  openReminderDetail: vi.fn(),
   remindersEnabled: true,
   activeSplit: { id: 'controller' } as unknown,
 }));
 
 // The action opens the reminder's editor the same way a row click does.
-vi.mock('../utils', () => ({
-  openEntityInSplitFromUnifiedList: mocks.openEntityInSplitFromUnifiedList,
+vi.mock('@app/features/reminders/reminder-navigation', () => ({
+  openReminderDetail: mocks.openReminderDetail,
 }));
 
 vi.mock('@app/signal/splitLayout', () => ({
@@ -51,10 +51,10 @@ describe('makeEditReminderAction', () => {
     const row = reminder();
     makeEditReminderAction().execute([row]);
 
-    expect(mocks.openEntityInSplitFromUnifiedList).toHaveBeenCalledWith(
-      row,
+    expect(mocks.openReminderDetail).toHaveBeenCalledWith(
+      row.id,
       expect.objectContaining({
-        splitHandle: mocks.activeSplit,
+        handle: mocks.activeSplit,
         referredFrom: null,
       })
     );
@@ -63,7 +63,7 @@ describe('makeEditReminderAction', () => {
   it('does nothing for an empty selection', () => {
     makeEditReminderAction().execute([]);
 
-    expect(mocks.openEntityInSplitFromUnifiedList).not.toHaveBeenCalled();
+    expect(mocks.openReminderDetail).not.toHaveBeenCalled();
   });
 
   // The editor is about one reminder's time, so a multi-select is not a batch —
@@ -73,9 +73,9 @@ describe('makeEditReminderAction', () => {
 
     makeEditReminderAction().execute([first, reminder({ id: 'rem-2' })]);
 
-    expect(mocks.openEntityInSplitFromUnifiedList).toHaveBeenCalledOnce();
-    expect(mocks.openEntityInSplitFromUnifiedList).toHaveBeenCalledWith(
-      first,
+    expect(mocks.openReminderDetail).toHaveBeenCalledOnce();
+    expect(mocks.openReminderDetail).toHaveBeenCalledWith(
+      first.id,
       expect.anything()
     );
   });
@@ -83,7 +83,7 @@ describe('makeEditReminderAction', () => {
   it('does not open the editor for a non-reminder', () => {
     makeEditReminderAction().execute([entity('document')]);
 
-    expect(mocks.openEntityInSplitFromUnifiedList).not.toHaveBeenCalled();
+    expect(mocks.openReminderDetail).not.toHaveBeenCalled();
   });
 
   it('cannot run when the reminders flag is off', () => {
@@ -99,7 +99,7 @@ describe('makeEditReminderAction', () => {
 
     makeEditReminderAction().execute([reminder()]);
 
-    expect(mocks.openEntityInSplitFromUnifiedList).not.toHaveBeenCalled();
+    expect(mocks.openReminderDetail).not.toHaveBeenCalled();
   });
 
   // The soup context menu and soup command menu both drive actions through
@@ -112,6 +112,6 @@ describe('makeEditReminderAction', () => {
       >[1]
     );
 
-    expect(mocks.openEntityInSplitFromUnifiedList).toHaveBeenCalledOnce();
+    expect(mocks.openReminderDetail).toHaveBeenCalledOnce();
   });
 });

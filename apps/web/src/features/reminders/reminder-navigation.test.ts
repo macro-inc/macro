@@ -13,7 +13,17 @@ import {
   reminderDetailPath,
   reminderDetailUrl,
   reminderIdFromDetailContent,
+  reminderSourceContent,
 } from './reminder-navigation';
+
+vi.mock('@core/constant/allBlocks', () => ({
+  itemToBlockName: (item: {
+    referencedEntity: { type: string; fileType?: string; subType?: string };
+  }) =>
+    item.referencedEntity.subType ??
+    item.referencedEntity.fileType ??
+    item.referencedEntity.type,
+}));
 
 afterEach(() => setGlobalSplitManager(undefined));
 
@@ -131,4 +141,24 @@ describe('openReminderDetail', () => {
       status: 'unavailable',
     });
   });
+});
+
+it('opens attached sources while retaining explicit reminder detail destinations', () => {
+  expect(
+    reminderSourceContent({ referencedEntity: { id: 'email', type: 'email' } })
+  ).toEqual({ type: 'email', id: 'email' });
+  expect(
+    reminderSourceContent({
+      referencedEntity: {
+        id: 'task',
+        type: 'document',
+        fileType: 'md',
+        subType: 'task',
+      },
+    })
+  ).toEqual({ type: 'task', id: 'task' });
+  expect(reminderSourceContent({})).toBeUndefined();
+  expect(reminderDetailDestination('reminder').content.id).toBe(
+    'reminder-detail'
+  );
 });

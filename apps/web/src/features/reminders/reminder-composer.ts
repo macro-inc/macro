@@ -18,6 +18,7 @@ interface ReminderComposerState {
    * reminder from nothing to compose.
    */
   standalone?: boolean;
+  choosing?: boolean;
 }
 
 /** What the surface that opened the composer does once the reminder exists. */
@@ -67,19 +68,28 @@ export function openReminderComposer(
 }
 
 /**
- * Open the composer to create a reminder about nothing.
- *
- * There is no entity to name it after, so its description is the one field it
- * cannot skip — see `resolveStandaloneDescription`.
+ * Open reminder creation without a preselected source. The picker offers an
+ * entity association or a freeform reminder with a required description.
  */
 export function openStandaloneReminderComposer(options?: {
   onCreated?: ReminderCreatedHandler;
 }) {
   createdHandler = options?.onCreated;
   batch(() => {
-    setState(reconcile({ entity: undefined, standalone: true }));
+    setState(reconcile({ entity: undefined, choosing: true }));
     setReminderComposerOpen(true);
   });
+}
+
+/** Switch targets within the open composer, retaining the invoking callback. */
+export function chooseReminderTarget(entity?: EntityData) {
+  setState(reconcile(entity ? { entity } : { standalone: true }));
+}
+
+export function showReminderEntityPicker() {
+  // A different target must never run the original row’s archive/navigation callback.
+  createdHandler = undefined;
+  setState(reconcile({ choosing: true }));
 }
 
 export function closeReminderComposer() {

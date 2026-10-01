@@ -230,7 +230,7 @@ describe('makeCreateReminderAction', () => {
     expect(focus).not.toHaveBeenCalled();
     await composerOnCreated()?.();
     expect(onCreated).not.toHaveBeenCalled();
-    expect(onEmailSaved).toHaveBeenCalledOnce();
+    expect(onEmailSaved).not.toHaveBeenCalled();
     expect(focus).toHaveBeenCalledWith('thread-2');
     expect(onNavigate).toHaveBeenCalledWith({
       actionId: 'create-reminder',

@@ -15,6 +15,7 @@ import {
 } from '../components/email-reminder-form';
 import {
   closeReminderComposer,
+  showReminderEntityPicker,
   takeReminderCreatedHandler,
 } from '../reminder-composer';
 
@@ -154,7 +155,10 @@ export function EmailReminderComposer(props: {
       !lastCommand ||
       lastCommand.type !== 'set' ||
       lastCommand.remindAt !== values.remindAt ||
-      lastCommand.condition !== condition
+      lastCommand.condition !== condition ||
+      ((lastCommand.expectedRevision ?? undefined) !==
+        (values.expectedRevision ?? undefined) &&
+        current()?.revision !== lastCommand.operationId)
     ) {
       lastCommand = { ...values, operationId: crypto.randomUUID() };
     }
@@ -182,7 +186,17 @@ export function EmailReminderComposer(props: {
         autofocus
         header={
           <ActionDialogShell.Header>
-            <ActionDialogShell.Title>Remind me</ActionDialogShell.Title>
+            <div class="flex items-center justify-between gap-3">
+              <ActionDialogShell.Title>Remind me</ActionDialogShell.Title>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={pending()}
+                onClick={showReminderEntityPicker}
+              >
+                Change item
+              </Button>
+            </div>
             <ActionDialogShell.Description>
               Move this conversation out of the inbox until the selected time.
             </ActionDialogShell.Description>
@@ -200,7 +214,12 @@ export function EmailReminderComposer(props: {
             ? () => {
                 const revision = current()?.revision;
                 if (!revision) return;
-                if (!lastCommand || lastCommand.type !== 'remove')
+                if (
+                  !lastCommand ||
+                  lastCommand.type !== 'remove' ||
+                  (lastCommand.expectedRevision !== revision &&
+                    revision !== lastCommand.operationId)
+                )
                   lastCommand = {
                     type: 'remove',
                     operationId: crypto.randomUUID(),

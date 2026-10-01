@@ -95,7 +95,7 @@ it('keeps initial navigation and removal undo when a lost response is discovered
     linkId: 'inbox',
     remindAt: '2026-12-01T12:00:00.000Z',
     reminderId: 'reminder',
-    revision: 'revision',
+    revision: mocks.execute.mock.calls[0][1].operationId,
     state: 'pending',
     threadId: 'thread',
   };
@@ -115,7 +115,7 @@ it('keeps initial navigation and removal undo when a lost response is discovered
     'thread',
     expect.objectContaining({
       type: 'remove',
-      expectedRevision: 'revision',
+      expectedRevision: saved.revision,
       undo: true,
     })
   );
@@ -175,3 +175,47 @@ it('reports rolled-back creation without claiming that a reply arrived', async (
   expect(mocks.success).not.toHaveBeenCalled();
   expect(mocks.pushUndo).not.toHaveBeenCalled();
 });
+
+it.each(['Save', 'Remove'])(
+  'starts a fresh %s operation when another writer changes the revision',
+  async (action) => {
+    const previous: EmailFollowup = {
+      condition: 'if_no_reply',
+      linkId: 'inbox',
+      remindAt: '2026-12-01T12:00:00.000Z',
+      reminderId: 'reminder',
+      revision: 'original',
+      state: 'pending',
+      threadId: 'thread',
+    };
+    const [current, setCurrent] = createSignal(previous);
+    mocks.query.mockReturnValue({
+      isSuccess: true,
+      get data() {
+        return current();
+      },
+    });
+    mocks.execute.mockRejectedValue(new Error('Conflict'));
+    render(() => (
+      <EmailReminderComposer
+        entity={{ id: 'thread', type: 'email', name: 'Subject' } as EntityData}
+        onPending={() => {}}
+      />
+    ));
+    fireEvent.click(screen.getByRole('button', { name: action }));
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: action }).hasAttribute('disabled')
+      ).toBe(false)
+    );
+    setCurrent({ ...previous, revision: 'other-writer' });
+    fireEvent.click(screen.getByRole('button', { name: action }));
+    await waitFor(() => expect(mocks.execute).toHaveBeenCalledTimes(2));
+    expect(mocks.execute.mock.calls[1][1].expectedRevision).toBe(
+      'other-writer'
+    );
+    expect(mocks.execute.mock.calls[1][1].operationId).not.toBe(
+      mocks.execute.mock.calls[0][1].operationId
+    );
+  }
+);

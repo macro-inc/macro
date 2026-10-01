@@ -63,7 +63,7 @@ pub(crate) async fn new_inbox_preview_cursor(
                 t.is_read,
                 t.is_signal,
                 t.project_id,
-                COALESCE(t.latest_inbound_message_ts, t.latest_outbound_message_ts) AS created_at,
+                COALESCE(t.latest_inbound_message_ts, t.latest_outbound_message_ts, t.created_at) AS created_at,
                 GREATEST(t.latest_inbound_message_ts, t.reminder_returned_at) AS updated_at,
                 uh.updated_at AS viewed_at,
                 CASE $5 -- sort_method_str

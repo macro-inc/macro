@@ -6,7 +6,9 @@ import type {
   SplitHandle,
   SplitManager,
 } from '@components/app/split-layout/layoutManager';
+import { itemToBlockName } from '@core/constant/allBlocks';
 import { buildSimpleEntityUrl } from '@core/util/url';
+import type { ReminderEntity } from '@entity';
 
 export const REMINDER_DETAIL_ROUTE_ID = 'reminder-detail';
 export const HOME_REMINDER_DETAIL_ROUTE_ID = 'home-reminder-detail';
@@ -68,7 +70,23 @@ export function reminderDetailContent(reminderId: string): SplitContent {
   };
 }
 
-/** A reminder always opens its details first; source navigation lives there. */
+/** Source content for ordinary opening; explicit editing retains reminder identity. */
+export function reminderSourceContent(
+  reminder: Pick<ReminderEntity, 'referencedEntity'>
+): Exclude<SplitContent, { type: 'component' }> | undefined {
+  const reference = reminder.referencedEntity;
+  if (!reference) return;
+  const type =
+    reference.type === 'crm_company'
+      ? 'company'
+      : reference.type === 'crm_contact'
+        ? 'contact'
+        : itemToBlockName({ type: 'reminder', referencedEntity: reference });
+  if (type === 'unknown') return;
+  return { type, id: reference.id };
+}
+
+/** Explicit management destination, also used for freeform reminders. */
 export type ReminderDetailDestination = {
   kind: 'reminder-detail';
   reminderId: string;
