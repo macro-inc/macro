@@ -1222,7 +1222,15 @@ async fn run() -> anyhow::Result<()> {
 
     // Held by value here and behind an `Arc` in the router state: the impl is a
     // pool handle, so cloning is cheap and `SoupImpl` needs an owned service.
-    let reminders_service = RemindersServiceImpl::new(PgRemindersRepo::new(db.clone()));
+    let email_followups = reminders::domain::email_followup::service::EmailFollowupService::new(
+        PgRemindersRepo::new(db.clone()),
+        email_service.clone(),
+    );
+    let reminders_service =
+        reminders::domain::email_followup::reminder_service::EmailRemindersService::new(
+            RemindersServiceImpl::new(PgRemindersRepo::new(db.clone())),
+            email_followups.clone(),
+        );
 
     let document_creator = documents_hex::domain::create::DocumentCreator::new(
         document_service.clone(),
@@ -1523,7 +1531,13 @@ async fn run() -> anyhow::Result<()> {
             NotificationReminderNotifier::new((*notification_ingress_service).clone()),
             queue.clone(),
         );
-        DispatchWorker::new(dispatch_service, queue)
+        DispatchWorker::new(
+            reminders::domain::email_followup::dispatch::EmailReminderDispatch::new(
+                dispatch_service,
+                email_followups.clone(),
+            ),
+            queue,
+        )
     };
 
     consumer_tracker.spawn({

@@ -59,6 +59,7 @@ export type UseBlockEntityCommandsOptions = {
   scopeId?: string;
   resolveEntity?: () => EntityData | undefined;
   onDeleted?: () => void;
+  onEmailReminderSaved?: () => void | Promise<void>;
 };
 
 export const useBlockEntityCommands = (
@@ -173,6 +174,7 @@ export const useBlockEntityCommands = (
   // after `advanceSplitTo` so the follow-up advances exactly as 'e' does.
   const createReminderAction = makeCreateReminderAction({
     onCreated: markReminderTargetDone(markDone, advanceSplitTo),
+    onEmailSaved: options.onEmailReminderSaved,
   });
 
   /**
@@ -198,6 +200,7 @@ export const useBlockEntityCommands = (
     if (soup && selectedRow) {
       void createReminderAction.executeWithSoup([selectedRow.original], soup, {
         advances: true,
+        onNavigate: advanceSplitTo,
       });
       return true;
     }

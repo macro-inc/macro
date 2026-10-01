@@ -1,3 +1,4 @@
+import { clearPressedKeys } from '@core/hotkey/state';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import type { EntityData } from '@entity';
 import { batch } from 'solid-js';
@@ -82,6 +83,9 @@ export function openStandaloneReminderComposer(options?: {
 }
 
 export function closeReminderComposer() {
+  // Escape dismisses the dialog outside the hotkey command runner. Its keyup
+  // can be lost during focus restoration, so don't carry held keys into H.
+  if (reminderComposerOpen()) clearPressedKeys();
   createdHandler = undefined;
   batch(() => {
     setReminderComposerOpen(false);

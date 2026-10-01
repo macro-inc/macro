@@ -93,6 +93,8 @@ import type { DocumentResponseMetadataWithContent } from './generated/schemas/do
 import type { DocumentTeamShareResponse } from './generated/schemas/documentTeamShareResponse';
 import type { EditAnchorResponse } from './generated/schemas/editAnchorResponse';
 import type { EditCommentResponse } from './generated/schemas/editCommentResponse';
+import type { EmailFollowup } from './generated/schemas/emailFollowup';
+import type { EmailFollowupCommand } from './generated/schemas/emailFollowupCommand';
 import type { ExportDocumentResponse } from './generated/schemas/exportDocumentResponse';
 import type { Favorite } from './generated/schemas/favorite';
 import type { FavoritesList } from './generated/schemas/favoritesList';
@@ -2450,6 +2452,20 @@ export const storageServiceClient = {
     },
   },
   reminders: {
+    async getEmailFollowup(threadId: string) {
+      return (
+        await dssFetch<{ followup: EmailFollowup | null }>(
+          `/reminders/email/${threadId}`,
+          { method: 'GET' }
+        )
+      ).map((response) => response.followup);
+    },
+    async setEmailFollowup(threadId: string, command: EmailFollowupCommand) {
+      return await dssFetch<EmailFollowup>(`/reminders/email/${threadId}`, {
+        method: 'PUT',
+        body: JSON.stringify(command),
+      });
+    },
     async createReminder(params: CreateReminderRequest) {
       return await dssFetch<Reminder>('/reminders', {
         method: 'POST',

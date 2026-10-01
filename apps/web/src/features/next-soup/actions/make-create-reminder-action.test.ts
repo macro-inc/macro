@@ -196,7 +196,7 @@ describe('makeCreateReminderAction', () => {
   // Marking done from a list moves focus off the row, which needs the list.
   it('passes the list to the created handler when driven from one', async () => {
     const onCreated = vi.fn();
-    const target = entity('email', 'thread-1');
+    const target = entity('document', 'doc-1');
     const soup = soupState();
 
     await makeCreateReminderAction({ onCreated }).executeWithSoup(
@@ -207,6 +207,35 @@ describe('makeCreateReminderAction', () => {
     await composerOnCreated()?.();
 
     expect(onCreated).toHaveBeenCalledWith(target, { soup, advances: true });
+  });
+
+  it('email save advances only after persistence and never invokes generic archive', async () => {
+    const onCreated = vi.fn();
+    const onEmailSaved = vi.fn();
+    const target = entity('email', 'thread-1');
+    const next = { id: 'thread-2', original: entity('email', 'thread-2') };
+    const focus = vi.fn();
+    const clear = vi.fn();
+    const onNavigate = vi.fn();
+    const soup = {
+      navigate: { peekOffset: () => ({ row: next, index: 1 }) },
+      focus: { set: focus },
+      selection: { clear },
+    } as unknown as SoupState;
+    await makeCreateReminderAction({ onCreated, onEmailSaved }).executeWithSoup(
+      [target],
+      soup,
+      { advances: true, onNavigate }
+    );
+    expect(focus).not.toHaveBeenCalled();
+    await composerOnCreated()?.();
+    expect(onCreated).not.toHaveBeenCalled();
+    expect(onEmailSaved).toHaveBeenCalledOnce();
+    expect(focus).toHaveBeenCalledWith('thread-2');
+    expect(onNavigate).toHaveBeenCalledWith({
+      actionId: 'create-reminder',
+      entity: next.original,
+    });
   });
 
   // Whether the list moves on is the surface's answer, carried through to the

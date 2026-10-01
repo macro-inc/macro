@@ -387,6 +387,8 @@ use utoipa::OpenApi;
         user_api_key::inbound::axum_router::delete_user_api_key_handler,
 
         // reminders
+        reminders::inbound::axum_router::get_email_followup_handler,
+        reminders::inbound::axum_router::set_email_followup_handler,
         reminders::inbound::axum_router::list_reminders_handler,
         reminders::inbound::axum_router::create_reminder_handler,
         reminders::inbound::axum_router::get_reminder_handler,

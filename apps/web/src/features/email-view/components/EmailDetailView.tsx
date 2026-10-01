@@ -49,6 +49,7 @@ function EmailDetailHeader(
     value: string;
     focusThread: () => void;
     controlsMount: HTMLDivElement | undefined;
+    onEmailReminderSaved: () => void | Promise<void>;
   }
 ) {
   const { emailEntity, permissions, menuTools, controls } =
@@ -84,6 +85,7 @@ function EmailDetailHeader(
                 permissions={permissions()}
                 ops={[]}
                 tools={menuTools}
+                onEmailReminderSaved={props.onEmailReminderSaved}
               />
             </div>
           </div>
@@ -161,6 +163,9 @@ export function EmailDetailView(props: {
     scopeId: panel.splitHotkeyScope,
     resolveEntity: commandEntity,
     onDeleted: closeThread,
+    onEmailReminderSaved: async () => {
+      await listNavigation.afterReminderSaved?.();
+    },
   });
 
   let container: HTMLDivElement | undefined;
@@ -263,6 +268,9 @@ export function EmailDetailView(props: {
               host={host}
               chrome={({ createTask }) => (
                 <EmailDetailHeader
+                  onEmailReminderSaved={async () => {
+                    await listNavigation.afterReminderSaved?.();
+                  }}
                   id={props.thread.id}
                   title={title()}
                   onCreateTask={createTask}

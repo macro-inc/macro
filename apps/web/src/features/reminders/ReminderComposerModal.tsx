@@ -24,6 +24,7 @@ import {
   resolveReminderDescription,
   resolveStandaloneDescription,
 } from './reminder-schedule';
+import { EmailReminderComposer } from './views/email-reminder-composer';
 
 const CREATE_FAILURE_MESSAGE =
   'We couldn’t save this reminder. Your draft is still here—try again. If the request timed out, it may already exist; check Reminders before retrying.';
@@ -159,43 +160,59 @@ export function ReminderComposerModal() {
       class="w-[calc(100vw-2rem)] max-w-110"
     >
       <ActionDialogShell>
-        <Show when={hasTarget()}>
-          <ReminderForm
-            layout="dialog"
-            header={
-              <ActionDialogShell.Header>
-                <ActionDialogShell.Title>New reminder</ActionDialogShell.Title>
-                <ActionDialogShell.Description>
-                  Choose when you’d like to be reminded.
-                </ActionDialogShell.Description>
-              </ActionDialogShell.Header>
-            }
-            placeholder={
-              standalone()
-                ? "What's the reminder?"
-                : "What's the reminder? (optional)"
-            }
-            descriptionRequired={standalone()}
-            submitLabel="Set reminder"
-            autofocus
-            pending={submitting()}
-            error={saveError()}
-            reference={
-              <Show when={entity()}>
-                {(target) => (
-                  <div class="flex min-w-0">
-                    <EntitySelectionBadge entity={target()} />
-                  </div>
-                )}
-              </Show>
-            }
-            onCancel={() => {
-              if (submitting()) return;
-              setSaveError(undefined);
-              closeReminderComposer();
-            }}
-            onSubmit={(values) => void handleSubmit(values)}
-          />
+        <Show
+          when={entity()?.type === 'email'}
+          fallback={
+            <Show when={hasTarget()}>
+              <ReminderForm
+                layout="dialog"
+                header={
+                  <ActionDialogShell.Header>
+                    <ActionDialogShell.Title>
+                      New reminder
+                    </ActionDialogShell.Title>
+                    <ActionDialogShell.Description>
+                      Choose when you’d like to be reminded.
+                    </ActionDialogShell.Description>
+                  </ActionDialogShell.Header>
+                }
+                placeholder={
+                  standalone()
+                    ? "What's the reminder?"
+                    : "What's the reminder? (optional)"
+                }
+                descriptionRequired={standalone()}
+                submitLabel="Set reminder"
+                autofocus
+                pending={submitting()}
+                error={saveError()}
+                reference={
+                  <Show when={entity()}>
+                    {(target) => (
+                      <div class="flex min-w-0">
+                        <EntitySelectionBadge entity={target()} />
+                      </div>
+                    )}
+                  </Show>
+                }
+                onCancel={() => {
+                  if (submitting()) return;
+                  setSaveError(undefined);
+                  closeReminderComposer();
+                }}
+                onSubmit={(values) => void handleSubmit(values)}
+              />
+            </Show>
+          }
+        >
+          <Show when={entity()}>
+            {(target) => (
+              <EmailReminderComposer
+                entity={target()}
+                onPending={setSubmitting}
+              />
+            )}
+          </Show>
         </Show>
       </ActionDialogShell>
     </Dialog>

@@ -672,7 +672,17 @@ async fn update_db_thread_metadata(
         r#"
         UPDATE email_threads
         SET
-            inbox_visible = $1,
+            inbox_visible = $1 OR (reminder_returned_at IS NOT NULL AND EXISTS (
+                SELECT 1 FROM email_messages fm
+                JOIN email_message_labels fml ON fml.message_id = fm.id
+                JOIN email_labels fl ON fl.id = fml.label_id
+                WHERE fm.thread_id = email_threads.id AND fl.provider_label_id = 'INBOX'
+                  AND NOT EXISTS (
+                      SELECT 1 FROM email_message_labels blocked
+                      JOIN email_labels bl ON bl.id = blocked.label_id
+                      WHERE blocked.message_id = fm.id AND bl.provider_label_id IN ('TRASH', 'SPAM')
+                  )
+            )),
             is_read = $2,
             latest_inbound_message_ts = $3,
             latest_outbound_message_ts = $4,

@@ -49,3 +49,35 @@ duplicate-safe.
 After a confirmed response, the dialog closes and the success toast includes the
 exact persisted time or recurrence. Only a confirmed create runs the invoking
 surface's follow-up action.
+
+## Email follow-ups (H)
+
+On one selected email or an open conversation, **H**, **Remind me** in the menu,
+and the bell control open the same time-first picker. The subject is already
+known; the first field is **When**, with no required title. Bare H remains text
+inside reply, compose, search and other editable fields. Escape cancels without
+moving the conversation. Saving uses one server operation to schedule and move
+it out of the inbox; successful creation advances within the invoking list.
+
+**If no reply** is the default. A genuinely new inbound message after scheduling
+cancels it; drafts, outgoing mail (including provider SENT aliases), known own
+inbox senders, replays and historical backfill do not. **Regardless** survives a
+reply. Existing H opens the pending follow-up for editing or **Remove**. Remove
+returns the conversation to its inbox; **Undo** cancels a newly scheduled
+follow-up and restores its original inbox visibility. A stale undo cannot
+remove a newer edit. Generic reminders attached to the same thread remain
+separate reminders.
+
+The bell is accented for pending and returned reminders and its accessible label
+includes the pending time. Server dispatch returns eligible conversations to
+the top of the corresponding inbox, including sent-only conversations, then
+uses the existing persistent reminder alert. Trash, deleted and inaccessible
+conversations are not returned. The server sweep runs once a minute; this is
+not exact-second delivery, and it does not promise a closed-browser OS alert.
+Pending operations and replies reconcile without an open browser.
+
+Email writes use `PUT /dss/reminders/email/{threadId}` with a retained operation
+ID. Unlike generic creation, retrying the same email request cannot duplicate
+it. For failure verification, intercept that endpoint and verify the time and
+condition remain, no client archive request is sent, and no navigation occurs
+before the server confirms the operation.

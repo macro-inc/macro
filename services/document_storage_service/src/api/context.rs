@@ -491,7 +491,13 @@ pub(crate) type DssUserApiKeyState =
     UserApiKeyRouterState<UserApiKeyServiceType, AuthorizationService>;
 
 /// Type alias for the reminders service.
-pub(crate) type RemindersServiceType = RemindersServiceImpl<PgRemindersRepo>;
+pub(crate) type RemindersServiceType =
+    reminders::domain::email_followup::reminder_service::EmailRemindersService<
+        RemindersServiceImpl<PgRemindersRepo>,
+        PgRemindersRepo,
+        DssEmailService,
+        reminders::domain::ports::SystemClock,
+    >;
 
 /// Type alias for the reminders router state.
 pub(crate) type DssRemindersState =

@@ -1,5 +1,6 @@
 //! PostgreSQL implementation of the [`RemindersRepo`] port.
 
+mod email_followup;
 #[cfg(test)]
 mod test;
 
@@ -24,12 +25,22 @@ use crate::domain::ports::{ReminderDispatchRepo, RemindersRepo};
 #[derive(Debug, Clone)]
 pub struct PgRemindersRepo {
     pool: PgPool,
+    followup_locks: PgPool,
 }
 
 impl PgRemindersRepo {
     /// Create a repository backed by the provided pool.
     pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+        // Locks may wait for another process and span email operations. A
+        // separate bounded pool prevents waiters exhausting the data pool
+        // needed by the operation that currently owns a lock.
+        let followup_locks = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(4)
+            .connect_lazy_with(pool.connect_options().as_ref().clone());
+        Self {
+            pool,
+            followup_locks,
+        }
     }
 }
 

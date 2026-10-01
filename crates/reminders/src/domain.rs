@@ -5,3 +5,6 @@ pub mod models;
 pub mod ports;
 #[cfg(feature = "ports")]
 pub mod service;
+
+#[cfg(feature = "ports")]
+pub mod email_followup;

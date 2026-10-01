@@ -21,6 +21,7 @@ mod db_types;
 mod draft;
 mod dynamic;
 mod email_filter;
+mod followup;
 mod label;
 mod link;
 mod message;

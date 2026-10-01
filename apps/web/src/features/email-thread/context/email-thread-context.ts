@@ -66,6 +66,7 @@ export interface EmailThreadListNavigation {
   canNext: Accessor<boolean>;
   previous(): void;
   next(): void;
+  afterReminderSaved?(): Promise<void>;
   markDone(archiveThread: EmailThreadCommands['archiveThread']): void;
 }
 

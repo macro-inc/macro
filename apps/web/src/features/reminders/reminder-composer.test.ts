@@ -1,3 +1,4 @@
+import { pressedKeys, setPressedKeys } from '@core/hotkey/state';
 import type { EntityData } from '@entity';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -31,6 +32,20 @@ describe('reminder composer state', () => {
 
     expect(reminderComposerOpen()).toBe(false);
     expect(reminderComposerState.entity).toBeUndefined();
+  });
+
+  it('clears keys held during dismissal so H can reopen without a modifier reset', () => {
+    openReminderComposer(doc('doc-1', 'Q3 Contract'));
+    setPressedKeys(new Set(['escape']));
+    closeReminderComposer();
+    expect([...pressedKeys()]).toEqual([]);
+
+    // The next keydown is a plain H, rather than the stale escape+h chord.
+    setPressedKeys((held) => new Set([...held, 'h']));
+    expect([...pressedKeys()]).toEqual(['h']);
+    openReminderComposer(doc('doc-1', 'Q3 Contract'));
+    expect(reminderComposerOpen()).toBe(true);
+    closeReminderComposer();
   });
 
   // Reopening must fully replace the target, or a reminder could be attached to

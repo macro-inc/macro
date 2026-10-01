@@ -63,28 +63,28 @@ pub(crate) async fn new_inbox_preview_cursor(
                 t.is_read,
                 t.is_signal,
                 t.project_id,
-                t.latest_inbound_message_ts AS created_at,
-                t.latest_inbound_message_ts AS updated_at,
+                COALESCE(t.latest_inbound_message_ts, t.latest_outbound_message_ts) AS created_at,
+                GREATEST(t.latest_inbound_message_ts, t.reminder_returned_at) AS updated_at,
                 uh.updated_at AS viewed_at,
                 CASE $5 -- sort_method_str
                     WHEN 'viewed_at' THEN COALESCE(uh."updated_at", '1970-01-01 00:00:00+00')
-                    WHEN 'viewed_updated' THEN COALESCE(uh.updated_at, t.latest_inbound_message_ts)
-                    ELSE t.latest_inbound_message_ts
+                    WHEN 'viewed_updated' THEN COALESCE(uh.updated_at, GREATEST(t.latest_inbound_message_ts, t.reminder_returned_at))
+                    ELSE GREATEST(t.latest_inbound_message_ts, t.reminder_returned_at)
                 END AS effective_ts
             FROM email_threads t
             LEFT JOIN email_user_history uh ON uh.thread_id = t.id AND uh.link_id = t.link_id
             WHERE
                 t.link_id = ANY($1)
               AND t.inbox_visible = TRUE
-              AND t.latest_inbound_message_ts IS NOT NULL
+              AND (t.latest_inbound_message_ts IS NOT NULL OR t.reminder_returned_at IS NOT NULL)
 
               -- The cursor logic is moved inside this subquery for maximum efficiency.
               AND (($3::timestamptz IS NULL) OR (
                   -- This CASE must exactly match the one that defines `effective_ts`
                   CASE $5 -- sort_method_str
                       WHEN 'viewed_at' THEN COALESCE(uh."updated_at", '1970-01-01 00:00:00+00')
-                      WHEN 'viewed_updated' THEN COALESCE(uh.updated_at, t.latest_inbound_message_ts)
-                      ELSE t.latest_inbound_message_ts
+                      WHEN 'viewed_updated' THEN COALESCE(uh.updated_at, GREATEST(t.latest_inbound_message_ts, t.reminder_returned_at))
+                      ELSE GREATEST(t.latest_inbound_message_ts, t.reminder_returned_at)
                   END, t.id
               ) < ($3::timestamptz, $4::uuid))
             ORDER BY effective_ts DESC, t.updated_at DESC -- fall back to updated_at if effective_ts is the same

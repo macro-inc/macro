@@ -14286,6 +14286,124 @@
         }
       }
     },
+    "/reminders/email/{thread_id}": {
+      "get": {
+        "tags": ["reminders"],
+        "summary": "Read an email follow-up and reconcile inbound reply cancellation.",
+        "operationId": "get_email_followup",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailFollowupResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["reminders"],
+        "summary": "Schedule, edit or remove one email follow-up as an idempotent operation.",
+        "operationId": "set_email_followup",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailFollowupCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailFollowup"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/reminders/{id}": {
       "get": {
         "tags": ["reminders"],
@@ -23648,6 +23766,136 @@
           }
         }
       },
+      "EmailFollowup": {
+        "type": "object",
+        "description": "Public status shown on email and in the Reminders editor.",
+        "required": [
+          "reminderId",
+          "threadId",
+          "linkId",
+          "condition",
+          "remindAt",
+          "revision",
+          "state"
+        ],
+        "properties": {
+          "condition": {
+            "$ref": "#/components/schemas/EmailReminderCondition",
+            "description": "Condition, defaulting to no reply for new follow-ups."
+          },
+          "linkId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Canonical owned/delegated inbox."
+          },
+          "remindAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Confirmed schedule."
+          },
+          "reminderId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Its ordinary reminder, used by the existing alert/management surfaces."
+          },
+          "revision": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Last accepted operation; edits/removal compare this to prevent stale undo."
+          },
+          "state": {
+            "$ref": "#/components/schemas/FollowupState",
+            "description": "Durable lifecycle progress."
+          },
+          "threadId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Conversation identity."
+          }
+        }
+      },
+      "EmailFollowupCommand": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Create or edit one follow-up. An edit requires the displayed revision.",
+            "required": ["operationId", "remindAt", "condition", "type"],
+            "properties": {
+              "condition": {
+                "$ref": "#/components/schemas/EmailReminderCondition",
+                "description": "Reply condition."
+              },
+              "expectedRevision": {
+                "type": ["string", "null"],
+                "format": "uuid",
+                "description": "None for creation, the current revision for edits."
+              },
+              "operationId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Unique request identity retained across network retries."
+              },
+              "remindAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "One future instant; conditional recurrence is deliberately absent."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["set"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Cancel and restore the conversation without leaving a future alert.",
+            "required": ["operationId", "expectedRevision", "type"],
+            "properties": {
+              "expectedRevision": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Reject removal if a newer edit has replaced this operation."
+              },
+              "operationId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Unique request identity."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["remove"]
+              },
+              "undo": {
+                "type": "boolean",
+                "description": "Undo restores original visibility; ordinary Remove returns to inbox."
+              }
+            }
+          }
+        ],
+        "description": "Idempotent email command. Reusing an operation ID with different data fails."
+      },
+      "EmailFollowupResponse": {
+        "type": "object",
+        "description": "Lookup response, including an email with no follow-up yet.",
+        "properties": {
+          "followup": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EmailFollowup",
+                "description": "Most recent specialized follow-up, if any."
+              }
+            ]
+          }
+        }
+      },
+      "EmailReminderCondition": {
+        "type": "string",
+        "description": "When an email follow-up should return the conversation.",
+        "enum": ["if_no_reply", "regardless"]
+      },
       "EmptyResponse": {
         "type": "object",
         "description": "Empty response is required due to custom fetch forcing `response.json()`"
@@ -24707,6 +24955,18 @@
             "description": "The sha of the file."
           }
         }
+      },
+      "FollowupState": {
+        "type": "string",
+        "description": "Durable progress of an email operation.",
+        "enum": [
+          "archiving",
+          "pending",
+          "returning",
+          "returned",
+          "cancelled",
+          "removed"
+        ]
       },
       "ForeignEntity": {
         "type": "object",

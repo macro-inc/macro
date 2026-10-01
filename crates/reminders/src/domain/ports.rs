@@ -297,6 +297,36 @@ pub trait ReminderDispatch: Send + Sync + 'static {
 
 /// Inbound service port: the reminders API used by drivers (HTTP).
 pub trait RemindersService: Send + Sync + 'static {
+    /// Read the email workflow when this service has email capabilities wired.
+    fn get_email_followup(
+        &self,
+        _user: MacroUserIdStr<'static>,
+        _thread: Uuid,
+    ) -> impl Future<Output = Result<Option<super::email_followup::EmailFollowup>, ReminderError>> + Send
+    {
+        async {
+            Err(ReminderError::BadRequest(
+                "Email reminders are unavailable".into(),
+            ))
+        }
+    }
+
+    /// Execute an idempotent email workflow command. Generic/AI-only services
+    /// deliberately do not gain inbox mutation capabilities by default.
+    fn execute_email_followup(
+        &self,
+        _user: MacroUserIdStr<'static>,
+        _thread: Uuid,
+        _command: super::email_followup::EmailFollowupCommand,
+    ) -> impl Future<Output = Result<super::email_followup::EmailFollowup, ReminderError>> + Send
+    {
+        async {
+            Err(ReminderError::BadRequest(
+                "Email reminders are unavailable".into(),
+            ))
+        }
+    }
+
     /// Create a reminder for the user.
     ///
     /// `entity_receipt` must be present whenever `request` names an entity, and

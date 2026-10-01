@@ -1785,3 +1785,13 @@ New conversations confirm selected model and effort settings before sending the
 first message. If startup reports a rejected setting or timeout, the first prompt
 has not been sent. See [effort capabilities](../AGENT_EFFORT.md) for the harness
 contracts and test coverage.
+
+### Email reminders
+
+Use **H** on one selected email or its open conversation, **Remind me** in the
+menu, or the header bell. These share the email-specific, time-first workflow
+in [Reminders](reminders.md#email-follow-ups-h). A successful new reminder moves
+out of the inbox and advances within that surface's filtered list. Cancel and
+failed saves keep the current email. H on a pending follow-up edits it; Remove
+returns it to the inbox. The bell's label identifies pending time or returned
+status. Bare H in a reply or search field must remain ordinary typing.
