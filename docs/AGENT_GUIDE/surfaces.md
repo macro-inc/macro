@@ -1255,7 +1255,13 @@ byline.
 
 Macro-linked GitHub pull requests open inside the Reviews shell, with a Reviews
 breadcrumb, PR title/status, GitHub action, discussion timeline, and Details/Checks
-side panel below the top bar. PRs are not tasks and do not appear in the Tasks list.
+side panel below the top bar. An open PR also shows a green **Merge** button in the
+top bar beside **Open on GitHub**. It asks **Merge pull request?** and then merges
+on GitHub as the signed-in user through their linked GitHub account, so GitHub's
+permissions and branch protections decide; a refusal appears as a toast with
+GitHub's reason, and a merge refreshes the PR status in place. Without a linked
+GitHub account the toast points to Settings. Merged and closed PRs have no Merge
+button. PRs are not tasks and do not appear in the Tasks list.
 Copy Link from a PR in Quick Access copies `/app/reviews/pr/<foreignEntityId>`.
 Old `/app/pr/<foreignEntityId>` links redirect to Reviews. Check a copied link,
 a PR opened from a list or agent session, a second split, breadcrumb return,

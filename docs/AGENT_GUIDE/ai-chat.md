@@ -680,7 +680,8 @@ When the session has opened a pull request, a compact `#N` status chip
 appears in the header (top right) and in the side-panel Details. Click it
 to open the PR entity in a split; until GitHub has synced the entity the
 chip is a GitHub link instead. The icon and status word follow open /
-merged / closed.
+merged / closed. Merging happens from the PR entity's top bar or from a channel
+Magic Chip's PR row, not from this header chip.
 
 Tool rows show the tool's own name without an MCP server or workspace prefix.
 Chat MCP rows retain their service icon.
