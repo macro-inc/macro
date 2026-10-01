@@ -96,7 +96,6 @@ export function RouteTour() {
             aria-labelledby="unification-heading"
             style={SHELL_PALETTE}
           >
-            <FeatureConstellation expanded />
             <div class="unification-copy">
               <h2 id="unification-heading">
                 Replace 27+ apps
@@ -116,6 +115,7 @@ export function RouteTour() {
                 </span>
               </p>
             </div>
+            <FeatureConstellation expanded />
           </section>
 
           <section

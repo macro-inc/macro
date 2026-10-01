@@ -19,6 +19,9 @@ body:has(.tour-page) .site-nav-demo { display: none; }
 /* Later sections reuse the unification heading; it sits above content instead
    of below the constellation. */
 .unification-copy.tour-heading { margin: 0 auto 48px; }
+/* Here the heading leads into the constellation rather than following it. */
+.tour-constellation .unification-copy { margin: 0 auto 32px; }
+.tour-constellation .feature-flow-expanded { margin-bottom: 0; }
 /* OnboardingShell's hero frame: a centered card in the first viewport. */
 .tour-hero { display: flex; align-items: center; justify-content: center; min-height: 100svh; padding: 96px 0 40px; }
 /* OnboardingShell's tile entrance, which also centers each logo on its point. */
