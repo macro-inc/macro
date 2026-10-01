@@ -933,9 +933,7 @@ describe('send and schedule ordering', () => {
       state.form.setSelectedInbox('secondary');
       state.handleAddAttachments([new File(['attachment'], 'review.txt')]);
       await vi.advanceTimersByTimeAsync(500);
-      expect(state.handleSendTimeChange(hoursFromNow(24))).toBe(
-        true
-      );
+      expect(state.handleSendTimeChange(hoursFromNow(24))).toBe(true);
       const scheduling = state.sendEmail();
       await vi.advanceTimersByTimeAsync(0);
       expect(composeContext.delivery.schedule).not.toHaveBeenCalled();

@@ -250,9 +250,9 @@ describe('standalone compose controller', () => {
       expect(context.delivery.schedule).toHaveBeenCalledOnce();
       expect(root.state.context.disabled()).toBe(true);
       root.state.context.onSend();
-      expect(
-        root.state.context.schedule.onSelect(hoursFromNow(48))
-      ).toBe(false);
+      expect(root.state.context.schedule.onSelect(hoursFromNow(48))).toBe(
+        false
+      );
       expect(context.delivery.sendMessage).not.toHaveBeenCalled();
       expect(context.delivery.schedule).toHaveBeenCalledOnce();
       pending.resolve();
