@@ -218,8 +218,7 @@ export function createGraphqlSoupDoneProjection() {
         if (
           current &&
           !excludesDone &&
-          current.entity.type !== 'email' &&
-          current.entity.type !== 'reminder'
+          !['email', 'reminder'].includes(current.entity.type)
         )
           continue;
         if (current && entry.done && !remembered.has(id)) {

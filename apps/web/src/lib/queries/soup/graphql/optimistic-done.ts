@@ -48,6 +48,7 @@ export function hideGraphqlSoupEntitiesAsDone(args: {
   let active = false;
   let settled = false;
   let checking = false;
+  let refreshing = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   const readers = new Map<object, { version: number; acknowledged: boolean }>();
 
@@ -98,18 +99,22 @@ export function hideGraphqlSoupEntitiesAsDone(args: {
       release(true);
       return;
     }
-    if (settled) {
+    // Keep cleanup independent of a hung refresh, without starting overlapping
+    // network retries. A later tick can collect an intent whose readers unmounted.
+    timer = setTimeout(() => void retry(), GRAPHQL_SOUP_DONE_RETENTION_MS);
+    if (settled && !refreshing) {
+      refreshing = true;
       try {
         await refreshActiveGraphqlSoupQueries({ throwOnError: true });
       } catch {
         // A failed/stale refresh must not resurrect rows. Mounted readers keep
         // their intent until they actually observe it, or the user reverses it.
+      } finally {
+        refreshing = false;
       }
     }
     if (version !== generation) return;
     check();
-    if (active)
-      timer = setTimeout(() => void retry(), GRAPHQL_SOUP_DONE_RETENTION_MS);
   };
   const observations = (
     version: number

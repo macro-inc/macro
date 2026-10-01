@@ -242,6 +242,32 @@ describe('hideGraphqlSoupEntitiesAsDone', () => {
     overlay.release();
   });
 
+  it('collects an unmounted settled intent even when its refresh never responds', async () => {
+    vi.useFakeTimers();
+    let finish!: () => void;
+    refresh.mockReturnValue(
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      })
+    );
+    const read = observePending();
+    const overlay = hideGraphqlSoupEntitiesAsDone({
+      entityIds: ['a'],
+      notificationIds: [],
+    });
+    await vi.advanceTimersByTimeAsync(1);
+    const reader = {};
+    read()[0].observe(reader, false);
+    overlay.settle();
+    await vi.advanceTimersByTimeAsync(GRAPHQL_SOUP_DONE_RETENTION_MS * 2);
+    expect(refresh).toHaveBeenCalledOnce();
+    expect(read()).toHaveLength(1);
+    read()[0].unobserve(reader);
+    await vi.advanceTimersByTimeAsync(GRAPHQL_SOUP_DONE_RETENTION_MS);
+    expect(read()).toEqual([]);
+    finish();
+  });
+
   it('retires superseded intent after acknowledgement without losing other bulk targets', async () => {
     const read = observePending();
     const first = hideGraphqlSoupEntitiesAsDone({
