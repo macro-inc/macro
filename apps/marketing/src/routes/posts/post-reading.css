@@ -1,0 +1,272 @@
+/* Slab headlines and monochrome artwork follow the public homepage. */
+.posts-article .posts-title {
+  color: var(--post-ink);
+  font-family: 'Roboto Slab Variable', display, serif;
+  font-size: clamp(36px, 5.4vw, 56px);
+  font-weight: 315;
+  letter-spacing: -0.035em;
+  line-height: 1.16;
+  text-wrap: balance;
+}
+
+.posts-article .posts-eyebrow a {
+  align-items: center;
+  color: var(--post-faint);
+  display: inline-flex;
+  font-size: 12px;
+  gap: 8px;
+}
+
+.posts-article .posts-eyebrow svg {
+  height: 14px;
+  width: 14px;
+}
+
+.posts-article .posts-lede {
+  color: var(--post-muted);
+  font: 400 15px/28px 'Inter Variable', Inter, sans-serif;
+  max-width: 440px;
+}
+
+.posts-article .posts-byline {
+  font-family: 'Inter Variable', Inter, sans-serif;
+  font-size: 13px;
+}
+
+.posts-article .posts-hero-art {
+  background: none;
+}
+
+.posts-article .post-cover-svg {
+  filter: grayscale(1);
+}
+
+/* Match the reading scale and FAQ rhythm of OnboardingTrustDetails. */
+.posts-article .post-body {
+  color: var(--post-muted);
+  font-family: 'Inter Variable', Inter, sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 28px;
+  max-width: 560px;
+}
+
+.posts-article .post-body > div {
+  color: inherit;
+  font-family: inherit;
+}
+
+.posts-article .post-body h2,
+.posts-article .post-body h3 {
+  color: var(--post-ink);
+  font-family: 'Inter Variable', Inter, sans-serif;
+  font-weight: 500;
+  letter-spacing: -0.025em;
+}
+
+.posts-article .post-body h2 {
+  font-size: 24px;
+  line-height: 32px;
+  margin: 80px 0 28px;
+}
+
+.posts-article .post-body h3 {
+  font-size: 16px;
+  letter-spacing: normal;
+  line-height: 24px;
+  margin: 48px 0 12px;
+}
+
+.posts-article .post-body h2::before,
+.posts-article .post-body h3::before {
+  content: none;
+}
+
+.posts-article .post-body p {
+  margin-bottom: 20px;
+}
+
+.posts-article .post-body a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--post-faint);
+  text-underline-offset: 4px;
+}
+
+.posts-article .post-body a:hover {
+  color: var(--post-ink);
+}
+
+.posts-article .post-body a:focus-visible,
+.post-faq__item summary:focus-visible {
+  border-radius: 2px;
+  outline: 1px solid var(--post-ink);
+  outline-offset: 4px;
+}
+
+.posts-article .post-section-rule {
+  border: 0;
+  border-top: 1px solid #292929;
+  margin: 80px 0 40px;
+  width: 48px;
+}
+
+.posts-article .post-section-rule + h2 {
+  margin-top: 0;
+}
+
+.posts-article .post-body .mvn-testimonial blockquote {
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.posts-article .post-body .mvn-figcaption {
+  color: var(--post-faint);
+  font-size: 12px;
+  line-height: 24px;
+  margin: 12px 0 40px;
+}
+
+.posts-article .post-body .post-faq-title {
+  font-size: 16px;
+  letter-spacing: normal;
+  line-height: 24px;
+  margin: 48px 0 12px;
+}
+
+.post-faq {
+  border-top: 1px solid var(--post-rule);
+  margin-bottom: 32px;
+}
+
+.post-faq__item {
+  border-bottom: 1px solid var(--post-rule);
+}
+
+.post-faq__item summary {
+  align-items: flex-start;
+  color: var(--post-muted);
+  cursor: pointer;
+  display: flex;
+  font-size: 14px;
+  font-weight: 500;
+  gap: 20px;
+  justify-content: space-between;
+  line-height: 24px;
+  list-style: none;
+  padding: 20px 0;
+}
+
+.post-faq__item summary::-webkit-details-marker {
+  display: none;
+}
+
+.post-faq__item summary:hover {
+  color: var(--post-ink);
+}
+
+.post-faq__item summary svg {
+  color: var(--post-faint);
+  flex-shrink: 0;
+  height: 16px;
+  margin-top: 4px;
+  transition: transform 150ms ease;
+  width: 16px;
+}
+
+.post-faq__item[open] summary svg {
+  transform: rotate(180deg);
+}
+
+.post-faq__answer {
+  padding: 0 24px 24px 0;
+}
+
+.posts-article .post-faq__answer p:last-child {
+  margin-bottom: 0;
+}
+
+.posts-article .post-body .post-footnote {
+  color: var(--post-faint);
+  font-size: 12px;
+  line-height: 24px;
+}
+
+@media (min-width: 640px) {
+  .posts-article .post-body {
+    font-size: 15px;
+  }
+
+  .posts-article .post-body h2 {
+    font-size: 28px;
+    line-height: 36px;
+  }
+
+  .posts-article .post-body .post-faq-title {
+    font-size: 16px;
+    line-height: 24px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .post-faq__item summary svg {
+    transition: none;
+  }
+}
+
+/* Older entries share the same reading styles, including their lead copy. */
+.posts-article .post-body [class$="-lede"] {
+  color: var(--post-muted);
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.posts-article .post-body [class$="-figcaption"] {
+  color: var(--post-faint);
+  font-size: 12px;
+  line-height: 24px;
+}
+
+.posts-article .mvn-section-glyph {
+  border-top: 1px solid #292929;
+  height: 1px;
+  margin: 80px 0 40px;
+  width: 48px;
+}
+
+.posts-article .mvn-section-glyph svg {
+  display: none;
+}
+
+.posts-article .mvn-section-glyph + h2 {
+  margin-top: 0;
+}
+
+.posts-article .mvn-graphic-frame,
+.posts-article .aie-shot-frame {
+  background: transparent;
+  border: 1px solid #292929;
+  padding: 0;
+}
+
+.posts-article .mvn-graphic-frame::before {
+  content: none;
+}
+
+.posts-article .mvn-graphic-inner {
+  border: 0;
+  border-radius: inherit;
+}
+
+.posts-article .pdg-diagram {
+  font-family: 'Inter Variable', Inter, sans-serif;
+}
+
+.posts-article .mvn-authors-note-label {
+  color: var(--post-faint);
+  font-family: 'Inter Variable', Inter, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+}

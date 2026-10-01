@@ -43,7 +43,7 @@ export function BaseSection(props: SectionProps) {
             'font-size': breakpoint() ? '20px' : '30px',
             'letter-spacing': '-0.02em',
             'font-family': 'display',
-            'font-weight': '450',
+            'font-weight': '315',
             margin: '0',
           }}
         >

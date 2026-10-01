@@ -68,9 +68,6 @@ const _HERO_DEMO_VIDEO_ID = 'tnsxkywzTvY';
 
 const mobile = isMobileViewport;
 
-// Faux-app chrome uses a neutral UI sans so the mocks read as real product
-// screenshots rather than marketing copy (the marketing type stays rajdhani /
-// roboto-slab via the site's 'body' / 'display' families).
 const appFont =
   "'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
 
@@ -1763,7 +1760,7 @@ function ComparisonCell(props: { value: Cell; macro: boolean }) {
         <span
           style={{
             color: props.macro ? 'var(--a0)' : 'var(--c2)',
-            'font-family': 'rajdhani, body',
+            'font-family': 'Inter, body',
             'font-size': mobile() ? '13px' : '15px',
             'font-weight': '700',
             'letter-spacing': '0.02em',
@@ -1792,7 +1789,7 @@ function _ComparisonTable() {
       : 'transparent',
     color: macro ? 'var(--a0)' : 'var(--c2)',
     display: 'flex',
-    'font-family': 'rajdhani, body',
+    'font-family': 'Inter, body',
     'font-size': mobile() ? '12px' : '15px',
     'font-weight': '700',
     'justify-content': 'center',
@@ -1925,7 +1922,7 @@ function _PrimaryCta(props: { buttonName: string; label?: string }) {
         cursor: 'default',
         display: 'inline-flex',
         'font-family': 'body',
-        'font-size': mobile() ? '16px' : '17px',
+        'font-size': mobile() ? '16px' : '14px',
         'font-weight': '700',
         gap: '8px',
         height: mobile() ? '46px' : '48px',
@@ -2072,7 +2069,7 @@ function _EmailIntro() {
         style={{
           'font-family': 'display',
           'font-size': compact() ? '28px' : 'clamp(32px, 4vw, 46px)',
-          'font-weight': '420',
+          'font-weight': '315',
           'letter-spacing': '-0.015em',
           'line-height': 1.14,
           margin: '0',
@@ -2119,7 +2116,7 @@ function _EmailIntro() {
               <span
                 style={{
                   color: 'color-mix(in srgb, var(--c4) 60%, transparent)',
-                  'font-family': 'rajdhani, body',
+                  'font-family': 'Inter, body',
                   'font-size': compact() ? '11px' : '12px',
                   'font-weight': '700',
                   'letter-spacing': '0.14em',
@@ -3549,8 +3546,8 @@ function BigKey(props: {
         color: 'var(--c1)',
         cursor: 'pointer',
         display: 'inline-grid',
-        'font-family': 'rajdhani, body',
-        'font-size': mobile() ? '16px' : '18px',
+        'font-family': 'Inter, body',
+        'font-size': mobile() ? '16px' : '15px',
         'font-weight': '700',
         height: mobile() ? '42px' : '48px',
         'line-height': 1,
@@ -3748,7 +3745,7 @@ function _KeyboardSpeedGraphic() {
                         'border-radius': '999px',
                         color: 'var(--c2)',
                         cursor: 'pointer',
-                        'font-family': 'rajdhani, body',
+                        'font-family': 'Inter, body',
                         'font-size': '12px',
                         'font-weight': '700',
                         'letter-spacing': '0.06em',
@@ -3876,7 +3873,7 @@ function _KeyboardSpeedGraphic() {
                     <span
                       style={{
                         color: 'var(--c4)',
-                        'font-family': 'rajdhani, body',
+                        'font-family': 'Inter, body',
                         'font-size': '12px',
                         'font-weight': '700',
                         'letter-spacing': '0.08em',

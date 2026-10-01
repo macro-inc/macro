@@ -98,7 +98,7 @@ function BentoItem(props: {
           <h3
             style={{
               'font-family': 'display',
-              'font-weight': '450',
+              'font-weight': '315',
               'font-size': isCompact()
                 ? '17px'
                 : breakpoint()
@@ -196,7 +196,7 @@ export function SectionBento() {
         style={{
           'font-family': 'display',
           'font-size': breakpoint() ? '38px' : '40px',
-          'font-weight': '400',
+          'font-weight': '315',
           'letter-spacing': '-0.024em',
           margin: '0',
           color: 'var(--c2)',

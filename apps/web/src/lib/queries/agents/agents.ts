@@ -141,10 +141,6 @@ export function useUpdateAgentMutation() {
         })
       ),
     onSuccess: async (updated) => {
-      const previousChannelIds =
-        queryClient
-          .getQueryData<Agent[]>(agentKeys.list.queryKey)
-          ?.find((agent) => agent.bot.id === updated.bot.id)?.channel_ids ?? [];
       queryClient.setQueryData<Agent[]>(
         agentKeys.list.queryKey,
         (current = []) =>
@@ -157,13 +153,14 @@ export function useUpdateAgentMutation() {
         updated.bot
       );
       await Promise.all([
-        invalidateAgentChannelBots([
-          ...previousChannelIds,
-          ...updated.channel_ids,
-        ]),
         queryClient.invalidateQueries({ queryKey: botKeys.list.queryKey }),
         queryClient.invalidateQueries({
           queryKey: botProfileKeys.detail(updated.bot.id).queryKey,
+        }),
+        // Global agents have no selected channel IDs but can still appear in
+        // a channel's bot list, which takes precedence in the mention menu.
+        queryClient.invalidateQueries({
+          queryKey: channelKeys.channelBots._def,
         }),
       ]);
     },

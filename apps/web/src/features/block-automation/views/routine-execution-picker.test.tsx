@@ -51,33 +51,31 @@ type Catalog = {
 };
 const [catalogs, setCatalogs] = createSignal<Record<string, Catalog>>({});
 vi.mock('@queries/agents/models', () => ({
-  useAgentModelsQueries: (
-    targets: () => { harness: string; harnessId?: string }[]
+  useAgentModelsQuery: (
+    target: () => { harness: string; harnessId?: string },
+    enabled: () => boolean
   ) => {
     const current = () => {
-      const target = targets()[0];
-      return target
-        ? catalogs()[target.harnessId ?? target.harness]
-        : undefined;
+      if (!enabled()) return undefined;
+      const next = target();
+      return catalogs()[next.harnessId ?? next.harness];
     };
-    return [
-      {
-        get isSuccess() {
-          return current()?.status === 'success';
-        },
-        get isPending() {
-          return current()?.status === 'pending';
-        },
-        get isError() {
-          return current()?.status === 'error';
-        },
-        get data() {
-          if (current()?.status !== 'success')
-            throw new Error('Read a pending catalog');
-          return { status: 'available', models: current()?.models ?? [] };
-        },
+    return {
+      get isSuccess() {
+        return current()?.status === 'success';
       },
-    ];
+      get isPending() {
+        return current()?.status === 'pending';
+      },
+      get isError() {
+        return current()?.status === 'error';
+      },
+      get data() {
+        if (current()?.status !== 'success')
+          throw new Error('Read a pending catalog');
+        return { status: 'available', models: current()?.models ?? [] };
+      },
+    };
   },
 }));
 

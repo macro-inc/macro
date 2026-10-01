@@ -1,5 +1,6 @@
 import Calendar from '@phosphor/calendar-blank.svg';
 import Chats from '@phosphor/chats.svg';
+import Check from '@phosphor/check.svg';
 import CheckSquare from '@phosphor/check-square.svg';
 import Clock from '@phosphor/clock.svg';
 import Envelope from '@phosphor/envelope.svg';
@@ -11,16 +12,19 @@ import PaperPlane from '@phosphor/paper-plane-tilt.svg';
 import Plus from '@phosphor/plus.svg';
 import Sidebar from '@phosphor/sidebar-simple.svg';
 import Sparkle from '@phosphor/sparkle.svg';
+import Star from '@phosphor/star.svg';
 import Users from '@phosphor/users-three.svg';
 import Signal from '@phosphor/wave-sine.svg';
 import Noise from '@phosphor/waveform.svg';
 import { For, type JSX, Show } from 'solid-js';
+import { type EmailTagId, emailTags } from '../../../core/demo-email';
 import { homepagePeople } from '../../../core/homepage-demo-people';
 import { ViewSidebar } from '../../DemoViewSidebar';
 
 export type MailTab =
   | 'important'
   | 'noise'
+  | 'favorites'
   | 'sent'
   | 'scheduled'
   | 'calendar'
@@ -31,6 +35,7 @@ export type MailTab =
 export const mailTabs = [
   { id: 'important', label: 'Signal', icon: Signal },
   { id: 'noise', label: 'Noise', icon: Noise },
+  { id: 'favorites', label: 'Favorites', icon: Star },
   { id: 'sent', label: 'Sent', icon: PaperPlane },
   { id: 'scheduled', label: 'Scheduled', icon: Clock },
   { id: 'calendar', label: 'Calendar', icon: Calendar },
@@ -70,6 +75,9 @@ export function EmailSidebar(props: {
   onTab: (tab: MailTab) => void;
   onAccount: (account: string) => void;
   onCompose: () => void;
+  onToggleNavigation?: () => void;
+  tag?: EmailTagId;
+  onTag?: (tag: EmailTagId) => void;
 }) {
   return (
     <ViewSidebar.Root aria-label="Email navigation" class="mail-sidebar">
@@ -78,16 +86,13 @@ export function EmailSidebar(props: {
           <h3 class="text-sm font-semibold tracking-[-0.03em] text-ink">
             Email
           </h3>
-          <Sidebar class="size-4 text-ink-muted" />
+          <ViewSidebar.Control
+            label="Collapse email navigation"
+            onClick={props.onToggleNavigation}
+          >
+            <Sidebar class="size-4 text-ink-muted" />
+          </ViewSidebar.Control>
         </ViewSidebar.Header>
-        <ViewSidebar.Primary>
-          <ViewSidebar.Action onClick={props.onCompose}>
-            <ViewSidebar.Icon>
-              <Plus />
-            </ViewSidebar.Icon>
-            <span class="truncate">New email</span>
-          </ViewSidebar.Action>
-        </ViewSidebar.Primary>
       </header>
       <ViewSidebar.Content class="overflow-visible">
         <ViewSidebar.Nav aria-label="Inboxes">
@@ -96,7 +101,7 @@ export function EmailSidebar(props: {
             onClick={() => props.onAccount('all')}
           >
             <ViewSidebar.Icon>
-              <Envelope />
+              <Check class="text-accent" />
             </ViewSidebar.Icon>
             <span class="truncate">All inboxes</span>
           </ViewSidebar.Item>
@@ -124,11 +129,19 @@ export function EmailSidebar(props: {
             )}
           </For>
         </ViewSidebar.Nav>
+        <div>
+          <ViewSidebar.Action onClick={props.onCompose}>
+            <ViewSidebar.Icon>
+              <Plus />
+            </ViewSidebar.Icon>
+            <span class="truncate">New email</span>
+          </ViewSidebar.Action>
+        </div>
         <ViewSidebar.Nav aria-label="Email tabs">
           <For each={mailTabs}>
             {(tab) => (
               <ViewSidebar.Item
-                active={props.tab === tab.id}
+                active={!props.tag && props.tab === tab.id}
                 onClick={() => props.onTab(tab.id)}
               >
                 <ViewSidebar.Icon>
@@ -139,23 +152,25 @@ export function EmailSidebar(props: {
             )}
           </For>
         </ViewSidebar.Nav>
-        <div class="mail-tags" aria-hidden="true">
-          <div class="flex items-center justify-between text-xs text-ink-muted px-2 mb-3">
-            Tags
-            <Plus class="size-4" />
-          </div>
-          <For each={['Launch', 'Customers', 'Follow up']}>
-            {(label, i) => (
-              <div class="flex items-center gap-3 px-3 py-2 text-sm text-ink-muted">
-                <span
-                  class="size-2 rounded-full"
-                  style={{ background: ['#a99b5b', '#669aba', '#a36b8c'][i()] }}
-                />
-                {label}
-              </div>
+        <ViewSidebar.Nav aria-label="Email tags">
+          <div class="text-xs text-ink-muted px-2 mb-3">Tags</div>
+          <For each={emailTags}>
+            {(tag) => (
+              <ViewSidebar.Item
+                active={props.tag === tag.id}
+                onClick={() => props.onTag?.(tag.id)}
+              >
+                <ViewSidebar.Icon>
+                  <span
+                    class="size-2.5 rounded-full"
+                    style={{ background: tag.color }}
+                  />
+                </ViewSidebar.Icon>
+                <span>{tag.label}</span>
+              </ViewSidebar.Item>
             )}
           </For>
-        </div>
+        </ViewSidebar.Nav>
       </ViewSidebar.Content>
     </ViewSidebar.Root>
   );
@@ -166,10 +181,11 @@ export function EmailShell(props: {
   sidebar?: JSX.Element;
   channel?: boolean;
   label: string;
+  class?: string;
 }) {
   return (
     <div
-      class="mail-app workspace-demo"
+      class={`mail-app workspace-demo ${props.class ?? ''}`}
       data-theme="dark"
       role="group"
       aria-label={props.label}

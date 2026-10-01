@@ -40,14 +40,17 @@ const comparisonRows: ComparisonRow[] = [
   },
   { feature: 'Split-screen multitasking', cells: [true, false, true, false] },
   {
-    feature: 'AI with your whole workspace as context',
+    feature: 'Agents search email, chat, docs & calls',
     cells: [true, false, false, false],
   },
   {
     feature: '@mention docs, people & tasks',
     cells: [true, false, false, false],
   },
-  { feature: 'Shared team memory', cells: [true, false, false, false] },
+  {
+    feature: 'Memory built from workspace activity',
+    cells: [true, false, false, false],
+  },
   { feature: 'Open source', cells: [true, false, false, false] },
 ];
 

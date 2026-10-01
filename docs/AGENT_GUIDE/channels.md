@@ -266,10 +266,13 @@ bottom of the area carries the other decisions, refusal first: `Dismiss · Open 
 for a tool draft, `Decline · Submit · Open in session` (or `Open` for a URL) for a question.
 Only the session's owner can act; other viewers see the question read-only and the header
 names who is being waited on. Once answered, the area shows the agent's passage again.
+Images made with `GenerateImage` are saved to static file service. The bot embeds
+the returned URL as a Markdown image in its channel reply; generated images have
+no document mention or filename card.
 Agent replies may contain mention chips (`<m-document-mention>`) that render like any
-other channel mention. A mention of an image document (PNG, JPG, GIF, SVG, WebP —
-including a picture the bot made with `GenerateImage`) also unfurls beneath the
-message text as an image card: a header with the filename above the picture,
+other channel mention. A mention of an image document (PNG, JPG, GIF, SVG, WebP)
+also unfurls beneath the message text as an image card: a header with the filename
+above the picture,
 inside the message's `[data-message-mentioned-images]` element. The chip stays;
 clicking the card opens the image document in a split. The same image mentioned
 twice unfurls once, mentions of other document types, channels, and chats never
@@ -364,13 +367,13 @@ and message/unread-chip navigation may still open the thread.
 
 Channel messages, thread replies, reactions, edits, deletions, and typing go
 through the shared message API at `GET|POST /dss/messages/channel/<id>` and its
-`items`, `threads`, and `typing` subroutes; the `/dss/channels/<id>/message*`
-routes are no longer called by the web app. Live updates arrive as one
+`items`, `threads`, and `typing` subroutes; the `/dss/channels/<id>/message*`,
+reaction, and typing routes no longer exist. Live updates arrive as one
 `message_update` websocket payload per committed change (`posted`, `edited`,
 `message_deleted`, `reaction_changed`, `thread_updated`, `typing`); the older
 `comms_message`, `comms_reaction`, `comms_attachment`, and `comms_typing`
-frames are ignored. Documents share the same client, cache, and components
-behind `enable-unified-document-discussions` (see documents.md).
+frames are no longer sent. Documents share the same client, cache, and
+components (see documents.md).
 
 Reopening a channel already loaded this session requests
 `GET /dss/messages/channel/<id>?selection=<cursor of the newest cached root, direction newer, limit 50>`

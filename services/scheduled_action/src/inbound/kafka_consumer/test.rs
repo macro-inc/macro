@@ -179,7 +179,7 @@ async fn run(consumer: &FakeConsumer) -> Result<(), Report> {
 fn subscriptions_are_exact_and_group_is_dedicated() {
     assert_eq!(
         DeclaredMacroEvent::topics(),
-        &["macro.documents", "macro.channels"]
+        &["macro.documents", "macro.channels", "macro.messages"]
     );
     assert_eq!(
         ScheduledActionEventIngestionGroup::GROUP_NAME,

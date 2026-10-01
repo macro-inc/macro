@@ -247,5 +247,8 @@ export function staticFileSizedEndpoint(
 }
 
 export function staticFileSizedUrl(url: string, size: StaticFileSize): string {
+  // Embedded and local previews are not image-service URLs. A query string
+  // changes their contents instead of requesting a resized image.
+  if (url.startsWith('data:') || url.startsWith('blob:')) return url;
   return `${url}?size=${staticFileSizes[size]}`;
 }

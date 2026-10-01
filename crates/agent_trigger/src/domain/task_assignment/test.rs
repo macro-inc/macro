@@ -1,5 +1,5 @@
 use super::*;
-use crate::domain::sources::{ChannelTriggerEvents, MessageTriggerEvents, TriggerEvents};
+use crate::domain::sources::{MessageTriggerEvents, TriggerEvents};
 use chrono::Utc;
 use macro_event_broker::{Event, MacroEvent, MacroEventCollection};
 use messages::domain::ports::MessageError;
@@ -264,7 +264,7 @@ fn removing_then_reassigning_starts_a_new_assignment() {
 }
 
 #[test]
-fn both_message_sources_also_decode_task_assignments() {
+fn the_trigger_source_also_decodes_task_assignments() {
     let event_id = Uuid::now_v7();
     let event = || {
         PropertyMacroEvent::from_event(
@@ -276,10 +276,7 @@ fn both_message_sources_also_decode_task_assignments() {
         )
     };
     let message = MessageTriggerEvents::PropertyMacroEvent(event()).into_trigger();
-    let channel = ChannelTriggerEvents::PropertyMacroEvent(event()).into_trigger();
     assert!(MessageTriggerEvents::topics().contains(&"macro.properties"));
-    assert!(ChannelTriggerEvents::topics().contains(&"macro.properties"));
-    assert_eq!(message, channel);
     assert!(message.posted.is_none());
     assert_eq!(message.assignment.unwrap().event_id, event_id);
 }

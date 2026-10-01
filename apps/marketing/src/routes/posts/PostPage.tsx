@@ -1,3 +1,4 @@
+import ArrowLeftIcon from '@phosphor/arrow-left.svg';
 import { A, useParams } from '@solidjs/router';
 import { createMemo, createRenderEffect, Show } from 'solid-js';
 import { Dynamic, isServer } from 'solid-js/web';
@@ -5,13 +6,9 @@ import { APP_BASE_URL } from '../../app/utils/utilBaseUrl';
 import { setPageSeo } from '../../app/utils/utilSeo';
 import { PostCover } from './PostCover';
 import { PostsPageTail } from './PostsPageTail';
-import {
-  avoidTitleOrphan,
-  EXCLUDED_FILTER_TAGS,
-  formatTagLabel,
-  getPostBySlug,
-} from './registry';
+import { avoidTitleOrphan, getPostBySlug } from './registry';
 import './posts-shell.css';
+import './post-reading.css';
 
 const MONTHS = [
   'January',
@@ -85,27 +82,9 @@ export default function PostPage() {
             <article class="posts-shell posts-article posts-article--with-footer">
               <header class="posts-article-header">
                 <nav class="posts-eyebrow" aria-label="Breadcrumb">
-                  <A href="/posts">Blog</A>
-                  <Show when={e().meta.category ?? e().meta.tags?.[0]}>
-                    {(cat) => {
-                      const tagParam = () => {
-                        const primary = e().meta.tags?.find(
-                          (t) => !EXCLUDED_FILTER_TAGS.has(t.toLowerCase())
-                        );
-                        return primary ?? cat().toLowerCase();
-                      };
-                      return (
-                        <>
-                          <span class="posts-eyebrow-sep">/</span>
-                          <A
-                            href={`/posts?tag=${encodeURIComponent(tagParam())}`}
-                          >
-                            {formatTagLabel(cat())}
-                          </A>
-                        </>
-                      );
-                    }}
-                  </Show>
+                  <A href="/posts">
+                    <ArrowLeftIcon aria-hidden="true" /> All posts
+                  </A>
                 </nav>
 
                 <h1 class="posts-title">

@@ -37,7 +37,7 @@ export function SectionPlan() {
           style={{
             'font-family': 'display',
             'font-size': breakpoint() ? '24px' : '32px',
-            'font-weight': '450',
+            'font-weight': '315',
             'letter-spacing': '-0.02em',
             'line-height': breakpoint() ? '28px' : '36px',
           }}
@@ -91,7 +91,7 @@ export function SectionPlan() {
                 color: 'var(--a0)',
                 'font-family': 'display',
                 'font-size': '14px',
-                'font-weight': '500',
+                'font-weight': '315',
                 'letter-spacing': '0.04em',
               }}
             >
@@ -101,7 +101,7 @@ export function SectionPlan() {
               style={{
                 'font-family': 'display',
                 'font-size': breakpoint() ? '20px' : '24px',
-                'font-weight': '450',
+                'font-weight': '315',
                 'letter-spacing': '-0.02em',
                 'line-height': breakpoint() ? '24px' : '28px',
                 'max-width': '240px',

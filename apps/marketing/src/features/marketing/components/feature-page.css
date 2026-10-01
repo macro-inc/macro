@@ -13,6 +13,7 @@
 .feature-page-hero h1 { margin: 18px 0 24px; font: 315 clamp(40px, 5.4vw, 68px)/1.12 'Roboto Slab Variable', display, serif; letter-spacing: -.035em; text-wrap: balance; }
 .feature-page-hero > p:not(.feature-page-eyebrow) { max-width: 460px; color: #999; font-size: 16px; line-height: 1.8; text-wrap: balance; }
 .feature-page-cta { display: inline-flex; align-items: center; justify-content: center; gap: 24px; min-height: 52px; padding: 14px 25px; border-radius: 999px; background: #fafafa; color: #080808; font-size: 15px; font-weight: 500; line-height: 24px; text-decoration: none; transition: background 180ms; }
+.feature-page .feature-page-cta { color: #080808; }
 .feature-page-cta svg { width: 21px; height: 21px; }
 .feature-page-cta:hover { background: #ddd; }
 .feature-page-hero .feature-page-cta { margin-top: 32px; }

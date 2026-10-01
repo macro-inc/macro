@@ -3,9 +3,7 @@
 use agent_session::outbound::postgres::PgAgentSessionRepo;
 use agent_trigger::domain::processing::process_message_event;
 use agent_trigger::domain::service::AgentTriggerService;
-use agent_trigger::domain::sources::{
-    ChannelTriggerEvents, MessageTriggerEvents, TriggerEventSource, TriggerEvents,
-};
+use agent_trigger::domain::sources::{MessageTriggerEvents, TriggerEvents};
 use agent_trigger::domain::task_assignment::process_task_assignment;
 use agent_trigger::outbound::{
     BotRepoAgentLookup, ChannelRepoTypeLookup, DssTaskAssignmentContext, FastModelTriggerJudge,
@@ -85,7 +83,6 @@ pub async fn supervise(
     kafka_brokers: String,
     internal_api_key: String,
     document_storage_service_auth_key: String,
-    source: TriggerEventSource,
     services: TriggerServices,
 ) {
     loop {
@@ -94,7 +91,6 @@ pub async fn supervise(
             kafka_brokers.clone(),
             internal_api_key.clone(),
             document_storage_service_auth_key.clone(),
-            source,
             services.clone(),
         )
         .await
@@ -110,7 +106,6 @@ async fn run(
     kafka_brokers: String,
     internal_api_key: String,
     document_storage_service_auth_key: String,
-    source: TriggerEventSource,
     services: TriggerServices,
 ) -> anyhow::Result<()> {
     let TriggerServices {
@@ -162,33 +157,18 @@ async fn run(
     );
     let consumer = KafkaEventConsumer::<AgentTriggerConsumerGroup>::from_env(&kafka_brokers)?;
     let consumer = KafkaConsumerAdapter::<AgentTriggerConsumerGroup, ()>::new(consumer);
-    match source {
-        TriggerEventSource::Messages => {
-            consume::<MessageTriggerEvents>(
-                consumer,
-                &trigger,
-                &publisher,
-                &channel_types,
-                messages.as_ref(),
-                &task_context,
-            )
-            .await
-        }
-        TriggerEventSource::Channels => {
-            consume::<ChannelTriggerEvents>(
-                consumer,
-                &trigger,
-                &publisher,
-                &channel_types,
-                messages.as_ref(),
-                &task_context,
-            )
-            .await
-        }
-    }
+    consume::<MessageTriggerEvents>(
+        consumer,
+        &trigger,
+        &publisher,
+        &channel_types,
+        messages.as_ref(),
+        &task_context,
+    )
+    .await
 }
 
-/// Read one trigger source until it fails, evaluating every committed post.
+/// Read the trigger topic until it fails, evaluating every committed post.
 async fn consume<Events: TriggerEvents>(
     consumer: KafkaConsumerAdapter<AgentTriggerConsumerGroup, ()>,
     trigger: &Trigger,
@@ -204,7 +184,6 @@ async fn consume<Events: TriggerEvents>(
 
     tracing::info!(
         topics = ?Events::topics(),
-        source = ?Events::SOURCE,
         group = AgentTriggerConsumerGroup::GROUP_NAME,
         "agent trigger listening"
     );

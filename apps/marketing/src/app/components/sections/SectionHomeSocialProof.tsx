@@ -97,7 +97,7 @@ export function SectionHomeSocialProof() {
       <span
         style={{
           color: 'color-mix(in srgb, var(--c4) 60%, transparent)',
-          'font-family': 'rajdhani, body',
+          'font-family': 'Inter, body',
           'font-size': mobile() ? '11px' : '12px',
           'font-weight': '700',
           'letter-spacing': '0.14em',
@@ -127,7 +127,7 @@ export function SectionHomeSocialProof() {
                 color: 'color-mix(in srgb, var(--c3) 62%, transparent)',
                 'font-family': 'display',
                 'font-size': mobile() ? '18px' : '21px',
-                'font-weight': '500',
+                'font-weight': '315',
                 'letter-spacing': '-0.01em',
                 'line-height': 1,
                 'white-space': 'nowrap',
@@ -172,7 +172,7 @@ export function SectionHomeSocialProof() {
                 style={{
                   color: 'var(--c2)',
                   'font-family': 'body',
-                  'font-size': mobile() ? '16px' : '17px',
+                  'font-size': mobile() ? '16px' : '14px',
                   'font-weight': '400',
                   'line-height': 1.55,
                   margin: '0',

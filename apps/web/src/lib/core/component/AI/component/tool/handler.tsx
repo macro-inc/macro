@@ -52,6 +52,7 @@ import {
   listImportEntitiesHandler,
 } from './ImportTools';
 import { initiativeToolHandlers } from './Initiatives';
+import { LegacyGeneratedImage } from './LegacyGeneratedImage';
 import { listEntitiesHandler } from './ListEntities';
 import { listInboxesHandler } from './ListInboxes';
 import { listLabelsHandler } from './ListLabels';
@@ -294,19 +295,26 @@ export function RenderTool(props: ToolProps) {
   });
 
   return (
-    <ToolErrorContext.Provider
-      value={() => (props.isComplete && !response() ? 'failed' : undefined)}
+    <LegacyGeneratedImage
+      name={props.name}
+      response={
+        props.response?.name === props.name ? props.response.json : undefined
+      }
     >
-      <Dynamic
-        component={handler.render}
-        {...context}
-        response={response()}
-        renderContext={{
-          isStreaming: props.renderContext.renderContext.isStreaming,
-          grouped: props.renderContext.renderContext.grouped,
-        }}
-      />
-    </ToolErrorContext.Provider>
+      <ToolErrorContext.Provider
+        value={() => (props.isComplete && !response() ? 'failed' : undefined)}
+      >
+        <Dynamic
+          component={handler.render}
+          {...context}
+          response={response()}
+          renderContext={{
+            isStreaming: props.renderContext.renderContext.isStreaming,
+            grouped: props.renderContext.renderContext.grouped,
+          }}
+        />
+      </ToolErrorContext.Provider>
+    </LegacyGeneratedImage>
   );
 }
 

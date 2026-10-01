@@ -10,6 +10,13 @@ use chrono_tz::Tz;
 use documents::domain::events::DocumentTopicEvent;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use messages::domain::{
+    events::{
+        MessageAttachmentCreatedMetadata, MessageMentionedMetadata, MessagePatchedMetadata,
+        MessagePostedMetadata,
+    },
+    models::MessageParent,
+};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -305,6 +312,26 @@ impl EventReference {
 pub enum EventPayload {
     Document(DocumentTopicEvent),
     Channel(ChannelTopicEvent),
+    Message(MessageFact),
+}
+
+/// The message facts routines can trigger on, from `macro.messages`. Anything
+/// else on that topic arrives as [`MessageFact::Other`] and never triggers.
+#[derive(Debug, Clone)]
+pub enum MessageFact {
+    Posted(MessagePostedMetadata),
+    Mentioned(MessageMentionedMetadata),
+    Patched(MessagePatchedMetadata),
+    AttachmentCreated(MessageAttachmentCreatedMetadata),
+    Other,
+}
+
+/// Routines trigger on channel conversations only; other parents never match.
+fn channel_parent(parent: &MessageParent) -> Result<Uuid, EventRejection> {
+    match parent {
+        MessageParent::Channel(id) => Ok(*id),
+        _ => Err(EventRejection::UnsupportedEvent),
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -388,39 +415,46 @@ impl IncomingEvent {
                     require_human(Some(&data.actor), data.on_behalf_of.is_some())?;
                     (EventName::ChannelCreated, data.channel_id, None)
                 }
-                ChannelTopicEvent::MessagePosted(data) => {
+                _ => return Err(EventRejection::UnsupportedEvent),
+            },
+            EventPayload::Message(fact) => match fact {
+                MessageFact::Posted(data) => {
+                    let channel_id = channel_parent(&data.parent)?;
                     require_human(Some(&data.sender), data.triggered_by.is_some())?;
                     (
                         EventName::ChannelMessagePosted,
-                        data.channel_id,
+                        channel_id,
                         Some(data.message_id),
                     )
                 }
-                ChannelTopicEvent::Mentioned(data) => {
+                MessageFact::Mentioned(data) => {
+                    let channel_id = channel_parent(&data.parent)?;
                     require_human(Some(&data.sender), false)?;
                     (
                         EventName::ChannelMentioned,
-                        data.channel_id,
+                        channel_id,
                         Some(data.message_id),
                     )
                 }
-                ChannelTopicEvent::MessagePatched(data) => {
+                MessageFact::Patched(data) => {
+                    let channel_id = channel_parent(&data.parent)?;
                     require_human(Some(&data.actor), false)?;
                     (
                         EventName::ChannelMessagePatched,
-                        data.channel_id,
+                        channel_id,
                         Some(data.message_id),
                     )
                 }
-                ChannelTopicEvent::MessageAttachmentCreated(data) => {
+                MessageFact::AttachmentCreated(data) => {
+                    let channel_id = channel_parent(&data.parent)?;
                     require_human(Some(&data.actor), false)?;
                     (
                         EventName::ChannelMessageAttachmentCreated,
-                        data.channel_id,
+                        channel_id,
                         Some(data.message_id),
                     )
                 }
-                _ => return Err(EventRejection::UnsupportedEvent),
+                MessageFact::Other => return Err(EventRejection::UnsupportedEvent),
             },
         };
         Ok(EventReference {
