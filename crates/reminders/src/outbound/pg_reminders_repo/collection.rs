@@ -8,7 +8,6 @@ use crate::domain::{
 };
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
-use sqlx::types::Json;
 
 impl PgRemindersRepo {
     pub(super) async fn read_collection(
@@ -34,7 +33,7 @@ impl PgRemindersRepo {
                 r.remind_at, r.cron, r.timezone, r.next_run_at, r.enabled,
                 r.completed_at, r.created_at, r.updated_at,
                 d."fileType" AS "file_type?", dst.sub_type::text AS "sub_type?",
-                f.payload AS "followup?: Json<FollowupRecord>"
+                f.payload AS "followup?"
             FROM candidates r
             LEFT JOIN "Document" d ON r.entity_type = 'document'
                 AND d.id = r.entity_id::text AND d."deletedAt" IS NULL
@@ -77,6 +76,16 @@ impl PgRemindersRepo {
             last_examined,
         };
         for row in rows {
+            let email_followup = match row.followup {
+                Some(payload) => match serde_json::from_value::<FollowupRecord>(payload) {
+                    Ok(record) => Some(record.followup),
+                    Err(error) => {
+                        tracing::error!(error = ?error, "skipping unreadable email reminder in collection");
+                        continue;
+                    }
+                },
+                None => None,
+            };
             let reminder = ReminderRow {
                 id: row.id,
                 description: row.description,
@@ -107,7 +116,7 @@ impl PgRemindersRepo {
             batch.items.push(ReminderCollectionRow {
                 reminder,
                 reference,
-                email_followup: row.followup.map(|f| f.0.followup),
+                email_followup,
             })
         }
         Ok(batch)

@@ -104,6 +104,7 @@ import {
   applyDocumentTabScope,
   withDocumentTabItemScope,
 } from './document-tab-scope';
+import { resolveInitialViewFilters } from './initial-view-filters';
 
 type DataSource<T> = {
   data: Accessor<T[]>;
@@ -373,10 +374,6 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
             : undefined)
       )
     : undefined;
-  const legacyReminderTab =
-    initialView === 'reminders' &&
-    (initialEntryState?.['soup.tab'] ?? persistedActiveTabs().reminders) !==
-      'all';
   const initialPersistedQuery =
     filterPersistenceEnabled() && initialView && initialTab
       ? persistedQueryFor(initialView, initialTab)
@@ -386,20 +383,26 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
       ? persistedPredicatesFor(initialView, initialTab)
       : undefined;
 
-  const store = createQueryStore({
-    initial:
-      (legacyReminderTab ? undefined : initialEntryQuery) ??
-      (props.preferInitialFilters ? props.initialQuery : undefined) ??
-      initialPersistedQuery ??
-      props.initialQuery,
+  const initialFilters = resolveInitialViewFilters({
+    view: initialView,
+    rememberedTab:
+      initialEntryState?.['soup.tab'] ??
+      (filterPersistenceEnabled() && initialView
+        ? persistedActiveTabs()[initialView]
+        : undefined),
+    entry: { query: initialEntryQuery, predicates: initialEntryPredicates },
+    persisted: {
+      query: initialPersistedQuery,
+      predicates: initialPersistedPredicates,
+    },
+    initial: {
+      query: props.initialQuery,
+      predicates: props.initialClientFilters,
+    },
+    preferInitialFilters: props.preferInitialFilters,
   });
-
-  const initialPredicates =
-    (legacyReminderTab ? undefined : initialEntryPredicates) ??
-    (props.preferInitialFilters ? props.initialClientFilters : undefined) ??
-    initialPersistedPredicates ??
-    props.initialClientFilters;
-  if (initialPredicates) soup.predicates.set(initialPredicates);
+  const store = createQueryStore({ initial: initialFilters.query });
+  if (initialFilters.predicates) soup.predicates.set(initialFilters.predicates);
 
   const filterCaptorTeardown = panel.handle.registerEntryStateCaptor(
     'search.filters',
@@ -877,26 +880,23 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
             ? persistedPredicatesFor(view, tabId)
             : undefined;
 
-        queryFilters.replace(
-          (legacyReminderTab ? undefined : entryQuery) ??
-            (options.preferInitialFilters ? options.initialQuery : undefined) ??
-            persistedQuery ??
-            (legacyReminderTab
-              ? getViewPreset('reminders')?.filters
-              : options.initialQuery) ??
-            null
-        );
-        soup.predicates.set(
-          (legacyReminderTab ? undefined : entryPredicates) ??
-            (options.preferInitialFilters
-              ? options.initialClientFilters
-              : undefined) ??
-            savedPredicates ??
-            (legacyReminderTab
-              ? { and: ['reminders'] }
-              : options.initialClientFilters) ??
-            {}
-        );
+        const filters = resolveInitialViewFilters({
+          view,
+          rememberedTab:
+            entryState?.['soup.tab'] ??
+            (filterPersistenceEnabled() && view
+              ? persistedActiveTabs()[view]
+              : undefined),
+          entry: { query: entryQuery, predicates: entryPredicates },
+          persisted: { query: persistedQuery, predicates: savedPredicates },
+          initial: {
+            query: options.initialQuery,
+            predicates: options.initialClientFilters,
+          },
+          preferInitialFilters: options.preferInitialFilters,
+        });
+        queryFilters.replace(filters.query ?? null);
+        soup.predicates.set(filters.predicates ?? {});
         setSearchText(options.initialSearchText ?? '');
         setEnabled(true);
       });

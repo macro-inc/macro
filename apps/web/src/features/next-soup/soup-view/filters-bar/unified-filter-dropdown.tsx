@@ -53,6 +53,7 @@ import {
   FilterSubmenu,
   SearchableFilterSubmenu,
 } from './filter-menu';
+import { toggleReminderCompletionFilter } from './reminder-completion-filter';
 import type { SearchableOption } from './searchable-multi-select';
 
 import { useTagFilter } from './tag-filter';
@@ -475,6 +476,11 @@ export const UnifiedFilterDropdown = (
   };
 
   const toggleFilter = (optionId: string) => {
+    if (
+      currentView() === 'reminders' &&
+      toggleReminderCompletionFilter(optionId, soup.predicates, queryFilters)
+    )
+      return;
     const wasActive = soup.predicates.isActive(optionId);
     const previousDocumentTypeIds =
       currentView() === 'documents' && isDocumentTypeFilterId(optionId)

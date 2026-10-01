@@ -14,7 +14,8 @@ ordering applies before pagination. An old saved tab opens the unified view.
 Completion is acknowledgment of an occurrence: a done recurring reminder can
 still have a future schedule. Its completed check and clock appear together.
 Marking done keeps the row in the unfiltered collection. The explicit Completion
-filter can limit the collection to Done or Not done.
+filter can limit the collection to Done or Not done. These choices are exclusive;
+selecting the active choice again or using Clear all restores the full collection.
 
 A persistent clock beside the row metadata exposes the full date, time, timezone,
 repeat rule, and email condition on hover or keyboard focus. Click or tap it to
