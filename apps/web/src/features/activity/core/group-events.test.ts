@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { entryHead } from './collapse-runs';
 import type { ActivityEvent } from './event';
 import { groupEventsByDay } from './group-events';
@@ -23,6 +23,12 @@ const ids = (entries: ReturnType<typeof groupEventsByDay>[number]['entries']) =>
   entries.map((entry) => entryHead(entry).id);
 
 describe('groupEventsByDay', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-21T14:00:00.000Z'));
+  });
+  afterEach(() => vi.useRealTimers());
+
   it('returns an empty list for no events', () => {
     expect(groupEventsByDay([])).toEqual([]);
   });

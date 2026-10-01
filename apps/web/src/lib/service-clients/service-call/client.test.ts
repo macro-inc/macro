@@ -74,6 +74,7 @@ describe('meeting transport authorization', () => {
       'https://gateway.example/dss/call/join/secret/leave',
       {
         method: 'POST',
+        keepalive: true,
         credentials: 'omit',
         headers: { Authorization: 'Bearer scoped-room-token' },
       }
