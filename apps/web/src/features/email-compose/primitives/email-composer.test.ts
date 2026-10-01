@@ -4,7 +4,8 @@ import { decodeBase64Utf8 } from '../core/decode-base64';
 import { createComposeContext } from '../tests/capabilities';
 import { mountEmailComposer } from '../tests/composer';
 
-beforeEach(() => vi.useFakeTimers());
+// Keep the scheduling fixtures in the future regardless of the wall clock.
+beforeEach(() => vi.useFakeTimers({ now: new Date('2026-09-01T12:00:00Z') }));
 afterEach(() => vi.useRealTimers());
 
 // Real controller and editor, with only feature capabilities replaced.

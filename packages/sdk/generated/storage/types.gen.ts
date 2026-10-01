@@ -261,6 +261,12 @@ export type AgentSessionLifecycleEvent = {
      */
     metadata: TurnEndedMetadata;
 } | {
+    event_type: 'agent_session.command_rejected';
+    /**
+     * An accepted command was refused before runtime execution.
+     */
+    metadata: CommandRejectedMetadata;
+} | {
     event_type: 'agent_session.settled';
     /**
      * A turn ended with nothing queued behind it.
@@ -3174,6 +3180,47 @@ export type CollabSurfaceTokenResponse = {
      * The signed JWT to pass to the sync-service websocket connect.
      */
     token: string;
+};
+
+/**
+ * Sanitized public details of a command refused before runtime execution.
+ */
+export type CommandFailure = {
+    /**
+     * Stable public denial or unavailability code.
+     */
+    code: string;
+    /**
+     * Public explanation, never an internal error report.
+     */
+    message: string;
+    /**
+     * Whether retrying later may succeed without a policy change.
+     */
+    retryable: boolean;
+};
+
+/**
+ * An accepted command was refused before it could start a runtime turn.
+ */
+export type CommandRejectedMetadata = {
+    /**
+     * The command that will not execute.
+     */
+    action_id: AgentActionId;
+    actor?: null | MacroUserIdStr;
+    /**
+     * The command's thread announcement, when one was created.
+     */
+    announcement_message_id?: string | null;
+    /**
+     * Safe details for clients and downstream consumers.
+     */
+    failure: CommandFailure;
+    /**
+     * The session.
+     */
+    identity: SessionIdentity;
 };
 
 export type Comment = {

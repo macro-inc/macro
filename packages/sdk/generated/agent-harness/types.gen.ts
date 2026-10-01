@@ -496,6 +496,21 @@ export type AgentSetModelAction = {
     model: string;
 };
 
+/**
+ * Public admission error payload. Handlers with additional fields can reuse the
+ * domain error's code and message and [`admission_status`].
+ */
+export type AiAdmissionErrorBody = {
+    /**
+     * Stable denial or unavailability code.
+     */
+    code: string;
+    /**
+     * Human-readable explanation, without internal billing diagnostics.
+     */
+    error: string;
+};
+
 export type BotId = string;
 
 /**
@@ -1523,10 +1538,18 @@ export type CreateAgentSessionData = {
 
 export type CreateAgentSessionErrors = {
     401: string;
+    /**
+     * AI allowance exhausted
+     */
+    402: AiAdmissionErrorBody;
     403: string;
     404: string;
     422: string;
     500: string;
+    /**
+     * AI usage validation unavailable; retry later
+     */
+    503: AiAdmissionErrorBody;
 };
 
 export type CreateAgentSessionError = CreateAgentSessionErrors[keyof CreateAgentSessionErrors];
@@ -1730,9 +1753,17 @@ export type ControlAgentSessionData = {
 
 export type ControlAgentSessionErrors = {
     401: string;
+    /**
+     * AI allowance exhausted
+     */
+    402: AiAdmissionErrorBody;
     403: string;
     422: string;
     500: string;
+    /**
+     * AI usage validation unavailable, or replica draining; retry later
+     */
+    503: AiAdmissionErrorBody;
 };
 
 export type ControlAgentSessionError = ControlAgentSessionErrors[keyof ControlAgentSessionErrors];
