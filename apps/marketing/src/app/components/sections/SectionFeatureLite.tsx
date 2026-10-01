@@ -487,7 +487,7 @@ export function FeatureLiteCards(props: {
         <p
           style={{
             color: 'color-mix(in srgb, var(--c4) 70%, transparent)',
-            'font-family': 'rajdhani, body, system-ui, sans-serif',
+            'font-family': 'Inter, body, system-ui, sans-serif',
             'font-size': '14px',
             'font-weight': '600',
             'letter-spacing': '0.12em',
@@ -536,7 +536,7 @@ export function FeatureLiteCards(props: {
                     style={{
                       color: 'var(--c2)',
                       'font-family': 'body, system-ui, sans-serif',
-                      'font-size': '18px',
+                      'font-size': '15px',
                       'font-weight': '700',
                       'letter-spacing': '0.07em',
                       'line-height': '1.2',
@@ -594,7 +594,7 @@ export function FeatureLiteVideoSection(props: {
           <p
             style={{
               color: 'color-mix(in srgb, var(--c4) 70%, transparent)',
-              'font-family': 'rajdhani, body, system-ui, sans-serif',
+              'font-family': 'Inter, body, system-ui, sans-serif',
               'font-size': '14px',
               'font-weight': '600',
               'letter-spacing': '0.12em',
@@ -675,11 +675,7 @@ export function SectionFeatureLite(props: {
                   'font-size': mobile()
                     ? 'clamp(38px, 11vw, 52px)'
                     : 'clamp(44px, 6vw, 60px)',
-                  // The h1 weight main settled the slab on: the home hero and
-                  // .tasks-h1 both set 360, and this clamp tops out at the same
-                  // 60px they do, so it is the same tier and takes the same
-                  // number rather than a value of its own.
-                  'font-weight': '360',
+                  'font-weight': '315',
                   'letter-spacing': 'normal',
                   'line-height': '1.08',
                   margin: mobile() ? '16px 0 0' : '18px 0 0',
@@ -702,24 +698,10 @@ export function SectionFeatureLite(props: {
               </h1>
               <p
                 style={{
-                  // Main's lead tier, taken whole: cyberreader at its real
-                  // Light 300 -- a discrete file, not a synthesised weight --
-                  // on --c4 at full strength.
-                  //
-                  // The 78% mix belonged to the 600, which was synthetic bold
-                  // over Rajdhani Medium, the only weight that family ships.
-                  // Holding a transparency meant for a bolded face under one
-                  // 300 units lighter would leave the sub too faint to read as
-                  // the headline's second half, so it goes back to the flat
-                  // --c4 that .tasks-lead uses.
-                  //
-                  // 'body' stays behind cyberreader as a fallback: with
-                  // font-display: swap a failed load would otherwise drop to
-                  // the generic sans rather than to Rajdhani.
                   color: 'var(--c4)',
-                  'font-family': 'cyberreader, body, system-ui, sans-serif',
-                  'font-size': mobile() ? '17px' : '20px',
-                  'font-weight': '300',
+                  'font-family': 'Inter, body, system-ui, sans-serif',
+                  'font-size': mobile() ? '14px' : '17px',
+                  'font-weight': '400',
                   'line-height': '1.6',
                   margin: '18px 0 0',
                   'max-width': '52ch',

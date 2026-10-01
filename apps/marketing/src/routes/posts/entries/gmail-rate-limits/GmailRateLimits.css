@@ -1,6 +1,6 @@
 .grl-post {
   color: var(--c4);
-  font-family: 'cyberreader', system-ui, sans-serif;
+  font-family: 'Inter', system-ui, sans-serif;
 }
 
 .grl-post,
@@ -56,6 +56,6 @@
 
 .grl-post code {
   color: var(--c1);
-  font-family: 'rajdhani', body, system-ui, sans-serif;
+  font-family: 'Inter', body, system-ui, sans-serif;
   font-size: 0.95em;
 }

@@ -46,7 +46,7 @@ export function SectionExtensibility() {
           style={{
             'font-family': 'display',
             'font-size': breakpoint() ? '24px' : '32px',
-            'font-weight': '450',
+            'font-weight': '315',
             'letter-spacing': '-0.02em',
             'line-height': breakpoint() ? '28px' : '36px',
           }}
@@ -94,7 +94,7 @@ export function SectionExtensibility() {
                 color: 'var(--a0)',
                 'font-family': 'display',
                 'font-size': '18px',
-                'font-weight': '450',
+                'font-weight': '315',
                 'letter-spacing': '-0.01em',
               }}
             >

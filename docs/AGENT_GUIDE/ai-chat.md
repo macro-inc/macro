@@ -36,11 +36,10 @@ permission failures should display a failed tool call without a successful resul
 ## Generating images with AI
 
 `GenerateImage` takes a text prompt, renders it with Google's Nano Banana image
-model, and saves the result as an image document. Optional arguments: a short file
-name (otherwise the opening words of the prompt name the document), an aspect ratio
-(`square`, `landscape`, `portrait`, `widescreen`, `tall`), and a project ID (edit
-access required). The file extension comes from the generated format, so
-`fileName: "lighthouse"` yields `lighthouse.png`.
+model, and saves the result to static file service. An optional aspect ratio
+(`square`, `landscape`, `portrait`, `widescreen`, `tall`) controls its shape.
+The response includes `staticFileId` and the permanent image `url`; it does not
+create a document or take a filename or destination project.
 
 For edits or variations, attach photos with the existing paperclip or use Macro
 image documents the user can view. Pass up to three references in `referenceImages`,
@@ -48,18 +47,17 @@ for example `[{"type":"staticFile","id":"<UUID>"},{"type":"document","id":"<UUID
 For an uploaded photo, use the UUID from `/file/<id>` in its attachment URL;
 for a document, use its document ID. Describe the edit in `prompt`, referring to
 image 1, image 2, and image 3 in array order. A description alone does not send
-the photo to the image model. The result is saved as a new document.
+the photo to the image model. For a previous generation, use its `staticFileId`
+with type `staticFile`. Each result is saved as a new static file.
 
-The result appears as a standalone image card outside grouped tool calls. A
-rounded header shows the filename above the image preview; clicking the card
-opens the image document in a new app split. The card fits the image's scaled
-width without side padding, preserves its aspect ratio, and truncates long
-filenames in the header. The preview loads once the upload
-is ready, with a placeholder while it is being prepared. Any commentary the
-model added appears below the image.
-In a channel thread, where the bot's reply is plain message text with a
-mention chip rather than a tool card, the same image card renders beneath the
-message for every image document the reply mentions (see channels.md).
+The result appears directly as an image outside grouped tool calls, loaded from
+its SFS URL without a filename header or document navigation. It preserves its
+aspect ratio and fits the available width. A status appears while generation is
+pending; a failed image load shows “Preview unavailable”. The tool already renders
+the result in chat, so the assistant should not add a document mention or duplicate
+image there. In channel messages, embed the returned URL as a Markdown image.
+Earlier generations saved as DSS documents still render their original document
+card when viewing historical conversations.
 Refused prompts, provider failures, and hosts without a Google Generative AI key
 display a failed tool call; the error tells the agent whether to rephrase, retry,
 or stop.
@@ -675,6 +673,20 @@ Cursor walkthrough files the run re-hosts appear in the transcript after the
 answer: screenshots as images, recordings as video players, and `.txt` / `.log`
 files as an inline `txt` code block (not a download link). Larger or non-UTF-8
 text stays a link.
+
+When a Cursor run subscribes to something outside the conversation (a CI run,
+a pull request, a Slack thread, a Linear issue, a timer), Cursor feeds the
+event back as a prompt wrapped in `<system_notification …>`. The transcript
+renders that as a full-width event card, not a prompt bubble: a source header
+(e.g. **GitHub · CI checks**), a pass/fail pill when the event carries a
+`conclusion`, the summary line, and chips for the repository, branch, short
+commit and check count (repository and commit chips open GitHub). Attributes
+the card has no face for appear as `name: value` chips; the subscription id
+is hidden. The same tag renders as the same card anywhere internal markdown
+is shown; a tag inside a code fence stays code. Text between notification
+blocks keeps the message in its author's prompt bubble. Card links accept
+only HTTP or HTTPS URLs; invalid repository links stay as plain chips and
+invalid event links are omitted.
 
 On mobile the composer (and any queued prompts above it) floats in the bottom
 accessory region above the dock — same placement as channel and AI chat — so it

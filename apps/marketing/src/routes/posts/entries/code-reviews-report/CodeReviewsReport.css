@@ -29,7 +29,7 @@
   color: var(--crr-text-bright);
   font-family: 'display', Georgia, serif;
   font-size: clamp(28px, 4vw, 38px);
-  font-weight: 430;
+  font-weight: 315;
   letter-spacing: -0.02em;
   line-height: 1.12;
   margin: 68px 0 24px;
@@ -112,7 +112,7 @@
 
 .crr-post .crr-ascii-block pre {
   color: var(--crr-text-dim);
-  font-family: 'rajdhani', body, system-ui, sans-serif;
+  font-family: 'Inter', body, system-ui, sans-serif;
   font-size: 14px;
   line-height: 1.55;
   margin: 0;
@@ -137,7 +137,7 @@
 
 .crr-post code {
   color: var(--crr-text-bright);
-  font-family: 'rajdhani', body, system-ui, sans-serif;
+  font-family: 'Inter', body, system-ui, sans-serif;
   font-size: 0.95em;
 }
 

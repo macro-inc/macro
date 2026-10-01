@@ -163,14 +163,6 @@ pub struct Config {
     #[macro_config_default(false)]
     pub calendar_reminder_dispatch_enabled: bool,
 
-    /// Master switch for the legacy document comment writers: comment create,
-    /// edit and delete, and anchor delete, which also deletes the thread.
-    /// Set to `false` for the final pass of the legacy comment importer, before
-    /// the new document discussion UI is enabled; those handlers then answer
-    /// 503 and the importer works from a frozen source.
-    #[macro_config_default(true)]
-    pub legacy_comment_writes_enabled: bool,
-
     /// Lets a team-scoped bot with no acting user own the documents it creates.
     pub enable_non_user_owners: EnableNonUserOwners,
 

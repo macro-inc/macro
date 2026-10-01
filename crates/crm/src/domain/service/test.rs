@@ -203,60 +203,6 @@ impl CompaniesRepository for StubRepo {
         unimplemented!()
     }
 
-    #[allow(clippy::too_many_arguments)]
-    async fn create_crm_comment(
-        &self,
-        _team_id: &uuid::Uuid,
-        _entity_type: CrmCommentEntityType,
-        _entity_id: &uuid::Uuid,
-        _owner: &str,
-        _thread_id: Option<uuid::Uuid>,
-        _thread_metadata: Option<Value>,
-        _text: &str,
-        _metadata: Option<Value>,
-        _include_hidden: bool,
-    ) -> Result<CrmCommentThread, CrmError> {
-        unimplemented!()
-    }
-
-    async fn get_crm_comment_threads(
-        &self,
-        _team_id: &uuid::Uuid,
-        _entity_type: CrmCommentEntityType,
-        _entity_id: &uuid::Uuid,
-        _include_hidden: bool,
-    ) -> Result<Vec<CrmCommentThread>, CrmError> {
-        unimplemented!()
-    }
-
-    async fn edit_crm_comment(
-        &self,
-        _team_id: &uuid::Uuid,
-        _comment_id: &uuid::Uuid,
-        _text: &str,
-        _include_hidden: bool,
-        _requester: &str,
-    ) -> Result<CrmComment, CrmError> {
-        unimplemented!()
-    }
-
-    async fn delete_crm_comment(
-        &self,
-        _team_id: &uuid::Uuid,
-        _comment_id: &uuid::Uuid,
-        _include_hidden: bool,
-        _requester: &str,
-    ) -> Result<DeleteCrmCommentResult, CrmError> {
-        unimplemented!()
-    }
-
-    async fn get_comment_entity(
-        &self,
-        _comment_id: &uuid::Uuid,
-    ) -> Result<Option<(CrmCommentEntityType, uuid::Uuid)>, CrmError> {
-        unimplemented!()
-    }
-
     async fn get_team_settings(&self, _team_id: &uuid::Uuid) -> Result<CrmTeamSettings, CrmError> {
         Ok(CrmTeamSettings::default())
     }

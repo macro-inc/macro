@@ -52,7 +52,7 @@ const CALL_TEAL = 'var(--a3)';
 function eyebrowStyle(): JSX.CSSProperties {
   return {
     color: 'var(--a0)',
-    'font-family': 'rajdhani, body',
+    'font-family': 'Inter, body',
     'font-size': breakpoint() ? '12px' : '16px',
     'letter-spacing': '0.08em',
     'text-transform': 'uppercase',
@@ -3622,7 +3622,7 @@ function ComparisonCell(props: { value: Cell; macro: boolean }) {
         <span
           style={{
             color: props.macro ? 'var(--a0)' : 'var(--c2)',
-            'font-family': 'rajdhani, body',
+            'font-family': 'Inter, body',
             'font-size': mobile() ? '13px' : '15px',
             'font-weight': '700',
             'letter-spacing': '0.02em',
@@ -3649,7 +3649,7 @@ function _ComparisonTable() {
       : 'transparent',
     color: macro ? 'var(--a0)' : 'var(--c2)',
     display: 'flex',
-    'font-family': 'rajdhani, body',
+    'font-family': 'Inter, body',
     'font-size': mobile() ? '12px' : '15px',
     'font-weight': '700',
     'justify-content': 'center',
@@ -3925,7 +3925,7 @@ function _FaqSection() {
             color: 'var(--c1)',
             'font-family': 'display',
             'font-size': mobile() ? '32px' : breakpoint() ? '38px' : '44px',
-            'font-weight': '410',
+            'font-weight': '315',
             'letter-spacing': '-0.015em',
             'line-height': 1.1,
             margin: 0,

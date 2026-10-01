@@ -1197,7 +1197,6 @@ async fn run() -> anyhow::Result<()> {
         config.kafka_brokers.as_ref().to_owned(),
         config.internal_api_key.clone(),
         config.document_storage_service_auth_key.clone(),
-        config.agent_trigger_event_source,
         trigger::TriggerServices {
             recorder,
             admission,

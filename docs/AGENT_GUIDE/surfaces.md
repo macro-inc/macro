@@ -1714,6 +1714,14 @@ but unconnected app gets a tool result saying so, and the agent's reply renders 
 `Connect <app>` chip that opens Agents → Connections for that app. The same page
 is also available as Settings → Connections.
 
+To change an agent's picture, open `Edit <name>`, choose an image with `Upload`,
+wait for `Uploading…` to finish, then click `Save changes`. Images up to 16 MB
+are uploaded to image storage; Save stays disabled during the upload. A failed
+upload shows an error and keeps the previous picture so you can retry. Verify
+the picture after reopening settings and after a page reload, then type `@` and
+the agent's name in a channel to check its mention-menu picture. Team agents
+available in all channels should refresh there without reloading the channel.
+
 With `pipedream-mcp` enabled, Connections (in Agents or Settings) has `Connected` and `Discover`
 tabs. Connected groups GitHub, Linear, Notion, and Slack tool grants by provider,
 lists other catalog connections alongside them, and puts custom MCP servers in

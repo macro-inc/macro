@@ -11,8 +11,6 @@ async-trait.workspace = true
 attachment = { path = "../attachment" }
 base64.workspace = true
 bot_id = { path = "../bot_id" }
-documents = { path = "../documents", default-features = false, features = ["document_create"] }
-entity_access = { path = "../entity_access" }
 model = { path = "../model" }
 model-entity = { path = "../model-entity" }
 model_owner = { path = "../model_owner" }
@@ -22,13 +20,13 @@ rootcause.workspace = true
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+static_file_service_client = { path = "../static_file_service_client" }
 thiserror.workspace = true
 tracing.workspace = true
 uuid.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-models_permissions = { path = "../models_permissions" }
 macro_user_id = { path = "../macro_user_id" }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 wiremock.workspace = true

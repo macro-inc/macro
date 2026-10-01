@@ -5,7 +5,6 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { PdfPlaceableCommentAnchorRootId } from './pdfPlaceableCommentAnchorRootId';
-import type { PdfPlaceableCommentAnchorThreadId } from './pdfPlaceableCommentAnchorThreadId';
 
 export interface PdfPlaceableCommentAnchor {
   allowableEdits?: unknown;
@@ -18,7 +17,6 @@ export interface PdfPlaceableCommentAnchor {
   rootId?: PdfPlaceableCommentAnchorRootId;
   rotation: number;
   shouldLockOnSave: boolean;
-  threadId?: PdfPlaceableCommentAnchorThreadId;
   uuid: string;
   wasDeleted: boolean;
   wasEdited: boolean;

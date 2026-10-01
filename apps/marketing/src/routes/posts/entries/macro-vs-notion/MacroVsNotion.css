@@ -1,6 +1,6 @@
 .mvn-post {
   color: var(--c4);
-  font-family: 'cyberreader', system-ui, sans-serif;
+  font-family: 'Inter', system-ui, sans-serif;
 }
 
 .mvn-post,
@@ -38,7 +38,7 @@
 
 .mvn-authors-note-label {
   color: var(--c2);
-  font-family: rajdhani, body, system-ui, sans-serif;
+  font-family: Inter, body, system-ui, sans-serif;
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -220,7 +220,7 @@
 
 .mvn-testimonial figcaption {
   color: var(--c4);
-  font-family: rajdhani, body, system-ui, sans-serif;
+  font-family: Inter, body, system-ui, sans-serif;
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -266,7 +266,7 @@
 .mvn-th-brand {
   align-items: center;
   display: inline-flex;
-  font-family: 'rajdhani', body;
+  font-family: 'Inter', body;
   gap: 8px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -321,7 +321,7 @@
   align-items: center;
   color: var(--c4);
   display: flex;
-  font-family: 'rajdhani', body;
+  font-family: 'Inter', body;
   font-size: 11px;
   font-weight: 700;
   gap: 8px;

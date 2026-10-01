@@ -1,7 +1,12 @@
 .posts-shell {
+  --post-ink: #fff;
+  --post-muted: #a8a8a8;
+  --post-faint: #737373;
+  --post-rule: #1c1c1c;
+  --a0: var(--post-muted);
   box-sizing: border-box;
-  color: var(--c2);
-  font-family: 'cyberreader', system-ui, sans-serif;
+  color: var(--post-muted);
+  font-family: 'Inter Variable', Inter, sans-serif;
   width: 100%;
 }
 
@@ -56,7 +61,7 @@
   color: var(--c4);
   display: flex;
   flex-wrap: wrap;
-  font-family: 'cyberreader', system-ui, sans-serif;
+  font-family: 'Inter', system-ui, sans-serif;
   font-size: 13px;
   font-weight: 500;
   gap: 8px;
@@ -78,7 +83,7 @@
 
 .posts-title {
   color: var(--c0);
-  font-family: 'cyberreader', system-ui, sans-serif;
+  font-family: 'Inter', system-ui, sans-serif;
   font-size: clamp(32px, 5vw, 48px);
   font-weight: 400;
   letter-spacing: -0.022em;
@@ -133,7 +138,7 @@
   color: var(--c4);
   display: flex;
   flex-wrap: wrap;
-  font-family: 'cyberreader', system-ui, sans-serif;
+  font-family: 'Inter', system-ui, sans-serif;
   font-size: 16px;
   gap: 9px;
   justify-content: center;
@@ -161,7 +166,7 @@
 
 .posts-updated {
   color: var(--c4);
-  font-family: 'cyberreader', system-ui, sans-serif;
+  font-family: 'Inter', system-ui, sans-serif;
   font-size: 13px;
   margin: 10px 0 0;
   text-align: center;
@@ -201,7 +206,7 @@
 .posts-index-date,
 .posts-toc-title {
   color: var(--c4);
-  font-family: 'cyberreader', system-ui, sans-serif;
+  font-family: 'Inter', system-ui, sans-serif;
   font-size: 14px;
   font-weight: 500;
   letter-spacing: 0.08em;
@@ -212,7 +217,7 @@
 .posts-header-text time {
   color: var(--a0);
   display: block;
-  font-family: 'cyberreader', system-ui, sans-serif;
+  font-family: 'Inter', system-ui, sans-serif;
   font-size: 15px;
   font-weight: 500;
   letter-spacing: 0.08em;
@@ -224,7 +229,7 @@
 .posts-index-hero h1,
 .posts-shell .posts-index-title {
   color: var(--c0);
-  font-family: 'cyberreader', system-ui, sans-serif;
+  font-family: 'Inter', system-ui, sans-serif;
   font-weight: 400;
 }
 
@@ -236,7 +241,7 @@
 
 .posts-lede {
   color: var(--c4);
-  font-family: 'cyberreader', system-ui, sans-serif;
+  font-family: 'Inter', system-ui, sans-serif;
   font-size: clamp(13px, 1.3vw, 14px);
   line-height: 1.45;
   margin: 18px auto 0;
@@ -247,7 +252,7 @@
 
 .post-body {
   color: var(--c4);
-  font-family: 'cyberreader', system-ui, sans-serif;
+  font-family: 'Inter', system-ui, sans-serif;
   font-size: 17px;
   line-height: 1.6;
   margin: 52px auto 0;
@@ -266,7 +271,7 @@
 .post-body h2,
 .post-body h3 {
   color: var(--c0);
-  font-family: 'cyberreader', system-ui, sans-serif;
+  font-family: 'Inter', system-ui, sans-serif;
   font-weight: 400;
   letter-spacing: -0.018em;
 }
@@ -343,7 +348,7 @@
 
 .post-body code {
   color: var(--c1);
-  font-family: 'rajdhani', body, system-ui, sans-serif;
+  font-family: 'Inter', body, system-ui, sans-serif;
   font-size: 0.95em;
 }
 
@@ -361,7 +366,7 @@
   border: 1px solid var(--b4);
   color: var(--c4);
   display: inline-flex;
-  font-family: 'cyberreader', system-ui, sans-serif;
+  font-family: 'Inter', system-ui, sans-serif;
   font-size: 12px;
   font-weight: 500;
   letter-spacing: 0.08em;
@@ -412,7 +417,7 @@
   color: var(--c1);
   font-family: 'display', Georgia, serif;
   font-size: clamp(38px, 9vw, 56px);
-  font-weight: 420;
+  font-weight: 315;
   letter-spacing: normal;
   line-height: 1.12;
   margin: 0;
@@ -426,111 +431,6 @@
   line-height: 1.5;
   margin: 18px 0 0;
   max-width: 440px;
-}
-
-/* Toolbar: category filters (left) + search (right) */
-.post-toolbar {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14px 24px;
-  justify-content: space-between;
-  margin-bottom: 54px;
-  margin-top: 40px;
-  padding-bottom: 46px;
-  position: relative;
-}
-
-/* Rule under the toolbar. */
-.post-toolbar::after {
-  background: color-mix(in srgb, var(--b4) 22%, transparent);
-  bottom: 0;
-  content: '';
-  height: 1px;
-  left: 50%;
-  position: absolute;
-  transform: translateX(-50%);
-  width: 100%;
-}
-
-.post-filter {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px 20px;
-  margin: 0;
-  padding: 0;
-}
-
-.posts-shell a.post-filter-link {
-  color: var(--c4);
-  font-family: 'rajdhani', 'body', system-ui, sans-serif;
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  transition: color 0.15s ease;
-}
-
-.posts-shell a.post-filter-link:hover {
-  color: var(--c2);
-}
-
-.posts-shell a.post-filter-link--active {
-  color: var(--c0);
-}
-
-/* Search pill — copied from Linear's openSearchButton */
-.post-search {
-  align-items: center;
-  background: var(--b2);
-  border: 0;
-  border-radius: 100px;
-  margin-top: -3px;
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.03),
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.04),
-    0 0 0 1px rgba(0, 0, 0, 0.6),
-    0 4px 4px 0 rgba(0, 0, 0, 0.1);
-  color: var(--c4);
-  display: flex;
-  gap: 10px;
-  height: 40px;
-  padding: 0 16px;
-  transition: box-shadow 0.15s ease;
-  width: 260px;
-}
-
-.post-search:focus-within {
-  box-shadow:
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.05),
-    0 0 0 1px var(--b4),
-    0 0 0 3px color-mix(in srgb, var(--c4) 18%, transparent);
-}
-
-.post-search-icon {
-  color: var(--c4);
-  flex: none;
-  height: 18px;
-  width: 18px;
-}
-
-.post-search input {
-  background: transparent;
-  border: 0;
-  color: var(--c1);
-  font-family: 'cyberreader', system-ui, sans-serif;
-  font-size: 14px;
-  outline: none;
-  width: 100%;
-}
-
-.post-search input::placeholder {
-  color: var(--c4);
-}
-
-.posts-index-shell .post-grid {
-  margin-top: 0;
 }
 
 /* Cover graphic: the actual "switch to Macro" SVGs (competitor → Macro) */
@@ -667,7 +567,7 @@
 
 .post-empty {
   color: var(--c4);
-  font-family: 'cyberreader', system-ui, sans-serif;
+  font-family: 'Inter', system-ui, sans-serif;
   padding: 24px 0;
 }
 
@@ -722,14 +622,6 @@
   .post-card:nth-child(-n + 3) {
     border-top: 0;
     padding-top: 0;
-  }
-}
-
-@media (max-width: 720px) {
-  /* Hide the category filters + search on mobile — not needed there and the row
-     reads awkwardly at narrow widths. Desktop keeps the full toolbar. */
-  .post-toolbar {
-    display: none;
   }
 }
 

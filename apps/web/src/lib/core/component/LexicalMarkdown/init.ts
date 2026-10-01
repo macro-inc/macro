@@ -4,6 +4,7 @@ import {
   AwaitNode,
   ConnectAppNode,
   ContactMentionNode,
+  CursorSystemNotificationNode,
   DateMentionNode,
   DiffInsertNode,
   DocumentCardNode,
@@ -34,6 +35,7 @@ import { AgentSessionMention } from './component/decorator/AgentSessionMention';
 import { Await } from './component/decorator/Await';
 import { ConnectApp } from './component/decorator/ConnectApp';
 import { ContactMention } from './component/decorator/ContactMention';
+import { CursorSystemNotification } from './component/decorator/CursorSystemNotification';
 import { DateMention } from './component/decorator/DateMention';
 import { DiffInsert } from './component/decorator/DiffInsert';
 import { DocumentCard } from './component/decorator/DocumentCard';
@@ -86,5 +88,6 @@ export function initializeLexical() {
   setDecorator(WatermarkNode, Watermark);
   setDecorator(AwaitNode, Await);
   setDecorator(MagicChipNode, MagicChip);
+  setDecorator(CursorSystemNotificationNode, CursorSystemNotification);
   registerDiffNodeFactory();
 }

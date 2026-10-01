@@ -51,7 +51,7 @@ export type LoopsFeatureBlock = {
   graphicTopPadding?: string;
   /** Place the mobile product link below the hero graphic rather than in the copy block. */
   mobileExploreBelowGraphic?: boolean;
-  /** Place the Rajdhani description (and the product link) below the hero graphic on phones. */
+  /** Place the Inter description (and the product link) below the hero graphic on phones. */
   mobileCopyBelowGraphic?: boolean;
   /** Suppress the wide mobile spotlight when the graphic supplies its own backdrop. */
   mobileHideSpotlightBackdrop?: boolean;
@@ -226,7 +226,7 @@ export function LoopsFeatureSection(props: {
         style={{
           color: 'var(--c0)',
           'font-family': 'display',
-          'font-weight': '360',
+          'font-weight': '315',
           'letter-spacing': '-0.018em',
           'line-height': 1.1,
           margin: '0',
@@ -240,10 +240,10 @@ export function LoopsFeatureSection(props: {
           class="loops-stacked-p"
           style={{
             color: 'var(--c4)',
-            'font-family': 'cyberreader, body',
+            'font-family': 'Inter, body',
             'font-size':
               props.textLayout === 'stacked-hero' ? '15.5px' : undefined,
-            'font-weight': '300',
+            'font-weight': '400',
             'line-height': props.textLayout === 'stacked-hero' ? 1.5 : 1.55,
             margin: '0',
             'max-width':
@@ -298,7 +298,7 @@ export function LoopsFeatureSection(props: {
                 color: 'var(--c0)',
                 'font-family': 'display',
                 'font-size': splitHeadlineSize,
-                'font-weight': '360',
+                'font-weight': '315',
                 'grid-column': '1',
                 'grid-row': '1',
                 'letter-spacing': '-0.018em',
@@ -318,9 +318,9 @@ export function LoopsFeatureSection(props: {
             <p
               style={{
                 color: 'var(--c4)',
-                'font-family': 'cyberreader, body',
+                'font-family': 'Inter, body',
                 'font-size': splitDescSize,
-                'font-weight': '300',
+                'font-weight': '400',
                 'grid-column': '2',
                 'grid-row': '1',
                 'line-height': splitDescLh,
@@ -360,7 +360,7 @@ export function LoopsFeatureSection(props: {
                 color: 'var(--c0)',
                 'font-family': 'display',
                 'font-size': '37.38px',
-                'font-weight': '360',
+                'font-weight': '315',
                 'letter-spacing': '-0.006em',
                 'line-height': 1.25,
                 margin: '0',
@@ -375,8 +375,8 @@ export function LoopsFeatureSection(props: {
             <p
               style={{
                 color: 'var(--c4)',
-                'font-family': 'cyberreader',
-                'font-size': '18px',
+                'font-family': 'Inter',
+                'font-size': '15px',
                 'font-weight': '400',
                 'line-height': 1.6,
                 margin: '0',
@@ -589,12 +589,12 @@ export function LoopsFeatureSection(props: {
                   class="loops-stacked-p"
                   style={{
                     color: 'var(--c4)',
-                    'font-family': 'cyberreader, body',
+                    'font-family': 'Inter, body',
                     'font-size':
                       props.textLayout === 'stacked-hero'
                         ? '15.5px'
                         : undefined,
-                    'font-weight': '300',
+                    'font-weight': '400',
                     'line-height':
                       props.textLayout === 'stacked-hero' ? 1.5 : 1.55,
                     margin: '0',

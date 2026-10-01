@@ -67,6 +67,7 @@ fn subscribes_to_all_ingestion_topics() {
         [
             "macro.documents",
             "macro.channels",
+            "macro.messages",
             "macro.webhooks",
             "macro.agent_sessions",
             "macro.agent_session_lifecycle"
@@ -174,6 +175,13 @@ impl WebhookEventIngestionService for FlakyIngestionService {
     async fn ingest_channel_event(
         &self,
         _event: Event<ChannelTopicEvent>,
+    ) -> Result<(), WebhookEventIngestionError> {
+        Ok(())
+    }
+
+    async fn ingest_message_event(
+        &self,
+        _event: Event<messages::outbound::broker::MessageTopicEvent>,
     ) -> Result<(), WebhookEventIngestionError> {
         Ok(())
     }

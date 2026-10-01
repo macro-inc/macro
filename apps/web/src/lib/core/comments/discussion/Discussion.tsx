@@ -26,7 +26,7 @@ import {
 import { useDiscussion } from './context';
 import { DiscussionInput } from './DiscussionInput';
 import {
-  discussionCommentToApiChannelMessage,
+  discussionCommentToChannelMessage,
   discussionCommentToMessageData,
 } from './messageAdapter';
 import type {
@@ -109,7 +109,7 @@ export function Discussion(props: {
     const messages = source.threads().flatMap((thread) => {
       const root = thread.comments[0];
       if (!root) return [];
-      const message = discussionCommentToApiChannelMessage(root);
+      const message = discussionCommentToChannelMessage(root);
       message.thread.reply_count = thread.comments.length - 1;
       return [message];
     });
@@ -226,9 +226,7 @@ export function DiscussionThreadView(props: {
   const replies = () => comments().slice(1);
   const hasReplies = () => replies().length > 0;
   const replyMetaById = createMemo(() =>
-    buildThreadReplyListMeta(
-      replies().map(discussionCommentToApiChannelMessage)
-    )
+    buildThreadReplyListMeta(replies().map(discussionCommentToChannelMessage))
   );
   const threadId = () => props.thread.id;
 
@@ -312,7 +310,7 @@ export function DiscussionThreadView(props: {
     <Show when={root()}>
       {(rootComment) => {
         const rootMessageData = () =>
-          discussionCommentToApiChannelMessage(rootComment());
+          discussionCommentToChannelMessage(rootComment());
         return (
           <div class="flex flex-col w-full gap-0">
             <Thread.Row

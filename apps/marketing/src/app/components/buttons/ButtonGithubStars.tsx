@@ -39,7 +39,7 @@ export function ButtonGithubStars(props: {
         cursor: 'default',
         display: 'inline-flex',
         'font-family': 'body',
-        'font-size': header() ? '14px' : props.mobile ? '16px' : '17px',
+        'font-size': header() ? '14px' : props.mobile ? '16px' : '14px',
         'font-weight': '700',
         gap: header() ? '6px' : '8px',
         height: header() ? '30px' : props.mobile ? '46px' : '48px',
