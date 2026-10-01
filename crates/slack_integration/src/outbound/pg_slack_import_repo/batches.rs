@@ -2,6 +2,7 @@
 //! No helper writes comms tables. The caller must roll back the entire transaction
 //! on any error, including a failed final fence check, and commit only after finish.
 
+use macro_user_id::cowlike::CowLike;
 use sqlx::{Postgres, Transaction};
 
 use super::{
@@ -11,6 +12,73 @@ use super::{
 
 #[cfg(test)]
 mod test;
+
+/// Trusted persisted context read under the execution fence.
+pub struct WriteContext {
+    /// Namespace owning the job.
+    pub team: TeamId,
+    /// Persisted administrator, never supplied by a queue message.
+    pub requester: MacroUserIdStr<'static>,
+    /// Persisted source kind.
+    pub kind: ConversationKind,
+    /// Previously authorized target, if bound.
+    pub channel: Option<Uuid>,
+    /// Current committed restart point.
+    pub checkpoint: Checkpoint,
+}
+
+/// Fence before any owning-crate writes and load their trusted context.
+pub async fn write_context(
+    tx: &mut Transaction<'_, Postgres>,
+    lease: &Lease,
+) -> PortResult<WriteContext> {
+    let team = fence(tx, lease).await?;
+    let row = sqlx::query!(
+        r#"SELECT j.user_id, c.kind, c.channel_id, c.checkpoint_part, c.checkpoint_record
+           FROM slack_import_job j JOIN slack_import_conversation c ON c.job_id = j.id
+           WHERE j.id = $1 AND c.slack_channel_id = $2"#,
+        Uuid::from(lease.event.job_id),
+        lease.event.slack_channel_id.as_str(),
+    )
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(internal)?;
+    Ok(WriteContext {
+        team,
+        requester: MacroUserIdStr::parse_from_str(&row.user_id)
+            .map_err(internal)?
+            .into_owned(),
+        kind: parse_enum(&row.kind)?,
+        channel: row.channel_id,
+        checkpoint: Checkpoint {
+            part_index: row.checkpoint_part as u32,
+            record_index: row.checkpoint_record as u32,
+        },
+    })
+}
+
+/// Persist warnings idempotently under the same fence as target binding.
+pub async fn record_warnings(
+    tx: &mut Transaction<'_, Postgres>,
+    lease: &Lease,
+    warnings: &[ImportWarning],
+) -> PortResult<()> {
+    let team = fence(tx, lease).await?;
+    for warning in warnings {
+        let warning = super::lifecycle::enum_string(warning)?;
+        sqlx::query!(
+            r#"UPDATE slack_import_conversation SET warnings = array_append(warnings, $3)
+               WHERE job_id = $1 AND slack_channel_id = $2 AND NOT ($3 = ANY(warnings))"#,
+            Uuid::from(lease.event.job_id),
+            lease.event.slack_channel_id.as_str(),
+            warning,
+        )
+        .execute(&mut **tx)
+        .await
+        .map_err(internal)?;
+    }
+    bump_revision(tx, team, lease.event.job_id).await
+}
 
 /// A mapping selected by first-commit-wins source identity.
 #[derive(Debug)]

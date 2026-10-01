@@ -26,7 +26,9 @@ fn message(team: TeamId, channel: Uuid, seconds: u32) -> HistoricalMessage {
         channel_id: channel,
         parent_id: None,
         orphaned_thread_ts: None,
-        sender: MacroUserIdStr::parse_from_str("macro|lifecycle@example.com").unwrap(),
+        sender: HistoricalSender::User(
+            MacroUserIdStr::parse_from_str("macro|lifecycle@example.com").unwrap(),
+        ),
         imported_author: None,
         content: "historical".into(),
         import_order: 0,
@@ -37,11 +39,14 @@ fn message(team: TeamId, channel: Uuid, seconds: u32) -> HistoricalMessage {
 // Emulate the composition root calling the message owner's helper in the SAME
 // transaction. Production import helpers never write comms tables.
 async fn insert_message(batch: &mut FencedBatch<'_, '_>, message: &HistoricalMessage) {
+    let HistoricalSender::User(sender) = &message.sender else {
+        panic!("user fixture")
+    };
     sqlx::query!(
         "INSERT INTO comms_messages (id, channel_id, sender_id, content) VALUES ($1, $2, $3, $4)",
         message.id,
         message.channel_id,
-        message.sender.as_ref(),
+        sender.as_ref(),
         message.content,
     )
     .execute(&mut **batch.transaction())

@@ -15,6 +15,7 @@ ledger = ["dep:import", "outbound"]
 postgres = ["dep:sqlx", "ledger"]
 s3 = ["dep:aws-sdk-s3", "dep:base64", "dep:macro_aws_config", "dep:s3_key", "dep:tokio", "outbound"]
 sqs = ["dep:aws-sdk-sqs", "dep:macro_queues", "outbound"]
+search = ["dep:reqwest", "outbound"]
 worker = ["dep:tokio", "dep:tokio-util", "ports"]
 
 [dependencies]
@@ -32,6 +33,7 @@ macro_aws_config = { path = "../macro_aws_config", optional = true }
 macro_queues = { path = "../macro_queues", optional = true }
 macro_user_id = { path = "../macro_user_id" }
 mention_utils = { path = "../mention_utils" }
+reqwest = { workspace = true, optional = true }
 rootcause = { workspace = true, optional = true }
 s3_key = { path = "../s3_key", optional = true }
 serde = { workspace = true }

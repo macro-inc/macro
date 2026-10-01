@@ -10261,6 +10261,8 @@
       "crates/macro_auth",
       "crates/macro_authorization",
       "crates/macro_aws_config",
+      "crates/macro_config",
+      "crates/macro_config_derive",
       "crates/macro_entrypoint",
       "crates/macro_env",
       "crates/macro_env_var",

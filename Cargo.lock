@@ -17061,7 +17061,30 @@ checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 name = "slack_import_worker"
 version = "0.1.0"
 dependencies = [
+ "aws-sdk-sqs",
+ "bot_id",
+ "channel_sender",
+ "channels",
+ "chrono",
+ "database_env_vars",
+ "entity_access",
+ "import",
+ "macro_aws_config",
+ "macro_config",
+ "macro_entrypoint",
+ "macro_queues",
+ "macro_service_urls",
+ "macro_user_id",
+ "mention_utils",
+ "messages",
+ "rootcause",
+ "serde",
+ "serde_json",
  "slack_integration",
+ "sqlx",
+ "tokio",
+ "tokio-util",
+ "uuid",
  "workspace-hack",
 ]
 
@@ -17084,6 +17107,7 @@ dependencies = [
  "macro_user_id",
  "mention_utils",
  "model_user",
+ "reqwest 0.13.4",
  "rootcause",
  "s3_key",
  "serde",

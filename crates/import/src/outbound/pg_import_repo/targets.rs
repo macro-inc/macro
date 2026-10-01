@@ -167,33 +167,71 @@ impl CanonicalImportRepo for PgImportRepo {
         kind: ImportTargetKind,
     ) -> Result<ImportTargetReservation> {
         let mut tx = self.pool.begin().await?;
-        lock_key(&mut tx, key).await?;
-        let row = reservation(&mut tx, key)
-            .await?
-            .ok_or(ImportError::TargetNotReserved)?;
-        if row.candidate_channel_id != channel_id || row.state == "conflict" {
-            return Err(ImportError::TargetConflict);
-        }
-        validate_channel(&mut tx, key, channel_id, kind).await?;
-        sqlx::query!(
-            r#"
+        let result = complete_target_in(&mut tx, key, channel_id, kind).await?;
+        tx.commit().await?;
+        Ok(result)
+    }
+}
+
+/// Complete a reserved target alongside channel creation in a caller-owned transaction.
+pub async fn complete_target_in(
+    tx: &mut Transaction<'_, Postgres>,
+    key: &ImportTargetKey,
+    channel_id: Uuid,
+    kind: ImportTargetKind,
+) -> Result<ImportTargetReservation> {
+    lock_key(tx, key).await?;
+    let row = reservation(tx, key)
+        .await?
+        .ok_or(ImportError::TargetNotReserved)?;
+    if row.candidate_channel_id != channel_id || row.state == "conflict" {
+        return Err(ImportError::TargetConflict);
+    }
+    validate_channel(tx, key, channel_id, kind).await?;
+    sqlx::query!(
+        r#"
             UPDATE import_target_reservation
             SET state = 'ready', channel_id = $3, updated_at = now()
             WHERE team_id = $1 AND source = 'slack' AND foreign_id = $2 AND state = 'pending'
             "#,
-            key.team_id,
-            key.foreign_id.as_str(),
-            channel_id,
-        )
-        .execute(&mut *tx)
-        .await?;
-        tx.commit().await?;
-        Ok(ImportTargetReservation {
-            key: key.clone(),
-            channel_id,
-            ready: true,
-        })
+        key.team_id,
+        key.foreign_id.as_str(),
+        channel_id,
+    )
+    .execute(&mut **tx)
+    .await?;
+    Ok(ImportTargetReservation {
+        key: key.clone(),
+        channel_id,
+        ready: true,
+    })
+}
+
+/// Lock the canonical source key before channel or message operations. Returns
+/// validated same-team provenance only for a ready, compatible reservation.
+/// A missing reservation is allowed for read-only target discovery.
+pub async fn lock_target_in(
+    tx: &mut Transaction<'_, Postgres>,
+    key: &ImportTargetKey,
+    channel_id: Uuid,
+    kind: ImportTargetKind,
+    required: bool,
+) -> Result<bool> {
+    lock_key(tx, key).await?;
+    let Some(row) = reservation(tx, key).await? else {
+        if required {
+            return Err(ImportError::TargetNotReserved);
+        }
+        return Ok(false);
+    };
+    if row.candidate_channel_id != channel_id || row.state == "conflict" {
+        return Err(ImportError::TargetConflict);
     }
+    if row.state == "ready" {
+        validate_channel(tx, key, channel_id, kind).await?;
+        return Ok(true);
+    }
+    Ok(false)
 }
 
 async fn lock_key(tx: &mut Transaction<'_, Postgres>, key: &ImportTargetKey) -> Result<()> {

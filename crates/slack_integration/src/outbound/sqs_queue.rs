@@ -10,7 +10,7 @@ use macro_queues::{SlackImportDlq, SlackImportQueue};
 
 use crate::domain::{
     models::{ImportError, ImportEvent},
-    ports::{ImportQueue, PortResult},
+    ports::{ImportConsumer, ImportQueue, PortResult},
 };
 
 #[cfg(test)]
@@ -146,11 +146,15 @@ impl SqsImportQueue {
     /// Long-poll up to ten messages, requesting receive counts and a three-minute lease.
     /// The worker must heartbeat visibility every minute while durable work is active.
     pub async fn receive(&self, source: QueueSource) -> PortResult<Vec<Delivery>> {
+        self.receive_bounded(source, BATCH_SIZE as i32).await
+    }
+
+    async fn receive_bounded(&self, source: QueueSource, limit: i32) -> PortResult<Vec<Delivery>> {
         let output = self
             .client
             .receive_message()
             .queue_url(self.url(source))
-            .max_number_of_messages(BATCH_SIZE as i32)
+            .max_number_of_messages(limit)
             .wait_time_seconds(POLL_SECONDS)
             .visibility_timeout(VISIBILITY_SECONDS)
             .message_system_attribute_names(MessageSystemAttributeName::ApproximateReceiveCount)
@@ -192,6 +196,32 @@ impl SqsImportQueue {
             .await
             .map_err(|error| rootcause::Report::new(error).context(ImportError::Retryable))?;
         Ok(())
+    }
+}
+
+impl ImportConsumer for SqsImportQueue {
+    type Delivery = Delivery;
+
+    async fn receive(&self, dead_letter: bool) -> PortResult<Option<Delivery>> {
+        let source = if dead_letter {
+            QueueSource::DeadLetter
+        } else {
+            QueueSource::Main
+        };
+        Ok(self.receive_bounded(source, 1).await?.pop())
+    }
+
+    fn envelope(delivery: &Delivery) -> (Result<ImportEvent, ImportError>, u32) {
+        (delivery.event.clone(), delivery.receive_count)
+    }
+
+    async fn extend(&self, delivery: &Delivery) -> PortResult<()> {
+        self.extend_visibility(delivery, VISIBILITY_SECONDS as u32)
+            .await
+    }
+
+    async fn delete(&self, delivery: &Delivery) -> PortResult<()> {
+        self.delete(delivery).await
     }
 }
 

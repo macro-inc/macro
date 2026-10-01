@@ -79,23 +79,24 @@ pub trait ImportService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<ImportPage, ImportError>> + Send;
 }
 
-/// Queue-driven use cases, deliberately separate from the administrator's API.
+/// Claimed-work use cases, separate from administrator and maintenance services.
+/// The split lets the driver start heartbeats before slow storage or database work.
 pub trait ImportWorker: Send + Sync + 'static {
-    /// Load trusted persisted context, revalidate admin/target authorization, claim or
-    /// reclaim with fencing, then process bounded batches. Duplicate/stale events are no-ops.
-    fn process(&self, event: ImportEvent)
-    -> impl Future<Output = PortResult<WorkerOutcome>> + Send;
-
-    /// Reconcile identifiable exhausted work. Acknowledge the DLQ message only after
-    /// terminal persistence and job recomputation; never defeat a newer active lease.
-    fn reconcile_dead_letter(
+    /// Load the durable requester and revalidate authorization before claiming/reclaiming.
+    fn claim(
         &self,
-        event: ImportEvent,
+        event: &ImportEvent,
+        owner: WorkerId,
+    ) -> impl Future<Output = PortResult<ClaimOutcome>> + Send;
+
+    /// Process bounded atomic batches and durably settle permanent outcomes.
+    fn import(
+        &self,
+        context: &ClaimedConversation,
     ) -> impl Future<Output = PortResult<WorkerOutcome>> + Send;
 
-    /// Publish pending outbox work and reconcile expired leases, abandoned uploads,
-    /// cancellation settlement and stale search receipts in bounded pages.
-    fn maintain(&self) -> impl Future<Output = PortResult<()>> + Send;
+    /// Renew the fence using database time. Any failure stops the current attempt.
+    fn heartbeat(&self, lease: &Lease) -> impl Future<Output = PortResult<Lease>> + Send;
 }
 
 /// Team-scoped persistence used by the admin service. All mutations serialize on
@@ -277,6 +278,25 @@ pub trait ImportStorage: Send + Sync + 'static {
 pub trait ImportQueue: Send + Sync + 'static {
     /// Publish an identity-only event; duplicates are expected and safe.
     fn publish(&self, event: &ImportEvent) -> impl Future<Output = PortResult<()>> + Send;
+}
+
+/// Delivery controls with opaque adapter-owned receipts. Payloads remain untrusted.
+/// The driver receives only one delivery per available processing slot.
+pub trait ImportConsumer: Send + Sync {
+    /// Opaque acknowledgement capability; never logged or persisted as domain state.
+    type Delivery: Send + Sync;
+
+    /// Long-poll one message from the main queue or its dead-letter queue.
+    fn receive(
+        &self,
+        dead_letter: bool,
+    ) -> impl Future<Output = PortResult<Option<Self::Delivery>>> + Send;
+    /// Strictly decoded identity plus the provider's approximate receive count.
+    fn envelope(delivery: &Self::Delivery) -> (Result<ImportEvent, ImportError>, u32);
+    /// Extend delivery visibility independently of the database fence.
+    fn extend(&self, delivery: &Self::Delivery) -> impl Future<Output = PortResult<()>> + Send;
+    /// Acknowledge only a durable outcome, or an unidentifiable poison envelope.
+    fn delete(&self, delivery: &Self::Delivery) -> impl Future<Output = PortResult<()>> + Send;
 }
 
 /// Separate requester and target authorization, evaluated by domain orchestration.
