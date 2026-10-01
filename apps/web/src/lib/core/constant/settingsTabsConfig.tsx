@@ -8,6 +8,7 @@ import DeviceMobileIcon from '@phosphor/device-mobile-speaker.svg';
 import KeyIcon from '@phosphor/key.svg';
 import KeyboardIcon from '@phosphor/keyboard.svg';
 import PlugIcon from '@phosphor/plug.svg';
+import PlugsConnectedIcon from '@phosphor/plugs-connected.svg';
 import BotIcon from '@phosphor/robot.svg';
 import AgentIcon from '@phosphor/sparkle.svg';
 import SwatchesIcon from '@phosphor/swatches.svg';
@@ -74,6 +75,7 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
         label: 'Integrations',
         icon: CpuIcon,
       },
+      { tab: 'Connections', label: 'Connections', icon: PlugsConnectedIcon },
       { tab: 'Agent', label: 'MCP server', icon: PlugIcon },
       { tab: 'Bots', label: 'Bots', icon: BotIcon },
     ],
@@ -111,6 +113,8 @@ const SETTINGS_TAB_SLUGS: Record<SettingsTab, string> = {
   Tags: 'tags',
   CRM: 'crm',
   Connected: 'connections',
+  // `connections` predates this tab and stays on Integrations for old links.
+  Connections: 'agent-connections',
   Email: 'email',
   GitHub: 'github',
   Admin: 'admin',
@@ -169,6 +173,7 @@ export const useSettingsTabAvailable = () => {
       case 'CRM':
         return crmFlag().enabled;
       case 'Connected':
+      case 'Connections':
         return true;
       case 'Shortcuts':
         return !isTouchDevice();

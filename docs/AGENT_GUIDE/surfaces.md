@@ -1558,7 +1558,8 @@ menu; Premium seats have no Max option; moves are prorated at once), `Tags`, `CR
 with `Customize stages`, inline rename, reorder by drag handle or arrow keys (up/down
 buttons on touch), delete, `Add stage`, `Reset to defaults`, and `Closed stages`
 checkboxes, editable by the role set as `edit_stages_role`),
-`Integrations` (personal Gmail/GitHub accounts), `MCP server`
+`Integrations` (personal Gmail/GitHub accounts), `Connections` (agent tool
+connections; the same page as Agents → Connections, URL slug `agent-connections`), `MCP server`
 (setup snippets for Claude Code / Codex CLI / Claude.ai / ChatGPT / IDE), `Bots`;
 `Log out`.
 `Agents` unifies agent definitions and runtime configuration in one page, also used by the Agents workspace. Its `Agents` section lists team and private agents. `New agent` / `Edit <name>` open full-page forms grouped
@@ -1570,16 +1571,16 @@ with a connected / not-connected dot for the *current viewer* plus an inline `Co
 that opens the Pipedream Connect flow inside the page. Unconnected picks never block
 saving; each teammate connects their own account. An agent session that calls a picked
 but unconnected app gets a tool result saying so, and the agent's reply renders a
-`Connect <app>` chip that opens Agents → Connections for that app. MCP integrations
-are managed on that page, rather than in Settings.
+`Connect <app>` chip that opens Agents → Connections for that app. The same page
+is also available as Settings → Connections.
 
-With `pipedream-mcp` enabled, Agents → Connections has `Connected` and `Discover`
+With `pipedream-mcp` enabled, Connections (in Agents or Settings) has `Connected` and `Discover`
 tabs. Connected groups GitHub, Linear, Notion, and Slack tool grants by provider,
 lists other catalog connections alongside them, and puts custom MCP servers in
 a separate section. Discover offers featured providers, a searchable catalog,
 and `Add custom MCP`. Slack discovery retains its development-only gate.
 Provider Back returns to the tab that opened it; navigation is local to each
-Agents workspace and starts at Connected on a fresh visit.
+Connections page and starts at Connected on a fresh visit.
 Provider and custom-server More menus contain Disable, Reconnect, and Disconnect;
 custom servers also offer Rename. Disabled grants show Enable. Unauthenticated
 custom servers show Connect and Remove. Disconnect/Remove require confirmation.

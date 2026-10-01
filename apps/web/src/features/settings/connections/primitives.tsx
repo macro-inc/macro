@@ -1,11 +1,12 @@
 import CaretLeftIcon from '@phosphor/caret-left.svg';
 import { cn, Layer } from '@ui';
-import { type JSX, Show } from 'solid-js';
+import { type JSX, Show, useContext } from 'solid-js';
+import { SettingsSheetContext } from '../primitives';
 
 /*
- * Connections presentation adapted from #6151. Kept local to the Agents page
- * so its card spacing and provider headers do not alter Harness or the mobile
- * settings sheet.
+ * Connections presentation adapted from #6151. Kept local to the Connections
+ * page so its card spacing and provider headers do not alter Harness or the
+ * other settings pages.
  *
  *   <SettingsPage title="Account" description="…">
  *     <SettingsSection title="Profile">
@@ -35,12 +36,23 @@ export function SettingsPage(props: {
   backLabel?: string;
   children: JSX.Element;
 }) {
+  const inSheet = useContext(SettingsSheetContext);
   return (
-    <div class="h-full min-h-0 overflow-y-auto [overflow-anchor:none]">
+    <div
+      data-drawer-scroll-body={inSheet ? true : undefined}
+      class="h-full min-h-0 overflow-y-auto [overflow-anchor:none]"
+    >
       {/* On mobile/tablet the page is full-frame: the chrome insets live inside the
           scroll content (plus the usual breathing room) so pages scroll under
           the floating header and bottom rows like every other block. */}
-      <div class="mx-auto w-full max-w-[710px] px-10 pt-14 pb-24 touch:px-5 touch:pt-[calc(var(--mobile-content-inset-top,0px)+2rem)] touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+3rem)]">
+      <div
+        class={cn(
+          'mx-auto w-full max-w-[710px]',
+          inSheet
+            ? 'px-3 pt-2 pb-[max(24px,var(--mobile-sheet-safe-padding))]'
+            : 'px-10 pt-14 pb-24 touch:px-5 touch:pt-[calc(var(--mobile-content-inset-top,0px)+2rem)] touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+3rem)]'
+        )}
+      >
         <Show when={props.onBack}>
           <button
             type="button"
@@ -52,21 +64,23 @@ export function SettingsPage(props: {
           </button>
         </Show>
         <header class="flex flex-col gap-1.5">
-          <div class="flex items-start justify-between gap-4">
-            <div class="flex min-w-0 items-center gap-3.5">
-              <Show when={props.icon}>
-                <div class="flex size-9 shrink-0 items-center justify-center [&_svg]:size-8 [&_img]:size-8">
-                  {props.icon}
-                </div>
+          <Show when={!inSheet || props.onBack || props.icon}>
+            <div class="flex items-start justify-between gap-4">
+              <div class="flex min-w-0 items-center gap-3.5">
+                <Show when={props.icon}>
+                  <div class="flex size-9 shrink-0 items-center justify-center [&_svg]:size-8 [&_img]:size-8">
+                    {props.icon}
+                  </div>
+                </Show>
+                <h1 class="min-w-0 text-2xl/tight font-semibold text-ink">
+                  {props.title}
+                </h1>
+              </div>
+              <Show when={props.actions}>
+                <div class="shrink-0 pt-1">{props.actions}</div>
               </Show>
-              <h1 class="min-w-0 text-2xl/tight font-semibold text-ink">
-                {props.title}
-              </h1>
             </div>
-            <Show when={props.actions}>
-              <div class="shrink-0 pt-1">{props.actions}</div>
-            </Show>
-          </div>
+          </Show>
           <Show when={props.description}>
             <p class="text-sm text-ink-muted text-balance">
               {props.description}
@@ -74,7 +88,11 @@ export function SettingsPage(props: {
           </Show>
           <Show when={props.signpost}>{props.signpost}</Show>
         </header>
-        <div class="mt-9 flex flex-col gap-10">{props.children}</div>
+        <div
+          class={cn('flex flex-col', inSheet ? 'mt-3 gap-6' : 'mt-9 gap-10')}
+        >
+          {props.children}
+        </div>
       </div>
     </div>
   );
