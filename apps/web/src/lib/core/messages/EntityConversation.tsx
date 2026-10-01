@@ -23,6 +23,8 @@ export function EntityConversationComposer(props: {
   collapsible?: boolean;
   /** Dismiss the keyboard after submitting from a floating mobile composer. */
   blurOnSend?: boolean;
+  /** Extra classes on the composer's card; see `ChannelInput.surfaceClass`. */
+  surfaceClass?: string;
 }) {
   const send = useSendMessageMutation();
   const userId = useUserId();
@@ -35,6 +37,7 @@ export function EntityConversationComposer(props: {
       input={{ mode: 'channel', placeholder: 'Leave a comment...' }}
       autofocus={false}
       collapsible={props.collapsible}
+      surfaceClass={props.surfaceClass}
       onReady={(handle) => (input = handle)}
       onSend={async (snapshot) => {
         const senderId = userId();
@@ -66,6 +69,8 @@ export function EntityConversation(props: {
   hideComposer?: boolean;
   /** Render nothing while there is no root to show. */
   hideWhenEmpty?: boolean;
+  /** Extra classes on the root composer's card. */
+  composerClass?: string;
 }) {
   const [expanded, setExpanded] = createSignal(true);
   const target = useMessageLink(
@@ -167,7 +172,10 @@ export function EntityConversation(props: {
               when={props.canWrite && !props.hideComposer && !unavailable()}
             >
               <div class="mt-4">
-                <EntityConversationComposer parent={props.parent} />
+                <EntityConversationComposer
+                  parent={props.parent}
+                  surfaceClass={props.composerClass}
+                />
               </div>
             </Show>
           </StaticMarkdownContext>

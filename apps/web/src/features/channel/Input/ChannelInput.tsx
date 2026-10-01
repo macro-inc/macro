@@ -99,6 +99,8 @@ export type ChannelInputProps = InputCallbacks & {
    * read as a second box inside the first.
    */
   flat?: boolean;
+  /** Extra classes on the composer's card, e.g. a host-specific tint. Ignored when `flat`. */
+  surfaceClass?: string;
 };
 
 function WebDefaultActions(props: {
@@ -556,7 +558,7 @@ export function ChannelInput(props: ChannelInputProps) {
         // `ComposerSurface` stretches itself; a bare div would take its
         // content width inside a centering flex host, such as the margin card.
         class={cn(
-          props.flat && 'w-full',
+          props.flat ? 'w-full' : props.surfaceClass,
           isCollapsed() && 'hidden',
           !isCollapsed() && 'relative'
         )}

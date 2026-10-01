@@ -222,18 +222,25 @@ export function createAgentSession(
       });
 
       const record = await session.load();
-      if (superseded()) return record.session;
+      if (superseded()) {
+        session.telemetry.surfaced(0, true);
+        return record.session;
+      }
       // Read after every input pushed so far, and applied before any event
       // that arrives later: events between subscribe and here upserted into
       // the list, and this replaces the list with a view that includes them.
       const snapshot = await session.snapshot();
-      if (superseded()) return record.session;
+      if (superseded()) {
+        session.telemetry.surfaced(0, true);
+        return record.session;
+      }
 
       batch(() => {
         setBot(record.bot);
         setMetadata(snapshot.metadata);
         replace(snapshot.messages);
       });
+      session.telemetry.surfaced(snapshot.messages.length);
 
       return renameRefresh > renameRefreshAtStart &&
         latestRename?.agentSessionId === session.id

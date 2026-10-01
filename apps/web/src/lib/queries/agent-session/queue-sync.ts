@@ -41,3 +41,37 @@ export function subscribeSocketSessionStarted(
   ws.addEventListener(WebsocketEvent.Open, handler);
   return () => ws.removeEventListener(WebsocketEvent.Open, handler);
 }
+
+/** A change in the gateway socket's connection worth recording against a session. */
+export type SocketTransition =
+  | 'open'
+  | 'close'
+  | 'reconnect'
+  | 'retry'
+  | 'heartbeat_missed';
+
+const TRANSITION_EVENTS: readonly [WebsocketEvent, SocketTransition][] = [
+  [WebsocketEvent.Open, 'open'],
+  [WebsocketEvent.Close, 'close'],
+  [WebsocketEvent.Reconnect, 'reconnect'],
+  [WebsocketEvent.retry, 'retry'],
+  [WebsocketEvent.HeartbeatMissed, 'heartbeat_missed'],
+];
+
+/**
+ * Follow the gateway socket's connection state. For telemetry: a session
+ * whose rows stopped arriving reads differently when the socket was
+ * flapping underneath it than when it stayed open the whole time.
+ */
+export function subscribeSocketTransitions(
+  listener: (transition: SocketTransition) => void
+): () => void {
+  const handlers = TRANSITION_EVENTS.map(([event, transition]) => {
+    const handler = () => listener(transition);
+    ws.addEventListener(event, handler);
+    return () => ws.removeEventListener(event, handler);
+  });
+  return () => {
+    for (const unsubscribe of handlers) unsubscribe();
+  };
+}

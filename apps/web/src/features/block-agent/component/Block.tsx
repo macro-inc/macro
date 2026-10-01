@@ -16,10 +16,19 @@ import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component
 import { nativeNetworkStatus } from '@core/mobile/native-network-status';
 import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
+import { Telemetry } from '@macro-inc/observability';
 import type { NotificationSource } from '@notifications/notification-source';
 import { useSearchParams } from '@solidjs/router';
 import { EmptyStatePanel } from '@ui';
-import { createEffect, createSignal, on, Show, useContext } from 'solid-js';
+import {
+  createEffect,
+  createSignal,
+  ErrorBoundary,
+  on,
+  type ParentProps,
+  Show,
+  useContext,
+} from 'solid-js';
 import { AgentSessionProvider } from '../agent-session-provider';
 import { useAgentSession } from '../context/AgentSessionContext';
 import { forgetPendingSession } from '../context/pending-session';
@@ -182,6 +191,33 @@ function AgentBlockContent(props: {
   );
 }
 
+/**
+ * A render error inside the block would otherwise reach a boundary far
+ * above it, which blanks the pane and reports nothing about which session
+ * was showing. Record it against the session and offer a retry in place.
+ */
+function AgentBlockErrorBoundary(props: ParentProps) {
+  const { sessionId } = useAgentSession();
+  return (
+    <ErrorBoundary
+      fallback={(error, reset) => {
+        Telemetry.error(error, {
+          'agent.session.id': sessionId() ?? '',
+          'error.source': 'agent_block_render',
+        });
+        return (
+          <LoadErrorPanel
+            title="Unable to show this agent session"
+            onRetry={reset}
+          />
+        );
+      }}
+    >
+      {props.children}
+    </ErrorBoundary>
+  );
+}
+
 export default function BlockAgent() {
   const blockId = useBlockId();
   const split = useContext(SplitPanelContext);
@@ -203,10 +239,12 @@ export default function BlockAgent() {
       {(id) => (
         <AgentSessionProvider blockId={id()} onSessionId={adoptSessionId}>
           <AgentChangesProvider>
-            <AgentBlockContent
-              active={split?.isPanelActive() ?? false}
-              notificationSource={notificationSource}
-            />
+            <AgentBlockErrorBoundary>
+              <AgentBlockContent
+                active={split?.isPanelActive() ?? false}
+                notificationSource={notificationSource}
+              />
+            </AgentBlockErrorBoundary>
           </AgentChangesProvider>
         </AgentSessionProvider>
       )}

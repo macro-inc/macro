@@ -27,10 +27,16 @@ import { scrollToRenderedTarget } from './scroll-to-rendered-target';
 function MobileMessageComposer(props: {
   parent: MessageParent;
   hidden: boolean;
+  surfaceClass?: string;
 }) {
   // Preserve the editor and draft while its placement is hidden.
   const input = (
-    <EntityConversationComposer parent={props.parent} collapsible blurOnSend />
+    <EntityConversationComposer
+      parent={props.parent}
+      collapsible
+      blurOnSend
+      surfaceClass={props.surfaceClass}
+    />
   );
 
   return (
@@ -60,6 +66,8 @@ export function EntityDiscussion(props: {
    */
   floatingComposerOnTouch?: boolean;
   editorHasFocus?: boolean;
+  /** Extra classes on the root composer's card. */
+  composerClass?: string;
 }) {
   const params = useUrlParams({ commentId: COMMENT_LINK_PARAM });
   const commentId = () =>
@@ -117,6 +125,7 @@ export function EntityDiscussion(props: {
           }
           hideComposer={floating()}
           hideWhenEmpty={floating()}
+          composerClass={props.composerClass}
         />
       </div>
       <Show when={floating() && props.canWrite}>
@@ -124,6 +133,7 @@ export function EntityDiscussion(props: {
           <MobileMessageComposer
             parent={props.parent}
             hidden={props.editorHasFocus === true && virtualKeyboardVisible()}
+            surfaceClass={props.composerClass}
           />
         </StaticMarkdownContext>
       </Show>

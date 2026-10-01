@@ -30,6 +30,24 @@ const socket = vi.hoisted(() => ({
     socket.listeners.add(listener);
     return () => socket.listeners.delete(listener);
   }),
+  transitions: new Set<(transition: string) => void>(),
+  subscribeSocketTransitions: vi.fn(
+    (listener: (transition: string) => void) => {
+      socket.transitions.add(listener);
+      return () => socket.transitions.delete(listener);
+    }
+  ),
+}));
+const telemetry = vi.hoisted(() => ({
+  spans: [] as {
+    name: string;
+    attrs: Record<string, unknown>;
+    events: { name: string; attrs?: Record<string, unknown> }[];
+    ended: boolean;
+  }[],
+  warn: vi.fn(),
+  error: vi.fn(),
+  flush: vi.fn(async () => {}),
 }));
 
 vi.mock('@core/agent-fold/client', () => fold);
@@ -38,6 +56,35 @@ vi.mock('@service-agent-harness/client', () => ({
 }));
 vi.mock('@queries/agent-session/queue-sync', () => ({
   subscribeSocketSessionStarted: socket.subscribeSocketSessionStarted,
+  subscribeSocketTransitions: socket.subscribeSocketTransitions,
+}));
+vi.mock('@macro-inc/observability', () => ({
+  Telemetry: {
+    span: (name: string) => {
+      const span = {
+        name,
+        attrs: {} as Record<string, unknown>,
+        events: [] as { name: string; attrs?: Record<string, unknown> }[],
+        ended: false,
+      };
+      telemetry.spans.push(span);
+      return {
+        setAttr: (key: string, value: unknown) => {
+          span.attrs[key] = value;
+        },
+        event: (eventName: string, attrs?: Record<string, unknown>) => {
+          span.events.push({ name: eventName, attrs });
+        },
+        error: () => {},
+        end: () => {
+          span.ended = true;
+        },
+      };
+    },
+    warn: telemetry.warn,
+    error: telemetry.error,
+    flush: telemetry.flush,
+  },
 }));
 
 import {
@@ -84,6 +131,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   resetSessionTurns();
   socket.listeners.clear();
+  socket.transitions.clear();
+  telemetry.spans.length = 0;
   // Instances are shared and refcounted, so a test that fails before its
   // `release()` would hand the next one a session that is already loaded.
   for (
@@ -490,6 +539,141 @@ describe('AgentSession', () => {
     harness.getLog.mockResolvedValueOnce(err([{ code: 'FORBIDDEN' }]));
     await expect(live.load()).rejects.toBeInstanceOf(AgentSessionAccessDenied);
     live.release();
+  });
+
+  describe('live telemetry', () => {
+    const liveSpans = () =>
+      telemetry.spans.filter((span) => span.name === 'agent.session.live');
+    const lastLive = () => liveSpans().at(-1)!;
+
+    it('ends the follow with its counts on the last release', async () => {
+      fold.pushSession.mockResolvedValue([
+        { kind: 'metadata', metadata: { turn: 'idle', status: 'acp_ready' } },
+      ]);
+      const live = AgentSession.acquire(SESSION);
+      // Arrives before the snapshot folded: buffered, not applied.
+      AgentSession.ingest({ agentSessionId: SESSION, entries: [row(2)] });
+      await live.load();
+      AgentSession.ingest({ agentSessionId: SESSION, entries: [row(3)] });
+      await settle();
+
+      expect(lastLive().ended).toBe(false);
+      live.release();
+
+      const span = lastLive();
+      expect(span.ended).toBe(true);
+      expect(span.attrs).toMatchObject({
+        'agent.session.id': SESSION,
+        'agent.session.live.segment': 1,
+        'agent.session.live.reason': 'released',
+        'agent.session.live.rows.snapshot': 1,
+        'agent.session.live.rows.buffered': 1,
+        'agent.session.live.rows.socket': 1,
+        'agent.session.live.rows.known': 3,
+        'agent.session.live.pushes_failed': 0,
+        'agent.session.live.status': 'acp_ready',
+        'agent.session.live.turn': 'idle',
+        'agent.session.live.listeners': 0,
+      });
+      expect(span.attrs['agent.session.live.pushes']).toBeGreaterThan(0);
+      expect(span.attrs['agent.session.live.fold_events']).toBeGreaterThan(0);
+    });
+
+    it('counts the rows a resync found that no socket frame delivered', async () => {
+      const live = AgentSession.acquire(SESSION);
+      await live.load();
+      // The socket dropped and came back; two rows were written meanwhile
+      // and never pushed to this tab.
+      harness.getLog.mockResolvedValue(logOf([row(1), row(2), row(3)]));
+      for (const listener of socket.listeners) listener();
+      await settle();
+      live.release();
+
+      const span = lastLive();
+      expect(span.attrs).toMatchObject({
+        'agent.session.live.resync.run': 1,
+        'agent.session.live.resync.missed_rows': 2,
+        'agent.session.live.rows.known': 3,
+      });
+      expect(span.events).toContainEqual({
+        name: 'agent.session.resync.snapshot',
+        attrs: {
+          'agent.session.resync.rows': 3,
+          'agent.session.resync.missed_rows': 2,
+        },
+      });
+    });
+
+    it('records a resync the load was too early for', async () => {
+      const log = deferred<LogResult>();
+      harness.getLog.mockReturnValue(log.promise);
+      const live = AgentSession.acquire(SESSION);
+      for (const listener of socket.listeners) listener();
+      log.resolve(logOf([row(1)]));
+      await live.load();
+      live.release();
+
+      expect(lastLive().attrs).toMatchObject({
+        'agent.session.live.resync.skipped_not_ready': 1,
+        'agent.session.live.resync.run': 0,
+      });
+    });
+
+    it('records the socket flapping under an open session', async () => {
+      const live = AgentSession.acquire(SESSION);
+      await live.load();
+      for (const listener of socket.transitions) {
+        listener('close');
+        listener('retry');
+        listener('reconnect');
+      }
+      live.release();
+
+      expect(lastLive().attrs).toMatchObject({
+        'agent.session.live.socket.close': 1,
+        'agent.session.live.socket.retry': 1,
+        'agent.session.live.socket.reconnect': 1,
+      });
+      expect(socket.transitions.size).toBe(0);
+    });
+
+    it('reports a push the machine rejected', async () => {
+      const live = AgentSession.acquire(SESSION);
+      await live.load();
+      const failure = new Error('fold exploded');
+      fold.pushSession.mockRejectedValueOnce(failure);
+      const consoleError = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {});
+      AgentSession.ingest({ agentSessionId: SESSION, entries: [row(2)] });
+      await settle();
+      consoleError.mockRestore();
+      live.release();
+
+      expect(telemetry.error).toHaveBeenCalledWith(failure, {
+        'agent.session.id': SESSION,
+        'agent.session.push.inputs': 1,
+        'error.source': 'agent_session_fold_push',
+      });
+      expect(lastLive().attrs).toMatchObject({
+        'agent.session.live.pushes_failed': 1,
+      });
+    });
+
+    it('follows how many surfaces are listening', async () => {
+      const live = AgentSession.acquire(SESSION);
+      const unsubscribe = live.subscribe(() => {});
+      await live.load();
+      live.telemetry.surfaced(4);
+      unsubscribe();
+      live.release();
+
+      expect(lastLive().attrs).toMatchObject({
+        'agent.session.live.listeners': 0,
+        'agent.session.live.surface.messages': 4,
+      });
+      expect(lastLive().attrs['agent.session.live.surface_ms']).not.toBe(-1);
+    });
   });
 
   it('re-runs a failed load on the next call only', async () => {

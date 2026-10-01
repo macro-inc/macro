@@ -27,6 +27,7 @@ vi.mock('@service-agent-harness/client', () => ({
 }));
 vi.mock('@queries/agent-session/queue-sync', () => ({
   subscribeSocketSessionStarted: () => () => {},
+  subscribeSocketTransitions: () => () => {},
 }));
 vi.mock('@queries/agent-session/session-metadata-sync', () => ({
   subscribeAgentSessionRenamed: () => () => {},

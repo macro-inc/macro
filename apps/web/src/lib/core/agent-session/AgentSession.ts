@@ -20,7 +20,10 @@ import {
   readSession,
   type SessionFoldSnapshot,
 } from '@core/agent-fold/client';
-import { subscribeSocketSessionStarted } from '@queries/agent-session/queue-sync';
+import {
+  subscribeSocketSessionStarted,
+  subscribeSocketTransitions,
+} from '@queries/agent-session/queue-sync';
 import type { AgentSessionLogEvent } from '@queries/agent-session/realtime-protocol';
 import type {
   FoldedStreamEvent,
@@ -34,6 +37,7 @@ import type {
   SessionBot,
 } from '@service-agent-harness/generated/schemas';
 import { v7 as uuidv7 } from 'uuid';
+import { SessionLiveTrace } from './live-telemetry';
 import { SessionLoadTrace, traceAcquire } from './load-telemetry';
 import { publishSessionTurn } from './session-turn';
 
@@ -119,12 +123,21 @@ export class AgentSession {
    * push, so a flush of many frames costs one worker round trip.
    */
   static ingest(event: AgentSessionLogEvent): void {
-    AgentSession.open
-      .get(event.agentSessionId)
-      ?.enqueueAll(event.entries.map((row) => ({ kind: 'confirmed', row })));
+    const session = AgentSession.open.get(event.agentSessionId);
+    if (!session) return;
+    session.telemetry.ingested(event.entries, session.ready);
+    void session.enqueueAll(
+      event.entries.map((row) => ({ kind: 'confirmed', row }))
+    );
   }
 
   readonly id: string;
+  /**
+   * The follow's telemetry, from acquisition to the last release. Surfaces
+   * report what they put on screen through it; everything the class itself
+   * knows - rows, pushes, socket, resyncs - it reports on its own.
+   */
+  readonly telemetry: SessionLiveTrace;
 
   private references = 0;
   private closed = false;
@@ -153,16 +166,25 @@ export class AgentSession {
   private setTurn(turn: TurnState | undefined): void {
     const next = turn ?? 'idle';
     this.turn = next;
+    this.telemetry.turn(next);
     publishSessionTurn(this.id, next);
   }
 
   private constructor(id: string) {
     this.id = id;
+    this.telemetry = new SessionLiveTrace(id);
     // Subscribed before the fetch so no row between the two is lost: rows
     // that arrive during the load are buffered and folded after the snapshot.
-    this.unsubscribeSocket = subscribeSocketSessionStarted(() => {
+    const unsubscribeStarted = subscribeSocketSessionStarted(() => {
       void this.resync();
     });
+    const unsubscribeTransitions = subscribeSocketTransitions((transition) =>
+      this.telemetry.socket(transition)
+    );
+    this.unsubscribeSocket = () => {
+      unsubscribeStarted();
+      unsubscribeTransitions();
+    };
     this.trace = new SessionLoadTrace(id);
     this.loading = this.startLoad();
   }
@@ -317,8 +339,10 @@ export class AgentSession {
   /** Fold events, in order. The only way anything about the fold is observed. */
   subscribe(listener: AgentSessionListener): () => void {
     this.listeners.add(listener);
+    this.telemetry.listeners(this.listeners.size);
     return () => {
       this.listeners.delete(listener);
+      this.telemetry.listeners(this.listeners.size);
     };
   }
 
@@ -341,6 +365,7 @@ export class AgentSession {
     // Ended here rather than where the load notices: a fetch that never
     // answers never reaches that check, and an unended span never reports.
     this.trace.end('released');
+    this.telemetry.end('released');
     this.listeners.clear();
     this.unsubscribeSocket();
     closeSession(this.id);
@@ -380,6 +405,8 @@ export class AgentSession {
     }
     if (this.closed) throw new AgentSessionReleased(this.id);
     this.trace.fetched(log.value.entries.length);
+    this.telemetry.loaded(session.value);
+    this.telemetry.snapshot(log.value.entries, 'load');
 
     const foldStartedAt = performance.now();
     await this.apply([{ kind: 'snapshot', rows: log.value.entries }]);
@@ -402,9 +429,24 @@ export class AgentSession {
    * and settle any speculation the log confirmed meanwhile.
    */
   private async resync(): Promise<void> {
-    if (!this.ready || this.closed) return;
+    if (this.closed) return;
+    if (!this.ready) {
+      // Rows the socket missed while down are not in the buffered run and
+      // not in the snapshot already fetched; recorded, so a hole here shows.
+      this.telemetry.resync('skipped_not_ready');
+      return;
+    }
     const log = await agentHarnessServiceClient.getLog(this.id);
-    if (log.isErr() || this.closed) return;
+    if (this.closed) {
+      this.telemetry.resync('skipped_closed');
+      return;
+    }
+    if (log.isErr()) {
+      this.telemetry.resync('failed');
+      return;
+    }
+    this.telemetry.resync('run');
+    this.telemetry.snapshot(log.value.entries, 'resync');
     await this.apply([{ kind: 'snapshot', rows: log.value.entries }]);
   }
 
@@ -425,14 +467,20 @@ export class AgentSession {
     const run = this.chain.then(async () => {
       if (this.closed) return;
       const events = await pushSession(this.id, inputs);
-      if (this.closed || events.length === 0) return;
+      if (this.closed) return;
+      this.telemetry.pushed(events.length);
+      if (events.length === 0) return;
       const metadata = events.findLast((event) => event.kind === 'metadata');
-      if (metadata) this.setTurn(metadata.metadata.turn);
+      if (metadata) {
+        this.setTurn(metadata.metadata.turn);
+        this.telemetry.status(metadata.metadata.status);
+      }
       for (const listener of this.listeners) listener(events);
     });
     // A failed push must not poison the chain for every input after it.
     this.chain = run.catch((error: unknown) => {
       console.error('[agent-session] fold input could not be applied', error);
+      this.telemetry.pushFailed(inputs.length, error);
     });
     return this.chain;
   }

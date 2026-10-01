@@ -41,6 +41,8 @@ import type {
  */
 export function Discussion(props: {
   hideComposer?: boolean;
+  /** Extra classes on the new-thread composer's card. */
+  composerClass?: string;
   threadHeader?: (thread: ViewThread) => JSX.Element;
 }) {
   const source = useDiscussion();
@@ -163,7 +165,7 @@ export function Discussion(props: {
 
             <Show when={!props.hideComposer && source.canEdit()}>
               <div class="mt-4">
-                <DiscussionComposer />
+                <DiscussionComposer surfaceClass={props.composerClass} />
               </div>
             </Show>
           </div>
@@ -179,6 +181,8 @@ export function DiscussionComposer(props: {
   autofocus?: boolean;
   /** Dismiss the keyboard after submitting from a floating mobile composer. */
   blurOnSend?: boolean;
+  /** Extra classes on the composer's card; see `DiscussionInput.surfaceClass`. */
+  surfaceClass?: string;
 }) {
   const source = useDiscussion();
   let inputHandle: { clear: () => void } | undefined;
@@ -196,6 +200,7 @@ export function DiscussionComposer(props: {
         input={{ mode: 'channel', placeholder: 'Leave a comment...' }}
         collapsible={props.collapsible}
         blurOnSend={props.blurOnSend}
+        surfaceClass={props.surfaceClass}
         onSend={handleCreateThread}
         onReady={(handle) => {
           inputHandle = handle;

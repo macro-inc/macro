@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   timeline: vi.fn(),
   linkResolved: true,
   capturedParent: undefined as { type: string; id: string } | undefined,
+  capturedSurfaceClass: undefined as string | undefined,
   linkError: null as unknown,
   refetchLink: vi.fn(),
   urlTarget: undefined as string | undefined,
@@ -26,8 +27,12 @@ vi.mock('./scroll-to-rendered-target', () => ({
 }));
 
 vi.mock('@channel/Input', () => ({
-  ChannelInput: (props: { parent?: { type: string; id: string } }) => {
+  ChannelInput: (props: {
+    parent?: { type: string; id: string };
+    surfaceClass?: string;
+  }) => {
     mocks.capturedParent = props.parent;
+    mocks.capturedSurfaceClass = props.surfaceClass;
     return <textarea aria-label="Leave a comment..." />;
   },
 }));
@@ -85,6 +90,7 @@ vi.mock('./MessageThread', () => ({
 afterEach(() => {
   mocks.linkResolved = true;
   mocks.capturedParent = undefined;
+  mocks.capturedSurfaceClass = undefined;
   mocks.linkError = null;
   mocks.urlTarget = undefined;
   mocks.scroll.mockClear();
@@ -180,6 +186,7 @@ function discussion(
     canWrite?: boolean;
     hideComposer?: boolean;
     hideWhenEmpty?: boolean;
+    composerClass?: string;
   } = {}
 ) {
   const [pages, setPages] = createSignal(initialPages);
@@ -198,6 +205,7 @@ function discussion(
         targetId={targetId}
         hideComposer={options.hideComposer}
         hideWhenEmpty={options.hideWhenEmpty}
+        composerClass={options.composerClass}
       />
     )),
   };
@@ -224,6 +232,14 @@ describe('EntityConversation placement', () => {
     expect(view.queryByText('Range topic')).toBeNull();
     expect(mocks.capturedParent).toEqual({ type: 'document', id: 'document' });
     expect(view.getByRole('textbox')).toBeTruthy();
+  });
+
+  it('hands the host-provided surface class to the inline composer', () => {
+    discussion([[]], undefined, {
+      canWrite: true,
+      composerClass: 'bg-blue-bg',
+    });
+    expect(mocks.capturedSurfaceClass).toBe('bg-blue-bg');
   });
 
   it('renders the Discussion disclosure as an icon instead of a text glyph', () => {

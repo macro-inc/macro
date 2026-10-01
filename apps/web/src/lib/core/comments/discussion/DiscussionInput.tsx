@@ -28,6 +28,7 @@ import type { IUser } from '@core/user/types';
 import PaperclipIcon from '@phosphor/paperclip.svg';
 import { isIOS } from '@solid-primitives/platform';
 import { CollapsedInput, ComposerSurface } from '@ui';
+import { cn } from '@ui/utils/classname';
 import {
   type Accessor,
   createSignal,
@@ -50,6 +51,8 @@ export type DiscussionInputProps = InputCallbacks & {
   collapsible?: boolean;
   /** Blur and collapse after onSend completes; other inputs retain focus. */
   blurOnSend?: boolean;
+  /** Extra classes on the composer's card, e.g. a host-specific tint. */
+  surfaceClass?: string;
 };
 
 function AttachImagesAction() {
@@ -294,7 +297,7 @@ export function DiscussionInput(props: DiscussionInputProps) {
         />
       </Show>
       <ComposerSurface
-        class={isCollapsed() ? 'hidden' : 'h-auto'}
+        class={cn(isCollapsed() ? 'hidden' : 'h-auto', props.surfaceClass)}
         onFocusOut={(event) => {
           const next = event.relatedTarget as Node | null;
           if (next && event.currentTarget.contains(next)) return;

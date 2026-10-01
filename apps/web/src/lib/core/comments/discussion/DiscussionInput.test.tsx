@@ -256,3 +256,14 @@ describe('discussion submission focus', () => {
     expect(screen.queryByTestId('compact-input')).toBeNull();
   });
 });
+
+describe('discussion surface styling', () => {
+  it('paints the composer surface with the host-provided class', () => {
+    render(() => (
+      <DiscussionInput input={{ mode: 'channel' }} surfaceClass="bg-blue-bg">
+        <span />
+      </DiscussionInput>
+    ));
+    expect(screen.getByTestId('composer').className).toBe('h-auto bg-blue-bg');
+  });
+});

@@ -25,7 +25,9 @@ import { useMarkdownDocument } from '../context/markdown-document-context';
 
 function MobileDiscussionComposer(props: { hidden: boolean }) {
   // Preserve the editor and draft while its placement is hidden.
-  const input = <DiscussionComposer collapsible blurOnSend />;
+  const input = (
+    <DiscussionComposer collapsible blurOnSend surfaceClass="bg-blue-bg" />
+  );
 
   return (
     <FloatRegion region="accessory">
@@ -69,6 +71,8 @@ export function MessageDocumentDiscussion(props: {
       label={props.label}
       floatingComposerOnTouch={props.floatingComposerOnTouch}
       editorHasFocus={props.editorHasFocus}
+      // The document's "Leave a comment" card is tinted apart from the page.
+      composerClass="bg-blue-bg"
     />
   );
 }
@@ -100,7 +104,7 @@ function LegacyDocumentDiscussion(props: { editorHasFocus: boolean }) {
           source.threads().some((thread) => thread.comments.length > 0)
         }
       >
-        <Discussion hideComposer={isTouchDevice()} />
+        <Discussion hideComposer={isTouchDevice()} composerClass="bg-blue-bg" />
       </Show>
       <Show when={isTouchDevice() && source.canEdit()}>
         <StaticMarkdownContext>
