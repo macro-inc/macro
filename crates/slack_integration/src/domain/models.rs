@@ -946,6 +946,9 @@ pub struct HistoricalMessage {
     pub imported_author: Option<String>,
     /// Converted, nonempty Macro markdown (attachment bytes are excluded).
     pub content: String,
+    /// Only user identities emitted by conversion outside code; never rediscover
+    /// these by parsing the serialized body.
+    pub user_mentions: Vec<MacroUserIdStr<'static>>,
     /// Deterministic source ordering for equal-time historical display.
     pub import_order: u64,
     /// Converted, deduplicated reactions with email-bearing actors only.

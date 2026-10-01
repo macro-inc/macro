@@ -377,6 +377,53 @@ pub trait ImportLedger: Send + Sync + 'static {
     ) -> impl Future<Output = PortResult<()>> + Send;
 }
 
+/// Import-owned read-only source-message mapping capability.
+pub trait SourceMessageReader: Send + Sync {
+    /// Explicit team namespace, bounded exact identities; mapping alone proves
+    /// neither message existence nor read access. Reject mixed-team inputs.
+    fn reference_mappings(
+        &self,
+        team: TeamId,
+        sources: &[SourceMessageId],
+    ) -> impl Future<
+        Output = PortResult<Vec<super::slack::references::resolve::StoredMessageMapping>>,
+    > + Send;
+}
+
+/// Batched read-only reference capabilities. Every method is bounded by the
+/// database record/byte ceilings; none may reserve targets or mutate membership.
+/// Context must come from persisted job ownership, not a client-supplied requester.
+pub trait ReferenceLookup: Send + Sync {
+    /// Load canonical channel facts in input order, without authorizing disclosure.
+    fn channels(
+        &self,
+        context: &super::slack::references::resolve::ReferenceContext,
+        channels: &[ConversationId],
+    ) -> impl Future<Output = PortResult<Vec<super::slack::references::resolve::ChannelMapping>>> + Send;
+
+    /// Selected nonterminal conversations in this job which may supply references.
+    fn pending_channels(
+        &self,
+        context: &super::slack::references::resolve::ReferenceContext,
+        channels: &[ConversationId],
+    ) -> impl Future<Output = PortResult<Vec<ConversationId>>> + Send;
+
+    /// Read source mappings and validate actual message ownership/deletion and root
+    /// state through the message owner. Results correspond exactly to input order.
+    fn messages(
+        &self,
+        context: &super::slack::references::resolve::ReferenceContext,
+        sources: &[SourceMessageId],
+    ) -> impl Future<Output = PortResult<Vec<super::slack::references::resolve::MessageMapping>>> + Send;
+
+    /// Current read-access facts, never the import-write provenance shortcut.
+    fn disclosure_access(
+        &self,
+        context: &super::slack::references::resolve::ReferenceContext,
+        channels: &[Uuid],
+    ) -> impl Future<Output = PortResult<super::slack::references::resolve::DisclosureAccess>> + Send;
+}
+
 /// Worker composition-root coordinator for a transaction spanning owning-crate helpers.
 /// Domain signatures never expose SQL transactions. No live send/message effects.
 pub trait HistoricalSink: Send + Sync + 'static {

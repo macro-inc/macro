@@ -17,6 +17,17 @@ pub const MAX_HISTORICAL_BATCH_BYTES: usize = 4 * 1024 * 1024;
 /// Maximum serialized input bytes for one message, including references and metadata.
 pub const MAX_HISTORICAL_MESSAGE_BYTES: usize = 1024 * 1024;
 
+/// Live persisted channel message identity, without body or author disclosure.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HistoricalMessageTarget {
+    /// Actual message ID.
+    pub message_id: Uuid,
+    /// Actual owning channel, checked against parent ownership.
+    pub channel_id: Uuid,
+    /// Persisted live root (self for roots and orphan-imported replies).
+    pub root_id: Uuid,
+}
+
 /// A channel already authorized by the importing domain and its bounded messages.
 /// Source deduplication, fencing, mappings and checkpoints belong to the caller.
 #[derive(Debug, Clone, Serialize)]

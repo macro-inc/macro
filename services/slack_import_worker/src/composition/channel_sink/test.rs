@@ -15,6 +15,7 @@ fn fallback_attribution_uses_the_canonical_bot_not_a_fabricated_user() {
         sender: HistoricalSender::SystemBot,
         imported_author: Some("Archive author".into()),
         content: "historical".into(),
+        user_mentions: vec![],
         import_order: 0,
         reactions: vec![],
     };

@@ -20,6 +20,175 @@ use super::{
     authorizer::WorkerAuthorizer, channel_sink::ChannelImportSink, target_key, target_kind,
 };
 
+#[sqlx::test(migrations = "../../crates/macro_db_client/migrations")]
+async fn code_tags_never_create_mentions_and_reference_reads_recheck_access(pool: PgPool) {
+    check_read_access_and_mentions(pool, ConversationKind::PrivateChannel).await;
+}
+
+#[sqlx::test(migrations = "../../crates/macro_db_client/migrations")]
+async fn dm_reference_disclosure_is_revoked_without_removing_import_provenance(pool: PgPool) {
+    check_read_access_and_mentions(pool, ConversationKind::DirectMessage).await;
+}
+
+async fn check_read_access_and_mentions(pool: PgPool, kind: ConversationKind) {
+    use slack_integration::domain::{
+        ports::ReferenceLookup,
+        slack::{mrkdwn::MrkdwnConverter, references::resolve::*, users::UserDirectory},
+    };
+    let team = team(&pool).await;
+    let context = claim(&pool, team, kind, 2).await;
+    let target = target(&pool, &context).await;
+    let directory = UserDirectory::new(
+        serde_json::from_value::<Vec<slack_integration::domain::slack::users::ExportUser>>(
+            serde_json::json!([
+                {"id": "U1", "profile": {"email": "other@example.com"}}
+            ]),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let names = Default::default();
+    let converter = MrkdwnConverter {
+        users: &directory,
+        channels: &names,
+    };
+    let literal = r#"`<m-user-mention>{"userId":"macro|other@example.com"}</m-user-mention>`"#;
+    let converted = converter.convert_with_references(literal, false).unwrap();
+    assert!(converted.user_mentions.is_empty());
+    let mut batch = batch(
+        &context,
+        target.channel_id,
+        &[1, 2],
+        Checkpoint {
+            part_index: 1,
+            record_index: 0,
+        },
+    );
+    batch.messages[0].content = converted.body;
+    batch.messages[0].user_mentions = converted.user_mentions;
+    let converted = converter
+        .convert_with_references(&format!("{literal} <@U1>"), false)
+        .unwrap();
+    batch.messages[1].content = converted.body;
+    batch.messages[1].user_mentions = converted.user_mentions;
+    let sources: Vec<_> = batch.messages.iter().map(|m| m.source.clone()).collect();
+    sink(&pool).commit(batch).await.unwrap();
+    assert_eq!(
+        sqlx::query_scalar!("SELECT count(*) FROM comms_entity_mentions")
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        Some(1)
+    );
+    let lookup =
+        super::references::WorkerReferenceLookup::new(pool.clone(), ImportLimits::default());
+    let scope = lookup
+        .context(team, context.lease.event.job_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(
+        scope.domains.is_empty(),
+        "unknown-source confirmation is not domain evidence"
+    );
+    let token = converter
+        .convert_with_references("<#C1|untrusted>", false)
+        .unwrap();
+    let resolved = resolve_batch(&lookup, &scope, &[token.clone()], &ImportLimits::default())
+        .await
+        .unwrap();
+    assert!(matches!(resolved[0][0], ReferenceOutcome::Resolved(_)));
+    let mapped = lookup.messages(&scope, &sources).await.unwrap();
+    assert!(mapped.iter().all(|m| matches!(m, MessageMapping::Ready { channel, message, root } if *channel == target.channel_id && message == root)));
+    let requester = user();
+    sqlx::query!("UPDATE comms_channel_participants SET left_at = now() WHERE channel_id = $1 AND user_id = $2", target.channel_id, requester.as_ref()).execute(&pool).await.unwrap();
+    assert_eq!(
+        resolve_batch(&lookup, &scope, &[token], &ImportLimits::default())
+            .await
+            .unwrap(),
+        vec![vec![ReferenceOutcome::Fallback]]
+    );
+    // The ready private import provenance remains, but is not read permission.
+    assert!(matches!(
+        lookup
+            .channels(&scope, &["C1".parse().unwrap()])
+            .await
+            .unwrap()[0],
+        ChannelMapping::Ready { .. }
+    ));
+    sqlx::query!(
+        "UPDATE comms_messages SET deleted_at = now() WHERE channel_id = $1",
+        target.channel_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        lookup.messages(&scope, &sources).await.unwrap(),
+        vec![MessageMapping::Invalid; 2]
+    );
+}
+
+#[sqlx::test(migrations = "../../crates/macro_db_client/migrations")]
+async fn prior_archived_unselected_channels_resolve_but_selected_absent_targets_wait(pool: PgPool) {
+    use slack_integration::domain::slack::{
+        mrkdwn::MrkdwnConverter,
+        references::{ResolvedTarget, resolve::*},
+        users::UserDirectory,
+    };
+    let team = team(&pool).await;
+    let first =
+        claim_with_archive_state(&pool, team, ConversationKind::PublicChannel, 0, true).await;
+    let target = target(&pool, &first).await;
+    let repo = repo(&pool);
+    repo.settle(&first.lease, ConversationStatus::Completed, None)
+        .await
+        .unwrap();
+    let mut metadata = first.metadata.clone();
+    metadata.slack_channel_id = "C2".parse().unwrap();
+    let second = repo
+        .create(
+            team,
+            &user(),
+            &CreateImport {
+                idempotency_token: Uuid::now_v7().try_into().unwrap(),
+                source: SourceIdentity::ConfirmedUnknown,
+                include_message_history: false,
+                conversations: vec![metadata],
+            },
+            &ImportLimits::default(),
+        )
+        .await
+        .unwrap();
+    let lookup =
+        super::references::WorkerReferenceLookup::new(pool.clone(), ImportLimits::default());
+    let scope = lookup.context(team, second.job_id).await.unwrap().unwrap();
+    let users = UserDirectory::new(vec![]).unwrap();
+    let names = Default::default();
+    let record = MrkdwnConverter {
+        users: &users,
+        channels: &names,
+    }
+    .convert_with_references("<#C1|same> <#C2|same> <#C3|same>", false)
+    .unwrap();
+    let before = repo.progress(team, second.job_id).await.unwrap();
+    let outcomes = resolve_batch(&lookup, &scope, &[record], &ImportLimits::default())
+        .await
+        .unwrap();
+    assert_eq!(
+        outcomes[0],
+        vec![
+            ReferenceOutcome::Resolved(ResolvedTarget::Channel {
+                channel_id: target.channel_id,
+                name: target.name
+            }),
+            ReferenceOutcome::Pending,
+            ReferenceOutcome::Fallback,
+        ]
+    );
+    assert_eq!(before, repo.progress(team, second.job_id).await.unwrap());
+}
+
 type Access = EntityAccessServiceImpl<PgAccessRepository>;
 type Sink = ChannelImportSink<Access>;
 
@@ -58,6 +227,16 @@ async fn claim(
     kind: ConversationKind,
     records: u32,
 ) -> ClaimedConversation {
+    claim_with_archive_state(pool, team, kind, records, false).await
+}
+
+async fn claim_with_archive_state(
+    pool: &PgPool,
+    team: TeamId,
+    kind: ConversationKind,
+    records: u32,
+    archived: bool,
+) -> ClaimedConversation {
     let repo = repo(pool);
     let job = repo
         .create(
@@ -75,7 +254,7 @@ async fn claim(
                     member_ids: vec![],
                     creator_id: None,
                     created_at: Some("1.000001".parse().unwrap()),
-                    archived: false,
+                    archived,
                     message_count: None,
                 }],
             },
@@ -179,6 +358,7 @@ fn message(context: &ClaimedConversation, channel: Uuid, seconds: u32) -> Histor
         sender: HistoricalSender::User(user()),
         imported_author: Some("Source name".into()),
         content: "history".into(),
+        user_mentions: vec![],
         import_order: u64::from(seconds),
         reactions: vec![
             HistoricalReaction {

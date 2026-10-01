@@ -333,6 +333,16 @@ pub trait MessageRepository: Send + Sync + 'static {
     }
 }
 
+/// Read-only message targets. Returned identities are not authorization grants.
+pub trait HistoricalMessageReader: Send + Sync + 'static {
+    /// At most 500 distinct IDs. Omit deleted messages, deleted roots, and invalid
+    /// parent/channel relationships. Never create threads or update activity.
+    fn lookup_historical_targets(
+        &self,
+        ids: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<super::historical::HistoricalMessageTarget>, MessageError>> + Send;
+}
+
 /// Silent historical persistence for trusted import compositions. Implementations
 /// atomically persist only messages, thread structure, reactions and user mentions:
 /// no activity, sharing, notifications, bots, contacts, broker or realtime effects.

@@ -398,6 +398,124 @@ pub async fn lookup(
         .collect())
 }
 
+impl crate::domain::ports::SourceMessageReader for PgSlackImportRepo {
+    async fn reference_mappings(
+        &self,
+        team: TeamId,
+        sources: &[SourceMessageId],
+    ) -> PortResult<Vec<crate::domain::slack::references::resolve::StoredMessageMapping>> {
+        use crate::domain::slack::references::resolve::StoredMessageMapping;
+        if sources.len()
+            > self
+                .limits
+                .database_batch_messages
+                .min(ImportLimits::default().database_batch_messages) as usize
+            || sources.iter().any(|source| source.team_id != team)
+        {
+            return Err(ImportError::LimitExceeded.into());
+        }
+        let payload = serde_json::Value::Array(
+            sources
+                .iter()
+                .enumerate()
+                .map(|(index, s)| {
+                    serde_json::json!({
+                        "index": index, "channel": s.slack_channel_id, "ts": s.ts.unix_micros(),
+                    })
+                })
+                .collect(),
+        );
+        if serde_json::to_vec(&payload).map_err(internal)?.len() as u64
+            > self.limits.database_batch_bytes
+        {
+            return Err(ImportError::LimitExceeded.into());
+        }
+        let rows = sqlx::query!(
+            r#"SELECT s.index AS "index!", m.message_id, m.channel_id
+               FROM jsonb_to_recordset($1) AS s(index integer, channel text, ts bigint)
+               JOIN slack_import_message_map m ON m.team_id = $2
+                 AND m.slack_channel_id = s.channel AND m.slack_ts = s.ts"#,
+            payload,
+            Uuid::from(team),
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(internal)?;
+        Ok(rows
+            .into_iter()
+            .map(|row| StoredMessageMapping {
+                source: sources[row.index as usize].clone(),
+                channel: row.channel_id,
+                message: row.message_id,
+            })
+            .collect())
+    }
+}
+
+impl PgSlackImportRepo {
+    /// Load source scope and requester only from an explicitly team-owned job.
+    /// Binding and domain evidence are supplied by the owning ledger, not SQL here.
+    pub async fn reference_job(
+        &self,
+        team: TeamId,
+        job: JobId,
+    ) -> PortResult<Option<(MacroUserIdStr<'static>, SourceIdentity)>> {
+        let row = sqlx::query!(
+            "SELECT user_id, source_workspace_id, confirmed_unknown FROM slack_import_job WHERE team_id = $1 AND id = $2",
+            Uuid::from(team), Uuid::from(job),
+        ).fetch_optional(&self.pool).await.map_err(internal)?;
+        row.map(|row| {
+            let source = match row.source_workspace_id {
+                Some(source) => SourceIdentity::Known {
+                    source_id: source.parse().map_err(internal)?,
+                },
+                None if row.confirmed_unknown => SourceIdentity::ConfirmedUnknown,
+                None => return Err(ImportError::Unavailable.into()),
+            };
+            Ok((
+                MacroUserIdStr::parse_from_str(&row.user_id)
+                    .map_err(internal)?
+                    .into_owned(),
+                source,
+            ))
+        })
+        .transpose()
+    }
+
+    /// Bounded selected work with remaining resolution opportunity; no target IDs.
+    pub async fn pending_reference_channels(
+        &self,
+        team: TeamId,
+        job: JobId,
+        channels: &[ConversationId],
+    ) -> PortResult<Vec<ConversationId>> {
+        if channels.len()
+            > self
+                .limits
+                .database_batch_messages
+                .min(ImportLimits::default().database_batch_messages) as usize
+        {
+            return Err(ImportError::LimitExceeded.into());
+        }
+        let ids: Vec<_> = channels.iter().map(ConversationId::as_str).collect();
+        let rows = sqlx::query_scalar!(
+            r#"SELECT c.slack_channel_id FROM slack_import_conversation c
+               JOIN slack_import_job j ON j.id = c.job_id
+               WHERE j.team_id = $1 AND j.id = $2 AND c.slack_channel_id = ANY($3)
+                 AND c.status IN ('awaiting_uploads', 'queued', 'importing')"#,
+            Uuid::from(team),
+            Uuid::from(job),
+            &ids as _,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(internal)?;
+        rows.into_iter()
+            .map(|id| id.parse().map_err(internal))
+            .collect()
+    }
+}
+
 fn position(checkpoint: Checkpoint) -> (u32, u32) {
     (checkpoint.part_index, checkpoint.record_index)
 }

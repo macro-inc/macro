@@ -16,7 +16,7 @@ use channels::{
 use chrono::{DateTime, Utc};
 use entity_access::domain::ports::EntityAccessService;
 use import::outbound::pg_import_repo::targets as ledger;
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::user_id::MacroUserIdStr;
 use messages::{
     domain::historical as messages_model, outbound::pg_message_repo::PgMessageRepository,
 };
@@ -395,7 +395,6 @@ fn timestamp(ts: SlackTimestamp) -> PortResult<DateTime<Utc>> {
 }
 
 fn convert(message: HistoricalMessage) -> PortResult<messages_model::HistoricalMessage> {
-    use mention_utils::parse::{ParsedXmlText, TextSegment, XmlTag};
     let created_at = timestamp(message.source.ts)?;
     let mut seen = HashSet::new();
     let mut reactions = Vec::new();
@@ -408,21 +407,19 @@ fn convert(message: HistoricalMessage) -> PortResult<messages_model::HistoricalM
             });
         }
     }
-    let mut mentions = Vec::new();
-    if let Ok(parsed) = ParsedXmlText::parse(&message.content) {
-        let mut users = HashSet::new();
-        for segment in parsed.0 {
-            if let TextSegment::Xml(XmlTag::User(mention)) = segment
-                && let Some(user) = mention.user_id.into_user()
-                && users.insert(user.clone())
-            {
-                mentions.push(messages_model::HistoricalUserMention {
-                    id: Uuid::now_v7(),
-                    user_id: user.into_owned(),
-                });
-            }
-        }
+    if message.user_mentions.len() > slack_integration::domain::slack::references::MAX_REFERENCES {
+        return Err(ImportError::LimitExceeded.into());
     }
+    let mut users = HashSet::new();
+    let mentions = message
+        .user_mentions
+        .into_iter()
+        .filter(|user| users.insert(user.clone()))
+        .map(|user_id| messages_model::HistoricalUserMention {
+            id: Uuid::now_v7(),
+            user_id,
+        })
+        .collect();
     Ok(messages_model::HistoricalMessage {
         id: message.id,
         thread_id: message.parent_id,

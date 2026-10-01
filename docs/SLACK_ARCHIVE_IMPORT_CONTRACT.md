@@ -373,6 +373,130 @@ Staging may expire after 14 days. Job/staging cleanup must not delete user-visib
 history, long-lived dedupe mappings, canonical reservations or source bindings.
 Team/channel deletion semantics belong to owning schema migrations.
 
+## Native links and deferred source references
+
+The pure `slack::mrkdwn::MrkdwnConverter` retains its existing `message`/`convert`
+interfaces. The additive `convert_with_references(source, italic)` returns
+`ConvertedText`: an initially safe `body`, explicit `user_mentions` (occurrences
+actively emitted outside code), and typed `ReferenceIntent` occurrences. It accepts
+at most 1 MiB source text, 1 MiB cumulative generated token/fallback bytes,
+256 references, and 256 emitted user mentions per body. Metadata expansion and
+occurrence budgets are checked as tokens are emitted; excess is an explicit
+`LimitExceeded`, not silent truncation. `italic` is used for
+Slack `me_message`. Baseline worker interfaces are unchanged; persistence and
+resolution wiring are separate follow-ups.
+
+Native representations match Lexical `INTERNAL_TRANSFORMERS`:
+
+```text
+<m-link>{"url":"https://example.com","text":"Example","title":""}</m-link>
+<m-user-mention>{"userId":"macro|a@example.com","email":"a@example.com"}</m-user-mention>
+<m-document-mention>{"documentId":"<channel UUID>","blockName":"channel","documentName":"general","blockParams":{},"collapsed":false}</m-document-mention>
+<m-document-mention>{"documentId":"<channel UUID>","blockName":"channel","documentName":"general","blockParams":{"channel_message_id":"<message UUID>","channel_thread_id":"<persisted root UUID>"},"collapsed":false}</m-document-mention>
+```
+
+`channel_thread_id` is optional; `channel_message_id` is the canonical message UUID,
+never a Slack timestamp. `documentId` is always the channel UUID. There is no
+`m-channel-mention`. The renderer may show the accessible entity name, not the
+original arbitrary link label. Shared typed serializers live in `mention_utils`;
+the existing markdown-document serializer's API and behavior remain unchanged.
+New native serialization JSON-escapes literal `<`/`>` delimiters, restoring labels
+exactly on JSON decoding (including quotes, backslashes, newlines and Unicode).
+This prevents closing/nested tag injection without HTML-encoding decoded labels.
+URL scheme policy (HTTP/HTTPS/mailto only) is validated separately from URL syntax
+using the URL parser; malformed authorities/ports and literal controls, whitespace,
+backslashes or tag delimiters are rejected. Original accepted URLs are retained,
+not rewritten to a hardcoded Macro origin.
+
+Safe Slack labeled/unlabeled angle links and protocol-prefixed bare HTTP(S)/mailto
+URLs outside code become `m-link`. Unlabeled mailto displays its address. Bare URL
+boundaries follow the frontend's protocol-mode autolink convention: terminal
+punctuation and unmatched closing parentheses are outside the URL; balanced path
+parentheses remain inside. Host-only/fuzzy links are not guessed. Entities decode
+once. Formatting is applied around generated nodes, never recursively through
+serialized JSON. Source-supplied Macro tags are escaped display text; recognized
+inline/fenced code remains literal. Never feed the entire output to the XML-only
+Rust parser to extract mention rows: it is not code-aware. Use `user_mentions`.
+Channel/group broadcasts and subteams are always inert text.
+
+Reference evidence and fallback policy:
+
+- Channel tokens carry a validated exact Slack channel ID. Fallback is the escaped
+  original `#label`, archive-provided channel name, or original Slack ID; no Macro
+  metadata is added to a fallback.
+- Supported permalinks are HTTPS `<workspace>.slack.com/archives/<C/G/D ID>/p<seconds><six microseconds>`
+  root links and reply links with optional `thread_ts=<seconds>.<six microseconds>`
+  and matching `cid`. Message identity always comes from the path, not `thread_ts`.
+  Credentials, non-default ports, fragments, extra path segments, duplicate/unknown
+  query keys, malformed IDs/timestamps and other Slack URL forms stay external links.
+- A parsed hostname is only source evidence to check, **not proof** of the bound
+  workspace. Resolution requires team + bound source + exact channel/message
+  identity and independently established matching source/domain evidence. Unknown
+  source confirmation supplies no domain evidence. Do not infer associations,
+  fetch URLs, call Slack, reserve IDs, create channels, or invent message mappings.
+- `ResolvedTarget` distinguishes authorized canonical channels from messages and
+  carries UUIDs (plus an optional persisted root). The resolver must require
+  requester **read** access, separate from import-write provenance. Prior same-source
+  imports may resolve even if not selected. Per-viewer runtime access checks remain.
+- Missing, unauthorized, skipped, deleted, incompatible or source-mismatched targets
+  retain their original safe fallback: external `m-link` for a permalink, source-only
+  display text for a channel. A message can never downgrade to a channel mention.
+
+### Read-only resolver boundary
+
+`references::resolve::resolve_batch` returns typed `Resolved`, `Pending`, or
+`Fallback` outcomes, in record/occurrence order. Pending/fallback contain no target
+IDs or labels. It deduplicates exact source identities within a batch, caps each
+record at 256 reference occurrences, caps records and serialized template bytes at
+the configured database ceilings (never above 500/4 MiB), and chunks lookup calls
+at that same record ceiling. No per-token queries or archive-wide reference map.
+
+`ImportTargetReader` reads canonical reservations and unambiguous explicitly
+team-scoped legacy mappings without reserving, locking, or deriving scope from a
+user's current team. It validates binding, existence, type and team compatibility;
+name-only legacy mappings are not evidence. Prior compatible imports and archived
+source channels remain eligible. Pending reservations expose no candidate UUID.
+`SourceMessageReader` reads exact integer-microsecond mappings; `HistoricalMessageReader`
+checks live message/root state and actual channel/parent ownership. A persisted
+orphan-imported reply links to its own root, not a guessed Slack parent.
+
+The worker's `WorkerReferenceLookup::context` loads the requester and source from
+the team-owned job. V1 has **no persisted domain-association evidence**, so its
+`domains` is empty and all Slack permalinks remain external, even with a known T ID.
+The domain resolver supports independently established exact workspace/hostname
+pairs, but there is no public/archive input or implicit alias-binding flow for
+those pairs. URL userinfo (including empty userinfo), contradictory `cid`, and a
+`thread_ts` later than the path message are not accepted source references.
+
+Disclosure requires current active participation for Private/DM, or current
+membership in the owning team for Team channels. Import provenance and admin role
+alone do not grant read access. Missing mappings in selected nonterminal work stay
+pending; deleted/inconsistent mapped messages do not become speculative targets.
+The sink persists user mention rows only from converter-emitted `user_mentions`,
+never by parsing tags in the resulting body. Code-contained tags remain inert.
+
+The resolver is a read-only capability for deferred reconciliation; persistence,
+settlement-time retries, guarded body updates and search publication remain the
+separate reconciliation boundary described below.
+
+Each intent stores its exact fallback and UTF-8 byte range in the immutable initial
+body. `ConvertedText::render` reconstructs by occurrence with typed targets; it
+validates ordered, non-overlapping ranges/fallback equality and never searches or
+regex-replaces serialized bodies. Duplicate, self, forward and cyclic occurrences
+are independent of import order. Persist the template/intents atomically with the
+imported body/mapping/checkpoint. Subsequent reconciliation must fence body updates
+against live edits/deletion and atomically complete intents with search-dirty/outbox
+work. Close unresolved intents to fallback when the job's opportunity ends, including
+cancellation, without restarting imports or adding members/mention effects. This is
+within-job reconciliation, not cross-job edit synchronization.
+
+`tests/fixtures/native-message-links.json` in `slack_integration` is shared with
+`packages/lexical-core/tests/slack-import-links.test.ts`. Rust checks converter/shared
+serializer output with the real `mention_utils` parser; frontend tests import using
+real `INTERNAL_TRANSFORMERS` and round-trip Lexical state, including hostile labels
+and code. Ordinary mentions/mailto also round-trip native markdown. Lexical's own
+markdown export normalizes URL parentheses and is not the import serializer.
+
 ## Bounds and browser obligations
 
 `ImportLimits::default()` defines these initial configurable ceilings:

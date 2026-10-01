@@ -13,7 +13,7 @@ use super::{
     ports::*,
     slack::{
         export::{NormalizedMessage, NormalizedRecord},
-        mrkdwn::{MessageConversion, MrkdwnConverter},
+        mrkdwn::MrkdwnConverter,
         reactions,
         users::{ResolvedAuthor, UserDirectory},
     },
@@ -185,7 +185,7 @@ where
                         context.team_id,
                         &users,
                         &converter,
-                    ),
+                    )?,
                     NormalizedRecord::Skipped(_) => None,
                 };
                 let bytes = message
@@ -366,9 +366,12 @@ where
         team: TeamId,
         users: &UserDirectory,
         converter: &MrkdwnConverter<'_>,
-    ) -> Option<HistoricalMessage> {
-        let MessageConversion::Text(content) = converter.message(&message.content) else {
-            return None;
+    ) -> PortResult<Option<HistoricalMessage>> {
+        let Some(converted) = converter
+            .message_with_references(&message.content)
+            .map_err(|_| ImportError::LimitExceeded)?
+        else {
+            return Ok(None);
         };
         let (sender, imported_author) = match users.author(&message.content) {
             ResolvedAuthor::User(user) => (HistoricalSender::User(user), None),
@@ -381,7 +384,7 @@ where
             .parent_lookup()
             .map(|parent| parent.ts);
         let reactions = reactions::convert(&message.content.reactions, users, message.identity.ts);
-        Some(HistoricalMessage {
+        Ok(Some(HistoricalMessage {
             id: Uuid::now_v7(),
             source: message.identity.in_team(team),
             channel_id: channel,
@@ -389,10 +392,11 @@ where
             orphaned_thread_ts: parent_ts,
             sender,
             imported_author,
-            content,
+            content: converted.body,
+            user_mentions: converted.user_mentions,
             import_order: order,
             reactions,
-        })
+        }))
     }
 
     async fn flush(&self, pending: &mut PendingBatch) -> PortResult<()> {

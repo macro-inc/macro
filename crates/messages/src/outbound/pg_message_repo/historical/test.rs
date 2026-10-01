@@ -15,6 +15,60 @@ use crate::domain::{
 
 const USER: &str = "macro|historical@example.com";
 
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn read_targets_validate_live_roots_and_preserve_orphan_structure(pool: PgPool) {
+    use crate::domain::ports::HistoricalMessageReader;
+    let channel_id = channel(&pool).await;
+    let repo = PgMessageRepository::new(pool.clone());
+    let root = message(None, 0);
+    let reply = message(Some(root.id), 1);
+    let mut orphan = message(None, 2);
+    orphan.import_metadata = serde_json::json!({"orphaned_thread_ts": "1.000001"});
+    repo.insert_historical(&HistoricalBatch {
+        channel_id,
+        messages: vec![root.clone(), reply.clone(), orphan.clone()],
+    })
+    .await
+    .unwrap();
+    let ids = [root.id, reply.id, orphan.id, Uuid::now_v7()];
+    let found = repo.lookup_historical_targets(&ids).await.unwrap();
+    assert_eq!(found.len(), 3);
+    assert!(found.iter().all(|m| m.channel_id == channel_id));
+    assert!(
+        found
+            .iter()
+            .any(|m| m.message_id == reply.id && m.root_id == root.id)
+    );
+    assert!(
+        found
+            .iter()
+            .any(|m| m.message_id == orphan.id && m.root_id == orphan.id)
+    );
+    sqlx::query!(
+        "UPDATE comms_messages SET deleted_at = now() WHERE id = $1",
+        root.id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let found = repo.lookup_historical_targets(&ids).await.unwrap();
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].message_id, orphan.id);
+    sqlx::query!(
+        "UPDATE comms_message_threads SET deleted_at = now() WHERE root_id = $1",
+        orphan.id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(
+        repo.lookup_historical_targets(&ids)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+}
+
 fn historical_time() -> DateTime<Utc> {
     DateTime::from_timestamp(1_600_000_000, 123_456_000).unwrap()
 }

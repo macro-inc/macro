@@ -11,6 +11,35 @@ use crate::domain::{
 #[cfg(test)]
 mod test;
 
+impl crate::domain::ports::HistoricalMessageReader for PgMessageRepository {
+    async fn lookup_historical_targets(
+        &self,
+        ids: &[uuid::Uuid],
+    ) -> Result<Vec<crate::domain::historical::HistoricalMessageTarget>, MessageError> {
+        use crate::domain::historical::{HistoricalMessageTarget, MAX_HISTORICAL_MESSAGES};
+        if ids.len() > MAX_HISTORICAL_MESSAGES {
+            return Err(MessageError::Invalid("too many reference targets"));
+        }
+        sqlx::query_as!(
+            HistoricalMessageTarget,
+            r#"SELECT m.id AS message_id, m.channel_id AS "channel_id!", t.root_id
+               FROM comms_messages m
+               JOIN comms_message_threads t ON t.root_id = coalesce(m.thread_id, m.id)
+               JOIN comms_messages root ON root.id = t.root_id
+               WHERE m.id = ANY($1) AND m.deleted_at IS NULL AND t.deleted_at IS NULL
+                 AND root.deleted_at IS NULL AND root.thread_id IS NULL
+                 AND m.parent_entity_type = 'channel' AND m.parent_entity_id = m.channel_id::text
+                 AND t.parent_entity_type = 'channel' AND t.parent_entity_id = m.channel_id::text
+                 AND root.channel_id = m.channel_id AND root.parent_entity_type = 'channel'
+                 AND root.parent_entity_id = m.channel_id::text"#,
+            ids,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(database_error)
+    }
+}
+
 impl HistoricalMessageRepository for PgMessageRepository {
     async fn insert_historical(&self, batch: &HistoricalBatch) -> Result<(), MessageError> {
         let mut tx = self.pool.begin().await.map_err(database_error)?;
