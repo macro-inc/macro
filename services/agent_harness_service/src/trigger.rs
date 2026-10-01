@@ -68,6 +68,17 @@ fn commit_message<M: MacroEventCollection + 'static>(
         .map_err(|error| anyhow::anyhow!("failed to commit trigger event offset: {error:?}"))
 }
 
+/// Shared domain services retained across trigger-consumer restarts.
+#[derive(Clone)]
+pub struct TriggerServices {
+    /// Recorder configured with the host's quota policy.
+    pub recorder: Arc<dyn ai_usage::UsageRecorder>,
+    /// Admission gate for Macro-funded inference.
+    pub admission: Arc<dyn ai_billing::AiAdmissionService>,
+    /// Message service used to announce task assignments.
+    pub messages: Arc<dyn MessageServiceApi>,
+}
+
 /// Keeps the trigger consumer running across transient failures.
 pub async fn supervise(
     pool: PgPool,
@@ -75,7 +86,7 @@ pub async fn supervise(
     internal_api_key: String,
     document_storage_service_auth_key: String,
     source: TriggerEventSource,
-    messages: Arc<dyn MessageServiceApi>,
+    services: TriggerServices,
 ) {
     loop {
         if let Err(error) = run(
@@ -84,7 +95,7 @@ pub async fn supervise(
             internal_api_key.clone(),
             document_storage_service_auth_key.clone(),
             source,
-            messages.clone(),
+            services.clone(),
         )
         .await
         {
@@ -100,12 +111,14 @@ async fn run(
     internal_api_key: String,
     document_storage_service_auth_key: String,
     source: TriggerEventSource,
-    messages: Arc<dyn MessageServiceApi>,
+    services: TriggerServices,
 ) -> anyhow::Result<()> {
-    let lexical = LexicalClient::new(
-        internal_api_key.clone(),
-        LexicalServiceUrl::new()?.to_string(),
-    );
+    let TriggerServices {
+        recorder,
+        admission,
+        messages,
+    } = services;
+    let lexical = LexicalClient::new(internal_api_key, LexicalServiceUrl::new()?.to_string());
     let task_context = DssTaskAssignmentContext::new(
         DocumentStorageServiceClient::new(
             document_storage_service_auth_key,
@@ -113,7 +126,6 @@ async fn run(
         ),
         lexical.clone(),
     );
-    let recorder = ai_usage::pg_recorder(pool.clone());
     let images = VisionImageCaptioner::new(
         static_file::outbound::CdnStaticFileRepo::new(StaticFileServiceUrl::new()?.to_string()),
         recorder.clone(),
@@ -141,7 +153,8 @@ async fn run(
                 entity_access::outbound::PgAccessRepository::new(pool.clone()),
             ),
         ),
-    );
+    )
+    .with_admission(admission);
     let channel_types = ChannelRepoTypeLookup::new(PgChannelsRepo::new(pool));
     let publisher = MacroEventBrokerService::new(
         KafkaEventPublisher::new(&kafka_brokers)?,

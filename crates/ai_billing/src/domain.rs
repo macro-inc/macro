@@ -1,6 +1,7 @@
 //! Domain layer: plans and margin math, the settlement ledger, ports, and the
 //! billing service.
 
+pub mod admission;
 pub mod financial;
 pub mod ledger;
 pub mod models;
@@ -9,6 +10,10 @@ pub mod policy;
 pub mod ports;
 pub mod service;
 
+pub use admission::{
+    AdmissionFuture, AiAdmissionError, AiAdmissionService, BillingAdmissionService,
+    DisabledAiAdmissionService,
+};
 pub use ledger::{SettlementPlan, SettlementPolicy, SettlementState, plan_settlement};
 pub use models::{
     AllowanceDecision, AllowanceStore, BillingError, BillingPeriod, BillingSettings,

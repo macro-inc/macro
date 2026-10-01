@@ -14,6 +14,27 @@ use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use std::sync::{Arc, Mutex};
 
+#[test]
+#[cfg(feature = "admission")]
+fn definitive_admission_failures_survive_routine_preparation_and_prompt_mapping() {
+    use ai_billing::{AiAdmissionError, DenyReason};
+    for error in [
+        AiAdmissionError::Denied(DenyReason::AllowanceExhausted),
+        AiAdmissionError::Denied(DenyReason::OverageLimitReached),
+        AiAdmissionError::Denied(DenyReason::OveragePaymentFailed),
+        AiAdmissionError::Unavailable,
+    ] {
+        let expected = RoutineSessionError::Admission(error);
+        assert_eq!(session_error(AgentSessionError::Admission(error)), expected);
+        assert_eq!(prompt_error(AgentSessionError::Admission(error)), expected);
+        let wire = serde_json::to_vec(&expected).unwrap();
+        assert_eq!(
+            serde_json::from_slice::<RoutineSessionError>(&wire).unwrap(),
+            expected
+        );
+    }
+}
+
 #[derive(Clone)]
 struct Directory(Arc<Mutex<Option<BotFacts>>>);
 

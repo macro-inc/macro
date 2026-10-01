@@ -2,12 +2,21 @@
 
 ## Current scope: observation, not billing activation
 
-T07 installs **observational per-provider-attempt tracking** for the Rust paths
-below. It does not activate the new allowance policy, authorization, credit holds,
-credit debits, postpaid liability, or collection. The existing $40 subscription,
-legacy analytics/settlement behavior, feature exclusions, and existing enforcement
-remain unchanged. Observations must never be replayed as financial authorizations
-or converted into historical customer debt.
+The observation rollout installs **observational per-provider-attempt tracking**
+for the Rust paths below. It does not activate financial admission, credit holds,
+credit debits, postpaid liability, or collection. Observations must never be
+replayed as financial authorizations or converted into historical customer debt.
+
+The separate [legacy quota rollout](AI_QUOTA_ENFORCEMENT.md) adds default-off
+`ENABLE_AI_USAGE_ENFORCEMENT`: snapshot-based allowance admission and prospective
+`ai_usage.count_usage` writes by existing aggregate producers. Billing reads only
+persisted counted rows; historical/default-false rows remain uncounted. This is
+not the financial journal's reservation/admission system. Free/unlimited policy,
+feature exclusions, and the existing $40 subscription remain unchanged. Production
+usage-driven credit consumption and Stripe settlement remain dev-gated even when
+legacy quota enforcement is enabled. Follow that document for coordinated Doppler
+registration, rollout, rollback, coverage, and limitations; this observation
+matrix alone is not an enforcement or collection activation checklist.
 
 `UsageRecorder::tracking()` explicitly bridges the existing analytics injection to
 an object-safe `UsageTracking` capability. `agent::complete`, history/image and
@@ -17,11 +26,13 @@ Injection alone is **not** coverage: code bypassing those boundaries remains out
 this accounting view. `rig_engine` explicitly carries task-local context into its
 spawned turn; each session still binds its trusted owner/feature independently.
 
-Composition roots use `ai_usage::pg_recorder`, which constructs the owning-domain
-observation service and adapter alongside the existing analytics service. DCS wraps
-its existing settling recorder with `with_tracking(..., pg_tracking(...))` instead
-of replacing its legacy behavior. The observation service accepts **no funding or
-rate-authorization capability**. No host selects `FinancialMode::Activated` here;
+Production composition roots use `ai_usage::pg_recorder_with_enforcement`, which
+constructs configured prospective analytics counting alongside the owning-domain
+observation service and adapter. The default-disabled `pg_recorder` remains for
+internal/evaluation callers. DCS wraps its configured settling recorder with
+`with_tracking(..., pg_tracking(...))`; only enabled, counted usage can request
+legacy settlement, and that path remains dev-only. The observation service accepts
+**no funding or rate-authorization capability**. No host selects `FinancialMode::Activated` here;
 its strict admission, budget validation, and error propagation remain intact.
 
 ### Persistence and failure semantics
@@ -35,7 +46,8 @@ analytics `ai_usage` table, and funding/collection work queues:
   identical invocation IDs, timestamps and evidence; new provider executions get
   new IDs. Conflicting deliveries fail visibly rather than overwrite facts.
 - Request budgets, bodies and headers are unchanged in tracking-only mode. Missing
-  provider billing profiles, rates, balances and opt-in do not deny execution.
+  provider billing profiles, rates, balances and opt-in do not deny execution through
+  observations. Enabled legacy quota admission can independently refuse the operation.
 - Reported disjoint token dimensions are **unpriced (`MissingRate`)**, not free or
   exempt. This path intentionally does not consult mutable analytics rates or claim
   that existing financial rate publications qualify all observed request regimes.
@@ -64,8 +76,8 @@ analytics `ai_usage` table, and funding/collection work queues:
 
 Analytics aggregates and per-attempt observations are **different accounting
 views**. Do not sum them together. Existing final-success aggregates still feed
-legacy analytics exactly as before; the observational journal never calls analytics
-`record` or the settlement trigger. Independent Anthropic tools add observations,
+legacy analytics, with quota eligibility now stored separately in `count_usage`;
+the observational journal never calls analytics `record` or the settlement trigger. Independent Anthropic tools add observations,
 not new legacy aggregate rows or separate tool fees.
 
 ## Producer / host matrix
@@ -76,22 +88,22 @@ regressions, not live-provider or deployment verification.
 
 | Producer / host | Trusted attribution and injection site | Attempt vs aggregate coverage / evidence | Tests and remaining gaps |
 | --- | --- | --- | --- |
-| DCS chat, dynamic/structured completion, rename | Per-operation `UsageContext` from existing authenticated handlers; `services/document_cognition_service/src/main.rs` wraps its settling recorder | Rig HTTP attempts → journal, including failed parsing/retries; legacy final aggregates unchanged | `agent` metering/structured tests, DCS package tests; billing activation off |
+| DCS chat, dynamic/structured completion, rename | Per-operation `UsageContext` from existing authenticated handlers; `services/document_cognition_service/src/main.rs` wraps its settling recorder | Rig HTTP attempts → journal, including failed parsing/retries; legacy final aggregates unchanged | `agent` metering/structured tests, DCS package tests; financial activation off |
 | Subagent in any common-context host | `crates/ai_tools/src/subagent.rs` replaces shared-context user with `RequestContext.user_id`, retains parent feature/entity | `agent::complete` binds a fresh or matching inherited scope → journal; no shared mutable user | `ai_tools` subagent isolation; `agent` scope/independent recorder tests. Shared system identity is not an authenticated payer |
-| MCP native Anthropic tools and subagent | `AuthenticatedToolService` builds `RequestContext` from authenticated HTTP extensions; `services/mcp_service/src/context.rs` injects `pg_recorder`; `ToolServiceContext::FromRef` supplies inherited feature/entity and recorder | Independent Anthropic HTTP attempts and subagent attempts → journal, not merely successful tool aggregates; default feature remains Chat | Anthropic authenticated attribution/malformed-result/failure tests; MCP auth tests. MCP client's own model and remote MCP servers are not covered |
+| MCP native Anthropic tools and subagent | `AuthenticatedToolService` builds `RequestContext` from authenticated HTTP extensions; `services/mcp_service/src/context.rs` injects the configured recorder; `ToolServiceContext::FromRef` supplies inherited feature/entity and recorder | Independent Anthropic HTTP attempts and subagent attempts → journal, not merely successful tool aggregates; default feature remains Chat | Anthropic authenticated attribution/malformed-result/failure tests; MCP auth tests. MCP client's own model and remote MCP servers are not covered |
 | Anthropic WebSearch, WebFetch, BashCodeExecution, TextEditorCodeExecution in all common hosts | Manual per-operation `FromRef<ToolServiceContext>` copies recorder + feature/entity; tool call always uses authenticated `RequestContext.user_id` | One journal attempt per independent native Messages HTTP execution. Counters recorded before SDK/result parsing, including non-2xx evidence; cancellation retains execution/evidence task. No separate tool fees | `anthropic --features toolset` tests. Native client has no application retry loop; any future retries must create fresh attempt IDs. Server-tool-specific non-token fees are intentionally not priced |
 | In-memory harness sessions | `services/agent_harness_service/src/main.rs` common context → `RigTurnEngine`; trusted `TurnRequest.owner`, AgentSession feature | Captured scope carried into spawned turn; AgentLoop binds immutable owner scope; Rig attempts → journal, final analytics retained | `agent` spawned scope/cancellation tests; `agent_inmem` package tests. Non-user owners remain rejected by existing behavior |
-| Harness session naming | Independent `pg_recorder` supplied to `HaikuAgentSessionNameGenerator` in harness `main.rs`; session owner, ChatRename feature/entity | One-shot model attempts → journal (feature classification unchanged) | Existing name-generator/host tests plus shared completion tests; not covered merely by common-context injection |
-| Harness repository selection | Independent `pg_recorder` passed to `CursorContainerManager` in harness `main.rs`; repository chooser's trusted owner, AgentRepositoryChoice feature | Rust selection completion attempts → journal | Shared completion tests and host tests. Does not cover Cursor's external agent runtime |
-| Harness trigger classifier + image captions | Independent recorder in `services/agent_harness_service/src/trigger.rs` passed to `FastModelTriggerJudge` and `VisionImageCaptioner`; authenticated message sender, Automation feature | Structured/image HTTP attempts → journal before existing errors are handled | `agent_trigger` caption tests + `agent` image-budget/cancellation/evidence tests. Non-user fallback remains system/internal, never an authenticated payer |
-| Standalone trigger classifier + captions | Same explicit injection in `services/agent_trigger_service/src/main.rs` | Same journal attempt boundary, separate from harness and DCS | Standalone service and shared trigger tests. Caption timeout/error-to-None behavior retained; funding-denial propagation deferred |
+| Harness session naming | Independent configured recorder supplied to `HaikuAgentSessionNameGenerator` in harness `main.rs`; session owner, ChatRename feature/entity | One-shot model attempts → journal (feature classification unchanged) | Existing name-generator/host tests plus shared completion tests; not covered merely by common-context injection |
+| Harness repository selection | Independent configured recorder passed to `CursorContainerManager` in harness `main.rs`; repository chooser's trusted owner, AgentRepositoryChoice feature | Rust selection completion attempts → journal | Shared completion tests and host tests. Does not cover Cursor's external agent runtime |
+| Harness trigger classifier + image captions | Independent recorder in `services/agent_harness_service/src/trigger.rs` passed to `FastModelTriggerJudge` and `VisionImageCaptioner`; authenticated message sender, Automation feature | Structured/image HTTP attempts → journal before existing errors are handled | `agent_trigger` caption tests + `agent` image-budget/cancellation/evidence tests. A non-user sender is not replaced with a system billing identity |
+| Standalone trigger classifier + captions | Same explicit injection in `services/agent_trigger_service/src/main.rs` | Same journal attempt boundary, separate from harness and DCS | Standalone service and shared trigger tests. Caption timeout/error-to-None behavior retained; optional inference skips legacy quota refusal without AI fallback |
 | DSS channel responder | `services/document_storage_service/src/main.rs` builds common context; responder binds requesting user, ChannelBot feature | AgentLoop HTTP attempts, native tools and subagents → journal; legacy aggregate retained | Shared agent/tool tests, DSS package tests |
-| DSS channel classifier | Separate `pg_recorder` supplied to `FastModelTriggerClassifier` in DSS `main.rs`; requesting user, ChannelBot | One-shot classification attempts → journal | Shared completion/structured tests. This is distinct from the responder's common context |
-| DSS call summarizer, import duplicate judges | Independent `pg_recorder` injections already present in DSS `main.rs`; existing user/feature supplied by each producer | Calls using shared Rust completion APIs now produce journal attempts | Shared agent tests and DSS tests; this change does not change their attribution policy |
+| DSS channel classifier | Separate configured recorder supplied to `FastModelTriggerClassifier` in DSS `main.rs`; requesting user, ChannelBot | One-shot classification attempts → journal | Shared completion/structured tests. This is distinct from the responder's common context |
+| DSS call summarizer, system task duplicate judge | Independent configured recorder injections in DSS `main.rs`; existing user/feature supplied by each producer | Calls using shared Rust completion APIs now produce journal attempts | Shared agent tests and DSS tests; this change does not change their attribution policy |
 | Scheduled actions | `services/scheduled_action/src/bins/service.rs` common context; executor binds stored authenticated owner, Automation feature | AgentLoop attempts + native tools/subagents → journal | Scheduled-action package and shared scope tests; remote execution outside this process remains separate |
 | DCS imports | DCS `main.rs` passes wrapped recorder to import service; import `drive_session` binds user, Import feature | Rust gather/Notion AgentLoop attempts → journal | Shared agent tests / DCS tests. Remote connector internals are not local model attempts |
-| Memory and AI projections | Common host recorder (DCS; memory's own context also uses `pg_recorder`), with existing user-specific Memory / AiProjection contexts | Shared completion/AgentLoop attempts → journal, including native tool subcalls where available | Shared agent/tool regressions; no claim of new end-to-end producer deployment tests |
-| Managed harness sandboxes (local/Daytona), external Cursor/Codex/Claude agents | Harness passes provider credentials / external account credentials directly to the runtime | **Not covered** by Rust common-context injection; runtime model calls bypass this HTTP adapter. Rust session naming/selection and calls back to authenticated MCP are the only covered portions | Future runtime-owned producer instrumentation must emit trusted per-attempt provider/model/counter/response IDs and immutable authenticated session attribution to an idempotent journal ingress. No credential/proxy redesign or enforcement is introduced here |
+| Memory and AI projections | Common host recorder (DCS; memory's own context uses the configured common-tool builder), with existing user-specific Memory / AiProjection contexts | Shared completion/AgentLoop attempts → journal, including native tool subcalls where available | Shared agent/tool regressions; no claim of new end-to-end producer deployment tests |
+| Managed harness sandboxes (local/Daytona), external Cursor/Codex/Claude agents | Harness passes provider credentials / external account credentials directly to the runtime | **Not covered** by Rust common-context injection; runtime model calls bypass this HTTP adapter. Rust session naming/selection and calls back to authenticated MCP are the only covered portions | Future runtime-owned producer instrumentation must emit trusted per-attempt provider/model/counter/response IDs and immutable authenticated session attribution to an idempotent journal ingress. Legacy admission now gates Macro-funded managed sessions, but adds no runtime metering or credential/proxy redesign; externally funded runtime execution skips that gate |
 | AI editing worker, dictation/audio, arbitrary raw-provider callers, remote MCP internals | Separate producer ownership; multipart requests explicitly warn when scoped but unsupported | **Not covered by this token-attempt adapter.** Existing aggregate/audio behavior is not per-attempt evidence | Separate worker/audio integrations and trusted ingress required. Do not enable new-policy charging for these paths based on this matrix |
 
 ## Verification and future activation gates
@@ -125,7 +137,8 @@ retention requirements for observations, or cascade-delete financial history.
 Schema/application merge and test-environment verification are not evidence that
 this deployment gate has passed.
 
-Before a future **billing/enforcement** release, separately review/implement:
+Before a future **financial admission/collection** release (not the separate
+legacy snapshot-based quota flag), separately review/implement:
 
 1. Verified rates, request-regime support, authenticated payer/seat resolution,
    renewal policy activation, and the existing financial admission contract.
@@ -139,8 +152,8 @@ Before a future **billing/enforcement** release, separately review/implement:
 5. An authorized, auditable resolution/release transition for unresolved financial
    attempts. `FinancialUsage::pending` and funding scans only discover work;
    reconciliation stops at missing actual usage, and conflicting finalization
-   replays cannot overwrite immutable evidence. Before enabling admission, test
-   operator authorization, retained original evidence, idempotent resolution and
+   replays cannot overwrite immutable evidence. Before enabling financial admission,
+   test operator authorization, retained original evidence, idempotent resolution and
    recovery of payer ordering/holds. Never treat missing evidence as zero or
    release a hold merely because a request timed out. This gap may remain deferred
    only while financial admission and policy activation remain unwired.

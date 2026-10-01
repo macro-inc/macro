@@ -16,6 +16,7 @@ use super::ports::{
     BillingRepo, BillingService, CreditCheckoutRequest, EntitlementSource, OverageChargeRequest,
     PaymentGateway, PendingCharge, UsageReader,
 };
+use ai_usage::AiUsageEnforcement;
 use chrono::{DateTime, Utc};
 use macro_env::Environment;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
@@ -31,11 +32,13 @@ pub struct BillingServiceImpl<E, U, R, P> {
     repo: R,
     payments: P,
     environment: Environment,
+    enforcement: AiUsageEnforcement,
     period_sync: Option<Arc<dyn PeriodSync>>,
 }
 
 impl<E, U, R, P> BillingServiceImpl<E, U, R, P> {
-    /// Construct the service. Allowance enforcement and settlement run only in dev.
+    /// Construct with quota enforcement disabled. Settlement remains dev-only.
+    /// Production composition must explicitly install the configured enforcement policy.
     pub fn new(entitlements: E, usage: U, repo: R, payments: P, environment: Environment) -> Self {
         Self {
             entitlements,
@@ -43,8 +46,15 @@ impl<E, U, R, P> BillingServiceImpl<E, U, R, P> {
             repo,
             payments,
             environment,
+            enforcement: AiUsageEnforcement::Disabled,
             period_sync: None,
         }
+    }
+
+    /// Configure quota enforcement independently of the settlement environment guard.
+    pub fn with_enforcement(mut self, enforcement: AiUsageEnforcement) -> Self {
+        self.enforcement = enforcement;
+        self
     }
 
     /// Install verified renewal activation at the composition root only after the
@@ -473,7 +483,7 @@ where
 {
     #[tracing::instrument(skip(self), err)]
     async fn check_allowance(&self, user: &MacroUserIdStr<'_>) -> Result<AllowanceDecision> {
-        if !matches!(self.environment, Environment::Develop) {
+        if !self.enforcement.is_enabled() {
             return Ok(AllowanceDecision::Allow);
         }
         let position = self.position(user, Utc::now()).await?;
@@ -488,8 +498,8 @@ where
     async fn snapshot(&self, user: &MacroUserIdStr<'_>) -> Result<UsageSnapshot> {
         let position = self.position(user, Utc::now()).await?;
         let mut snapshot = self.snapshot_at(user, &position).await?;
-        // Keep the summary consistent with the allowance gate outside dev.
-        if !matches!(self.environment, Environment::Develop) {
+        // Keep the summary consistent with the configured allowance gate.
+        if !self.enforcement.is_enabled() {
             snapshot.blocked_reason = None;
         }
         Ok(snapshot)

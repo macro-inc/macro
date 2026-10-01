@@ -22,6 +22,7 @@ use agent_runtime_protocol::domain::{
     action::{AgentAction, AgentActionId},
     schema::v0::SystemEvent,
 };
+use ai_billing::inbound::admission::AiAdmissionErrorBody;
 use axum::{
     Json, Router,
     extract::{FromRef, Path, State},
@@ -300,6 +301,7 @@ impl IntoResponse for AgentSessionApiError {
             // here, and nothing the caller does again right now will land, so it
             // answers 409 with a reason rather than a 500 that reads as a bug
             // and buries the one fact worth showing a user.
+            Self::Domain(AgentSessionError::Admission(error)) => error.into_response(),
             Self::Domain(AgentSessionError::Disconnected(session_id)) => {
                 tracing::info!(%session_id, "action refused: the session's runtime is not connected");
                 (
@@ -951,9 +953,16 @@ async fn ensure_harness_serves_session<R: AgentSessionNotificationRecipient>(
                            running turn to end and can be edited or removed meanwhile."
         ),
         (status = 401, body = String),
+        (status = 402, description = "AI allowance exhausted", body = AiAdmissionErrorBody),
         (status = 403, body = String),
         (status = 422, body = String),
         (status = 500, body = String),
+        (status = 503, description = "AI usage validation unavailable, or replica draining; retry later",
+            content(
+                (AiAdmissionErrorBody = "application/json"),
+                (String = "text/plain"),
+            )
+        ),
     )
 )]
 /// Perform a control operation on a live agent session.
@@ -1765,6 +1774,7 @@ impl IntoResponse for CreateSessionApiError {
                 };
                 return (StatusCode::CONFLICT, Json(body)).into_response();
             }
+            Self::Domain(AgentSessionError::Admission(error)) => return error.into_response(),
             Self::Domain(AgentSessionError::ThreadSessionExists) => (
                 StatusCode::CONFLICT,
                 "this bot already has a session for this thread".to_owned(),
@@ -1911,10 +1921,12 @@ fn principal_owner(
     responses(
         (status = 201, body = CreateAgentSessionResponse),
         (status = 401, body = String),
+        (status = 402, description = "AI allowance exhausted", body = AiAdmissionErrorBody),
         (status = 403, body = String),
         (status = 404, body = String),
         (status = 422, body = String),
         (status = 500, body = String),
+        (status = 503, description = "AI usage validation unavailable; retry later", body = AiAdmissionErrorBody),
     )
 )]
 /// Open an agent session served by an external runtime.

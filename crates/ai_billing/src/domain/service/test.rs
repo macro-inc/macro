@@ -594,7 +594,8 @@ fn premium_service_in(
             repo.clone(),
             payments.clone(),
             environment,
-        ),
+        )
+        .with_enforcement(AiUsageEnforcement::Enabled),
         repo,
         payments,
         usage,
@@ -674,9 +675,14 @@ async fn allows_within_allowance_and_denies_past_it() {
 }
 
 #[tokio::test]
-async fn outside_dev_allows_exhausted_allowances_caps_and_failed_payments() {
-    for environment in [Environment::Production, Environment::Local] {
+async fn disabled_allows_exhausted_allowances_caps_and_failed_payments_in_every_environment() {
+    for environment in [
+        Environment::Local,
+        Environment::Develop,
+        Environment::Production,
+    ] {
         let (svc, repo, _, _) = premium_service_in(environment, 1_000_000);
+        let svc = svc.with_enforcement(AiUsageEnforcement::Disabled);
         let payer = user("payer@x.com");
         assert_eq!(
             svc.check_allowance(&payer).await.unwrap(),
@@ -684,8 +690,9 @@ async fn outside_dev_allows_exhausted_allowances_caps_and_failed_payments() {
         );
         assert_eq!(svc.snapshot(&payer).await.unwrap().blocked_reason, None);
 
-        let snapshot = svc.update_overage(&payer, true, 1_000).await.unwrap();
-        assert_eq!(snapshot.blocked_reason, None);
+        // Changing settings directly keeps this admission test independent of settlement.
+        repo.update_overage(&payer, true, 1_000).await.unwrap();
+        assert_eq!(svc.snapshot(&payer).await.unwrap().blocked_reason, None);
         assert_eq!(
             svc.check_allowance(&payer).await.unwrap(),
             AllowanceDecision::Allow
@@ -697,6 +704,80 @@ async fn outside_dev_allows_exhausted_allowances_caps_and_failed_payments() {
             AllowanceDecision::Allow
         );
         assert_eq!(svc.snapshot(&payer).await.unwrap().blocked_reason, None);
+    }
+}
+
+#[tokio::test]
+async fn enabled_enforces_allowances_in_every_environment_without_settlement() {
+    for environment in [
+        Environment::Local,
+        Environment::Develop,
+        Environment::Production,
+    ] {
+        let (svc, repo, payments, usage) = premium_service_in(environment, 4_000);
+        let payer = user("payer@x.com");
+        assert_eq!(
+            svc.check_allowance(&payer).await.unwrap(),
+            AllowanceDecision::Deny(DenyReason::AllowanceExhausted)
+        );
+        assert_eq!(
+            svc.snapshot(&payer).await.unwrap().blocked_reason,
+            Some(DenyReason::AllowanceExhausted)
+        );
+        repo.update_overage(&payer, true, 1_000).await.unwrap();
+        *usage.cents.lock().unwrap() = 5_000;
+        assert_eq!(
+            svc.check_allowance(&payer).await.unwrap(),
+            AllowanceDecision::Deny(DenyReason::OverageLimitReached)
+        );
+        repo.state.lock().unwrap().suspended = true;
+        assert_eq!(
+            svc.check_allowance(&payer).await.unwrap(),
+            AllowanceDecision::Deny(DenyReason::OveragePaymentFailed)
+        );
+        assert!(repo.charges().is_empty());
+        assert!(repo.state.lock().unwrap().consumed.is_empty());
+        assert!(payments.opened().is_empty());
+        assert!(payments.payments().is_empty());
+    }
+}
+
+#[tokio::test]
+async fn default_disabled_gate_and_production_settlement_do_not_read_entitlements() {
+    struct PanicEntitlements;
+    impl EntitlementSource for PanicEntitlements {
+        async fn entitlement(&self, _: &MacroUserIdStr<'_>) -> Result<Entitlement> {
+            panic!("must not read entitlements")
+        }
+        async fn stripe_customer_id(&self, _: &MacroUserIdStr<'_>) -> Result<Option<String>> {
+            panic!("must not resolve a payment customer")
+        }
+        async fn team_payer(&self, _: Uuid) -> Result<Option<MacroUserIdStr<'static>>> {
+            panic!("must not resolve a team payer")
+        }
+    }
+    for environment in [
+        Environment::Local,
+        Environment::Develop,
+        Environment::Production,
+    ] {
+        let svc = BillingServiceImpl::new(
+            PanicEntitlements,
+            FakeUsage::default(),
+            FakeRepo::default(),
+            FakePayments::default(),
+            environment,
+        );
+        assert_eq!(
+            svc.check_allowance(&user("payer@x.com")).await.unwrap(),
+            AllowanceDecision::Allow
+        );
+        if !matches!(environment, Environment::Develop) {
+            svc.with_enforcement(AiUsageEnforcement::Enabled)
+                .settle(&user("payer@x.com"))
+                .await
+                .unwrap();
+        }
     }
 }
 
@@ -1077,7 +1158,8 @@ async fn team_seats_keep_allowances_separate_and_share_credits() {
         repo.clone(),
         FakePayments::default(),
         Environment::Develop,
-    );
+    )
+    .with_enforcement(AiUsageEnforcement::Enabled);
 
     let owner_snapshot = service.snapshot(&owner).await.unwrap();
     assert_eq!(owner_snapshot.used_cents, 0);

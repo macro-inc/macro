@@ -879,7 +879,8 @@ describe('send and schedule ordering', () => {
       state.dispose();
     }
   });
-  beforeEach(() => vi.useFakeTimers());
+  // Keep the scheduling fixtures in the future regardless of the wall clock.
+  beforeEach(() => vi.useFakeTimers({ now: new Date('2026-09-01T12:00:00Z') }));
   afterEach(() => vi.useRealTimers());
 
   it('serializes the last reply edit on disposal and reuses the ID from its first save', async () => {

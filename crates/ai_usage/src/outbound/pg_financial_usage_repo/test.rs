@@ -376,17 +376,20 @@ async fn legacy_analytics_writes_and_repricing_leave_financial_evidence_unchange
         output: 0,
     };
     analytics
-        .insert_usage(&CompletionUsage {
-            feature: AiFeature::Chat,
-            user: SYSTEM_USER_ID.clone(),
-            entity: None,
-            cost: Usage {
-                amount,
-                model: "test-model".into(),
-                price: Price::compute(pricing, amount),
-                created_at: Utc::now(),
+        .insert_usage(
+            &CompletionUsage {
+                feature: AiFeature::Chat,
+                user: SYSTEM_USER_ID.clone(),
+                entity: None,
+                cost: Usage {
+                    amount,
+                    model: "test-model".into(),
+                    price: Price::compute(pricing, amount),
+                    created_at: Utc::now(),
+                },
             },
-        })
+            false,
+        )
         .await
         .unwrap();
     analytics

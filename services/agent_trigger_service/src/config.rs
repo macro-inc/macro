@@ -14,6 +14,12 @@ env_vars! {
 #[derive(macro_config::MacroConfig)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Config {
+    /// Default-off quota admission and prospective usage counting.
+    #[macro_config_default(ai_usage::AiUsageEnforcement::Disabled)]
+    pub enable_ai_usage_enforcement: ai_usage::AiUsageEnforcement,
+    /// Deployment environment; settlement remains disabled in this worker.
+    #[macro_config_default(macro_env::Environment::new_or_prod())]
+    pub environment: macro_env::Environment,
     /// MacroDB connection URL.
     pub database_url: DatabaseUrl,
     /// Kafka bootstrap servers.
@@ -33,7 +39,11 @@ pub struct Config {
 impl Config {
     /// Loads configuration from the process environment.
     pub fn from_env() -> anyhow::Result<Self> {
-        macro_config::ConfigLoader::load::<Self>()
-            .context("failed to load agent trigger service config")
+        let enforcement = ai_usage::config::load_ai_usage_enforcement()
+            .map_err(|error| anyhow::anyhow!("{error}"))?;
+        let mut config = macro_config::ConfigLoader::load::<Self>()
+            .context("failed to load agent trigger service config")?;
+        config.enable_ai_usage_enforcement = enforcement;
+        Ok(config)
     }
 }

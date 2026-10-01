@@ -499,16 +499,19 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let stripe_client = Arc::new(stripe_client);
-    let ai_billing_service = Arc::new(ai_billing::domain::BillingServiceImpl::new(
-        ai_billing::outbound::RolesTeamsEntitlementSource::new(
-            user_roles_and_permissions_service.clone(),
-            teams_repo_impl.clone(),
-        ),
-        ai_billing::outbound::PgUsageReader::new(db.clone()),
-        ai_billing::outbound::PgBillingRepo::new(db.clone()),
-        ai_billing::outbound::StripePaymentGateway::new(stripe_client.clone()),
-        config.environment,
-    ));
+    let ai_billing_service = Arc::new(
+        ai_billing::domain::BillingServiceImpl::new(
+            ai_billing::outbound::RolesTeamsEntitlementSource::new(
+                user_roles_and_permissions_service.clone(),
+                teams_repo_impl.clone(),
+            ),
+            ai_billing::outbound::PgUsageReader::new(db.clone()),
+            ai_billing::outbound::PgBillingRepo::new(db.clone()),
+            ai_billing::outbound::StripePaymentGateway::new(stripe_client.clone()),
+            config.environment,
+        )
+        .with_enforcement(config.enable_ai_usage_enforcement),
+    );
     let teams_service_impl = TeamServiceImpl::new_with_analytics(
         teams_repo_impl.clone(),
         customer_repo_impl,

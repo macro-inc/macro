@@ -1506,6 +1506,7 @@ pub struct ToolServiceContext {
     pub soup_service: Arc<ToolSoupService>,
     pub email_service: Arc<ToolEmailService>,
     pub activity_tool_context: ToolActivityToolContext,
+    #[from_ref(skip)]
     pub document_tool_context: ToolDocumentToolContext,
     pub image_generation_tool_context: ToolImageGenerationToolContext,
     pub properties_tool_context: ToolPropertiesToolContext,
@@ -1533,6 +1534,9 @@ pub struct ToolServiceContext {
     pub schedule_tool_context: NoOpScheduleContext,
     #[from_ref(skip)]
     pub anthropic_tool_context: AnthropicToolContext,
+    /// Shared admission for independently initiated AI work. Hosts must inject
+    /// their configured service; request identity always comes from RequestContext.
+    pub admission: Arc<dyn ai_billing::domain::admission::AiAdmissionService>,
     /// Records token usage / cost for AI calls made with this context.
     pub recorder: std::sync::Arc<dyn ai_usage::UsageRecorder>,
     /// The usage context (feature/user/entity) of the request currently using
@@ -1544,9 +1548,20 @@ pub struct ToolServiceContext {
 impl FromRef<ToolServiceContext> for AnthropicToolContext {
     fn from_ref(context: &ToolServiceContext) -> Self {
         let mut tools = context.anthropic_tool_context.clone();
+        tools.admission = context.admission.clone();
         tools.recorder = context.recorder.clone();
         tools.usage_context = context.usage_context.clone();
         tools
+    }
+}
+
+impl FromRef<ToolServiceContext> for ToolDocumentToolContext {
+    fn from_ref(context: &ToolServiceContext) -> Self {
+        context
+            .document_tool_context
+            .clone()
+            .with_admission(context.admission.clone())
+            .with_recorder(context.recorder.clone())
     }
 }
 

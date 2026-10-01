@@ -1,6 +1,7 @@
 //! The in-memory agent's domain: the turn engine seam, per-session state, and
 //! the ACP agent surface.
 
+pub mod admission;
 pub mod agent;
 pub mod engine;
 pub mod mcp;

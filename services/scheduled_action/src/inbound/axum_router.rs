@@ -8,6 +8,7 @@ use crate::domain::models::{
 use crate::domain::ports::ScheduledActionService;
 use crate::domain::target_validation::TargetValidationError;
 use agent_session::domain::routines::RoutineSessionError;
+use ai_billing::{AiAdmissionError, inbound::admission::AiAdmissionErrorBody};
 use axum::extract::{FromRef, Path, Query, State, rejection::JsonRejection};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
@@ -363,6 +364,8 @@ where
         (status = 401, body = String),
         (status = 404, body = String),
         (status = 409, body = String, description = "Action is already running"),
+        (status = 402, body = AiAdmissionErrorBody, description = "AI allowance exhausted"),
+        (status = 503, body = AiAdmissionErrorBody, description = "AI usage validation unavailable; retry later"),
         (status = 500, body = String),
     )
 )]
@@ -441,6 +444,9 @@ impl IntoResponse for ScheduledActionApiError {
             }
             Self::Service(error) => error,
         };
+        if let Some(admission) = error.downcast_ref::<AiAdmissionError>() {
+            return (*admission).into_response();
+        }
         if let Some(policy) = error.downcast_ref::<ActionPolicyError>() {
             let status = match policy {
                 ActionPolicyError::NotFound => StatusCode::NOT_FOUND,
@@ -462,6 +468,7 @@ impl IntoResponse for ScheduledActionApiError {
         }
         if let Some(session) = error.downcast_ref::<RoutineSessionError>() {
             let (status, message) = match session {
+                RoutineSessionError::Admission(error) => return (*error).into_response(),
                 RoutineSessionError::InvalidCommand | RoutineSessionError::ModelMismatch => {
                     (StatusCode::BAD_REQUEST, session.to_string())
                 }

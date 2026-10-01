@@ -8,6 +8,9 @@ use uuid::Uuid;
 /// Errors surfaced by the import service and repository.
 #[derive(Debug, Error)]
 pub enum ImportError {
+    /// AI work was refused or usage validation is temporarily unavailable.
+    #[error(transparent)]
+    Admission(#[from] ai_billing::AiAdmissionError),
     /// Database failure.
     #[error("database error: {0}")]
     Db(rootcause::Report),
