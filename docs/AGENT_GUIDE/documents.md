@@ -4,6 +4,19 @@ The document header has separate Share, Copy Share Link, and Side Panel buttons.
 They are borderless with a soft rounded background on hover. Share opens the
 sharing dialog; copying a link is a separate action.
 
+## Markdown outline
+
+On desktop, Markdown documents with at least three headings show a tick rail in
+the left margin. Every section whose content overlaps the editor viewport is
+highlighted, including a section whose heading has already scrolled above it.
+Hover a tick (or Tab to its button) to expand it and nearby ticks and show a
+rounded preview with the section heading and up to three lines of body text.
+While a preview is open, only its tick is emphasized; visible-section highlights
+return when the preview closes.
+Click a tick or press Enter to jump immediately to its heading without closing its preview
+or collapsing the expanded ticks. Scrolling, resizing, and
+editor updates refresh the visible-section highlights.
+
 ## Spreadsheets
 
 Spreadsheets are an internal pilot controlled by the `enable-spreadsheets` PostHog
