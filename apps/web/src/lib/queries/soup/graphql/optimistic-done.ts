@@ -1,3 +1,4 @@
+import { scopeChannelNotificationsForEntity } from '@app/features/soup/entity-notifications';
 import type { EntityData } from '@entity/types/entity';
 import type { Notification } from '@entity/types/notification';
 import { skipToken, useQuery } from '@tanstack/solid-query';
@@ -12,6 +13,9 @@ export const GRAPHQL_SOUP_DONE_RETENTION_MS = 60_000;
 export type PendingGraphqlSoupDone = {
   entityIds: ReadonlySet<string>;
   notificationIds: ReadonlySet<string>;
+  /** Unknown IDs can belong to older, previously unloaded notifications. */
+  startedAt: number;
+  scopeChannelThreads: boolean;
 };
 
 export type GraphqlSoupDoneOverlay = {
@@ -31,10 +35,13 @@ const PENDING_DONE_KEY = graphqlSoupKeys.pendingDone.queryKey;
 export function hideGraphqlSoupEntitiesAsDone(args: {
   entityIds: readonly string[];
   notificationIds: readonly string[];
+  scopeChannelThreads?: boolean;
 }): GraphqlSoupDoneOverlay {
   const entry: PendingGraphqlSoupDone = {
     entityIds: new Set(args.entityIds),
     notificationIds: new Set(args.notificationIds),
+    startedAt: Date.now(),
+    scopeChannelThreads: args.scopeChannelThreads ?? false,
   };
   queryClient.setQueryData<PendingGraphqlSoupDone[]>(
     PENDING_DONE_KEY,
@@ -73,19 +80,25 @@ export function usePendingGraphqlSoupDone(): Accessor<
   return () => (pending.isSuccess ? pending.data : []);
 }
 
-function activeNotifications(entity: EntityData): Notification[] {
-  const notifications = (entity as { notifications?: unknown }).notifications;
-  return Array.isArray(notifications)
-    ? (notifications as Notification[]).filter(
-        (notification) => notification.state !== 'done'
-      )
-    : [];
+function activeNotifications(
+  entity: EntityData,
+  scopeChannelThreads: boolean
+): Notification[] {
+  const attached = (entity as { notifications?: unknown }).notifications;
+  if (!Array.isArray(attached)) return [];
+  const notifications = attached as Notification[];
+  const scoped =
+    scopeChannelThreads &&
+    (entity.type === 'channel' || entity.type === 'channel_thread')
+      ? scopeChannelNotificationsForEntity(entity, notifications)
+      : notifications;
+  return scoped.filter((notification) => notification.state !== 'done');
 }
 
 /**
  * Adds the ids a done-excluding list hides to `hiddenIds`. An entity that has
- * an active notification newer than the done action (one that was not marked)
- * stays visible, so fresh activity re-admits it immediately.
+ * an active notification created after the done action (and not marked by it)
+ * stays visible. Merely loading an older notification must not reopen the row.
  */
 export function withPendingDoneIds(
   hiddenIds: ReadonlySet<string>,
@@ -95,10 +108,19 @@ export function withPendingDoneIds(
   if (pending.length === 0) return hiddenIds;
   let hidden: Set<string> | undefined;
   for (const entity of entities) {
-    const covering = pending.find(({ entityIds }) => entityIds.has(entity.id));
+    // A row may have returned through fresh activity since an earlier Done.
+    // Its latest action must win even while the older overlay is retained.
+    const covering = pending.findLast(({ entityIds }) =>
+      entityIds.has(entity.id)
+    );
     if (!covering) continue;
-    const readmitted = activeNotifications(entity).some(
-      ({ id }) => !covering.notificationIds.has(id)
+    const readmitted = activeNotifications(
+      entity,
+      covering.scopeChannelThreads
+    ).some(
+      ({ id, created_at }) =>
+        !covering.notificationIds.has(id) &&
+        Date.parse(created_at) > covering.startedAt
     );
     if (readmitted) continue;
     hidden ??= new Set(hiddenIds);

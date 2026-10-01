@@ -710,6 +710,7 @@ describe('mark-done optimism', () => {
     expect(hideGraphqlSoupEntitiesAsDone).toHaveBeenCalledWith({
       entityIds: ['document-1'],
       notificationIds: ['notification-1'],
+      scopeChannelThreads: undefined,
     });
     const applied = hideGraphqlSoupEntitiesAsDone.mock.results[0]?.value;
 

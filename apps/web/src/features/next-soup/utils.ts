@@ -1400,6 +1400,7 @@ export function applyEntitiesDoneOptimistic(args: {
   emailIds: string[];
   notificationIds: string[];
   reminderIds?: string[];
+  scopeChannelThreads?: boolean;
 }): MarkEntitiesDoneContext {
   const { entityIds, emailIds, notificationIds, reminderIds = [] } = args;
   const emailIdSet = new Set(emailIds);
@@ -1492,7 +1493,11 @@ export function applyEntitiesDoneOptimistic(args: {
     graphqlDone?.release();
     graphqlDone =
       entityIds.length > 0
-        ? hideGraphqlSoupEntitiesAsDone({ entityIds, notificationIds })
+        ? hideGraphqlSoupEntitiesAsDone({
+            entityIds,
+            notificationIds,
+            scopeChannelThreads: args.scopeChannelThreads,
+          })
         : null;
     // Rows that remain visible flip to the done state.
     emailRowTxns = emailIds.map((id) =>
