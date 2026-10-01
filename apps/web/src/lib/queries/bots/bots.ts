@@ -43,13 +43,9 @@ export function useBotsQuery(enabled: () => boolean = () => true) {
   return useQuery(() => ({ ...botsQueryOptions(), enabled: enabled() }));
 }
 
-export function useBotQuery(
-  botId: () => string,
-  enabled: () => boolean = () => true
-) {
+export function useBotQuery(botId: () => string) {
   return useQuery(() => ({
     queryKey: botKeys.detail(botId()).queryKey,
-    enabled: enabled(),
     queryFn: async (): Promise<Bot> =>
       await throwOnErr(() => storageServiceClient.getBot({ bot_id: botId() })),
   }));
