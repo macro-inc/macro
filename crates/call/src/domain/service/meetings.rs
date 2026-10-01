@@ -5,6 +5,7 @@ use crate::domain::meetings::{
     CreateMeetingRequest, GuestId, GuestJoinRequest, Meeting, MeetingToken,
 };
 use rootcause::compat::boxed_error::IntoBoxedError;
+use tracing::Instrument;
 
 impl<
     R: CallRepository + Clone,
@@ -19,6 +20,37 @@ impl<
     B: MacroEventBroker + Clone,
 > CallServiceImpl<R, C, Cn, E, N, S, Sm, V, Vr, B>
 {
+    /// Webhooks can beat the startup API response, especially if a call ends
+    /// immediately. Correlate only standalone rooms whose UUID is their call ID.
+    #[tracing::instrument(err, skip_all)]
+    pub(super) async fn link_meeting_recording_webhook(
+        &self,
+        room_name: Option<&str>,
+        egress_id: Option<&str>,
+    ) -> Result<(), CallError> {
+        let (Some(room_name), Some(egress_id)) = (room_name, egress_id) else {
+            return Ok(());
+        };
+        let Ok(call_id) = Uuid::parse_str(room_name) else {
+            return Ok(());
+        };
+        let record = self
+            .repo
+            .get_call_record_by_call_id(&call_id)
+            .await
+            .map_err(|e| CallError::Internal(e.into()))?;
+        if let Some(record) = record
+            && record.channel_id.is_none()
+            && record.room_name == room_name
+        {
+            self.repo
+                .attach_meeting_recording(&call_id, egress_id)
+                .await
+                .map_err(|e| CallError::Internal(e.into()))?;
+        }
+        Ok(())
+    }
+
     #[tracing::instrument(err, skip_all)]
     pub(super) async fn email_invitation(
         &self,
@@ -74,7 +106,8 @@ impl<
         request: CreateMeetingRequest,
     ) -> Result<Meeting, CallError> {
         let request = request.validate()?;
-        self.repo
+        let meeting = self
+            .repo
             .create_meeting(Meeting {
                 id: Uuid::now_v7(),
                 share_token: MeetingToken::generate(),
@@ -86,7 +119,62 @@ impl<
                 call_id: None,
                 user_id: actor.to_string(),
             })
+            .await?;
+        if let Some(id) = request.preparation_id {
+            self.repo
+                .claim_meeting_preparation(&id, actor.as_ref(), &meeting.id)
+                .await?;
+        }
+        Ok(meeting)
+    }
+
+    #[tracing::instrument(err, skip_all)]
+    pub(super) async fn prepare_invitation_room(
+        &self,
+        actor: MacroUserIdStr<'_>,
+    ) -> Result<MeetingPreparation, CallError> {
+        let preparation = MeetingPreparation {
+            id: Uuid::now_v7(),
+            // Starts before the RTC request, so the server never advertises a
+            // longer lifetime than the provider's five-minute empty timeout.
+            expires_at: chrono::Utc::now() + chrono::Duration::minutes(5),
+        };
+        self.repo
+            .insert_meeting_preparation(actor.as_ref(), &preparation)
+            .await?;
+        if let Err(error) = self
+            .rtc_client
+            .prepare_room(&preparation.id.to_string())
             .await
+        {
+            self.repo
+                .cancel_meeting_preparation(&preparation.id, actor.as_ref())
+                .await?;
+            return Err(CallError::Internal(error));
+        }
+        Ok(preparation)
+    }
+
+    #[tracing::instrument(err, skip_all)]
+    pub(super) async fn cancel_invitation_room(
+        &self,
+        actor: MacroUserIdStr<'_>,
+        id: Uuid,
+    ) -> Result<(), CallError> {
+        if self
+            .repo
+            .cancel_meeting_preparation(&id, actor.as_ref())
+            .await?
+        {
+            self.rtc_client
+                .delete_room(&id.to_string())
+                .await
+                .inspect_err(
+                    |error| tracing::warn!(error=?error, "failed to delete unused meeting room"),
+                )
+                .ok();
+        }
+        Ok(())
     }
 
     #[tracing::instrument(err, skip_all)]
@@ -146,7 +234,71 @@ impl<
     }
 
     #[tracing::instrument(err, skip_all)]
-    async fn prepare_meeting_call(&self, meeting: &Meeting) -> Result<Call, CallError> {
+    pub(super) async fn preview_invitation(
+        &self,
+        token: MeetingToken,
+        actor: Option<MacroUserIdStr<'_>>,
+    ) -> Result<crate::domain::meetings::MeetingParticipants, CallError> {
+        use crate::domain::meetings::{MeetingParticipant, MeetingParticipants};
+
+        let meeting = self.resolve_invitation(&token).await?;
+        if meeting.channel_id.is_some() && actor.is_none() {
+            return Err(CallError::Forbidden(
+                "Sign in to view this call".to_string(),
+            ));
+        }
+        let mut participants = Vec::new();
+        let Some(call_id) = meeting.call_id else {
+            return Ok(MeetingParticipants { participants });
+        };
+        let Some(call) = self
+            .repo
+            .get_call_by_id(&call_id)
+            .await
+            .map_err(|error| CallError::Internal(error.into()))?
+        else {
+            return Ok(MeetingParticipants { participants });
+        };
+        let connected = self
+            .rtc_client
+            .list_meeting_participants(&call.room_name)
+            .await
+            .map_err(CallError::Internal)?
+            .unwrap_or_default();
+        for participant in connected {
+            if let Ok(user) = MacroUserIdStr::parse_from_str(&participant.identity) {
+                let display_name = self
+                    .repo
+                    .get_user_display_name(user.copied())
+                    .await
+                    .map_err(|error| CallError::Internal(error.into()))?
+                    .unwrap_or_else(|| "Macro user".to_string());
+                let avatar_url = self
+                    .repo
+                    .get_user_profile_picture(user)
+                    .await
+                    .map_err(|error| CallError::Internal(error.into()))?;
+                participants.push(MeetingParticipant {
+                    display_name,
+                    avatar_url,
+                });
+            } else if GuestId::parse_rtc_identity(&participant.identity).is_some() {
+                participants.push(MeetingParticipant {
+                    display_name: if participant.name.trim().is_empty() {
+                        "Guest".to_string()
+                    } else {
+                        participant.name
+                    },
+                    avatar_url: None,
+                });
+            }
+        }
+        participants.sort_by(|a, b| a.display_name.cmp(&b.display_name));
+        Ok(MeetingParticipants { participants })
+    }
+
+    #[tracing::instrument(err, skip_all)]
+    pub(super) async fn prepare_meeting_call(&self, meeting: &Meeting) -> Result<Call, CallError> {
         if let Some(call_id) = meeting.call_id
             && let Some(call) = self
                 .repo
@@ -156,17 +308,22 @@ impl<
         {
             return Ok(call);
         }
-        let candidate_id = Uuid::now_v7();
+        let preparation = self.repo.get_meeting_preparation(&meeting.id).await?;
+        let candidate_id = preparation
+            .as_ref()
+            .map_or_else(Uuid::now_v7, |room| room.id);
         let candidate_room = candidate_id.to_string();
-        self.rtc_client
-            .create_room(&candidate_room)
-            .await
-            .map_err(CallError::Internal)?;
+        if preparation.is_none() {
+            self.rtc_client
+                .create_room(&candidate_room)
+                .await
+                .map_err(CallError::Internal)?;
+        }
         let allocated = self
             .repo
             .get_or_create_meeting_call(&meeting.id, &candidate_id)
             .await;
-        if !matches!(&allocated, Ok((_, true))) {
+        if !matches!(&allocated, Ok((_, true))) && preparation.is_none() {
             self.rtc_client
                 .delete_room(&candidate_room)
                 .await
@@ -177,22 +334,6 @@ impl<
         }
         let (call, created) = allocated?;
         if created {
-            self.rtc_client.dispatch_transcription_agent(&call.room_name).await
-                .inspect_err(|error| tracing::error!(error=?error, "failed to dispatch meeting transcription agent")).ok();
-            if let Some(config) = &self.egress_s3_config {
-                match self
-                    .rtc_client
-                    .start_room_composite_egress(&call.room_name, config)
-                    .await
-                {
-                    Ok(egress_id) => self
-                        .repo
-                        .set_egress_id(&call.id, &egress_id)
-                        .await
-                        .map_err(|e| CallError::Internal(e.into()))?,
-                    Err(error) => tracing::error!(error=?error, "failed to record meeting"),
-                }
-            }
             let created_by = MacroUserIdStr::parse_from_str(&call.created_by)
                 .map_err(|error| CallError::Internal(error.into()))?
                 .into_owned();
@@ -203,6 +344,21 @@ impl<
                 created_at: call.created_at,
                 recording_enabled: self.egress_s3_config.is_some(),
             }));
+            // Token issuance needs a room, not a running recorder or agent.
+            // Only the allocation winner schedules these best-effort services.
+            let rtc = self.rtc_client.clone();
+            let repo = self.repo.clone();
+            let config = self.egress_s3_config.clone();
+            let room_name = call.room_name.clone();
+            let call_id = call.id;
+            tokio::spawn(async move {
+                let transcription = async {
+                    rtc.dispatch_transcription_agent(&room_name).await
+                        .inspect_err(|error| tracing::error!(error=?error, "failed to dispatch meeting transcription agent")).ok();
+                };
+                let recording = start_meeting_recording(&repo, rtc.as_ref(), call_id, &room_name, config.as_ref());
+                tokio::join!(transcription, recording);
+            }.instrument(tracing::info_span!("start_meeting_media", call_id = %call_id)));
         }
         Ok(call)
     }
@@ -319,6 +475,11 @@ impl<
             .remove_participant(&other.id, user_id.copied())
             .await
             .map_err(|e| CallError::Internal(e.into()))?;
+        // Archiving closes this room to future joins. Its whole-room teardown
+        // can then run independently without kicking a later rejoin.
+        if self.finish_empty_call(&other).await? {
+            return Ok(());
+        }
         // Best-effort: a stale participation has no RTC session to end.
         self.rtc_client
             .remove_participant(&other.room_name, user_id)
@@ -327,7 +488,6 @@ impl<
                 tracing::warn!(error=?error, "failed to remove participant from previous call room")
             })
             .ok();
-        self.finish_empty_call(&other).await?;
         Ok(())
     }
 
@@ -350,18 +510,24 @@ impl<
         self.publish_archived_call_event(&archived, CallArchiveReason::LastParticipantLeft);
         self.spawn_summarize_call(archived.call_id);
         self.spawn_process_voices_for_call(archived.call_id);
-        if let Some(egress_id) = &call.egress_id {
-            self.rtc_client
-                .stop_egress(egress_id)
-                .await
-                .inspect_err(|error| tracing::error!(error=?error, "failed to stop egress"))
-                .ok();
-        }
-        self.rtc_client
-            .delete_room(&call.room_name)
-            .await
-            .inspect_err(|error| tracing::error!(error=?error, "failed to delete RTC room"))
-            .ok();
+        let rtc = self.rtc_client.clone();
+        let room_name = call.room_name.clone();
+        let egress_id = call.egress_id.clone();
+        tokio::spawn(
+            async move {
+                if let Some(egress_id) = egress_id {
+                    rtc.stop_egress(&egress_id)
+                        .await
+                        .inspect_err(|error| tracing::error!(error=?error, "failed to stop egress"))
+                        .ok();
+                }
+                rtc.delete_room(&room_name)
+                    .await
+                    .inspect_err(|error| tracing::error!(error=?error, "failed to delete RTC room"))
+                    .ok();
+            }
+            .instrument(tracing::info_span!("finish_meeting_media", call_id = %call.id)),
+        );
         self.send_call_event(
             &archived.channel_id,
             "call_ended",
@@ -407,25 +573,75 @@ impl<
             return Err(CallError::Auth);
         }
         if let Some(guest_id) = GuestId::parse_rtc_identity(&verified.identity) {
+            self.repo.reconcile_guest(&call.id, guest_id, false).await?;
+            if self.finish_empty_call(&call).await? {
+                return Ok(LeaveCallResponse { call_ended: true });
+            }
             self.rtc_client
                 .remove_guest(&room, guest_id)
                 .await
                 .map_err(CallError::Internal)?;
-            self.repo.reconcile_guest(&call.id, guest_id, false).await?;
         } else {
             let identity =
                 MacroUserIdStr::parse_from_str(&verified.identity).map_err(|_| CallError::Auth)?;
-            self.rtc_client
-                .remove_participant(&room, identity.copied())
-                .await
-                .map_err(CallError::Internal)?;
             self.repo
-                .remove_participant(&call.id, identity)
+                .remove_participant(&call.id, identity.copied())
                 .await
                 .map_err(|e| CallError::Internal(e.into()))?;
+            if self.finish_empty_call(&call).await? {
+                return Ok(LeaveCallResponse { call_ended: true });
+            }
+            // Keep nonempty-room removal ordered with a later rejoin using
+            // this same identity; a detached remove could kick the new session.
+            self.rtc_client
+                .remove_participant(&room, identity)
+                .await
+                .map_err(CallError::Internal)?;
         }
-        Ok(LeaveCallResponse {
-            call_ended: self.finish_empty_call(&call).await?,
-        })
+        Ok(LeaveCallResponse { call_ended: false })
+    }
+}
+
+/// A late recorder must be attached before stopping so its completion webhook
+/// can find the archived record. Any failed attachment must also stop egress.
+#[tracing::instrument(skip_all, fields(%call_id))]
+pub(super) async fn start_meeting_recording<R: CallRepository, C: CallRtcClient>(
+    repo: &R,
+    rtc: &C,
+    call_id: Uuid,
+    room_name: &str,
+    config: Option<&EgressS3Config>,
+) {
+    let Some(config) = config else {
+        return;
+    };
+    let egress_id = match rtc.start_room_composite_egress(room_name, config).await {
+        Ok(id) => id,
+        Err(error) => {
+            tracing::error!(error=?error, "failed to record meeting");
+            return;
+        }
+    };
+    let active = match repo.attach_meeting_recording(&call_id, &egress_id).await {
+        Ok(true) => match repo.get_call_by_id(&call_id).await {
+            Ok(call) => call.is_some(),
+            Err(error) => {
+                tracing::error!(error=?error, "failed to confirm meeting is still active");
+                false
+            }
+        },
+        Ok(false) => false,
+        Err(error) => {
+            tracing::error!(error=?error, "failed to attach meeting recording");
+            false
+        }
+    };
+    if !active {
+        rtc.stop_egress(&egress_id)
+            .await
+            .inspect_err(
+                |error| tracing::error!(error=?error, "failed to stop late meeting recording"),
+            )
+            .ok();
     }
 }

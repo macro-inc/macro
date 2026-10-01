@@ -3752,6 +3752,10 @@ export type CreateMarkdownDocumentResponse = {
  */
 export type CreateMeetingRequest = {
     /**
+     * Optional unused room reserved by this actor on the setup screen.
+     */
+    preparationId?: string | null;
+    /**
      * Optional scheduled end.
      */
     scheduledEnd?: string | null;
@@ -7029,6 +7033,44 @@ export type MeetingInvitePermissions = {
      * True for the owner of an uncancelled standalone meeting.
      */
     canInvite: boolean;
+};
+
+/**
+ * Minimal waiting-room display data, without account identities or call content.
+ */
+export type MeetingParticipant = {
+    /**
+     * Profile image, when available for a Macro member.
+     */
+    avatarUrl?: string | null;
+    /**
+     * Name displayed in the waiting room.
+     */
+    displayName: string;
+};
+
+/**
+ * People currently connected to a meeting's room.
+ */
+export type MeetingParticipants = {
+    /**
+     * Human attendees only; transcription agents are excluded.
+     */
+    participants: Array<MeetingParticipant>;
+};
+
+/**
+ * An empty room reservation, not a started call or an invitation.
+ */
+export type MeetingPreparation = {
+    /**
+     * After this deadline Start falls back to ordinary room creation.
+     */
+    expiresAt: string;
+    /**
+     * Also the reserved RTC room's UUID and prospective call ID.
+     */
+    id: string;
 };
 
 /**
@@ -11831,6 +11873,28 @@ export type MeetingLeaveResponses = {
 
 export type MeetingLeaveResponse = MeetingLeaveResponses[keyof MeetingLeaveResponses];
 
+export type MeetingGuestParticipantsData = {
+    body?: never;
+    path: {
+        token: string;
+    };
+    query?: never;
+    url: '/call/join/{token}/participants';
+};
+
+export type MeetingGuestParticipantsErrors = {
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingGuestParticipantsError = MeetingGuestParticipantsErrors[keyof MeetingGuestParticipantsErrors];
+
+export type MeetingGuestParticipantsResponses = {
+    200: MeetingParticipants;
+};
+
+export type MeetingGuestParticipantsResponse = MeetingGuestParticipantsResponses[keyof MeetingGuestParticipantsResponses];
+
 export type MeetingListData = {
     body?: never;
     path?: never;
@@ -11985,6 +12049,67 @@ export type MeetingJoinResponses = {
 };
 
 export type MeetingJoinResponse = MeetingJoinResponses[keyof MeetingJoinResponses];
+
+export type MeetingParticipantsData = {
+    body?: never;
+    path: {
+        token: string;
+    };
+    query?: never;
+    url: '/call/meetings/join/{token}/participants';
+};
+
+export type MeetingParticipantsErrors = {
+    404: ErrorResponse;
+};
+
+export type MeetingParticipantsError = MeetingParticipantsErrors[keyof MeetingParticipantsErrors];
+
+export type MeetingParticipantsResponses = {
+    200: MeetingParticipants;
+};
+
+export type MeetingParticipantsResponse = MeetingParticipantsResponses[keyof MeetingParticipantsResponses];
+
+export type MeetingPrepareData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/call/meetings/prepare';
+};
+
+export type MeetingPrepareErrors = {
+    401: ErrorResponse;
+};
+
+export type MeetingPrepareError = MeetingPrepareErrors[keyof MeetingPrepareErrors];
+
+export type MeetingPrepareResponses = {
+    200: MeetingPreparation;
+};
+
+export type MeetingPrepareResponse = MeetingPrepareResponses[keyof MeetingPrepareResponses];
+
+export type MeetingCancelPreparationData = {
+    body?: never;
+    path: {
+        preparation_id: string;
+    };
+    query?: never;
+    url: '/call/meetings/prepare/{preparation_id}';
+};
+
+export type MeetingCancelPreparationErrors = {
+    401: ErrorResponse;
+};
+
+export type MeetingCancelPreparationError = MeetingCancelPreparationErrors[keyof MeetingCancelPreparationErrors];
+
+export type MeetingCancelPreparationResponses = {
+    204: void;
+};
+
+export type MeetingCancelPreparationResponse = MeetingCancelPreparationResponses[keyof MeetingCancelPreparationResponses];
 
 export type MeetingCancelData = {
     body?: never;

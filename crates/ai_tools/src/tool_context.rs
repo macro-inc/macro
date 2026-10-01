@@ -111,11 +111,11 @@ pub type ToolEmailService = EmailServiceImpl<
 /// graceful shutdown by the hosting process.
 pub type ToolEventBroker = MacroEventBrokerService<KafkaEventPublisher, TaskTracker>;
 
-/// Event broker used by bot tools across hosts that either do or do not have
+/// Event broker used by bot and property tools across hosts that either do or do not have
 /// Kafka lifecycle publishing configured.
 #[derive(Clone)]
 pub enum ToolBotEventBroker {
-    /// Publish bot lifecycle events through the shared Kafka broker.
+    /// Publish lifecycle events through the shared Kafka broker.
     Real(ToolEventBroker),
     /// Drop lifecycle events in hosts that do not configure Kafka.
     NoOp(NoopMacroEventBroker),
@@ -462,6 +462,8 @@ pub fn build_crm_tool_context(pool: sqlx::PgPool) -> ToolCrmToolContext {
             entity_access::outbound::PgAccessRepository::new(pool.clone()),
         ),
     );
+    // This CRM-only context does not assign tasks. Task writes use the host's
+    // shared properties context, which carries its lifecycle event broker.
     let properties = build_properties_service(pool.clone(), entity_access_service.clone());
     CrmToolContext {
         service: Arc::new(crm::domain::service::CrmServiceImpl::new(
@@ -645,6 +647,9 @@ impl ConnectionService for NoOpConnectionService {
 pub struct NoOpCallRtcClient;
 
 impl CallRtcClient for NoOpCallRtcClient {
+    async fn prepare_room(&self, room_name: &str) -> anyhow::Result<()> {
+        self.create_room(room_name).await
+    }
     async fn generate_guest_token(
         &self,
         _room_name: &str,
@@ -694,6 +699,13 @@ impl CallRtcClient for NoOpCallRtcClient {
         _participant_identity: MacroUserIdStr<'a>,
     ) -> anyhow::Result<()> {
         Ok(())
+    }
+
+    async fn list_meeting_participants(
+        &self,
+        _room_name: &str,
+    ) -> anyhow::Result<Option<Vec<call::domain::meetings::MeetingRtcParticipant>>> {
+        Ok(None)
     }
 
     async fn list_participant_identities(

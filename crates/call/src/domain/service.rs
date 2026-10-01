@@ -31,6 +31,7 @@ use notification::domain::ports::VoipPushSender;
 use notification::domain::service::NotificationIngress;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 use subtle::ConstantTimeEq;
 
 use uuid::Uuid;
@@ -47,7 +48,7 @@ use crate::domain::models::{
 
 use super::meetings::{
     ActiveMeeting, CreateMeetingRequest, GuestJoinRequest, InviteMeetingUsersRequest, Meeting,
-    MeetingInvitePermissions, MeetingToken, UpdateMeetingRequest,
+    MeetingInvitePermissions, MeetingPreparation, MeetingToken, UpdateMeetingRequest,
 };
 use super::models::{
     ActiveCallsResponse, AddParticipantError, ArchivedCall, Call, CallActiveResponse, CallError,
@@ -75,7 +76,7 @@ pub struct CallServiceImpl<
     B: MacroEventBroker = NoopMacroEventBroker,
 > {
     repo: R,
-    rtc_client: C,
+    rtc_client: Arc<C>,
     connection_service: Cn,
     entity_access_service: E,
     notification_ingress: N,
@@ -112,7 +113,7 @@ impl<
     ) -> Self {
         Self {
             repo,
-            rtc_client,
+            rtc_client: Arc::new(rtc_client),
             connection_service,
             entity_access_service,
             notification_ingress,
@@ -573,6 +574,19 @@ impl<
     B: MacroEventBroker + Clone,
 > CallService for CallServiceImpl<R, C, Cn, E, N, S, Sm, V, Vr, B>
 {
+    async fn prepare_meeting(
+        &self,
+        actor: MacroUserIdStr<'_>,
+    ) -> Result<MeetingPreparation, CallError> {
+        self.prepare_invitation_room(actor).await
+    }
+    async fn cancel_meeting_preparation(
+        &self,
+        actor: MacroUserIdStr<'_>,
+        id: Uuid,
+    ) -> Result<(), CallError> {
+        self.cancel_invitation_room(actor, id).await
+    }
     async fn create_meeting(
         &self,
         actor: MacroUserIdStr<'_>,
@@ -647,6 +661,13 @@ impl<
     }
     async fn get_meeting(&self, token: MeetingToken) -> Result<Meeting, CallError> {
         self.resolve_invitation(&token).await
+    }
+    async fn get_meeting_participants(
+        &self,
+        token: MeetingToken,
+        actor: Option<MacroUserIdStr<'_>>,
+    ) -> Result<super::meetings::MeetingParticipants, CallError> {
+        self.preview_invitation(token, actor).await
     }
     async fn join_meeting(
         &self,
@@ -1133,6 +1154,13 @@ impl<
     #[tracing::instrument(err, skip(self, body, auth_token))]
     async fn process_webhook_event(&self, body: &str, auth_token: &str) -> Result<(), CallError> {
         let event = self.rtc_client.receive_webhook(body, auth_token)?;
+        if matches!(event.event.as_str(), "egress_started" | "egress_ended") {
+            self.link_meeting_recording_webhook(
+                event.room_name.as_deref(),
+                event.egress_id.as_deref(),
+            )
+            .await?;
+        }
 
         tracing::info!(
             event_type = %event.event,

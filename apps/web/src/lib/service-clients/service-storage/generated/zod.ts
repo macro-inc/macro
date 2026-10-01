@@ -1979,6 +1979,35 @@ export const meetingLeaveResponse = zod
   .describe('Response for the leave\/end call operation.');
 
 /**
+ * @summary Read a standalone meeting preview without admitting a guest to the room.
+ */
+export const meetingGuestParticipantsParams = zod.object({
+  token: zod.string(),
+});
+
+export const meetingGuestParticipantsResponse = zod
+  .object({
+    participants: zod
+      .array(
+        zod
+          .object({
+            avatarUrl: zod
+              .string()
+              .nullish()
+              .describe('Profile image, when available for a Macro member.'),
+            displayName: zod
+              .string()
+              .describe('Name displayed in the waiting room.'),
+          })
+          .describe(
+            'Minimal waiting-room display data, without account identities or call content.'
+          )
+      )
+      .describe('Human attendees only; transcription agents are excluded.'),
+  })
+  .describe("People currently connected to a meeting's room.");
+
+/**
  * @summary Handle `GET /call/meetings` through the call domain service.
  */
 export const meetingListResponse = zod
@@ -2028,6 +2057,12 @@ export const meetingListResponse = zod
  */
 export const meetingCreateBody = zod
   .object({
+    preparationId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'Optional unused room reserved by this actor on the setup screen.'
+      ),
     scheduledEnd: zod.iso
       .datetime({})
       .nullish()
@@ -2206,6 +2241,58 @@ export const meetingJoinResponse = zod
     token: zod.string().describe('The RTC token for connecting to the room.'),
   })
   .describe('Response returned when creating or joining a call.');
+
+/**
+ * @summary Read the participant preview for an authenticated invitation holder.
+ */
+export const meetingParticipantsParams = zod.object({
+  token: zod.string(),
+});
+
+export const meetingParticipantsResponse = zod
+  .object({
+    participants: zod
+      .array(
+        zod
+          .object({
+            avatarUrl: zod
+              .string()
+              .nullish()
+              .describe('Profile image, when available for a Macro member.'),
+            displayName: zod
+              .string()
+              .describe('Name displayed in the waiting room.'),
+          })
+          .describe(
+            'Minimal waiting-room display data, without account identities or call content.'
+          )
+      )
+      .describe('Human attendees only; transcription agents are excluded.'),
+  })
+  .describe("People currently connected to a meeting's room.");
+
+/**
+ * @summary Reserve a room while the authenticated caller configures a new call.
+ */
+export const meetingPrepareResponse = zod
+  .object({
+    expiresAt: zod.iso
+      .datetime({})
+      .describe(
+        'After this deadline Start falls back to ordinary room creation.'
+      ),
+    id: zod
+      .uuid()
+      .describe("Also the reserved RTC room's UUID and prospective call ID."),
+  })
+  .describe('An empty room reservation, not a started call or an invitation.');
+
+/**
+ * @summary Cancel an unused room; the domain owns ownership and activation checks.
+ */
+export const meetingCancelPreparationParams = zod.object({
+  preparation_id: zod.uuid(),
+});
 
 /**
  * @summary Handle `DELETE /call/meetings/{meeting_id}` through the call domain service.

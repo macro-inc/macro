@@ -39,8 +39,8 @@ export function botsQueryOptions() {
   });
 }
 
-export function useBotsQuery() {
-  return useQuery(botsQueryOptions);
+export function useBotsQuery(enabled: () => boolean = () => true) {
+  return useQuery(() => ({ ...botsQueryOptions(), enabled: enabled() }));
 }
 
 export function useBotQuery(botId: () => string) {

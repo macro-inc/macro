@@ -115,6 +115,12 @@ vi.mock('@queries/soup/cache', () => ({
     rollback: vi.fn(),
   })),
 }));
+const hideGraphqlSoupEntitiesAsDone = vi.hoisted(() =>
+  vi.fn(() => ({ release: vi.fn() }))
+);
+vi.mock('@queries/soup/graphql/optimistic-done', () => ({
+  hideGraphqlSoupEntitiesAsDone,
+}));
 vi.mock('@service-email/client', () => ({
   emailClient: { flagArchived: operationMocks.flagArchived },
 }));
@@ -143,6 +149,7 @@ import { type ChannelEntityTarget, type EntityData, queryKeys } from '@entity';
 import type { NotificationSource, UnifiedNotification } from '@notifications';
 import { hydrateChannelNotificationSelection } from '@queries/channel/notification-selection';
 import {
+  applyEntitiesDoneOptimistic,
   type CalendarPreviewSelection,
   type ChannelPreviewSelection,
   channelIdForPreviewNavigation,
@@ -690,6 +697,31 @@ describe('mark-done orchestration', () => {
       entities: [{ type: 'document', id: 'document-1' }],
       operation: 'MARK_DONE',
     });
+  });
+});
+
+describe('mark-done optimism', () => {
+  it('hides GraphQL rows until a rollback or undo releases them', () => {
+    const context = applyEntitiesDoneOptimistic({
+      entityIds: ['document-1'],
+      emailIds: [],
+      notificationIds: ['notification-1'],
+    });
+    expect(hideGraphqlSoupEntitiesAsDone).toHaveBeenCalledWith({
+      entityIds: ['document-1'],
+      notificationIds: ['notification-1'],
+    });
+    const applied = hideGraphqlSoupEntitiesAsDone.mock.results[0]?.value;
+
+    context.rollback();
+    expect(applied?.release).toHaveBeenCalledOnce();
+
+    context.reapply();
+    const reapplied = hideGraphqlSoupEntitiesAsDone.mock.results[1]?.value;
+    expect(reapplied).toBeDefined();
+
+    context.applyUndone();
+    expect(reapplied?.release).toHaveBeenCalledOnce();
   });
 });
 

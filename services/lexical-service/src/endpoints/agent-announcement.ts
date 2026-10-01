@@ -35,7 +35,7 @@ const replyTargetRequest = z
   );
 
 const sessionAnnouncementRequest = z.object({
-  replyTarget: replyTargetRequest,
+  replyTarget: replyTargetRequest.optional(),
   chip: z.object({
     agentSessionId: z.string(),
     channelId: z.string().optional(),
@@ -130,15 +130,25 @@ export class AgentAnnouncementEndpoint extends OpenAPIRoute {
           markdown: composeAgentChatReply({ sessionId, body: replyBody }),
         });
       }
-      const { parent, channelId, ...target } = body.replyTarget;
-      // Callers that predate message parents send only `channelId`; the
-      // node itself references any parent the reply lives under.
-      const replyParent: ReplyTargetParent | undefined =
-        parent ?? (channelId ? { type: 'channel', id: channelId } : undefined);
+      const target = body.replyTarget;
+      // Assignments have no user-authored message to quote.
+      const replyParent: ReplyTargetParent | undefined = target
+        ? (target.parent ??
+          (target.channelId
+            ? { type: 'channel', id: target.channelId }
+            : undefined))
+        : undefined;
       const markdown = composeAgentSessionAnnouncement({
-        replyTarget: replyParent
-          ? { ...target, parent: replyParent }
-          : undefined,
+        replyTarget:
+          target && replyParent
+            ? {
+                parent: replyParent,
+                targetMessageId: target.targetMessageId,
+                targetThreadId: target.targetThreadId,
+                displayText: target.displayText,
+                senderId: target.senderId,
+              }
+            : undefined,
         chip: body.chip,
       });
       return c.json({ markdown });

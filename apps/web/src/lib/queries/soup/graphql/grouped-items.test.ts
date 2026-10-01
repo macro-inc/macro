@@ -1,6 +1,6 @@
 import type { OperationResult } from '@urql/core';
 import { createRoot, createSignal } from 'solid-js';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   local: vi.fn(),
@@ -22,10 +22,10 @@ vi.mock('@service-storage/graphql-soup', () => ({
 vi.mock('./active-queries', () => ({
   registerGraphqlSoupRevalidations: () => () => {},
 }));
-vi.mock('./optimistic-deletions', () => ({
-  usePendingGraphqlSoupDeleteIds: () => () => new Set(),
-  withoutPendingGraphqlSoupDeletes: (data: unknown) => data,
-}));
+vi.mock('@queries/client', async () => {
+  const { QueryClient } = await import('@tanstack/solid-query');
+  return { queryClient: new QueryClient() };
+});
 vi.mock('./ast', () => ({
   makeGraphqlGroupedSoupInput: ({ body }: { body: unknown }) => body,
 }));
@@ -34,9 +34,15 @@ vi.mock('../grouped/mail-date-groups', () => ({
 }));
 vi.mock('../transform-utils', () => ({ mapSoupPageToEntityList: vi.fn() }));
 
+import { queryClient } from '@queries/client';
 import { createGraphqlGroupedSoupAstItemsQuery } from './grouped-items';
+import { hideGraphqlSoupEntitiesAsDone } from './optimistic-done';
 
-function fixture() {
+beforeEach(() => {
+  queryClient.clear();
+});
+
+function fixture(emailView: 'inbox' | 'drafts' = 'drafts') {
   const local = { cachedMail: true, entities: [{ id: 'offline-draft' }] };
   const network = { entities: [{ id: 'server-draft' }] };
   const [optimistic, setOptimistic] = createSignal(true);
@@ -58,7 +64,7 @@ function fixture() {
     query: createGraphqlGroupedSoupAstItemsQuery(
       () => ({
         params: {},
-        body: { emailView: 'drafts' },
+        body: { emailView },
         groupBy: { type: 'date', field: 'updated_at' },
       }),
       () => ({ enabled: true })
@@ -113,6 +119,53 @@ describe('grouped Mail cache acknowledgement', () => {
       await first.promise;
       expect(f.query.data()).toBe(f.network);
     } finally {
+      f.dispose();
+    }
+  });
+});
+
+describe('grouped Mail pending done filtering', () => {
+  it.each(['local', 'network'] as const)(
+    'hides done items from the %s inbox projection and restores them on undo',
+    async (source) => {
+      const f = fixture('inbox');
+      const data = f[source];
+      const overlay = hideGraphqlSoupEntitiesAsDone({
+        entityIds: data.entities.map(({ id }) => id),
+        notificationIds: [],
+      });
+      try {
+        if (source === 'network') {
+          f.setOptimistic(false);
+          const persistence = Promise.resolve('1');
+          f.publish(persistence);
+          await persistence;
+        }
+        await vi.waitFor(() => {
+          expect(f.query.data()?.entities).toEqual([]);
+        });
+        overlay.release();
+        await vi.waitFor(() => {
+          expect(f.query.data()).toBe(data);
+        });
+      } finally {
+        overlay.release();
+        f.dispose();
+      }
+    }
+  );
+
+  it('keeps cached drafts visible when the view includes done items', async () => {
+    const f = fixture();
+    const overlay = hideGraphqlSoupEntitiesAsDone({
+      entityIds: ['offline-draft'],
+      notificationIds: [],
+    });
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(f.query.data()).toBe(f.local);
+    } finally {
+      overlay.release();
       f.dispose();
     }
   });

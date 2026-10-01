@@ -252,6 +252,7 @@ where
         let persona = self.reply_persona(&session).await?;
 
         Ok(Some(SessionAnnouncement {
+            reuse_origin_message: origin.reuse_origin_message,
             session_id,
             bot_id: session.bot_id,
             is_coding: persona.is_coding,

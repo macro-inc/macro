@@ -3,6 +3,7 @@ use chrono::Utc;
 use entity_access::domain::models::{AccessLevel, EntityAccessAuth};
 use std::sync::{Arc, Mutex};
 
+mod event_posts;
 mod initiative;
 
 #[derive(Clone)]
@@ -16,6 +17,7 @@ struct Repo {
     edits: Arc<Mutex<Vec<EditMessage>>>,
     reaction_changed: bool,
     file_type: Option<String>,
+    concurrent_create: bool,
 }
 
 impl Repo {
@@ -58,6 +60,9 @@ impl MessageRepository for Repo {
         Ok(true)
     }
     async fn get(&self, parent: &MessageParent, id: Uuid) -> Result<Option<Message>, MessageError> {
+        if self.concurrent_create && self.creates.lock().unwrap().is_empty() {
+            return Ok(None);
+        }
         let mut message = std::iter::once(&self.message)
             .chain(&self.replies)
             .find(|message| message.parent == *parent && message.id == id)
@@ -110,7 +115,12 @@ impl MessageRepository for Repo {
         })
     }
     async fn create(&self, command: CreateMessage) -> Result<Message, MessageError> {
+        if command.input.id == Some(self.message.id) {
+            self.creates.lock().unwrap().push(command);
+            return Err(MessageError::Conflict);
+        }
         let mut message = self.message.clone();
+        message.id = command.input.id.unwrap_or(message.id);
         message.parent = command.parent.clone();
         message.sender_id = command.actor.clone();
         message.content = command.input.content.clone();
@@ -243,6 +253,7 @@ fn fixture() -> Repo {
         edits: Arc::default(),
         reaction_changed: true,
         file_type: Some("md".into()),
+        concurrent_create: false,
     }
 }
 

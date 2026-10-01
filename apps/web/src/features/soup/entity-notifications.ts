@@ -136,7 +136,45 @@ export function getEntityNotifications<T extends EntityData>(
     : notifications;
 }
 
-/** Attach the reactive accessor expected by reusable list-entity components. */
+type NotificationAccessors = {
+  all?: Accessor<UnifiedNotification[]>;
+  scoped?: Accessor<UnifiedNotification[]>;
+};
+
+/** One accessor per entity object, notification source and scope. */
+const accessors = new WeakMap<
+  object,
+  WeakMap<NotificationSource, NotificationAccessors>
+>();
+
+function notificationsAccessor(
+  entity: EntityWithRawNotifications<EntityData>,
+  source: NotificationSource,
+  options: { scopeChannelThreads?: boolean }
+): Accessor<UnifiedNotification[]> {
+  let bySource = accessors.get(entity);
+  if (!bySource) {
+    bySource = new WeakMap();
+    accessors.set(entity, bySource);
+  }
+  let slots = bySource.get(source);
+  if (!slots) {
+    slots = {};
+    bySource.set(source, slots);
+  }
+  const slot = options.scopeChannelThreads ? 'scoped' : 'all';
+  const cached = slots[slot];
+  if (cached) return cached;
+  const accessor = () => getEntityNotifications(entity, source, options);
+  slots[slot] = accessor;
+  return accessor;
+}
+
+/**
+ * Attach the reactive accessor expected by reusable list-entity components.
+ * The accessor is reused for the same entity object, so list stores that
+ * reconcile these wrappers see no change when nothing about it changed.
+ */
 export function withEntityNotifications<T extends EntityData>(
   entity: EntityWithRawNotifications<T>,
   source: NotificationSource,
@@ -144,6 +182,6 @@ export function withEntityNotifications<T extends EntityData>(
 ): WithNotification<T> {
   return {
     ...entity,
-    notifications: () => getEntityNotifications(entity, source, options),
+    notifications: notificationsAccessor(entity, source, options),
   };
 }

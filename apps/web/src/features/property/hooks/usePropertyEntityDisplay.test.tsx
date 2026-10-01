@@ -51,7 +51,11 @@ vi.mock('@core/context/channels', () => ({
 }));
 vi.mock('@core/user', () => ({
   getDisplayName: () => '',
+  getDisplayNameParts: () => ({ fullName: '', firstName: '' }),
   tryMacroId: () => undefined,
+}));
+vi.mock('@queries/bots/profiles', () => ({
+  useBotProfile: () => ({ isPending: true }),
 }));
 vi.mock('@queries/preview', () => ({
   useItemPreview: () => {

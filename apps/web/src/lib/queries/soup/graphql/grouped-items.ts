@@ -35,6 +35,7 @@ import {
   on,
   onCleanup,
 } from 'solid-js';
+import { soupQueryExcludesDone } from '../excludes-done';
 import { groupCachedMailByDate } from '../grouped/mail-date-groups';
 import type { SoupAstBody, SoupAstItemsData, SoupAstParams } from '../items';
 import { mapSoupPageToEntityList } from '../transform-utils';
@@ -48,6 +49,10 @@ import {
   usePendingGraphqlSoupDeleteIds,
   withoutPendingGraphqlSoupDeletes,
 } from './optimistic-deletions';
+import {
+  usePendingGraphqlSoupDone,
+  withPendingDoneIds,
+} from './optimistic-done';
 
 export type GraphqlGroupedSoupAstItemsQueryArgs = {
   params: SoupAstParams;
@@ -107,6 +112,8 @@ export function createGraphqlGroupedSoupAstItemsQuery(
 ): GraphqlSoupAstItemsQuery {
   const instructionsIdQuery = useInstructionsMdIdQuery();
   const pendingDeleteIds = usePendingGraphqlSoupDeleteIds();
+  const pendingDone = usePendingGraphqlSoupDone();
+  const excludesDone = createMemo(() => soupQueryExcludesDone([args().body]));
   const [now, setNow] = createSignal(new Date());
   const dateTimer = setInterval(() => setNow(new Date()), 60_000);
   onCleanup(() => clearInterval(dateTimer));
@@ -148,6 +155,7 @@ export function createGraphqlGroupedSoupAstItemsQuery(
         args().body.emailView !== undefined,
     })
   );
+
   const input = createMemo(() => {
     const { params, body, groupBy } = args();
     if (!groupBy) return;
@@ -249,11 +257,19 @@ export function createGraphqlGroupedSoupAstItemsQuery(
   );
 
   return {
-    data: () =>
-      withoutPendingGraphqlSoupDeletes(
-        cachedMail() ?? query.data,
-        pendingDeleteIds()
-      ),
+    data: () => {
+      const data = cachedMail() ?? query.data;
+      return withoutPendingGraphqlSoupDeletes(
+        data,
+        excludesDone()
+          ? withPendingDoneIds(
+              pendingDeleteIds(),
+              data?.entities ?? [],
+              pendingDone()
+            )
+          : pendingDeleteIds()
+      );
+    },
     error,
     isSupported,
     isEnabled: () => query.isEnabled,

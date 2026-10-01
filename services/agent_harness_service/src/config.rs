@@ -154,6 +154,8 @@ pub struct Config {
     pub inmem_harness_slug: String,
     /// Key for internal service-to-service calls (the connection gateway).
     pub internal_api_key: String,
+    /// Key required by document storage's internal endpoints.
+    pub document_storage_service_auth_key: String,
     /// Port the control routes are served on.
     #[macro_config_default(8101)]
     pub port: u16,

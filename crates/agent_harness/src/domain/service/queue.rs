@@ -298,7 +298,7 @@ where
         match &command {
             HarnessCommand::Open(open)
                 if AgentKind::of(open.bot_id) == AgentKind::SandboxedCoder
-                    && !is_macro_staff(&open.origin.sender) =>
+                    && !is_macro_staff(open.origin.actor()) =>
             {
                 return Err(AgentSessionError::Forbidden.into());
             }
