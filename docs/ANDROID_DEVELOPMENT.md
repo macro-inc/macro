@@ -386,3 +386,124 @@ Publication procedure for the hosting owner:
    route result. If rollback is needed, restore the saved JSON and metadata with
    a conditional write against the published ETag, then invalidate the same URL.
    Reconcile concurrent edits before restoring anything.
+
+## Offline and OTA qualification (Task 05)
+
+Use a dedicated installation. Local APK upgrades need the same package and
+signing key and an increasing versionCode. A local test key may sign a
+release-optimized APK; preserve it outside the checkout for local upgrades and
+never use it for Play uploads. To build an emulator APK, run
+`cargo tauri android build --target x86_64 --apk --ci` from
+`apps/web/tauri/src-tauri` inside the Android Nix shell. ARM64 uses the launcher
+above. Keep OTA enabled for update acceptance; `--no-default-features` qualifies
+only embedded behavior. Shared OTA builds need both `MIN_NATIVE_BUILD_ANDROID`
+and `MIN_NATIVE_BUILD_IOS`; see the
+[native compatibility contract](../apps/web/tauri/src-tauri/README.md).
+
+Android ConnectivityManager reports the validated default network and takes a
+fresh snapshot on resume. Captive/unvalidated networks count as offline. Older
+native binaries lacking the command retain browser connectivity. Neither signal
+proves a particular backend is reachable. The activity unregisters its monitor
+on destruction.
+
+Android backup is disabled. API 31+ cloud-backup/device-transfer rules exclude
+normal and device-protected private storage, databases, preferences, and external
+app files, including credentials, WebView cookies, cache, drafts, and staging.
+An app upgrade still preserves app-private data. Logout clears all query stores,
+including unhydrated entries, fences pending hydration, and clears the native
+normalized cache/queue. Failed wipes quarantine the disk namespace. The new query
+namespace deliberately discards legacy read caches on the first upgrade.
+
+Record device/API/WebView, APK certificate/versionCode, embedded/active bundle
+build, and these results for locally installed release builds:
+
+| Case | Required evidence |
+| --- | --- |
+| Acknowledged edit, queued/optimistic mutation, cached document/list, durable draft/upload workflows | Background/resume and process kill/relaunch preserve state; reconnect drains queued work without duplication |
+| Airplane mode, Wi-Fi/cellular transition, captive network | Correct native status; cached reads; session refresh; websocket subscriptions recover |
+| Missed websocket events | Replay deduplicates retained events; gaps resynchronize |
+| Logout and second-account login, including offline logout | No prior-account records, drafts, staged files, or queued writes appear or replay |
+| Local native upgrade signed with the same key | Data survives and build detection returns installed versionCode |
+| Higher Android minimum in a newer iOS/shared bundle; legacy/unknown metadata | Older Android stays functional and rejects incompatible JS |
+| Kill during download/extraction; truncated archive; cache eviction | Partial assets are never selected; failures retain working embedded/active assets |
+| Revocation, apply on resume, unavailable store handler/listing | Embedded fallback; correct generation acknowledgment; dismissible update dialog |
+| Lower-end physical hardware | Cold/warm launch and hydration times, large lists/documents, peak PSS, background CPU/battery and Doze |
+
+Background then use `adb shell am kill com.macro.app.prod` and verify the PID
+has disappeared for normal process death. Force-stop/relaunch is a separate case.
+Use `adb shell am start -W -n com.macro.app.prod/.MainActivity` for launch timings,
+`adb shell dumpsys meminfo com.macro.app.prod` for PSS, and Perfetto/Android Studio
+for rendering/CPU/battery evidence. A VM emulator cannot qualify physical battery,
+cellular handoffs, OEM memory pressure, or lower-end hardware. Do not reset shared
+device statistics or account data. Keep evidence free of credentials/content.
+
+Task 07 owns live Play listing verification and a real Play-delivered update.
+Task 05 retains offline/account isolation and shared-JS/older-native acceptance,
+using local release installations and local version upgrades. No Play Console is
+required.
+
+Local evidence recorded on 2026-09-30 uses an isolated API 36 x86_64 emulator
+with 2 GB RAM, production frontend, OTA enabled, and a local test signing key.
+Release versionCodes 2005000, 2005001, and 2005002 installed successfully.
+The final 2005001 → 2005002 upgrade preserved a committed native cache record and
+a WebView storage value; native build detection returned 2005002. Airplane mode
+reported offline then online; disabling Wi-Fi retained emulator cellular
+connectivity. Acknowledged native records and optimistic queued mutations
+survived background process death. The recovered queue allowed only one lease
+at a time; changing a synthetic account identity cleared the records and queue.
+The update-required dialog rendered and its explicit OK button dismissed it on
+Android; a mobile component regression covers unavailable-store failure.
+
+Signed-out launch was 837 ms initially and 186 ms after process death, with
+approximately 137 MiB app PSS after relaunch. A synthetic 5,000-document native
+cache write took 2.39 s; five cached reads took 15–21 ms, with approximately
+173 MiB app PSS afterward. These measure native cache/IPC, not document/list
+rendering or signed-in hydration. Immediate WebView writes need a disk flush:
+an immediate replacement-install test lost its sentinel; backgrounding for
+10 seconds before replacement preserved it. Acknowledged native database writes
+survived process death and upgrade independently of that WebView flush.
+
+Automated coverage includes platform-specific OTA minima and legacy rejection,
+interrupted extraction and missing completion markers, eviction/revocation and
+embedded fallback, cache/queue reopen, logout hydration fencing and durable
+query-store wiping, draft/upload persistence, session refresh, websocket
+reconnect/replay, native reachability, and store-link failure recovery.
+Additional installed-release evidence on 2026-10-01 uses two dedicated signed-in
+accounts and local signed upgrades through versionCode 2005005. Both accounts'
+acknowledged document edits and offline edits survived background process death
+and reopening the cached document. A fresh authenticated sync client confirmed
+account A's queued edit reached the server. A server-acknowledged peer edit made
+while the Android client was offline appeared exactly once after reconnect.
+Real offline logout followed by the second account's email-code login exposed
+neither the first account's draft nor its cached test document. A fresh
+authenticated sync client also confirmed account B's queued edit reached the
+server. Online logout of account B removed its session and composer storage.
+
+The Home Ask AI composer's unsent text and a file selected there while offline
+both disappeared after process death. Loss of these unsent Home inputs is an
+accepted behavior for Task 05, not an acceptance blocker. The original selected
+file remains on the device. This exception does not cover acknowledged document
+edits, durable drafts elsewhere, or committed upload workflows. Existing
+persisted Home/Agents composer and attachment projections use account-specific
+keys, and logout clears both legacy and scoped keys.
+
+A loopback-only controlled OTA feed exercised the installed release with real
+production assets. Dropped downloads, truncated archives, bad checksums, legacy
+and unknown schemas, and incompatible Android minima were rejected. Rejected
+updates retained an existing active bundle. Killing the process during Unzipping
+retained the previous complete bundle; retry completed. Resume applied a valid
+bundle with an Android-compatible minimum and a much newer iOS minimum.
+Background process death during download retained embedded assets, and retry
+completed. Revocation recovered to embedded assets. These tests found an embedded-entrypoint
+routing bug that could load the previous OTA index after rollback; the resolver
+now selects the embedded index, with regression coverage and installed-release
+rollback verification. The local-feed APK is a test artifact: its feed override
+must be omitted from a distributed release.
+
+Actual Android OS cache eviction is not qualified: the API 36 emulator's
+`pm clear --cache-only com.macro.app.prod` command hung and did not remove the
+active OTA cache. Missing-assets/eviction recovery remains covered by updater
+unit tests. Expired-session refresh, all pending-upload and queued-write logout
+paths, actual large-document rendering/hydration, and physical memory-pressure,
+battery, and cellular testing remain necessary for full Task 05 acceptance.
+Play verification remains Task 07.

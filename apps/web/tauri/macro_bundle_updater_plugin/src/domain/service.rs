@@ -301,6 +301,12 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery, S: TaskSpawner> Worker<U, Fs, Q,
                     .parent()
                     .unwrap_or(&unzip_status.zip_filename)
                     .to_path_buf();
+                // Keep the completion record outside the extracted archive.
+                // A retry must invalidate it before writing any assets.
+                self.fs_repo
+                    .remove_file(&archive_target.with_extension("complete"))
+                    .await
+                    .context(UpdateError::Unzip)?;
                 let update_dir = archive_target.parent().map(Path::to_path_buf);
                 let (req, rx) = UnzipRequest::new(unzip_status.zip_filename, archive_target);
 
@@ -327,6 +333,13 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery, S: TaskSpawner> Worker<U, Fs, Q,
                 )
                 .await
                 .context(UpdateError::Unzip)?;
+                self.fs_repo
+                    .write(
+                        &bundle_dir.with_extension("complete"),
+                        unzip_status.expected_bundle_build.to_string().as_bytes(),
+                    )
+                    .await
+                    .context(UpdateError::Unzip)?;
                 if let Some(update_dir) = update_dir {
                     let marker = update_dir.join(PENDING_BUNDLE_ROOT_FILE);
                     if let Err(e) =
@@ -400,6 +413,12 @@ pub(crate) fn next_bundle_index(names: &[String]) -> u64 {
         .map_or(0, |m| m + 1)
 }
 
+async fn extraction_is_complete(fs: &impl FsRepo, bundle_dir: &Path, build: u64) -> bool {
+    fs.read_to_string(&bundle_dir.with_extension("complete"))
+        .await
+        .is_ok_and(|value| value == build.to_string())
+}
+
 /// Search existing numeric bundle directories for one whose manifest matches
 /// `bundle_build` and is compatible with this native app.
 async fn find_cached_bundle(
@@ -422,7 +441,10 @@ async fn find_cached_bundle(
             tracing::debug!("find_cached_bundle: no valid manifest in {dir:?}");
             continue;
         };
-        if manifest.bundle_build == bundle_build && manifest.min_native_build <= native_build {
+        if manifest.bundle_build == bundle_build
+            && manifest.min_native_build <= native_build
+            && extraction_is_complete(fs, &dir, bundle_build).await
+        {
             let entrypoint = dir.join(ENTRYPOINT_NAME);
             if fs.read_to_string(&entrypoint).await.is_ok() {
                 tracing::debug!("find_cached_bundle: hit reusing {entrypoint:?}");
@@ -749,7 +771,8 @@ impl<Fs: FsRepo> Service<Fs> {
             else {
                 continue;
             };
-            if manifest.bundle_build < self.embedded_bundle_build
+            if !extraction_is_complete(&self.fs_repo, &bundle_dir, manifest.bundle_build).await
+                || manifest.bundle_build < self.embedded_bundle_build
                 || manifest.min_native_build > native_build
                 || self
                     .fs_repo
@@ -787,7 +810,9 @@ impl<Fs: FsRepo> Service<Fs> {
         };
 
         let entrypoint = bundle_dir.join(ENTRYPOINT_NAME);
-        let usable = manifest.bundle_build >= self.embedded_bundle_build
+        let usable = extraction_is_complete(&self.fs_repo, &bundle_dir, manifest.bundle_build)
+            .await
+            && manifest.bundle_build >= self.embedded_bundle_build
             && manifest.min_native_build <= native_build
             && self.fs_repo.read_to_string(&entrypoint).await.is_ok();
         if !usable {
@@ -880,7 +905,8 @@ impl<Fs: FsRepo> Service<Fs> {
         let Some(manifest) = self.bundle_root.manifest(&self.fs_repo).await else {
             return false;
         };
-        manifest.bundle_build >= self.embedded_bundle_build
+        extraction_is_complete(&self.fs_repo, path, manifest.bundle_build).await
+            && manifest.bundle_build >= self.embedded_bundle_build
             && manifest.min_native_build <= native_build
     }
 }
@@ -963,6 +989,8 @@ impl<Fs: FsRepo> Service<Fs> {
 }
 
 #[cfg(test)]
+mod interruption_test;
+#[cfg(test)]
 mod persistence_test;
 #[cfg(test)]
 mod reload_test;
@@ -1029,7 +1057,7 @@ mod tests {
     }
 
     impl FakeFs {
-        fn write_file(&self, path: impl Into<PathBuf>, contents: impl Into<String>) {
+        pub(super) fn write_file(&self, path: impl Into<PathBuf>, contents: impl Into<String>) {
             let path = path.into();
             let mut state = self.state.lock().unwrap();
             insert_parent_dirs(&mut state.dirs, &path);
@@ -1293,6 +1321,7 @@ mod tests {
         let dir = cache_dir.join(dir_name);
         fs.create_dir(dir.clone());
         fs.write_file(dir.join(ENTRYPOINT_NAME), "<html></html>");
+        fs.write_file(dir.with_extension("complete"), bundle_build.to_string());
         fs.write_file(
             dir.join("bundle-manifest.json"),
             manifest_json(bundle_build, min_native_build),

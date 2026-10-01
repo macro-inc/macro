@@ -71,7 +71,7 @@ export function NewChatPage(props: {
   const [modelOverride, setModelOverride] = createSignal<string>();
   // A new conversation starts on Automatic until the caller picks a repository.
   const [repoUrl, setRepoUrl] = createSignal<string | undefined>();
-  const persistedDraft = createPersistedComposerDraft();
+  const persistedDraft = createPersistedComposerDraft(undefined, userId());
   const draft = () => props.draft ?? persistedDraft.draft();
   const setDraft = (text: string) =>
     props.onDraftChange
@@ -179,7 +179,7 @@ export function NewChatPage(props: {
     // Home supplies its own text draft; attachment persistence here is for Agents.
     persistenceKey: props.onDraftChange
       ? undefined
-      : NEW_CONVERSATION_ATTACHMENTS_KEY,
+      : `${NEW_CONVERSATION_ATTACHMENTS_KEY}:${encodeURIComponent(userId() ?? '')}`,
   });
   const attachFiles = (files: File[]) =>
     void uploadInputAttachments({

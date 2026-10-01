@@ -21,10 +21,13 @@ export const NEW_CONVERSATION_ATTACHMENTS_KEY = createPersistenceKey(
 
 /** Keep a composer draft after the New conversation page remounts. */
 export function createPersistedComposerDraft(
-  name = NEW_CONVERSATION_DRAFT_KEY
+  name = NEW_CONVERSATION_DRAFT_KEY,
+  userId?: string
 ) {
   const raw = createSignal<string | undefined>(undefined);
-  const [persisted, setPersisted] = makePersisted(raw, { name });
+  const [persisted, setPersisted] = makePersisted(raw, {
+    name: userId ? `${name}:${encodeURIComponent(userId)}` : name,
+  });
   return {
     draft: () => persisted() ?? '',
     setDraft: (value: string) => setPersisted(value || undefined),

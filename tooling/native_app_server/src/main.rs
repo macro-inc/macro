@@ -28,6 +28,7 @@ impl GetJsBundleManifest for AlwaysUpdateFetcher {
     async fn get_app_bundle_manifest(&self) -> Result<BundleManifest, Report<UpdateErr>> {
         Ok(BundleManifest {
             schema_version: 2,
+            min_native_builds: None,
             bundle_build: 999_000_000_000,
             min_native_build: 0,
             git_sha: None,

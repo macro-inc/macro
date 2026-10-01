@@ -6,6 +6,11 @@ const { client } = vi.hoisted(() => ({
   client: { current: undefined as QueryClient | undefined },
 }));
 vi.mock('@queries/client', () => ({
+  queryPersistence: {
+    clear: async () => {
+      client.current?.clear();
+    },
+  },
   get queryClient() {
     return client.current;
   },

@@ -11,6 +11,31 @@ import {
 } from './composer-draft';
 
 describe('createPersistedComposerDraft', () => {
+  it('restores each account draft without exposing another account draft', () => {
+    createRoot((dispose) => {
+      const alice = createPersistedComposerDraft(
+        HOME_CONVERSATION_DRAFT_KEY,
+        'alice'
+      );
+      alice.setDraft('Private Alice draft');
+      dispose();
+    });
+    createRoot((dispose) => {
+      const bob = createPersistedComposerDraft(
+        HOME_CONVERSATION_DRAFT_KEY,
+        'bob'
+      );
+      expect(bob.draft()).toBe('');
+      bob.setDraft('Private Bob draft');
+      const alice = createPersistedComposerDraft(
+        HOME_CONVERSATION_DRAFT_KEY,
+        'alice'
+      );
+      expect(alice.draft()).toBe('Private Alice draft');
+      expect(bob.draft()).toBe('Private Bob draft');
+      dispose();
+    });
+  });
   it('keeps Home and Agents drafts independent when either is cleared', () => {
     createRoot((dispose) => {
       const home = createPersistedComposerDraft(HOME_CONVERSATION_DRAFT_KEY);
