@@ -3,7 +3,7 @@
  *
  * A Cursor run that subscribes to something outside the conversation — a CI
  * run, a thread, a timer — gets told about it by a prompt Cursor writes
- * itself, wrapped in `<system_notification …>` (see `SystemNotificationNode`
+ * itself, wrapped in `<system_notification …>` (see `CursorSystemNotificationNode`
  * in lexical-core). The fold records it as a user message like any other, so
  * by author it is indistinguishable from something a person typed. It is
  * not: nobody sent it, so it should not sit in a prompt bubble under

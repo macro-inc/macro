@@ -103,7 +103,7 @@ export function parseConnectApps(text: string): string {
 }
 
 /** A Cursor `<system_notification …>` block reads as its summary line. */
-export function parseSystemNotifications(text: string): string {
+export function parseCursorSystemNotifications(text: string): string {
   return text.replace(
     /<system_notification\b[^>]*>(.*?)<\/system_notification>/gs,
     (_, body: string) => body.trim()
@@ -237,7 +237,7 @@ export function markdownToPlainText(markdown: string): string {
     parseAgentSessionMentions,
     parseTagMentions,
     parseConnectApps,
-    parseSystemNotifications,
+    parseCursorSystemNotifications,
     parseSnapshots,
     parseDocumentCards,
     parseLinks,

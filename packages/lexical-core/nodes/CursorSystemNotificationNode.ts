@@ -16,7 +16,7 @@ import { $applyIdFromSerialized } from '../plugins/nodeIdPlugin';
 
 const VERSION = 1;
 
-export const SYSTEM_NOTIFICATION_NODE_TYPE = 'system-notification';
+export const CURSOR_SYSTEM_NOTIFICATION_NODE_TYPE = 'system-notification';
 
 /**
  * The tag Cursor's cloud agents wrap an event notification in. When a run
@@ -35,10 +35,10 @@ export const SYSTEM_NOTIFICATION_NODE_TYPE = 'system-notification';
  * summary. Nothing in Macro writes one; they only arrive through the Cursor
  * transport, so the node exists to read them.
  */
-export const SYSTEM_NOTIFICATION_TAG = 'system_notification';
+export const CURSOR_SYSTEM_NOTIFICATION_TAG = 'system_notification';
 
 /** What one notification carries. */
-export type SystemNotificationData = {
+export type CursorSystemNotificationData = {
   /** Who raised the event: `github`, `slack`, `linear`, `timer`, … */
   source: string;
   /** Every attribute on the opening tag except `source`, in tag order. */
@@ -48,9 +48,9 @@ export type SystemNotificationData = {
 };
 
 /** Return whether a value is a system-notification payload. */
-export function isSystemNotificationData(
+export function isCursorSystemNotificationData(
   value: unknown
-): value is SystemNotificationData {
+): value is CursorSystemNotificationData {
   if (!value || typeof value !== 'object') return false;
   const data = value as Record<string, unknown>;
   return (
@@ -64,34 +64,39 @@ export function isSystemNotificationData(
   );
 }
 
-export type SerializedSystemNotificationNode = Spread<
-  SystemNotificationData & { type: typeof SYSTEM_NOTIFICATION_NODE_TYPE },
+export type SerializedCursorSystemNotificationNode = Spread<
+  CursorSystemNotificationData & {
+    type: typeof CURSOR_SYSTEM_NOTIFICATION_NODE_TYPE;
+  },
   SerializedLexicalNode
 >;
 
-export type SystemNotificationDecoratorProps = SystemNotificationData & {
-  key: NodeKey;
-  theme: EditorThemeClasses;
-};
+export type CursorSystemNotificationDecoratorProps =
+  CursorSystemNotificationData & {
+    key: NodeKey;
+    theme: EditorThemeClasses;
+  };
 
 /**
  * A block-level card for one event notification a Cursor run received. Reads
  * as an event that happened to the session rather than as something a person
  * typed.
  */
-export class SystemNotificationNode extends DecoratorNode<
-  DecoratorComponent<SystemNotificationDecoratorProps> | undefined
+export class CursorSystemNotificationNode extends DecoratorNode<
+  DecoratorComponent<CursorSystemNotificationDecoratorProps> | undefined
 > {
   __source: string;
   __attributes: Record<string, string>;
   __text: string;
 
-  static getType(): typeof SYSTEM_NOTIFICATION_NODE_TYPE {
-    return SYSTEM_NOTIFICATION_NODE_TYPE;
+  static getType(): typeof CURSOR_SYSTEM_NOTIFICATION_NODE_TYPE {
+    return CURSOR_SYSTEM_NOTIFICATION_NODE_TYPE;
   }
 
-  static clone(node: SystemNotificationNode): SystemNotificationNode {
-    return new SystemNotificationNode(
+  static clone(
+    node: CursorSystemNotificationNode
+  ): CursorSystemNotificationNode {
+    return new CursorSystemNotificationNode(
       node.__source,
       node.__attributes,
       node.__text,
@@ -112,26 +117,26 @@ export class SystemNotificationNode extends DecoratorNode<
   }
 
   static importJSON(
-    serializedNode: SerializedSystemNotificationNode
-  ): SystemNotificationNode {
-    if (!isSystemNotificationData(serializedNode)) {
+    serializedNode: SerializedCursorSystemNotificationNode
+  ): CursorSystemNotificationNode {
+    if (!isCursorSystemNotificationData(serializedNode)) {
       throw new Error('invalid system notification data');
     }
-    const node = $createSystemNotificationNode(serializedNode);
+    const node = $createCursorSystemNotificationNode(serializedNode);
     $applyIdFromSerialized(node, serializedNode);
     return node;
   }
 
-  exportJSON(): SerializedSystemNotificationNode {
+  exportJSON(): SerializedCursorSystemNotificationNode {
     return {
       ...super.exportJSON(),
       ...this.exportComponentProps(),
-      type: SYSTEM_NOTIFICATION_NODE_TYPE,
+      type: CURSOR_SYSTEM_NOTIFICATION_NODE_TYPE,
       version: VERSION,
     };
   }
 
-  exportComponentProps(): SystemNotificationData {
+  exportComponentProps(): CursorSystemNotificationData {
     return {
       source: this.__source,
       attributes: { ...this.__attributes },
@@ -190,8 +195,8 @@ export class SystemNotificationNode extends DecoratorNode<
   }
 
   decorate(_: LexicalEditor, config: EditorConfig) {
-    const decorator = getDecorator<SystemNotificationDecoratorProps>(
-      SystemNotificationNode
+    const decorator = getDecorator<CursorSystemNotificationDecoratorProps>(
+      CursorSystemNotificationNode
     );
     if (!decorator) return;
     return () =>
@@ -204,17 +209,17 @@ export class SystemNotificationNode extends DecoratorNode<
 }
 
 /** Create a system notification card. */
-export function $createSystemNotificationNode(
-  data: SystemNotificationData
-): SystemNotificationNode {
+export function $createCursorSystemNotificationNode(
+  data: CursorSystemNotificationData
+): CursorSystemNotificationNode {
   return $applyNodeReplacement(
-    new SystemNotificationNode(data.source, data.attributes, data.text)
+    new CursorSystemNotificationNode(data.source, data.attributes, data.text)
   );
 }
 
 /** Return whether a Lexical node is a system notification. */
-export function $isSystemNotificationNode(
+export function $isCursorSystemNotificationNode(
   node: LexicalNode | null | undefined
-): node is SystemNotificationNode {
-  return node instanceof SystemNotificationNode;
+): node is CursorSystemNotificationNode {
+  return node instanceof CursorSystemNotificationNode;
 }

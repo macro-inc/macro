@@ -17,6 +17,10 @@ import type {
   ContactMentionNode,
 } from './nodes/ContactMentionNode';
 import type {
+  CursorSystemNotificationDecoratorProps,
+  CursorSystemNotificationNode,
+} from './nodes/CursorSystemNotificationNode';
+import type {
   DateMentionDecoratorProps,
   DateMentionNode,
 } from './nodes/DateMentionNode';
@@ -66,10 +70,6 @@ import type {
   SnapshotDecoratorProps,
   SnapshotNode,
 } from './nodes/SnapshotNode';
-import type {
-  SystemNotificationDecoratorProps,
-  SystemNotificationNode,
-} from './nodes/SystemNotificationNode';
 import type {
   TagMentionDecoratorProps,
   TagMentionNode,
@@ -199,9 +199,9 @@ export interface NodeDecoratorMap {
     klass: typeof MagicChipNode;
     props: MagicChipDecoratorProps;
   };
-  SystemNotificationNode: {
-    klass: typeof SystemNotificationNode;
-    props: SystemNotificationDecoratorProps;
+  CursorSystemNotificationNode: {
+    klass: typeof CursorSystemNotificationNode;
+    props: CursorSystemNotificationDecoratorProps;
   };
 }
 

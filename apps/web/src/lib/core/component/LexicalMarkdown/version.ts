@@ -24,6 +24,6 @@
  * Version 4.2 - Sep 2026. ConnectAppNode: optional `target` (connections | harness) so the chip can connect Cursor.
  * Version 4.3 - Sep 2026. ReplyTargetNode references a message parent (channel or document) instead of a channel id.
  * Version 4.4 - Sep 2026. Expanded agent session mentions are block decorators with node selection.
- * Version 5.0 - Sep 2026. Added SystemNotificationNode (Cursor `<system_notification>` event cards).
+ * Version 5.0 - Sep 2026. Added CursorSystemNotificationNode (Cursor `<system_notification>` event cards).
  */
 export const MARKDOWN_VERSION_COUNTER = 5.0;

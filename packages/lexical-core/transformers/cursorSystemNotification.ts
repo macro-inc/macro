@@ -1,12 +1,12 @@
 import type { MultilineElementTransformer } from '@lexical/markdown';
 import type { LexicalNode } from 'lexical';
 import {
-  $createSystemNotificationNode,
-  $isSystemNotificationNode,
-  SYSTEM_NOTIFICATION_TAG,
-  type SystemNotificationData,
-  SystemNotificationNode,
-} from '../nodes/SystemNotificationNode';
+  $createCursorSystemNotificationNode,
+  $isCursorSystemNotificationNode,
+  CURSOR_SYSTEM_NOTIFICATION_TAG,
+  type CursorSystemNotificationData,
+  CursorSystemNotificationNode,
+} from '../nodes/CursorSystemNotificationNode';
 
 // Attributes are quoted `name="value"` pairs; the quotes are what let a value
 // carry `>` without ending the tag. An autolinked `<m-link>` payload inside a
@@ -51,7 +51,7 @@ function escapeAttribute(value: string): string {
 }
 
 /** The attributes on an opening tag, in the order written. */
-export function parseSystemNotificationAttributes(
+export function parseCursorSystemNotificationAttributes(
   tag: string
 ): Record<string, string> {
   const attributes: Record<string, string> = {};
@@ -62,50 +62,50 @@ export function parseSystemNotificationAttributes(
 }
 
 /** The notification a tag and its body describe, or `undefined` when the tag names no source. */
-export function readSystemNotification(
+export function readCursorSystemNotification(
   openingTag: string,
   body: string
-): SystemNotificationData | undefined {
+): CursorSystemNotificationData | undefined {
   const { source, ...attributes } =
-    parseSystemNotificationAttributes(openingTag);
+    parseCursorSystemNotificationAttributes(openingTag);
   if (!source) return undefined;
   return { source, attributes, text: body.trim() };
 }
 
 /** The tag as Cursor writes it, so a notification survives a save unchanged. */
-export function buildSystemNotificationMarkdown(
-  data: SystemNotificationData
+export function buildCursorSystemNotificationMarkdown(
+  data: CursorSystemNotificationData
 ): string {
   const attributes = Object.entries({ source: data.source, ...data.attributes })
     .map(([name, value]) => `${name}="${escapeAttribute(value)}"`)
     .join(' ');
-  return `<${SYSTEM_NOTIFICATION_TAG} ${attributes}>\n${data.text}\n</${SYSTEM_NOTIFICATION_TAG}>`;
+  return `<${CURSOR_SYSTEM_NOTIFICATION_TAG} ${attributes}>\n${data.text}\n</${CURSOR_SYSTEM_NOTIFICATION_TAG}>`;
 }
 
 /**
  * Internal markdown transformer for the event notifications Cursor's cloud
- * agents receive (see {@link SystemNotificationNode}).
+ * agents receive (see {@link CursorSystemNotificationNode}).
  *
  * A tag with no `source`, or with no closing tag, is left as the text it was:
  * the format is Cursor's, and anything else spelled like it is more likely
  * someone writing about the format than an event.
  */
-export const I_SYSTEM_NOTIFICATION: MultilineElementTransformer = {
-  dependencies: [SystemNotificationNode],
+export const I_CURSOR_SYSTEM_NOTIFICATION: MultilineElementTransformer = {
+  dependencies: [CursorSystemNotificationNode],
   type: 'multiline-element',
   regExpStart: OPEN_TAG,
   regExpEnd: CLOSE_TAG,
   export: (node: LexicalNode) => {
-    if (!$isSystemNotificationNode(node)) return null;
-    return buildSystemNotificationMarkdown(node.exportComponentProps());
+    if (!$isCursorSystemNotificationNode(node)) return null;
+    return buildCursorSystemNotificationMarkdown(node.exportComponentProps());
   },
   replace: (rootNode, children, startMatch, _endMatch, linesInBetween) => {
     if ((children?.length ?? 0) > 0) return false;
-    const data = readSystemNotification(
+    const data = readCursorSystemNotification(
       startMatch[1] ?? '',
       linesInBetween?.join('\n') ?? ''
     );
     if (!data) return false;
-    rootNode.append($createSystemNotificationNode(data));
+    rootNode.append($createCursorSystemNotificationNode(data));
   },
 };

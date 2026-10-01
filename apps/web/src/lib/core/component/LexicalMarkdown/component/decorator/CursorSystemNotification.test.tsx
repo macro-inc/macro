@@ -5,12 +5,12 @@
 import { fireEvent, render } from '@solidjs/testing-library';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  CursorSystemNotification,
   conclusionTone,
   details,
   kindLabel,
-  SystemNotification,
   sourceLabel,
-} from './SystemNotification';
+} from './CursorSystemNotification';
 
 const mocks = vi.hoisted(() => ({ openExternalUrl: vi.fn() }));
 vi.mock('@core/util/url', () => ({ openExternalUrl: mocks.openExternalUrl }));
@@ -35,9 +35,9 @@ beforeEach(() => {
   mocks.openExternalUrl.mockReset();
 });
 
-describe('SystemNotification', () => {
+describe('CursorSystemNotification', () => {
   it('reads a CI result as a GitHub card with its summary and a pass pill', () => {
-    const view = render(() => <SystemNotification {...ci} />);
+    const view = render(() => <CursorSystemNotification {...ci} />);
     const card = view.getByRole('region', { name: 'GitHub notification' });
     expect(card.textContent).toContain('GitHub');
     expect(card.textContent).toContain('CI checks');
@@ -51,7 +51,7 @@ describe('SystemNotification', () => {
   });
 
   it('shows the repository, branch, short commit and check count, and hides the subscription id', () => {
-    const view = render(() => <SystemNotification {...ci} />);
+    const view = render(() => <CursorSystemNotification {...ci} />);
     const card = view.getByRole('region');
     expect(card.textContent).toContain('macro-inc/macro');
     expect(card.textContent).toContain('cursor/settings-menu-search-1f17');
@@ -65,7 +65,7 @@ describe('SystemNotification', () => {
   });
 
   it('opens the commit on GitHub from its chip', () => {
-    const view = render(() => <SystemNotification {...ci} />);
+    const view = render(() => <CursorSystemNotification {...ci} />);
     fireEvent.click(view.getByText('ca515d3'));
     expect(mocks.openExternalUrl).toHaveBeenCalledWith(
       'https://github.com/macro-inc/macro/commit/ca515d369476de0a33eef36b21724175e2f6bed3'
@@ -78,7 +78,7 @@ describe('SystemNotification', () => {
 
   it('lists attributes it has no face for as name: value chips', () => {
     const view = render(() => (
-      <SystemNotification
+      <CursorSystemNotification
         key="k"
         theme={{}}
         source="linear"

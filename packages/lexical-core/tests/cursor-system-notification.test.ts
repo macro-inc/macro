@@ -6,9 +6,9 @@ import { $getRoot, $isParagraphNode, createEditor } from 'lexical';
 import { describe, expect, it } from 'vitest';
 import { SupportedNodeTypes } from '../node-list';
 import {
-  $isSystemNotificationNode,
-  SystemNotificationNode,
-} from '../nodes/SystemNotificationNode';
+  $isCursorSystemNotificationNode,
+  CursorSystemNotificationNode,
+} from '../nodes/CursorSystemNotificationNode';
 import { ALL_TRANSFORMERS, EXTERNAL_TRANSFORMERS } from '../transformers';
 import { markdownToPlainText } from '../utils/parsers';
 
@@ -56,8 +56,8 @@ describe('system notification', () => {
   it('reads the CI notification Cursor writes into a prompt', () => {
     const editor = editorWith(CI_NOTIFICATION);
     const [node] = topLevel(editor);
-    expect(node).toBeInstanceOf(SystemNotificationNode);
-    if (!$isSystemNotificationNode(node)) throw new Error('unreachable');
+    expect(node).toBeInstanceOf(CursorSystemNotificationNode);
+    if (!$isCursorSystemNotificationNode(node)) throw new Error('unreachable');
     expect(node.getSource()).toBe('github');
     expect(node.getText()).toBe('All 27 CI checks completed without failures.');
     expect(node.getAttributes()).toEqual({
@@ -98,7 +98,8 @@ describe('system notification', () => {
       '<system_notification source="timer" subscriptionType="timer">Timer fired.</system_notification>'
     );
     const [single] = topLevel(oneLine);
-    if (!$isSystemNotificationNode(single)) throw new Error('expected a card');
+    if (!$isCursorSystemNotificationNode(single))
+      throw new Error('expected a card');
     expect(single.getSource()).toBe('timer');
     expect(single.getText()).toBe('Timer fired.');
 
@@ -106,7 +107,8 @@ describe('system notification', () => {
       '<system_notification source="slack" channel="#eng">\nFirst line.\n\nSecond paragraph.\n</system_notification>'
     );
     const [card] = topLevel(multi);
-    if (!$isSystemNotificationNode(card)) throw new Error('expected a card');
+    if (!$isCursorSystemNotificationNode(card))
+      throw new Error('expected a card');
     expect(card.getText()).toBe('First line.\n\nSecond paragraph.');
   });
 
@@ -119,7 +121,8 @@ describe('system notification', () => {
       '</system\\_notification>',
     ].join('\n');
     const [node] = topLevel(editorWith(escaped));
-    if (!$isSystemNotificationNode(node)) throw new Error('expected a card');
+    if (!$isCursorSystemNotificationNode(node))
+      throw new Error('expected a card');
     expect(node.getAttributes()).toMatchObject({
       repo: 'github.com/macro-inc/macro',
       subscriptionId: 'sub_7a13',
@@ -131,12 +134,16 @@ describe('system notification', () => {
       '<system_notification kind="x">\nBody.\n</system_notification>'
     );
     expect(topLevel(noSource).every($isParagraphNode)).toBe(true);
-    expect(topLevel(noSource).some($isSystemNotificationNode)).toBe(false);
+    expect(topLevel(noSource).some($isCursorSystemNotificationNode)).toBe(
+      false
+    );
 
     const unclosed = editorWith(
       '<system_notification source="github">\nStill streaming'
     );
-    expect(topLevel(unclosed).some($isSystemNotificationNode)).toBe(false);
+    expect(topLevel(unclosed).some($isCursorSystemNotificationNode)).toBe(
+      false
+    );
     expect(topLevelText(unclosed).join('\n')).toContain(
       '<system_notification source="github">'
     );
@@ -149,12 +156,12 @@ describe('system notification', () => {
     const nodes = topLevel(editor);
     expect(nodes).toHaveLength(1);
     expect(nodes[0]!.getType()).toBe('code');
-    expect(nodes.some($isSystemNotificationNode)).toBe(false);
+    expect(nodes.some($isCursorSystemNotificationNode)).toBe(false);
   });
 
   it('is an internal-format node; external markdown leaves it as text', () => {
     const editor = editorWith(CI_NOTIFICATION, EXTERNAL_TRANSFORMERS);
-    expect(topLevel(editor).some($isSystemNotificationNode)).toBe(false);
+    expect(topLevel(editor).some($isCursorSystemNotificationNode)).toBe(false);
   });
 
   it('reads as its summary in plain text', () => {

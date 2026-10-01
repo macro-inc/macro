@@ -3,7 +3,7 @@
  * happened to the session — a CI run finishing, a thread reply, a timer —
  * rather than something a person typed. Cursor writes these into the prompt
  * stream when a run subscribes to something outside the conversation; see
- * `SystemNotificationNode` for the wire shape.
+ * `CursorSystemNotificationNode` for the wire shape.
  *
  * The attributes Cursor sends are not a fixed schema, so the card knows the
  * handful worth a face (repository, branch, commit, checks, a status word)
@@ -12,7 +12,7 @@
  */
 
 import { openExternalUrl } from '@core/util/url';
-import type { SystemNotificationDecoratorProps } from '@macro-inc/lexical-core';
+import type { CursorSystemNotificationDecoratorProps } from '@macro-inc/lexical-core';
 import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
 import BellIcon from '@phosphor/bell.svg';
 import CheckCircleIcon from '@phosphor/check-circle.svg';
@@ -199,7 +199,9 @@ function DetailChip(props: { detail: Detail }) {
   );
 }
 
-export function SystemNotification(props: SystemNotificationDecoratorProps) {
+export function CursorSystemNotification(
+  props: CursorSystemNotificationDecoratorProps
+) {
   const conclusion = () =>
     props.attributes.conclusion ?? props.attributes.status;
   const tone = () => conclusionTone(conclusion());
