@@ -41,6 +41,8 @@ pub struct FollowupThread {
     pub subject: String,
     /// Current visibility, retained for coherent undo.
     pub inbox_visible: bool,
+    /// Previous reminder ordering, retained when undo restores the inbox.
+    pub returned_at: Option<DateTime<Utc>>,
     /// Trashed/spam threads must never be resurrected by a follow-up.
     pub unavailable: bool,
     /// Persisted messages, excluding bodies and recipient lists.
@@ -102,6 +104,13 @@ pub trait EmailFollowupRepo: Send + Sync + 'static {
         thread_id: Uuid,
         link_id: Uuid,
     ) -> impl Future<Output = Result<Vec<FollowupMessage>, EmailErr>> + Send;
+
+    /// Read ordering metadata without widening the generic thread model.
+    fn followup_returned_at(
+        &self,
+        thread_id: Uuid,
+        link_id: Uuid,
+    ) -> impl Future<Output = Result<Option<DateTime<Utc>>, EmailErr>> + Send;
 
     /// Store a return timestamp separately from immutable mail activity.
     fn set_followup_returned_at(

@@ -25,8 +25,13 @@ impl<
 > ReminderDispatch for EmailReminderDispatch<D, R, E, C>
 {
     async fn sweep(&self) -> Result<SweepSummary, ReminderError> {
-        self.email.reconcile().await?;
-        self.generic.sweep().await
+        // Due delivery checks its own email facts. Recovery of unrelated email
+        // workflows must not delay fan-out or suppress ordinary reminders.
+        let result = self.generic.sweep().await;
+        if let Err(error) = self.email.reconcile().await {
+            tracing::error!(error = ?error, "email follow-up reconciliation failed; will retry next sweep");
+        }
+        result
     }
     async fn deliver(&self, firing: DueFiring) -> Result<DeliveryOutcome, ReminderError> {
         let Some(due) = self

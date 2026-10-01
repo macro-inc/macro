@@ -31,9 +31,9 @@ pub struct PgRemindersRepo {
 impl PgRemindersRepo {
     /// Create a repository backed by the provided pool.
     pub fn new(pool: PgPool) -> Self {
-        // Locks may wait for another process and span email operations. A
-        // separate bounded pool prevents waiters exhausting the data pool
-        // needed by the operation that currently owns a lock.
+        // Lock holders span email operations. Keep their connections separate
+        // from the data pool; unsuccessful lock attempts release their connection
+        // before backoff so waiters do not occupy this pool either.
         let followup_locks = sqlx::postgres::PgPoolOptions::new()
             .max_connections(4)
             .connect_lazy_with(pool.connect_options().as_ref().clone());

@@ -151,6 +151,8 @@ impl<R: EmailFollowupRepo, E: EmailFollowupMailbox, C: Clock> EmailFollowupServi
                         user_id: user,
                         baseline: facts.baseline(now),
                         original_inbox_visible: facts.inbox_visible,
+                        original_returned_at: facts.returned_at,
+                        restore_original: false,
                         restore_inbox_visible: true,
                         cancel_on_restore: false,
                     }
@@ -176,6 +178,7 @@ impl<R: EmailFollowupRepo, E: EmailFollowupMailbox, C: Clock> EmailFollowupServi
                 };
                 current.cancel_on_restore = false;
                 current.restore_inbox_visible = !undo || current.original_inbox_visible;
+                current.restore_original = *undo;
                 current
             }
         };
@@ -193,6 +196,7 @@ impl<R: EmailFollowupRepo, E: EmailFollowupMailbox, C: Clock> EmailFollowupServi
             if record.followup.state == FollowupState::Archiving {
                 record.followup.state = FollowupState::Returning;
                 record.restore_inbox_visible = record.original_inbox_visible;
+                record.restore_original = true;
                 self.repo.save_followup(&record, None, None).await?;
                 if let Err(restore_error) = self.reconcile_locked(&mut record).await {
                     tracing::error!(error = ?restore_error, reminder_id = %record.followup.reminder_id, "email reminder rollback will retry");
@@ -212,6 +216,7 @@ impl<R: EmailFollowupRepo, E: EmailFollowupMailbox, C: Clock> EmailFollowupServi
         record.followup.revision = Uuid::now_v7();
         record.cancel_on_restore = false;
         record.restore_inbox_visible = true;
+        record.restore_original = false;
         record.followup.state = if record.followup.state.active() {
             FollowupState::Returning
         } else {
@@ -252,6 +257,7 @@ impl<R: EmailFollowupRepo, E: EmailFollowupMailbox, C: Clock> EmailFollowupServi
             record.followup.state = FollowupState::Returning;
             record.restore_inbox_visible = true;
             record.cancel_on_restore = true;
+            record.restore_original = false;
             self.repo.save_followup(record, None, None).await?;
         }
         let (visible, next) = match record.followup.state {
@@ -272,7 +278,11 @@ impl<R: EmailFollowupRepo, E: EmailFollowupMailbox, C: Clock> EmailFollowupServi
                 record.followup.thread_id,
                 record.followup.link_id,
                 visible,
-                visible.then(|| self.clock.now()),
+                if record.restore_original {
+                    record.original_returned_at
+                } else {
+                    visible.then(|| self.clock.now())
+                },
             )
             .await
             .map_err(internal)?;
@@ -290,16 +300,28 @@ impl<R: EmailFollowupRepo, E: EmailFollowupMailbox, C: Clock> EmailFollowupServi
             }
             for record in records {
                 after = Some(record.followup.reminder_id);
-                let _guard = self
+                let _guard = match self
                     .repo
                     .lock_followup(&record.user_id, record.followup.thread_id)
-                    .await?;
-                let Some(mut current) = self
+                    .await
+                {
+                    Ok(guard) => guard,
+                    Err(error) => {
+                        tracing::error!(error = ?error, reminder_id = %record.followup.reminder_id, "email follow-up lock will retry");
+                        continue;
+                    }
+                };
+                let mut current = match self
                     .repo
                     .reminder_followup(&record.user_id, record.followup.reminder_id)
-                    .await?
-                else {
-                    continue;
+                    .await
+                {
+                    Ok(Some(current)) => current,
+                    Ok(None) => continue,
+                    Err(error) => {
+                        tracing::error!(error = ?error, reminder_id = %record.followup.reminder_id, "email follow-up read will retry");
+                        continue;
+                    }
                 };
                 if let Err(error) = self.reconcile_locked(&mut current).await {
                     tracing::error!(error = ?error, reminder_id = %current.followup.reminder_id, "email follow-up reconciliation will retry");

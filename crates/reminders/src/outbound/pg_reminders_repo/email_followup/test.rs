@@ -18,8 +18,29 @@ use entity_access::domain::models::{
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use model_entity::EntityType;
 use sqlx::PgPool;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use tokio::sync::Notify;
+
+struct SweepProbe {
+    calls: Arc<AtomicUsize>,
+    fail: bool,
+}
+
+impl ReminderDispatch for SweepProbe {
+    async fn sweep(&self) -> Result<SweepSummary, ReminderError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        if self.fail {
+            Err(ReminderError::NotFound)
+        } else {
+            Ok(SweepSummary { dispatched: 7 })
+        }
+    }
+
+    async fn deliver(&self, _: DueFiring) -> Result<DeliveryOutcome, ReminderError> {
+        Ok(DeliveryOutcome::Gone)
+    }
+}
 
 fn owner_receipt(id: Uuid) -> EntityAccessReceipt<OwnerAccessLevel> {
     EntityAccessReceipt::try_new_authenticated_user(
@@ -90,7 +111,7 @@ impl EmailFollowupMailbox for Mailbox {
         thread: Uuid,
         link: Uuid,
         visible: bool,
-        _: Option<DateTime<Utc>>,
+        returned_at: Option<DateTime<Utc>>,
     ) -> Result<(), EmailErr> {
         assert_eq!(actor, user());
         assert_eq!(thread, THREAD);
@@ -109,6 +130,7 @@ impl EmailFollowupMailbox for Mailbox {
         }
         mail.writes += 1;
         mail.facts.as_mut().unwrap().inbox_visible = visible;
+        mail.facts.as_mut().unwrap().returned_at = if visible { returned_at } else { None };
         Ok(())
     }
 }
@@ -133,6 +155,7 @@ async fn setup(pool: PgPool) -> EmailFollowupService<PgRemindersRepo, Mailbox, F
                 link_id: LINK,
                 subject: "Waiting for a reply".into(),
                 inbox_visible: true,
+                returned_at: None,
                 unavailable: false,
                 messages: vec![],
             }),
@@ -721,4 +744,213 @@ async fn completion_waits_for_delivery_after_inbox_return(pool: PgPool) {
             .state,
         FollowupState::Removed
     );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn corrupt_email_reconciliation_does_not_suppress_generic_sweep(pool: PgPool) {
+    let service = setup(pool).await;
+    let created = service
+        .execute(
+            user(),
+            THREAD,
+            set(
+                service.clock.now() + Duration::hours(1),
+                EmailReminderCondition::Regardless,
+            ),
+        )
+        .await
+        .unwrap();
+    sqlx::query!(
+        "UPDATE reminder_email_followup SET payload = '{}'::jsonb WHERE reminder_id = $1",
+        created.reminder_id,
+    )
+    .execute(&service.repo.pool)
+    .await
+    .unwrap();
+    assert!(
+        service.reconcile().await.is_err(),
+        "fixture must fail decoding"
+    );
+    let calls = Arc::new(AtomicUsize::new(0));
+    let dispatch = EmailReminderDispatch::new(
+        SweepProbe {
+            calls: calls.clone(),
+            fail: false,
+        },
+        service.clone(),
+    );
+    assert_eq!(dispatch.sweep().await.unwrap().dispatched, 7);
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    let dispatch = EmailReminderDispatch::new(
+        SweepProbe {
+            calls: calls.clone(),
+            fail: true,
+        },
+        service,
+    );
+    assert!(matches!(
+        dispatch.sweep().await,
+        Err(ReminderError::NotFound)
+    ));
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn busy_thread_waiters_leave_lock_pool_available(pool: PgPool) {
+    // A different process owns the busy key. Four waiters used to occupy every
+    // connection in this process's lock pool while blocked inside PostgreSQL.
+    let holder = PgRemindersRepo::new(pool.clone());
+    let held = holder.lock_followup(&user(), THREAD).await.unwrap();
+    let repo = PgRemindersRepo::new(pool);
+    let mut waiters = Vec::new();
+    for _ in 0..4 {
+        let repo = repo.clone();
+        waiters.push(tokio::spawn(async move {
+            repo.lock_followup(&user(), THREAD).await
+        }));
+    }
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    assert!(waiters.iter().all(|waiter| !waiter.is_finished()));
+    let unrelated = tokio::time::timeout(
+        std::time::Duration::from_secs(1),
+        repo.lock_followup(&user(), Uuid::now_v7()),
+    )
+    .await
+    .expect("busy-thread waiters must not monopolize the lock pool")
+    .unwrap();
+    unrelated.rollback().await.unwrap();
+    for waiter in waiters {
+        waiter.abort();
+        let _ = waiter.await;
+    }
+    // The same busy key fails within the bounded acquisition deadline.
+    let result = tokio::time::timeout(
+        LOCK_WAIT_TIMEOUT + std::time::Duration::from_secs(1),
+        repo.lock_followup(&user(), THREAD),
+    )
+    .await
+    .expect("lock acquisition must have a bounded deadline");
+    assert!(result.is_err());
+    held.rollback().await.unwrap();
+    let recovered = repo.lock_followup(&user(), THREAD).await.unwrap();
+    recovered.rollback().await.unwrap();
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn guard_survives_configured_idle_transaction_timeout(pool: PgPool) {
+    let mut repo = PgRemindersRepo::new(pool.clone());
+    repo.followup_locks = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(1)
+        .connect_lazy_with(pool.connect_options().as_ref().clone());
+    sqlx::query!("SET idle_in_transaction_session_timeout = '50ms'")
+        .execute(&repo.followup_locks)
+        .await
+        .unwrap();
+    let guard = repo.lock_followup(&user(), THREAD).await.unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+    let key = format!("{}:{THREAD}", user().as_ref());
+    let mut competing = pool.begin().await.unwrap();
+    let locked = sqlx::query_scalar!(
+        r#"SELECT pg_try_advisory_xact_lock(hashtextextended($1, 732849)) AS "locked!""#,
+        key,
+    )
+    .fetch_one(&mut *competing)
+    .await
+    .unwrap();
+    assert!(
+        !locked,
+        "an idle guard must retain the lock across external I/O"
+    );
+    competing.rollback().await.unwrap();
+    guard.rollback().await.unwrap();
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn undo_and_archive_rollback_restore_original_inbox_order(pool: PgPool) {
+    let service = setup(pool).await;
+    for original in [None, Some(service.clock.now() - Duration::days(1))] {
+        service
+            .mailbox
+            .0
+            .lock()
+            .unwrap()
+            .facts
+            .as_mut()
+            .unwrap()
+            .returned_at = original;
+        let created = service
+            .execute(
+                user(),
+                THREAD,
+                set(
+                    service.clock.now() + Duration::hours(1),
+                    EmailReminderCondition::Regardless,
+                ),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            service
+                .mailbox
+                .0
+                .lock()
+                .unwrap()
+                .facts
+                .as_ref()
+                .unwrap()
+                .returned_at,
+            None
+        );
+        service
+            .execute(
+                user(),
+                THREAD,
+                EmailFollowupCommand::Remove {
+                    operation_id: Uuid::now_v7(),
+                    expected_revision: created.revision,
+                    undo: true,
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            service
+                .mailbox
+                .0
+                .lock()
+                .unwrap()
+                .facts
+                .as_ref()
+                .unwrap()
+                .returned_at,
+            original
+        );
+        service.mailbox.0.lock().unwrap().archive_fails = true;
+        assert!(
+            service
+                .execute(
+                    user(),
+                    THREAD,
+                    set(
+                        service.clock.now() + Duration::hours(1),
+                        EmailReminderCondition::Regardless
+                    )
+                )
+                .await
+                .is_err()
+        );
+        assert_eq!(
+            service
+                .mailbox
+                .0
+                .lock()
+                .unwrap()
+                .facts
+                .as_ref()
+                .unwrap()
+                .returned_at,
+            original
+        );
+        service.mailbox.0.lock().unwrap().archive_fails = false;
+    }
 }

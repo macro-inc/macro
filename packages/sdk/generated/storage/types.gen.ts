@@ -5443,6 +5443,89 @@ export type EmailFilters = {
 };
 
 /**
+ * Public status shown on email and in the Reminders editor.
+ */
+export type EmailFollowup = {
+    /**
+     * Condition, defaulting to no reply for new follow-ups.
+     */
+    condition: EmailReminderCondition;
+    /**
+     * Canonical owned/delegated inbox.
+     */
+    linkId: string;
+    /**
+     * Confirmed schedule.
+     */
+    remindAt: string;
+    /**
+     * Its ordinary reminder, used by the existing alert/management surfaces.
+     */
+    reminderId: string;
+    /**
+     * Last accepted operation; edits/removal compare this to prevent stale undo.
+     */
+    revision: string;
+    /**
+     * Durable lifecycle progress.
+     */
+    state: FollowupState;
+    /**
+     * Conversation identity.
+     */
+    threadId: string;
+};
+
+/**
+ * Idempotent email command. Reusing an operation ID with different data fails.
+ */
+export type EmailFollowupCommand = {
+    /**
+     * Reply condition.
+     */
+    condition: EmailReminderCondition;
+    /**
+     * None for creation, the current revision for edits.
+     */
+    expectedRevision?: string | null;
+    /**
+     * Unique request identity retained across network retries.
+     */
+    operationId: string;
+    /**
+     * One future instant; conditional recurrence is deliberately absent.
+     */
+    remindAt: string;
+    type: 'set';
+} | {
+    /**
+     * Reject removal if a newer edit has replaced this operation.
+     */
+    expectedRevision: string;
+    /**
+     * Unique request identity.
+     */
+    operationId: string;
+    type: 'remove';
+    /**
+     * Undo restores original visibility; ordinary Remove returns to inbox.
+     */
+    undo?: boolean;
+};
+
+/**
+ * Lookup response, including an email with no follow-up yet.
+ */
+export type EmailFollowupResponse = {
+    followup?: null | EmailFollowup;
+};
+
+/**
+ * When an email follow-up should return the conversation.
+ */
+export type EmailReminderCondition = 'if_no_reply' | 'regardless';
+
+/**
  * Empty response is required due to custom fetch forcing `response.json()`
  */
 export type EmptyResponse = {
@@ -5853,6 +5936,11 @@ export type FolderItem = {
      */
     sha: string;
 };
+
+/**
+ * Durable progress of an email operation.
+ */
+export type FollowupState = 'archiving' | 'pending' | 'returning' | 'returned' | 'cancelled' | 'removed';
 
 /**
  * A persisted mapping to an entity owned by an external system.
@@ -17093,6 +17181,51 @@ export type CreateReminderResponses = {
 };
 
 export type CreateReminderResponse = CreateReminderResponses[keyof CreateReminderResponses];
+
+export type GetEmailFollowupData = {
+    body?: never;
+    path: {
+        thread_id: string;
+    };
+    query?: never;
+    url: '/reminders/email/{thread_id}';
+};
+
+export type GetEmailFollowupErrors = {
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetEmailFollowupError = GetEmailFollowupErrors[keyof GetEmailFollowupErrors];
+
+export type GetEmailFollowupResponses = {
+    200: EmailFollowupResponse;
+};
+
+export type GetEmailFollowupResponse = GetEmailFollowupResponses[keyof GetEmailFollowupResponses];
+
+export type SetEmailFollowupData = {
+    body: EmailFollowupCommand;
+    path: {
+        thread_id: string;
+    };
+    query?: never;
+    url: '/reminders/email/{thread_id}';
+};
+
+export type SetEmailFollowupErrors = {
+    400: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SetEmailFollowupError = SetEmailFollowupErrors[keyof SetEmailFollowupErrors];
+
+export type SetEmailFollowupResponses = {
+    200: EmailFollowup;
+};
+
+export type SetEmailFollowupResponse = SetEmailFollowupResponses[keyof SetEmailFollowupResponses];
 
 export type DeleteReminderData = {
     body?: never;

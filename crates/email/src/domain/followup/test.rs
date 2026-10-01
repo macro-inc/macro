@@ -8,6 +8,7 @@ fn only_new_inbound_mail_after_the_boundary_counts() {
     let mut thread = FollowupThread {
         link_id: Uuid::from_u128(2),
         subject: "Subject".into(),
+        returned_at: None,
         inbox_visible: true,
         unavailable: false,
         messages: vec![FollowupMessage {

@@ -32,7 +32,7 @@ inbound = [
 notify = ["dep:model_notifications", "dep:notification", "outbound"]
 outbound = ["ports"]
 ports = ["dep:entity_access", "dep:tracing", "dep:email", "dep:serde_json"]
-postgres = ["dep:macro_uuid", "dep:sqlx", "outbound"]
+postgres = ["dep:macro_uuid", "dep:sqlx", "dep:tokio", "outbound"]
 
 [dependencies]
 email = { path = "../email", optional = true, default-features = false, features = ["ports"] }

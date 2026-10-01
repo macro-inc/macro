@@ -5,7 +5,12 @@ use crate::domain::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::{Postgres, Transaction, types::Json};
+use std::time::Duration;
 use uuid::Uuid;
+
+const LOCK_WAIT_TIMEOUT: Duration = Duration::from_secs(5);
+const LOCK_INITIAL_BACKOFF: Duration = Duration::from_millis(10);
+const LOCK_MAX_BACKOFF: Duration = Duration::from_millis(100);
 
 fn db(error: sqlx::Error) -> ReminderError {
     ReminderError::Internal(rootcause::Report::new(error).into_dynamic())
@@ -19,19 +24,39 @@ impl EmailFollowupRepo for PgRemindersRepo {
         user: &MacroUserIdStr<'_>,
         thread: Uuid,
     ) -> Result<Self::Guard, ReminderError> {
-        let mut guard = self.followup_locks.begin().await.map_err(db)?;
         // The transaction exists only to hold the lock. Durable intent writes
         // use their own transactions, so dropping/crashing this guard cannot
         // roll back intent after an email side effect has committed.
         let key = format!("{}:{thread}", user.as_ref());
-        sqlx::query!(
-            "SELECT pg_advisory_xact_lock(hashtextextended($1, 732849))",
-            key
-        )
-        .execute(&mut *guard)
+        tokio::time::timeout(LOCK_WAIT_TIMEOUT, async {
+            let mut backoff = LOCK_INITIAL_BACKOFF;
+            loop {
+                let mut guard = self.followup_locks.begin().await.map_err(db)?;
+                // The guard is deliberately idle during email/notification I/O.
+                // A deployment's idle transaction timeout must not release it.
+                sqlx::query!("SET LOCAL idle_in_transaction_session_timeout = 0")
+                    .execute(&mut *guard)
+                    .await
+                    .map_err(db)?;
+                let locked = sqlx::query_scalar!(
+                    r#"SELECT pg_try_advisory_xact_lock(hashtextextended($1, 732849)) AS "locked!""#,
+                    key
+                )
+                .fetch_one(&mut *guard)
+                .await
+                .map_err(db)?;
+                if locked {
+                    return Ok(guard);
+                }
+                // Finish rollback before sleeping, returning the connection to
+                // the pool so unrelated threads can acquire their own locks.
+                guard.rollback().await.map_err(db)?;
+                tokio::time::sleep(backoff).await;
+                backoff = (backoff * 2).min(LOCK_MAX_BACKOFF);
+            }
+        })
         .await
-        .map_err(db)?;
-        Ok(guard)
+        .map_err(|_| db(sqlx::Error::PoolTimedOut))?
     }
 
     async fn thread_followup(

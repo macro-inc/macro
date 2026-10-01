@@ -97,6 +97,12 @@ pub struct FollowupRecord {
     pub baseline: ReplyBaseline,
     /// Undo restores original visibility, including sent-only conversations.
     pub original_inbox_visible: bool,
+    /// Preserve ordering when undo/rollback restores the original inbox state.
+    #[serde(default)]
+    pub original_returned_at: Option<DateTime<Utc>>,
+    /// Whether this is an undo/rollback rather than an explicit return.
+    #[serde(default)]
+    pub restore_original: bool,
     /// Visibility desired by an explicit remove/undo operation.
     pub restore_inbox_visible: bool,
     /// A reply-triggered restoration finishes without a reminder alert.

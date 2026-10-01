@@ -42,6 +42,22 @@ impl EmailFollowupRepo for EmailPgRepo {
         .map_err(|e| EmailErr::RepoErr(e.into()))
     }
 
+    async fn followup_returned_at(
+        &self,
+        thread_id: Uuid,
+        link_id: Uuid,
+    ) -> Result<Option<DateTime<Utc>>, EmailErr> {
+        sqlx::query_scalar!(
+            "SELECT reminder_returned_at FROM email_threads WHERE id = $1 AND link_id = $2",
+            thread_id,
+            link_id,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map(Option::flatten)
+        .map_err(|e| EmailErr::RepoErr(e.into()))
+    }
+
     async fn set_followup_returned_at(
         &self,
         thread_id: Uuid,

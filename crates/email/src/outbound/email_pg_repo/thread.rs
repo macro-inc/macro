@@ -670,9 +670,8 @@ async fn update_db_thread_metadata(
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(
         r#"
-        UPDATE email_threads
-        SET
-            inbox_visible = $1 OR (reminder_returned_at IS NOT NULL AND EXISTS (
+        WITH effective AS (
+            SELECT id AS thread_id, $1 OR (reminder_returned_at IS NOT NULL AND EXISTS (
                 SELECT 1 FROM email_messages fm
                 JOIN email_message_labels fml ON fml.message_id = fm.id
                 JOIN email_labels fl ON fl.id = fml.label_id
@@ -682,17 +681,22 @@ async fn update_db_thread_metadata(
                       JOIN email_labels bl ON bl.id = blocked.label_id
                       WHERE blocked.message_id = fm.id AND bl.provider_label_id IN ('TRASH', 'SPAM')
                   )
-            )),
+            )) AS inbox_visible
+            FROM email_threads
+            WHERE id = $6 AND link_id = $7
+        )
+        UPDATE email_threads t
+        SET
+            inbox_visible = effective.inbox_visible,
             is_read = $2,
             latest_inbound_message_ts = $3,
             latest_outbound_message_ts = $4,
             latest_non_spam_message_ts = $5,
             updated_at = NOW()
-        WHERE
-            id = $6 AND
-            link_id = $7 AND
-            (inbox_visible, is_read, latest_inbound_message_ts, latest_outbound_message_ts, latest_non_spam_message_ts)
-                IS DISTINCT FROM ($1, $2, $3, $4, $5)
+        FROM effective
+        WHERE t.id = effective.thread_id
+            AND (t.inbox_visible, t.is_read, t.latest_inbound_message_ts, t.latest_outbound_message_ts, t.latest_non_spam_message_ts)
+                IS DISTINCT FROM (effective.inbox_visible, $2, $3, $4, $5)
         "#,
         inbox_visible,
         is_read,

@@ -69,6 +69,10 @@ where
                 .filter(|subject| !subject.trim().is_empty())
                 .unwrap_or_else(|| "Email follow-up".into()),
             inbox_visible: thread.inbox_visible,
+            returned_at: self
+                .email_repo
+                .followup_returned_at(thread_id, link.id)
+                .await?,
             unavailable: labels.iter().any(|label| {
                 matches!(
                     label.provider_label_id.as_str(),
