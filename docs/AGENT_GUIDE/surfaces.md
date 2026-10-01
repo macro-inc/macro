@@ -1988,6 +1988,11 @@ contracts and test coverage.
 
 ### Email reminders
 
+The global Reminders workspace uses one continuous collection with completion
+and schedule shown independently on the existing entity rows. Its persistent
+clock exposes the full schedule on hover/focus and opens the existing editor;
+see [collection verification](reminders.md#one-collection-independent-completion-and-schedule).
+
 Use **H** on one selected email or its open conversation, **Remind me** in the
 menu, or the header bell. These share the email-specific, time-first workflow
 in [Reminders](reminders.md#email-follow-ups-h). A successful new reminder moves

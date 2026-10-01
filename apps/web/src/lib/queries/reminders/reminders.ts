@@ -10,9 +10,8 @@ import { useMutation, useQuery } from '@tanstack/solid-query';
 
 import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
-
-import { reminderKeys } from './keys';
 import { updateReminderCollection } from './collection';
+import { reminderKeys } from './keys';
 
 /** The entity types a reminder can be attached to, as the API names them. */
 export type ReminderEntityType = NonNullable<

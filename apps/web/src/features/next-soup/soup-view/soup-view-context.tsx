@@ -67,8 +67,8 @@ import {
   unreadFilterFn,
 } from '@entity';
 import { useQueryClient } from '@queries/client';
-import { useReminderCollectionQuery } from '@queries/reminders/collection';
 import { invalidateUserNotifications } from '@queries/notification/user-notifications';
+import { useReminderCollectionQuery } from '@queries/reminders/collection';
 import { createGroupedSoupQueries } from '@queries/soup/grouped/create-grouped-soup-queries';
 import type {
   GroupMeta as ApiGroupMeta,

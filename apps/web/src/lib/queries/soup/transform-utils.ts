@@ -1,4 +1,3 @@
-import { reminderEntityFromData } from '../reminders/entity';
 import {
   blockNameToDefaultFile,
   itemToSafeName,
@@ -55,7 +54,8 @@ import type { ChannelType } from '@service-storage/generated/schemas/channelType
 import { formatDocumentName } from '@service-storage/util/filename';
 import type { UseQueryResult } from '@tanstack/solid-query';
 import { differenceInMilliseconds } from 'date-fns';
-import { match, P } from 'ts-pattern';
+import { match } from 'ts-pattern';
+import { reminderEntityFromData } from '../reminders/entity';
 import { mapAgentSessionSearchResult } from './agent-session-search';
 
 type InnerSearchResult =

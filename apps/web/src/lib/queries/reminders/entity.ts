@@ -4,6 +4,7 @@ import type {
   SoupReminderSoupPropertiesField,
 } from '@service-storage/generated/schemas';
 import { match, P } from 'ts-pattern';
+
 type ReferencedEntityType = NonNullable<
   ReminderEntity['referencedEntity']
 >['type'];

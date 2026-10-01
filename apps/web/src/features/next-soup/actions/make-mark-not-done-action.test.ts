@@ -114,6 +114,19 @@ describe('makeMarkNotDoneAction', () => {
     });
   });
 
+  it('never sends generic reopening for an email-follow-up mirror', async () => {
+    const mirror = {
+      type: 'reminder',
+      id: 'mirror',
+      completedAt: '2026-10-01T12:00:00Z',
+      emailFollowup: { threadId: 'email' },
+    } as EntityData;
+    const action = createAction();
+    expect(action.canExecute(mirror)).toBe(false);
+    await action.execute([mirror]);
+    expect(mocks.executeMarkEntitiesUndone).not.toHaveBeenCalled();
+  });
+
   it('unarchives a thread and restores only its notifications', async () => {
     await expect(createAction().execute([doneEmail('inbound')])).resolves.toBe(
       'committed'

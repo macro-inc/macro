@@ -1,5 +1,3 @@
-import type { ReminderCollectionPage } from './generated/schemas/reminderCollectionPage';
-import type { ListReminderCollectionParams } from './generated/schemas/listReminderCollectionParams';
 import {
   PdfCoParseSchema as CoParseSchema,
   type PdfCoParse as ICoParse,
@@ -123,6 +121,7 @@ import type { GroupedSoupSort } from './generated/schemas/groupedSoupSort';
 import type { Item } from './generated/schemas/item';
 import type { ListFavoritesParams } from './generated/schemas/listFavoritesParams';
 import type { ListOccurrencesParams } from './generated/schemas/listOccurrencesParams';
+import type { ListReminderCollectionParams } from './generated/schemas/listReminderCollectionParams';
 import type { ListRemindersParams } from './generated/schemas/listRemindersParams';
 import type { ListTeamOutOfOfficeParams } from './generated/schemas/listTeamOutOfOfficeParams';
 import type { LocationResponseV3 } from './generated/schemas/locationResponseV3';
@@ -137,6 +136,7 @@ import type { PostSoupAstRequest } from './generated/schemas/postSoupAstRequest'
 import type { PostSoupRequest } from './generated/schemas/postSoupRequest';
 import type { Project } from './generated/schemas/project';
 import type { Reminder } from './generated/schemas/reminder';
+import type { ReminderCollectionPage } from './generated/schemas/reminderCollectionPage';
 import type { RemindersList } from './generated/schemas/remindersList';
 import type { RemoveParticipantsRequest } from './generated/schemas/removeParticipantsRequest';
 import type { RenameChannelLabelRequest } from './generated/schemas/renameChannelLabelRequest';

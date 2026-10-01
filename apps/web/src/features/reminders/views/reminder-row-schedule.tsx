@@ -3,13 +3,13 @@ import CheckIcon from '@phosphor/check.svg';
 import CircleIcon from '@phosphor/circle.svg';
 import { ActionDialogShell, Button, Dialog } from '@ui';
 import { createSignal, Show, Suspense } from 'solid-js';
-import { ReminderDetails } from '../ReminderEditorSplit';
 import { ReminderScheduleIndicator } from '../components/reminder-schedule-indicator';
 import {
   reminderScheduleLabel,
   reminderScheduleState,
 } from '../core/row-schedule';
 import { useReminderClock } from '../primitives/reminder-clock';
+import { ReminderDetails } from '../ReminderEditorSplit';
 
 /** The editor is loaded only on demand; rendering a clock performs no query. */
 export function ReminderRowSchedule(props: {
@@ -18,6 +18,14 @@ export function ReminderRowSchedule(props: {
 }) {
   const [open, setOpen] = createSignal(false);
   const [pending, setPending] = createSignal(false);
+  let opener: HTMLElement | undefined;
+  const openEditor = () => {
+    opener =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : undefined;
+    setOpen(true);
+  };
   const now = useReminderClock();
   const state = () => reminderScheduleState(props.entity, now());
   const done = () => props.entity.completedAt != null;
@@ -25,7 +33,7 @@ export function ReminderRowSchedule(props: {
   const toggle = async () => {
     if (pending()) return;
     if (reschedule()) {
-      setOpen(true);
+      openEditor();
       return;
     }
     setPending(true);
@@ -71,12 +79,18 @@ export function ReminderRowSchedule(props: {
       <Show when={state() !== 'completed'}>
         <ReminderScheduleIndicator
           label={reminderScheduleLabel(props.entity, now())}
-          onEdit={() => setOpen(true)}
+          onEdit={openEditor}
         />
       </Show>
       <Dialog
         open={open()}
         onOpenChange={setOpen}
+        onCloseAutoFocus={(event) => {
+          if (opener?.isConnected) {
+            event.preventDefault();
+            opener.focus();
+          }
+        }}
         position="center"
         class="w-[calc(100vw-2rem)] max-w-110"
       >

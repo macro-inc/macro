@@ -6,6 +6,32 @@ controls; reminder creation is a real hosted-data mutation, so use request
 interception when checking failures and cancel any draft used only for visual
 inspection.
 
+## One collection, independent completion and schedule
+
+The Reminders workspace is one continuous list, without Active/Scheduled/Done
+tabs. Due reminders come first, then upcoming schedules, then completed history;
+ordering applies before pagination. An old saved tab opens the unified view.
+Completion is acknowledgment of an occurrence: a done recurring reminder can
+still have a future schedule. Its completed check and clock appear together.
+Marking done keeps the row in the unfiltered collection. The explicit Completion
+filter can limit the collection to Done or Not done.
+
+A persistent clock beside the row metadata exposes the full date, time, timezone,
+repeat rule, and email condition on hover or keyboard focus. Click or tap it to
+edit using the existing reminder form. It remains available when row-hover
+actions or notification metadata are visible and on narrow/touch layouts. Paused
+and due tooltips describe those states without claiming a future firing or
+successful delivery. Completed one-shot reminders have no scheduled clock.
+
+An email-follow-up mirror's completed control opens its owning email composer
+to schedule again; it must not call generic mark-not-done. Its completion toast
+does not offer generic Undo, because the server rejects that operation.
+
+For verification, include a done recurring reminder, due and completed one-shots,
+a paused schedule, and a long recurrence. Verify hover/focus tooltips, editor
+dismissal focus, retained rows after completion, and narrow notification rows.
+Collection reads are paginated and refreshed in bulk, with no per-row polling.
+
 ## Create or edit a reminder
 
 **New reminder** opens **Remind me about…**, an entity picker with recent items.

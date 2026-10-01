@@ -32,7 +32,7 @@ const VALID_MARK_DONE_LIST_VIEWS: `${ListView}-${string}`[] = [
   'home-signal',
   'home-noise',
   // Marking a pending reminder done cancels it before it fires — same as the
-  // standalone Reminders view's Scheduled tab below.
+  // standalone Reminders collection below.
   'home-reminders',
   'mail-important',
   'mail-all',
@@ -49,9 +49,8 @@ export const canExecuteMarkDoneOnView = (view: ListView, tabId: string) => {
   return VALID_MARK_DONE_LIST_VIEWS.includes(`${view}-${tabId}`);
 };
 
-/** Already-done emails are skipped by mark-done (they appear alongside
- *  not-done rows in views that show done content, e.g. mail "All"). done
- *  state is email-specific; other entity types are never filtered. */
+/** Already-done emails and reminders coexist with actionable rows in unified
+ * collections, so mark-done skips them rather than acknowledging twice. */
 const isMarkDoneTarget = (e: EntityData) =>
   !(e.type === 'email' && e.done === true) &&
   !(e.type === 'reminder' && e.completedAt != null);
