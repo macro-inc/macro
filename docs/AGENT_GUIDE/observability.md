@@ -65,8 +65,34 @@ trace context — timestamps + service are the only join for those.
   inter-service client spans), so a trace tells you the route and latency but not why.
 - Log lines from events outside spans (startup, pollers) have no trace_id; in-span events do
   (structured metadata), so prefer erroring *handlers* as log entry points.
-- Frontend spans stop at the fetch: no spans for user interactions or the websocket-delivered
-  results, so async flows (AI edits applying, message fan-out) have no trace at all.
+- Most frontend spans stop at the fetch: websocket-delivered results such as AI edits
+  applying and message fan-out remain untraced. Call joining now has a user-action
+  trace; see below.
+
+## Call joining
+
+Click **Start call** on `/app/meet/new` or **Join call** on a shared meeting's
+setup screen. Search Tempo for `{ name="meeting.join" }`. One browser trace
+covers an accepted button press through connection or failure:
+
+| Span | What it measures |
+| --- | --- |
+| `meeting.join.previous_session` | Waiting for previous session cleanup. |
+| `meeting.join.create` | Preparing the meeting link for a new call; absent for shared-link joins. |
+| `meeting.join.credentials` | Requesting join credentials, including backend room allocation. |
+| `meeting.join.connect` | Connecting the browser call session after receiving credentials. |
+
+The root records `meeting.join.kind` (`create` or `join`), guest status,
+microphone/camera preferences, `call.id` once credentials arrive, and
+`meeting.join.outcome` (`connected`, `failed`, `cancelled`, or `already_in_call`).
+It does not measure setup-page loading or completion of background media setup.
+Never add share tokens or RTC credentials to trace attributes or errors.
+
+The HTTP requests can have separate trace IDs across asynchronous mutation
+boundaries. Capture each request's `traceparent` as described above and inspect
+the backend trace as well. For the join request, compare `create_room`,
+`prepare_meeting_call`, and `join_invitation`; `start_meeting_media` runs in the
+background and must not be added to the time spent waiting for credentials.
 
 ## Agent sessions
 

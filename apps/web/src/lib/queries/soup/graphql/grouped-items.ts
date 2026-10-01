@@ -29,6 +29,7 @@ import {
   on,
   onCleanup,
 } from 'solid-js';
+import { soupQueryExcludesDone } from '../excludes-done';
 import type { SoupAstBody, SoupAstItemsData, SoupAstParams } from '../items';
 import { mapSoupPageToEntityList } from '../transform-utils';
 import { registerGraphqlSoupRevalidations } from './active-queries';
@@ -38,6 +39,10 @@ import {
   usePendingGraphqlSoupDeleteIds,
   withoutPendingGraphqlSoupDeletes,
 } from './optimistic-deletions';
+import {
+  usePendingGraphqlSoupDone,
+  withPendingDoneIds,
+} from './optimistic-done';
 
 export type GraphqlGroupedSoupAstItemsQueryArgs = {
   params: SoupAstParams;
@@ -97,6 +102,8 @@ export function createGraphqlGroupedSoupAstItemsQuery(
 ): GraphqlSoupAstItemsQuery {
   const instructionsIdQuery = useInstructionsMdIdQuery();
   const pendingDeleteIds = usePendingGraphqlSoupDeleteIds();
+  const pendingDone = usePendingGraphqlSoupDone();
+  const excludesDone = createMemo(() => soupQueryExcludesDone([args().body]));
   const input = createMemo(() => {
     const { params, body, groupBy } = args();
     if (!groupBy) return;
@@ -164,7 +171,16 @@ export function createGraphqlGroupedSoupAstItemsQuery(
 
   return {
     data: () =>
-      withoutPendingGraphqlSoupDeletes(query.data, pendingDeleteIds()),
+      withoutPendingGraphqlSoupDeletes(
+        query.data,
+        excludesDone()
+          ? withPendingDoneIds(
+              pendingDeleteIds(),
+              query.data?.entities ?? [],
+              pendingDone()
+            )
+          : pendingDeleteIds()
+      ),
     error,
     isSupported,
     isEnabled: () => query.isEnabled,

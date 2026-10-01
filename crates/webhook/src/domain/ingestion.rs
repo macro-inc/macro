@@ -439,6 +439,9 @@ pub(crate) fn normalized_agent_trigger_event(
     use agent_trigger::domain::broker_events::AgentTriggerEventName;
 
     let (bot_id, audience) = match &event.event {
+        AgentTriggerTopicEvent::New(
+            agent_trigger::domain::broker_events::NewAgentSessionEvent::AssignedToTask(assigned),
+        ) => Some((assigned.bot_id, TriggerAudience::parent(&assigned.parent))),
         AgentTriggerTopicEvent::New(new) => match (new.mention(), new.requested()) {
             (Some(mention), _) => Some((
                 mention.bot_id,

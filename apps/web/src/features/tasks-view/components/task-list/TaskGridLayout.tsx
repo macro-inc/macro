@@ -1,9 +1,8 @@
-import { UserIcon } from '@core/component/UserIcon';
-import { getDisplayNameParts, tryMacroId } from '@core/user';
 import {
   Entity,
   isProjectContainedEntity,
   MultiSelectCheckbox,
+  OwnerLabel,
   ProjectBreadCrumb,
   type TaskEntityWithProperties,
   UnreadIndicator,
@@ -22,7 +21,6 @@ import {
 } from '@property/context/PropertiesContext';
 import { EntityRowTags } from '@property/tags';
 import type { Property, PropertyApiValues } from '@property/types';
-import { useUserId } from '@queries/auth';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
@@ -65,16 +63,7 @@ type TaskGridLayoutProps = Omit<LayoutProps, 'entity'> & {
 };
 
 export function TaskGridLayout(props: TaskGridLayoutProps) {
-  const currentId = useUserId();
   const entity = () => props.entity;
-  const isShared = () => props.entity.ownerId !== currentId();
-
-  // Get owner's first name for the Created By column
-  const ownerDisplayName = () =>
-    isShared()
-      ? getDisplayNameParts(tryMacroId(props.entity.ownerId)).firstName ||
-        'Unknown'
-      : 'Me';
 
   const propertyMap = createMemo(() => {
     const map = new Map<string, Property>();
@@ -176,13 +165,10 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
               </span>
             )}
           </Show>
-          {/* Show shared badges on narrow/medium containers, hide on wide (>1220px) */}
-          <Show when={isShared()}>
-            {/* Narrow: "shared this with you" tooltip */}
+          <Show when={props.isShared}>
             <span class="@min-[841px]/u-list:hidden">
               <SharedBadgeSmall ownerId={props.entity.ownerId} />
             </span>
-            {/* Medium (841px-1220px): "Created by" tooltip */}
             <span class="hidden @min-[841px]/u-list:inline @min-[1221px]/u-list:hidden">
               <CreatedByBadgeSmall ownerId={props.entity.ownerId} />
             </span>
@@ -220,13 +206,11 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
           </Entity.Slot>
         </Show>
 
-        {/* Created By column - only shown on wide containers (>1220px) */}
         <Entity.Slot
           placement="createdBy"
-          class="hidden @min-[1221px]/u-list:flex items-center gap-1.5 min-w-0 overflow-hidden text-xs ph-no-capture"
+          class="hidden @min-[1221px]/u-list:flex items-center min-w-0 overflow-hidden text-xs text-ink-muted ph-no-capture"
         >
-          <UserIcon id={props.entity.ownerId} size="sm" showTooltip={true} />
-          <span class="truncate text-ink-muted">{ownerDisplayName()}</span>
+          <OwnerLabel ownerId={props.entity.ownerId} viewerLabel="Me" />
         </Entity.Slot>
 
         <Entity.Slot

@@ -24,6 +24,8 @@ use uuid::Uuid;
 
 mod active_meetings;
 mod meeting_invites;
+mod meeting_participants;
+mod meeting_startup;
 
 use crate::domain::meetings::GuestId;
 use crate::domain::models::{
@@ -92,6 +94,9 @@ impl MockRtcClient {
 }
 
 impl CallRtcClient for MockRtcClient {
+    async fn prepare_room(&self, room_name: &str) -> anyhow::Result<()> {
+        self.create_room(room_name).await
+    }
     async fn generate_guest_token(
         &self,
         room: &str,
@@ -169,6 +174,13 @@ impl CallRtcClient for MockRtcClient {
             participant_identity.as_ref().to_string(),
         ));
         Ok(())
+    }
+
+    async fn list_meeting_participants(
+        &self,
+        _room_name: &str,
+    ) -> anyhow::Result<Option<Vec<crate::domain::meetings::MeetingRtcParticipant>>> {
+        Ok(None)
     }
 
     async fn list_participant_identities(
@@ -3905,9 +3917,7 @@ async fn last_guest_leaving_archives_call_and_stops_recording() {
                 room: Some(ARCHIVED_EVENT_ROOM_NAME.to_string()),
             })
         });
-    rtc.expect_remove_guest()
-        .times(1)
-        .returning(|_, _| Box::pin(async { Ok(()) }));
+    rtc.expect_remove_guest().never();
     rtc.expect_stop_egress().times(1).returning(|id| {
         assert_eq!(id, "recording");
         Box::pin(async { Ok(()) })

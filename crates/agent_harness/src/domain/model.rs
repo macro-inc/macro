@@ -14,23 +14,8 @@ use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use messages::domain::events::MessageEventAttachment;
-/// Where a mention happened.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct MentionOrigin {
-    /// Channel or document the mentioning message was posted in.
-    pub parent: messages::domain::models::MessageParent,
-    /// Thread the announcement replies into: the mention's thread root.
-    pub thread_id: Uuid,
-    /// The mentioning message itself.
-    pub message_id: Uuid,
-    /// Who asked. Owns the session and is credited for its messages.
-    pub sender: MacroUserIdStr<'static>,
-    /// The message text, verbatim; becomes the session's first prompt.
-    pub content: String,
-    /// Files attached to the message, as the prompt will refer to them.
-    #[serde(default)]
-    pub attachments: Vec<PromptAttachment>,
-}
+mod session_origin;
+pub use session_origin::{MentionOrigin, SessionOrigin, TaskAssignmentOrigin};
 
 /// How a channel message's attached files are named to an agent.
 ///
@@ -91,7 +76,7 @@ impl StaticFileLinks {
     }
 }
 
-/// Open a new session for a mention.
+/// Open a new session for a mention or task assignment.
 ///
 /// Only for managed sessions - the ones whose sandbox this deployment
 /// provisions. External sessions are opened through
@@ -100,12 +85,12 @@ impl StaticFileLinks {
 /// a plain create rather than a harness command.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct OpenSession {
-    /// The bot that was mentioned.
+    /// The bot selected by the triggering event.
     pub bot_id: BotId,
     /// Runtime configuration resolved for this bot when the trigger arrived.
     pub runtime: AgentRuntimeConfig,
-    /// The mention itself.
-    pub origin: MentionOrigin,
+    /// The mention or assignment that requested the session.
+    pub origin: SessionOrigin,
 }
 
 /// How a bot's sessions get a runtime — the closed set of first-party
@@ -349,6 +334,9 @@ pub(crate) use agent_egress::domain::model::is_macro_staff;
 /// answer back into.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct AnnounceOrigin {
+    /// Update the existing agent response instead of posting a reply.
+    #[serde(default)]
+    pub reuse_origin_message: bool,
     /// Channel or document the prompt was posted in.
     pub parent: messages::domain::models::MessageParent,
     /// Thread the announcement replies into.
@@ -615,6 +603,8 @@ pub struct AnnouncePrompt {
 /// Facts required to announce one prompt into its originating context.
 #[derive(Debug, Clone)]
 pub struct SessionAnnouncement {
+    /// Update the existing agent response instead of posting a reply.
+    pub reuse_origin_message: bool,
     /// Agent session represented by the announcement.
     pub session_id: AgentSessionId,
     /// The bot the session runs for; the announcement posts as it.

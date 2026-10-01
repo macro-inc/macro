@@ -435,6 +435,11 @@ Deferred navigation waits until the destination is applied; an unavailable split
 must leave unread state unchanged. Join-only channels remain
 blocked after hydration, including on mobile.
 
+Right-clicking a favorite opens the same menu as its channel's row in the
+sections below — `Mark Read`, `Unfavorite`, `Mute notifications`, `Copy Link`,
+and the label actions when channel labels are enabled — and focuses the
+favorite row rather than the channel's own row.
+
 ### Threads tab
 
 The `enable-channel-threads-preview` feature flag adds a third `Threads` tab.

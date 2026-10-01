@@ -10,6 +10,7 @@ import type { EntityReference } from '@service-properties/generated/schemas/enti
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { createSignal, Show, Suspense } from 'solid-js';
 import { useProperty } from '../../core/context';
+import { useAgentAssignees } from '../../queries/agent-assignees';
 import type { EntityProperty, PropertyApiValues } from '../../types';
 import { isEntityProperty } from '../../utils';
 import { PropertyEntitySelector } from '../selectors/PropertyEntitySelector';
@@ -45,6 +46,9 @@ function EntityEditorBody(props: EntityEditorProps) {
   // team roster instead of the default quick-access people pool.
   const isCompanyOwner =
     property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.COMPANY_OWNER;
+  const agents = useAgentAssignees(
+    () => property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.ASSIGNEES
+  );
   const teamQuery = useCurrentTeamQuery();
   const teamMembers = (): IUser[] =>
     (teamQuery.data?.members ?? []).map((member) => ({
@@ -100,6 +104,7 @@ function EntityEditorBody(props: EntityEditorProps) {
             specificEntityType: property.specificEntityType,
             selfFilter: props.selfFilter,
             users: isCompanyOwner ? teamMembers : undefined,
+            additionalUsers: agents,
           }}
           selectedOptions={() => entityReferencesToIdSet(selectedRefs())}
           setSelectedOptions={(newOptions, entityInfo) => {

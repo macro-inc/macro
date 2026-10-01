@@ -835,7 +835,7 @@ async fn run() -> anyhow::Result<()> {
     let prompt_mentions =
         LexicalPromptMentions::new(lexical.clone(), PgSessionAccess::new(pool.clone()));
     let prompt_context = MessagePromptContextAdapter::new(
-        message_service,
+        message_service.clone(),
         Arc::clone(&entity_access),
         Arc::new(lexical.clone()),
     );
@@ -1197,9 +1197,13 @@ async fn run() -> anyhow::Result<()> {
         pool.clone(),
         config.kafka_brokers.as_ref().to_owned(),
         config.internal_api_key.clone(),
+        config.document_storage_service_auth_key.clone(),
         config.agent_trigger_event_source,
-        recorder,
-        admission,
+        trigger::TriggerServices {
+            recorder,
+            admission,
+            messages: message_service,
+        },
     ));
 
     let egress_port = config.egress_port;

@@ -1421,6 +1421,55 @@
         }
       }
     },
+    "/call/join/{token}/participants": {
+      "get": {
+        "tags": ["call::inbound::axum_router::meetings"],
+        "summary": "Read a standalone meeting preview without admitting a guest to the room.",
+        "operationId": "meeting_guest_participants",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeetingParticipants"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/call/meetings": {
       "get": {
         "tags": ["call::inbound::axum_router::meetings"],
@@ -1804,6 +1853,107 @@
             }
           },
           "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/call/meetings/join/{token}/participants": {
+      "get": {
+        "tags": ["call::inbound::axum_router::meetings"],
+        "summary": "Read the participant preview for an authenticated invitation holder.",
+        "operationId": "meeting_participants",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeetingParticipants"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/call/meetings/prepare": {
+      "post": {
+        "tags": ["call::inbound::axum_router::meetings"],
+        "summary": "Reserve a room while the authenticated caller configures a new call.",
+        "operationId": "meeting_prepare",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeetingPreparation"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/call/meetings/prepare/{preparation_id}": {
+      "delete": {
+        "tags": ["call::inbound::axum_router::meetings"],
+        "summary": "Cancel an unused room; the domain owns ownership and activation checks.",
+        "operationId": "meeting_cancel_preparation",
+        "parameters": [
+          {
+            "name": "preparation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
             "description": "",
             "content": {
               "application/json": {
@@ -20952,6 +21102,11 @@
         "type": "object",
         "description": "Inputs for creating a meeting without starting its RTC room.",
         "properties": {
+          "preparationId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Optional unused room reserved by this actor on the setup screen."
+          },
           "scheduledEnd": {
             "type": ["string", "null"],
             "format": "date-time",
@@ -26338,6 +26493,52 @@
           "canInvite": {
             "type": "boolean",
             "description": "True for the owner of an uncancelled standalone meeting."
+          }
+        }
+      },
+      "MeetingParticipant": {
+        "type": "object",
+        "description": "Minimal waiting-room display data, without account identities or call content.",
+        "required": ["displayName"],
+        "properties": {
+          "avatarUrl": {
+            "type": ["string", "null"],
+            "description": "Profile image, when available for a Macro member."
+          },
+          "displayName": {
+            "type": "string",
+            "description": "Name displayed in the waiting room."
+          }
+        }
+      },
+      "MeetingParticipants": {
+        "type": "object",
+        "description": "People currently connected to a meeting's room.",
+        "required": ["participants"],
+        "properties": {
+          "participants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MeetingParticipant"
+            },
+            "description": "Human attendees only; transcription agents are excluded."
+          }
+        }
+      },
+      "MeetingPreparation": {
+        "type": "object",
+        "description": "An empty room reservation, not a started call or an invitation.",
+        "required": ["id", "expiresAt"],
+        "properties": {
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "After this deadline Start falls back to ordinary room creation."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Also the reserved RTC room's UUID and prospective call ID."
           }
         }
       },

@@ -424,6 +424,7 @@ where
         self.inner
             .announcer
             .announce(SessionAnnouncement {
+                reuse_origin_message: false,
                 session_id,
                 bot_id: session.bot_id,
                 is_coding: persona.is_coding,

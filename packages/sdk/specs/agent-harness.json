@@ -2709,6 +2709,10 @@
               }
             ]
           },
+          "reuseOriginMessage": {
+            "type": "boolean",
+            "description": "Update the existing bot response reserved by a task assignment."
+          },
           "threadId": {
             "type": ["string", "null"],
             "format": "uuid",

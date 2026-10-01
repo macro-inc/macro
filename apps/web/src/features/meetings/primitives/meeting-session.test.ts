@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
+import { Telemetry } from '@macro-inc/observability';
 import { createRoot } from 'solid-js';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type {
   MeetingCredentials,
   MeetingSessionCapabilities,
@@ -19,6 +20,8 @@ const token: MeetingCredentials = {
   shareToken: 'meeting-secret',
 };
 const preferences = { microphoneEnabled: false, cameraEnabled: false };
+
+afterEach(() => vi.restoreAllMocks());
 
 function setup(overrides: Partial<MeetingSessionCapabilities> = {}) {
   let activeCallId: string | null = null;
@@ -53,6 +56,72 @@ function setup(overrides: Partial<MeetingSessionCapabilities> = {}) {
 }
 
 describe('meeting session ownership', () => {
+  it('starts releasing credentials before waiting for the media disconnect', async () => {
+    let finish!: () => void;
+    const { session, capabilities, dispose } = setup({
+      disconnect: () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    });
+    await session.join(undefined, preferences);
+    const leaving = session.leave();
+    expect(capabilities.release).toHaveBeenCalledExactlyOnceWith(
+      token.shareToken,
+      token.token
+    );
+    finish();
+    await leaving;
+    dispose();
+  });
+
+  it('traces connection phases and ends with the connected outcome', async () => {
+    const trace = Telemetry.span('test');
+    vi.spyOn(Telemetry, 'span').mockReturnValue(trace);
+    const phases = vi.spyOn(trace, 'span');
+    const attributes = vi.spyOn(trace, 'setAttr');
+    const end = vi.spyOn(trace, 'end');
+    const { session, dispose } = setup({ prepare: async () => {} });
+
+    await session.join(undefined, preferences);
+
+    expect(phases.mock.calls.map(([name]) => name)).toEqual([
+      'meeting.join.previous_session',
+      'meeting.join.create',
+      'meeting.join.credentials',
+      'meeting.join.connect',
+    ]);
+    expect(attributes).toHaveBeenCalledWith('call.id', token.callId);
+    expect(attributes).toHaveBeenCalledWith(
+      'meeting.join.outcome',
+      'connected'
+    );
+    expect(end).toHaveBeenCalledOnce();
+    dispose();
+  });
+
+  it('ends failed join traces without exporting provider credentials', async () => {
+    const trace = Telemetry.span('test');
+    vi.spyOn(Telemetry, 'span').mockReturnValue(trace);
+    const error = vi.spyOn(trace, 'error');
+    const attributes = vi.spyOn(trace, 'setAttr');
+    const end = vi.spyOn(trace, 'end');
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { session, dispose } = setup({
+      join: async () => {
+        throw new Error(`Provider failed with ${token.token}`);
+      },
+    });
+
+    await session.join(undefined, preferences);
+
+    expect(error).toHaveBeenCalledExactlyOnceWith('Meeting join failed');
+    expect(attributes).toHaveBeenCalledWith('meeting.join.outcome', 'failed');
+    expect(JSON.stringify(attributes.mock.calls)).not.toContain(token.token);
+    expect(end).toHaveBeenCalledOnce();
+    dispose();
+  });
+
   it('prepares only when joining and retains the prepared invitation for release', async () => {
     let shareToken = '';
     let finishPrepare!: () => void;

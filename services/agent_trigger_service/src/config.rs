@@ -26,6 +26,8 @@ pub struct Config {
     pub kafka_brokers: KafkaBrokers,
     /// Key for internal service-to-service calls (the lexical service).
     pub internal_api_key: String,
+    /// Key required by document storage's internal endpoints.
+    pub document_storage_service_auth_key: String,
     /// Which committed-post topic feeds the trigger: `messages` (the default,
     /// channel and document posts) or `channels` (the pre-parent channel
     /// event, kept until its producer retires it). Never both: every channel

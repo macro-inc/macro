@@ -174,6 +174,8 @@ vi.mock('../../queries', () => ({
     ).values(),
   ],
   useChannelsByIdsQuery: () => ({ isEnabled: false }),
+  // What the real helper answers for the disabled lookup above.
+  resolveReferencedChannels: (previous: ChannelEntity[]) => previous,
 }));
 vi.mock('./ChannelLabelNameDialog', () => ({ promptLabelName: vi.fn() }));
 vi.mock('./SmartTagDialog', () => ({ promptSmartTag: vi.fn() }));

@@ -99,7 +99,7 @@ fn assert_no_provisioning(service: &TestHarness) {
 }
 
 #[tokio::test]
-async fn denied_or_unavailable_mention_open_has_no_side_effects() {
+async fn denied_or_unavailable_trigger_open_has_no_side_effects() {
     for failure in [denied(), AiAdmissionError::Unavailable] {
         for (bot, kind, harness) in [
             (
@@ -114,16 +114,30 @@ async fn denied_or_unavailable_mention_open_has_no_side_effects() {
             open.bot_id = bot;
             open.runtime.kind = kind;
             open.runtime.harness = harness.into();
-            open.origin.sender = staff_sender();
-            let id = AgentSessionId::new();
-            let result = service.execute_here(id, HarnessCommand::Open(open)).await;
-            assert!(matches!(result, Err(HarnessError::Admission(error)) if error == failure));
-            assert!(repo.get(id).await.is_err());
-            assert_eq!(
-                *admission.calls.lock().unwrap(),
-                [(staff_sender().to_string(), AiFeature::AgentSession)]
-            );
-            assert_no_provisioning(&service);
+            mention_origin_mut(&mut open).sender = staff_sender();
+            for origin in [
+                open.origin.clone(),
+                SessionOrigin::TaskAssignment(crate::domain::model::TaskAssignmentOrigin {
+                    parent: MessageParent::parse("document", "assigned-task").unwrap(),
+                    discussion_id: macro_uuid::generate_uuid_v7(),
+                    actor: staff_sender(),
+                    prompt: "Work on this task".to_owned(),
+                }),
+            ] {
+                admission.calls.lock().unwrap().clear();
+                open.origin = origin;
+                let id = AgentSessionId::new();
+                let result = service
+                    .execute_here(id, HarnessCommand::Open(open.clone()))
+                    .await;
+                assert!(matches!(result, Err(HarnessError::Admission(error)) if error == failure));
+                assert!(repo.get(id).await.is_err());
+                assert_eq!(
+                    *admission.calls.lock().unwrap(),
+                    [(staff_sender().to_string(), AiFeature::AgentSession)]
+                );
+                assert_no_provisioning(&service);
+            }
         }
     }
 }
@@ -139,7 +153,7 @@ async fn unauthorized_open_never_consults_billing() {
             .await,
         Err(HarnessError::Session(AgentSessionError::Forbidden))
     ));
-    open.origin.sender = staff_sender();
+    mention_origin_mut(&mut open).sender = staff_sender();
     *service.inner.prompt_context.unauthorized.lock().unwrap() = Some("no access".into());
     assert!(matches!(
         service

@@ -1624,6 +1624,9 @@ pub struct CreateAgentSessionRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateSessionThread {
+    /// Update the existing bot response reserved by a task assignment.
+    #[serde(default)]
+    pub reuse_origin_message: bool,
     /// Entity the mentioning message was posted in.
     #[serde(default)]
     pub parent: Option<messages::domain::models::MessageParent>,
@@ -2112,6 +2115,7 @@ pub async fn create_agent_session_handler<
                     .map(messages::domain::models::MessageParent::Channel))
                 .ok_or(CreateSessionApiError::ThreadParentRequired)?;
             Ok::<_, CreateSessionApiError>(SessionThread {
+                reuse_origin_message: thread.reuse_origin_message,
                 parent,
                 thread_id: thread.thread_id.unwrap_or(thread.message_id),
                 message_id: thread.message_id,

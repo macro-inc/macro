@@ -99,6 +99,17 @@ update filter membership on the authoritative reply, not from a guessed optimist
 state. Rollback restores only the failed operation's contribution. `DONE` predicates,
 other entity partitions, and notified-at sorting still use the network path.
 
+The Mark done action (`e`, row menu) hides its rows at once from GraphQL lists that
+exclude done items, such as Email Important/Noise and Home Signal, without waiting
+for the server. Lists that show done items, such as Email All, keep the row. Undo
+or a failed write brings the row back, and so does a new active notification on the
+entity. To verify, mark a row done and watch it for a few seconds. It must not
+reappear once the server reply lands, and it must stay gone after a reload.
+In Tasks, Email, Home and Drive, rows keep their DOM when the list updates. A
+property edit or a rename updates the edited row in place instead of rebuilding
+every visible row. To verify, watch the row nodes with a `MutationObserver` while
+editing: only moved or removed rows should be added or removed.
+
 Channels use the same general Soup reconciliation path, not a separate local page
 chain. Channel ID, type, team, organization, importance, and participant-scoped
 filters operate over synchronized channel metadata. The default channel scope
@@ -1202,7 +1213,20 @@ press `Join call`. Setup requests microphone permission and waits until that
 prompt finishes before requesting the camera, then previews video locally;
 sharing starts only after joining.
 Permission denial leaves the affected device off and still allows joining.
+Shared-link setup shows the people currently connected, with avatars, names, and
+an attendee count. It refreshes every 15 seconds while setup is open; guests see
+this only for standalone links. Empty calls show `No one else is here yet`; a
+failed roster request leaves joining available. Transcription agents and past
+attendees are excluded.
+
 The preview and full-width join button retain their size while joining.
+The call runtime preloads while setup is open. New-call setup also reserves an
+empty room, without starting a meeting, recording, or invitations. Leaving setup
+cancels that reservation; abandoned rooms expire after five minutes. Starting
+still works if preparation fails or expires.
+Entry waits for the room connection;
+teammate invitations continue afterward. For a newly started call, transcription
+and recording start in the background instead of delaying join credentials.
 Copying the meeting URL is available after joining, in the in-call header.
 
 The creator presses `Start call`; invitees press `Join call`. Loading the page or
@@ -1217,6 +1241,8 @@ for audio, video, device selection, screen sharing, and effects. `Leave call` re
 to Macro. `Copy Meeting Url` is available during the call.
 Rejoining from a new page waits for the prior page's pending leave cleanup before
 requesting another connection, so a slow leave cannot disconnect the replacement.
+Leaving the last participant archives the session first and tears down its media
+in the background, so the next call does not wait for that room to be deleted.
 It keeps its label and shows a checkmark for a few seconds after copying, then
 restores the copy icon.
 
