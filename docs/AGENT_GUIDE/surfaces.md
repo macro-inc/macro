@@ -1622,6 +1622,19 @@ confirms access. Verify counters, errors and skip
 reasons at narrow widths, using synthetic exports and a test backend rather than
 importing customer data into hosted dev.
 
+For a release check, inspect the actual create request and then reload the server
+receipt: both must contain exactly the selected Slack IDs and history option.
+Select two rows with the same display name, filter both out, and confirm the
+selected total remains unchanged. Cancel before confirmation and verify there
+were no create, registration or PUT requests. An open job must reject tampered
+registration/sealing of an unselected ID; a client-only picker test is insufficient.
+Check desktop web and Tauri: opening Settings alone creates no ZIP worker, and
+signed PUTs work without dropping checksum or conditional headers. A 412 upload
+retry verifies the existing object instead of overwriting it. Keep an active job
+open through websocket disconnect/reconnect to verify polling remains usable.
+The [runbook](../SLACK_ARCHIVE_IMPORT_RUNBOOK.md) distinguishes fixture tests from
+live-backend release gates and documents staging retention and recovery.
+
 ### Email signatures
 
 In Integrations, **Edit signature** beside an owned inbox expands its editor.
