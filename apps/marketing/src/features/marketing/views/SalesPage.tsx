@@ -140,7 +140,7 @@ export function RouteTour() {
           >
             <TourHeading
               id="book-title"
-              title="See Macro with your team’s work."
+              title="See how to grow your business faster."
               description="A 30-minute call with our CEO or a member of our team. Pick a time below."
             />
             <DemoBookingEmbed id="tour-booking" />
