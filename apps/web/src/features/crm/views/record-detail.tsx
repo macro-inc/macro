@@ -11,7 +11,9 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
+import { RecordTabs } from '../components/record-tabs';
 import type { CrmContact as CompanyContact } from '../core/contact';
+import { COMPANY_SECTIONS, type CompanySection } from '../core/record';
 import { Company } from './company-detail';
 import { Contact } from './contact-detail';
 import { CrmCopyLinkButton } from './copy-link-button';
@@ -26,6 +28,8 @@ export function CrmCompanyDetail(props: {
   const { query, company } = useCompanyQuery(() => props.company.id);
   const companyName = () => company()?.name ?? props.company.name;
   const [selectedContact, setSelectedContact] = createSignal<CompanyContact>();
+  const [companySection, setCompanySection] =
+    createSignal<CompanySection>('overview');
   const contactQuery = useContactQuery(() => selectedContact()?.id ?? '');
   const contactName = () => {
     const contact = contactQuery.isSuccess
@@ -118,8 +122,17 @@ export function CrmCompanyDetail(props: {
             {props.navigation}
             <ViewBreadcrumbs.Outlet
               aria-label="CRM record location"
-              class="flex-1"
+              class="min-w-0 shrink"
             />
+            <Show when={!selectedContact()}>
+              <div class="min-w-0 overflow-x-auto">
+                <RecordTabs
+                  sections={COMPANY_SECTIONS}
+                  value={companySection()}
+                  onChange={setCompanySection}
+                />
+              </div>
+            </Show>
             <div class="ml-auto flex shrink-0 items-center gap-2">
               <CrmCopyLinkButton
                 type={selectedContact() ? 'contact' : 'company'}
@@ -173,6 +186,7 @@ export function CrmCompanyDetail(props: {
                         fallback={
                           <Company
                             companyId={props.company.id}
+                            section={companySection()}
                             headerToggle={false}
                             onHidden={props.onClose}
                             onOpenContact={setSelectedContact}

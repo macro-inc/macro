@@ -17,6 +17,7 @@ import {
 import { patchTeamCrmSettings } from '@service-auth/crm';
 import { storageServiceClient } from '@service-storage/client';
 import { useQueryClient } from '@tanstack/solid-query';
+import { lazy } from 'solid-js';
 import type { CrmContext } from './context/crm-context';
 import {
   openCreateCompanyModal,
@@ -51,6 +52,10 @@ import {
 } from './queries/contacts';
 import { fetchCrmExportCompanies } from './queries/export';
 import { useCrmLists } from './queries/lists';
+import {
+  useRecordCallsQuery,
+  useRecordFilesQuery,
+} from './queries/record-items';
 import { usePersonalCrmViews, useTeamCrmViews } from './queries/saved-views';
 import { usePatchTeamCrmSettingsMutation } from './queries/settings-commands';
 import {
@@ -59,6 +64,11 @@ import {
 } from './queries/stages';
 import { useTeamCrmConfig } from './queries/team-config';
 import { createAppDealStages } from './stage-adapter';
+
+// Loaded on demand: the Tasks list imports soup, which imports CRM entry points.
+const CrmRecordTasks = lazy(async () => ({
+  default: (await import('./record-tasks-adapter')).CrmRecordTasks,
+}));
 
 /** Only this app-facing adapter constructs production capabilities. */
 export function createAppCrmContext(): CrmContext {
@@ -85,6 +95,11 @@ export function createAppCrmContext(): CrmContext {
       useCompanyEmailsQuery(useSoupAstItemsQuery, ...args),
     createContactEmails: (...args) =>
       useContactEmailsQuery(useSoupAstItemsQuery, ...args),
+    createRecordFiles: (scope) =>
+      useRecordFilesQuery(useSoupAstItemsQuery, scope),
+    createRecordCalls: (scope) =>
+      useRecordCallsQuery(useSoupAstItemsQuery, scope),
+    RecordTasks: CrmRecordTasks,
     createPropertyCommands: useBulkSaveEntityPropertiesMutation,
     createSettingsCommands: () =>
       usePatchTeamCrmSettingsMutation({

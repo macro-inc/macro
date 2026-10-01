@@ -116,7 +116,10 @@ export type ListsSource = {
 
 export type CrmEmailScope = 'team' | 'me';
 export type CrmEmailSignal = 'signal' | 'all';
-export type EmailSource = {
+/** A paged soup list: email threads, files or calls of a CRM record. */
+export type ItemListSource = {
+  /** True until the first page is readable (including disabled queries). */
+  readonly isPending: boolean;
   readonly isLoading: boolean;
   readonly data: { entities: import('@entity').EntityData[] } | undefined;
   readonly hasNextPage: boolean;

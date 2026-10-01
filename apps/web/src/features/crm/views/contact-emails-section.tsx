@@ -15,7 +15,7 @@ import type { CrmContact as CrmContactResponse } from '../core/contact';
 import { useContactEmailsQuery } from './use-crm';
 
 export function ContactEmailsSection(props: { contact?: CrmContactResponse }) {
-  const { openEmail } = useCrmContext().createNavigation();
+  const { openEntity } = useCrmContext().createNavigation();
   const email = () => props.contact?.email;
   const [view, setView] = createSignal<EmailView>('team');
   const [signalView, setSignalView] = createSignal<EmailSignalView>('all');
@@ -78,7 +78,7 @@ export function ContactEmailsSection(props: { contact?: CrmContactResponse }) {
                       <ListEntity
                         entity={entity}
                         timestamp={entity.updatedAt}
-                        onClick={() => openEmail(entity)}
+                        onClick={() => openEntity(entity)}
                       />
                     )}
                   </For>

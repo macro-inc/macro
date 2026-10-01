@@ -13,6 +13,12 @@ export type TaskGroupBy =
 
 export type TaskSortId = 'updated_at' | 'created_at' | 'viewed_at';
 
+/** Scopes a task list to tasks whose entity-reference property points at an entity. */
+export type TaskReferenceScope = {
+  propertyDefinitionId: string;
+  entityId: string;
+};
+
 export type TaskDetailTarget = {
   id: string;
   fallbackName?: string;

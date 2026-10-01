@@ -31,6 +31,7 @@ vi.mock('@components/app/side-panel', () => ({
 }));
 vi.mock('@core/component/EntityIcon', () => ({ EntityIcon: () => null }));
 vi.mock('./copy-link-button', () => ({ CrmCopyLinkButton: () => null }));
+vi.mock('../components/record-tabs', () => ({ RecordTabs: () => null }));
 vi.mock('./use-crm', () => ({
   useCompanyQuery: () => ({
     query: { isError: false },

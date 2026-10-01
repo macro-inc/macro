@@ -1448,7 +1448,7 @@ segment to return with the same filters, layout, and list scroll position. Selec
 another sidebar view or switching Board/List closes the company details.
 Shift-click still opens the company in a separate split. Direct company links use
 the standalone company page.
-Clicking a contact in an embedded company's Contacts section appends a third
+Clicking a contact in an embedded company's Team tab appends a third
 breadcrumb: `<current view or list> > <company> > <contact>`. The CRM sidebar stays
 visible. Click the company breadcrumb or the contact's Company link to return to
 the company; click the first breadcrumb to return directly to the originating
@@ -1457,6 +1457,18 @@ use the standalone contact page.
 Company and contact headers have `Copy link` beside the side-panel toggle.
 It copies the record's direct URL and shows a confirmation toast; this is also
 available in the embedded company and contact breadcrumb header.
+
+A company is laid out like a project. Its top bar (the split header, or the
+embedded breadcrumb header) has `Overview`, `Team`, `Emails`, `Files`, `Tasks`
+and `Calls` tabs, collapsing to icons when narrow. Overview shows the name, pills
+for each domain and `Last interacted`, the generated description and the
+Discussion. Team lists the contacts with `Add contact`. Emails keeps the
+`Signal`/`All` and `Team`/`Me` toggles. Files lists non-task documents whose
+`Companies` property references the company, plus attachments of emails with
+its domains. Tasks is the Tasks list scoped to the `Companies` property; its
+`New task` composer pre-fills the company. Calls lists calls linked to the
+company, including those linked automatically from their participants. The side
+panel keeps Properties and Sharing.
 
 Company and contact pages have a **Discussion** section built from the same
 message conversation as a document's Discussion: threaded replies, reactions,
