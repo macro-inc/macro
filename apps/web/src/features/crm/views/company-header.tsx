@@ -7,8 +7,9 @@ import {
 } from '@entity';
 import ClockIcon from '@phosphor/clock.svg';
 import GlobeIcon from '@phosphor/globe.svg';
+import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { Badge, Tooltip } from '@ui';
-import { createEffect, createSignal, For, Show } from 'solid-js';
+import { createEffect, createSignal, For, onMount, Show } from 'solid-js';
 import { useSetCompanyNameMutation } from './use-crm';
 
 function Description(props: { text: string }) {
@@ -16,16 +17,20 @@ function Description(props: { text: string }) {
   const [hasOverflow, setHasOverflow] = createSignal(false);
   let ref: HTMLParagraphElement | undefined;
 
-  // Measure overflow while clamped; rerun when the text changes or after
-  // collapsing back. Skip while expanded — clientHeight then equals
+  // Measure overflow while clamped; rerun when the text changes, after
+  // collapsing back, and when the width changes (the header mounts before
+  // its layout settles). Skip while expanded — clientHeight then equals
   // scrollHeight and would flip hasOverflow off incorrectly.
+  const measure = () => {
+    if (ref && !expanded())
+      setHasOverflow(ref.scrollHeight > ref.clientHeight + 1);
+  };
   createEffect(() => {
     props.text;
     if (expanded()) return;
-    requestAnimationFrame(() => {
-      if (ref) setHasOverflow(ref.scrollHeight > ref.clientHeight + 1);
-    });
+    requestAnimationFrame(measure);
   });
+  onMount(() => createResizeObserver(() => ref, measure));
 
   return (
     <div class="flex flex-col items-start gap-0.5">

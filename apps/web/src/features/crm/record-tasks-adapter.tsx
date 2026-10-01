@@ -8,6 +8,7 @@ import {
 } from '@app/features/tasks-view/tasks-view-context';
 import { createTaskWithProperties } from '@block-md/util/taskComposerProperties';
 import { useSplitLayout } from '@components/app/split-layout/layout';
+import { TagSetsQueryProvider } from '@property/tags/tag-sets-context';
 import type { PropertyApiValues } from '@property/types';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
@@ -20,37 +21,40 @@ import {
 
 /**
  * The record's Tasks tab: the production Tasks list, scoped to tasks whose
- * Companies or Contacts property references the record.
+ * Companies or Contacts property references the record. It owns its tag
+ * sets because a standalone record has no list provider above it.
  */
 export function CrmRecordTasks(props: { scope: CrmRecordScope }) {
   const layout = useSplitLayout();
   return (
     <Show when={props.scope} keyed>
       {(scope) => (
-        <TasksViewProvider
-          initialState={{ tab: 'team-tasks', groupBy: 'status', facets: {} }}
-          restoreEntryState
-          scopeKey={`crm:${scope.type}:${scope.id}:tasks`}
-          onOpenTask={(task, options) => {
-            layout.openWithSplit(
-              { type: 'md', id: task.id },
-              { preferNewSplit: options?.event?.shiftKey }
-            );
-            return true;
-          }}
-          onCloseTask={() => {}}
-          sourceFactory={(state, options) =>
-            useTasksDataSource(state, {
-              ...options,
-              reference: () => ({
-                propertyDefinitionId: crmRecordPropertyId(scope),
-                entityId: scope.id,
-              }),
-            })
-          }
-        >
-          <RecordTasksBody scope={scope} />
-        </TasksViewProvider>
+        <TagSetsQueryProvider>
+          <TasksViewProvider
+            initialState={{ tab: 'team-tasks', groupBy: 'status', facets: {} }}
+            restoreEntryState
+            scopeKey={`crm:${scope.type}:${scope.id}:tasks`}
+            onOpenTask={(task, options) => {
+              layout.openWithSplit(
+                { type: 'md', id: task.id },
+                { preferNewSplit: options?.event?.shiftKey }
+              );
+              return true;
+            }}
+            onCloseTask={() => {}}
+            sourceFactory={(state, options) =>
+              useTasksDataSource(state, {
+                ...options,
+                reference: () => ({
+                  propertyDefinitionId: crmRecordPropertyId(scope),
+                  entityId: scope.id,
+                }),
+              })
+            }
+          >
+            <RecordTasksBody scope={scope} />
+          </TasksViewProvider>
+        </TagSetsQueryProvider>
       )}
     </Show>
   );

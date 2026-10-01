@@ -37,14 +37,24 @@ export function CompanyBlockAdapter() {
         <CollapsibleHeaderItem
           id="company-tabs"
           priority={1}
-          containerClass="ph-no-capture min-w-0 shrink-0 h-full mx-2"
+          containerClass="ph-no-capture min-w-0 h-full mx-2"
         >
           {(isCollapsed) => (
-            <CompanyTabs
-              value={section()}
-              onChange={setSection}
-              compact={isCollapsed()}
-            />
+            // Labels keep their width so the header collapses them to
+            // icons; the icons scroll once even they no longer fit.
+            <div
+              class={
+                isCollapsed()
+                  ? 'min-w-0 overflow-x-auto scrollbar-hidden'
+                  : 'shrink-0'
+              }
+            >
+              <CompanyTabs
+                value={section()}
+                onChange={setSection}
+                compact={isCollapsed()}
+              />
+            </div>
           )}
         </CollapsibleHeaderItem>
       </SplitHeaderLeft>

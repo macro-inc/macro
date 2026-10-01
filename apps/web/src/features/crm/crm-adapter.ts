@@ -1,5 +1,7 @@
 import { useQuickAccessCrmCompaniesQuery } from '@app/features/crm/crm-search';
+import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { toast } from '@core/component/Toast/Toast';
 import { enableCrmLists } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
@@ -17,8 +19,9 @@ import {
 import { patchTeamCrmSettings } from '@service-auth/crm';
 import { storageServiceClient } from '@service-storage/client';
 import { useQueryClient } from '@tanstack/solid-query';
-import { lazy } from 'solid-js';
+import { createMemo, lazy } from 'solid-js';
 import type { CrmContext } from './context/crm-context';
+import type { ItemListSource } from './context/crm-sources';
 import {
   openCreateCompanyModal,
   openCreateContactModal,
@@ -70,6 +73,43 @@ const CrmRecordTasks = lazy(async () => ({
   default: (await import('./record-tasks-adapter')).CrmRecordTasks,
 }));
 
+/**
+ * Soup rows carry raw notification arrays; `ListEntity` reads them through
+ * an accessor bound to the app's notification source, as other lists do.
+ */
+function withRowNotifications(source: ItemListSource): ItemListSource {
+  const notificationSource = useGlobalNotificationSource();
+  // Gated on `isPending`: reading `data` earlier would suspend the tab.
+  const data = createMemo(() => {
+    const page = source.isPending ? undefined : source.data;
+    return (
+      page && {
+        entities: page.entities.map((entity) =>
+          withEntityNotifications(entity, notificationSource)
+        ),
+      }
+    );
+  });
+  return {
+    get isPending() {
+      return source.isPending;
+    },
+    get isLoading() {
+      return source.isLoading;
+    },
+    get data() {
+      return data();
+    },
+    get hasNextPage() {
+      return source.hasNextPage;
+    },
+    get isFetchingNextPage() {
+      return source.isFetchingNextPage;
+    },
+    fetchNextPage: () => source.fetchNextPage(),
+  };
+}
+
 /** Only this app-facing adapter constructs production capabilities. */
 export function createAppCrmContext(): CrmContext {
   const deps = {
@@ -92,13 +132,17 @@ export function createAppCrmContext(): CrmContext {
       return () => flag().enabled;
     },
     createCompanyEmails: (...args) =>
-      useCompanyEmailsQuery(useSoupAstItemsQuery, ...args),
+      withRowNotifications(
+        useCompanyEmailsQuery(useSoupAstItemsQuery, ...args)
+      ),
     createContactEmails: (...args) =>
-      useContactEmailsQuery(useSoupAstItemsQuery, ...args),
+      withRowNotifications(
+        useContactEmailsQuery(useSoupAstItemsQuery, ...args)
+      ),
     createRecordFiles: (scope) =>
-      useRecordFilesQuery(useSoupAstItemsQuery, scope),
+      withRowNotifications(useRecordFilesQuery(useSoupAstItemsQuery, scope)),
     createRecordCalls: (scope) =>
-      useRecordCallsQuery(useSoupAstItemsQuery, scope),
+      withRowNotifications(useRecordCallsQuery(useSoupAstItemsQuery, scope)),
     RecordTasks: CrmRecordTasks,
     createPropertyCommands: useBulkSaveEntityPropertiesMutation,
     createSettingsCommands: () =>
