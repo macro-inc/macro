@@ -1,3 +1,4 @@
+import { isCronRepresentable } from '@core/util/cron';
 import type { ReminderEntity } from '@entity';
 import {
   describeReminderSchedule,
@@ -39,7 +40,9 @@ export function reminderScheduleLabel(
   }).format(new Date(reminder.nextRunAt));
   const recurrence =
     reminder.scheduleType === 'recurring'
-      ? describeReminderSchedule(scheduleFromRow(reminder))
+      ? reminder.cron && !isCronRepresentable(reminder.cron)
+        ? `Custom repeat: ${reminder.cron}`
+        : describeReminderSchedule(scheduleFromRow(reminder))
       : undefined;
   const status = {
     scheduled: 'Scheduled',

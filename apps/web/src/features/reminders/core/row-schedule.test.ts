@@ -53,4 +53,18 @@ describe('independent reminder occurrence and schedule state', () => {
     expect(label).toContain('America/New_York');
     expect(label).toContain(' · ');
   });
+
+  it('does not mislabel an unsupported monthly rule as weekdays', () => {
+    const label = reminderScheduleLabel(
+      {
+        ...reminder,
+        scheduleType: 'recurring',
+        cron: '0 0 9 1,15 * *',
+        timezone: 'America/New_York',
+      },
+      now
+    );
+    expect(label).toContain('Custom repeat: 0 0 9 1,15 * *');
+    expect(label).not.toContain('Weekdays');
+  });
 });
