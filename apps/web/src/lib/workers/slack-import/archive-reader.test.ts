@@ -440,6 +440,99 @@ describe('bounded ZIP reader', () => {
 });
 
 describe('lazy worker and cancellation', () => {
+  it('stages a large multi-conversation archive in two phases with bounded output', async () => {
+    const count = 20_001;
+    const entries: Record<string, unknown> = {
+      'users.json': [],
+      'channels.json': ['C100', 'C200'].map((id) => ({
+        id,
+        name: id,
+        members: [],
+      })),
+    };
+    for (const id of ['C100', 'C200']) {
+      entries[`${id}/2023-11-14.json`] = Array.from(
+        { length: count },
+        (_, n) => ({
+          ts: `${1700000000 + n}.000001`,
+          text: 'x'.repeat(512),
+        })
+      );
+    }
+    // Stored ZIP keeps the input large, rather than hiding growth behind compression.
+    const blob = zipBlob(zipFixture(entries, false));
+    expect(blob.size).toBeGreaterThan(20 * 1024 * 1024);
+    const slices = vi.spyOn(blob, 'slice');
+    const whole = vi.spyOn(blob, 'arrayBuffer');
+    const discover = vi.spyOn(ArchiveReader.prototype, 'discover');
+    const history = vi.spyOn(ArchiveReader.prototype, 'readHistory');
+    let records = 0;
+    let parts = 0;
+    let complete = false;
+    let failure: ArchiveWorkerResponse | undefined;
+    const seals: string[] = [];
+    const sessionId = 'large-two-phase';
+    const port: ArchiveWorkerPort = {
+      onmessage: null,
+      postMessage(message) {
+        if (message.type === 'discovered') {
+          send({
+            type: 'read_history',
+            sessionId,
+            selectedIds: ['C100', 'C200'],
+            includeMessageHistory: true,
+          });
+        } else if (message.type === 'part') {
+          // Keep counters, not all output parts: the consumer releases each part.
+          expect(message.bytes.byteLength).toBeLessThanOrEqual(
+            16 * 1024 * 1024
+          );
+          expect(message.descriptor.recordCount).toBeLessThanOrEqual(20_000);
+          records += message.descriptor.recordCount ?? 0;
+          parts++;
+          send({ type: 'ack_part', sessionId, sequence: message.sequence });
+        } else if (message.type === 'seal') {
+          seals.push(message.seal.slackChannelId);
+          expect(message.seal.partCount).toBe(2);
+        } else if (message.type === 'complete') complete = true;
+        else if (message.type === 'error') failure = message;
+      },
+    };
+    function send(request: ArchiveWorkerRequest): void {
+      // Emulate worker message delivery rather than re-entering its callback.
+      queueMicrotask(() =>
+        port.onmessage?.({
+          data: request,
+        } as MessageEvent<ArchiveWorkerRequest>)
+      );
+    }
+    installArchiveWorker(port);
+    send({ type: 'discover', sessionId, archive: blob });
+    await vi.waitFor(
+      () => {
+        expect(failure).toBeUndefined();
+        expect(complete).toBe(true);
+      },
+      { timeout: 60_000 }
+    );
+    expect(discover).toHaveBeenCalledTimes(1);
+    expect(history).toHaveBeenCalledTimes(1);
+    expect(whole).not.toHaveBeenCalled();
+    expect(
+      slices.mock.calls.every(
+        ([start, end]) => (end ?? 0) - (start ?? 0) <= 65557
+      )
+    ).toBe(true);
+    expect(records).toBe(count * 2);
+    expect(parts).toBe(4);
+    expect(seals.sort()).toEqual(['C100', 'C200']);
+    expect(
+      (await indexedDB.databases()).some(
+        (db) => db.name === `slack-import-scratch:${sessionId}`
+      )
+    ).toBe(false);
+  }, 65_000);
+
   it('does not construct a worker on module import; the factory creates it on action', async () => {
     const Worker = vi.fn(function () {});
     vi.stubGlobal('Worker', Worker);
