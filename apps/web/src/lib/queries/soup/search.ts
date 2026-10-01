@@ -12,7 +12,11 @@ import {
   searchClient,
 } from '@service-search/client';
 import type { UnifiedSearchRequest } from '@service-search/generated/models';
-import { infiniteQueryOptions, useInfiniteQuery } from '@tanstack/solid-query';
+import {
+  infiniteQueryOptions,
+  keepPreviousData,
+  useInfiniteQuery,
+} from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
 
 export type SearchSoupQueryArgs = {
@@ -74,7 +78,7 @@ function searchSoupQueryOptions(
       });
     },
     enabled: enabled,
-    placeholderData: (p) => p,
+    placeholderData: keepPreviousData,
     meta: { normalize: false },
   });
 }
@@ -164,7 +168,7 @@ function searchChannelQueryOptions(
       return { items, totalCount };
     },
     enabled: enabled,
-    placeholderData: (p) => p,
+    placeholderData: keepPreviousData,
     meta: { normalize: false },
   });
 }

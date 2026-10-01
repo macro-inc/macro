@@ -23,6 +23,7 @@ import {
   uploadFiles,
 } from '@core/util/upload';
 import { refetchSoupEntity } from '@queries/soup/cache';
+import type { SoupApiItem } from '@service-storage/generated/schemas';
 import { refetchResources } from '@service-storage/util/refetchResources';
 import { type Component, createSignal, Show } from 'solid-js';
 import { ModalsProvider } from './ModalsProvider';
@@ -137,6 +138,13 @@ const Block: Component = () => {
   );
 };
 
+// Lands in cached soup query `meta`, so it is built over the plain id rather
+// than the component's props (see "Query callback lifetimes" in AGENTS.md).
+function projectMembershipFilter(projectId: string) {
+  return (item: SoupApiItem) =>
+    soupItemMatchesProjectMembership(item, projectId);
+}
+
 const ProjectEntityList = (props: {
   scopeId: string;
   projectId: string;
@@ -150,7 +158,7 @@ const ProjectEntityList = (props: {
         itemMembershipFilter={
           getIsSpecialProject(props.projectId)
             ? undefined
-            : (item) => soupItemMatchesProjectMembership(item, props.projectId)
+            : projectMembershipFilter(props.projectId)
         }
         initialQuery={defineQueryFilters({
           include: {

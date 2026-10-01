@@ -5,7 +5,12 @@ import {
   type TaskDuplicate,
   type TaskSimilarityResult,
 } from '@service-storage/client';
-import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
+import {
+  keepPreviousData,
+  queryOptions,
+  useMutation,
+  useQuery,
+} from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { entityKeys, taskSimilaritySearchKeys } from './keys';
 
@@ -101,7 +106,7 @@ function taskSimilaritySearchQueryOptions(input: TaskSimilaritySearchInput) {
     // Only query when there is something to search on: a title or a body.
     enabled: input.title.trim().length > 0 || input.markdown.trim().length > 0,
     staleTime: 30 * 1000,
-    placeholderData: (prev) => prev,
+    placeholderData: keepPreviousData,
   });
 }
 

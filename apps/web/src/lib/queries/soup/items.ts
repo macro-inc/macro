@@ -28,6 +28,7 @@ import type { PostSoupRequest } from '@service-storage/generated/schemas/postSou
 import {
   type InfiniteData,
   infiniteQueryOptions,
+  keepPreviousData,
   type StaleTime,
   useInfiniteQuery,
 } from '@tanstack/solid-query';
@@ -147,7 +148,7 @@ function soupItemsQueryOptions(
       ),
     enabled,
     staleTime,
-    placeholderData: (p) => p,
+    placeholderData: keepPreviousData,
     meta: {
       itemFilter: (item: SoupApiItem) =>
         !body || filterSoupItemByRequestBody(item, body),
