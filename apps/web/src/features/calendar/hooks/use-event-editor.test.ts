@@ -161,11 +161,11 @@ describe('editing event times', () => {
           expect(request.recurrenceId).toBe(
             scope === 'this_event' ? event.occurrenceKey : undefined
           );
-          expect(request.patch).not.toHaveProperty('time');
-          expect(request.patch).not.toHaveProperty('recurrenceLines');
-          expect(request.patch.reminders).toEqual({
-            useDefault: false,
-            overrides: [{ method: 'popup', minutes: 5 }],
+          expect(request.patch).toEqual({
+            reminders: {
+              useDefault: false,
+              overrides: [{ method: 'popup', minutes: 5 }],
+            },
           });
           expect(onSaved).toHaveBeenCalledOnce();
           expect(mocks.failure).not.toHaveBeenCalled();
@@ -195,6 +195,83 @@ describe('editing event times', () => {
       }
     );
   });
+
+  it.each([
+    {
+      label: 'Google Meet',
+      conferenceUrl: 'https://meet.google.com/abc-defg-hij',
+      conferenceProvider: 'google_meet' as const,
+      location: 'Meeting room',
+      description: '<p>Deploy checklist</p>',
+    },
+    { label: 'Macro call', location: savedEvent.location },
+  ])('sends only reminders on an invited $label event', async (overrides) => {
+    const { editor, form, onSaved, dispose } = editorFor({
+      ...overrides,
+      attendees: [
+        {
+          email: 'organizer@example.com',
+          isOrganizer: true,
+          isSelf: false,
+          isOptional: false,
+          responseStatus: 'accepted',
+        },
+        {
+          email: 'guest@example.com',
+          isOrganizer: false,
+          isSelf: true,
+          isOptional: false,
+          responseStatus: 'accepted',
+        },
+      ],
+    });
+    mocks.updateEvent.mockImplementationOnce(async ({ patch }) => {
+      if (Object.keys(patch).some((field) => field !== 'reminders')) {
+        throw new Error('Forbidden');
+      }
+      return { id: 'event-1' };
+    });
+    try {
+      form.setReminderMinutes([5]);
+      await editor.save(form.submitValues()!, 'all');
+      expect(mocks.updateEvent).toHaveBeenCalledOnce();
+      expect(onSaved).toHaveBeenCalledOnce();
+      expect(mocks.failure).not.toHaveBeenCalled();
+    } finally {
+      dispose();
+    }
+  });
+
+  it('closes an unchanged event without sending an empty patch', async () => {
+    const { editor, form, onSaved, dispose } = editorFor();
+    try {
+      await editor.save(form.submitValues()!, 'all');
+      expect(mocks.updateEvent).not.toHaveBeenCalled();
+      expect(onSaved).toHaveBeenCalledOnce();
+    } finally {
+      dispose();
+    }
+  });
+
+  it.each(['title', 'location', 'description'] as const)(
+    'still sends intentional %s edits and clearing',
+    async (field) => {
+      const { editor, form, dispose } = editorFor({
+        title: 'Prod Deploy',
+        location: 'Meeting room',
+        description: '<p>Checklist</p>',
+      });
+      try {
+        form.setField(field, field === 'title' ? 'Updated deploy' : '');
+        await editor.save(form.submitValues()!, 'all');
+        expect(mocks.updateEvent.mock.lastCall?.[0].patch).toEqual({
+          [field]: field === 'title' ? 'Updated deploy' : '',
+        });
+      } finally {
+        dispose();
+      }
+    }
+  );
 });
 
 describe('scheduling a Macro call', () => {
@@ -396,10 +473,12 @@ describe('scheduling a Macro call', () => {
         description: initial.description,
         conferenceChoice: 'none',
       });
-      expect(mocks.updateEvent.mock.lastCall?.[0].patch.location).toBe(
-        event.location
+      expect(mocks.updateEvent.mock.lastCall?.[0].patch).not.toHaveProperty(
+        'location'
       );
-      expect(mocks.updateEvent.mock.lastCall?.[0].patch.description).toBe('');
+      expect(mocks.updateEvent.mock.lastCall?.[0].patch).not.toHaveProperty(
+        'description'
+      );
       expect(mocks.createMeeting).not.toHaveBeenCalled();
       expect(mocks.updateMeeting).not.toHaveBeenCalled();
     } finally {

@@ -288,8 +288,13 @@ export function useEventEditor(props: UseEventEditorProps) {
 
       const effectiveScope: CalendarUpdateScope = scope ?? 'all';
       const targetsOneOccurrence = effectiveScope === 'this_event';
+      const initialContent = removeCalendarMacroCall(event, existingMeetingUrl);
       const content =
-        event.eventType === 'out_of_office'
+        event.eventType === 'out_of_office' ||
+        (existingMeetingUrl &&
+          wantsMacroCall &&
+          cleanContent.location === initialContent.location &&
+          cleanContent.description === initialContent.description)
           ? {
               location: event.location ?? '',
               description: event.description ?? '',
@@ -322,10 +327,14 @@ export function useEventEditor(props: UseEventEditorProps) {
           : undefined,
         occurrenceKey: targetsOneOccurrence ? event.occurrenceKey : undefined,
         patch: {
-          title: values.title,
+          ...(values.title !== event.title ? { title: values.title } : {}),
           ...(hasTimeChanged(event, values.time) ? { time: values.time } : {}),
-          location: content.location,
-          description: content.description,
+          ...(content.location !== (event.location ?? '')
+            ? { location: content.location }
+            : {}),
+          ...(content.description !== (event.description ?? '')
+            ? { description: content.description }
+            : {}),
           ...(recurrenceChanged
             ? { recurrenceLines: values.recurrenceLines }
             : {}),
@@ -339,7 +348,9 @@ export function useEventEditor(props: UseEventEditorProps) {
           ...(values.outOfOffice ? { outOfOffice: values.outOfOffice } : {}),
         },
       };
-      await update.mutateAsync(updateArgs);
+      if (Object.keys(updateArgs.patch).length > 0) {
+        await update.mutateAsync(updateArgs);
+      }
       calendarSaved = true;
 
       if (needsCall() && canManageCall && !existingMeetingUrl) {
