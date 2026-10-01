@@ -7,6 +7,10 @@ import { mountEmailComposer } from '../tests/composer';
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
+function hoursFromNow(hours: number): Date {
+  return new Date(Date.now() + hours * 60 * 60 * 1000);
+}
+
 // Real controller and editor, with only feature capabilities replaced.
 describe('standalone compose controller', () => {
   it.each([
@@ -205,7 +209,7 @@ describe('standalone compose controller', () => {
     const root = mountEmailComposer(context);
     try {
       root.edit('Schedule this reply', 'Schedule review');
-      const requested = new Date('2026-10-01T12:00:00Z');
+      const requested = hoursFromNow(24);
       vi.mocked(context.delivery.schedule).mockRejectedValueOnce(
         new Error('offline')
       );
@@ -240,14 +244,14 @@ describe('standalone compose controller', () => {
     const root = mountEmailComposer(context);
     try {
       root.edit('Schedule this reply', 'Schedule review');
-      root.state.context.schedule.onSelect(new Date('2026-10-01T12:00:00Z'));
+      root.state.context.schedule.onSelect(hoursFromNow(24));
       root.state.context.onSend();
       await vi.advanceTimersByTimeAsync(0);
       expect(context.delivery.schedule).toHaveBeenCalledOnce();
       expect(root.state.context.disabled()).toBe(true);
       root.state.context.onSend();
       expect(
-        root.state.context.schedule.onSelect(new Date('2026-10-02T12:00:00Z'))
+        root.state.context.schedule.onSelect(hoursFromNow(48))
       ).toBe(false);
       expect(context.delivery.sendMessage).not.toHaveBeenCalled();
       expect(context.delivery.schedule).toHaveBeenCalledOnce();

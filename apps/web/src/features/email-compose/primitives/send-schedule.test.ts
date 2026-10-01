@@ -21,6 +21,10 @@ vi.mock('@core/cross-tab/cross-tab-bus', () => ({
   createCrossTabBus: () => ({ publish() {}, subscribe: () => () => {} }),
 }));
 
+function hoursFromNow(hours: number): Date {
+  return new Date(Date.now() + hours * 60 * 60 * 1000);
+}
+
 function composer(
   kind: 'standalone' | 'reply',
   composeContext: EmailComposeContext,
@@ -929,7 +933,7 @@ describe('send and schedule ordering', () => {
       state.form.setSelectedInbox('secondary');
       state.handleAddAttachments([new File(['attachment'], 'review.txt')]);
       await vi.advanceTimersByTimeAsync(500);
-      expect(state.handleSendTimeChange(new Date('2026-10-01T12:00:00Z'))).toBe(
+      expect(state.handleSendTimeChange(hoursFromNow(24))).toBe(
         true
       );
       const scheduling = state.sendEmail();
@@ -1002,7 +1006,7 @@ describe('send and schedule ordering', () => {
         expect(state.sendActionDisabled()).toBe(true);
         const saves = vi.mocked(composeContext.drafts.saveDraft).mock.calls
           .length;
-        await state.handleSendTimeChange(new Date('2026-10-01T12:00:00Z'));
+        await state.handleSendTimeChange(hoursFromNow(24));
         state.persistDraftOnSenderSwitch('secondary');
         await vi.advanceTimersByTimeAsync(500);
         expect(composeContext.delivery.schedule).not.toHaveBeenCalled();
@@ -1234,7 +1238,7 @@ describe('send and schedule ordering', () => {
         'draft-a',
         'draft-b',
       ]);
-      state.handleSendTimeChange(new Date('2026-10-01T12:00:00Z'));
+      state.handleSendTimeChange(hoursFromNow(24));
       await state.sendEmail();
       expect(composeContext.delivery.archive).toHaveBeenLastCalledWith(
         { threadId: 'thread-c', value: true },
@@ -1259,7 +1263,7 @@ describe('send and schedule ordering', () => {
         state.send();
         await vi.advanceTimersByTimeAsync(0);
         expect(composeContext.drafts.saveDraft).toHaveBeenCalledOnce();
-        expect(state.selectTime(new Date('2026-10-01T12:00:00Z'))).toBe(false);
+        expect(state.selectTime(hoursFromNow(24))).toBe(false);
         finishSaving({
           draftId: 'draft',
           threadId: 'thread',
