@@ -1056,6 +1056,8 @@ Declining or timing out does not remove an invited live call from Channels `Live
 The list updates as calls end and new calls start. Calls from other conferencing
 providers open their own join links. A failed upcoming-list request has a `Retry`
 action and does not prevent creating a call.
+Working locations (such as `Office` or `Home`) stay on the calendar grid but are
+excluded from Upcoming events, including both all-day and hourly locations.
 Events require connecting a Google account (`Connect calendar`). The
 `Calendar settings` (gear) menu has an `Accounts`
 section listing each connected account with a per-account `Enable` (grant calendar) or
