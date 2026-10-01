@@ -65,12 +65,12 @@ export function RouteTour() {
                 onContinue={() => {}}
                 title={
                   <>
-                    Replace Notion, Linear,
+                    The only app you need{' '}
                     <br />
-                    and Superhuman.
+                    for your entire company.
                   </>
                 }
-                description={`Email, chat, documents, tasks, CRM, and agents in one workspace, from ${formatWholeUsd(MACRO_SEAT_CENTS)} a seat.`}
+                description={`Email, chat, documents, tasks, CRM, and agents in one workspace, for ${formatWholeUsd(MACRO_SEAT_CENTS)} a seat.`}
                 action={
                   <div class="homepage-hero-action mt-6 flex justify-center pb-5">
                     <a

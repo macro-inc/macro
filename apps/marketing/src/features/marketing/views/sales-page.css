@@ -6,6 +6,11 @@
    otherwise give them slab and Inter. */
 .tour-hero, .tour-constellation .feature-flow, .tour-page .unification-subtext { font-family: -apple-system, BlinkMacSystemFont, "Inter Variable", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"; }
 .feature-page .tour-cta { color: #000; }
+/* The shared header's "Talk to us" link leaves the page for cal.com; here the
+   booker is inline, so hide it while this page is mounted. */
+body:has(.tour-page) .site-nav-demo { display: none; }
+/* The desktop line break orphans a word on phones; balance the lines instead. */
+@media (max-width: 767px) { .tour-hero h1 { text-wrap: balance; } .tour-hero h1 br { display: none; } }
 /* `.feature-page p` also cancels the hero subtitle's `mx-auto` centering. */
 .feature-page .tour-hero p[data-welcome-copy] { margin-inline: auto; }
 /* `.feature-page p` resets margins; restore homepage-unification.css spacing. */
