@@ -1,6 +1,7 @@
 import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
 import { isServer } from 'solid-js/web';
 import markDesyncPlaceholder from '../../assets/mark-desync-placeholder.jpg';
+import { SavingsCalculator } from '../../features/marketing/components/pricing/SavingsCalculator';
 import { HomeSectionRule } from '../components/sections/HomeSectionRule';
 import { SectionFinalCta } from '../components/sections/SectionFinalCta';
 import { SectionMoreFeatures } from '../components/sections/SectionMoreFeatures';
@@ -911,6 +912,51 @@ function FaqSection() {
   );
 }
 
+function SavingsSection() {
+  return (
+    <section
+      aria-labelledby="pricing-savings-title"
+      id="savings"
+      style={{
+        'box-sizing': 'border-box',
+        display: 'grid',
+        gap: mobile() ? '24px' : '40px',
+        'justify-items': 'center',
+        'padding-block': mobile() ? '56px' : '80px',
+        'padding-inline': mobile() ? '18px' : '24px',
+        width: '100%',
+      }}
+    >
+      <div
+        style={{
+          display: 'grid',
+          gap: '16px',
+          'justify-items': 'center',
+          'text-align': 'center',
+        }}
+      >
+        <span style={eyebrowStyle()}>Calculator</span>
+        <h2 id="pricing-savings-title" style={sectionHeadingStyle()}>
+          See what you’d save
+        </h2>
+        <p
+          style={{
+            color: 'var(--c4)',
+            'font-size': mobile() ? '15px' : '16px',
+            'line-height': 1.6,
+            margin: 0,
+            'max-width': '440px',
+            'text-wrap': 'balance',
+          }}
+        >
+          Choose the tools your team pays for today and how many seats you need.
+        </p>
+      </div>
+      <SavingsCalculator />
+    </section>
+  );
+}
+
 function PricingFinalCta() {
   return (
     <SectionFinalCta
@@ -987,6 +1033,10 @@ export const RoutePricing: Component = () => {
       <HomeSectionRule />
 
       <ComparisonGrid />
+
+      <HomeSectionRule />
+
+      <SavingsSection />
 
       <HomeSectionRule />
 
