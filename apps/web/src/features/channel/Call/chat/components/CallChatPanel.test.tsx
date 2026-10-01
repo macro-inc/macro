@@ -1,12 +1,9 @@
 /** @vitest-environment jsdom */
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { createSignal, type JSX } from 'solid-js';
+import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { CallChatPanel } from './CallChatPanel';
 
-vi.mock('@ui', () => ({
-  Tooltip: (props: { children: JSX.Element }) => props.children,
-}));
 let resize: () => void;
 const disconnect = vi.fn();
 beforeEach(() => {
@@ -42,7 +39,7 @@ it('preserves the draft and content nodes when closing and reopening', () => {
   const input = screen.getByRole('textbox') as HTMLInputElement;
   fireEvent.input(input, { target: { value: 'Unsent draft' } });
   const panel = screen.getByRole('complementary', { name: 'Call chat' });
-  fireEvent.click(screen.getByRole('button', { name: 'Close chat' }));
+  setOpen(false);
   expect(panel.hidden).toBe(true);
   expect(screen.queryByRole('textbox')).toBeNull();
   setOpen(true);

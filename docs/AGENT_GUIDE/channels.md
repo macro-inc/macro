@@ -757,8 +757,9 @@ away and return while connected to check that the call and its controls remain
 usable.
 
 The **Open chat** button in its own island at the far right of the bottom toolbar
-opens **Call chat** beside the video. The media controls stay centered. On
-narrow screens it overlays the video. **Close chat** or Escape closes the panel
+opens the chat beside the video. The panel has no header or divider above the
+composer. The media controls stay centered. On narrow screens it overlays the
+video. The same toolbar button, now **Close chat**, or Escape closes the panel
 and returns focus to the chat button; reopening preserves the draft and scroll
 position. The call continues while chat is open or closed.
 

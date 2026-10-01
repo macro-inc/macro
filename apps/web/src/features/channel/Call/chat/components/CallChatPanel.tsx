@@ -1,5 +1,3 @@
-import X from '@phosphor/x.svg';
-import { Tooltip } from '@ui';
 import { type JSX, onCleanup, onMount } from 'solid-js';
 
 /** A persistent sidebar: closing it preserves the composer and scroll position. */
@@ -37,19 +35,6 @@ export function CallChatPanel(props: {
         props.onClose();
       }}
     >
-      <div class="flex shrink-0 items-center justify-between border-b border-edge-muted px-4 py-3">
-        <h2 class="text-sm font-medium text-ink">Call chat</h2>
-        <Tooltip label="Close chat">
-          <button
-            type="button"
-            aria-label="Close chat"
-            class="flex size-7 items-center justify-center rounded-md text-ink-muted hover:bg-hover hover:text-ink"
-            onClick={props.onClose}
-          >
-            <X class="size-4" />
-          </button>
-        </Tooltip>
-      </div>
       <div
         ref={viewport}
         class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4"
@@ -62,9 +47,7 @@ export function CallChatPanel(props: {
       >
         <div ref={content}>{props.children}</div>
       </div>
-      <div class="shrink-0 border-t border-edge-muted p-3">
-        {props.composer}
-      </div>
+      <div class="shrink-0 p-3">{props.composer}</div>
     </aside>
   );
 }
