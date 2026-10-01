@@ -1,46 +1,25 @@
 import { TabsInset } from '@core/component/TabsInset';
-import {
-  ListEntity,
-  ListEntityMetadataQueryProvider,
-  ListLayoutProvider,
-} from '@entity';
-import { createSignal, For, Show } from 'solid-js';
-import { useInfiniteScrollSentinel } from '../../../lib/primitives/infinite-scroll-sentinel';
-import { useCrmContext } from '../context/crm-context';
+import { createSignal } from 'solid-js';
+import { RecordSection } from '../components/record-section';
 import type {
   CrmEmailSignal as EmailSignalView,
   CrmEmailScope as EmailView,
 } from '../context/crm-sources';
 import type { CrmContact as CrmContactResponse } from '../core/contact';
+import { RecordItemList } from './record-item-list';
 import { useContactEmailsQuery } from './use-crm';
 
 export function ContactEmailsSection(props: { contact?: CrmContactResponse }) {
-  const { openEntity } = useCrmContext().createNavigation();
   const email = () => props.contact?.email;
   const [view, setView] = createSignal<EmailView>('team');
   const [signalView, setSignalView] = createSignal<EmailSignalView>('all');
   const emailsQuery = useContactEmailsQuery(email, view, signalView);
-  const emails = () => emailsQuery.data?.entities ?? [];
-  // An enabled query is loading until its first page is readable, including
-  // paused requests; a disabled one shows the empty state instead.
-  const loading = () =>
-    !props.contact || (emailsQuery.isPending && emailsQuery.isEnabled);
-
-  const [listRef, setListRef] = createSignal<HTMLElement>();
-  const [sentinelRef, setSentinelRef] = createSignal<HTMLDivElement>();
-
-  useInfiniteScrollSentinel({
-    sentinel: sentinelRef,
-    hasNextPage: () => emailsQuery.hasNextPage ?? false,
-    isFetchingNextPage: () => emailsQuery.isFetchingNextPage,
-    fetchNextPage: () => emailsQuery.fetchNextPage(),
-  });
 
   return (
-    <div class="flex flex-col gap-2">
-      <div class="flex items-center justify-between gap-2">
-        <h2 class="text-sm font-medium text-ink-muted">Emails</h2>
-        <div class="flex items-center gap-2.5">
+    <RecordSection
+      title="Emails"
+      actions={
+        <>
           <TabsInset
             list={[
               { value: 'signal', label: 'Signal' },
@@ -57,49 +36,14 @@ export function ContactEmailsSection(props: { contact?: CrmContactResponse }) {
             value={view()}
             onChange={(v) => setView(v as EmailView)}
           />
-        </div>
-      </div>
-      <Show
-        when={!loading()}
-        fallback={
-          <div class="p-6 text-center text-sm text-ink-muted">Loading…</div>
-        }
-      >
-        <Show
-          when={emails().length > 0}
-          fallback={
-            <div class="rounded-lg border border-dashed border-edge-muted p-6 text-center text-sm text-ink-muted">
-              {`No ${signalView() === 'signal' ? 'signal emails' : 'emails'} with this contact ${view() === 'me' ? 'in your inbox' : 'yet'}.`}
-            </div>
-          }
-        >
-          <div class="max-h-96 overflow-y-auto">
-            <ListEntityMetadataQueryProvider>
-              <ListLayoutProvider ref={listRef}>
-                <div ref={setListRef} class="flex flex-col">
-                  <For each={emails()}>
-                    {(entity) => (
-                      <ListEntity
-                        entity={entity}
-                        timestamp={entity.updatedAt}
-                        onClick={() => openEntity(entity)}
-                      />
-                    )}
-                  </For>
-                </div>
-              </ListLayoutProvider>
-            </ListEntityMetadataQueryProvider>
-            <Show when={emailsQuery.hasNextPage}>
-              <div ref={setSentinelRef} class="h-px" />
-            </Show>
-            <Show when={emailsQuery.isFetchingNextPage}>
-              <div class="p-3 text-center text-xs text-ink-muted">
-                Loading more…
-              </div>
-            </Show>
-          </div>
-        </Show>
-      </Show>
-    </div>
+        </>
+      }
+    >
+      <RecordItemList
+        source={emailsQuery}
+        pending={!props.contact}
+        empty={`No ${signalView() === 'signal' ? 'signal emails' : 'emails'} with this contact ${view() === 'me' ? 'in your inbox' : 'yet'}.`}
+      />
+    </RecordSection>
   );
 }

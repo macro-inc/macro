@@ -38,6 +38,7 @@ describe('CRM record item queries', () => {
       type: 'contact',
       id: 'contact-1',
       email: 'ada@acme.com',
+      companyId: 'company-1',
     });
 
     expect(body.df['&'][1]).toEqual({
