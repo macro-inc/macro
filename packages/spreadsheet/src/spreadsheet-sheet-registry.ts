@@ -1,4 +1,4 @@
-import type { LoroDoc } from 'loro-crdt';
+import type { AutomergeDoc } from '@macro-inc/automerge';
 import { formulaReferencesSheet } from './sheet-references';
 
 export const DEFAULT_SHEET_ID = 'sheet1';
@@ -57,7 +57,9 @@ function retainedIdentity(value: unknown): RetainedIdentity | undefined {
   }
 }
 
-function readRetainedIdentities(doc: LoroDoc): Map<string, RetainedIdentity> {
+function readRetainedIdentities(
+  doc: AutomergeDoc
+): Map<string, RetainedIdentity> {
   const retained = new Map<string, RetainedIdentity>();
   // Causally newer metadata wins; sorted peer keys break concurrent ties.
   for (const [key, value] of Object.entries(
@@ -76,7 +78,7 @@ function readRetainedIdentities(doc: LoroDoc): Map<string, RetainedIdentity> {
 }
 
 /** Registry defaults never write state, so opening a legacy sheet is read-only. */
-export function readSpreadsheetSheets(doc: LoroDoc): SpreadsheetSheet[] {
+export function readSpreadsheetSheets(doc: AutomergeDoc): SpreadsheetSheet[] {
   const names = doc.getMap('spreadsheetSheetNames').toJSON();
   const order = doc.getMap('spreadsheetSheetOrder').toJSON();
   const deleted = doc.getMap('spreadsheetDeletedSheets').toJSON();
@@ -148,7 +150,7 @@ export function readSpreadsheetSheets(doc: LoroDoc): SpreadsheetSheet[] {
  * Retention does not override an explicit deletion tombstone.
  */
 export function retainSpreadsheetSheets(
-  doc: LoroDoc,
+  doc: AutomergeDoc,
   sheetId: string,
   formulas: string[] = []
 ): void {
@@ -171,12 +173,10 @@ export function retainSpreadsheetSheets(
     const existing = retainedIdentity(retentions.get(key));
     if (existing?.name === sheet.name && existing.order === sheetOrder)
       continue;
-    // Version-vector totals increase across causally ordered metadata updates,
-    // without relying on local wall clocks when reconstructing an undone name.
-    const revision = Object.values(doc.version().toJSON()).reduce<number>(
-      (total, counter) => total + Number(counter),
-      0
-    );
+    // Native operation counts increase across causally ordered updates.
+    const revision = [...doc.getAllChanges().values()]
+      .flat()
+      .reduce((total, change) => total + change.ops.length, 0);
     retentions.set(
       key,
       JSON.stringify({ name: sheet.name, order: sheetOrder, revision })
@@ -189,7 +189,7 @@ export function retainSpreadsheetSheets(
  * targeting a hidden sheet must not revive it either.
  */
 export function reviveSpreadsheetFallback(
-  doc: LoroDoc,
+  doc: AutomergeDoc,
   sheetId?: string
 ): void {
   const deleted = doc.getMap('spreadsheetDeletedSheets');
@@ -215,7 +215,10 @@ export function reviveSpreadsheetFallback(
 }
 
 /** Explicit deletion removes observed revivals, never an unseen peer's edit. */
-export function tombstoneSpreadsheetSheet(doc: LoroDoc, sheetId: string): void {
+export function tombstoneSpreadsheetSheet(
+  doc: AutomergeDoc,
+  sheetId: string
+): void {
   const revivals = doc.getMap('spreadsheetSheetRevivals');
   for (const [key, revivedId] of Object.entries(revivals.toJSON())) {
     if (revivedId === sheetId) revivals.delete(key);

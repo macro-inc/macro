@@ -14,12 +14,12 @@ import {
   useIsNestedBlock,
 } from '../block';
 import {
+  blockAutomergeManagerSignal,
   blockEditPermissionEnabledSignal,
   blockErrorSignal,
   blockFileSignal,
   blockHandleSignal,
   blockLoadRetrySignal,
-  blockLoroManagerSignal,
   blockMetadataSignal,
   blockSourceSignal,
   blockSyncSourceSignal,
@@ -58,7 +58,7 @@ export function BlockLoader<
   const setText = blockTextSignal.set;
   const setUserAccess = blockUserAccessSignal.set;
   const setDocumentMetadata = blockMetadataSignal.set;
-  const setLoroManagerSignal = blockLoroManagerSignal.set;
+  const setAutomergeManagerSignal = blockAutomergeManagerSignal.set;
   const [syncSource, setSyncSourceSignal] = blockSyncSourceSignal;
   const setSourceSignal = blockSourceSignal.set;
   const setEditPermissionEnabled = blockEditPermissionEnabledSignal.set;
@@ -117,7 +117,7 @@ Check that the load function does not return a preload source when the intent is
       setDocumentMetadata(undefined);
       setError(undefined);
       setSyncSourceSignal(undefined);
-      setLoroManagerSignal(undefined);
+      setAutomergeManagerSignal(undefined);
       setSourceSignal(undefined);
       setHandle(undefined);
       return;
@@ -183,8 +183,8 @@ Check that the load function does not return a preload source when the intent is
         : undefined;
     });
 
-    setLoroManagerSignal(() =>
-      data && 'loroManager' in data ? data.loroManager : undefined
+    setAutomergeManagerSignal(() =>
+      data && 'automergeManager' in data ? data.automergeManager : undefined
     );
 
     setSyncSourceSignal(() =>

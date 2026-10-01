@@ -2,7 +2,7 @@ import { createBlockSignal, type LoadErrors } from '@core/block';
 import type { OwnedBlockHandle } from '@core/orchestrator';
 import type { Source } from '@core/source';
 import type { IDocumentStorageServiceFile } from '@filesystem/file';
-import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
+import type { AutomergeManager } from '@macro-inc/collaboration/collab/manager';
 import type { LiveSyncSource } from '@macro-inc/collaboration/collab/source';
 import type { AccessLevel as UserAccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
@@ -19,7 +19,8 @@ export const blockUserAccessSignal = createBlockSignal<UserAccessLevel>();
 export const blockMetadataSignal = createBlockSignal<DocumentMetadata>();
 
 // Derived signals for syncable documents
-export const blockLoroManagerSignal = createBlockSignal<LoroManager>();
+export const blockAutomergeManagerSignal =
+  createBlockSignal<AutomergeManager>();
 export const blockSyncSourceSignal = createBlockSignal<LiveSyncSource>();
 export const blockSourceSignal = createBlockSignal<Source>();
 

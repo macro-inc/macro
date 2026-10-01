@@ -26,7 +26,7 @@ env_var! {
 maybe_env_vars! {
     /// sync-service base url (markdown document content lives there)
     pub struct SyncServiceUrl;
-    /// lexical-service base url (markdown -> loro snapshot conversion)
+    /// lexical-service base url (markdown -> automerge snapshot conversion)
     pub struct LexicalServiceUrl;
     /// internal auth key shared by sync/lexical locally
     pub struct InternalApiSecretKey;
@@ -45,7 +45,7 @@ maybe_env_vars! {
 
 /// Clients for initializing native markdown document content.
 pub struct DocContentClients {
-    /// Converts markdown to a loro snapshot.
+    /// Converts markdown to a automerge snapshot.
     pub lexical: LexicalClient,
     /// Boots the document's durable object from a snapshot.
     pub sync: SyncServiceClient,

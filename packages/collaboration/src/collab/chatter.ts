@@ -1,7 +1,7 @@
 import type { RawUpdate } from './shared';
 
 /** What co-located replicas gossip to each other, out-of-band from the live
- *  transport: a loro update or an awareness blob. */
+ *  transport: an Automerge update or an awareness blob. */
 export type ChatterMessage =
   | { type: 'update'; data: RawUpdate }
   | { type: 'awareness'; data: RawUpdate };
@@ -25,7 +25,7 @@ export function noopChatter(): Chatter {
   return { post: () => {}, subscribe: () => () => {}, close: () => {} };
 }
 
-const CHANNEL_PREFIX = 'macro-loro-';
+const CHANNEL_PREFIX = 'macro-automerge-';
 
 /** Cross-tab gossip over the browser {@link BroadcastChannel}. */
 export class BroadcastChannelChatter implements Chatter {

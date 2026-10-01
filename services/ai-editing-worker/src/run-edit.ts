@@ -1,4 +1,4 @@
-import { LoroManager } from '@macro-inc/collaboration/collab/manager';
+import { AutomergeManager } from '@macro-inc/collaboration/collab/manager';
 import type { RawUpdate } from '@macro-inc/collaboration/collab/shared';
 import {
   createNoopLiveSyncSource,
@@ -9,7 +9,7 @@ import {
   WALSyncer,
 } from '@macro-inc/collaboration/collab/wal';
 import type { SyncServiceSource } from '@macro-inc/collaboration/sync-service/source';
-import { MARKDOWN_LORO_SCHEMA } from '@macro-inc/lexical-core/markdown-loro-schema';
+import { MARKDOWN_AUTOMERGE_SCHEMA } from '@macro-inc/lexical-core/markdown-automerge-schema';
 import { Telemetry } from '@macro-inc/observability';
 import type { LanguageModel } from 'ai';
 import { fastEditor, supervisor } from './ai-editing/agents';
@@ -87,7 +87,7 @@ export type RunEditArgs = {
   /** Include a markdown trace of all supervisor steps in the result. */
   debug?: boolean;
   /**
-   * Commit edits to the shared Loro doc (default true). Set false to have the
+   * Commit edits to the shared Automerge doc (default true). Set false to have the
    * caller receive the returned `ops` without them being committed.
    */
   propagate?: boolean;
@@ -109,7 +109,7 @@ export async function runEditSession(
   const source = args.source;
 
   // The manager owns the one true (merged) doc + mirror.
-  const manager = new LoroManager(MARKDOWN_LORO_SCHEMA, {
+  const manager = new AutomergeManager(MARKDOWN_AUTOMERGE_SCHEMA, {
     documentId: args.documentId,
   });
 
@@ -153,7 +153,7 @@ export async function runEditSession(
     (updates) => liveSource.pushUpdate(updates)
   );
 
-  // The workspace owns the editing surface + its two-way sync with Loro, and
+  // The workspace owns the editing surface + its two-way sync with Automerge, and
   // hands out per-coder writers. Under debug it also records a replay trace.
   const { workspace, initialDocument } = await Telemetry.span(
     'edit.hydrate',

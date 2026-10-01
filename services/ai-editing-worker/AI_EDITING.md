@@ -3,13 +3,13 @@
 The general idea is that we have a worker that takes an English request for a
 document and dispatches agents to produce edits on the document.
 
-We do this by having a Cloudflare worker join the document as a real Loro peer,
+We do this by having a Cloudflare worker join the document as a real Automerge peer,
 make its edits through the same CRDT system everyone else uses, and stream them
 out keystroke by keystroke.
 
 ## Shared-code boundary
 
-The worker and web app share the Loro collaboration engine, sync-service wire
+The worker and web app share the Automerge collaboration engine, sync-service wire
 transport, and WebSocket runtime through `@macro-inc/collaboration`. Browser
 authentication and sync HTTP policy stay in `apps/web`; the package accepts an
 environment-specific URL resolver instead. The worker is part of the root Bun
@@ -32,8 +32,8 @@ edit session. At a high level, it:
 
 1. Opens a sync-service WebSocket, speaking the same Bebop wire protocol as the
    browser client.
-2. Waits for the initial snapshot, then spins up a `LoroManager` + `SyncEngine`
-   around the markdown Loro schema. It uses the same abstractions the frontend
+2. Waits for the initial snapshot, then spins up a `AutomergeManager` + `SyncEngine`
+   around the markdown Automerge schema. It uses the same abstractions the frontend
    does.
 3. Wires a `WALSyncer` so local commits get pushed back to the server, and
    flushes it before disconnecting. It's memory backed (not IDB).
@@ -65,7 +65,7 @@ A diagram for the animation abstraction flow
                               │
         Lexical session  ←────┘
                 │
-            propagate  →  snapshot  →  mirror  →  Loro  →  sync to everyone
+            propagate  →  snapshot  →  mirror  →  Automerge  →  sync to everyone
 ```
 
 ### Prompts
@@ -133,7 +133,7 @@ node ids. It is what turns DocumentOps into actual edits to the lexical document
 ## Cursors and peer ids
 
 **The live cursor** is ephemeral. While a writer works, `realAwarenessSource`
-encodes its caret/selection as a Loro cursor and broadcasts it over the
+encodes its caret/selection as an Automerge cursor and broadcasts it over the
 ephemeral awareness channel, so the website renders a remote cursor walking
 through the text. The cursor's label is the editor `POST /edit` names
 (`editor: { name }`): the agent or persona that asked for the edit, so a
@@ -143,7 +143,7 @@ to the pool of distinct names (`Sam (AI)`, `Alex (AI)`). Every label ends in
 `(AI)`; the website keys off that suffix to keep AI name tags pinned. Each
 writer also gets one of a few accent colors; the cursor lingers ~700ms after the
 writer finishes, then clears. We have some ugly code that manages resolving a
-block id to the `LoroText` that actually owns the characters for this :/
+block id to the `AutomergeText` that actually owns the characters for this :/
 
 **The peer id** Human peers get random ids from the whole 64b range, and we have
 it so that AI commits use a small reserved range in

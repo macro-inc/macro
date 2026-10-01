@@ -1,21 +1,21 @@
 import {
-  createLoroManager,
-  type LoroManager,
+  type AutomergeManager,
+  createAutomergeManager,
 } from '@macro-inc/collaboration/collab/manager';
 import type { RawUpdate } from '@macro-inc/collaboration/collab/shared';
 import {
+  AUTOMERGE_SNAPSHOT_DB_NAME,
   IDBSnapshotStore,
-  LORO_SNAPSHOT_DB_NAME,
 } from '@macro-inc/collaboration/collab/snapshot-store';
 import type {
   InitialSync,
   SyncError,
 } from '@macro-inc/collaboration/collab/source';
 import {
+  AUTOMERGE_WAL_DB_NAME,
   BrowserWALStore,
-  LORO_WAL_DB_NAME,
 } from '@macro-inc/collaboration/collab/wal';
-import { MARKDOWN_LORO_SCHEMA } from '@macro-inc/lexical-core/markdown-loro-schema';
+import { MARKDOWN_AUTOMERGE_SCHEMA } from '@macro-inc/lexical-core/markdown-automerge-schema';
 import type { Span } from '@macro-inc/observability';
 import { Scroll } from '@ui';
 import type { ResultAsync } from 'neverthrow';
@@ -37,12 +37,17 @@ import {
   type MarkdownDocumentState,
 } from '../context/markdown-document-state';
 import { HistoryProvider } from '../history/HistoryContext';
-import { resumeDocumentSpan, stampLoroSnapshotState } from '../observability';
+import {
+  resumeDocumentSpan,
+  stampAutomergeSnapshotState,
+} from '../observability';
 import type { MarkdownDocumentKind, MarkdownDocumentSource } from '../types';
 import { MarkdownNameProvider } from './MarkdownNameProvider';
 import { InstructionsNotebook, Notebook } from './Notebook';
 
-type MarkdownLoroManager = LoroManager<typeof MARKDOWN_LORO_SCHEMA>;
+type MarkdownAutomergeManager = AutomergeManager<
+  typeof MARKDOWN_AUTOMERGE_SCHEMA
+>;
 type SnapshotResult = {
   outcome: 'seeded' | 'discarded' | 'unavailable' | 'error';
   bytes?: number;
@@ -80,7 +85,7 @@ async function recordSnapshotResult(
 function startSnapshotIngest(
   parentSpan: Span | undefined,
   source: SnapshotSource,
-  loroManager: MarkdownLoroManager,
+  automergeManager: MarkdownAutomergeManager,
   ingest: () => Promise<SnapshotResult>
 ): void {
   parentSpan?.event('doc.snapshot.attempt', {
@@ -97,7 +102,7 @@ function startSnapshotIngest(
             snapshotSpan.setAttr('snapshot.bytes', result.bytes);
           }
           if (result.outcome === 'seeded') {
-            stampLoroSnapshotState(snapshotSpan, loroManager.doc);
+            stampAutomergeSnapshotState(snapshotSpan, automergeManager.doc);
           } else if (result.outcome === 'error') {
             snapshotSpan.error('snapshot ingestion failed');
           }
@@ -114,21 +119,21 @@ function startSnapshotIngest(
 }
 
 async function ingestLocalSnapshot(
-  loroManager: MarkdownLoroManager,
+  automergeManager: MarkdownAutomergeManager,
   snapshotStore: IDBSnapshotStore<RawUpdate>,
   walStore: BrowserWALStore<RawUpdate>
 ): Promise<SnapshotResult> {
   const localSnapshot = await snapshotStore.load();
   if (!localSnapshot) return { outcome: 'unavailable' };
   const walEntries = await walStore.getAll();
-  const seeded = await loroManager.ingest({
+  const seeded = await automergeManager.ingest({
     kind: 'local',
     snapshot: localSnapshot,
     walUpdates: walEntries.map((entry) => entry.update),
   });
 
   if (walEntries.length >= 1) {
-    const doc = loroManager.doc;
+    const doc = automergeManager.doc;
     const snapshot = doc.export({
       mode: 'shallow-snapshot',
       frontiers: doc.oplogFrontiers(),
@@ -142,7 +147,7 @@ async function ingestLocalSnapshot(
 }
 
 async function ingestRemoteSnapshot(
-  loroManager: MarkdownLoroManager,
+  automergeManager: MarkdownAutomergeManager,
   doInitialSync: () => ResultAsync<InitialSync, SyncError>
 ): Promise<SnapshotResult> {
   const sync = await doInitialSync();
@@ -151,7 +156,7 @@ async function ingestRemoteSnapshot(
     return { outcome: 'error' };
   }
   const bytes = sync.value.snapshot.length;
-  const seeded = await loroManager.ingest({
+  const seeded = await automergeManager.ingest({
     kind: 'dss',
     snapshot: sync.value.snapshot,
   });
@@ -159,12 +164,12 @@ async function ingestRemoteSnapshot(
 }
 
 async function ingestS3Snapshot(
-  loroManager: MarkdownLoroManager,
+  automergeManager: MarkdownAutomergeManager,
   loadCachedSnapshot: () => Promise<Uint8Array | undefined>
 ): Promise<SnapshotResult> {
   const snapshot = await loadCachedSnapshot();
   if (!snapshot) return { outcome: 'unavailable' };
-  const seeded = await loroManager.ingest({
+  const seeded = await automergeManager.ingest({
     kind: 's3',
     snapshot,
   });
@@ -233,16 +238,19 @@ type MarkdownSnapshotIngestOptions = {
 };
 
 function useMarkdownSnapshotIngest(
-  loroManager: MarkdownLoroManager,
+  automergeManager: MarkdownAutomergeManager,
   options: MarkdownSnapshotIngestOptions
 ) {
   const { documentId: getDocumentId } = useMarkdownDocument();
   const documentId = getDocumentId();
   const snapshotStore = new IDBSnapshotStore<RawUpdate>(
-    LORO_SNAPSHOT_DB_NAME,
+    AUTOMERGE_SNAPSHOT_DB_NAME,
     documentId
   );
-  const walStore = new BrowserWALStore<RawUpdate>(LORO_WAL_DB_NAME, documentId);
+  const walStore = new BrowserWALStore<RawUpdate>(
+    AUTOMERGE_WAL_DB_NAME,
+    documentId
+  );
 
   createEffect(
     on(
@@ -253,28 +261,33 @@ function useMarkdownSnapshotIngest(
 
         const span = resumeDocumentSpan(documentId);
         if (options.optimisticSnapshot) {
-          startSnapshotIngest(span, 'optimistic', loroManager, async () => {
-            const seeded = await loroManager.ingest({
-              kind: 'optimistic',
-              snapshot: options.optimisticSnapshot!,
-            });
-            return {
-              outcome: seeded ? 'seeded' : 'discarded',
-              bytes: options.optimisticSnapshot!.length,
-            };
-          });
+          startSnapshotIngest(
+            span,
+            'optimistic',
+            automergeManager,
+            async () => {
+              const seeded = await automergeManager.ingest({
+                kind: 'optimistic',
+                snapshot: options.optimisticSnapshot!,
+              });
+              return {
+                outcome: seeded ? 'seeded' : 'discarded',
+                bytes: options.optimisticSnapshot!.length,
+              };
+            }
+          );
         }
-        startSnapshotIngest(span, 'local', loroManager, () =>
-          ingestLocalSnapshot(loroManager, snapshotStore, walStore)
+        startSnapshotIngest(span, 'local', automergeManager, () =>
+          ingestLocalSnapshot(automergeManager, snapshotStore, walStore)
         );
-        startSnapshotIngest(span, 's3', loroManager, () =>
+        startSnapshotIngest(span, 's3', automergeManager, () =>
           ingestS3Snapshot(
-            loroManager,
+            automergeManager,
             options.loadCachedSnapshot ?? (async () => undefined)
           )
         );
-        startSnapshotIngest(span, 'remote', loroManager, () =>
-          ingestRemoteSnapshot(loroManager, doInitialSync)
+        startSnapshotIngest(span, 'remote', automergeManager, () =>
+          ingestRemoteSnapshot(automergeManager, doInitialSync)
         );
       }
     )
@@ -291,11 +304,11 @@ export function MarkdownDocumentContent(props: MarkdownDocumentContentProps) {
   const { documentId: getDocumentId, state } = useMarkdownDocument();
   const documentId = getDocumentId();
 
-  const loroManager = createLoroManager(MARKDOWN_LORO_SCHEMA, {
+  const automergeManager = createAutomergeManager(MARKDOWN_AUTOMERGE_SCHEMA, {
     documentId,
   });
 
-  useMarkdownSnapshotIngest(loroManager, props);
+  useMarkdownSnapshotIngest(automergeManager, props);
 
   const isInstructions = () => props.isInstructions ?? false;
 
@@ -315,13 +328,13 @@ export function MarkdownDocumentContent(props: MarkdownDocumentContentProps) {
               when={!isInstructions()}
               fallback={
                 <InstructionsNotebook
-                  loroManager={loroManager}
+                  automergeManager={automergeManager}
                   hotkeyScope={props.hotkeyScope}
                 />
               }
             >
               <Notebook
-                loroManager={loroManager}
+                automergeManager={automergeManager}
                 documentId={documentId}
                 hotkeyScope={props.hotkeyScope}
                 autoFocus={props.autoFocus ?? false}

@@ -17,7 +17,7 @@ export type CreateTaskHandler200 = {
   documentId: string;
   /** Metadata for the created document */
   documentMetadata: DocumentResponseMetadata;
-  /** Base64-encoded canonical Loro snapshot used to initialize the task. */
+  /** Base64-encoded canonical Automerge snapshot used to initialize the task. */
   initialSnapshot: string;
   /** The team this task number is scoped to. */
   teamId?: CreateTaskHandler200TeamId;

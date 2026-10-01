@@ -107,7 +107,7 @@ function nextVersionId(id: string): string {
 
 /**
  * Retype a container node by swapping in a freshly-built replacement. The
- * replacement gets a FRESH durable id (Loro can't reshape a container in place —
+ * replacement gets a FRESH durable id (Automerge can't reshape a container in place —
  * reusing the id makes the change vanish on sync, a fresh id reads as a clean
  * delete + insert). The new id is the old id with a `~vN` suffix so it stays
  * recognizable to the agent (`b3` -> `b3~v1`), and every id that pointed at the

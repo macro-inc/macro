@@ -1,115 +1,115 @@
-import { schema } from '@loro-mirror/core';
+import { schema } from '@macro-inc/automerge/mirror';
 
 // Root maps have stable identities even when two peers first edit an empty
 // cell concurrently. Separate properties also let formatting and value edits
 // merge independently. Calculated values are deliberately never persisted.
-export const SPREADSHEET_LORO_SCHEMA = schema({
-  spreadsheetSheetMetadata: schema.LoroMap(
+export const SPREADSHEET_AUTOMERGE_SCHEMA = schema({
+  spreadsheetSheetMetadata: schema.AutomergeMap(
     {} as Record<string, ReturnType<typeof schema.String>>
   ),
-  spreadsheetSheetNames: schema.LoroMap(
+  spreadsheetSheetNames: schema.AutomergeMap(
     {} as Record<string, ReturnType<typeof schema.String>>
   ),
-  spreadsheetSheetOrder: schema.LoroMap(
+  spreadsheetSheetOrder: schema.AutomergeMap(
     {} as Record<string, ReturnType<typeof schema.Number>>
   ),
-  spreadsheetDeletedSheets: schema.LoroMap(
+  spreadsheetDeletedSheets: schema.AutomergeMap(
     {} as Record<string, ReturnType<typeof schema.Boolean>>
   ),
-  spreadsheetSheetRevivals: schema.LoroMap(
+  spreadsheetSheetRevivals: schema.AutomergeMap(
     {} as Record<string, ReturnType<typeof schema.String>>
   ),
-  spreadsheetSheetRetentions: schema.LoroMap(
+  spreadsheetSheetRetentions: schema.AutomergeMap(
     {} as Record<string, ReturnType<typeof schema.String>>
   ),
-  spreadsheetValues: schema.LoroMap(
+  spreadsheetValues: schema.AutomergeMap(
     {} as Record<string, ReturnType<typeof schema.String>>
   ),
-  spreadsheetBold: schema.LoroMap(
+  spreadsheetBold: schema.AutomergeMap(
     {} as Record<string, ReturnType<typeof schema.Boolean>>
   ),
-  spreadsheetFontNames: schema.LoroMap(
+  spreadsheetFontNames: schema.AutomergeMap(
     {} as Record<string, ReturnType<typeof schema.String>>
   ),
-  spreadsheetBorderTopStyles: schema.LoroMap(
+  spreadsheetBorderTopStyles: schema.AutomergeMap(
     {} as Record<string, ReturnType<typeof schema.String>>
   ),
-  spreadsheetBorderTopColors: schema.LoroMap(
+  spreadsheetBorderTopColors: schema.AutomergeMap(
     {} as Record<string, ReturnType<typeof schema.String>>
   ),
-  spreadsheetBorderRightStyles: schema.LoroMap(
+  spreadsheetBorderRightStyles: schema.AutomergeMap(
     {} as Record<string, ReturnType<typeof schema.String>>
   ),
-  spreadsheetBorderRightColors: schema.LoroMap(
+  spreadsheetBorderRightColors: schema.AutomergeMap(
     {} as Record<string, ReturnType<typeof schema.String>>
   ),
-  spreadsheetBorderBottomStyles: schema.LoroMap(
+  spreadsheetBorderBottomStyles: schema.AutomergeMap(
     {} as Record<string, ReturnType<typeof schema.String>>
   ),
-  spreadsheetBorderBottomColors: schema.LoroMap(
+  spreadsheetBorderBottomColors: schema.AutomergeMap(
     {} as Record<string, ReturnType<typeof schema.String>>
   ),
-  spreadsheetBorderLeftStyles: schema.LoroMap(
+  spreadsheetBorderLeftStyles: schema.AutomergeMap(
     {} as Record<string, ReturnType<typeof schema.String>>
   ),
-  spreadsheetBorderLeftColors: schema.LoroMap(
+  spreadsheetBorderLeftColors: schema.AutomergeMap(
     {} as Record<string, ReturnType<typeof schema.String>>
   ),
-  spreadsheetNumberFormats: schema.LoroMap(
+  spreadsheetNumberFormats: schema.AutomergeMap(
     {} as Record<string, ReturnType<typeof schema.String>>
   ),
-  spreadsheetFormats: schema.LoroMap(
+  spreadsheetFormats: schema.AutomergeMap(
     {} as Record<string, ReturnType<typeof schema.String>>
   ),
-  spreadsheetItalic: schema.LoroMap(
+  spreadsheetItalic: schema.AutomergeMap(
     {} as Record<string, ReturnType<typeof schema.Boolean>>
   ),
-  spreadsheetUnderline: schema.LoroMap(
+  spreadsheetUnderline: schema.AutomergeMap(
     {} as Record<string, ReturnType<typeof schema.Boolean>>
   ),
-  spreadsheetStrikethrough: schema.LoroMap(
+  spreadsheetStrikethrough: schema.AutomergeMap(
     {} as Record<string, ReturnType<typeof schema.Boolean>>
   ),
-  spreadsheetWrap: schema.LoroMap(
+  spreadsheetWrap: schema.AutomergeMap(
     {} as Record<string, ReturnType<typeof schema.Boolean>>
   ),
-  spreadsheetBorderTop: schema.LoroMap(
+  spreadsheetBorderTop: schema.AutomergeMap(
     {} as Record<string, ReturnType<typeof schema.Boolean>>
   ),
-  spreadsheetBorderRight: schema.LoroMap(
+  spreadsheetBorderRight: schema.AutomergeMap(
     {} as Record<string, ReturnType<typeof schema.Boolean>>
   ),
-  spreadsheetBorderBottom: schema.LoroMap(
+  spreadsheetBorderBottom: schema.AutomergeMap(
     {} as Record<string, ReturnType<typeof schema.Boolean>>
   ),
-  spreadsheetBorderLeft: schema.LoroMap(
+  spreadsheetBorderLeft: schema.AutomergeMap(
     {} as Record<string, ReturnType<typeof schema.Boolean>>
   ),
-  spreadsheetFontFamily: schema.LoroMap(
+  spreadsheetFontFamily: schema.AutomergeMap(
     {} as Record<string, ReturnType<typeof schema.String>>
   ),
-  spreadsheetTextColor: schema.LoroMap(
+  spreadsheetTextColor: schema.AutomergeMap(
     {} as Record<string, ReturnType<typeof schema.String>>
   ),
-  spreadsheetFillColor: schema.LoroMap(
+  spreadsheetFillColor: schema.AutomergeMap(
     {} as Record<string, ReturnType<typeof schema.String>>
   ),
-  spreadsheetHorizontalAlign: schema.LoroMap(
+  spreadsheetHorizontalAlign: schema.AutomergeMap(
     {} as Record<string, ReturnType<typeof schema.String>>
   ),
-  spreadsheetVerticalAlign: schema.LoroMap(
+  spreadsheetVerticalAlign: schema.AutomergeMap(
     {} as Record<string, ReturnType<typeof schema.String>>
   ),
-  spreadsheetFontSize: schema.LoroMap(
+  spreadsheetFontSize: schema.AutomergeMap(
     {} as Record<string, ReturnType<typeof schema.Number>>
   ),
-  spreadsheetDecimals: schema.LoroMap(
+  spreadsheetDecimals: schema.AutomergeMap(
     {} as Record<string, ReturnType<typeof schema.Number>>
   ),
-  spreadsheetColumnWidths: schema.LoroMap(
+  spreadsheetColumnWidths: schema.AutomergeMap(
     {} as Record<string, ReturnType<typeof schema.Number>>
   ),
-  spreadsheetRowAdditions: schema.LoroMap(
+  spreadsheetRowAdditions: schema.AutomergeMap(
     {} as Record<string, ReturnType<typeof schema.Number>>
   ),
 });

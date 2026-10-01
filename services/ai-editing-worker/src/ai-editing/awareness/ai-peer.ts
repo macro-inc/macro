@@ -1,5 +1,5 @@
 /**
- * AI editors draw their Loro peer id from a small reserved block whose decimal
+ * AI editors draw their Automerge peer id from a small reserved block whose decimal
  * form is 15 leading 9s followed by a 3-digit identity, i.e.
  * `999999999999999000 ... 999999999999999999`.
  *

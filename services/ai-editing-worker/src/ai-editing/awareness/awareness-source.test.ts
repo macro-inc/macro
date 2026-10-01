@@ -1,4 +1,4 @@
-import { EphemeralStore } from 'loro-crdt';
+import { EphemeralStore } from '@macro-inc/automerge';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   AI_NAMES,
@@ -28,7 +28,7 @@ describe('aiLabel', () => {
   });
 });
 
-// Duck-typed fake loro containers (kind/get), matching what resolveTextOwner reads.
+// Duck-typed fake automerge containers (kind/get), matching what resolveTextOwner reads.
 function textC() {
   return {
     kind: () => 'Text',
@@ -50,7 +50,7 @@ function mapC(id: string, fields: { text?: unknown; children?: unknown[] }) {
     },
   };
 }
-function fakeLoro(containers: Record<string, unknown>) {
+function fakeAutomerge(containers: Record<string, unknown>) {
   const mirror = { getContainerIds: () => Object.keys(containers) } as any;
   const doc = { getContainerById: (cid: string) => containers[cid] } as any;
   return { mirror, doc };
@@ -59,7 +59,7 @@ function fakeLoro(containers: Record<string, unknown>) {
 describe('resolveTextOwner (cursor-walk fix)', () => {
   it('a text-node container resolves to itself', () => {
     const t = textC();
-    const { mirror, doc } = fakeLoro({ c1: mapC('t1', { text: t }) });
+    const { mirror, doc } = fakeAutomerge({ c1: mapC('t1', { text: t }) });
     expect(resolveTextOwner(mirror, doc, 't1')).toEqual({
       text: t,
       nodeId: 't1',
@@ -69,7 +69,7 @@ describe('resolveTextOwner (cursor-walk fix)', () => {
   it('a block whose text lives in a child resolves to the CHILD text-node id', () => {
     const childText = textC();
     const block = mapC('b1', { children: [mapC('t2', { text: childText })] });
-    const { mirror, doc } = fakeLoro({ c1: block });
+    const { mirror, doc } = fakeAutomerge({ c1: block });
     // block id in, but the owner is the child text node (so the caret can walk)
     expect(resolveTextOwner(mirror, doc, 'b1')).toEqual({
       text: childText,
@@ -82,7 +82,7 @@ describe('resolveTextOwner (cursor-walk fix)', () => {
     const item = mapC('li1', {
       children: [mapC('p1', { children: [mapC('t9', { text: deepText })] })],
     });
-    const { mirror, doc } = fakeLoro({ c1: item });
+    const { mirror, doc } = fakeAutomerge({ c1: item });
     expect(resolveTextOwner(mirror, doc, 'li1')).toEqual({
       text: deepText,
       nodeId: 't9',
@@ -90,7 +90,7 @@ describe('resolveTextOwner (cursor-walk fix)', () => {
   });
 
   it('returns null for an unknown id or a block with no text anywhere', () => {
-    const { mirror, doc } = fakeLoro({
+    const { mirror, doc } = fakeAutomerge({
       c1: mapC('b1', { children: [mapC('img', {})] }),
     });
     expect(resolveTextOwner(mirror, doc, 'missing')).toBeNull();
@@ -123,7 +123,9 @@ describe('realAwarenessSource (no live mirror)', () => {
 
   it('broadcasts the borrowed peer name as the cursor user readers see', async () => {
     const sent: Uint8Array[] = [];
-    const { mirror, doc } = fakeLoro({ c1: mapC('t1', { text: textC() }) });
+    const { mirror, doc } = fakeAutomerge({
+      c1: mapC('t1', { text: textC() }),
+    });
     const pool = PeerPool.forEditor('Macro');
     const [a, b] = await Promise.all([pool.borrow(), pool.borrow()]);
     for (const peer of [a, b]) {
@@ -149,7 +151,9 @@ describe('realAwarenessSource (no live mirror)', () => {
 
   it('keeps live awareness alive until clear removes it', () => {
     const send = vi.fn();
-    const { mirror, doc } = fakeLoro({ c1: mapC('t1', { text: textC() }) });
+    const { mirror, doc } = fakeAutomerge({
+      c1: mapC('t1', { text: textC() }),
+    });
     const src = realAwarenessSource({
       mirror,
       doc,
@@ -177,7 +181,9 @@ describe('realAwarenessSource (no live mirror)', () => {
 
   it('clears live awareness when the latest target no longer resolves', () => {
     const send = vi.fn();
-    const { mirror, doc } = fakeLoro({ c1: mapC('t1', { text: textC() }) });
+    const { mirror, doc } = fakeAutomerge({
+      c1: mapC('t1', { text: textC() }),
+    });
     const src = realAwarenessSource({
       mirror,
       doc,

@@ -1,4 +1,4 @@
-import type { LoroDoc } from 'loro-crdt';
+import type { AutomergeDoc } from '@macro-inc/automerge';
 import type {
   SpreadsheetCalculateRequest,
   SpreadsheetCalculateResponse,
@@ -59,7 +59,7 @@ export const SPREADSHEET_AI_LIMITS = {
 } as const;
 
 /** Strict native shape check: never reinterpret markdown as a blank sheet. */
-export function assertSpreadsheetDocument(doc: LoroDoc): void {
+export function assertSpreadsheetDocument(doc: AutomergeDoc): void {
   if (doc.getMap('spreadsheetMeta').get('formatVersion') !== 1)
     throw new Error('This is not a supported native Macro spreadsheet.');
 }
@@ -211,7 +211,7 @@ function readCell(
 }
 
 export function readSpreadsheetForAi(
-  doc: LoroDoc,
+  doc: AutomergeDoc,
   revision: string,
   request: SpreadsheetReadRequest,
   calculator: SpreadsheetCalculator
@@ -291,7 +291,7 @@ function validateInputs(
 }
 
 export function calculateSpreadsheetForAi(
-  doc: LoroDoc,
+  doc: AutomergeDoc,
   revision: string,
   request: SpreadsheetCalculateRequest,
   calculator: SpreadsheetCalculator
@@ -386,7 +386,7 @@ function operationRange(operation: SpreadsheetOperation): string | undefined {
 
 /** All mutations happen on a disposable fork; a failed batch changes nothing. */
 export function prepareSpreadsheetEdit(
-  doc: LoroDoc,
+  doc: AutomergeDoc,
   request: SpreadsheetEditRequest,
   calculator: SpreadsheetCalculator,
   peerId?: bigint

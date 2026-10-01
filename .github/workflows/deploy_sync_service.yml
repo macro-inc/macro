@@ -26,6 +26,10 @@ jobs:
     name: Deploy to Cloudflare
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=sync-service-deploy
     steps:
+    - name: Block incompatible legacy deployment
+      run: |-
+        echo 'Automerge is limited to isolated PLAYGROUND storage until app and data migration is complete.' >&2
+        exit 1
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       with:

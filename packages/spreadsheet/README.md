@@ -1,7 +1,7 @@
 # Shared spreadsheet model and AI interface
 
 The browser editor and the deterministic spreadsheet worker use this package's
-Loro model, sheet identity/reference rules, formula copying and IronCalc 0.8.4
+Automerge model, sheet identity/reference rules, formula copying and IronCalc 0.8.4
 calculation. Browser feature paths re-export the model for compatibility. WASM
 loading stays at the boundary: Vite loads a URL in the browser; Cloudflare imports
 a precompiled module and calls `initSync`.
@@ -11,7 +11,7 @@ a precompiled module and calls `initSync`.
 - `readSpreadsheetForAi`: workbook inventory and sparse ranges with source,
   formula, typed value, formatted display, errors and optional styles.
 - `calculateSpreadsheetForAi`: independent scratch formulas with optional
-  input overrides. It never writes to Loro. IronCalc tokenization qualifies
+  input overrides. It never writes to Automerge. IronCalc tokenization qualifies
   unqualified references to the requested source sheet, including ranges,
   absolute references, Unicode names and whole columns/rows. Each formula uses
   a separate private sheet, so scratch results cannot overwrite or accidentally
@@ -35,6 +35,6 @@ when written into the workbook. Context-sensitive no-argument functions such as
 restrictions as the editor. Sheet rename/delete retain the editor's direct
 reference guard; dynamic string references are not rewritten.
 
-Tests use the real IronCalc WASM and Loro implementation. Existing frontend core
+Tests use the real IronCalc WASM and Automerge implementation. Existing frontend core
 tests exercise these shared implementations through the compatibility exports.
 See the worker's [local integration instructions](../../services/ai-editing-worker/src/spreadsheet/README.md).

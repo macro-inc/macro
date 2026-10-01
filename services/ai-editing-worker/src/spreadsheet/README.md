@@ -6,14 +6,14 @@ The precise contract lives in `packages/spreadsheet/src/ai-types.ts` and is mirr
 by the Rust document tool types. This endpoint needs `SYNC_WS_BASE`; it does not
 call an LLM or require model API keys.
 
-The worker loads a coherent Loro snapshot and revision using
+The worker loads a coherent Automerge snapshot and revision using
 `GET /document/:id/state`. Reads and scratch calculations are pure.
 Edits operate on a disposable fork and send one delta with the caller's expected
 revision to `POST /document/:id/update`. The Durable Object validates
 the signed document grant, compares the live version and persists/broadcasts the
 delta atomically. A stale revision returns 409 and requires a fresh read.
 
-Sync treats the content as an arbitrary Loro document. This worker validates the
+Sync treats the content as an arbitrary Automerge document. This worker validates the
 loaded native workbook before reads/calculations/edits, and the spreadsheet edit
 use case validates its resulting fork before exporting a delta. The shared
 `packages/spreadsheet/src/document-validation.ts` reuses cell style, sheet name

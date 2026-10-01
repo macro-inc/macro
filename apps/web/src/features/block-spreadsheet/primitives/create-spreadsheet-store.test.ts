@@ -1,4 +1,4 @@
-import { LoroDoc } from 'loro-crdt';
+import { AutomergeDoc } from '@macro-inc/automerge';
 import { createRoot, createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import type { SpreadsheetDocumentSource } from '../context/spreadsheet-source';
@@ -17,7 +17,7 @@ import { createSpreadsheetStore } from './create-spreadsheet-store';
 
 describe('spreadsheet store', () => {
   it('applies structural patches as one undo step and rejects stale collaborator snapshots', async () => {
-    const doc = new LoroDoc();
+    const doc = new AutomergeDoc();
     writeSpreadsheetCells(doc, {
       A1: { value: '10', bold: true },
       A2: { value: '20' },
@@ -50,7 +50,7 @@ describe('spreadsheet store', () => {
     store.undo();
     expect(store.cells()).toEqual(before[0].cells);
     expect(store.activeSheet().metadata?.hiddenRows).toBeUndefined();
-    const peer = new LoroDoc();
+    const peer = new AutomergeDoc();
     peer.import(doc.export({ mode: 'snapshot' }));
     writeSpreadsheetCells(peer, { B1: { value: 'New collaborator edit' } });
     doc.import(peer.export({ mode: 'update' }));
@@ -66,7 +66,7 @@ describe('spreadsheet store', () => {
   it.each(['connected', 'connecting', 'offline'] as const)(
     'rejects coordinate shifts for a %s collaborative source',
     async (status) => {
-      const doc = new LoroDoc();
+      const doc = new AutomergeDoc();
       writeSpreadsheetCells(doc, { A1: { value: 'Keep me' } });
       let dispose = () => {};
       const store = createRoot((cleanup) => {
@@ -96,8 +96,8 @@ describe('spreadsheet store', () => {
     }
   );
   it('reports blocked structural history through its error accessor and preserves the undo step', async () => {
-    const doc = new LoroDoc();
-    const peer = new LoroDoc();
+    const doc = new AutomergeDoc();
+    const peer = new AutomergeDoc();
     const id = addSpreadsheetSheet(doc, 'Before');
     let dispose = () => {};
     const store = createRoot((cleanup) => {
@@ -138,7 +138,7 @@ describe('spreadsheet store', () => {
   it.each(['readonly', 'hydrating'] as const)(
     'does not revive a retained fallback while %s',
     async (state) => {
-      const doc = new LoroDoc();
+      const doc = new AutomergeDoc();
       doc.getMap('spreadsheetDeletedSheets').set(DEFAULT_SHEET_ID, true);
       doc.commit();
       const version = doc.version().toJSON();
@@ -177,7 +177,7 @@ describe('spreadsheet store', () => {
   );
 
   it('keeps active sheets local and routes cells, layout and presence to the selected sheet', async () => {
-    const doc = new LoroDoc();
+    const doc = new AutomergeDoc();
     const selections: (SpreadsheetSelection | undefined)[] = [];
     const source: SpreadsheetDocumentSource = {
       doc: () => doc,
@@ -242,7 +242,7 @@ describe('spreadsheet store', () => {
     'publishes the restored cursor on sheet %s and cancels pending old-sheet presence',
     async (action) => {
       vi.useFakeTimers();
-      const doc = new LoroDoc();
+      const doc = new AutomergeDoc();
       const publish = vi.fn();
       let dispose = () => {};
       try {
@@ -287,7 +287,7 @@ describe('spreadsheet store', () => {
   );
 
   it('filters remote cursors by sheet and treats legacy presence as Sheet1', async () => {
-    const doc = new LoroDoc();
+    const doc = new AutomergeDoc();
     const source: SpreadsheetDocumentSource = {
       doc: () => doc,
       ready: () => true,
@@ -326,7 +326,7 @@ describe('spreadsheet store', () => {
   });
 
   it('falls back after a remote deletion and restores an imported workbook in one undo', async () => {
-    const doc = new LoroDoc();
+    const doc = new AutomergeDoc();
     const source: SpreadsheetDocumentSource = {
       doc: () => doc,
       ready: () => true,
@@ -376,7 +376,7 @@ describe('spreadsheet store', () => {
   });
 
   it('blocks workbook mutations while read-only without blocking tab selection', async () => {
-    const doc = new LoroDoc();
+    const doc = new AutomergeDoc();
     const [canEdit, setCanEdit] = createSignal(true);
     const source: SpreadsheetDocumentSource = {
       doc: () => doc,
@@ -418,7 +418,7 @@ describe('spreadsheet store', () => {
   });
 
   it('blocks writes before hydration and while read-only', async () => {
-    const doc = new LoroDoc();
+    const doc = new AutomergeDoc();
     const [ready, setReady] = createSignal(false);
     const [canEdit, setCanEdit] = createSignal(true);
     const source: SpreadsheetDocumentSource = {

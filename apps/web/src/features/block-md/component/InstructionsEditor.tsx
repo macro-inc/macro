@@ -38,7 +38,7 @@ import {
 } from '@core/component/LexicalMarkdown/utils';
 import { ENABLE_MARKDOWN_LIVE_COLLABORATION } from '@core/constant/featureFlags';
 import { bufToString } from '@core/util/string';
-import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
+import type { AutomergeManager } from '@macro-inc/collaboration/collab/manager';
 import {
   AwaitNode,
   CommentNode,
@@ -66,7 +66,7 @@ import { MarkdownCollabProvider } from './MarkdownCollabProvider';
 const EDITOR_PADDING_BOTTOM = 120;
 
 export function InstructionsEditor(props: {
-  loroManager: LoroManager;
+  automergeManager: AutomergeManager;
   showLexicalStateDebugger?: boolean;
   onLexicalStateDebuggerClose?: () => void;
   resolveAppLink?: MentionLinkResolver;
@@ -152,7 +152,7 @@ export function InstructionsEditor(props: {
     if (!IS_SYNC()) {
       return createPeerIdValidator(() => undefined, false);
     }
-    const peerId = () => props.loroManager.peerIdStr;
+    const peerId = () => props.automergeManager.peerIdStr;
     return createPeerIdValidator(peerId, true);
   };
 
@@ -167,7 +167,7 @@ export function InstructionsEditor(props: {
     .markdownShortcuts()
     .delete()
     .state<EditorState>(setState, 'json')
-    .history(400, props.loroManager)
+    .history(400, props.automergeManager)
     .use(userPromptPlugin)
     .use(
       emojisPlugin({
@@ -205,7 +205,7 @@ export function InstructionsEditor(props: {
     );
 
   if (ENABLE_MARKDOWN_LIVE_COLLABORATION) {
-    const peerId = () => props.loroManager.peerIdStr;
+    const peerId = () => props.automergeManager.peerIdStr;
     plugins.use(
       peerIdPlugin({
         peerId,
@@ -376,7 +376,7 @@ export function InstructionsEditor(props: {
             editorFocus={editorFocus}
             setEditorReady={setEditorReady}
             setEditorError={setEditorError}
-            loroManager={props.loroManager}
+            automergeManager={props.automergeManager}
           />
         </Show>
 

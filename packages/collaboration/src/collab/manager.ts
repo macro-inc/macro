@@ -1,24 +1,28 @@
 import {
-  type InferType,
-  Mirror,
-  SyncDirection,
-  type UpdateMetadata,
-} from '@loro-mirror/core';
-import {
+  AutomergeDoc,
   type Container,
   type ContainerID,
   type Cursor,
   type ImportStatus,
-  LoroDoc,
   type PeerID,
+  type Revision,
   type Side,
-  type VersionVector,
-} from 'loro-crdt';
+} from '@macro-inc/automerge';
+import {
+  type InferType,
+  Mirror,
+  SyncDirection,
+  type UpdateMetadata,
+} from '@macro-inc/automerge/mirror';
 import { err, ok, type Result } from 'neverthrow';
 import { onCleanup } from 'solid-js';
 import type { ResultError } from '../internal/result';
 import { logSyncService } from './logger';
-import type { GenericRootSchema, LoroRawUpdate, RawUpdate } from './shared';
+import type {
+  AutomergeRawUpdate,
+  GenericRootSchema,
+  RawUpdate,
+} from './shared';
 import {
   disposeTelemetryFor,
   frontiersAttr,
@@ -26,9 +30,9 @@ import {
   telemetrySpan,
 } from './telemetry';
 
-export enum LoroManagerError {
+export enum AutomergeManagerError {
   ImportFailed = 'IMPORT_FAILED',
-  /** The update arrived ahead of its causal dependencies. Loro holds it and
+  /** The update arrived ahead of its causal dependencies. Automerge holds it and
    *  applies it automatically once the gap fills — not a failure. */
   ImportPending = 'IMPORT_PENDING',
   NotInitialized = 'NOT_INITIALIZED',
@@ -37,10 +41,10 @@ export enum LoroManagerError {
   ExportFailed = 'EXPORT_FAILED',
   GetCursorPosFailed = 'GET_CURSOR_POS_FAILED',
   GetContainerByIdFailed = 'GET_CONTAINER_BY_ID_FAILED',
-  UnknownLoroError = 'UNKNOWN_LORO_ERROR',
+  UnknownAutomergeError = 'UNKNOWN_AUTOMERGE_ERROR',
 }
 
-export enum LoroStateTag {
+export enum AutomergeStateTag {
   Initialize = 'INITIALIZE',
   FromManager = 'FROM_MANAGER',
 }
@@ -61,20 +65,20 @@ export type SnapshotIngest =
   | { kind: 's3'; snapshot: RawUpdate }
   | { kind: 'dss'; snapshot: RawUpdate };
 
-export type LoroManagerOptions = {
+export type AutomergeManagerOptions = {
   documentId: string;
 };
 
-/** Map Loro's {@link ImportStatus} onto our Result: ok(didChange), or
- *  {@link LoroManagerError.ImportPending} when ops were held back waiting on
+/** Map Automerge's {@link ImportStatus} onto our Result: ok(didChange), or
+ *  {@link AutomergeManagerError.ImportPending} when ops were held back waiting on
  *  missing causal dependencies. */
 function importStatusToResult(
   importStatus: ImportStatus
-): Result<boolean, ResultError<LoroManagerError>[]> {
+): Result<boolean, ResultError<AutomergeManagerError>[]> {
   if ((importStatus.pending?.size ?? 0) > 0) {
     return err([
       {
-        code: LoroManagerError.ImportPending,
+        code: AutomergeManagerError.ImportPending,
         message: 'Import held back pending missing causal dependencies',
       },
     ]);
@@ -86,27 +90,27 @@ function importStatusToResult(
 export interface SyncEngineManager<
   S extends GenericRootSchema = GenericRootSchema,
 > {
-  readonly doc: LoroDoc;
+  readonly doc: AutomergeDoc;
   readonly initialized: boolean;
   readonly peerId: bigint;
   importUpdate(
-    update: LoroRawUpdate
-  ): Result<boolean, ResultError<LoroManagerError>[]>;
-  syncToLoro(
+    update: AutomergeRawUpdate
+  ): Result<boolean, ResultError<AutomergeManagerError>[]>;
+  syncToAutomerge(
     state: InferType<S>
-  ): Promise<Result<void, ResultError<LoroManagerError>[]>>;
+  ): Promise<Result<void, ResultError<AutomergeManagerError>[]>>;
   reset(
-    snapshot: LoroRawUpdate
-  ): Promise<Result<void, ResultError<LoroManagerError>[]>>;
+    snapshot: AutomergeRawUpdate
+  ): Promise<Result<void, ResultError<AutomergeManagerError>[]>>;
   /** Subscribe to state changes; `createSyncEngine` uses this to wire the
    *  manager's updates into the engine. Returns an unsubscribe fn. */
   onStateChange(listener: (update: StateUpdate<S>) => void): () => void;
 }
 
 /**
- * The LoroManager manages the state of a LoroDoc by syncing arbitrary JSON
+ * The AutomergeManager manages the state of an AutomergeDoc by syncing arbitrary JSON
  * state to and from it via the {@link Mirror}, which incrementally diffs the
- * incoming JSON state and applies it to the LoroDoc.
+ * incoming JSON state and applies it to the AutomergeDoc.
  *
  * ┌────────────┬──────────────────────────────────────┐
  * │  Manager   │                                      │
@@ -120,45 +124,49 @@ export interface SyncEngineManager<
  * │        │   ▼                                      │
  * │    ┌──────────────┐          ┌──────────────┐     │
  * │    │              │◀─────────┤              │     │
- * │    │    Mirror    │          │   LoroDoc    │     │
+ * │    │    Mirror    │          │   AutomergeDoc    │     │
  * │    │              ├─────────▶│              │     │
  * │    └──────────────┘          └──────────────┘     │
  * └───────────────────────────────────────────────────┘
  */
-export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
+export class AutomergeManager<S extends GenericRootSchema = GenericRootSchema>
   implements SyncEngineManager<S>
 {
   /** The current schema of the manager. */
   readonly schema: S;
 
   private _initialized = false;
-  private _doc: LoroDoc = createLoroDoc();
+  private _doc: AutomergeDoc = createAutomergeDoc();
   private _mirror?: Mirror<S>;
   private _state?: StateUpdate<S>;
 
   private mirrorUnsub?: () => void;
-  private readonly options: LoroManagerOptions;
+  private readonly options: AutomergeManagerOptions;
 
   private readonly stateListeners = new Set<(u: StateUpdate<S>) => void>();
   private readonly initListeners = new Set<(v: boolean) => void>();
 
-  constructor(schema: S, options: LoroManagerOptions) {
+  constructor(schema: S, options: AutomergeManagerOptions) {
     this.schema = schema;
     this.options = options;
     // Stamp this doc's telemetry with the peer identity as soon as it
     // exists, so every span and log record carries who we are.
-    setTelemetryAttr(options.documentId, 'loro.peer_id', this._doc.peerIdStr);
+    setTelemetryAttr(
+      options.documentId,
+      'automerge.peer_id',
+      this._doc.peerIdStr
+    );
   }
 
-  /** The inner LoroDoc. Only touch this if you know what you're doing. */
-  get doc(): LoroDoc {
+  /** The inner AutomergeDoc. Only touch this if you know what you're doing. */
+  get doc(): AutomergeDoc {
     return this._doc;
   }
   /** The inner Mirror, once initialized. */
   get mirror(): Mirror<S> | undefined {
     return this._mirror;
   }
-  /** The current mirrored state of the loro doc
+  /** The current mirrored state of the automerge doc
    *
    * ┌─────────────┐
    * │ Local State │                    ┌─────────────┐
@@ -168,13 +176,13 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
    *       │                                  │
    *       ▼                                  ▼
    * ┌──────────┐      ┌ ─ ─ ─ ─ ┐      ┌──────────┐      ┌ ─ ─ ─ ─ ─ ┐
-   * │  Mirror  │─────▶   Diff          │ LoroDoc  │─────▶ exportJSON
+   * │  Mirror  │─────▶   Diff          │ AutomergeDoc  │─────▶ exportJSON
    * └──────────┘      └ ─ ─ ─ ─ ┘      └──────────┘      └ ─ ─ ─ ─ ─ ┘
    *                         │                                   │
    *                         │                                   │
    *                         ▼                                   ▼
    *                   ┌───────────┐                       ┌───────────┐
-   *                   │  LoroDoc  │                       │   State   │
+   *                   │  AutomergeDoc  │                       │   State   │
    *                   └───────────┘                       └───────────┘
    * */
   get state(): StateUpdate<S> | undefined {
@@ -190,7 +198,7 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
   get peerIdStr(): PeerID {
     return this._doc.peerIdStr;
   }
-  get version(): VersionVector {
+  get version(): Revision {
     return this._doc.version();
   }
 
@@ -236,8 +244,8 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
   }
 
   importUpdate(
-    update: LoroRawUpdate
-  ): Result<boolean, ResultError<LoroManagerError>[]> {
+    update: AutomergeRawUpdate
+  ): Result<boolean, ResultError<AutomergeManagerError>[]> {
     let importStatus: ImportStatus;
 
     try {
@@ -251,7 +259,7 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
       });
       return err([
         {
-          code: LoroManagerError.ImportFailed,
+          code: AutomergeManagerError.ImportFailed,
           message: `Failed to import update: ${e}`,
         },
       ]);
@@ -261,8 +269,8 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
   }
 
   importBatchUpdates(
-    updates: LoroRawUpdate[]
-  ): Result<boolean, ResultError<LoroManagerError>[]> {
+    updates: AutomergeRawUpdate[]
+  ): Result<boolean, ResultError<AutomergeManagerError>[]> {
     let importStatus: ImportStatus;
 
     try {
@@ -276,7 +284,7 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
       });
       return err([
         {
-          code: LoroManagerError.ImportFailed,
+          code: AutomergeManagerError.ImportFailed,
           message: `Failed to import update: ${e}`,
         },
       ]);
@@ -286,8 +294,8 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
   }
 
   async initializeFromSnapshot(
-    snapshot: LoroRawUpdate
-  ): Promise<Result<void, ResultError<LoroManagerError>[]>> {
+    snapshot: AutomergeRawUpdate
+  ): Promise<Result<void, ResultError<AutomergeManagerError>[]>> {
     const importResult = this.importUpdate(snapshot);
 
     if (importResult.isErr()) {
@@ -303,7 +311,7 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
       this.emitState({
         state: mirrorState,
         metadata: {
-          direction: SyncDirection.TO_LORO,
+          direction: SyncDirection.TO_AUTOMERGE,
           tags: ['INITIALIZE'],
         },
       });
@@ -316,7 +324,7 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
       });
       return err([
         {
-          code: LoroManagerError.InitializeFailed,
+          code: AutomergeManagerError.InitializeFailed,
           message: `Failed to sync mirror: ${e}`,
         },
       ]);
@@ -329,80 +337,56 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
   }
 
   getUpdateSince(
-    lastVersionVector: VersionVector
-  ): Result<Uint8Array | undefined, ResultError<LoroManagerError>[]> {
+    lastVersionVector: Revision
+  ): Result<Uint8Array | undefined, ResultError<AutomergeManagerError>[]> {
     if (!this._initialized || !this._mirror) {
       return err([
-        { code: LoroManagerError.NotInitialized, message: 'Not initialized' },
-      ]);
-    }
-    const currentVersionVector = this._doc.version();
-    /** Comparison between the current state, and the last synced state */
-    const vvDiff = lastVersionVector.compare(currentVersionVector);
-
-    if (vvDiff === 0) {
-      return ok(undefined);
-    }
-
-    const spans = this._doc.findIdSpansBetween(
-      this._doc.vvToFrontiers(lastVersionVector),
-      this._doc.vvToFrontiers(currentVersionVector)
-    );
-
-    const localSpans = spans.forward.filter(
-      (span) => span.peer === this._doc.peerIdStr
-    );
-
-    let update: RawUpdate;
-
-    try {
-      update = this._doc.export({
-        mode: 'updates-in-range',
-        spans: localSpans.map((span) => ({
-          id: { peer: span.peer, counter: span.counter },
-          len: span.length,
-        })),
-      });
-    } catch (e) {
-      logSyncService({
-        documentId: this.options.documentId,
-        level: 'error',
-        context: {},
-        message: `getUpdateSince: export failed: ${e}`,
-      });
-      return err([
         {
-          code: LoroManagerError.ExportFailed,
-          message: `Failed to export update: ${e}`,
+          code: AutomergeManagerError.NotInitialized,
+          message: 'Not initialized',
         },
       ]);
     }
+    const update = this._doc.export({
+      mode: 'update',
+      from: lastVersionVector,
+    });
+    if (update.length === 0) return ok(undefined);
 
     return ok(update);
   }
 
-  getAllContainerIds(): Result<ContainerID[], ResultError<LoroManagerError>[]> {
+  getAllContainerIds(): Result<
+    ContainerID[],
+    ResultError<AutomergeManagerError>[]
+  > {
     if (!this._initialized || !this._mirror) {
       return err([
-        { code: LoroManagerError.NotInitialized, message: 'Not initialized' },
+        {
+          code: AutomergeManagerError.NotInitialized,
+          message: 'Not initialized',
+        },
       ]);
     }
 
     return ok(this._mirror.getContainerIds());
   }
 
-  async syncToLoro(
+  async syncToAutomerge(
     state: InferType<S>
-  ): Promise<Result<void, ResultError<LoroManagerError>[]>> {
+  ): Promise<Result<void, ResultError<AutomergeManagerError>[]>> {
     if (!this._initialized || !this._mirror) {
       return err([
-        { code: LoroManagerError.NotInitialized, message: 'Not initialized' },
+        {
+          code: AutomergeManagerError.NotInitialized,
+          message: 'Not initialized',
+        },
       ]);
     }
 
     try {
       this._mirror.setState(state, {
-        tags: LoroStateTag.FromManager,
+        tags: AutomergeStateTag.FromManager,
       });
 
       await this.awaitMirrorSync();
@@ -411,12 +395,12 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
         documentId: this.options.documentId,
         level: 'error',
         context: {},
-        message: `syncToLoro failed: ${e}`,
+        message: `syncToAutomerge failed: ${e}`,
       });
       return err([
         {
-          code: LoroManagerError.SyncFailed,
-          message: `Failed to sync to loro: ${e}`,
+          code: AutomergeManagerError.SyncFailed,
+          message: `Failed to sync to automerge: ${e}`,
         },
       ]);
     }
@@ -425,14 +409,14 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
   }
 
   async reset(
-    snapshot: LoroRawUpdate
-  ): Promise<Result<void, ResultError<LoroManagerError>[]>> {
+    snapshot: AutomergeRawUpdate
+  ): Promise<Result<void, ResultError<AutomergeManagerError>[]>> {
     this.mirrorUnsub?.();
     this.mirrorUnsub = undefined;
     this._mirror?.dispose();
     this._doc.free();
 
-    const newDoc = createLoroDoc();
+    const newDoc = createAutomergeDoc();
     this._doc = newDoc;
 
     let importStatus: ImportStatus;
@@ -447,7 +431,7 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
       });
       return err([
         {
-          code: LoroManagerError.ImportFailed,
+          code: AutomergeManagerError.ImportFailed,
           message: `Failed to import snapshot: ${e}`,
         },
       ]);
@@ -468,8 +452,8 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
     this.emitState({
       state,
       metadata: {
-        direction: SyncDirection.TO_LORO,
-        tags: [LoroStateTag.Initialize],
+        direction: SyncDirection.TO_AUTOMERGE,
+        tags: [AutomergeStateTag.Initialize],
       },
     });
 
@@ -480,7 +464,7 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
 
   getContainerById(
     id: ContainerID
-  ): Result<Container | undefined, ResultError<LoroManagerError>[]> {
+  ): Result<Container | undefined, ResultError<AutomergeManagerError>[]> {
     let container: Container | undefined;
 
     try {
@@ -493,7 +477,10 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
         message: `getContainerById failed: ${e}`,
       });
       return err([
-        { code: LoroManagerError.GetContainerByIdFailed, message: String(e) },
+        {
+          code: AutomergeManagerError.GetContainerByIdFailed,
+          message: String(e),
+        },
       ]);
     }
 
@@ -506,7 +493,7 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
       offset: number;
       side: Side;
     },
-    ResultError<LoroManagerError>[]
+    ResultError<AutomergeManagerError>[]
   > {
     let pos: { update?: Cursor; offset: number; side: Side } | undefined;
     try {
@@ -514,8 +501,8 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
       if (!pos) {
         return err([
           {
-            code: LoroManagerError.GetCursorPosFailed,
-            message: "loro didn't give us a cursor position",
+            code: AutomergeManagerError.GetCursorPosFailed,
+            message: "automerge didn't give us a cursor position",
           },
         ]);
       }
@@ -527,7 +514,7 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
         message: `getCursorPos failed: ${e}`,
       });
       return err([
-        { code: LoroManagerError.GetCursorPosFailed, message: String(e) },
+        { code: AutomergeManagerError.GetCursorPosFailed, message: String(e) },
       ]);
     }
 
@@ -592,23 +579,23 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
   }
 }
 
-export function createLoroManager<S extends GenericRootSchema>(
+export function createAutomergeManager<S extends GenericRootSchema>(
   schema: S,
-  options: LoroManagerOptions
-): LoroManager<S> {
-  const manager = new LoroManager(schema, options);
+  options: AutomergeManagerOptions
+): AutomergeManager<S> {
+  const manager = new AutomergeManager(schema, options);
   onCleanup(() => manager.dispose());
   return manager;
 }
 
-export function createLoroDoc(): LoroDoc {
-  const doc = new LoroDoc();
+export function createAutomergeDoc(): AutomergeDoc {
+  const doc = new AutomergeDoc();
   doc.setRecordTimestamp(true);
   return doc;
 }
 
 function createMirror<S extends GenericRootSchema>(
-  doc: LoroDoc,
+  doc: AutomergeDoc,
   schema: S
 ): Mirror<S> {
   return new Mirror({

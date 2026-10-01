@@ -6,7 +6,7 @@ import {
   isAwarenessWithSelection,
   type PeerAwareness,
 } from '@macro-inc/collaboration/collab/awareness';
-import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
+import type { AutomergeManager } from '@macro-inc/collaboration/collab/manager';
 import type { NodeIdMappings } from '@macro-inc/lexical-core';
 import { cn } from '@ui';
 import { $getNodeByKey, $isTextNode, type LexicalEditor } from 'lexical';
@@ -40,7 +40,7 @@ type RemoteCursorWithStyle = {
 /** Processes the remote cursor updates and returns a list of RemoteCursorWithStyle */
 function $processRemoteCursorUpdates(
   editor: LexicalEditor,
-  loroManager: LoroManager,
+  automergeManager: AutomergeManager,
   mapping: NodeIdMappings,
   awarenessState: PeerAwareness<LexicalSelectionAwareness | undefined>[]
 ): RemoteCursorWithStyle[] {
@@ -51,7 +51,7 @@ function $processRemoteCursorUpdates(
       if (isAwarenessWithSelection(awareness)) {
         const cursorStyle = awareness.selection
           ? $getRemoteCursorStyle(
-              loroManager,
+              automergeManager,
               editor,
               mapping,
               awareness,
@@ -73,13 +73,13 @@ function $processRemoteCursorUpdates(
 
 /** Converts a given awareness state into a RemoteCursorWithStyle
  *
- * @param loroDoc - The LoroDoc instance
- * @param mapping - The LoroNodeMapping instance
+ * @param automergeDoc - The AutomergeDoc instance
+ * @param mapping - The AutomergeNodeMapping instance
  * @param peerAwareness - The awareness state of the peer(user)
  * @returns The RemoteCursorWithStyle
  */
 function $getRemoteCursorStyle(
-  loroManager: LoroManager,
+  automergeManager: AutomergeManager,
   editor: LexicalEditor,
   mapping: NodeIdMappings,
   peerAwareness: PeerAwareness<LexicalSelectionAwareness>,
@@ -95,12 +95,17 @@ function $getRemoteCursorStyle(
 
   const anchorPoint = $cursorToLexicalPoint(
     anchor,
-    loroManager,
+    automergeManager,
     editor,
     mapping
   );
 
-  const focusPoint = $cursorToLexicalPoint(focus, loroManager, editor, mapping);
+  const focusPoint = $cursorToLexicalPoint(
+    focus,
+    automergeManager,
+    editor,
+    mapping
+  );
 
   if (!anchorPoint || !focusPoint) {
     warn('no anchor or focus point', anchorPoint, focusPoint);
@@ -184,7 +189,7 @@ function $getRemoteCursorStyle(
 }
 
 type UseRemoteCursorsProps = {
-  loroManager: LoroManager;
+  automergeManager: AutomergeManager;
   mapping: NodeIdMappings;
   editor: LexicalEditor;
   awareness: Awareness<LexicalSelectionAwareness>;
@@ -217,7 +222,7 @@ export function useRemoteCursors(
     props.editor.read(() => {
       cursors = $processRemoteCursorUpdates(
         props.editor,
-        props.loroManager,
+        props.automergeManager,
         props.mapping,
         remoteCursorState
       );
@@ -239,7 +244,7 @@ export function useRemoteCursors(
           highlightLayer={innerProps.highlightLayer}
           editor={props.editor}
           mapping={props.mapping}
-          loroManager={props.loroManager}
+          automergeManager={props.automergeManager}
           awareness={props.awareness}
           remoteCursors={remoteCursors}
           setRemoteCursors={setRemoteCursors}
@@ -255,7 +260,7 @@ type RemoteCursorsOverlayProps = {
   highlightLayer?: HTMLElement;
   editor: LexicalEditor;
   mapping: NodeIdMappings;
-  loroManager: LoroManager;
+  automergeManager: AutomergeManager;
   awareness: Awareness<LexicalSelectionAwareness>;
   remoteCursors: Accessor<RemoteCursorWithStyle[]>;
   setRemoteCursors: Setter<RemoteCursorWithStyle[]>;

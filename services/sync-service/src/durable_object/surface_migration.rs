@@ -6,7 +6,7 @@
 //! a crash can leave both unavailable, but can never leave two writable copies.
 //! Sealing is the irreversible commit intent; recovery thereafter is forward-only.
 
-use loro::{Frontiers, VersionVector};
+use crate::domain::crdt::decode_revision;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
@@ -34,8 +34,8 @@ pub(crate) struct SnapshotProof {
     pub source_id: Option<Uuid>,
     pub digest: String,
     pub content_digest: String,
-    pub revision: Vec<(String, i32)>,
-    pub oplog_revision: Vec<(String, i32)>,
+    pub revision: Vec<String>,
+    pub oplog_revision: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -81,15 +81,6 @@ struct TargetState {
     phase: TargetPhase,
 }
 
-fn revision(frontiers: Frontiers) -> Vec<(String, i32)> {
-    let mut ids: Vec<_> = frontiers
-        .iter()
-        .map(|id| (id.peer.to_string(), id.counter))
-        .collect();
-    ids.sort();
-    ids
-}
-
 fn digest(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
@@ -105,8 +96,8 @@ impl SnapshotProof {
             source_id,
             digest: digest(snapshot),
             content_digest: digest(&serde_json::to_vec(&content)?),
-            revision: revision(state.loro_doc.state_frontiers()),
-            oplog_revision: revision(state.loro_doc.oplog_frontiers()),
+            revision: state.heads().iter().map(ToString::to_string).collect(),
+            oplog_revision: state.heads().iter().map(ToString::to_string).collect(),
         })
     }
 
@@ -179,30 +170,20 @@ impl DocumentSyncSession {
         // Strict loading: missing snapshots must not invoke create-default-state;
         // malformed pending entries must not be silently skipped.
         let state = DocumentState::try_from_snapshot(&storage.get_snapshot().await?)?;
-        let mut updates: Vec<Vec<u8>> = storage
+        let updates: Vec<Vec<u8>> = storage
             .get_pending_operations()
             .await?
             .into_iter()
             .map(|entry| entry.map(|(_, bytes)| bytes))
             .collect::<Result<_>>()?;
+        state.replay_pending_operations(&updates)?;
         if let Some(current) = self.document_state.lock("freeze current state").as_ref() {
-            updates.push(current.export_snapshot(None)?);
-        }
-        let imported = state
-            .loro_doc
-            .import_batch(&updates)
-            .context("replay frozen operation log")?;
-        if imported.pending.is_some() {
-            return Err(worker::Error::from(
-                "migration has unresolved pending operations",
-            ));
+            let delta = current.export_updates_since(&state.heads())?;
+            state.import(&delta)?;
         }
         if let Some(bytes) = storage.debug_do_kv_get("LAST_VERSION_VECTOR").await? {
-            let saved = VersionVector::decode(&bytes).context("invalid saved revision")?;
-            if !matches!(
-                state.loro_doc.oplog_vv().partial_cmp(&saved),
-                Some(std::cmp::Ordering::Equal | std::cmp::Ordering::Greater)
-            ) {
+            let saved = decode_revision(&bytes).context("invalid saved revision")?;
+            if !state.contains_heads(&saved) {
                 return Err(worker::Error::from(
                     "migration snapshot is behind saved revision",
                 ));

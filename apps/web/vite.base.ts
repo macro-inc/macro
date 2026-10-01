@@ -175,14 +175,8 @@ export const createAppViteConfig = (): UserConfigFn => {
           'fflate',
           'saxes',
         ],
-        // loro-crdt is a wasm singleton. The app imports it directly (esbuild
-        // pre-bundles a copy) while the linked `@loro-mirror/core` workspace
-        // source imports it through vite-plugin-wasm — two module evaluations,
-        // two wasm memories. A LoroDoc from one instance handed to a Mirror on
-        // the other yields cross-instance container handles → `index out of
-        // bounds` panics in dev only. Excluding it from pre-bundling collapses
-        // everyone onto the single plugin-handled instance.
-        exclude: ['loro-crdt'],
+        // Keep the app and linked collaboration packages on one WASM instance.
+        exclude: ['@automerge/automerge'],
         esbuildOptions: {
           target: 'esnext',
         },
@@ -193,10 +187,10 @@ export const createAppViteConfig = (): UserConfigFn => {
           // NIX_TAURI_ALIAS
         ],
         dedupe: [
-          // Keep Loro resolution here: tsconfig path aliases cache a versioned
+          // Keep Automerge resolution here: tsconfig path aliases cache a versioned
           // URL that goes stale when Vite rebuilds dependencies, splitting the
           // app and workspace packages across separate WASM instances.
-          'loro-crdt',
+          '@automerge/automerge',
           'solid-js',
           '@codingame/monaco-vscode-api',
           '@codingame/monaco-vscode-*-common',

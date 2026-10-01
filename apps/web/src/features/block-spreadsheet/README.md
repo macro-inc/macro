@@ -24,7 +24,7 @@ frontend feature layers:
 | Layer | Responsibility |
 | --- | --- |
 | `definition.ts`, `SpreadsheetBlock.tsx` | Load the native document and compose Macro capabilities. |
-| `core/spreadsheet-document.ts`, `core/spreadsheet-schema.ts`, `core/workbook-document.ts` | Cell vocabulary, layout, address bounds, stable sheet identities, Loro schema, and document validation. |
+| `core/spreadsheet-document.ts`, `core/spreadsheet-schema.ts`, `core/workbook-document.ts` | Cell vocabulary, layout, address bounds, stable sheet identities, Automerge schema, and document validation. |
 | `core/calculation.ts` | Derive cell results from source text with IronCalc. |
 | `core/grid-selection.ts`, `core/cell-copy.ts` | Rectangular selection, clipboard validation, and fill planning. |
 | `workers/calculation.worker.ts` | Isolated IronCalc evaluation and reference translation. |
@@ -38,7 +38,7 @@ frontend feature layers:
 The editor fills its split beneath the shared document title bar. Saved documents
 use `ShareTrigger` and `useShareModal`, including existing document permissions,
 copy links, and the Share keyboard shortcut. The local sample also has a Share
-action: it creates a native document, saves the sample's Loro operations, waits for
+action: it creates a native document, saves the sample's Automerge operations, waits for
 the sync acknowledgement, then opens the saved document's sharing dialog. Failed
 saves leave the draft editable. Retrying reuses the document and operation IDs so
 row additions are not duplicated after a lost acknowledgement.
@@ -62,7 +62,7 @@ native document creation flow.
 Rust tool adapters obtain typed View/Edit receipts, then pass them to the document
 domain service. That service verifies the native file type and issues a scoped
 short-lived document token. Its editing-worker port calls `/spreadsheet`. The
-worker reads a consistent Loro snapshot/revision, prepares and validates edits on
+worker reads a consistent Automerge snapshot/revision, prepares and validates edits on
 an isolated copy, and sends a compare-and-set delta to sync. Sync validates exact
 document access, rejects stale revisions, validates the merged schema, persists,
 and broadcasts through the existing collaboration channel. No calculation results
@@ -88,18 +88,18 @@ workbooks and are not automatically converted by deploying spreadsheet support.
 ## Collaboration and persistence
 
 User-authored source text, formatting, column widths, and row additions are shared.
-New native documents start from a versioned Loro seed
-(`spreadsheetMeta.formatVersion = 1`). The document has stable Loro root maps keyed
+New native documents start from a versioned Automerge seed
+(`spreadsheetMeta.formatVersion = 1`). The document has stable Automerge root maps keyed
 by A1 address: `spreadsheetValues`, `spreadsheetBold`, `spreadsheetFormats`, and
 individual maps for each additional style property. Separate property maps allow a value
 edit and a formatting edit to merge independently, including when two peers first
 touch an empty cell. `spreadsheetColumnWidths` stores bounded column widths, and
 `spreadsheetRowAdditions` stores independent append operations that merge
 additively. Undo cannot hide rows containing a collaborator's cells. Concurrent
-writes to the same property use Loro's conflict resolution. A cell edit is a whole
+writes to the same property use Automerge's conflict resolution. A cell edit is a whole
 value replacement; text inside one cell is not coedited character by character.
 
-One user operation produces one Loro commit. A range paste is validated before
+One user operation produces one Automerge commit. A range paste is validated before
 writing and committed as one operation. The `UndoManager` tracks local operations;
 receiving remote changes does not add those changes to the local undo stack.
 Undo and redo are blocked if a collaborator has since changed a field that the
@@ -107,7 +107,7 @@ operation would overwrite, including values, formatting, and layout. The editor
 keeps their changes and explains the conflict without consuming the history step.
 Read-only permissions and initial hydration gate every write and history action.
 
-The session reuses `LoroManager`, `createSyncEngine`, `BrowserWALStore`,
+The session reuses `AutomergeManager`, `createSyncEngine`, `BrowserWALStore`,
 `WALSyncer`, and `IDBSnapshotStore` from `@macro-inc/collaboration`, as markdown
 does, including BroadcastChannel synchronization between local tabs. Cached
 snapshots and unsent updates restore local state; remote snapshots
@@ -125,7 +125,7 @@ reference transformation across concurrent operations.
 ### Workbook sheets
 
 The implicit first sheet has stable ID `sheet1`; existing version-1 documents and
-the canonical `static_assets/spreadsheet-golden.1.bin` seed open without migration
+the canonical `static_assets/spreadsheet-golden.2.bin` seed open without migration
 or writes. Its cells keep plain `A1` keys. Additional sheets receive UUIDs and use
 `<sheet-id>!A1` keys in the same property maps. Column widths and row additions use
 the same sheet prefix. `spreadsheetSheetNames`, `spreadsheetSheetOrder`, and
@@ -160,7 +160,7 @@ detect references computed by `INDIRECT`, or references arriving concurrently
 with a rename/delete. Concurrent name collisions can also change which sheet a
 name-based formula resolves to. Such formulas may require manual repair; fully
 concurrent reference rewriting remains future work.
-Structural undo and redo preview the inverse on an isolated Loro document and
+Structural undo and redo preview the inverse on an isolated Automerge document and
 block it when a surviving formula would lose its referenced sheet name. The
 history step remains available, and the editor explains the conflict. Formulas
 removed by that same inverse do not block it; peer formula edits are preserved

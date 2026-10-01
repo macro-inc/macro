@@ -1,7 +1,7 @@
-import { type InferType, SyncDirection } from '@loro-mirror/core';
+import type { Revision } from '@macro-inc/automerge';
+import { type InferType, SyncDirection } from '@macro-inc/automerge/mirror';
 import type { Attributes } from '@macro-inc/observability';
 import { Mutex } from 'async-mutex';
-import type { VersionVector } from 'loro-crdt';
 import type { ResultAsync } from 'neverthrow';
 import {
   type Accessor,
@@ -15,17 +15,21 @@ import type { Awareness } from './awareness';
 import { BroadcastChannelChatter, type Chatter, noopChatter } from './chatter';
 import { logSyncService } from './logger';
 import {
-  LoroManagerError,
-  LoroStateTag,
+  AutomergeManagerError,
+  AutomergeStateTag,
   type StateUpdate,
   type SyncEngineManager,
 } from './manager';
-import type { GenericRootSchema, LoroRawUpdate, RawUpdate } from './shared';
+import type {
+  AutomergeRawUpdate,
+  GenericRootSchema,
+  RawUpdate,
+} from './shared';
 import type { SnapshotStore } from './snapshot-store';
-import { peerCounterAttr, telemetrySpan } from './telemetry';
+import { telemetrySpan } from './telemetry';
 
-// SnapshotStore in the engine is always Loro updates — RawUpdate.
-type LoroSnapshotStore = SnapshotStore<RawUpdate>;
+// SnapshotStore in the engine is always Automerge updates — RawUpdate.
+type AutomergeSnapshotStore = SnapshotStore<RawUpdate>;
 
 import type { LiveSyncSource, SyncError, SyncSourceEvent } from './source';
 import type { WALSyncer } from './wal';
@@ -36,9 +40,9 @@ const REQUEST_UPDATES_MAX_ATTEMPTS = 3;
 const REQUEST_UPDATES_RETRY_DELAY_MS = 2_000;
 
 /** A version vector as a compact `peer:counter` span attribute. */
-function vvAttr(vv: VersionVector): string {
+function vvAttr(vv: Revision): string {
   try {
-    return peerCounterAttr(vv.toJSON().entries());
+    return vv.heads.join(',');
   } catch {
     return 'unavailable';
   }
@@ -54,13 +58,13 @@ export type SyncSources = {
 };
 
 export type SyncEngineParams<S extends GenericRootSchema, D> = {
-  loroManager: SyncEngineManager<S>;
+  automergeManager: SyncEngineManager<S>;
   awareness: Awareness<D>;
   syncs: SyncSources;
   bindings: EngineBindings<S>;
   readonly?: () => boolean;
   onRunningChange?: (v: boolean) => void;
-  snapshotStore?: LoroSnapshotStore;
+  snapshotStore?: AutomergeSnapshotStore;
   makeChatter?: (documentId: string) => Chatter;
 };
 
@@ -73,7 +77,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     return this._isRunning;
   }
 
-  private readonly loroManager: SyncEngineManager<S>;
+  private readonly automergeManager: SyncEngineManager<S>;
   private readonly awareness: Awareness<D>;
   private readonly syncs: SyncSources;
   private readonly bindings: EngineBindings<S>;
@@ -82,7 +86,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
   private unsubscribe?: () => void;
   private liveUnsubscribe?: () => void;
   private snapshotInterval?: ReturnType<typeof setInterval>;
-  private readonly snapshotStore?: LoroSnapshotStore;
+  private readonly snapshotStore?: AutomergeSnapshotStore;
   private readonly defaultSnapshotThunk: SnapshotThunk;
   private readonly onRunningChange: (v: boolean) => void;
   private readonly makeChatter: (documentId: string) => Chatter;
@@ -96,7 +100,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
   };
 
   constructor({
-    loroManager,
+    automergeManager,
     awareness,
     syncs,
     bindings,
@@ -105,7 +109,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     snapshotStore,
     makeChatter = () => noopChatter(),
   }: SyncEngineParams<S, D>) {
-    this.loroManager = loroManager;
+    this.automergeManager = automergeManager;
     this.awareness = awareness;
     this.syncs = syncs;
     this.bindings = bindings;
@@ -132,15 +136,17 @@ export class SyncEngine<S extends GenericRootSchema, D> {
   public start(): boolean {
     if (this._isRunning) return true; // already running — idempotent
 
-    if (!this.loroManager.initialized) {
+    if (!this.automergeManager.initialized) {
       this.log('warn', 'engine.start: manager not initialized, aborting');
       return false;
     }
 
     this.unsubscribe?.();
-    this.unsubscribe = this.loroManager.doc.subscribeLocalUpdates((update) => {
-      this.handleLocalUpdates(update);
-    });
+    this.unsubscribe = this.automergeManager.doc.subscribeLocalUpdates(
+      (update) => {
+        this.handleLocalUpdates(update);
+      }
+    );
 
     this.chatter = this.makeChatter(this.syncs.live.documentId);
     this.chatterUnsub = this.chatter.subscribe((msg) =>
@@ -159,7 +165,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     this.liveUnsubscribe = this.syncs.live.listen((event) =>
       this.handleSourceEvent(event)
     );
-    this.syncs.live.registerPeerId(this.loroManager.peerId);
+    this.syncs.live.registerPeerId(this.automergeManager.peerId);
 
     if (this.snapshotStore && this.snapshotInterval === undefined) {
       this.snapshotInterval = setInterval(
@@ -200,14 +206,14 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     this.log('info', 'engine.stop: ok');
   }
 
-  public async syncStateToLoro(state: InferType<S>) {
+  public async syncStateToAutomerge(state: InferType<S>) {
     if (!this._isRunning) return;
 
     await this.syncLock.runExclusive(async () => {
-      const syncResult = await this.loroManager.syncToLoro(state);
+      const syncResult = await this.automergeManager.syncToAutomerge(state);
 
       if (syncResult.isErr()) {
-        this.log('error', 'syncStateToLoro: failed, resetting engine', {
+        this.log('error', 'syncStateToAutomerge: failed, resetting engine', {
           err: JSON.stringify(syncResult.error),
         });
         this.reset();
@@ -215,7 +221,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     });
   }
 
-  public syncAwarenessToLoro(awarenessUpdate: D) {
+  public syncAwarenessToAutomerge(awarenessUpdate: D) {
     if (!this._isRunning) return;
 
     this.awareness.updateLocalAwareness(awarenessUpdate);
@@ -239,9 +245,9 @@ export class SyncEngine<S extends GenericRootSchema, D> {
         return;
       }
 
-      const resetResult = await this.loroManager.reset(snapshot.value);
+      const resetResult = await this.automergeManager.reset(snapshot.value);
       if (resetResult.isErr()) {
-        this.log('error', 'engine.reset: loro manager reset failed', {
+        this.log('error', 'engine.reset: automerge manager reset failed', {
           err: JSON.stringify(resetResult.error),
         });
         return;
@@ -256,8 +262,9 @@ export class SyncEngine<S extends GenericRootSchema, D> {
   public onStateUpdate(stateUpdate: StateUpdate<S> | undefined) {
     if (!this._isRunning || !stateUpdate) return;
 
-    if (stateUpdate.metadata.direction === SyncDirection.TO_LORO) return;
-    if (stateUpdate.metadata.tags?.includes(LoroStateTag.Initialize)) return;
+    if (stateUpdate.metadata.direction === SyncDirection.TO_AUTOMERGE) return;
+    if (stateUpdate.metadata.tags?.includes(AutomergeStateTag.Initialize))
+      return;
     this.syncLock.runExclusive(() =>
       this.bindings.onRemoteState(stateUpdate.state)
     );
@@ -272,7 +279,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     this.chatter?.post({ type: 'awareness', data: awarenessUpdate });
   }
 
-  private async handleLocalUpdates(update: LoroRawUpdate) {
+  private async handleLocalUpdates(update: AutomergeRawUpdate) {
     if (this.readonly()) return;
     this.log('debug', 'engine: local update, appending to WAL');
     void this.syncs.wal.append(update);
@@ -285,7 +292,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     void this.syncs.wal.flush(); // unawaited
 
     try {
-      const doc = this.loroManager.doc;
+      const doc = this.automergeManager.doc;
       this.log('debug', 'engine: persisting snapshot', { doc: doc.toJSON() });
       const snapshot = doc.export({
         mode: 'shallow-snapshot',
@@ -310,14 +317,14 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     return this.syncLock.runExclusive(() =>
       telemetrySpan(this.syncs.live.documentId, 'edit.apply', async (span) => {
         span.setAttr('update.bytes', update.length);
-        const importResult = this.loroManager.importUpdate(update);
+        const importResult = this.automergeManager.importUpdate(update);
         await Promise.resolve();
         if (importResult.isErr()) {
           const pendingOnly = importResult.error.every(
-            (e) => e.code === LoroManagerError.ImportPending
+            (e) => e.code === AutomergeManagerError.ImportPending
           );
           if (pendingOnly) {
-            // Loro retains causally-ahead updates. Pull the missing operations
+            // Automerge retains causally-ahead updates. Pull the missing operations
             // rather than resetting the document.
             this.log('debug', 'engine: remote update pending on missing ops');
             span.setAttr('outcome', 'pending');
@@ -390,7 +397,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
       return inFlight.promise;
     }
 
-    const since = this.loroManager.doc.version();
+    const since = this.automergeManager.doc.version();
     const promise = this.requestAndHandleUpdatesSince(since, 1, generation);
     const record = { generation, promise, rerunRequested: false };
     this.convergence = record;
@@ -408,7 +415,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
   }
 
   private async requestAndHandleUpdatesSince(
-    since: VersionVector,
+    since: Revision,
     attempt: number,
     generation: number
   ) {
@@ -447,7 +454,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     }
 
     if (updates.value.length === 0) {
-      // Nothing to converge. Zero bytes are not a valid Loro payload (real
+      // Nothing to converge. Zero bytes are not a valid Automerge payload (real
       // sources encode "no new ops" as a non-empty update), so importing them
       // would throw and trigger a reset — the noop live source used by
       // non-propagating AI edit sessions answers with exactly this.
@@ -473,8 +480,8 @@ export type ReactiveSyncEngine<S extends GenericRootSchema, D> = {
   reset: (
     snapshotThunk?: () => ResultAsync<Uint8Array, SyncError>
   ) => Promise<void>;
-  syncStateToLoro: (state: InferType<S>) => Promise<void>;
-  syncAwarenessToLoro: (awareness: D) => void;
+  syncStateToAutomerge: (state: InferType<S>) => Promise<void>;
+  syncAwarenessToAutomerge: (awareness: D) => void;
 };
 
 export function createSyncEngine<
@@ -494,10 +501,10 @@ export function createSyncEngine<
     makeChatter:
       params.makeChatter ?? ((id) => new BroadcastChannelChatter(id)),
   });
-  const { loroManager, awareness } = params;
+  const { automergeManager, awareness } = params;
 
   onCleanup(
-    loroManager.onStateChange((update) => engine.onStateUpdate(update))
+    automergeManager.onStateChange((update) => engine.onStateUpdate(update))
   );
   createEffect(on(awareness.local, () => engine.onLocalAwarenessChange()));
 
@@ -506,7 +513,7 @@ export function createSyncEngine<
     start: () => engine.start(),
     stop: () => engine.stop(),
     reset: (t) => engine.reset(t),
-    syncStateToLoro: (state) => engine.syncStateToLoro(state),
-    syncAwarenessToLoro: (a) => engine.syncAwarenessToLoro(a),
+    syncStateToAutomerge: (state) => engine.syncStateToAutomerge(state),
+    syncAwarenessToAutomerge: (a) => engine.syncAwarenessToAutomerge(a),
   };
 }

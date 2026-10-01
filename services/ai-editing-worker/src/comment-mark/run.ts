@@ -1,4 +1,4 @@
-import { LoroManager } from '@macro-inc/collaboration/collab/manager';
+import { AutomergeManager } from '@macro-inc/collaboration/collab/manager';
 import type { RawUpdate } from '@macro-inc/collaboration/collab/shared';
 import type { LiveSyncSource } from '@macro-inc/collaboration/collab/source';
 import {
@@ -6,7 +6,7 @@ import {
   WALSyncer,
 } from '@macro-inc/collaboration/collab/wal';
 import type { SyncServiceSource } from '@macro-inc/collaboration/sync-service/source';
-import { MARKDOWN_LORO_SCHEMA } from '@macro-inc/lexical-core/markdown-loro-schema';
+import { MARKDOWN_AUTOMERGE_SCHEMA } from '@macro-inc/lexical-core/markdown-automerge-schema';
 import { EditingWorkspace } from '../editing-workspace';
 import type { AnchorResult } from './anchor';
 import { $addCommentMark, $removeCommentMark } from './anchor';
@@ -25,7 +25,7 @@ export type CommentMarkChangeResult =
   | { ok: true; removed: boolean };
 
 /**
- * Join the document as a Loro peer, apply one comment mark change and push it
+ * Join the document as an Automerge peer, apply one comment mark change and push it
  * to everyone. The change is made on the state merged from the server a
  * moment before, and lands as ordinary CRDT operations, so edits people make
  * meanwhile merge with it rather than being overwritten.
@@ -35,7 +35,9 @@ export async function runCommentMarkChange(
   documentId: string,
   change: CommentMarkChange
 ): Promise<CommentMarkChangeResult> {
-  const manager = new LoroManager(MARKDOWN_LORO_SCHEMA, { documentId });
+  const manager = new AutomergeManager(MARKDOWN_AUTOMERGE_SCHEMA, {
+    documentId,
+  });
   try {
     const initial = await source.doInitialSync();
     if (initial.isErr())
@@ -57,7 +59,7 @@ export async function runCommentMarkChange(
 
 /** Apply `change` to the doc `manager` holds and push it out through `source`. */
 export async function applyCommentMarkChange(
-  manager: LoroManager<typeof MARKDOWN_LORO_SCHEMA>,
+  manager: AutomergeManager<typeof MARKDOWN_AUTOMERGE_SCHEMA>,
   source: LiveSyncSource,
   change: CommentMarkChange
 ): Promise<CommentMarkChangeResult> {

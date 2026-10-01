@@ -1,12 +1,11 @@
 use std::{
-    borrow::Cow,
     collections::{BTreeMap, BTreeSet, HashMap},
     rc::Rc,
     sync::{Arc, LazyLock},
 };
 
+use crate::awareness::PresenceStore;
 use bebop::Record;
-use loro::{ExportMode, awareness::EphemeralStore};
 use macro_sync_service_jwt::session::SessionKind;
 use matchit::Router;
 use serde::{Deserialize, Serialize};
@@ -134,7 +133,7 @@ pub struct DocumentSyncSession {
     document_state: Mutex<Option<Arc<DocumentState>>>,
     /// Access to document related IO
     session_storage: Mutex<Option<Rc<SessionStorage>>>,
-    awareness: EphemeralStore,
+    awareness: PresenceStore,
     /// a map from websocket's ID's to websocket metadata
     ws_meta_map: Arc<Mutex<WsMetaMap>>,
     /// Partial inbound messages, isolated by connection.
@@ -499,6 +498,9 @@ impl DocumentSyncSession {
             debug!(document_id = document_id, "Initializing snapshot");
             let body_raw = req.bytes().await?;
             let body = InitializeFromSnapshotRequest::deserialize(&body_raw).with_context(|| format!("Failed to deserialize InitializeFromSnapshotRequest with document_id: [{document_id}]"))?;
+            if DocumentState::try_from_snapshot(&body.snapshot).is_err() {
+                return Ok(response(400));
+            }
             storage.store_snapshot(&body.snapshot).await?;
             *self
                 .document_id
@@ -599,16 +601,17 @@ impl DocumentSyncSession {
             Some(serde_json::from_slice(&bytes)?)
         };
 
-        let frontiers: Option<ExportMode> = body.and_then(|b| {
-            if let Some(vid) = b.version_id {
-                let id = loro::ID::new(vid.peer.parse::<u64>().unwrap(), vid.counter);
-                Some(ExportMode::StateOnly(Some(Cow::Owned(
-                    loro::Frontiers::ID(id),
-                ))))
-            } else {
-                None
-            }
-        });
+        let frontiers = match body.and_then(|body| body.version_id) {
+            Some(heads) => match heads
+                .iter()
+                .map(|head| head.parse())
+                .collect::<std::result::Result<Vec<automerge::ChangeHash>, _>>()
+            {
+                Ok(heads) => Some(heads),
+                Err(_) => return Ok(response(400)),
+            },
+            None => None,
+        };
 
         let out = maybe_404!(self.document_state().await)?
             .export_snapshot(frontiers)
@@ -1001,7 +1004,7 @@ impl DurableObject for DocumentSyncSession {
             document_id: Mutex::new(None),
             document_state: Mutex::new(None),
             session_storage: Mutex::new(None),
-            awareness: EphemeralStore::new(5_000),
+            awareness: PresenceStore::new(5_000),
             ws_meta_map: Arc::new(Mutex::new(Default::default())),
             inbound: Arc::new(Mutex::new(HashMap::new())),
             pending_blame: Arc::new(Mutex::new(Vec::new())),
@@ -1279,22 +1282,15 @@ impl DurableObject for DocumentSyncSession {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
-pub struct VersionIndicator {
-    /// Json has trouble with peer id bigints, so we need to serialize from a string
-    pub peer: String,
-    pub counter: i32,
-}
-
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
 pub struct CopyDocumentRequest {
     pub target_document_id: String,
-    pub version_id: Option<VersionIndicator>,
+    pub version_id: Option<Vec<String>>,
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
 pub struct GetSnapshotRequest {
-    pub version_id: Option<VersionIndicator>,
+    pub version_id: Option<Vec<String>>,
 }
 
 #[derive(serde::Deserialize, serde::Serialize)]

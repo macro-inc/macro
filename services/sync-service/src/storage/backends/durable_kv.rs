@@ -1,4 +1,5 @@
-use loro::VersionVector;
+use crate::domain::crdt::{decode_revision, encode_revision};
+use automerge::ChangeHash;
 use std::{
     collections::BTreeSet,
     sync::{
@@ -96,15 +97,6 @@ impl DurableKVStorage {
         self.list_do_kv(PENDING_OP_PREFIX).await
     }
 
-    pub async fn apply_op(
-        &self,
-        document_state: &DocumentState,
-        op_update: &[u8],
-    ) -> Result<ImportedUpdate> {
-        self.apply_op_with_attribution(document_state, op_update, None)
-            .await
-    }
-
     /// Attribution is supplied only by the verified JWT boundary, never CRDT
     /// peer IDs or request-body fields. Metadata shares the operation-log ID.
     pub async fn apply_op_with_attribution(
@@ -113,9 +105,51 @@ impl DurableKVStorage {
         op_update: &[u8],
         attribution: Option<&crate::domain::document::DocumentAttribution>,
     ) -> Result<ImportedUpdate> {
+        let imported = document_state.import(op_update)?;
+        self.persist_operation(op_update, attribution).await?;
+        Ok(imported)
+    }
+
+    pub async fn apply_ops(
+        &self,
+        document_state: &DocumentState,
+        updates: &[&[u8]],
+    ) -> Result<ImportedUpdate> {
+        // Durable Object put_multiple is atomic and accepts at most 128 keys.
+        // Reserve one pending and one audit entry per delta.
+        if updates.len() > 64 {
+            return Err(worker::Error::from("too many updates in one batch"));
+        }
+        let imported = document_state.import_batch(updates)?;
+        let values = js_sys::Object::new();
+        let mut pending_keys = Vec::new();
+        for update in updates {
+            let id = self.ids.id();
+            let key = pending_op_key(&id);
+            let bytes = js_sys::Uint8Array::from(*update);
+            Reflect::set(&values, &key.clone().into(), &bytes)
+                .context("failed to encode pending operation")?;
+            Reflect::set(&values, &all_op_key(&id).into(), &bytes)
+                .context("failed to encode audit operation")?;
+            pending_keys.push(key);
+        }
+        if !pending_keys.is_empty() {
+            self.inner.put_multiple_raw(values).await?;
+            self.applied_keys
+                .write()
+                .unwrap_context("applied_keys mutex poisoned")
+                .extend(pending_keys);
+        }
+        Ok(imported)
+    }
+
+    async fn persist_operation(
+        &self,
+        op_update: &[u8],
+        attribution: Option<&crate::domain::document::DocumentAttribution>,
+    ) -> Result<()> {
         let op_id = self.ids.id();
         let op_key = pending_op_key(&op_id);
-        let imported = document_state.import(op_update)?;
         self.inner.put(&op_key, op_update).await?;
         self.applied_keys
             .write()
@@ -127,7 +161,7 @@ impl DurableKVStorage {
                 .context("failed to serialize signed document attribution")?;
             self.inner.put(&format!("actor/{op_id}"), metadata).await?;
         }
-        Ok(imported)
+        Ok(())
     }
 
     pub async fn apply_pending_ops(&self, snapshot: &DocumentState) -> Result<()> {
@@ -208,41 +242,22 @@ TODO
         Ok(())
     }
 
-    pub async fn store_version_vector(&self, vv: &VersionVector) -> Result<()> {
-        let value = vv.encode();
-        self.inner.put(LAST_VERSION_VECTOR_KEY, value).await?;
+    pub async fn store_heads(&self, heads: &[ChangeHash]) -> Result<()> {
+        self.inner
+            .put(LAST_VERSION_VECTOR_KEY, encode_revision(heads))
+            .await?;
         Ok(())
     }
 
-    /// The passed in version vector should be equal or greater than the last saved vv
-    pub async fn cmp_vv_with_last_snapshot_vv(
-        &self,
-        loaded_snapshot_vv: &VersionVector,
-    ) -> Result<()> {
-        let Some(bytes) =
-            do_kv_result_to_result_opt(self.inner.get::<Vec<u8>>(LAST_VERSION_VECTOR_KEY).await)?
-        else {
-            warn!("No version vector was saved the last time a snapshot was saved");
+    pub async fn check_saved_heads(&self, state: &DocumentState) -> Result<()> {
+        let Some(bytes) = self.inner.get::<Vec<u8>>(LAST_VERSION_VECTOR_KEY).await? else {
             return Ok(());
         };
-        let last_saved_vv = VersionVector::decode(&bytes).expect("TODO we wrote a bad vv???");
-        match loaded_snapshot_vv.partial_cmp(&last_saved_vv) {
-            Some(ord) => match ord {
-                std::cmp::Ordering::Less => {
-                    error!("Loaded snapshot older than the last snapshot saved");
-                }
-                std::cmp::Ordering::Equal => {
-                    trace!("Loaded snapshot matches last snapshot saved");
-                }
-                std::cmp::Ordering::Greater => {
-                    // this could happen if saving snapshot succeeds but writing, but
-                    // store_version_vector fails.
-                    warn!("Loaded snapshot was newer than the last snapshot saved");
-                }
-            },
-            None => {
-                warn!("Loaded snapshot that diverged from the last snapshot saved");
-            }
+        let heads = decode_revision(&bytes).context("invalid saved Automerge revision")?;
+        if !state.contains_heads(&heads) {
+            return Err(worker::Error::from(
+                "loaded snapshot is behind saved revision",
+            ));
         }
         Ok(())
     }

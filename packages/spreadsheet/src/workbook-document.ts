@@ -1,4 +1,4 @@
-import type { LoroDoc } from 'loro-crdt';
+import type { AutomergeDoc } from '@macro-inc/automerge';
 import { formulaReferencesSheet } from './sheet-references';
 import {
   parseWorkbookMetadata,
@@ -56,7 +56,7 @@ export type SpreadsheetSheetInput = {
 };
 
 export function readSpreadsheetWorkbook(
-  doc: LoroDoc
+  doc: AutomergeDoc
 ): SpreadsheetWorkbookSheet[] {
   const readEntries = createSpreadsheetEntryReader(doc);
   return readSpreadsheetSheets(doc).map((sheet) => ({
@@ -69,14 +69,14 @@ export function readSpreadsheetWorkbook(
   }));
 }
 
-function existingSheet(doc: LoroDoc, sheetId: string): SpreadsheetSheet {
+function existingSheet(doc: AutomergeDoc, sheetId: string): SpreadsheetSheet {
   const sheet = readSpreadsheetSheets(doc).find((item) => item.id === sheetId);
   if (!sheet) throw new Error('This sheet no longer exists.');
   return sheet;
 }
 
 function uniqueRequestedName(
-  doc: LoroDoc,
+  doc: AutomergeDoc,
   name: string,
   exceptId?: string
 ): string {
@@ -92,7 +92,7 @@ function uniqueRequestedName(
   return normalized;
 }
 
-function availableSheetName(doc: LoroDoc, base?: string): string {
+function availableSheetName(doc: AutomergeDoc, base?: string): string {
   const names = new Set(
     readSpreadsheetSheets(doc).map((sheet) => sheet.name.toLowerCase())
   );
@@ -105,7 +105,7 @@ function availableSheetName(doc: LoroDoc, base?: string): string {
   }
 }
 
-function assertUnreferenced(doc: LoroDoc, sheet: SpreadsheetSheet) {
+function assertUnreferenced(doc: AutomergeDoc, sheet: SpreadsheetSheet) {
   for (const current of readSpreadsheetWorkbook(doc)) {
     if (current.id === sheet.id && current.metadata?.definedNames?.length)
       throw new Error(
@@ -135,7 +135,7 @@ function assertUnreferenced(doc: LoroDoc, sheet: SpreadsheetSheet) {
 }
 
 export function renameSpreadsheetSheet(
-  doc: LoroDoc,
+  doc: AutomergeDoc,
   sheetId: string,
   name: string
 ) {
@@ -149,7 +149,7 @@ export function renameSpreadsheetSheet(
   doc.commit({ origin: 'spreadsheet-sheet-rename' });
 }
 
-export function deleteSpreadsheetSheet(doc: LoroDoc, sheetId: string) {
+export function deleteSpreadsheetSheet(doc: AutomergeDoc, sheetId: string) {
   const sheets = readSpreadsheetSheets(doc);
   const sheet = existingSheet(doc, sheetId);
   if (sheets.length <= 1)
@@ -160,7 +160,7 @@ export function deleteSpreadsheetSheet(doc: LoroDoc, sheetId: string) {
 }
 
 function validateSheetInputs(
-  doc: LoroDoc,
+  doc: AutomergeDoc,
   inputs: SpreadsheetSheetInput[],
   replace: boolean
 ) {
@@ -233,7 +233,7 @@ function validateSheetInputs(
 
 /** Validate the entire workbook before the first CRDT mutation; one undo step. */
 export function importSpreadsheetSheets(
-  doc: LoroDoc,
+  doc: AutomergeDoc,
   inputs: SpreadsheetSheetInput[],
   replace = false
 ): string[] {
@@ -280,7 +280,7 @@ export function importSpreadsheetSheets(
   return ids;
 }
 
-export function addSpreadsheetSheet(doc: LoroDoc, name?: string): string {
+export function addSpreadsheetSheet(doc: AutomergeDoc, name?: string): string {
   const normalized =
     name === undefined
       ? availableSheetName(doc)
@@ -296,7 +296,7 @@ export function addSpreadsheetSheet(doc: LoroDoc, name?: string): string {
 }
 
 export function duplicateSpreadsheetSheet(
-  doc: LoroDoc,
+  doc: AutomergeDoc,
   sheetId: string
 ): string {
   const sheet = existingSheet(doc, sheetId);

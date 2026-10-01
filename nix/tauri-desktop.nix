@@ -42,7 +42,6 @@
           && !(lib.hasPrefix "apps/web/src/lib/graphql-cache/wasm/" rel)
           && !(lib.hasPrefix "packages/lexical-core/node_modules/" rel)
           && !(lib.hasPrefix "services/lexical-service/node_modules/" rel)
-          && !(lib.hasPrefix "packages/loro-mirror/node_modules/" rel)
           && !(lib.hasInfix "/node_modules/" rel)
           && !(lib.hasInfix "/target/" rel)
           && !(lib.hasInfix "/dist/" rel)

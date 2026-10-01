@@ -1,8 +1,8 @@
 //! Outbound adapter for initializing markdown content through lexical-service and sync-service.
 
-/// Canonical blank-markdown Loro "golden" snapshot.
+/// Canonical blank-markdown Automerge "golden" snapshot.
 const MARKDOWN_GOLDEN_SNAPSHOT: &[u8] =
-    include_bytes!("../../../../static_assets/markdown-golden.1.bin");
+    include_bytes!("../../../../static_assets/markdown-golden.2.bin");
 
 use std::future::Future;
 use std::sync::Arc;
@@ -18,11 +18,11 @@ use crate::domain::ports::markdown::{
 };
 
 impl LexicalSnapshotPort for LexicalClient {
-    fn markdown_to_loro_snapshot(
+    fn markdown_to_automerge_snapshot(
         &self,
         markdown: &str,
     ) -> impl Future<Output = anyhow::Result<Vec<u8>>> + Send {
-        LexicalClient::markdown_to_loro_snapshot(self, markdown)
+        LexicalClient::markdown_to_automerge_snapshot(self, markdown)
     }
 }
 
@@ -67,23 +67,23 @@ where
         document_id: &str,
         markdown: &str,
     ) -> Result<Vec<u8>, DocumentError> {
-        let loro_snapshot = if markdown.is_empty() {
+        let automerge_snapshot = if markdown.is_empty() {
             MARKDOWN_GOLDEN_SNAPSHOT.into()
         } else {
             self.lexical_client
-                .markdown_to_loro_snapshot(markdown)
+                .markdown_to_automerge_snapshot(markdown)
                 .await
                 .map_err(DocumentError::Internal)?
         };
 
         let sync_service_client = self.sync_service_client.clone();
         let document_id = document_id.to_owned();
-        let initial_snapshot = loro_snapshot.clone();
+        let initial_snapshot = automerge_snapshot.clone();
         tokio::spawn(async move {
             const MAX_ATTEMPTS: usize = 3;
             const RETRY_DELAY: Duration = Duration::from_secs(1);
 
-            let loro_snapshot: Arc<[u8]> = loro_snapshot.into();
+            let automerge_snapshot: Arc<[u8]> = automerge_snapshot.into();
             let mut attempt = 0usize;
             let result = Retry::start(
                 FixedInterval::new(RETRY_DELAY).take(MAX_ATTEMPTS - 1),
@@ -91,10 +91,10 @@ where
                     attempt += 1;
                     let sync_service_client = Arc::clone(&sync_service_client);
                     let document_id = document_id.clone();
-                    let loro_snapshot = Arc::clone(&loro_snapshot);
+                    let automerge_snapshot = Arc::clone(&automerge_snapshot);
                     async move {
                         let result = sync_service_client
-                            .initialize_from_snapshot(&document_id, &loro_snapshot)
+                            .initialize_from_snapshot(&document_id, &automerge_snapshot)
                             .await;
                         if let Err(error) = &result
                             && attempt < MAX_ATTEMPTS
@@ -126,7 +126,7 @@ mod tests {
         let mut lexical = MockLexicalSnapshotPort::new();
         let mut sync = MockSyncInitializeSnapshotPort::new();
 
-        lexical.expect_markdown_to_loro_snapshot().times(0);
+        lexical.expect_markdown_to_automerge_snapshot().times(0);
         sync.expect_initialize_from_snapshot()
             .withf(|id, bytes| id == "doc1" && bytes == MARKDOWN_GOLDEN_SNAPSHOT)
             .times(1)
@@ -146,7 +146,7 @@ mod tests {
         let mut sync = MockSyncInitializeSnapshotPort::new();
 
         lexical
-            .expect_markdown_to_loro_snapshot()
+            .expect_markdown_to_automerge_snapshot()
             .withf(|m| m == "# hi")
             .times(1)
             .returning(|_| Box::pin(async { Ok(vec![1, 2, 3]) }));

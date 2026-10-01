@@ -19,7 +19,7 @@ export default defineConfig({
   ],
   resolve: {
     dedupe: ['solid-js'],
-    alias: { 'loro-crdt': 'loro-crdt/base64' },
+    alias: {},
   },
   test: {
     maxWorkers: 4,

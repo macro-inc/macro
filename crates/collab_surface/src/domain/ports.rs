@@ -42,7 +42,7 @@ pub trait CollabSurfaceRepo: Send + Sync + 'static {
 
 /// Outbound port that boots a surface's sync-service session from markdown.
 ///
-/// Implementations convert the markdown to a Loro snapshot (an empty string
+/// Implementations convert the markdown to an Automerge snapshot (an empty string
 /// maps to the canonical blank-document snapshot) and store it as the
 /// session's initial state. Initialization is one-shot per id on the
 /// sync-service side.

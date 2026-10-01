@@ -7,8 +7,8 @@ import {
 } from '@core/util/result';
 import type { RawUpdate } from '@macro-inc/collaboration/collab/shared';
 import {
+  AUTOMERGE_SNAPSHOT_DB_NAME,
   IDBSnapshotStore,
-  LORO_SNAPSHOT_DB_NAME,
 } from '@macro-inc/collaboration/collab/snapshot-store';
 import { z } from 'zod';
 import { prefetchUserInfo } from '../../auth/user-info';
@@ -90,7 +90,7 @@ const loader = createSyncDocumentContextLoader({
     // Metadata alone must never bootstrap an editable empty document when the
     // cached body was evicted or never finished persisting.
     const store = new IDBSnapshotStore<RawUpdate>(
-      LORO_SNAPSHOT_DB_NAME,
+      AUTOMERGE_SNAPSHOT_DB_NAME,
       documentId
     );
     try {

@@ -1,22 +1,26 @@
 use super::*;
+use automerge::{ObjType, ROOT, transaction::Transactable};
 use std::cell::{Cell, RefCell};
 
-fn document() -> LoroDoc {
-    let doc = LoroDoc::new();
-    doc.get_map("metadata").insert("title", "Document").unwrap();
-    doc.commit();
+fn document() -> Automerge {
+    let mut doc = Automerge::new();
+    let mut tx = doc.transaction();
+    tx.put(ROOT, "title", "Document").unwrap();
+    tx.commit();
     doc
 }
 fn access() -> DocumentAccess {
     DocumentAccess::authorize("doc", "doc", true).unwrap()
 }
-fn delta(doc: &LoroDoc, root: &str, key: &str, value: &str) -> Vec<u8> {
-    let fork = doc.fork();
-    fork.get_map(root).insert(key, value).unwrap();
-    fork.export(ExportMode::Updates {
-        from: Cow::Owned(doc.oplog_vv()),
-    })
-    .unwrap()
+fn delta(doc: &Automerge, root: &str, key: &str, value: &str) -> Vec<u8> {
+    let mut fork = doc.fork();
+    let mut tx = fork.transaction();
+    tx.put(ROOT, format!("{root}:{key}"), value).unwrap();
+    tx.commit();
+    fork.save_after(&doc.get_heads())
+}
+fn apply(doc: &mut Automerge, bytes: &[u8]) {
+    doc.apply_changes(decode_changes(bytes).unwrap()).unwrap();
 }
 
 #[test]
@@ -32,7 +36,7 @@ fn permission_policy_requires_matching_document_and_edit_grant() {
         prepare_update(
             &reader,
             &doc,
-            &doc.oplog_vv().encode(),
+            &encode_revision(&doc.get_heads()),
             &delta(&doc, "properties", "A1", "x")
         ),
         Err(DocumentError::Forbidden)
@@ -41,129 +45,119 @@ fn permission_policy_requires_matching_document_and_edit_grant() {
 
 #[test]
 fn preflight_is_isolated_and_stale_revision_never_changes_live_state() {
-    let doc = document();
-    let revision = doc.oplog_vv().encode();
-    let update = delta(&doc, "properties", "A1", "42");
-    let prepared = prepare_update(&access(), &doc, &revision, &update).unwrap();
-    assert!(prepared.applied);
-    assert!(doc.get_map("properties").get("A1").is_none());
-    doc.get_map("properties").insert("B1", "peer").unwrap();
-    doc.commit();
+    let mut doc = document();
+    let revision = encode_revision(&doc.get_heads());
+    let change = delta(&doc, "properties", "A1", "42");
+    assert!(
+        prepare_update(&access(), &doc, &revision, &change)
+            .unwrap()
+            .applied
+    );
+    assert!(doc.get(ROOT, "properties:A1").unwrap().is_none());
+    let other = delta(&doc, "properties", "B1", "peer");
+    apply(&mut doc, &other);
     assert!(matches!(
-        prepare_update(&access(), &doc, &revision, &update),
+        prepare_update(&access(), &doc, &revision, &change),
         Err(DocumentError::Conflict)
     ));
-    assert!(doc.get_map("properties").get("A1").is_none());
+    assert!(doc.get(ROOT, "properties:A1").unwrap().is_none());
 }
 
 #[test]
 fn applied_delta_retry_is_idempotent_even_after_another_edit() {
-    let doc = document();
-    let revision = doc.oplog_vv().encode();
-    let update = delta(&doc, "properties", "A1", "42");
-    doc.import(&update).unwrap();
-    doc.get_map("properties").insert("B1", "peer").unwrap();
-    doc.commit();
-    let retried = prepare_update(&access(), &doc, &revision, &update).unwrap();
+    let mut doc = document();
+    let revision = encode_revision(&doc.get_heads());
+    let change = delta(&doc, "properties", "A1", "42");
+    apply(&mut doc, &change);
+    let other = delta(&doc, "properties", "B1", "peer");
+    apply(&mut doc, &other);
+    let retried = prepare_update(&access(), &doc, &revision, &change).unwrap();
     assert!(!retried.applied);
-    assert_eq!(retried.revision, doc.oplog_vv().encode());
+    assert_eq!(retried.revision, encode_revision(&doc.get_heads()));
 }
 
 #[test]
 fn snapshots_and_updates_accept_text_maps_and_nested_containers() {
-    let doc = document();
-    doc.get_text("content").insert(0, "text").unwrap();
-    doc.commit();
+    let mut doc = document();
+    let mut tx = doc.transaction();
+    let map = tx.put_object(ROOT, "arbitrary", ObjType::Map).unwrap();
+    let text = tx.put_object(map, "text", ObjType::Text).unwrap();
+    tx.splice_text(text, 0, 0, "nested text 🐺").unwrap();
+    tx.commit();
     let (bytes, revision) = snapshot(&access(), &doc).unwrap();
-    let copy = LoroDoc::new();
-    copy.import(&bytes).unwrap();
-    assert_eq!(copy.oplog_vv().encode(), revision);
-    assert_eq!(copy.get_deep_value(), doc.get_deep_value());
-
-    let fork = doc.fork();
-    fork.get_map("arbitrary")
-        .insert_container("nested", loro::LoroText::new())
-        .unwrap()
-        .insert(0, "nested text")
-        .unwrap();
-    let update = fork
-        .export(ExportMode::Updates {
-            from: Cow::Owned(doc.oplog_vv()),
-        })
-        .unwrap();
-    let prepared = prepare_update(&access(), &doc, &revision, &update).unwrap();
-    assert!(prepared.applied);
-    doc.import(&prepared.update).unwrap();
-    assert_eq!(doc.get_deep_value(), fork.get_deep_value());
+    let restored = Automerge::load(&bytes).unwrap();
+    assert_eq!(encode_revision(&restored.get_heads()), revision);
+    assert_eq!(
+        serde_json::to_value(automerge::AutoSerde::from(&restored)).unwrap(),
+        serde_json::to_value(automerge::AutoSerde::from(&doc)).unwrap()
+    );
 }
 
 #[test]
-fn rejects_snapshots_malformed_updates_and_missing_dependencies_without_mutation() {
+fn rejects_snapshots_malformed_truncated_and_missing_dependencies_without_mutation() {
     let doc = document();
-    let revision = doc.oplog_vv().encode();
-    let fork = doc.fork();
-    fork.get_map("properties")
-        .insert("first", "missing")
-        .unwrap();
-    fork.commit();
-    let from = fork.oplog_vv();
-    fork.get_map("properties")
-        .insert("second", "pending")
-        .unwrap();
-    let pending = fork
-        .export(ExportMode::Updates {
-            from: Cow::Owned(from),
-        })
-        .unwrap();
-    for update in [
-        doc.export(ExportMode::Snapshot).unwrap(),
+    let revision = encode_revision(&doc.get_heads());
+    let first = delta(&doc, "properties", "first", "missing");
+    let mut fork = doc.fork();
+    apply(&mut fork, &first);
+    let pending = delta(&fork, "properties", "second", "pending");
+    let valid = delta(&doc, "properties", "A1", "42");
+    let mut trailing_garbage = valid.clone();
+    trailing_garbage.extend_from_slice(&[1, 2, 3]);
+    let mut bad_checksum = valid.clone();
+    bad_checksum[4] ^= 0xff;
+    for change in [
+        bad_checksum,
+        doc.save(),
         vec![1, 2, 3],
         pending,
+        valid[..valid.len() - 1].to_vec(),
+        trailing_garbage,
     ] {
         assert!(matches!(
-            prepare_update(&access(), &doc, &revision, &update),
+            prepare_update(&access(), &doc, &revision, &change),
             Err(DocumentError::Invalid(_))
         ));
-        assert_eq!(doc.oplog_vv().encode(), revision);
+        assert_eq!(encode_revision(&doc.get_heads()), revision);
     }
 }
 
 #[test]
 fn enforces_binary_revision_and_operation_bounds() {
     let doc = document();
-    let revision = doc.oplog_vv().encode();
-    let update = delta(&doc, "properties", "field", "value");
-    for (revision, update) in [
+    let revision = encode_revision(&doc.get_heads());
+    let change = delta(&doc, "properties", "field", "value");
+    for (revision, change) in [
         (revision.clone(), vec![0; MAX_BINARY_BYTES + 1]),
-        (vec![0; MAX_REVISION_BYTES + 1], update.clone()),
+        (vec![0; MAX_REVISION_BYTES + 1], change.clone()),
     ] {
         assert!(matches!(
-            prepare_update(&access(), &doc, &revision, &update),
+            prepare_update(&access(), &doc, &revision, &change),
             Err(DocumentError::TooLarge)
         ));
     }
     assert!(matches!(
-        prepare_update(&access(), &doc, &[255], &update),
+        prepare_update(&access(), &doc, &[255], &change),
         Err(DocumentError::Invalid(_))
     ));
-    let fork = doc.fork();
-    fork.get_text("content")
-        .insert(0, &"x".repeat(MAX_UPDATE_OPERATIONS as usize + 1))
-        .unwrap();
-    let update = fork
-        .export(ExportMode::Updates {
-            from: Cow::Owned(doc.oplog_vv()),
-        })
-        .unwrap();
+    let mut fork = doc.fork();
+    let mut tx = fork.transaction();
+    let text = tx.put_object(ROOT, "content", ObjType::Text).unwrap();
+    tx.splice_text(text, 0, 0, &"x".repeat(100_001)).unwrap();
+    tx.commit();
     assert!(matches!(
-        prepare_update(&access(), &doc, &revision, &update),
+        prepare_update(
+            &access(),
+            &doc,
+            &revision,
+            &fork.save_after(&doc.get_heads())
+        ),
         Err(DocumentError::TooLarge)
     ));
-    assert_eq!(doc.oplog_vv().encode(), revision);
 }
 
 struct UpdateHarness {
-    doc: LoroDoc,
+    doc: std::sync::Mutex<Automerge>,
     calls: RefCell<Vec<&'static str>>,
     fail_persist: bool,
     fail_publish: Cell<bool>,
@@ -172,7 +166,7 @@ struct UpdateHarness {
 impl UpdateHarness {
     fn new() -> Self {
         Self {
-            doc: document(),
+            doc: std::sync::Mutex::new(document()),
             calls: RefCell::new(Vec::new()),
             fail_persist: false,
             fail_publish: Cell::new(false),
@@ -181,13 +175,17 @@ impl UpdateHarness {
 }
 
 impl DocumentUpdatePort for UpdateHarness {
-    fn document(&self) -> &LoroDoc {
-        &self.doc
+    fn document(&self) -> MutexGuard<'_, Automerge> {
+        self.doc.lock().unwrap()
     }
 
     async fn apply_and_persist(&self, update: &[u8]) -> Result<(), DocumentError> {
         self.calls.borrow_mut().push("persist");
-        self.doc.import(update).unwrap();
+        self.doc
+            .lock()
+            .unwrap()
+            .apply_changes(decode_changes(update).unwrap())
+            .unwrap();
         if self.fail_persist {
             return Err(DocumentError::Persistence);
         }
@@ -198,9 +196,11 @@ impl DocumentUpdatePort for UpdateHarness {
 impl DocumentUpdateEffects for UpdateHarness {
     fn broadcast(&self, update: &[u8]) -> Result<(), DocumentError> {
         self.calls.borrow_mut().push("broadcast");
-        let preview = self.doc.fork();
-        preview.import(update).unwrap();
-        assert_eq!(preview.oplog_vv(), self.doc.oplog_vv());
+        let mut preview = self.doc.lock().unwrap().clone();
+        preview
+            .apply_changes(decode_changes(update).unwrap())
+            .unwrap();
+        assert_eq!(preview.get_heads(), self.doc.lock().unwrap().get_heads());
         Ok(())
     }
 
@@ -221,8 +221,8 @@ impl DocumentUpdateEffects for UpdateHarness {
 #[test]
 fn update_use_case_persists_before_broadcast_and_publishes_new_edits() {
     let port = UpdateHarness::new();
-    let revision = port.doc.oplog_vv().encode();
-    let delta = delta(&port.doc, "properties", "A1", "42");
+    let revision = encode_revision(&port.doc.lock().unwrap().get_heads());
+    let delta = delta(&port.doc.lock().unwrap(), "properties", "A1", "42");
     let prepared =
         futures::executor::block_on(update(&access(), &port, &port, &revision, &delta)).unwrap();
     assert!(prepared.applied);
@@ -241,8 +241,8 @@ fn update_use_case_persists_before_broadcast_and_publishes_new_edits() {
 #[test]
 fn rejected_or_unpersisted_update_never_notifies() {
     let mut port = UpdateHarness::new();
-    let revision = port.doc.oplog_vv().encode();
-    let delta = delta(&port.doc, "properties", "A1", "42");
+    let revision = encode_revision(&port.doc.lock().unwrap().get_heads());
+    let delta = delta(&port.doc.lock().unwrap(), "properties", "A1", "42");
     let viewer = DocumentAccess::authorize("doc", "doc", false).unwrap();
     let result = futures::executor::block_on(update(&viewer, &port, &port, &revision, &delta));
     assert!(matches!(result, Err(DocumentError::Forbidden)));
@@ -257,13 +257,20 @@ fn rejected_or_unpersisted_update_never_notifies() {
 #[test]
 fn notification_failure_preserves_durable_update_and_allows_idempotent_retry() {
     let port = UpdateHarness::new();
-    let revision = port.doc.oplog_vv().encode();
-    let delta = delta(&port.doc, "properties", "A1", "42");
+    let revision = encode_revision(&port.doc.lock().unwrap().get_heads());
+    let delta = delta(&port.doc.lock().unwrap(), "properties", "A1", "42");
     port.fail_publish.set(true);
     let result = futures::executor::block_on(update(&access(), &port, &port, &revision, &delta));
     assert!(matches!(result, Err(DocumentError::Notification)));
     assert_eq!(*port.calls.borrow(), ["persist", "broadcast", "publish"]);
-    assert!(port.doc.get_map("properties").get("A1").is_some());
+    assert!(
+        port.doc
+            .lock()
+            .unwrap()
+            .get(ROOT, "properties:A1")
+            .unwrap()
+            .is_some()
+    );
 
     port.calls.borrow_mut().clear();
     port.fail_publish.set(false);

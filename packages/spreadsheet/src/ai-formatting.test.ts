@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { initSync } from '@ironcalc/wasm';
-import { LoroDoc } from 'loro-crdt';
+import { AutomergeDoc } from '@macro-inc/automerge';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { prepareSpreadsheetEdit, readSpreadsheetForAi } from './ai-workbook';
 import {
@@ -26,7 +26,7 @@ afterAll(() => calculator.dispose());
 
 describe('AI formatting preserves spreadsheet values', () => {
   it('formats an entire column without overwriting a concurrent cell value', () => {
-    const doc = new LoroDoc();
+    const doc = new AutomergeDoc();
     try {
       doc.getMap('spreadsheetMeta').set('formatVersion', 1);
       writeSpreadsheetCells(doc, {
@@ -72,7 +72,7 @@ describe('AI formatting preserves spreadsheet values', () => {
   });
 
   it('keeps API fractional percentages and explicit user-entered percentages numerically equivalent', () => {
-    const doc = new LoroDoc();
+    const doc = new AutomergeDoc();
     try {
       doc.getMap('spreadsheetMeta').set('formatVersion', 1);
       writeSpreadsheetCells(doc, { A1: { value: '5%', format: 'percent' } });

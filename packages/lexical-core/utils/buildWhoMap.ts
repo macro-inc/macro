@@ -1,18 +1,22 @@
-import type { Change, ContainerID, LoroDoc } from 'loro-crdt';
-import { LoroMap } from 'loro-crdt';
+import type { AutomergeDoc, ContainerID } from '@macro-inc/automerge';
+import { Automerge, AutomergeMap } from '@macro-inc/automerge';
 
-// Read a node-map's `$.id`, if this container is a LoroMap with that structure.
-function dollarId(c: ReturnType<LoroDoc['getContainerById']>): string | null {
-  if (!(c instanceof LoroMap)) return null;
+// Read a node-map's `$.id`, if this container is a AutomergeMap with that structure.
+function dollarId(
+  c: ReturnType<AutomergeDoc['getContainerById']>
+): string | null {
+  if (!(c instanceof AutomergeMap)) return null;
   const dollar = c.get('$');
-  if (!(dollar instanceof LoroMap)) return null;
+  if (!(dollar instanceof AutomergeMap)) return null;
   const id = dollar.get('id');
   return typeof id === 'string' ? id : null;
 }
 
 // Read a node-map's lexical `type` field (paragraph/table/tablecell/…).
-function nodeType(c: ReturnType<LoroDoc['getContainerById']>): string | null {
-  if (!(c instanceof LoroMap)) return null;
+function nodeType(
+  c: ReturnType<AutomergeDoc['getContainerById']>
+): string | null {
+  if (!(c instanceof AutomergeMap)) return null;
   const t = c.get('type');
   return typeof t === 'string' ? t : null;
 }
@@ -28,7 +32,10 @@ const STABLE_CONTAINERS = new Set(['tablecell', 'listitem']);
 // containers between carry no `$.id`). chain[0] is the text node; chain[1] is its
 // block. Climbing all the way to the top-level block instead would collapse every
 // cell of a table onto the single `table` id (all edits look like one author).
-function blockIdOfContainer(doc: LoroDoc, cid: ContainerID): string | null {
+function blockIdOfContainer(
+  doc: AutomergeDoc,
+  cid: ContainerID
+): string | null {
   const chain: Array<{ type: string | null; id: string }> = [];
   let cur = doc.getContainerById(cid)?.parent();
   while (cur) {
@@ -45,34 +52,20 @@ function blockIdOfContainer(doc: LoroDoc, cid: ContainerID): string | null {
  * history (oldest -> newest, last write wins).
  */
 export function buildWhoMap(
-  doc: LoroDoc,
+  doc: AutomergeDoc,
   peerToUser: (peer: string) => string = (peer) => peer
 ): Map<string, string> {
   const whoMap = new Map<string, string>();
 
-  const flat: Change[] = [];
-  for (const changes of doc.getAllChanges().values()) {
-    flat.push(...changes);
-  }
-  // Order by lamport (global causal clock) so "last write wins" is correct across
-  // peers — timestamps can tie/skew and counter is per-peer. Tie-break by peer for
-  // determinism.
-  flat.sort(
-    (a, b) =>
-      a.lamport - b.lamport || (a.peer < b.peer ? -1 : a.peer > b.peer ? 1 : 0)
-  );
-
-  for (const change of flat) {
-    // Change satisfies IdSpan structurally; exportJsonInIdSpan gives us properly
-    // typed JsonOp[] with container as ContainerID, unlike getOpsInChange (any[]).
-    for (const jsonChange of doc.exportJsonInIdSpan(change)) {
-      for (const op of jsonChange.ops) {
-        if (!op.container.endsWith(':Text')) continue;
-        const blockId = blockIdOfContainer(doc, op.container);
-        if (blockId) whoMap.set(blockId, peerToUser(change.peer));
-      }
+  for (const bytes of Automerge.getAllChanges(doc.value)) {
+    const change = Automerge.decodeChange(bytes);
+    const peer = BigInt(`0x${change.actor}`).toString();
+    for (const op of change.ops) {
+      const container = doc.getContainerById(op.obj);
+      if (container?.kind() !== 'Text') continue;
+      const blockId = blockIdOfContainer(doc, op.obj);
+      if (blockId) whoMap.set(blockId, peerToUser(peer));
     }
   }
-
   return whoMap;
 }

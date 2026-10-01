@@ -3,12 +3,12 @@ import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { AutomergeDoc } from '@macro-inc/automerge';
 import type {
   SpreadsheetReadResponse,
   SpreadsheetRequest,
   SpreadsheetResponse,
 } from '@macro-inc/spreadsheet/ai-types';
-import { LoroDoc } from 'loro-crdt';
 import { Miniflare, type WebSocket } from 'miniflare';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
@@ -179,7 +179,7 @@ async function create() {
       body: new Uint8Array(
         InitializeFromSnapshotRequest.encode({
           snapshot: new Uint8Array(
-            readFileSync(join(repo, 'static_assets/spreadsheet-golden.1.bin'))
+            readFileSync(join(repo, 'static_assets/spreadsheet-golden.2.bin'))
           ),
         })
       ).buffer,
@@ -245,7 +245,7 @@ describe('real spreadsheet editing worker and sync Durable Object', () => {
       snapshot: string;
       revision: string;
     };
-    const doc = new LoroDoc();
+    const doc = new AutomergeDoc();
     try {
       doc.import(Buffer.from(source.snapshot, 'base64'));
       const from = doc.version();
@@ -301,7 +301,7 @@ describe('real spreadsheet editing worker and sync Durable Object', () => {
     expect(response.webSocket).toBeTruthy();
     const socket = createTestWebSocket(response.webSocket);
     response.webSocket.accept();
-    const doc = new LoroDoc();
+    const doc = new AutomergeDoc();
     try {
       const first = FromRemote.decode(
         new Uint8Array(await socket.waitForNextMessage())

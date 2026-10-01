@@ -1,5 +1,5 @@
 /**
- * The one place this system touches real Lexical (and, via `propagate`, Loro).
+ * The one place this system touches real Lexical (and, via `propagate`, Automerge).
  * `Doc` implements both `DocReader` (reads to plan) and `DocWriter` (atomic
  * edits), resolving every `NodeRef` through the durable id ↔ node-key map and
  * delegating the actual mutations to the existing `ai-toolkit` `$`-helpers. A
@@ -106,7 +106,7 @@ const FORMAT_BIT: Record<
 export class Doc implements DocReader, DocWriter {
   constructor(
     private readonly session: LexicalSession,
-    /** Push the new state out (snapshot to mirror to Loro). Noop in unit tests. */
+    /** Push the new state out (snapshot to mirror to Automerge). Noop in unit tests. */
     private readonly propagate: () => void = () => {}
   ) {}
 

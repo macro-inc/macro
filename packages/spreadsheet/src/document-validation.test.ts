@@ -1,16 +1,21 @@
 import { readFileSync } from 'node:fs';
-import { LoroCounter, LoroDoc, LoroMap, LoroText } from 'loro-crdt';
+import {
+  AutomergeCounter,
+  AutomergeDoc,
+  AutomergeMap,
+  AutomergeText,
+} from '@macro-inc/automerge';
 import { afterEach, describe, expect, it } from 'vitest';
 import { validateSpreadsheetDocument } from './document-validation';
 
-const docs: LoroDoc[] = [];
+const docs: AutomergeDoc[] = [];
 function workbook() {
-  const doc = new LoroDoc();
+  const doc = new AutomergeDoc();
   docs.push(doc);
   doc.import(
     readFileSync(
       new URL(
-        '../../../static_assets/spreadsheet-golden.1.bin',
+        '../../../static_assets/spreadsheet-golden.2.bin',
         import.meta.url
       )
     )
@@ -89,23 +94,23 @@ describe('spreadsheet document validation outside sync', () => {
     const text = workbook();
     text
       .getMap('spreadsheetValues')
-      .setContainer('A1', new LoroText())
+      .setContainer('A1', new AutomergeText())
       .insert(0, 'looks valid');
     expect(text.toJSON().spreadsheetValues).toEqual({ A1: 'looks valid' });
     expect(() => validateSpreadsheetDocument(text)).toThrow();
     const counter = workbook();
     counter
       .getMap('spreadsheetFontSize')
-      .setContainer('A1', new LoroCounter())
+      .setContainer('A1', new AutomergeCounter())
       .increment(10);
     expect(() => validateSpreadsheetDocument(counter)).toThrow();
     const map = workbook();
-    map.getMap('spreadsheetValues').setContainer('A1', new LoroMap());
+    map.getMap('spreadsheetValues').setContainer('A1', new AutomergeMap());
     expect(() => validateSpreadsheetDocument(map)).toThrow();
   });
 
   it('rejects other content types and wrong root container types', () => {
-    const markdown = new LoroDoc();
+    const markdown = new AutomergeDoc();
     docs.push(markdown);
     markdown.getText('root').insert(0, 'markdown');
     expect(() => validateSpreadsheetDocument(markdown)).toThrow();

@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { LoroDoc } from "loro-crdt";
+import { TestDocument } from "./automerge";
 import type { Miniflare } from "miniflare";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import { InitializeFromSnapshotRequest } from "../bebop/generated/schema";
@@ -18,7 +18,7 @@ afterAll(async () => {
 });
 
 function seed(content: string): Uint8Array {
-	const doc = new LoroDoc();
+	const doc = new TestDocument();
 	doc.getText("content").insert(0, content);
 	const snapshot = doc.export({ mode: "snapshot" });
 	doc.free();
@@ -50,7 +50,7 @@ async function content(id: string): Promise<string> {
 		headers: { Authorization: `Bearer ${getTokenForSurface(id)}` },
 	});
 	expect(response.status).toBe(200);
-	const doc = new LoroDoc();
+	const doc = new TestDocument();
 	doc.import(new Uint8Array(await response.arrayBuffer()));
 	const text = doc.getText("content").toString();
 	doc.free();

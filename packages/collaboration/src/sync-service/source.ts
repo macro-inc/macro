@@ -1,4 +1,4 @@
-import type { VersionVector } from 'loro-crdt';
+import type { Revision } from '@macro-inc/automerge';
 import { ResultAsync } from 'neverthrow';
 import { logSyncService } from '../collab/logger';
 import type { RawUpdate } from '../collab/shared';
@@ -212,7 +212,7 @@ export class SyncServiceSource implements LiveSyncSource {
   };
 
   public requestUpdatesSince = (
-    vv: VersionVector
+    vv: Revision
   ): ResultAsync<RawUpdate, TimeoutError> => {
     const encodedVv = vv.encode();
     this.ws.send(FromPeer.fromPeerRequestSince({ vv: encodedVv }));

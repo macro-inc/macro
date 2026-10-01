@@ -33,7 +33,6 @@ export default defineConfig({
           import.meta.url
         )
       ),
-      'loro-crdt': 'loro-crdt/base64',
     },
   },
   ssr: {

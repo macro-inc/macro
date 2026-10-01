@@ -6,9 +6,6 @@
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"main": "src/index.ts",
 	"compatibility_date": "2025-07-22",
-	"alias": {
-		"loro-crdt": "loro-crdt/bundler"
-	},
 	"observability": {
 		"enabled": true
 	},

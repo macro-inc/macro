@@ -1,4 +1,5 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { TestDocument } from './automerge';
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Miniflare } from "miniflare";
@@ -41,7 +42,10 @@ async function open(
 
 async function seed() {
 	const id = crypto.randomUUID();
-	const response = await mf.dispatchFetch(
+    const doc = new TestDocument();
+    doc.getMap('spreadsheetSheetNames').set('sheet1', 'Sheet1');
+    doc.getMap('spreadsheetSheetOrder').set('sheet1', 0);
+    const response = await mf.dispatchFetch(
 		`http://localhost/document/${id}/initialize`,
 		{
 			method: "POST",
@@ -50,9 +54,7 @@ async function seed() {
 				"Content-Type": "application/octet-stream",
 			},
 			body: InitializeFromSnapshotRequest.encode({
-				snapshot: new Uint8Array(
-					readFileSync("../../static_assets/spreadsheet-golden.1.bin"),
-				),
+				snapshot: doc.export({ mode: 'snapshot' }),
 			}),
 		},
 	);

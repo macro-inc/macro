@@ -5,10 +5,10 @@
  * shared with the browser — nothing is reimplemented here.
  */
 
+import { EphemeralStore, type PeerID } from '@macro-inc/automerge';
 import type { Awareness } from '@macro-inc/collaboration/collab/awareness';
 import { createSyncSocket } from '@macro-inc/collaboration/sync-service/socket';
 import { SyncServiceSource } from '@macro-inc/collaboration/sync-service/source';
-import { EphemeralStore, type PeerID } from 'loro-crdt';
 
 /**
  * A {@link SyncServiceSource} bound to a fixed, token-bearing URL. A worker

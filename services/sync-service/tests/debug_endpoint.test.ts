@@ -1,5 +1,5 @@
 import { Miniflare } from "miniflare";
-import { LoroDoc } from "loro-crdt";
+import { TestDocument } from "./automerge";
 import { expect, test, describe, beforeEach } from "vitest";
 import { createTestUser, INTERNAL_API_SECRET, setupMiniflare, sleep } from "./utils";
 
@@ -26,7 +26,7 @@ const callWakeupEndpoint = (docId: string, headers = {...admin_headers}) => {
 };
 
 const putSnapshotInKv = async (docId: string, content: string) => {
-  const doc = new LoroDoc();
+  const doc = new TestDocument();
   doc.getText('content').push(content);
   doc.commit();
 

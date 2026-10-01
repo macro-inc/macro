@@ -1,20 +1,15 @@
 #!/usr/bin/env bun
-// simple script to dump a document's loro state for a document that exists in dev or prod into your locally running instance. locally running instances have a feature flag that exposes an endpoint that makes this possible
+// Copy a native Automerge snapshot into a local worker built with test endpoints.
 const argv = process.argv.slice(2);
-const useDev = argv.includes('--dev');
-const [token, srcDocId, targetDocId, targetUrlArg] = argv.filter((a) => !a.startsWith('--'));
-if (!token || !srcDocId || !targetDocId) {
+const [token, srcDocId, targetDocId, targetUrlArg] = argv;
+const SOURCE_URL = process.env.SOURCE_URL;
+if (!SOURCE_URL || !token || !srcDocId || !targetDocId) {
   console.error(
-    'usage: bun run tooling/scripts/grab-snapshot.ts [--dev] <token> <source-document-id> <target-dev-document-id> [target-url]'
+    'usage: SOURCE_URL=<automerge-worker-url> bun run tooling/scripts/grab-snapshot.ts <token> <source-document-id> <target-local-document-id> [target-url]'
   );
   process.exit(1);
 }
 
-const SOURCE_URL =
-  process.env.SOURCE_URL ??
-  (useDev
-    ? 'https://sync-service-dev3.macroverse.workers.dev'
-    : 'https://sync-service-prod2.macroverse.workers.dev');
 const TARGET_URL = targetUrlArg ?? process.env.TARGET_URL ?? 'http://localhost:8787';
 const APP_URL = process.env.APP_URL ?? 'http://localhost:3000';
 
@@ -47,6 +42,6 @@ if (!set.ok) {
   process.exit(1);
 }
 
-console.log(`grabbed ${snapshot.length} bytes + ${peers.length} peers from ${useDev ? 'dev' : 'prod'}`);
+console.log(`grabbed ${snapshot.length} bytes + ${peers.length} peers from ${SOURCE_URL}`);
 console.log(`swapped onto dev doc ${targetDocId} (in-memory)`);
 console.log(`  ${APP_URL}/app/md/${targetDocId}`);

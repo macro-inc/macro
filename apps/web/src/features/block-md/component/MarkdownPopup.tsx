@@ -278,7 +278,7 @@ export function MarkdownPopup(props: {
     )
   );
 
-  // Resolves the loro-mirror node ids of every top-level block touched by
+  // Resolves the Automerge mirror node ids of every top-level block touched by
   // the selection, via the nodeIdPlugin's node state / key mapping.
   const resolveSelectedNodeIds = (): string[] => {
     const lexicalSelection = selection()?.lexicalSelection;

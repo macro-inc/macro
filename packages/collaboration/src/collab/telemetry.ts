@@ -98,8 +98,6 @@ export function peerCounterAttr(
 }
 
 /** A doc version as a compact span attribute (its frontiers). */
-export function frontiersAttr(doc: {
-  frontiers(): { peer: string; counter: number }[];
-}): string {
-  return peerCounterAttr(doc.frontiers().map((f) => [f.peer, f.counter]));
+export function frontiersAttr(doc: { frontiers(): string[] }): string {
+  return cappedAttr(doc.frontiers().join(','));
 }

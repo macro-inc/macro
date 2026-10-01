@@ -7109,7 +7109,7 @@ export const createTaskHandlerResponse = zod
     initialSnapshot: zod
       .string()
       .describe(
-        'Base64-encoded canonical Loro snapshot used to initialize the task.'
+        'Base64-encoded canonical Automerge snapshot used to initialize the task.'
       ),
     teamId: zod
       .uuid()
@@ -8409,15 +8409,7 @@ export const copyDocumentBody = zod
     documentName: zod
       .string()
       .describe('The name of the new document (without extension).'),
-    versionId: zod
-      .union([
-        zod.null(),
-        zod.object({
-          counter: zod.number(),
-          peer: zod.string(),
-        }),
-      ])
-      .optional(),
+    versionId: zod.union([zod.null(), zod.array(zod.string())]).optional(),
   })
   .describe('Request body for copying a document.');
 

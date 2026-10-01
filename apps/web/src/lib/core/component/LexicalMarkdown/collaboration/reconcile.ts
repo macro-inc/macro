@@ -83,7 +83,7 @@ function buildParentMap(
  *
  * @param oldState - Old editor state
  * @param newState - New editor state
- * @param mapping - LoroNodeMapping instance
+ * @param mapping - AutomergeNodeMapping instance
  */
 export function $reconcileLexicalState(
   oldState: SerializedEditorState,
@@ -186,7 +186,7 @@ function moveNodeBetweenParents(
 /** Diff and apply changes between two sets of nodes
  *
  * @param editor - Lexical editor instance
- * @param mapping - LoroNodeMapping instance
+ * @param mapping - AutomergeNodeMapping instance
  * @param oldNode - Old node to diff against
  * @param newNode - New node to diff against
  */

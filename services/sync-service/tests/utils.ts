@@ -1,5 +1,6 @@
 import { intoFrames, Reassembler } from '../../../packages/collaboration/src/websocket/platform/framing/frames';
-import { EphemeralStore, LoroDoc } from 'loro-crdt';
+import { PresenceStore } from '../client/presence';
+import { TestDocument } from './automerge';
 import { Miniflare, type MiniflareOptions, type WebSocket } from 'miniflare';
 import { assert } from 'vitest';
 import jwt from 'jsonwebtoken';
@@ -12,8 +13,8 @@ import { verify } from 'node:crypto';
 
 export const INTERNAL_API_SECRET = 'local';
 
-export const log = (...x) => [console.log(...x), x[0]][1]
-export const sleep = (millis) => new Promise(resolve => setTimeout(resolve, millis));
+export const log = (...x: unknown[]) => [console.log(...x), x[0]][1]
+export const sleep = (millis: number) => new Promise(resolve => setTimeout(resolve, millis));
 
 async function migrateDatabase(mf: Miniflare) {
   const db = await mf.getD1Database("USER_PEER_MAPPING");
@@ -87,7 +88,7 @@ type UserOptions = {
   permissionLevel?: 'view' | 'edit' | 'owner' | 'comment';
 };
 
-function randInt(maxNum) {
+function randInt(maxNum: number) {
     return Math.floor(Math.random() * maxNum)
 }
 function randName(length = 6) {
@@ -126,7 +127,7 @@ export async function createDocument(mf: Miniflare, name = randName()) {
   }
 }
 
-export const copyDocument = (mf, sourceId: string, targetId: string, versionId?: any) => {
+export const copyDocument = (mf: Miniflare, sourceId: string, targetId: string, versionId?: string[]) => {
   const body: any = { target_document_id: targetId };
   if (versionId) {
     body.version_id = versionId;
@@ -143,43 +144,45 @@ export const copyDocument = (mf, sourceId: string, targetId: string, versionId?:
 };
 
 export async function createTestUser(mf: Miniflare, documentId = 'test-doc', options?: UserOptions) {
-  let loroDoc = new LoroDoc();
+  let automergeDoc = new TestDocument();
   let connection = await connectToDocumentForTesting(mf, documentId, options);
-  let awareness = new EphemeralStore(60000);
+  let awareness = new PresenceStore(60000);
 
   const message = await connection.waitForNextMessage();
+  assert(typeof message !== 'string');
 
   const initialSync = FromRemote.decode(new Uint8Array(message));
 
   assert(initialSync.isRemoteInitialSync());
 
-  loroDoc.import(initialSync.value.snapshot);
+  automergeDoc.import(initialSync.value.snapshot);
 
   if (initialSync.value.awareness) {
     awareness.apply(initialSync.value.awareness);
   }
 
-  const registrationMessage = FromPeer.fromPeerRegisterId({ peerid: loroDoc.peerId }).encode();
+  const registrationMessage = FromPeer.fromPeerRegisterId({ peerid: automergeDoc.peerId }).encode();
 
 
   connection.send(registrationMessage);
 
   return {
-    doc: loroDoc,
+    doc: automergeDoc,
     awareness,
     connection,
     import(update: Uint8Array) {
-      let status = loroDoc.import(update);
+      let status = automergeDoc.import(update);
       assert(Object.entries(status.pending ?? {})?.length === 0);
     },
     batchImport(updates: Uint8Array[]) {
-      loroDoc.importBatch(updates);
+      automergeDoc.importBatch(updates);
     },
     async readNextMessage() {
       let message = await connection.waitForNextMessage();
+      assert(typeof message !== 'string');
       return FromRemote.decode(new Uint8Array(message));
     },
-    async readSyncMessage() {
+    async readSyncMessage(): Promise<Uint8Array> {
       let sync = await this.readNextMessage();
       if (sync.isRemoteUpdateAck()) {
         return this.readSyncMessage();
@@ -188,13 +191,13 @@ export async function createTestUser(mf: Miniflare, documentId = 'test-doc', opt
       return sync.value.update;
     },
     makeChange(text: string) {
-      loroDoc.getText('content').push(text);
-      loroDoc.commit();
-      const update = loroDoc.export({ mode: 'update' });
+      automergeDoc.getText('content').push(text);
+      automergeDoc.commit();
+      const update = automergeDoc.export({ mode: 'update' });
       connection.send(FromPeer.fromPeerUpdate({ updates: [update], id: crypto.randomUUID() }).encode());
     },
     getState() {
-      return loroDoc.getText('content').toString();
+      return automergeDoc.getText('content').toString();
     },
     async importNextUpdate() {
       let update = await this.readSyncMessage();
@@ -218,7 +221,7 @@ export function createTestWebSocket(ws: WebSocket) {
   ws.addEventListener('message', (event) => {
     const message = typeof event.data === 'string'
       ? event.data
-      : reassembler.push(new Uint8Array(event.data as ArrayBuffer))?.buffer;
+      : reassembler.push(new Uint8Array(event.data as ArrayBuffer))?.slice().buffer;
     if (message === undefined) return;
 
     if (waiters.length > 0) {
@@ -230,7 +233,7 @@ export function createTestWebSocket(ws: WebSocket) {
   });
 
   return {
-    async waitForNextMessage(timeout = 5000): Promise<ArrayBuffer | string> {
+    async waitForNextMessage(timeout = 30000): Promise<ArrayBuffer | string> {
       if (messages.length > 0) {
         return messages.shift()!;
       }
@@ -262,7 +265,7 @@ export function createTestWebSocket(ws: WebSocket) {
         ws.send(message);
         return;
       }
-      for (const frame of intoFrames(new Uint8Array(message))) ws.send(frame);
+      for (const frame of intoFrames(new Uint8Array(message))) ws.send(frame.slice());
     },
 
     getWebSocket() {

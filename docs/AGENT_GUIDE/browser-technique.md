@@ -51,7 +51,7 @@
 - `net::ERR_NETWORK_CHANGED` spam means the environment's network flapped: verify the stack
   with curl from the shell, then `navigate_page` reload.
 - Full-screen "Something went terribly wrong" dialogs: `Home` recovers navigation-level
-  crashes; the LoroDoc crash needs a reload with `ignoreCache: true` (see documents.md).
+  crashes; stale WASM instances after HMR may require a reload with `ignoreCache: true`.
 - Browser restarts invalidate page ids AND (with a fresh profile) the login session; on
   "browser was restarted" notes, `list_pages`, re-select, and expect to re-login.
 - Every backend request carries a `traceparent` header and returns `x-request-id` — grab them

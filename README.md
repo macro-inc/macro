@@ -216,7 +216,7 @@ macro/
 │   └── docs/      docs.macro.com
 ├── services/      42 deployable services, workers, and Lambda handlers
 ├── crates/        167 Rust libraries — domain logic, models, db clients
-├── packages/      shared TypeScript — collaboration, lexical-core, loro-mirror
+├── packages/      shared TypeScript — collaboration, lexical-core, automerge
 ├── infra/         Pulumi definitions
 ├── docker/        local Compose stack
 ├── nix/           pinned dev shell and build inputs

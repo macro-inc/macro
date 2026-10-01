@@ -741,7 +741,7 @@ export default function caretFromPoint(
 /**
  * @deprecated
  * Moving from this to the cleanState functionality as the bottom of this file.
- * This will work pre-stringification both for current save and coming LORO.
+ * This will work pre-stringification both for current save and coming AUTOMERGE.
  */
 function _stringifyEditorState(editor: LexicalEditor, filters?: string[]) {
   if (!filters) return JSON.stringify(editor.getEditorState().toJSON());
@@ -834,8 +834,8 @@ function transformSerializedEditorState(
 }
 
 /**
- * Transform a serialized editor state into one that is safe to the LORO sync plugin.
- * NOTE: this is no longer true for loro. but is being used for legacy DSS save.
+ * Transform a serialized editor state into one that is safe to the AUTOMERGE sync plugin.
+ * NOTE: this is no longer true for automerge. but is being used for legacy DSS save.
  */
 function cleanState(state: SerializedEditorState): SerializedEditorState {
   return transformSerializedEditorState(stripDraftCommentMarks(state), [
@@ -863,9 +863,9 @@ function cleanState(state: SerializedEditorState): SerializedEditorState {
 }
 
 /**
- * Transform a serialized editor state into one that is safe to the LORO sync plugin.
+ * Transform a serialized editor state into one that is safe to the AUTOMERGE sync plugin.
  */
-export function loroSyncState(state: EditorState): SerializedEditorState {
+export function automergeSyncState(state: EditorState): SerializedEditorState {
   let serializedState;
   if (ENABLE_MARKDOWN_SEARCH_TEXT) {
     serializedState = serializedSateWithSearchText(state);

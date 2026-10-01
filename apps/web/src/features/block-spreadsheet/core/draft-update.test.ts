@@ -1,17 +1,17 @@
-import { LoroDoc } from 'loro-crdt';
+import { AutomergeDoc } from '@macro-inc/automerge';
 import { describe, expect, it } from 'vitest';
 import { spreadsheetDraftUpdate } from './draft-update';
 
-function write(doc: LoroDoc, address: string, value: string) {
+function write(doc: AutomergeDoc, address: string, value: string) {
   doc.getMap('spreadsheetCells').set(address, { value });
   doc.commit();
 }
 
 describe('spreadsheet draft operation attribution', () => {
   it('registers the original operation peers when a draft contains multiple sessions', () => {
-    const server = new LoroDoc();
-    const first = new LoroDoc();
-    const second = new LoroDoc();
+    const server = new AutomergeDoc();
+    const first = new AutomergeDoc();
+    const second = new AutomergeDoc();
     try {
       server.getMap('spreadsheetMeta').set('formatVersion', 1);
       server.commit();
@@ -34,9 +34,9 @@ describe('spreadsheet draft operation attribution', () => {
         server.export({ mode: 'snapshot' })
       );
       expect(retry.peerIds).toEqual([]);
-      const before = server.exportJsonUpdates();
+      const before = server.oplogFrontiers();
       server.import(retry.update);
-      expect(server.exportJsonUpdates()).toEqual(before);
+      expect(server.oplogFrontiers()).toEqual(before);
     } finally {
       second.free();
       first.free();
@@ -45,9 +45,9 @@ describe('spreadsheet draft operation attribution', () => {
   });
 
   it('does not rebind an existing collaborator peer even when its draft has later operations', () => {
-    const server = new LoroDoc();
-    const collaborator = new LoroDoc();
-    const draft = new LoroDoc();
+    const server = new AutomergeDoc();
+    const collaborator = new AutomergeDoc();
+    const draft = new AutomergeDoc();
     try {
       write(collaborator, 'A1', 'Already synced');
       server.import(collaborator.export({ mode: 'snapshot' }));

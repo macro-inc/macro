@@ -1,116 +1,144 @@
 // This is a small helper that uses the helpers of the ai worker to type random
 // gibberish into a document
 
-import "../src/globals";
-import yargs from "yargs";
-import { hideBin } from "yargs/helpers";
-import { $getRoot } from "lexical";
-import type { SerializedEditorState } from "lexical";
-import { $getId, $updateAllNodeIds } from "@macro-inc/lexical-core/plugins/nodeIdPlugin";
+import '../src/globals';
+import type { InferType } from '@macro-inc/automerge/mirror';
+import { SyncEngine } from '@macro-inc/collaboration/collab/engine';
+import { AutomergeManager } from '@macro-inc/collaboration/collab/manager';
+import type { RawUpdate } from '@macro-inc/collaboration/collab/shared';
 import {
-	createEditingSession,
-	loadSnapshot,
-	toSnapshot,
-} from "../src/ai-editing/ai-toolkit";
-import { Doc } from "../src/ai-editing/doc/doc";
-import { nextAiPeerId } from "../src/ai-editing/awareness/ai-peer";
+  InMemoryWALStore,
+  WALSyncer,
+} from '@macro-inc/collaboration/collab/wal';
 import {
-	AI_NAMES,
-	COLORS,
-	realAwarenessSource,
-} from "../src/ai-editing/awareness/awareness-source";
-import { DocumentEditor } from "../src/ai-editing/editor/document-editor";
-import { type CodeRunner, runEditorCode } from "../src/ai-editing/runtime";
-import { MARKDOWN_LORO_SCHEMA, type MarkdownLoroSchemaType } from "@macro-inc/lexical-core/markdown-loro-schema";
-import type { InferType } from "@loro-mirror/core";
-import { createWorkerSyncSource, createWorkerAwareness } from "../src/sources";
-import { LoroManager } from "@macro-inc/collaboration/collab/manager";
-import { SyncEngine } from "@macro-inc/collaboration/collab/engine";
-import { InMemoryWALStore, WALSyncer } from "@macro-inc/collaboration/collab/wal";
-import type { RawUpdate } from "@macro-inc/collaboration/collab/shared";
+  MARKDOWN_AUTOMERGE_SCHEMA,
+  type MarkdownAutomergeSchemaType,
+} from '@macro-inc/lexical-core/markdown-automerge-schema';
+import {
+  $getId,
+  $updateAllNodeIds,
+} from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
+import type { SerializedEditorState } from 'lexical';
+import { $getRoot } from 'lexical';
+import yargs from 'yargs';
+import { hideBin } from 'yargs/helpers';
+import {
+  createEditingSession,
+  loadSnapshot,
+  toSnapshot,
+} from '../src/ai-editing/ai-toolkit';
+import { nextAiPeerId } from '../src/ai-editing/awareness/ai-peer';
+import {
+  AI_NAMES,
+  COLORS,
+  realAwarenessSource,
+} from '../src/ai-editing/awareness/awareness-source';
+import { Doc } from '../src/ai-editing/doc/doc';
+import { DocumentEditor } from '../src/ai-editing/editor/document-editor';
+import { type CodeRunner, runEditorCode } from '../src/ai-editing/runtime';
+import { createWorkerAwareness, createWorkerSyncSource } from '../src/sources';
 
-const argv = await yargs(hideBin(process.argv)).usage("$0 <wss-url>").help().parse();
+const argv = await yargs(hideBin(process.argv))
+  .usage('$0 <wss-url>')
+  .help()
+  .parse();
 const wssUrl = argv._[0] as string | undefined;
-if (!wssUrl) { yargs().showHelp(); process.exit(1); }
+if (!wssUrl) {
+  yargs().showHelp();
+  process.exit(1);
+}
 
-const source = createWorkerSyncSource(wssUrl, "", undefined);
+const source = createWorkerSyncSource(wssUrl, '', undefined);
 const initial = await source.doInitialSync();
-if (initial.isErr()) throw new Error(`initial sync failed: ${initial.error.type}`);
+if (initial.isErr())
+  throw new Error(`initial sync failed: ${initial.error.type}`);
 const { snapshot } = initial.value;
 
-const manager = new LoroManager(MARKDOWN_LORO_SCHEMA, { documentId: "" });
-let engine: SyncEngine<typeof MARKDOWN_LORO_SCHEMA, unknown> | undefined;
+const manager = new AutomergeManager(MARKDOWN_AUTOMERGE_SCHEMA, {
+  documentId: '',
+});
+let engine: SyncEngine<typeof MARKDOWN_AUTOMERGE_SCHEMA, unknown> | undefined;
 manager.onStateChange((u) => queueMicrotask(() => engine?.onStateUpdate(u)));
 
 const initResult = await manager.initializeFromSnapshot(snapshot);
-if (initResult.isErr()) throw new Error(`failed to initialize: ${initResult.error[0]?.message}`);
+if (initResult.isErr())
+  throw new Error(`failed to initialize: ${initResult.error[0]?.message}`);
 
 const session = createEditingSession();
-loadSnapshot(session, manager.mirror!.getState() as unknown as SerializedEditorState);
+loadSnapshot(
+  session,
+  manager.mirror!.getState() as unknown as SerializedEditorState
+);
 
 const workerAwareness = createWorkerAwareness(manager.peerIdStr);
-const wal = new WALSyncer<RawUpdate>(new InMemoryWALStore<RawUpdate>(), (updates) => source.pushUpdate(updates));
+const wal = new WALSyncer<RawUpdate>(
+  new InMemoryWALStore<RawUpdate>(),
+  (updates) => source.pushUpdate(updates)
+);
 engine = new SyncEngine({
-	loroManager: manager,
-	awareness: workerAwareness,
-	syncs: { wal, live: source },
-	bindings: { onRemoteState: () => {} },
+  automergeManager: manager,
+  awareness: workerAwareness,
+  syncs: { wal, live: source },
+  bindings: { onRemoteState: () => {} },
 });
 engine.start();
 
 let chain: Promise<void> = Promise.resolve();
 const propagate = () => {
-	chain = chain.then(async () => {
-		const newPeer = nextAiPeerId();
-		manager.doc.commit();
-		manager.doc.setPeerId(newPeer);
-		source.registerPeerId(newPeer);
-		session.editor.update(() => $updateAllNodeIds(session.ids), { discrete: true });
-		await engine!.syncStateToLoro(toSnapshot(session) as unknown as InferType<MarkdownLoroSchemaType>);
-	});
+  chain = chain.then(async () => {
+    const newPeer = nextAiPeerId();
+    manager.doc.commit();
+    manager.doc.setPeerId(newPeer);
+    source.registerPeerId(newPeer);
+    session.editor.update(() => $updateAllNodeIds(session.ids), {
+      discrete: true,
+    });
+    await engine!.syncStateToAutomerge(
+      toSnapshot(session) as unknown as InferType<MarkdownAutomergeSchemaType>
+    );
+  });
 };
 
 const awareness = realAwarenessSource({
-	mirror: manager.mirror!,
-	doc: manager.doc,
-	send: (bytes) => source.pushAwareness(bytes),
-	name: AI_NAMES[0]!,
-	color: COLORS[0]!,
+  mirror: manager.mirror!,
+  doc: manager.doc,
+  send: (bytes) => source.pushAwareness(bytes),
+  name: AI_NAMES[0]!,
+  color: COLORS[0]!,
 });
 
-const firstId = session.editor.getEditorState().read(() =>
-	$getId($getRoot().getFirstChildOrThrow()),
-);
-if (!firstId) throw new Error("document has no nodes");
+const firstId = session.editor
+  .getEditorState()
+  .read(() => $getId($getRoot().getFirstChildOrThrow()));
+if (!firstId) throw new Error('document has no nodes');
 
 const paragraphs = [
-	"The quick brown fox jumps over the lazy dog, and then, having completed that particular feat of athletic prowess, paused to reflect on the existential implications of being a fox in a world that seemingly only exists to test the typographic completeness of font families and keyboard layouts.",
-	"It was a dark and stormy night, or at least that is what the weather forecast had suggested earlier in the week, though by the time the actual evening arrived the clouds had largely dispersed, leaving behind only a faint drizzle and the lingering sense that meteorology is, at its core, an exercise in optimistic uncertainty.",
-	"The history of human civilization can be understood, if one squints sufficiently and ignores a great many inconvenient counterexamples, as a long and winding journey from sitting in caves wondering what that rustling noise was, all the way to sitting in offices wondering what that notification sound was, which is to say the fundamental anxieties have remained remarkably consistent.",
+  'The quick brown fox jumps over the lazy dog, and then, having completed that particular feat of athletic prowess, paused to reflect on the existential implications of being a fox in a world that seemingly only exists to test the typographic completeness of font families and keyboard layouts.',
+  'It was a dark and stormy night, or at least that is what the weather forecast had suggested earlier in the week, though by the time the actual evening arrived the clouds had largely dispersed, leaving behind only a faint drizzle and the lingering sense that meteorology is, at its core, an exercise in optimistic uncertainty.',
+  'The history of human civilization can be understood, if one squints sufficiently and ignores a great many inconvenient counterexamples, as a long and winding journey from sitting in caves wondering what that rustling noise was, all the way to sitting in offices wondering what that notification sound was, which is to say the fundamental anxieties have remained remarkably consistent.',
 ];
 
 const inserts = paragraphs
-	.map(
-		(text, i) =>
-			i === 0
-				? `const ref0 = editor.insertParagraphAfter('${firstId}', ${JSON.stringify(text)});`
-				: `const ref${i} = editor.insertParagraphAfter(ref${i - 1}, ${JSON.stringify(text)});`,
-	)
-	.join("\n");
+  .map((text, i) =>
+    i === 0
+      ? `const ref0 = editor.insertParagraphAfter('${firstId}', ${JSON.stringify(text)});`
+      : `const ref${i} = editor.insertParagraphAfter(ref${i - 1}, ${JSON.stringify(text)});`
+  )
+  .join('\n');
 
 const runner: CodeRunner = (validIds, code) => {
-	const refs = Array.from({ length: 128 }, (_, i) => `ref-${i + 1}`);
-	const editor = new DocumentEditor({ validIds, refs });
-	new Function("editor", code)(editor);
-	return editor.drain();
+  const refs = Array.from({ length: 128 }, (_, i) => `ref-${i + 1}`);
+  const editor = new DocumentEditor({ validIds, refs });
+  new Function('editor', code)(editor);
+  return editor.drain();
 };
 
 await runEditorCode({
-	session,
-	doc: new Doc(session, propagate),
-	code: inserts,
-	awarenessSource: awareness,
-	runner,
+  session,
+  doc: new Doc(session, propagate),
+  code: inserts,
+  awarenessSource: awareness,
+  runner,
 });
 
 await chain;

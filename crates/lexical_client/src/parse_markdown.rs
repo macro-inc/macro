@@ -565,7 +565,7 @@ impl LexicalClient {
     }
 
     #[tracing::instrument(skip(self, markdown), err)]
-    pub async fn markdown_to_loro_snapshot(&self, markdown: &str) -> Result<Vec<u8>> {
+    pub async fn markdown_to_automerge_snapshot(&self, markdown: &str) -> Result<Vec<u8>> {
         let url = format!("{}/snapshot/markdown", self.url);
         let response = check_response(
             self.client

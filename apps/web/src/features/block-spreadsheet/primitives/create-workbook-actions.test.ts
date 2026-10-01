@@ -1,4 +1,4 @@
-import { LoroDoc } from 'loro-crdt';
+import { AutomergeDoc } from '@macro-inc/automerge';
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type {
@@ -42,7 +42,7 @@ function deferred<T>() {
   return { promise, resolve };
 }
 function setup() {
-  const doc = new LoroDoc();
+  const doc = new AutomergeDoc();
   cleanups.push(() => doc.free());
   return createRoot((dispose) => {
     cleanups.unshift(dispose);

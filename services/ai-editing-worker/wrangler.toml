@@ -4,7 +4,6 @@ compatibility_date = "2025-07-22"
 compatibility_flags = ["nodejs_compat", "enable_request_signal", "global_fetch_strictly_public"]
 
 [alias]
-"loro-crdt" = "loro-crdt/bundler"
 "@observability/logger" = "./src/logger-shim.ts"
 "@macro-inc/lexical-core" = "../../packages/lexical-core"
 

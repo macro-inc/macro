@@ -1,7 +1,7 @@
 import { CollabProvider } from '@core/component/LexicalMarkdown/collaboration/CollabProvider';
 import type { MarkdownEditorErrors } from '@core/component/LexicalMarkdown/constants';
 import type { PluginManager } from '@core/component/LexicalMarkdown/plugins';
-import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
+import type { AutomergeManager } from '@macro-inc/collaboration/collab/manager';
 import type { NodeIdMappings } from '@macro-inc/lexical-core';
 import type { LexicalEditor } from 'lexical';
 import type { Accessor, Setter } from 'solid-js';
@@ -13,7 +13,7 @@ import { endDocumentSpan, resumeDocumentSpan } from '../observability';
 export {
   CODE_HIGHLIGHT_IDS_TAG,
   FORCE_SYNC_COMMAND,
-  FROM_LORO_TAG,
+  FROM_AUTOMERGE_TAG,
 } from '@core/component/LexicalMarkdown/collaboration/CollabProvider';
 
 export type MarkdownCollabProviderProps = {
@@ -25,7 +25,7 @@ export type MarkdownCollabProviderProps = {
   editorFocus: Accessor<boolean>;
   setEditorReady: Setter<boolean>;
   setEditorError: Setter<MarkdownEditorErrors | null>;
-  loroManager: LoroManager;
+  automergeManager: AutomergeManager;
 };
 
 /**
@@ -50,7 +50,7 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
       editorFocus={props.editorFocus}
       setEditorReady={props.setEditorReady}
       setEditorError={props.setEditorError}
-      loroManager={props.loroManager}
+      automergeManager={props.automergeManager}
       syncSource={syncSource}
       sourceReady={() => documentSource().type === 'sync'}
       canEdit={permissions.canEdit}

@@ -7,7 +7,7 @@ export type CanvasId = string;
 
 // TODO: The fact that edge style are defined but not used is causing
 // a lot of the ai-gen parse fails. Move a to loose number. This is a
-// hack until we either migrate to Loro or a Zod schema v2.
+// hack until we either migrate to Automerge or a Zod schema v2.
 const looseNumber = z
   .any()
   .optional()

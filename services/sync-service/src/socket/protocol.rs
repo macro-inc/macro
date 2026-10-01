@@ -1,5 +1,6 @@
+use crate::awareness::PresenceStore;
+use crate::domain::crdt::decode_revision;
 use bebop::{Record, SliceWrapper};
-use loro::{VersionVector, awareness::EphemeralStore};
 use tracing::trace;
 use worker::Result;
 
@@ -165,7 +166,7 @@ pub async fn process_message(
     document_id: &str,
     document_state: &DocumentState,
     session_storage: &SessionStorage,
-    awareness: &EphemeralStore,
+    awareness: &PresenceStore,
     message: FromPeer<'_>,
     dss: &DocumentSyncSession,
     telemetry: &mut InboundMessageTelemetry,
@@ -219,29 +220,26 @@ pub async fn process_message(
                 .duration_since(web_time::UNIX_EPOCH)
                 .map(|d| d.as_millis() as i64)
                 .unwrap_or(0);
-            for update in &updates {
-                let imported = session_storage
-                    .append_pending_operation(update, document_state)
-                    .await?;
-                if imported.changed {
-                    dss.record_editor(attribution.as_ref());
-                }
-                if !imported.touched_nodes.is_empty()
-                    && let Some(peer_id) = peer_id
-                {
-                    dss.push_blame_events(
-                        imported
-                            .touched_nodes
-                            .into_iter()
-                            .map(|node_id| crate::d1::BlameEvent {
-                                document_id: document_id.to_string(),
-                                node_id,
-                                peer_id,
-                                timestamp_ms: now_ms,
-                            })
-                            .collect(),
-                    );
-                }
+            let operations: Vec<&[u8]> = updates.iter().map(|update| **update).collect();
+            let imported = session_storage
+                .append_pending_operations(&operations, document_state)
+                .await?;
+            if imported.changed {
+                dss.record_editor(attribution.as_ref());
+            }
+            if let Some(peer_id) = peer_id {
+                dss.push_blame_events(
+                    imported
+                        .touched_nodes
+                        .into_iter()
+                        .map(|node_id| crate::d1::BlameEvent {
+                            document_id: document_id.to_string(),
+                            node_id,
+                            peer_id,
+                            timestamp_ms: now_ms,
+                        })
+                        .collect(),
+                );
             }
 
             // ACK only after the update is durably stored.
@@ -285,7 +283,7 @@ pub async fn process_message(
         // — e.g. a peer that made offline edits the server hasn't seen yet —
         // don't cause a panic in `frontiersToVV` lookup.
         FromPeer::PeerRequestSince { vv } => {
-            let decoded = VersionVector::decode(*vv).context("failed to decode version vector")?;
+            let decoded = decode_revision(*vv).context("failed to decode version vector")?;
 
             let update = document_state
                 .export_updates_since(&decoded)

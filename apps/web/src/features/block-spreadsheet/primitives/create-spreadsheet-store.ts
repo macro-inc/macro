@@ -81,7 +81,7 @@ export function createSpreadsheetStore(options: {
     setCanRedo(history?.canRedo() ?? false);
   };
 
-  // Loro is an external imperative system; subscribe only once hydration has
+  // Automerge is an external imperative system; subscribe only once hydration has
   // supplied its document. Resetting a sync session also replaces its history.
   createEffect(
     on(options.source.doc, (doc) => {

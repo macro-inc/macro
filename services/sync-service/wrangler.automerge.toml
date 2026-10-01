@@ -1,0 +1,54 @@
+# Isolated Automerge rollout. Never bind this worker to legacy pre-Automerge storage.
+name = "sync-service-automerge-local"
+main = "build/worker/shim.mjs"
+compatibility_date = "2025-03-05"
+
+[build]
+command = "worker-build --profile sync-service-release"
+
+[vars]
+INTERNAL_API_SECRET_KEY = "LOCAL_API_KEY"
+DOCUMENT_PERMISSIONS_SECRET = "local"
+ENVIRONMENT = "local"
+# DSS_URL is intentionally absent: native protocol tests must not write
+# Automerge snapshots into an existing pre-Automerge application's storage.
+
+[durable_objects]
+bindings = [{ name = "DOCUMENT_SYNC_SESSION", class_name = "DocumentSyncSession" }]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["DocumentSyncSession"]
+
+[[d1_databases]]
+binding = "USER_PEER_MAPPING"
+database_name = "automerge-peer-mapping-local"
+migrations_dir = "./database/user-peer-mapping/migrations/"
+
+[[kv_namespaces]]
+binding = "SNAPSHOT_STORE_KV"
+
+[env.playground]
+name = "sync-service-playground-automerge"
+
+[env.playground.vars]
+INTERNAL_API_SECRET_KEY = "SYNC_SERVICE_KEY_PLAYGROUND"
+DOCUMENT_PERMISSIONS_SECRET = "local"
+ENVIRONMENT = "playground"
+
+[env.playground.durable_objects]
+bindings = [{ name = "DOCUMENT_SYNC_SESSION", class_name = "DocumentSyncSession" }]
+
+[[env.playground.migrations]]
+tag = "v1"
+new_sqlite_classes = ["DocumentSyncSession"]
+
+# Wrangler provisions fresh resources on the first deployment. IDs are never
+# copied from wrangler.toml; its legacy worker remains independently usable.
+[[env.playground.d1_databases]]
+binding = "USER_PEER_MAPPING"
+database_name = "automerge-peer-mapping-playground"
+migrations_dir = "./database/user-peer-mapping/migrations/"
+
+[[env.playground.kv_namespaces]]
+binding = "SNAPSHOT_STORE_KV"

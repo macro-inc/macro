@@ -2,7 +2,7 @@
 
 Shared collaboration runtime used by the web app and non-browser workers.
 
-- `@macro-inc/collaboration/collab/*` contains the Loro manager, sync engine,
+- `@macro-inc/collaboration/collab/*` contains the Automerge manager, sync engine,
   awareness, snapshots, and write-ahead log.
 - `@macro-inc/collaboration/sync-service/*` contains the sync-service wire
   protocol and transport. Callers provide the environment-specific URL/token.

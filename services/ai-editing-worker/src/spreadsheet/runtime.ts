@@ -1,3 +1,4 @@
+import { AutomergeDoc } from '@macro-inc/automerge';
 import type {
   SpreadsheetRequest,
   SpreadsheetResponse,
@@ -9,7 +10,6 @@ import {
 } from '@macro-inc/spreadsheet/ai-workbook';
 import type { SpreadsheetCalculator } from '@macro-inc/spreadsheet/calculation';
 import { validateSpreadsheetDocument } from '@macro-inc/spreadsheet/document-validation';
-import { LoroDoc } from 'loro-crdt';
 import { nextAiPeerId } from '../ai-editing/awareness/ai-peer';
 
 const MAX_SNAPSHOT_BYTES = 4 * 1024 * 1024;
@@ -220,7 +220,7 @@ export async function runSpreadsheetRequest(
   };
   const { snapshot, revision } = await storage.load(signal);
   checkDeadline();
-  const doc = new LoroDoc();
+  const doc = new AutomergeDoc();
   try {
     doc.import(snapshot);
     validateSpreadsheetDocument(doc);

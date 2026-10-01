@@ -40,7 +40,6 @@ reviews:
     - "!**/target/**"
     - "!**/node_modules/**"
     - "!**/dist/**"
-    - "!packages/loro-mirror/**"
     - "!apps/web/src/lib/service-clients/**/generated/**"
     - "!**/*.gen.ts"
 

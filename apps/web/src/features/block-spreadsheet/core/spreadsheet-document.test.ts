@@ -1,4 +1,4 @@
-import { LoroDoc, UndoManager } from 'loro-crdt';
+import { AutomergeDoc, UndoManager } from '@macro-inc/automerge';
 import { describe, expect, it } from 'vitest';
 import {
   appendSpreadsheetRows,
@@ -12,7 +12,7 @@ import {
   writeSpreadsheetCells,
 } from './spreadsheet-document';
 
-function synchronize(left: LoroDoc, right: LoroDoc) {
+function synchronize(left: AutomergeDoc, right: AutomergeDoc) {
   const leftUpdate = left.export({ mode: 'update' });
   const rightUpdate = right.export({ mode: 'update' });
   left.import(rightUpdate);
@@ -21,8 +21,8 @@ function synchronize(left: LoroDoc, right: LoroDoc) {
 
 describe('spreadsheet document', () => {
   it('merges appended rows and column widths and preserves occupied rows across undo', () => {
-    const alice = new LoroDoc();
-    const bob = new LoroDoc();
+    const alice = new AutomergeDoc();
+    const bob = new AutomergeDoc();
     const history = new UndoManager(alice, { mergeInterval: 0 });
     appendSpreadsheetRows(alice, 100);
     appendSpreadsheetRows(bob, 100);
@@ -36,7 +36,7 @@ describe('spreadsheet document', () => {
     synchronize(alice, bob);
     history.undo();
     expect(readSpreadsheetLayout(alice).rowCount).toBe(400);
-    const reopened = new LoroDoc();
+    const reopened = new AutomergeDoc();
     reopened.import(alice.export({ mode: 'snapshot' }));
     expect(readSpreadsheetLayout(reopened)).toEqual(
       readSpreadsheetLayout(alice)
@@ -49,8 +49,8 @@ describe('spreadsheet document', () => {
     reopened.free();
   });
   it('merges edits to distinct cells from initially empty peers', () => {
-    const left = new LoroDoc();
-    const right = new LoroDoc();
+    const left = new AutomergeDoc();
+    const right = new AutomergeDoc();
     writeSpreadsheetCells(left, { A1: { value: 'Revenue' } });
     writeSpreadsheetCells(right, { B1: { value: '=SUM(B2:B10)' } });
     synchronize(left, right);
@@ -64,8 +64,8 @@ describe('spreadsheet document', () => {
   });
 
   it('preserves simultaneous value and formatting edits to the same cell', () => {
-    const left = new LoroDoc();
-    const right = new LoroDoc();
+    const left = new AutomergeDoc();
+    const right = new AutomergeDoc();
     writeSpreadsheetCells(left, { A1: { value: '42' } });
     writeSpreadsheetCells(right, { A1: { bold: true, format: 'currency' } });
     synchronize(left, right);
@@ -80,8 +80,8 @@ describe('spreadsheet document', () => {
   });
 
   it('resolves concurrent edits to one value identically on both peers', () => {
-    const left = new LoroDoc();
-    const right = new LoroDoc();
+    const left = new AutomergeDoc();
+    const right = new AutomergeDoc();
     writeSpreadsheetCells(left, { A1: { value: 'first' } });
     writeSpreadsheetCells(right, { A1: { value: 'second' } });
     synchronize(left, right);
@@ -92,8 +92,8 @@ describe('spreadsheet document', () => {
   });
 
   it('undoes one local batch while preserving a collaborators edits', () => {
-    const left = new LoroDoc();
-    const right = new LoroDoc();
+    const left = new AutomergeDoc();
+    const right = new AutomergeDoc();
     const undo = new UndoManager(left, { mergeInterval: 0 });
     writeSpreadsheetCells(left, { A1: { value: '1' }, A2: { value: '2' } });
     writeSpreadsheetCells(right, { B1: { value: 'from collaborator' } });
@@ -115,11 +115,11 @@ describe('spreadsheet document', () => {
   });
 
   it('round trips formulas and formatting through a snapshot', () => {
-    const original = new LoroDoc();
+    const original = new AutomergeDoc();
     writeSpreadsheetCells(original, {
       C4: { value: '=A1*2', format: 'percent', bold: true },
     });
-    const reopened = new LoroDoc();
+    const reopened = new AutomergeDoc();
     reopened.import(original.export({ mode: 'snapshot' }));
     expect(readSpreadsheetCells(reopened)).toEqual(
       readSpreadsheetCells(original)
@@ -129,7 +129,7 @@ describe('spreadsheet document', () => {
   });
 
   it('reopens all formatting fields and clears style without changing values', () => {
-    const original = new LoroDoc();
+    const original = new AutomergeDoc();
     const style: Required<SpreadsheetCellStyle> = {
       numberFormat: '#,##0;(#,##0);"—"',
       fontName: 'Calibri',
@@ -164,7 +164,7 @@ describe('spreadsheet document', () => {
       A1: { value: '=1/3', ...style },
       A300: { italic: true },
     });
-    const reopened = new LoroDoc();
+    const reopened = new AutomergeDoc();
     reopened.import(original.export({ mode: 'snapshot' }));
     expect(readSpreadsheetCells(reopened).A1).toEqual({
       value: '=1/3',
@@ -189,8 +189,8 @@ describe('spreadsheet document', () => {
   });
 
   it('merges independent style changes and undoes only local formatting', () => {
-    const alice = new LoroDoc();
-    const bob = new LoroDoc();
+    const alice = new AutomergeDoc();
+    const bob = new AutomergeDoc();
     writeSpreadsheetCells(alice, { A1: { value: '42' } });
     synchronize(alice, bob);
     const history = new UndoManager(alice, { mergeInterval: 0 });
@@ -223,7 +223,7 @@ describe('spreadsheet document', () => {
   });
 
   it('validates local and remote styles including defaults and color injection', () => {
-    const doc = new LoroDoc();
+    const doc = new AutomergeDoc();
     expect(isSpreadsheetCellStyle(SPREADSHEET_DEFAULT_STYLE)).toBe(true);
     for (const style of [
       { italic: 1 },
@@ -258,7 +258,7 @@ describe('spreadsheet document', () => {
   });
 
   it('rejects oversized batches before applying any edits', () => {
-    const doc = new LoroDoc();
+    const doc = new AutomergeDoc();
     expect(() =>
       writeSpreadsheetCells(doc, {
         A1: { value: 'must not be written' },

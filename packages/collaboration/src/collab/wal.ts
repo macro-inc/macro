@@ -40,9 +40,9 @@ export interface WALStore<T> {
 /** Undelivered entries older than this are dropped without replay. */
 export const WAL_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 1 week
 
-/** DB name for the Loro doc-update WAL. Each WAL "purpose" (loro updates,
+/** DB name for the Automerge doc-update WAL. Each WAL "purpose" (automerge updates,
  *  offline comments, etc.) gets its own DB so schemas don't collide. */
-export const LORO_WAL_DB_NAME = 'macro-document-wal';
+export const AUTOMERGE_WAL_DB_NAME = 'macro-automerge-document-wal';
 
 const DB_VERSION = 1;
 
@@ -471,14 +471,14 @@ export class WALSyncer<T> {
   }
 }
 
-/** Build a WAL syncer wired to a Loro live sync source: BrowserWALStore for
+/** Build a WAL syncer wired to an Automerge live sync source: BrowserWALStore for
  *  persistence, live.pushUpdate as the transport, and reconnect events
  *  trigger a re-flush. */
 export function createWALSyncSource(
   live: LiveSyncSource
 ): WALSyncer<RawUpdate> {
   const store = new BrowserWALStore<RawUpdate>(
-    LORO_WAL_DB_NAME,
+    AUTOMERGE_WAL_DB_NAME,
     live.documentId
   );
   const syncer = new WALSyncer<RawUpdate>(

@@ -42,7 +42,7 @@ impl SurfaceState {
     }
 }
 
-/// A collab surface: a stable id bound to a parent entity, backed by a Loro
+/// A collab surface: a stable id bound to a parent entity, backed by an Automerge
 /// session in sync-service. Content lives in the CRDT, not here.
 #[derive(Debug, Clone)]
 pub struct CollabSurface {

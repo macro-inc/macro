@@ -8,7 +8,7 @@ on:
       - "package.json"
       - "packages/lexical-core/**"
       - "services/lexical-service/**"
-      - "packages/loro-mirror/**"
+      - "packages/automerge/**"
   workflow_dispatch:
     inputs:
       environment:

@@ -4,7 +4,7 @@ export async function getMarkdownGoldenBytes(): Promise<Uint8Array> {
   if (!goldenPromise) {
     goldenPromise = (async () => {
       try {
-        const { MARKDOWN_GOLDEN } = await import('./markdown-golden.1');
+        const { MARKDOWN_GOLDEN } = await import('./markdown-golden.2');
         return MARKDOWN_GOLDEN;
       } catch (err) {
         // Allow retry on transient failure

@@ -1,5 +1,5 @@
 import { Miniflare } from "miniflare";
-import { LoroDoc } from "loro-crdt";
+import { TestDocument } from "./automerge";
 import { expect, test, describe, beforeEach } from "vitest";
 import { createTestUser, getTokenForDocument, setupMiniflare } from "./utils";
 
@@ -120,4 +120,20 @@ describe("raw endpoint tests", async () => {
 
     expect(response.status).toBe(404);
   });
+});
+
+test('canonical app markdown snapshot materializes stable lists for raw consumers', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { InitializeFromSnapshotRequest } = await import('../bebop/generated/schema');
+  const id = crypto.randomUUID();
+  const token = getTokenForDocument(id, 'raw-app', 'owner');
+  const initialized = await mf.dispatchFetch(`http://localhost:8787/document/${id}/initialize`, {
+    method: 'POST', headers: { Authorization: `Bearer ${token}` },
+    body: InitializeFromSnapshotRequest.encode({ snapshot: new Uint8Array(readFileSync('../../static_assets/markdown-golden.2.bin')) }),
+  });
+  expect(initialized.status).toBe(200);
+  const response = await mf.dispatchFetch(`http://localhost:8787/document/${id}/raw`, { headers: { Authorization: `Bearer ${token}` } });
+  expect(response.status).toBe(200);
+  const state = await response.json() as { root: { children: unknown[] } };
+  expect(Array.isArray(state.root.children)).toBe(true);
 });

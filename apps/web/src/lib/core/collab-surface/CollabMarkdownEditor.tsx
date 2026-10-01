@@ -54,7 +54,7 @@ export type CollabMarkdownControls = {
   getMarkdown: () => string;
   /**
    * Clear the surface for everyone. This is a normal collaborative edit: it
-   * syncs through Loro, so every connected peer's surface empties.
+   * syncs through Automerge, so every connected peer's surface empties.
    */
   clear: () => void;
   /** Focus the editor. */
@@ -137,7 +137,7 @@ export function CollabMarkdownEditor(props: CollabMarkdownEditorProps) {
   // Collab is the point of this component, so the validator is always live:
   // it keeps this peer from committing another peer's in-flight inline nodes
   // (mentions, emoji searches, snippets).
-  const peerId = () => session.loroManager.peerIdStr;
+  const peerId = () => session.automergeManager.peerIdStr;
   const peerIdValidator = createPeerIdValidator(peerId, true);
 
   plugins
@@ -146,7 +146,7 @@ export function CollabMarkdownEditor(props: CollabMarkdownEditorProps) {
     .markdownShortcuts()
     .delete()
     .state<string>(setMarkdownState, 'markdown')
-    .history(400, session.loroManager)
+    .history(400, session.automergeManager)
     .use(
       emojisPlugin({
         menu: emojiMenuOperations,
@@ -278,7 +278,7 @@ export function CollabMarkdownEditor(props: CollabMarkdownEditorProps) {
               editorFocus={editorFocus}
               setEditorReady={setEditorReady}
               setEditorError={setEditorError}
-              loroManager={session.loroManager}
+              automergeManager={session.automergeManager}
               syncSource={session.syncSource}
               sourceReady={() => true}
               canEdit={canEdit}

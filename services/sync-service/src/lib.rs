@@ -1,5 +1,6 @@
 mod ai_peer;
 mod auth;
+mod awareness;
 mod cf_worker;
 mod constants;
 mod d1;
@@ -26,7 +27,7 @@ use worker::{Context, Env, Result, event};
 pub const GIT_DESCRIBE: &str = env!("GIT_DESCRIBE");
 
 fn inner_start() {
-    let filter = EnvFilter::new("sync_service=trace,loro=warn");
+    let filter = EnvFilter::new("sync_service=info");
 
     let fmt_layer = tracing_subscriber::fmt::layer()
         .json()

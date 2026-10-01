@@ -1,9 +1,10 @@
 /**
  * This is a modified version of lexical's history plugin.
- * It uses lexical's semantics for history merges, but with Loro's undo manager as the source of truth.
+ * It uses lexical's semantics for history merges, but with Automerge's undo manager as the source of truth.
  */
 
 import { mergeRegister } from '@lexical/utils';
+import { type AutomergeDoc, UndoManager } from '@macro-inc/automerge';
 import type { EditorState, LexicalEditor } from 'lexical';
 import {
   $isRangeSelection,
@@ -17,7 +18,6 @@ import {
   REDO_COMMAND,
   UNDO_COMMAND,
 } from 'lexical';
-import { type LoroDoc, UndoManager } from 'loro-crdt';
 
 type MergeAction = 0 | 1 | 2;
 const HISTORY_MERGE = 0;
@@ -197,23 +197,23 @@ function isTextNodeUnchanged(
 }
 
 /**
- * Registers history plugin with Loro's UndoManager
+ * Registers history plugin with Automerge's UndoManager
  *
- * Uses lexical's history merge semantics, but with Loro's undo manager
+ * Uses lexical's history merge semantics, but with Automerge's undo manager
  *
  * @param editor - Lexical editor instance
- * @param loroDoc - Loro's CRDT document
+ * @param automergeDoc - Automerge's CRDT document
  * @param delay - Delay between merges
  * @param maxUndoSteps - Maximum number of undo steps
  * @returns - Cleanup function
  */
-export function registerLoroHistory(
+export function registerAutomergeHistory(
   editor: LexicalEditor,
-  loroDoc: LoroDoc,
+  automergeDoc: AutomergeDoc,
   delay: number,
   maxUndoSteps: number = 100
 ): () => void {
-  const undoManager = new UndoManager(loroDoc, {
+  const undoManager = new UndoManager(automergeDoc, {
     mergeInterval: delay,
     maxUndoSteps,
     excludeOriginPrefixes: ['history-'],
@@ -238,7 +238,7 @@ export function registerLoroHistory(
   let prevChangeType = OTHER;
   // Don't record history until the editor has been initialized and CLEAR_HISTORY_COMMAND
   // has been dispatched. Without this guard, setEditorState during initialization triggers
-  // groupStart() on a Loro doc that may have no committed ops, causing a WASM panic.
+  // groupStart() before the document has any committed operations.
   let isReadyForHistory = false;
 
   const getMergeAction = (
@@ -357,7 +357,7 @@ export function registerLoroHistory(
       }
     }
 
-    // Update can undo/redo commands based on Loro's state
+    // Update can undo/redo commands based on Automerge's state
     editor.dispatchCommand(CAN_UNDO_COMMAND, undoManager.canUndo());
     editor.dispatchCommand(CAN_REDO_COMMAND, undoManager.canRedo());
   };

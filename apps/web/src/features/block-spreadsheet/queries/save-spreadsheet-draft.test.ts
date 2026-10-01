@@ -1,5 +1,5 @@
+import { AutomergeDoc } from '@macro-inc/automerge';
 import { createNoopLiveSyncSource } from '@macro-inc/collaboration/collab/source';
-import { LoroDoc } from 'loro-crdt';
 import { errAsync, ok, okAsync } from 'neverthrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -20,14 +20,14 @@ vi.mock('@service-sync/source', () => ({
 }));
 
 describe('saving a local spreadsheet before sharing', () => {
-  let server: LoroDoc;
-  let draft: LoroDoc;
+  let server: AutomergeDoc;
+  let draft: AutomergeDoc;
   beforeEach(() => {
     vi.clearAllMocks();
-    server = new LoroDoc();
+    server = new AutomergeDoc();
     server.getMap('spreadsheetMeta').set('formatVersion', 1);
     server.commit();
-    draft = new LoroDoc();
+    draft = new AutomergeDoc();
     writeSpreadsheetCells(draft, {
       A1: { value: 'Budget', bold: true },
       B1: { value: '=SUM(B2:B4)', format: 'currency' },

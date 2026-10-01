@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { initSync } from '@ironcalc/wasm';
+import { AutomergeDoc } from '@macro-inc/automerge';
 import {
   createInitializedSpreadsheetCalculator,
   type SpreadsheetCalculator,
@@ -9,7 +10,6 @@ import {
   readSpreadsheetCells,
   writeSpreadsheetCells,
 } from '@macro-inc/spreadsheet/spreadsheet-document';
-import { LoroDoc } from 'loro-crdt';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   createSpreadsheetStorage,
@@ -19,7 +19,7 @@ import {
 import { spreadsheetBodySchema } from './schema';
 
 let calculator: SpreadsheetCalculator;
-const docs: LoroDoc[] = [];
+const docs: AutomergeDoc[] = [];
 beforeAll(() => {
   initSync({
     module: readFileSync(
@@ -33,7 +33,7 @@ afterAll(() => {
   for (const doc of docs) doc.free();
 });
 function store() {
-  const doc = new LoroDoc();
+  const doc = new AutomergeDoc();
   docs.push(doc);
   doc.getMap('spreadsheetMeta').set('formatVersion', 1);
   writeSpreadsheetCells(doc, { A1: { value: '5' } });

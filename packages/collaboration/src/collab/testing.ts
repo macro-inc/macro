@@ -3,11 +3,15 @@ import { vi } from 'vitest';
 import type { ResultError } from '../internal/result';
 import type { Chatter, ChatterMessage } from './chatter';
 import type {
-  LoroManagerError,
+  AutomergeManagerError,
   StateUpdate,
   SyncEngineManager,
 } from './manager';
-import type { GenericRootSchema, LoroRawUpdate, RawUpdate } from './shared';
+import type {
+  AutomergeRawUpdate,
+  GenericRootSchema,
+  RawUpdate,
+} from './shared';
 import type { SnapshotStore } from './snapshot-store';
 import type { SyncSourceEvent } from './source';
 import { type LiveSyncSource, SyncSourceStatus } from './source';
@@ -178,8 +182,10 @@ export class MockLiveSyncSource implements LiveSyncSource {
   }
 }
 
-export class MockLoroManager implements SyncEngineManager<GenericRootSchema> {
-  private updateCallbacks = new Set<(update: LoroRawUpdate) => void>();
+export class MockAutomergeManager
+  implements SyncEngineManager<GenericRootSchema>
+{
+  private updateCallbacks = new Set<(update: AutomergeRawUpdate) => void>();
   private stateCallbacks = new Set<
     (update: StateUpdate<GenericRootSchema>) => void
   >();
@@ -188,10 +194,10 @@ export class MockLoroManager implements SyncEngineManager<GenericRootSchema> {
   public peerId = BigInt(1);
   public importUpdate = vi.fn(
     (
-      _update: LoroRawUpdate
-    ): Result<boolean, ResultError<LoroManagerError>[]> => ok(true)
+      _update: AutomergeRawUpdate
+    ): Result<boolean, ResultError<AutomergeManagerError>[]> => ok(true)
   );
-  public syncToLoro = vi.fn(async () => ok(undefined as void));
+  public syncToAutomerge = vi.fn(async () => ok(undefined as void));
   public reset = vi.fn(async () => ok(undefined as void));
 
   constructor(initialized = true) {
@@ -204,7 +210,7 @@ export class MockLoroManager implements SyncEngineManager<GenericRootSchema> {
 
   public get doc() {
     return {
-      subscribeLocalUpdates: (cb: (update: LoroRawUpdate) => void) => {
+      subscribeLocalUpdates: (cb: (update: AutomergeRawUpdate) => void) => {
         this.updateCallbacks.add(cb);
         return () => this.updateCallbacks.delete(cb);
       },
@@ -218,7 +224,7 @@ export class MockLoroManager implements SyncEngineManager<GenericRootSchema> {
     return () => this.stateCallbacks.delete(cb);
   }
 
-  public triggerLocalUpdate(update: LoroRawUpdate) {
+  public triggerLocalUpdate(update: AutomergeRawUpdate) {
     this.updateCallbacks.forEach((cb) => void cb(update));
   }
 

@@ -47,10 +47,10 @@ fn scenario_body_html_sanitized(body_html: Option<&str>, body_text: &str) -> Str
     email_utils::sanitize_email_html(&raw)
 }
 
-/// Canonical blank-markdown loro snapshot, matching the one production uses
+/// Canonical blank-markdown Automerge snapshot used by document initialization
 /// to initialize empty documents.
 const MARKDOWN_GOLDEN_SNAPSHOT: &[u8] =
-    include_bytes!("../../../../../static_assets/markdown-golden.1.bin");
+    include_bytes!("../../../../../static_assets/markdown-golden.2.bin");
 
 /// System labels created for every seeded inbox.
 const EMAIL_SYSTEM_LABELS: &[&str] = &[
@@ -528,7 +528,7 @@ fn share_permission(
 }
 
 /// Native markdown documents live in sync-service, not object storage:
-/// markdown -> loro snapshot (via lexical) -> boot the document's durable
+/// markdown -> automerge snapshot (via lexical) -> boot the document's durable
 /// object, then mark the content ready.
 async fn initialize_markdown_content(
     ctx: &SeedCliContext,
@@ -543,7 +543,7 @@ async fn initialize_markdown_content(
             } else {
                 clients
                     .lexical
-                    .markdown_to_loro_snapshot(markdown)
+                    .markdown_to_automerge_snapshot(markdown)
                     .await
                     .context("converting markdown via lexical-service")?
             };

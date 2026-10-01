@@ -11,10 +11,10 @@ import { useRemoteCursors } from '@core/component/LexicalMarkdown/collaboration/
 import type { MarkdownEditorErrors } from '@core/component/LexicalMarkdown/constants';
 import type { PluginManager } from '@core/component/LexicalMarkdown/plugins';
 import {
+  automergeSyncState,
   initializeEditorEmpty,
   initializeEditorWithVersionedState,
   isStateEmpty,
-  loroSyncState,
 } from '@core/component/LexicalMarkdown/utils';
 import { useUserId } from '@core/context/user';
 import {
@@ -27,10 +27,10 @@ import { mergeRegister } from '@lexical/utils';
 import { createAwareness } from '@macro-inc/collaboration/collab/awareness';
 import { createSyncEngine } from '@macro-inc/collaboration/collab/engine';
 import { logSyncService } from '@macro-inc/collaboration/collab/logger';
-import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
+import type { AutomergeManager } from '@macro-inc/collaboration/collab/manager';
 import {
+  AUTOMERGE_SNAPSHOT_DB_NAME,
   IDBSnapshotStore,
-  LORO_SNAPSHOT_DB_NAME,
 } from '@macro-inc/collaboration/collab/snapshot-store';
 import type { LiveSyncSource } from '@macro-inc/collaboration/collab/source';
 import { createWALSyncSource } from '@macro-inc/collaboration/collab/wal';
@@ -88,7 +88,7 @@ export type CollabProviderProps = {
   editorFocus: Accessor<boolean>;
   setEditorReady: Setter<boolean>;
   setEditorError: Setter<MarkdownEditorErrors | null>;
-  loroManager: LoroManager;
+  automergeManager: AutomergeManager;
   /**
    * The live sync source for this session. Must be non-undefined by the time
    * the provider mounts — the check below is NOT reactive, so gate mounting
@@ -110,15 +110,15 @@ export type CollabProviderProps = {
   statusChrome?: JSX.Element;
 };
 
-export const FROM_LORO_TAG = 'from-loro';
+export const FROM_AUTOMERGE_TAG = 'from-automerge';
 export const CODE_HIGHLIGHT_IDS_TAG = 'code-highlight-ids-tag';
 
 export const FORCE_SYNC_COMMAND = createCommand<void>('FORCE_SYNC_COMMAND');
 
 /**
- * Wires a Lexical editor to a Loro sync session, in both directions:
+ * Wires a Lexical editor to an Automerge sync session, in both directions:
  * remote state is reconciled onto the live Lexical tree by stable node id,
- * and local updates are diffed into Loro via the sync engine (with WAL
+ * and local updates are diffed into Automerge via the sync engine (with WAL
  * buffering for offline edits). Also renders remote peer cursors.
  *
  * Generic over where the session came from — an md-block document or a
@@ -127,7 +127,7 @@ export const FORCE_SYNC_COMMAND = createCommand<void>('FORCE_SYNC_COMMAND');
  */
 export function CollabProvider(props: CollabProviderProps) {
   const [didFirstSync, setDidFirstSync] = createSignal(false);
-  const loroManager = props.loroManager;
+  const automergeManager = props.automergeManager;
   const syncSource = props.syncSource;
   const userId = useUserId();
 
@@ -138,7 +138,7 @@ export function CollabProvider(props: CollabProviderProps) {
   const endSpan = (id: string): void => props.observability?.endSpan?.(id);
 
   const awareness = createAwareness(
-    loroManager.peerIdStr,
+    automergeManager.peerIdStr,
     userId(),
     lexicalSelectionCodec,
     {
@@ -150,7 +150,7 @@ export function CollabProvider(props: CollabProviderProps) {
 
   const walSyncer = createWALSyncSource(syncSource()!);
   const syncEngine = createSyncEngine({
-    loroManager,
+    automergeManager,
     awareness,
     syncs: { wal: walSyncer, live: syncSource()! },
     bindings: {
@@ -159,20 +159,20 @@ export function CollabProvider(props: CollabProviderProps) {
     },
     readonly: readOnly,
     snapshotStore: new IDBSnapshotStore(
-      LORO_SNAPSHOT_DB_NAME,
+      AUTOMERGE_SNAPSHOT_DB_NAME,
       syncSource()!.documentId
     ),
   });
 
   const { refreshRemoteCursors, RemoteCursorsOverlay } = useRemoteCursors({
-    loroManager: loroManager,
+    automergeManager: automergeManager,
     mapping: props.mappings,
     editor: props.editor,
     awareness: awareness,
   });
 
   /**
-   * Responsible for syncing incoming state from the loro manager to the lexical editor
+   * Responsible for syncing incoming state from the automerge manager to the lexical editor
    *
    * @param state - The state to sync to the lexical editor
    */
@@ -182,7 +182,7 @@ export function CollabProvider(props: CollabProviderProps) {
       return;
     }
     const hadFocus = props.editorFocus();
-    let manager = loroManager;
+    let manager = automergeManager;
     if (!manager) {
       console.error(
         'registering sync state to lexical, but no manager -- this should never happen'
@@ -211,7 +211,7 @@ export function CollabProvider(props: CollabProviderProps) {
           props.editor.getEditorState().toJSON(),
           state,
           props.mappings,
-          () => loroManager.peerIdStr
+          () => automergeManager.peerIdStr
         );
 
         // Queue microtask after this `editor.update` to ensure that all the nodeIds are updated
@@ -220,7 +220,7 @@ export function CollabProvider(props: CollabProviderProps) {
             $updateAllNodeIds(props.mappings);
             // If we import a remote update, it's possible that the update
             // has shifted out own selection / cursor. We need to re-position our local
-            // cursor based on the new lexical state using the stable LoroCursor.
+            // cursor based on the new lexical state using the stable AutomergeCursor.
             let localAwareness = awareness.local();
             if (localAwareness.selection) {
               if (!hadFocus) {
@@ -240,7 +240,7 @@ export function CollabProvider(props: CollabProviderProps) {
       },
       {
         discrete: true,
-        tag: FROM_LORO_TAG,
+        tag: FROM_AUTOMERGE_TAG,
         onUpdate: () => {
           refreshRemoteCursors();
         },
@@ -248,13 +248,13 @@ export function CollabProvider(props: CollabProviderProps) {
     );
   }
 
-  /** Convert the current local selection to a loro cursor */
+  /** Convert the current local selection to a automerge cursor */
   function localCursorUpdate():
     | { awareness: LexicalSelectionAwareness; format: number }
     | undefined {
-    if (!loroManager) {
+    if (!automergeManager) {
       console.error(
-        'tried to convert selection to cursor, but no loro manager'
+        'tried to convert selection to cursor, but no automerge manager'
       );
       return;
     }
@@ -266,9 +266,9 @@ export function CollabProvider(props: CollabProviderProps) {
         return;
       }
 
-      // Convert the current selection to a set of LoroCursors
+      // Convert the current selection to a set of AutomergeCursors
       const cursors = $convertLexicalSelectionToCursors(
-        loroManager,
+        automergeManager,
         props.mappings,
         selection
       );
@@ -295,8 +295,8 @@ export function CollabProvider(props: CollabProviderProps) {
     });
   }
 
-  /** Handle the cursor state after successful sync from Lexical->Loro */
-  function $afterSyncCursorUpdate(manager: LoroManager) {
+  /** Handle the cursor state after successful sync from Lexical->Automerge */
+  function $afterSyncCursorUpdate(manager: AutomergeManager) {
     // Update the local cursor after the state has been synced
     let newLocalSelection = localCursorUpdate();
 
@@ -322,7 +322,7 @@ export function CollabProvider(props: CollabProviderProps) {
    * 1) Creates or appends to the current text node children of the code node
    * 2) Runs the code node line-by-line through PrismJS to get tokens
    * 3) Upgrades to code highlight nodes using the new tokens with the skipTransforms flag set to true - so our
-   *    id-assigning node transform does not run on new highlights. This pass enforces ids before making it to Loro.
+   *    id-assigning node transform does not run on new highlights. This pass enforces ids before making it to Automerge.
    * @param mutatedNodes
    * @returns True if code highlight mutations were found and a node id update was manually triggered.
    */
@@ -371,9 +371,11 @@ export function CollabProvider(props: CollabProviderProps) {
           discrete: true,
           tag: CODE_HIGHLIGHT_IDS_TAG,
           onUpdate: async () => {
-            const stateToSync = loroSyncState(props.editor.getEditorState());
-            await syncEngine.syncStateToLoro(stateToSync as any);
-            $afterSyncCursorUpdate(loroManager);
+            const stateToSync = automergeSyncState(
+              props.editor.getEditorState()
+            );
+            await syncEngine.syncStateToAutomerge(stateToSync as any);
+            $afterSyncCursorUpdate(automergeManager);
           },
         }
       );
@@ -381,30 +383,30 @@ export function CollabProvider(props: CollabProviderProps) {
     return nodeKeysToUpdate.size > 0;
   }
 
-  async function syncLexicalToLoro(
+  async function syncLexicalToAutomerge(
     state: EditorState,
     mutatedNodes: MutatedNodes,
     tags: Set<string>
   ) {
     if (!syncEngine.isRunning()) {
       console.warn(
-        'tried to sync lexical state to loro, but engine is not running'
+        'tried to sync lexical state to automerge, but engine is not running'
       );
       return;
     }
-    if (!loroManager) {
+    if (!automergeManager) {
       console.error(
         'registering sync state to lexical, but no manager -- this should never happen'
       );
       return;
     }
-    // State updates tagged with 'FROM_LORO' are from the syncToLexical function
-    // and should not be synced to the loroManager. This would cause an infinite loop.
+    // State updates tagged with 'FROM_AUTOMERGE' are from the syncToLexical function
+    // and should not be synced to the automergeManager. This would cause an infinite loop.
     // LOCAL_STATUS_TAG updates carry only per-peer ownership state, which is
     // resolved independently on each client — producers of this tag must not
     // mutate node content in the same update, or those changes will be dropped here.
     if (
-      tags.has(FROM_LORO_TAG) ||
+      tags.has(FROM_AUTOMERGE_TAG) ||
       tags.has(COLLABORATION_TAG) ||
       tags.has(LOCAL_STATUS_TAG) ||
       tags.has(CODE_HIGHLIGHT_IDS_TAG)
@@ -418,32 +420,32 @@ export function CollabProvider(props: CollabProviderProps) {
 
     // Only sync state if there are changes
     if (mutatedNodes && mutatedNodes.size > 0) {
-      // Do not try to send any state to Loro until code highlight ids have resolved.
+      // Do not try to send any state to Automerge until code highlight ids have resolved.
       if (codeNodeUpdateHandler(mutatedNodes)) {
         return false;
       }
 
       // Clean the state to remove any state properties that should not be synced
-      const stateToSync = loroSyncState(state);
-      await syncEngine.syncStateToLoro(stateToSync as any);
+      const stateToSync = automergeSyncState(state);
+      await syncEngine.syncStateToAutomerge(stateToSync as any);
     }
 
-    $afterSyncCursorUpdate(loroManager);
+    $afterSyncCursorUpdate(automergeManager);
   }
 
   function lexicalStateSyncPlugin() {
     return mergeRegister(
       props.editor.registerUpdateListener(
         ({ editorState, tags, mutatedNodes }) => {
-          syncLexicalToLoro(editorState, mutatedNodes, tags);
+          syncLexicalToAutomerge(editorState, mutatedNodes, tags);
           return false;
         }
       ),
       props.editor.registerCommand(
         FORCE_SYNC_COMMAND,
         () => {
-          const stateToSync = loroSyncState(props.editor.getEditorState());
-          syncEngine.syncStateToLoro(stateToSync as any);
+          const stateToSync = automergeSyncState(props.editor.getEditorState());
+          syncEngine.syncStateToAutomerge(stateToSync as any);
           return true;
         },
         COMMAND_PRIORITY_NORMAL
@@ -457,11 +459,11 @@ export function CollabProvider(props: CollabProviderProps) {
   }
 
   const [managerInitialized, setManagerInitialized] = createSignal(
-    loroManager.initialized
+    automergeManager.initialized
   );
-  onCleanup(loroManager.onInitializedChange(setManagerInitialized));
+  onCleanup(automergeManager.onInitializedChange(setManagerInitialized));
 
-  /** Initializes the loroManager and starts the sync engine */
+  /** Initializes the automergeManager and starts the sync engine */
   createEffect(
     on(
       () => managerInitialized() ?? false,
@@ -477,10 +479,10 @@ export function CollabProvider(props: CollabProviderProps) {
         }
 
         if (props.sourceReady()) {
-          // Get the current state from the loroManager
-          // At this point, the loroManager should be initialized and should
+          // Get the current state from the automergeManager
+          // At this point, the automergeManager should be initialized and should
           // have the initial state from the sync service
-          const state = loroManager.state;
+          const state = automergeManager.state;
           const empty = state
             ? isStateEmpty(state.state as unknown as SerializedEditorState)
             : undefined;
@@ -499,7 +501,7 @@ export function CollabProvider(props: CollabProviderProps) {
               level: 'error',
               context: {},
               message:
-                'editor init: no state from loroManager — editor will NOT become ready (skeleton stays)',
+                'editor init: no state from automergeManager — editor will NOT become ready (skeleton stays)',
             });
             endSpan(syncSource()!.documentId);
             return;
@@ -518,7 +520,10 @@ export function CollabProvider(props: CollabProviderProps) {
               context: {},
               message: 'editor init: empty',
             });
-            initializeEditorEmpty(props.editor, () => loroManager.peerIdStr);
+            initializeEditorEmpty(
+              props.editor,
+              () => automergeManager.peerIdStr
+            );
           } else {
             logSyncService({
               documentId: syncSource()!.documentId,
@@ -533,7 +538,7 @@ export function CollabProvider(props: CollabProviderProps) {
             const initError = initializeEditorWithVersionedState(
               props.editor,
               stateWithoutDrafts,
-              () => loroManager.peerIdStr
+              () => automergeManager.peerIdStr
             );
             if (initError !== null) {
               logSyncService({

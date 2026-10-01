@@ -5,9 +5,9 @@ use sync_service_client::SyncServiceClient;
 
 use crate::domain::ports::sync::DocumentSyncPort;
 
-/// A Loro snapshot containing only `spreadsheetMeta.formatVersion = 1`.
+/// An Automerge snapshot containing only `spreadsheetMeta.formatVersion = 1`.
 const SPREADSHEET_GOLDEN_SNAPSHOT: &[u8] =
-    include_bytes!("../../../../static_assets/spreadsheet-golden.1.bin");
+    include_bytes!("../../../../static_assets/spreadsheet-golden.2.bin");
 
 impl DocumentSyncPort for SyncServiceClient {
     async fn initialize_spreadsheet(&self, document_id: &str) -> anyhow::Result<()> {

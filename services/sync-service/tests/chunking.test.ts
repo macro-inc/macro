@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { LoroDoc } from "loro-crdt";
+import { TestDocument } from "./automerge";
 import type { Miniflare } from "miniflare";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import { MAX_CHUNK_SIZE } from "../../../packages/collaboration/src/websocket/platform/framing/frames";
@@ -22,7 +22,7 @@ afterAll(async () => {
 
 test("large update batches, snapshots and reconnects use bounded wire frames", async () => {
 	const id = crypto.randomUUID();
-	const seed = new LoroDoc();
+	const seed = new TestDocument();
 	seed.getText("content").push("Chunked sync\n");
 	seed.commit();
 	const initialized = await mf.dispatchFetch(
@@ -89,7 +89,7 @@ test("large update batches, snapshots and reconnects use bounded wire frames", a
 	expect(snapshotFrames.length).toBeGreaterThan(1);
 	expect(Math.max(...snapshotFrames)).toBeLessThanOrEqual(MAX_CHUNK_SIZE + 1);
 	if (!response.isRemoteSnapshot()) throw new Error("Expected snapshot");
-	const snapshot = new LoroDoc();
+	const snapshot = new TestDocument();
 	snapshot.import(response.value.snapshot);
 	expect(snapshot.getText("content").toString()).toBe(alice.getState());
 

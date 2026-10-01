@@ -1,5 +1,5 @@
 import { Miniflare } from "miniflare";
-import { LoroDoc } from "loro-crdt";
+import { TestDocument } from "./automerge";
 import { FromRemote, FromPeer } from "../bebop/generated/schema";
 import { expect, test, describe, beforeAll, assert } from "vitest";
 import {
@@ -31,15 +31,15 @@ describe("document sync tests", () => {
     expect(message.isRemoteInitialSync()).toBe(true);
   });
 
-  test("should be able to load initial sync into loro", async () => {
+  test("should be able to load initial sync into Automerge", async () => {
     const ws = await connectToDocumentForTesting(mf, "test");
     const next = await ws.waitForNextMessage();
     expect(next instanceof ArrayBuffer);
 
     const message = FromRemote.decode(new Uint8Array(next));
     assert(message.isRemoteInitialSync());
-    const loroDoc = new LoroDoc();
-    let status = loroDoc.import(message.value.snapshot);
+    const automergeDoc = new TestDocument();
+    let status = automergeDoc.import(message.value.snapshot);
     assert(Object.entries(status.pending ?? {})?.length === 0);
   });
 
@@ -50,14 +50,14 @@ describe("document sync tests", () => {
     expect(next instanceof ArrayBuffer);
 
     const message = FromRemote.decode(new Uint8Array(next));
-    const loroDoc = new LoroDoc();
+    const automergeDoc = new TestDocument();
     assert(message.isRemoteInitialSync());
-    loroDoc.import(message.value.snapshot);
+    automergeDoc.import(message.value.snapshot);
 
-    loroDoc.getText("content").push("hello world");
-    loroDoc.commit();
+    automergeDoc.getText("content").push("hello world");
+    automergeDoc.commit();
 
-    let update = loroDoc.export({ mode: "update" });
+    let update = automergeDoc.export({ mode: "update" });
 
     wsA.send(
       FromPeer.fromPeerUpdate({
@@ -74,10 +74,10 @@ describe("document sync tests", () => {
     let bSync = FromRemote.decode(new Uint8Array(bSecondMessage));
     assert(bSync.isRemoteUpdate());
 
-    const loroDocB = new LoroDoc();
-    loroDocB.import(bInitialSync.value.snapshot);
-    loroDocB.import(bSync.value.update);
-    expect(loroDocB.getText("content").toString()).toBe("hello world");
+    const automergeDocB = new TestDocument();
+    automergeDocB.import(bInitialSync.value.snapshot);
+    automergeDocB.import(bSync.value.update);
+    expect(automergeDocB.getText("content").toString()).toBe("hello world");
   });
 
   test("user connecting in middle of sync should receive all changes", async () => {
@@ -137,18 +137,16 @@ describe("document sync tests", () => {
   });
 
   test("non-text based exampe", async () => {
-    const docA = new LoroDoc();
+    const docA = new TestDocument();
     const connectionA = await connectToDocumentForTesting(mf, "12347");
 
-    const docB = new LoroDoc();
+    const docB = new TestDocument();
     const connectionB = await connectToDocumentForTesting(mf, "12347");
     await connectionB.waitForNextMessage();
 
-    let tree = docA.getTree("tree");
-
+    const tree = docA.getMap("tree");
     for (let i = 0; i < 10; i++) {
-      let node = tree.createNode(undefined, i);
-      node.data.set("test", i);
+      tree.set(String(i), { data: { test: i }, children: [] });
     }
 
     docA.commit();

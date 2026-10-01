@@ -40,7 +40,7 @@ pub fn deploy_ai_editing_worker() -> Workflow {
                     .add_path(xtask_paths::repo_glob!("packages/collaboration/**"))
                     .add_path(xtask_paths::repo_glob!("packages/lexical-core/**"))
                     .add_path(xtask_paths::repo_glob!("packages/spreadsheet/**"))
-                    .add_path(xtask_paths::repo_glob!("packages/loro-mirror/**")),
+                    .add_path(xtask_paths::repo_glob!("packages/automerge/**")),
             )
             // The `workflow_call` / `workflow_dispatch` input blocks are filled
             // in by `patch` below.

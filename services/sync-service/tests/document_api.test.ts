@@ -1,5 +1,5 @@
 import { Miniflare } from "miniflare";
-import { LoroDoc } from "loro-crdt";
+import { TestDocument } from "./automerge";
 import { expect, test, describe, beforeEach } from "vitest";
 import { createTestUser, getTokenForDocument, setupMiniflare } from "./utils";
 import { InitializeFromSnapshotRequest } from "../bebop/generated/schema";
@@ -12,7 +12,7 @@ beforeEach(async () => {
 
 describe("document api tests", async () => {
   test("should properly initialize the document", async () => {
-    const doc: LoroDoc = new LoroDoc();
+    const doc: TestDocument = new TestDocument();
     doc.getText("content").update("hello world 121");
     doc.commit();
     const snapshot = doc.export({ mode: "snapshot" });
@@ -39,7 +39,7 @@ describe("document api tests", async () => {
   });
 
   test("should reject snapshot if already exists", async () => {
-    const doc: LoroDoc = new LoroDoc();
+    const doc: TestDocument = new TestDocument();
     doc.getText("content").update("hello world 121");
     doc.commit();
 
@@ -188,7 +188,7 @@ describe("document api tests", async () => {
     const userA = await createTestUser(mf, "test-doc");
     userA.makeChange("v1");
 
-    const frontier = userA.doc.vvToFrontiers(userA.doc.version())[0];
+    const frontier = userA.doc.vvToFrontiers(userA.doc.version());
 
     userA.makeChange("v2");
 
@@ -200,10 +200,7 @@ describe("document api tests", async () => {
         method: "POST",
         body: JSON.stringify({
           target_document_id: "test-doc-copy",
-          version_id: {
-            peer: frontier.peer,
-            counter: frontier.counter,
-          },
+          version_id: frontier,
         }),
         headers: {
           "x-internal-auth-key": "local",

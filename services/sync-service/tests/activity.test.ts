@@ -3,7 +3,7 @@ import { createServer, type Server, type ServerResponse } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import jwt from 'jsonwebtoken';
-import { LoroDoc } from 'loro-crdt';
+import { TestDocument } from './automerge';
 import type { Miniflare } from 'miniflare';
 import { afterAll, afterEach, beforeAll, expect, it } from 'vitest';
 import { FromPeer, FromRemote, InitializeFromSnapshotRequest } from '../bebop/generated/schema';
@@ -91,7 +91,7 @@ afterAll(async () => {
 
 async function seed() {
   const id = crypto.randomUUID();
-  const doc = new LoroDoc();
+  const doc = new TestDocument();
   doc.getText('content').insert(0, 'Original content');
   const response = await mf.dispatchFetch(`http://localhost/document/${id}/initialize`, {
     method: 'POST',
@@ -119,7 +119,7 @@ async function connect(id: string, userId: string | null, actor?: string, access
   response.webSocket.accept();
   const initial = FromRemote.decode(new Uint8Array(await socket.waitForNextMessage() as ArrayBuffer));
   if (!initial.isRemoteInitialSync()) throw new Error('Expected initial snapshot');
-  const doc = new LoroDoc();
+  const doc = new TestDocument();
   doc.import(initial.value.snapshot);
   const client = { ...socket, doc };
   clients.push(client);
@@ -167,7 +167,7 @@ function releaseHeld(documentId: string, status: number) {
 }
 
 function snapshotText(snapshot: Uint8Array) {
-  const doc = new LoroDoc();
+  const doc = new TestDocument();
   try {
     doc.import(snapshot);
     return doc.getText('content').toString();
@@ -262,7 +262,7 @@ it.each([
   const response = await mf.dispatchFetch(`http://localhost/document/${id}/state`, { headers });
   expect(response.status).toBe(200);
   const source = await response.json() as { snapshot: string; revision: string };
-  const doc = new LoroDoc();
+  const doc = new TestDocument();
   doc.import(Buffer.from(source.snapshot, 'base64'));
   const from = doc.version();
   doc.getText('content').push(' HTTP edit');

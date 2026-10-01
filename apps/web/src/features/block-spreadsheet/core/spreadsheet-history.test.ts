@@ -1,4 +1,4 @@
-import { LoroDoc } from 'loro-crdt';
+import { AutomergeDoc } from '@macro-inc/automerge';
 import { describe, expect, it } from 'vitest';
 import {
   readSpreadsheetCells,
@@ -17,8 +17,8 @@ import {
 } from './workbook-document';
 
 function pair() {
-  const left = new LoroDoc();
-  const right = new LoroDoc();
+  const left = new AutomergeDoc();
+  const right = new AutomergeDoc();
   const id = addSpreadsheetSheet(left, 'Before');
   const history = createSpreadsheetHistory(left, () => {});
   const sync = () => {
@@ -204,7 +204,7 @@ describe('structural spreadsheet history', () => {
 
   const changes: {
     name: string;
-    apply: (doc: LoroDoc, id: string, peer: boolean) => void;
+    apply: (doc: AutomergeDoc, id: string, peer: boolean) => void;
   }[] = [
     ...[
       ['value', { value: 'local value' }, { value: 'peer replacement' }],
@@ -213,7 +213,7 @@ describe('structural spreadsheet history', () => {
       ['bold', { bold: false }, { bold: true }],
     ].map(([name, local, peer]) => ({
       name: String(name),
-      apply: (doc: LoroDoc, id: string, isPeer: boolean) =>
+      apply: (doc: AutomergeDoc, id: string, isPeer: boolean) =>
         writeSpreadsheetCells(
           doc,
           { A1: isPeer ? peer : local } as SpreadsheetCellEdits,
@@ -303,7 +303,7 @@ describe('structural spreadsheet history', () => {
       if (operation === 'delete')
         right.getMap('spreadsheetValues').delete('A1');
       else {
-        // Loro drops a set of the existing value; make a real peer rewrite
+        // Give the peer a distinct value before restoring the original value
         // whose final text matches the original local operation.
         right.getMap('spreadsheetValues').set('A1', 'temporary peer value');
         right.commit();

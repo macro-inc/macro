@@ -45,7 +45,7 @@ import { useTaskBranchNameHotkey } from './useTaskBranchNameHotkey';
 
 export interface BlockMarkdownProps {
   /**
-   * A Loro snapshot to load while waiting for a remote snapshot.
+   * An Automerge snapshot to load while waiting for a remote snapshot.
    */
   optimisticSnapshot?: Uint8Array<ArrayBufferLike>;
 }

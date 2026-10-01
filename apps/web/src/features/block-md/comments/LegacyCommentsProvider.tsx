@@ -16,7 +16,7 @@ import {
   REMOVE_ORPHANED_COMMENT_MARKS_COMMAND,
 } from '@core/component/LexicalMarkdown/plugins/comments/commentPlugin';
 import { useUserId } from '@core/context/user';
-import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
+import type { AutomergeManager } from '@macro-inc/collaboration/collab/manager';
 import type { CommentNode } from '@macro-inc/lexical-core';
 import { COMMAND_PRIORITY_LOW, SELECTION_CHANGE_COMMAND } from 'lexical';
 import {
@@ -82,7 +82,7 @@ function getHighlightThread(
 /** Comments read from the annotation endpoints and anchored by the mark's stored thread id. */
 export const LegacyCommentsProvider: VoidComponent<{
   activeComment?: Accessor<string | undefined>;
-  loroManager: LoroManager;
+  automergeManager: AutomergeManager;
 }> = (props) => {
   const wrapper = useContext(LexicalWrapperContext);
   if (!isWrapperWithIds(wrapper)) {
@@ -93,7 +93,7 @@ export const LegacyCommentsProvider: VoidComponent<{
   const { documentId, state } = useMarkdownDocument();
   const { comments: commentState, setCommentState } = state;
 
-  const currentPeerId = () => props.loroManager.peerIdStr;
+  const currentPeerId = () => props.automergeManager.peerIdStr;
 
   const commentThreadsQuery = useMarkdownCommentsQuery(documentId);
   useCommentRealtime();

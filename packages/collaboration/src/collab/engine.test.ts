@@ -1,20 +1,20 @@
-import { LoroDoc } from 'loro-crdt';
+import { AutomergeDoc } from '@macro-inc/automerge';
 import { err, ResultAsync } from 'neverthrow';
 import { describe, expect, it, vi } from 'vitest';
 import { SyncEngine } from './engine';
-import { LoroManagerError } from './manager';
+import { AutomergeManagerError } from './manager';
 import type { RawUpdate } from './shared';
 import { createNoopLiveSyncSource } from './source';
 import {
+  MockAutomergeManager,
   MockChatter,
   MockLiveSyncSource,
-  MockLoroManager,
   MockWALStore,
   makeTestWAL,
 } from './testing';
 import { WALSyncer } from './wal';
 
-const emptySnapshot = () => new LoroDoc().export({ mode: 'snapshot' });
+const emptySnapshot = () => new AutomergeDoc().export({ mode: 'snapshot' });
 
 function makeAwareness() {
   return {
@@ -28,11 +28,11 @@ function makeAwareness() {
 describe('SyncEngine', () => {
   it('registers peer id and calls onRunningChange(true) on start', () => {
     const source = new MockLiveSyncSource();
-    const manager = new MockLoroManager();
+    const manager = new MockAutomergeManager();
     const onRunningChange = vi.fn();
     const { wal } = makeTestWAL(source);
     const engine = new SyncEngine({
-      loroManager: manager,
+      automergeManager: manager,
       awareness: makeAwareness(),
       syncs: { wal, live: source },
       bindings: { onRemoteState: vi.fn() },
@@ -52,9 +52,9 @@ describe('SyncEngine', () => {
     const source = new MockLiveSyncSource();
     const { wal } = makeTestWAL(source);
     const appendSpy = vi.spyOn(wal, 'append');
-    const manager = new MockLoroManager();
+    const manager = new MockAutomergeManager();
     const engine = new SyncEngine({
-      loroManager: manager,
+      automergeManager: manager,
       awareness: makeAwareness(),
       syncs: { wal, live: source },
       bindings: { onRemoteState: vi.fn() },
@@ -72,9 +72,9 @@ describe('SyncEngine', () => {
     it('local edit is persisted to WAL and delivered to live', async () => {
       const live = new MockLiveSyncSource();
       const { wal, walStore } = makeTestWAL(live);
-      const manager = new MockLoroManager();
+      const manager = new MockAutomergeManager();
       const engine = new SyncEngine({
-        loroManager: manager,
+        automergeManager: manager,
         awareness: makeAwareness(),
         syncs: { wal, live },
         bindings: { onRemoteState: vi.fn() },
@@ -95,9 +95,9 @@ describe('SyncEngine', () => {
       const live = new MockLiveSyncSource();
       live.setPushResult(false);
       const { wal, walStore } = makeTestWAL(live);
-      const manager = new MockLoroManager();
+      const manager = new MockAutomergeManager();
       const engine = new SyncEngine({
-        loroManager: manager,
+        automergeManager: manager,
         awareness: makeAwareness(),
         syncs: { wal, live },
         bindings: { onRemoteState: vi.fn() },
@@ -128,10 +128,10 @@ describe('SyncEngine', () => {
     it('broadcasts local updates to the chatter', async () => {
       const source = new MockLiveSyncSource();
       const { wal } = makeTestWAL(source);
-      const manager = new MockLoroManager();
+      const manager = new MockAutomergeManager();
       const chatter = new MockChatter();
       const engine = new SyncEngine({
-        loroManager: manager,
+        automergeManager: manager,
         awareness: makeAwareness(),
         syncs: { wal, live: source },
         bindings: { onRemoteState: vi.fn() },
@@ -150,10 +150,10 @@ describe('SyncEngine', () => {
     it('applies updates received from another replica', async () => {
       const source = new MockLiveSyncSource();
       const { wal } = makeTestWAL(source);
-      const manager = new MockLoroManager();
+      const manager = new MockAutomergeManager();
       const chatter = new MockChatter();
       const engine = new SyncEngine({
-        loroManager: manager,
+        automergeManager: manager,
         awareness: makeAwareness(),
         syncs: { wal, live: source },
         bindings: { onRemoteState: vi.fn() },
@@ -172,10 +172,10 @@ describe('SyncEngine', () => {
     it('stops listening to the chatter on stop', () => {
       const source = new MockLiveSyncSource();
       const { wal } = makeTestWAL(source);
-      const manager = new MockLoroManager();
+      const manager = new MockAutomergeManager();
       const chatter = new MockChatter();
       const engine = new SyncEngine({
-        loroManager: manager,
+        automergeManager: manager,
         awareness: makeAwareness(),
         syncs: { wal, live: source },
         bindings: { onRemoteState: vi.fn() },
@@ -195,7 +195,7 @@ describe('SyncEngine', () => {
     const source = new MockLiveSyncSource();
     const { wal } = makeTestWAL(source);
     const engine = new SyncEngine({
-      loroManager: new MockLoroManager(false),
+      automergeManager: new MockAutomergeManager(false),
       awareness: makeAwareness(),
       syncs: { wal, live: source },
       bindings: { onRemoteState: vi.fn() },
@@ -210,16 +210,16 @@ describe('SyncEngine', () => {
   it('skips convergence payloads with zero bytes (noop live source)', async () => {
     // Non-propagating AI edit sessions run the engine over a noop live
     // source whose requestUpdatesSince/requestSnapshot answer with an empty
-    // Uint8Array — not a valid Loro payload. Startup convergence must skip
+    // Uint8Array — not a valid Automerge payload. Startup convergence must skip
     // it rather than import → throw → reset in a loop.
     const live = createNoopLiveSyncSource('doc-1');
     const wal = new WALSyncer<RawUpdate>(
       new MockWALStore<RawUpdate>(),
       (updates) => live.pushUpdate(updates)
     );
-    const manager = new MockLoroManager();
+    const manager = new MockAutomergeManager();
     const engine = new SyncEngine({
-      loroManager: manager,
+      automergeManager: manager,
       awareness: makeAwareness(),
       syncs: { wal, live },
       bindings: { onRemoteState: vi.fn() },
@@ -238,9 +238,9 @@ describe('SyncEngine', () => {
   it('converges instead of resetting when a remote update is causally pending', async () => {
     const source = new MockLiveSyncSource();
     const { wal } = makeTestWAL(source);
-    const manager = new MockLoroManager();
+    const manager = new MockAutomergeManager();
     const engine = new SyncEngine({
-      loroManager: manager,
+      automergeManager: manager,
       awareness: makeAwareness(),
       syncs: { wal, live: source },
       bindings: { onRemoteState: vi.fn() },
@@ -252,7 +252,7 @@ describe('SyncEngine', () => {
     await new Promise((resolve) => setTimeout(resolve));
 
     manager.importUpdate.mockReturnValueOnce(
-      err([{ code: LoroManagerError.ImportPending, message: 'pending' }])
+      err([{ code: AutomergeManagerError.ImportPending, message: 'pending' }])
     );
     source.emit({ type: 'update', update: new Uint8Array([9]) });
 
@@ -271,9 +271,9 @@ describe('SyncEngine', () => {
       ResultAsync.fromSafePromise(firstRequest.promise)
     );
     const { wal } = makeTestWAL(source);
-    const manager = new MockLoroManager();
+    const manager = new MockAutomergeManager();
     const engine = new SyncEngine({
-      loroManager: manager,
+      automergeManager: manager,
       awareness: makeAwareness(),
       syncs: { wal, live: source },
       bindings: { onRemoteState: vi.fn() },
@@ -304,9 +304,9 @@ describe('SyncEngine', () => {
       ResultAsync.fromSafePromise(pendingUpdate.promise)
     );
     const { wal } = makeTestWAL(source);
-    const manager = new MockLoroManager();
+    const manager = new MockAutomergeManager();
     const engine = new SyncEngine({
-      loroManager: manager,
+      automergeManager: manager,
       awareness: makeAwareness(),
       syncs: { wal, live: source },
       bindings: { onRemoteState: vi.fn() },

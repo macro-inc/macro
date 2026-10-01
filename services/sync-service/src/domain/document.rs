@@ -2,13 +2,14 @@
 //!
 //! This module has no HTTP or storage dependencies. The durable-object adapter
 //! supplies verified JWT claims and persists accepted updates through its oplog.
-use std::borrow::Cow;
+use std::sync::MutexGuard;
 
-use loro::{ExportMode, LoroDoc, VersionVector};
+use automerge::{Automerge, ReadDoc};
+
+use super::crdt::{decode_changes, decode_revision, encode_revision};
 
 pub const MAX_BINARY_BYTES: usize = 4 * 1024 * 1024;
 pub const MAX_REVISION_BYTES: usize = 64 * 1024;
-const MAX_UPDATE_OPERATIONS: u64 = 100_000;
 
 #[derive(Debug, thiserror::Error)]
 pub enum DocumentError {
@@ -109,7 +110,7 @@ impl DocumentAttribution {
 
 /// Persistence port: applying the update must happen before the first await.
 pub trait DocumentUpdatePort {
-    fn document(&self) -> &LoroDoc;
+    fn document(&self) -> MutexGuard<'_, Automerge>;
     async fn apply_and_persist(&self, update: &[u8]) -> Result<(), DocumentError>;
 }
 
@@ -129,9 +130,9 @@ pub async fn update(
     expected_revision: &[u8],
     update: &[u8],
 ) -> Result<PreparedUpdate, DocumentError> {
-    let prepared = prepare_update(access, port.document(), expected_revision, update)?;
+    let prepared = prepare_update(access, &port.document(), expected_revision, update)?;
     // Persist retries too: a prior request may have applied in memory but lost
-    // its storage write or response. Duplicate Loro imports are idempotent.
+    // its storage write or response. Duplicate Automerge changes are idempotent.
     port.apply_and_persist(&prepared.update).await?;
     effects.broadcast(&prepared.update)?;
     if prepared.applied {
@@ -143,15 +144,13 @@ pub async fn update(
 
 pub fn snapshot(
     _access: &DocumentAccess,
-    doc: &LoroDoc,
+    doc: &Automerge,
 ) -> Result<(Vec<u8>, Vec<u8>), DocumentError> {
-    let snapshot = doc
-        .export(ExportMode::Snapshot)
-        .map_err(|_| DocumentError::Invalid("The document snapshot could not be exported."))?;
+    let snapshot = doc.save();
     if snapshot.len() > MAX_BINARY_BYTES {
         return Err(DocumentError::TooLarge);
     }
-    let revision = doc.oplog_vv().encode();
+    let revision = encode_revision(&doc.get_heads());
     if revision.len() > MAX_REVISION_BYTES {
         return Err(DocumentError::TooLarge);
     }
@@ -162,7 +161,7 @@ pub fn snapshot(
 /// next await, so websocket writes cannot interleave with this version check.
 pub fn prepare_update(
     access: &DocumentAccess,
-    doc: &LoroDoc,
+    doc: &Automerge,
     expected_revision: &[u8],
     update: &[u8],
 ) -> Result<PreparedUpdate, DocumentError> {
@@ -170,62 +169,37 @@ pub fn prepare_update(
     if update.len() > MAX_BINARY_BYTES || expected_revision.len() > MAX_REVISION_BYTES {
         return Err(DocumentError::TooLarge);
     }
-    let expected = VersionVector::decode(expected_revision)
-        .map_err(|_| DocumentError::Invalid("Invalid document revision."))?;
-    let meta = LoroDoc::decode_import_blob_meta(update, true)
-        .map_err(|_| DocumentError::Invalid("Invalid Loro update."))?;
-    if meta.mode.is_snapshot() {
-        return Err(DocumentError::Invalid(
-            "Send a Loro update, not a snapshot.",
-        ));
-    }
-    let operations: u64 = meta
-        .partial_end_vv
-        .iter()
-        .map(|(peer, end)| {
-            end.checked_sub(meta.partial_start_vv.get(peer).copied().unwrap_or(0))
-                .and_then(|count| u64::try_from(count).ok())
-                .unwrap_or(u64::MAX)
-        })
-        .try_fold(0_u64, |total, count| total.checked_add(count))
-        .ok_or(DocumentError::TooLarge)?;
-    if operations > MAX_UPDATE_OPERATIONS || meta.change_num > 10_000 {
-        return Err(DocumentError::TooLarge);
-    }
-    let current = doc.oplog_vv();
-    let preview = doc.fork();
-    let imported = preview
-        .import(update)
-        .map_err(|_| DocumentError::Invalid("Invalid Loro update."))?;
-    if imported.pending.is_some() || preview.state_vv() != preview.oplog_vv() {
+    let expected = decode_revision(expected_revision)?;
+    let changes = decode_changes(update)?;
+    let current = doc.get_heads();
+    let mut preview = doc.clone();
+    preview
+        .apply_changes(changes)
+        .map_err(|_| DocumentError::Invalid("Invalid Automerge update."))?;
+    if !preview.get_missing_deps(&[]).is_empty() {
         return Err(DocumentError::Invalid(
             "The update has missing dependencies.",
         ));
     }
-    let revision = preview.oplog_vv();
-    // Recognizing an already applied delta makes a lost HTTP response safely
-    // retryable, even if other users have edited after the first application.
+    let revision = preview.get_heads();
+    // A lost response can be retried even after another client has edited.
     if revision == current {
         return Ok(PreparedUpdate {
             update: update.to_vec(),
-            revision: current.encode(),
+            revision: encode_revision(&current),
             applied: false,
         });
     }
     if current != expected {
         return Err(DocumentError::Conflict);
     }
-    let update = preview
-        .export(ExportMode::Updates {
-            from: Cow::Borrowed(&current),
-        })
-        .map_err(|_| DocumentError::Invalid("The validated update could not be exported."))?;
+    let update = preview.save_after(&current);
     if update.len() > MAX_BINARY_BYTES {
         return Err(DocumentError::TooLarge);
     }
     Ok(PreparedUpdate {
         update,
-        revision: revision.encode(),
+        revision: encode_revision(&revision),
         applied: true,
     })
 }

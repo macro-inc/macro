@@ -7,8 +7,8 @@ fn proof() -> SnapshotProof {
         source_id: Some(Uuid::from_u128(2)),
         digest: "snapshot-digest".into(),
         content_digest: "content-digest".into(),
-        revision: vec![("123".into(), 4)],
-        oplog_revision: vec![("123".into(), 4)],
+        revision: vec!["a".repeat(64)],
+        oplog_revision: vec!["a".repeat(64)],
     }
 }
 
@@ -17,6 +17,10 @@ fn wire_proof_round_trips_and_rejects_invalid_operation_ids() {
     let proof = proof();
     let value = serde_json::to_value(&proof).unwrap();
     assert_eq!(value["operation_id"], Uuid::from_u128(1).to_string());
+    assert_eq!(value["revision"], serde_json::json!(["a".repeat(64)]));
+    let mut obsolete_revision = value.clone();
+    obsolete_revision["revision"] = serde_json::json!([["123", 4]]);
+    assert!(serde_json::from_value::<SnapshotProof>(obsolete_revision).is_err());
     assert_eq!(
         serde_json::from_value::<SnapshotProof>(value.clone()).unwrap(),
         proof
@@ -24,6 +28,55 @@ fn wire_proof_round_trips_and_rejects_invalid_operation_ids() {
     let mut invalid = value;
     invalid["operation_id"] = "not-a-uuid".into();
     assert!(serde_json::from_value::<SnapshotProof>(invalid).is_err());
+}
+
+#[tokio::test]
+async fn automerge_contracts_use_hash_heads_and_native_proofs() {
+    let source = Uuid::from_u128(2);
+    let target = Uuid::from_u128(3);
+    let heads = vec!["a".repeat(64)];
+    let (client, task) = server(
+        format!("/document/{source}/copy"),
+        serde_json::json!({ "target_document_id": target.to_string(), "version_id": heads }),
+        200,
+        "{}".into(),
+    );
+    client
+        .copy_document(
+            &source.to_string(),
+            &target.to_string(),
+            Some(model::sync_service::SyncServiceVersionID(heads.clone())),
+        )
+        .await
+        .unwrap();
+    task.join().unwrap();
+    let proof = SnapshotProof {
+        operation_id: SurfaceOperationId(Uuid::from_u128(1)),
+        source_id: Some(source),
+        digest: "snapshot-digest".into(),
+        content_digest: "content-digest".into(),
+        revision: heads.clone(),
+        oplog_revision: heads,
+    };
+    let (client, task) = server(
+        format!("/surface/{target}/verify"),
+        serde_json::to_value(&proof).unwrap(),
+        200,
+        serde_json::to_string(&proof).unwrap(),
+    );
+    assert_eq!(client.verify_surface(target, &proof).await.unwrap(), proof);
+    task.join().unwrap();
+    let (client, task) = server(
+        format!("/document/{source}/migration/retire"),
+        serde_json::to_value(&proof).unwrap(),
+        200,
+        serde_json::to_string(&proof).unwrap(),
+    );
+    assert_eq!(
+        client.retire_legacy_surface(source, &proof).await.unwrap(),
+        proof
+    );
+    task.join().unwrap();
 }
 
 /// Minimal HTTP peer validates transport without another mocking dependency.

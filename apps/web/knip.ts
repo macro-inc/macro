@@ -16,7 +16,6 @@ const config: KnipConfig = {
   ignore: [
     '**/generated/**',
     'scripts/**',
-    '../../packages/loro-mirror/**',
     '../../packages/sdk/**',
     // Standalone browser harnesses are loaded from HTML and Playwright/Vite
     // configs rather than imported by the application graph.
@@ -60,7 +59,7 @@ const config: KnipConfig = {
     'bebop',
   ],
 
-  ignoreWorkspaces: ['../../packages/loro-mirror', '../../packages/sdk'],
+  ignoreWorkspaces: ['../../packages/sdk'],
 };
 
 export default config;

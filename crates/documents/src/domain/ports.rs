@@ -324,7 +324,7 @@ pub trait PresignedUploadUrlPort: Send + Sync + 'static {
         destination_key: &str,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 
-    /// Returns the raw bytes of the cached Loro snapshot, or `None` if no snapshot exists.
+    /// Returns the raw bytes of the cached Automerge snapshot, or `None` if no snapshot exists.
     fn get_snapshot(
         &self,
         document_id: &str,
@@ -567,7 +567,7 @@ pub trait DocumentService: Send + Sync + 'static {
         request: &CreateTaskRequest,
     ) -> impl Future<Output = Result<(), DocumentError>> + Send;
 
-    /// Returns the raw bytes of the cached Loro snapshot, or `None` if no snapshot exists.
+    /// Returns the raw bytes of the cached Automerge snapshot, or `None` if no snapshot exists.
     fn get_snapshot(
         &self,
         document_id: &str,

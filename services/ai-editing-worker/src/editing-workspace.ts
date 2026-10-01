@@ -1,13 +1,13 @@
-import type { InferType } from '@loro-mirror/core';
+import type { InferType } from '@macro-inc/automerge/mirror';
 import { SyncEngine } from '@macro-inc/collaboration/collab/engine';
-import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
+import type { AutomergeManager } from '@macro-inc/collaboration/collab/manager';
 import type { RawUpdate } from '@macro-inc/collaboration/collab/shared';
 import type { LiveSyncSource } from '@macro-inc/collaboration/collab/source';
 import type { WALSyncer } from '@macro-inc/collaboration/collab/wal';
 import type {
-  MARKDOWN_LORO_SCHEMA,
-  MarkdownLoroSchemaType,
-} from '@macro-inc/lexical-core/markdown-loro-schema';
+  MARKDOWN_AUTOMERGE_SCHEMA,
+  MarkdownAutomergeSchemaType,
+} from '@macro-inc/lexical-core/markdown-automerge-schema';
 import { $updateAllNodeIds } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
 import type { SerializedEditorState } from 'lexical';
 import {
@@ -33,13 +33,18 @@ export type EditingWorkspaceOptions = {
 
 export class EditingWorkspace {
   readonly session: LexicalSession;
-  private readonly engine: SyncEngine<typeof MARKDOWN_LORO_SCHEMA, unknown>;
+  private readonly engine: SyncEngine<
+    typeof MARKDOWN_AUTOMERGE_SCHEMA,
+    unknown
+  >;
   private chain: Promise<void> = Promise.resolve();
   private readonly outstanding = new Map<Peer, AwarenessSource>();
   private readonly pool: PeerPool;
 
   constructor(
-    private readonly manager: LoroManager<typeof MARKDOWN_LORO_SCHEMA>,
+    private readonly manager: AutomergeManager<
+      typeof MARKDOWN_AUTOMERGE_SCHEMA
+    >,
     private readonly source: LiveSyncSource,
     wal: WALSyncer<RawUpdate>,
     opts: EditingWorkspaceOptions = {}
@@ -53,7 +58,7 @@ export class EditingWorkspace {
     );
 
     this.engine = new SyncEngine({
-      loroManager: manager,
+      automergeManager: manager,
       awareness: createWorkerAwareness(manager.peerIdStr),
       syncs: { wal, live: source },
       bindings: {
@@ -65,7 +70,7 @@ export class EditingWorkspace {
     });
 
     // Feed the manager's state changes into the engine, deferred to a microtask:
-    // loro fires the mirror subscriber synchronously during `importUpdate`, and
+    // automerge fires the mirror subscriber synchronously during `importUpdate`, and
     // the engine guards remote handling with a mutex — calling `onStateUpdate`
     // inline would re-enter that lock. (The browser gets this deferral for free
     // via a Solid effect; here we do it by hand.)
@@ -119,15 +124,15 @@ export class EditingWorkspace {
       this.source.registerPeerId(peerId);
 
       // Prism creates code-highlight nodes without ids (skipTransforms). Stamp
-      // ids before snapshotting so the Loro mirror matches them by id instead of
+      // ids before snapshotting so the Automerge mirror matches them by id instead of
       // re-inserting duplicates on every sync. (code block thing :/)
       this.session.editor.update(() => $updateAllNodeIds(this.session.ids), {
         discrete: true,
       });
 
       const snapshot = toSnapshot(this.session);
-      await this.engine.syncStateToLoro(
-        snapshot as unknown as InferType<MarkdownLoroSchemaType>
+      await this.engine.syncStateToAutomerge(
+        snapshot as unknown as InferType<MarkdownAutomergeSchemaType>
       );
     });
   }

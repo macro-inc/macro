@@ -1,10 +1,10 @@
 import { ingestLocalSnapshot } from '@core/collab-surface/createCollabSurface';
 import type { CollabMarkdownSession } from '@core/collab-surface/types';
-import { createLoroManager } from '@macro-inc/collaboration/collab/manager';
+import { createAutomergeManager } from '@macro-inc/collaboration/collab/manager';
 import type { RawUpdate } from '@macro-inc/collaboration/collab/shared';
 import {
+  AUTOMERGE_SNAPSHOT_DB_NAME,
   IDBSnapshotStore,
-  LORO_SNAPSHOT_DB_NAME,
 } from '@macro-inc/collaboration/collab/snapshot-store';
 import type {
   InitialSync,
@@ -12,10 +12,10 @@ import type {
   SyncError,
 } from '@macro-inc/collaboration/collab/source';
 import {
+  AUTOMERGE_WAL_DB_NAME,
   BrowserWALStore,
-  LORO_WAL_DB_NAME,
 } from '@macro-inc/collaboration/collab/wal';
-import { MARKDOWN_LORO_SCHEMA } from '@macro-inc/lexical-core/markdown-loro-schema';
+import { MARKDOWN_AUTOMERGE_SCHEMA } from '@macro-inc/lexical-core/markdown-automerge-schema';
 import type { ResultAsync } from 'neverthrow';
 import { createSignal, getOwner, runWithOwner } from 'solid-js';
 
@@ -36,7 +36,9 @@ export function createProjectDescriptionSession<Access>(
   transport: ProjectDescriptionTransport<Access>
 ): CollabMarkdownSession & { dispose(): void; loaded: Promise<void> } {
   const owner = getOwner();
-  const loroManager = createLoroManager(MARKDOWN_LORO_SCHEMA, { documentId });
+  const automergeManager = createAutomergeManager(MARKDOWN_AUTOMERGE_SCHEMA, {
+    documentId,
+  });
   const [syncSource, setSyncSource] = createSignal<LiveSyncSource>();
   const [connectionError, setConnectionError] = createSignal<string>();
   let disposed = false;
@@ -46,9 +48,9 @@ export function createProjectDescriptionSession<Access>(
       if (disposed) return;
       // Local cache failures must not prevent a fresh server snapshot.
       void ingestLocalSnapshot(
-        loroManager,
-        new IDBSnapshotStore<RawUpdate>(LORO_SNAPSHOT_DB_NAME, documentId),
-        new BrowserWALStore<RawUpdate>(LORO_WAL_DB_NAME, documentId)
+        automergeManager,
+        new IDBSnapshotStore<RawUpdate>(AUTOMERGE_SNAPSHOT_DB_NAME, documentId),
+        new BrowserWALStore<RawUpdate>(AUTOMERGE_WAL_DB_NAME, documentId)
       ).catch(() => {});
       const connection = runWithOwner(owner, () =>
         transport.connect(documentId, access)
@@ -59,7 +61,7 @@ export function createProjectDescriptionSession<Access>(
       if (disposed) return;
       if (initial.isErr())
         throw new Error('Could not load the project description.');
-      await loroManager.ingest({
+      await automergeManager.ingest({
         kind: 'dss',
         snapshot: initial.value.snapshot,
       });
@@ -73,7 +75,7 @@ export function createProjectDescriptionSession<Access>(
     }
   })();
   return {
-    loroManager,
+    automergeManager,
     syncSource,
     connectionError,
     loaded,

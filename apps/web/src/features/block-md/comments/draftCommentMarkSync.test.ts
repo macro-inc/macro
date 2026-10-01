@@ -4,9 +4,9 @@ import {
   commentPlugin,
 } from '@core/component/LexicalMarkdown/plugins/comments/commentPlugin';
 import {
+  automergeSyncState,
   getSaveState,
   initializeEditorWithState,
-  loroSyncState,
 } from '@core/component/LexicalMarkdown/utils';
 import {
   $createCommentNode,
@@ -164,7 +164,7 @@ function remoteState(
   editor: LexicalEditor,
   edit: (children: SerializedLexicalNode[]) => SerializedLexicalNode[]
 ): SerializedEditorState {
-  const state = structuredClone(loroSyncState(editor.getEditorState()));
+  const state = structuredClone(automergeSyncState(editor.getEditorState()));
   const first = state.root.children[0] as SerializedLexicalNode & {
     children: SerializedLexicalNode[];
   };
@@ -179,7 +179,7 @@ describe('draft comment marks stay out of the shared document', () => {
     expect(draftKeys(editor)).toHaveLength(1);
 
     for (const state of [
-      loroSyncState(editor.getEditorState()),
+      automergeSyncState(editor.getEditorState()),
       getSaveState(editor.getEditorState()),
     ]) {
       expect(markTypes(state.root)).toEqual([]);
@@ -201,9 +201,9 @@ describe('draft comment marks stay out of the shared document', () => {
       },
       { discrete: true }
     );
-    expect(markTypes(loroSyncState(editor.getEditorState()).root)).toEqual([
-      'comment-mark',
-    ]);
+    expect(markTypes(automergeSyncState(editor.getEditorState()).root)).toEqual(
+      ['comment-mark']
+    );
   });
 
   it('returns the same state object when there is no draft to strip', () => {
@@ -224,7 +224,7 @@ describe('draft comment marks stay out of the shared document', () => {
     const { editor, mappings } = setup();
     const key = seedWithDraft(editor, mappings);
 
-    const remote = structuredClone(loroSyncState(editor.getEditorState()));
+    const remote = structuredClone(automergeSyncState(editor.getEditorState()));
     const second = remote.root.children[1] as SerializedLexicalNode & {
       children: (SerializedLexicalNode & { text: string })[];
     };

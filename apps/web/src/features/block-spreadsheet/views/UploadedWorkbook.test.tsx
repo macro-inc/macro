@@ -1,3 +1,4 @@
+import { AutomergeDoc } from '@macro-inc/automerge';
 import {
   cleanup,
   fireEvent,
@@ -6,7 +7,6 @@ import {
   waitFor,
 } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
-import { LoroDoc } from 'loro-crdt';
 import { type JSX, Suspense } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { readSpreadsheetWorkbook } from '../core/workbook-document';
@@ -143,7 +143,7 @@ it('loads without suspending its host, exposes import notes, and preserves all d
   fireEvent.click(screen.getByRole('button', { name: 'Edit in Macro' }));
   await waitFor(() => expect(mocks.save).toHaveBeenCalledOnce());
   expect(mocks.replace).not.toHaveBeenCalled();
-  const doc = new LoroDoc();
+  const doc = new AutomergeDoc();
   try {
     doc.import(mocks.save.mock.calls[0][1]);
     const [sheet] = readSpreadsheetWorkbook(doc);

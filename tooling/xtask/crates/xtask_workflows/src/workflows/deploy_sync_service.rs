@@ -71,6 +71,9 @@ fn deploy() -> Job {
     Job::default()
         .name("Deploy to Cloudflare")
         .runs_on(runners::Runner::Mid.with_cache_tag(vars::SYNC_SERVICE_CACHE_TAG))
+        .add_step(Step::new("Block incompatible legacy deployment").run(
+            "echo 'Automerge is limited to isolated PLAYGROUND storage until app and data migration is complete.' >&2\nexit 1",
+        ))
         .add_step(steps::checkout(false, false))
         .add_step(steps::mount_wasm_cache_volume())
         .add_step(steps::setup_rust_light())

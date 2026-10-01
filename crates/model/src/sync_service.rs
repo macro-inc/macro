@@ -2,10 +2,8 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 #[derive(Serialize, Deserialize, Debug, ToSchema, PartialEq, Eq, Clone)]
-pub struct SyncServiceVersionID {
-    pub peer: String,
-    pub counter: i32,
-}
+#[serde(transparent)]
+pub struct SyncServiceVersionID(pub Vec<String>);
 
 #[derive(Serialize, Deserialize, Debug, ToSchema, PartialEq, Eq, Clone)]
 pub struct PeerWithUserId {

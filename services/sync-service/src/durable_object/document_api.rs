@@ -70,7 +70,10 @@ impl DocumentSyncSession {
         }
         if !is_update {
             let state = self.document_state().await?;
-            return match document::snapshot(&access, &state.loro_doc) {
+            return match document::snapshot(
+                &access,
+                &state.document.lock().expect("document mutex poisoned"),
+            ) {
                 Ok((snapshot, revision)) => Response::from_json(&SnapshotResponse {
                     snapshot: STANDARD.encode(snapshot),
                     revision: STANDARD.encode(revision),

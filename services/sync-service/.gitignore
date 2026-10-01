@@ -4,3 +4,5 @@ node_modules
 data
 dist
 build
+
+.wrangler-automerge

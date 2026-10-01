@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { initSync } from '@ironcalc/wasm';
-import { LoroDoc } from 'loro-crdt';
+import { AutomergeDoc } from '@macro-inc/automerge';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   calculateSpreadsheetForAi,
@@ -24,9 +24,9 @@ import {
 } from './workbook-document';
 
 let calculator: SpreadsheetCalculator;
-const documents: LoroDoc[] = [];
+const documents: AutomergeDoc[] = [];
 function document() {
-  const doc = new LoroDoc();
+  const doc = new AutomergeDoc();
   doc.getMap('spreadsheetMeta').set('formatVersion', 1);
   doc.commit();
   documents.push(doc);
@@ -262,7 +262,7 @@ describe('spreadsheet AI reads and calculation', () => {
         calculator
       )
     ).toThrow('20');
-    const markdown = new LoroDoc();
+    const markdown = new AutomergeDoc();
     documents.push(markdown);
     expect(() =>
       readSpreadsheetForAi(markdown, 'v', { action: 'read' }, calculator)

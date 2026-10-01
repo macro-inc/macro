@@ -8168,7 +8168,7 @@
                     },
                     "initialSnapshot": {
                       "type": "string",
-                      "description": "Base64-encoded canonical Loro snapshot used to initialize the task."
+                      "description": "Base64-encoded canonical Automerge snapshot used to initialize the task."
                     },
                     "teamId": {
                       "type": ["string", "null"],
@@ -21128,7 +21128,7 @@
           },
           "initialSnapshot": {
             "type": "string",
-            "description": "Base64-encoded canonical Loro snapshot used to initialize the task."
+            "description": "Base64-encoded canonical Automerge snapshot used to initialize the task."
           },
           "teamId": {
             "type": ["string", "null"],
@@ -31595,16 +31595,9 @@
         "enum": ["pending", "ready"]
       },
       "SyncServiceVersionID": {
-        "type": "object",
-        "required": ["peer", "counter"],
-        "properties": {
-          "counter": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "peer": {
-            "type": "string"
-          }
+        "type": "array",
+        "items": {
+          "type": "string"
         }
       },
       "SystemSkillSummary": {

@@ -3,8 +3,8 @@
 	"compilerOptions": {
 		"baseUrl": ".",
 		"paths": {
-			"@macro-inc/lexical-core/markdown-loro-snapshot": [
-				"src/types/markdown-loro-snapshot.d.ts"
+			"@macro-inc/lexical-core/markdown-automerge-snapshot": [
+				"src/types/markdown-automerge-snapshot.d.ts"
 			],
 			"@macro-inc/lexical-core": ["../../packages/lexical-core/"],
 			"@macro-inc/lexical-core/*": ["../../packages/lexical-core/*"]

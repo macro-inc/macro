@@ -3,7 +3,7 @@
 //! following the hexagonal architecture pattern.
 //!
 //! A collab surface gives any markdown UI (an input box, a message editor, a
-//! task field) its own Loro CRDT session in sync-service, independent of the
+//! task field) its own Automerge CRDT session in sync-service, independent of the
 //! `Document` table. The CRDT is the durable source of truth for content; the
 //! `collab_surfaces` table records only existence, the parent entity, and
 //! lifecycle state.

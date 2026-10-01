@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { LoroDoc } from "loro-crdt";
+import { TestDocument } from "./automerge";
 import { createFetchMock, type Miniflare } from "miniflare";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import {
@@ -21,7 +21,7 @@ let mf: Miniflare;
 const persistPath = mkdtempSync(join(tmpdir(), "surface-isolation-"));
 type TestClient = {
 	socket: ReturnType<typeof createTestWebSocket>;
-	doc: LoroDoc;
+	doc: TestDocument;
 	closed: Promise<number>;
 };
 const effects: string[] = [];
@@ -62,11 +62,11 @@ async function initialize(
 	id: string,
 	content: string,
 ): Promise<number> {
-	const doc = new LoroDoc();
+	const doc = new TestDocument();
 	doc.getText("content").insert(0, content);
 	const body = InitializeFromSnapshotRequest.encode({
 		snapshot: doc.export({ mode: "snapshot" }),
-	});
+	}).slice();
 	doc.free();
 	const response = await mf.dispatchFetch(url(kind, id, "initialize"), {
 		method: "POST",
@@ -103,7 +103,7 @@ async function client(
 	expect(message.isRemoteInitialSync()).toBe(true);
 	if (!message.isRemoteInitialSync())
 		throw new Error("missing initial snapshot");
-	const doc = new LoroDoc();
+	const doc = new TestDocument();
 	doc.import(message.value.snapshot);
 	return { socket, doc, closed };
 }
@@ -116,7 +116,7 @@ async function content(
 		headers: { Authorization: `Bearer ${token(kind, id)}` },
 	});
 	expect(response.status).toBe(200);
-	const doc = new LoroDoc();
+	const doc = new TestDocument();
 	doc.import(new Uint8Array(await response.arrayBuffer()));
 	const text = doc.getText("content").toString();
 	doc.free();

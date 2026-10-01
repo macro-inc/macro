@@ -95,7 +95,7 @@ const EditBody = z
     interpret: z.boolean().default(true),
     debug: z.boolean().default(false),
     /**
-     * Commit edits to the shared Loro doc (default true). Set false to have the
+     * Commit edits to the shared Automerge doc (default true). Set false to have the
      * worker compute ops without committing them. This gives you the flexibility
      * to apply them on your own.
      */

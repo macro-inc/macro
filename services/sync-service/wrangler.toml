@@ -3,7 +3,7 @@ main = "build/worker/shim.mjs"
 compatibility_date = "2025-03-05"
 
 [build]
-command = "cargo install -q worker-build@0.8.4 --locked --force && worker-build --profile sync-service-release"
+command = "echo 'Legacy pre-Automerge deployment is disabled. Use wrangler.automerge.toml for the isolated Automerge rollout.' >&2; exit 1"
 
 [observability.logs]
 enabled = true

@@ -1,3 +1,4 @@
+import { AutomergeDoc } from '@macro-inc/automerge';
 import { noopChatter } from '@macro-inc/collaboration/collab/chatter';
 import type { SnapshotStore } from '@macro-inc/collaboration/collab/snapshot-store';
 import {
@@ -6,7 +7,6 @@ import {
   type SyncSourceEvent,
 } from '@macro-inc/collaboration/collab/source';
 import { InMemoryWALStore } from '@macro-inc/collaboration/collab/wal';
-import { LoroDoc } from 'loro-crdt';
 import { errAsync, okAsync } from 'neverthrow';
 import { createRoot } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
@@ -57,7 +57,7 @@ function fakeLiveSource() {
 
 describe('spreadsheet session', () => {
   it('reopens from the WAL without writing a stale teardown snapshot', async () => {
-    const remote = new LoroDoc();
+    const remote = new AutomergeDoc();
     writeSpreadsheetCells(remote, { A1: { value: 'base' } });
     const persistence = memoryPersistence();
     const save = vi.spyOn(persistence.snapshots, 'save');
@@ -109,7 +109,7 @@ describe('spreadsheet session', () => {
   });
 
   it('waits for an in-flight snapshot before a replacement session loads its cache', async () => {
-    const remote = new LoroDoc();
+    const remote = new AutomergeDoc();
     writeSpreadsheetCells(remote, { A1: { value: 'base' } });
     const persistence = memoryPersistence();
     const originalSave = persistence.snapshots.save;
@@ -169,7 +169,7 @@ describe('spreadsheet session', () => {
   });
 
   it('does not accept edits when the initial recovery snapshot cannot be saved', async () => {
-    const remote = new LoroDoc();
+    const remote = new AutomergeDoc();
     const transport = fakeLiveSource();
     const persistence = memoryPersistence();
     persistence.snapshots.save = async () => {
@@ -200,7 +200,7 @@ describe('spreadsheet session', () => {
   });
 
   it('leaves an unsupported future format unopened', async () => {
-    const remote = new LoroDoc();
+    const remote = new AutomergeDoc();
     remote.getMap('spreadsheetMeta').set('formatVersion', 2);
     remote.commit();
     const transport = fakeLiveSource();
@@ -228,7 +228,7 @@ describe('spreadsheet session', () => {
   });
 
   it('does not restart a session closed during hydration', async () => {
-    const remote = new LoroDoc();
+    const remote = new AutomergeDoc();
     const transport = fakeLiveSource();
     const cleanupTransport = vi.spyOn(transport.live, 'cleanup');
     const persistence = memoryPersistence();
@@ -265,7 +265,7 @@ describe('spreadsheet session', () => {
   });
 
   it('hydrates before accepting edits and applies incoming live updates', async () => {
-    const remote = new LoroDoc();
+    const remote = new AutomergeDoc();
     writeSpreadsheetCells(remote, { A1: { value: 'server' } });
     const transport = fakeLiveSource();
     const persistence = memoryPersistence();
@@ -305,8 +305,8 @@ describe('spreadsheet session', () => {
     remote.free();
   });
 
-  it('rebinds the editor after sync recovery replaces the Loro document', async () => {
-    const remote = new LoroDoc();
+  it('rebinds the editor after sync recovery replaces the Automerge document', async () => {
+    const remote = new AutomergeDoc();
     writeSpreadsheetCells(remote, { A1: { value: 'initial' } });
     const transport = fakeLiveSource();
     transport.live.requestSnapshot = () =>
@@ -345,7 +345,7 @@ describe('spreadsheet session', () => {
   });
 
   it('recovers cached cells and pending WAL edits before an offline load', async () => {
-    const local = new LoroDoc();
+    const local = new AutomergeDoc();
     writeSpreadsheetCells(local, { A1: { value: 'cached' } });
     const persistence = memoryPersistence(local.export({ mode: 'snapshot' }));
     const version = local.version();
@@ -384,7 +384,7 @@ describe('spreadsheet session', () => {
   });
 
   it('opens on reconnect after the first network attempt failed without a cache', async () => {
-    const remote = new LoroDoc();
+    const remote = new AutomergeDoc();
     writeSpreadsheetCells(remote, { A1: { value: 'recovered' } });
     const transport = fakeLiveSource();
     let dispose = () => {};

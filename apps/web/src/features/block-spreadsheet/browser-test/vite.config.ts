@@ -21,8 +21,7 @@ export default defineConfig({
     tailwind(),
   ],
   resolve: {
-    dedupe: ['solid-js', 'loro-crdt'],
-    alias: { 'loro-crdt': 'loro-crdt/base64' },
+    dedupe: ['solid-js', '@macro-inc/automerge'],
   },
   // Worker-only lazy dependencies otherwise trigger a page reload on the first
   // import, discarding the file chooser's pending request in a cold test run.

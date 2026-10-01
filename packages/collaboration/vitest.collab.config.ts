@@ -5,10 +5,8 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   plugins: [solidPlugin(), wasm()],
   resolve: {
-    dedupe: ['loro-crdt', 'solid-js'],
-    alias: {
-      'loro-crdt': 'loro-crdt/base64',
-    },
+    dedupe: ['@macro-inc/automerge', 'solid-js'],
+    alias: {},
   },
   test: {
     environment: 'jsdom',

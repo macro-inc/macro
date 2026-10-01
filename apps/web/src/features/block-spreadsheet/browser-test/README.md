@@ -1,6 +1,6 @@
 # Spreadsheet browser fixture
 
-This isolated entry mounts the real `SpreadsheetEditor` with its local Loro
+This isolated entry mounts the real `SpreadsheetEditor` with its local Automerge
 source, IronCalc calculation worker, Excel import/export worker, and shared Macro
 styles and controls. It does not load authentication, hosted document APIs, or
 product routes. Reloading resets the workbook. This verifies the editor and

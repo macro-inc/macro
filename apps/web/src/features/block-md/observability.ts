@@ -1,5 +1,5 @@
+import type { AutomergeDoc } from '@macro-inc/automerge';
 import { type Span, Telemetry } from '@macro-inc/observability';
-import type { LoroDoc } from 'loro-crdt';
 
 const documentSpans = new Map<string, Span>();
 
@@ -31,11 +31,17 @@ export function endTrackedDocumentSpan(span: Span): void {
   span.end();
 }
 
-export function stampLoroSnapshotState(span: Span, doc: LoroDoc): void {
-  const version = doc.oplogVersion();
-
-  span.setAttr('snapshot.op_count', doc.opCount());
-  span.setAttr('snapshot.peer_count', version.length());
+export function stampAutomergeSnapshotState(
+  span: Span,
+  doc: AutomergeDoc
+): void {
+  span.setAttr(
+    'snapshot.op_count',
+    [...doc.getAllChanges().values()]
+      .flat()
+      .reduce((sum, change) => sum + change.ops.length, 0)
+  );
+  span.setAttr('snapshot.peer_count', doc.getAllChanges().size);
   span.setAttr('snapshot.frontier_count', doc.oplogFrontiers().length);
-  span.setAttr('snapshot.is_shallow', doc.isShallow());
+  span.setAttr('snapshot.is_shallow', false);
 }

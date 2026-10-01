@@ -1,23 +1,25 @@
-import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
-import { createLoroManager } from '@macro-inc/collaboration/collab/manager';
+import type { AutomergeManager } from '@macro-inc/collaboration/collab/manager';
+import { createAutomergeManager } from '@macro-inc/collaboration/collab/manager';
 import type { RawUpdate } from '@macro-inc/collaboration/collab/shared';
 import {
+  AUTOMERGE_SNAPSHOT_DB_NAME,
   IDBSnapshotStore,
-  LORO_SNAPSHOT_DB_NAME,
 } from '@macro-inc/collaboration/collab/snapshot-store';
 import type { LiveSyncSource } from '@macro-inc/collaboration/collab/source';
 import {
+  AUTOMERGE_WAL_DB_NAME,
   BrowserWALStore,
-  LORO_WAL_DB_NAME,
 } from '@macro-inc/collaboration/collab/wal';
-import { MARKDOWN_LORO_SCHEMA } from '@macro-inc/lexical-core/markdown-loro-schema';
+import { MARKDOWN_AUTOMERGE_SCHEMA } from '@macro-inc/lexical-core/markdown-automerge-schema';
 import { storageServiceClient } from '@service-storage/client';
 import type { CollabSurfaceResponse } from '@service-storage/service';
 import { createCollabSurfaceSource } from '@service-sync/source';
 import { type Accessor, createSignal } from 'solid-js';
 import { getCollabSurfaceToken } from './token';
 
-export type CollabSurfaceLoroManager = LoroManager<typeof MARKDOWN_LORO_SCHEMA>;
+export type CollabSurfaceAutomergeManager = AutomergeManager<
+  typeof MARKDOWN_AUTOMERGE_SCHEMA
+>;
 
 /** The parent entity a surface hangs off; all access derives from it. */
 export type CollabSurfaceParent = {
@@ -46,7 +48,7 @@ export type CollabSurfaceSessionOptions = {
 
 export type CollabSurfaceSession = {
   surfaceId: string;
-  loroManager: CollabSurfaceLoroManager;
+  automergeManager: CollabSurfaceAutomergeManager;
   /**
    * The live sync source. Undefined until the initial connection token is
    * minted and the socket created — gate the collab provider on it.
@@ -64,21 +66,21 @@ export type CollabSurfaceSession = {
  * into a fresh snapshot so a reload during recovery doesn't show stale state.
  */
 export async function ingestLocalSnapshot(
-  loroManager: CollabSurfaceLoroManager,
+  automergeManager: CollabSurfaceAutomergeManager,
   snapshotStore: IDBSnapshotStore<RawUpdate>,
   walStore: BrowserWALStore<RawUpdate>
 ): Promise<void> {
   const localSnapshot = await snapshotStore.load();
   if (!localSnapshot) return;
   const walEntries = await walStore.getAll();
-  await loroManager.ingest({
+  await automergeManager.ingest({
     kind: 'local',
     snapshot: localSnapshot,
     walUpdates: walEntries.map((entry) => entry.update),
   });
 
   if (walEntries.length >= 1) {
-    const doc = loroManager.doc;
+    const doc = automergeManager.doc;
     const snapshot = doc.export({
       mode: 'shallow-snapshot',
       frontiers: doc.oplogFrontiers(),
@@ -92,7 +94,7 @@ export async function ingestLocalSnapshot(
  * load-or-create: give it a stable surface id plus its parent entity, and it
  * idempotently ensures the surface exists before connecting.
  *
- * Creates the Loro manager and local stores synchronously (so cached state can
+ * Creates the Automerge manager and local stores synchronously (so cached state can
  * seed the editor before the network round-trips), then ensures the surface,
  * mints a connection token, and opens the sync-service websocket. Three
  * snapshot sources race to seed the manager — optimistic (if provided), local
@@ -107,14 +109,17 @@ export function createCollabSurfaceSession(
   surfaceId: string,
   opts: CollabSurfaceSessionOptions
 ): CollabSurfaceSession {
-  const loroManager = createLoroManager(MARKDOWN_LORO_SCHEMA, {
+  const automergeManager = createAutomergeManager(MARKDOWN_AUTOMERGE_SCHEMA, {
     documentId: surfaceId,
   });
   const snapshotStore = new IDBSnapshotStore<RawUpdate>(
-    LORO_SNAPSHOT_DB_NAME,
+    AUTOMERGE_SNAPSHOT_DB_NAME,
     surfaceId
   );
-  const walStore = new BrowserWALStore<RawUpdate>(LORO_WAL_DB_NAME, surfaceId);
+  const walStore = new BrowserWALStore<RawUpdate>(
+    AUTOMERGE_WAL_DB_NAME,
+    surfaceId
+  );
 
   const [syncSource, setSyncSource] = createSignal<LiveSyncSource>();
   const [connectionError, setConnectionError] = createSignal<string>();
@@ -122,14 +127,14 @@ export function createCollabSurfaceSession(
 
   const optimisticSnapshot = opts.optimisticSnapshot;
   if (optimisticSnapshot) {
-    void loroManager
+    void automergeManager
       .ingest({ kind: 'optimistic', snapshot: optimisticSnapshot })
       .catch((error) => {
         console.error('collab surface: optimistic ingest failed', error);
       });
   }
 
-  void ingestLocalSnapshot(loroManager, snapshotStore, walStore).catch(
+  void ingestLocalSnapshot(automergeManager, snapshotStore, walStore).catch(
     (error) => {
       console.error('collab surface: local snapshot ingest failed', error);
     }
@@ -177,12 +182,15 @@ export function createCollabSurfaceSession(
       );
       return;
     }
-    await loroManager.ingest({ kind: 'dss', snapshot: sync.value.snapshot });
+    await automergeManager.ingest({
+      kind: 'dss',
+      snapshot: sync.value.snapshot,
+    });
   })();
 
   return {
     surfaceId,
-    loroManager,
+    automergeManager,
     syncSource,
     connectionError,
     dispose: () => {

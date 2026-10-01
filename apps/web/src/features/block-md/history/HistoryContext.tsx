@@ -1,6 +1,7 @@
 import { MACRO_AGENT_BOT_ID } from '@core/constant/macroAgent';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { ThrownResultError } from '@core/util/result';
+import { AutomergeDoc } from '@macro-inc/automerge';
 import { isAiPeer } from '@macro-inc/collaboration/collab/ai-peer';
 import {
   buildDiffState,
@@ -11,7 +12,6 @@ import { useDocumentPeersQuery } from '@queries/sync/document-peers';
 import type { HistorySession, HistoryVersionId } from '@service-sync/client';
 import { syncServiceClient } from '@service-sync/client';
 import type { SerializedEditorState } from 'lexical';
-import { LoroDoc } from 'loro-crdt';
 import {
   type Accessor,
   createContext,
@@ -113,7 +113,7 @@ export function HistoryProvider(props: {
     async (documentId) => {
       const result = await syncServiceClient.getSnapshot({ documentId });
       if (result.isErr()) throw new ThrownResultError(result.error);
-      const doc = new LoroDoc();
+      const doc = new AutomergeDoc();
       doc.import(result.value);
       return doc;
     }
@@ -136,7 +136,7 @@ export function HistoryProvider(props: {
   // (`historyDoc()`) or the query.data while they're still pending bubbles
   // a Suspense trigger. This Provider is mounted above places where a simple
   // suspense on the history UI would work.
-  const loadedDoc = (): LoroDoc | undefined =>
+  const loadedDoc = (): AutomergeDoc | undefined =>
     historyDoc.state === 'ready' || historyDoc.state === 'refreshing'
       ? historyDoc.latest
       : undefined;
@@ -186,7 +186,7 @@ export function HistoryProvider(props: {
     for (const [peer, changes] of doc.getAllChanges()) {
       const userId = resolvePeerUser(peers, peer);
       for (const change of changes) {
-        events.push({ userId, tMs: change.timestamp * 1000 });
+        events.push({ userId, tMs: change.time * 1000 });
       }
     }
 
@@ -216,7 +216,7 @@ export function HistoryProvider(props: {
 
   // Diff a session: the state just before its first edit vs the state at its end,
   // paired by node id. Each changed block is attributed to whoever last edited it
-  // (via buildWhoMap over the loro op history), falling back to the session author.
+  // (via buildWhoMap over the automerge op history), falling back to the session author.
   const diffPreviewState = createMemo<SerializedEditorState | null>(() => {
     const session = diffSession();
     if (!session) return null;

@@ -87,7 +87,7 @@ test('live edits, named colored ranges, offline recovery and departing cursors',
       body: new Uint8Array(
         InitializeFromSnapshotRequest.encode({
           snapshot: new Uint8Array(
-            readFileSync(`${root}/static_assets/spreadsheet-golden.1.bin`)
+            readFileSync(`${root}/static_assets/spreadsheet-golden.2.bin`)
           ),
         })
       ).buffer,

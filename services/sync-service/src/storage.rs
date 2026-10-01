@@ -28,8 +28,11 @@ pub struct DocumentUpdateStorage<'a> {
 }
 
 impl crate::domain::document::DocumentUpdatePort for DocumentUpdateStorage<'_> {
-    fn document(&self) -> &loro::LoroDoc {
-        &self.document_state.loro_doc
+    fn document(&self) -> std::sync::MutexGuard<'_, automerge::Automerge> {
+        self.document_state
+            .document
+            .lock()
+            .expect("document mutex poisoned")
     }
 
     async fn apply_and_persist(
@@ -75,10 +78,8 @@ impl SessionStorage {
                 return Err(Error::from(format!("document snapshot not found: {e}")));
             }
         }?;
-        self.oplog
-            .cmp_vv_with_last_snapshot_vv(&state.loro_doc.oplog_vv())
-            .await?;
         self.oplog.apply_pending_ops(&state).await?;
+        self.oplog.check_saved_heads(&state).await?;
         Ok(state)
     }
 
@@ -108,6 +109,7 @@ impl SessionStorage {
     /// Store a new snapshot in the snapshot storage
     pub async fn store_snapshot(&self, doc_state: &DocumentState) -> Result<()> {
         let snapshot = doc_state.export_snapshot(None)?;
+        let heads = doc_state.heads();
         let num_bytes = snapshot.len();
         let (res, elap) = timeit!(self.snapshot_storage.store_snapshot(&snapshot).await?);
         trace!(
@@ -115,19 +117,18 @@ impl SessionStorage {
             duration_ms = elap.as_millis(),
             "store_snapshot"
         );
-        self.oplog
-            .store_version_vector(&doc_state.loro_doc.oplog_vv())
-            .await?;
+        self.oplog.store_heads(&heads).await?;
         Ok(res)
     }
 
-    /// Persist an update and return its change status and touched Lexical nodes.
-    pub async fn append_pending_operation(
+    /// Validate the entire websocket batch before yielding, then durably store
+    /// every delta atomically, including batches sent out of causal order.
+    pub async fn append_pending_operations(
         &self,
-        operation: &[u8],
+        operations: &[&[u8]],
         document_state: &DocumentState,
     ) -> Result<ImportedUpdate> {
-        self.oplog.apply_op(document_state, operation).await
+        self.oplog.apply_ops(document_state, operations).await
     }
 
     pub async fn clear_applied_ops(&self) -> Result<()> {

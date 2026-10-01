@@ -1,20 +1,20 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { Mirror } from '@loro-mirror/core';
-import { LoroDoc } from 'loro-crdt';
+import { AutomergeDoc } from '@macro-inc/automerge';
+import { Mirror } from '@macro-inc/automerge/mirror';
 import { describe, expect, it } from 'vitest';
-import { MARKDOWN_LORO_SCHEMA } from '../markdown-loro-schema';
+import { MARKDOWN_AUTOMERGE_SCHEMA } from '../markdown-automerge-schema';
 
 describe('markdown-golden.bin', () => {
   it('ensures that the \"golden\" snapshot is properly blank as expected', async () => {
     const golden = readFileSync(
-      join(import.meta.dirname, '../../../static_assets/markdown-golden.1.bin')
+      join(import.meta.dirname, '../../../static_assets/markdown-golden.2.bin')
     );
 
-    const doc = new LoroDoc();
+    const doc = new AutomergeDoc();
     doc.import(golden);
 
-    const mirror = new Mirror({ doc, schema: MARKDOWN_LORO_SCHEMA });
+    const mirror = new Mirror({ doc, schema: MARKDOWN_AUTOMERGE_SCHEMA });
     await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();

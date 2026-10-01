@@ -108,7 +108,7 @@ fn embedded_assets_select_their_consumers() {
         &graph,
         &changed_files(&[
             "crates/email_validator/src/lib.rs",
-            "static_assets/markdown-golden.1.bin",
+            "static_assets/markdown-golden.2.bin",
         ]),
     )
     .unwrap();

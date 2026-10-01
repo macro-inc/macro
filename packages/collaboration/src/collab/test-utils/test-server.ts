@@ -1,15 +1,15 @@
-import { LoroDoc, type VersionVector } from 'loro-crdt';
+import { AutomergeDoc, type Revision } from '@macro-inc/automerge';
 import { okAsync } from 'neverthrow';
 import { vi } from 'vitest';
 import { type LiveSyncSource, SyncSourceStatus } from '../source';
 
 /**
- * In-memory "sync service" for tests. Holds a real LoroDoc and answers
+ * In-memory "sync service" for tests. Holds a real AutomergeDoc and answers
  * `requestUpdatesSince` with precise op deltas. Doubles as a LiveSyncSource
- * so it can be plugged into `createLoroManager` directly.
+ * so it can be plugged into `createAutomergeManager` directly.
  */
 export class TestServer {
-  public readonly doc = new LoroDoc();
+  public readonly doc = new AutomergeDoc();
 
   constructor() {
     this.doc.setPeerId(99n);
@@ -28,7 +28,7 @@ export class TestServer {
     });
   }
 
-  /** Adapter: present as a LiveSyncSource so it can drive a LoroManager. */
+  /** Adapter: present as a LiveSyncSource so it can drive a AutomergeManager. */
   asLiveSyncSource(): LiveSyncSource {
     return {
       documentId: 'doc-1',
@@ -42,7 +42,7 @@ export class TestServer {
       reconnect: vi.fn(),
       cleanup: vi.fn(),
       requestSnapshot: vi.fn(() => okAsync(this.shallowSnapshot())),
-      requestUpdatesSince: vi.fn((vv: VersionVector) =>
+      requestUpdatesSince: vi.fn((vv: Revision) =>
         // Version vector is lenient: peers it includes that we don't know
         // about are harmless (we just don't have ops for them).
         okAsync(this.doc.export({ mode: 'update', from: vv }))

@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { initSync } from '@ironcalc/wasm';
+import { AutomergeDoc } from '@macro-inc/automerge';
 import { createInitializedSpreadsheetCalculator } from '@macro-inc/spreadsheet/calculation';
 import {
   importSpreadsheetSheets,
@@ -8,7 +9,6 @@ import {
 } from '@macro-inc/spreadsheet/workbook-document';
 import ExcelJS from 'exceljs';
 import { strFromU8, unzipSync } from 'fflate';
-import { LoroDoc } from 'loro-crdt';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { writeSpreadsheetCells } from './spreadsheet-document';
 import { decodeXlsx, encodeXlsx } from './xlsx-codec';
@@ -43,8 +43,8 @@ describe('independent financial workbook regression', () => {
 
   it('keeps financial formulas, names, precision, number formats and layout through native persistence and XLSX export', async () => {
     const imported = await decodeXlsx(fixture('financial-model'));
-    const doc = new LoroDoc();
-    const reopened = new LoroDoc();
+    const doc = new AutomergeDoc();
+    const reopened = new AutomergeDoc();
     const engine = createInitializedSpreadsheetCalculator();
     try {
       importSpreadsheetSheets(doc, imported.sheets, true);
@@ -193,8 +193,8 @@ it('preserves stored errors, IFERROR and error propagation through native and Ex
   const imported = await decodeXlsx(
     new Uint8Array(await excel.xlsx.writeBuffer())
   );
-  const doc = new LoroDoc();
-  const reopened = new LoroDoc();
+  const doc = new AutomergeDoc();
+  const reopened = new AutomergeDoc();
   const engine = createInitializedSpreadsheetCalculator();
   try {
     importSpreadsheetSheets(doc, imported.sheets, true);

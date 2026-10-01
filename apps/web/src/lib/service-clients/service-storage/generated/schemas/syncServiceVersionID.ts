@@ -5,7 +5,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface SyncServiceVersionID {
-  counter: number;
-  peer: string;
-}
+export type SyncServiceVersionID = string[];

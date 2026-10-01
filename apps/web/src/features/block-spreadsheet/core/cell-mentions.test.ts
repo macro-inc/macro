@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { initSync } from '@ironcalc/wasm';
+import { AutomergeDoc } from '@macro-inc/automerge';
 import { createInitializedSpreadsheetCalculator } from '@macro-inc/spreadsheet/calculation';
 import {
   cellDateMention,
@@ -9,7 +10,6 @@ import {
   cellTextParts,
   encodeCellMention,
 } from '@macro-inc/spreadsheet/cell-mentions';
-import { LoroDoc } from 'loro-crdt';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { encodeCsv } from './csv-export';
 import {
@@ -67,8 +67,8 @@ describe('spreadsheet mention source', () => {
     expect(cellMentionQuery(person + ' @', person.length + 2)?.query).toBe('');
   });
   it('round trips through collaboration and calculates/export labels without stripping stored mentions', () => {
-    const first = new LoroDoc(),
-      second = new LoroDoc();
+    const first = new AutomergeDoc(),
+      second = new AutomergeDoc();
     const engine = createInitializedSpreadsheetCalculator();
     try {
       writeSpreadsheetCells(first, {

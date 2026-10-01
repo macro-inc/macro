@@ -1,6 +1,6 @@
 /**
  * @file Replace the Default Lexical CodeNode with a version that can be
- * synced via a single LoroText item
+ * synced via a single AutomergeText item
  */
 
 import {

@@ -120,11 +120,11 @@ entire cache in browser memory. With 10s of thousands of cached objects
   `ENABLE_GRAPHQL_SOUP` with REST fallback.
 - A separate normalization layer exists at the tanstack level:
   `@normy/query-core` (`src/lib/queries/soup/normalized-cache/`).
-- WASM precedent: loro-crdt via `vite-plugin-wasm`; note the documented
+- WASM precedent: @automerge/automerge via `vite-plugin-wasm`; note the documented
   dual-instantiation pitfall in `vite.base.ts` — the cache wasm
   module must be instantiated exactly once per JS context.
 - IndexedDB (`idb`) and OPFS utilities are already used elsewhere
-  (loro WAL/snapshot stores, `service-storage/util/opfs.ts`).
+  (automerge WAL/snapshot stores, `service-storage/util/opfs.ts`).
 
 ## 4. Architecture
 
@@ -481,7 +481,7 @@ apps/web/src/lib/graphql-cache/ # JS glue
   revisit only if Phase 4 integration shows latency problems.
 - **Two normalization layers during migration** — consistency hazard;
   mitigated by per-entity-type ownership rule (§4.6).
-- **wasm dual-instantiation** (known loro pitfall) — single worker entry owns
+- **wasm dual-instantiation** (known automerge pitfall) — single worker entry owns
   the module; never import the wasm package from page code.
 - **Offline correctness** — staleness semantics must be explicit
   (`stale: true` emissions) so UI can indicate offline data.

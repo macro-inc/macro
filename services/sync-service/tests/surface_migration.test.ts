@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { LoroDoc } from "loro-crdt";
+import { TestDocument } from "./automerge";
 import type { Miniflare } from "miniflare";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import {
@@ -56,7 +56,7 @@ async function post(
 	});
 }
 async function seed(id: string): Promise<void> {
-	const doc = new LoroDoc();
+	const doc = new TestDocument();
 	doc.getText("content").push("original");
 	const response = await mf.dispatchFetch(
 		`http://localhost/document/${id}/initialize`,
@@ -95,7 +95,7 @@ async function freeze(
 	return response.json<Export>();
 }
 function text(snapshot: number[]): string {
-	const doc = new LoroDoc();
+	const doc = new TestDocument();
 	doc.import(new Uint8Array(snapshot));
 	const value = doc.getText("content").toString();
 	doc.free();
@@ -116,7 +116,7 @@ test("freeze drains acknowledged and racing edits, closes writers, and replays p
 		new Uint8Array((await socket.waitForNextMessage()) as ArrayBuffer),
 	);
 	if (!initial.isRemoteInitialSync()) throw new Error("missing initial sync");
-	const doc = new LoroDoc();
+	const doc = new TestDocument();
 	doc.import(initial.value.snapshot);
 	function edit(value: string): void {
 		doc.getText("content").push(value);
@@ -254,7 +254,7 @@ test("internal-only operations and missing sources never create blank replacemen
 
 test("isolated initialization acknowledges only the identical verified operation and seed", async () => {
 	const id = crypto.randomUUID();
-	const doc = new LoroDoc();
+	const doc = new TestDocument();
 	doc.getText("content").push("seed");
 	const body = {
 		operation_id: crypto.randomUUID(),
@@ -298,7 +298,7 @@ test("cold freeze replays acknowledged operation logs and rollback preserves the
 		new Uint8Array((await socket.waitForNextMessage()) as ArrayBuffer),
 	);
 	if (!initial.isRemoteInitialSync()) throw new Error("missing initial sync");
-	const doc = new LoroDoc();
+	const doc = new TestDocument();
 	doc.import(initial.value.snapshot);
 	doc.getText("content").push(" pending");
 	socket.send(
@@ -383,7 +383,7 @@ test("an occupied target and forged revision/digest are not overwritten", async 
 			).status,
 		).toBe(400);
 	}
-	const doc = new LoroDoc();
+	const doc = new TestDocument();
 	doc.getText("content").push("unrelated target");
 	const occupied = await mf.dispatchFetch(
 		`http://localhost/surface/${id}/initialize`,
@@ -426,7 +426,7 @@ test("retries after activation preserve subsequent acknowledged surface edits", 
 		new Uint8Array((await socket.waitForNextMessage()) as ArrayBuffer),
 	);
 	if (!initial.isRemoteInitialSync()) throw new Error("missing initial sync");
-	const doc = new LoroDoc();
+	const doc = new TestDocument();
 	doc.import(initial.value.snapshot);
 	doc.getText("content").push(" after activation");
 	socket.send(

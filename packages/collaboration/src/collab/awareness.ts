@@ -3,8 +3,14 @@ import {
   type EphemeralStoreEvent,
   type PeerID,
   type Value,
-} from 'loro-crdt';
-import { type Accessor, createSignal, untrack } from 'solid-js';
+} from '@macro-inc/automerge';
+import {
+  type Accessor,
+  createSignal,
+  getOwner,
+  onCleanup,
+  untrack,
+} from 'solid-js';
 import { getRandomPaletteColor } from '../internal/palette';
 import type { RawUpdate } from './shared';
 
@@ -24,10 +30,10 @@ export type PeerAwareness<DecodedSelection> = {
 /**
  * A codec for encoding and decoding selections
  *
- * Selections require encoding / decoding, because they likely contain a [LoroCursor]
+ * Selections require encoding / decoding, because they likely contain a [AutomergeCursor]
  * Which is a wasm ptr, which is not structured clonable.
  *
- * To transmit LoroCursor over the wire, we need to use the LoroCursor.encode() method
+ * To transmit AutomergeCursor over the wire, we need to use the AutomergeCursor.encode() method
  *
  * The `encode` method on the codec, is responsible for encoding all cursors in the selection
  *
@@ -95,6 +101,8 @@ export function createAwareness<
   const store = new EphemeralStore<
     Record<string, PeerAwarenessRaw<EncodedSelection> | undefined>
   >(options?.timeout ?? DEFAULT_AWARENESS_TIMEOUT);
+
+  if (getOwner()) onCleanup(() => store.destroy());
 
   // Initialize user awareness with a random color
   const color = getRandomPaletteColor();
@@ -206,8 +214,7 @@ export function createAwareness<
 
   // Listen for changes to the ephemeral store
   store.subscribe((update) => {
-    // HACK: loro-crdt has a bug with [`EphemeralStore.subscribe`] which breaks
-    // recursive aliasing. This is a workaround for now.
+    // Apply awareness after the current document/selection transaction.
     queueMicrotask(() => {
       updateAwarenessSignals(update);
     });

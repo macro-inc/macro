@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { LoroDoc, VersionVector } from "loro-crdt";
+import { TestDocument, Revision } from "./automerge";
 import jwt from "jsonwebtoken";
 import type { Miniflare } from "miniflare";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -33,7 +33,7 @@ const auth = (
 const url = (id: string, action: string) =>
 	`http://localhost/document/${id}/${action === "snapshot" ? "state" : action}`;
 async function seed() {
-	const doc = new LoroDoc();
+	const doc = new TestDocument();
 	doc.getMap("metadata").set("title", "Document");
 	const bytes = doc.export({ mode: "snapshot" });
 	doc.free();
@@ -60,10 +60,10 @@ async function snapshot(id: string) {
 		snapshot: string;
 		revision: string;
 	};
-	const doc = new LoroDoc();
+	const doc = new TestDocument();
 	doc.import(Buffer.from(body.snapshot, "base64"));
 	expect(
-		VersionVector.decode(Buffer.from(body.revision, "base64")).toJSON(),
+		Revision.decode(Buffer.from(body.revision, "base64")).toJSON(),
 	).toEqual(doc.version().toJSON());
 	return { ...body, doc };
 }

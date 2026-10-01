@@ -1,175 +1,129 @@
-# Sync Service
-Service responsible for syncing collaborative documents between multiple users.
+# Sync service
 
-## Project Structure
-```bash
-.
-├── bebop/ # bebop schema and ts generator for tests & qa
-├── build.rs # build script for worker, to generate bebop rust bindings
-├── justfile # justfile for running commands
-├── src/ # rust worker-rs worker
-├── tests/ # e2e tests using miniflare and vitest
-└── wrangler.toml # wrangler configuration
+Rust Cloudflare Worker and Durable Object service for native Automerge documents.
+Each document/surface has independent state, an acknowledged operation log, and
+durable snapshots. Authorization policy stays in `src/domain/document.rs`; HTTP,
+WebSocket, and storage adapters share that policy and persistence pipeline.
+
+## Rollout boundary
+
+This implementation is **incompatible with pre-Automerge snapshots, updates, revisions,
+and awareness**. It rejects incompatible stored snapshots rather than replacing
+them with empty documents. It does not convert existing pre-Automerge history.
+
+The Macro editors, collaboration package, spreadsheet engine, and AI editing
+worker use `packages/automerge`, with native snapshots, head revisions, cursors,
+undo, and JSON presence. Stable list objects are stored separately from their
+ordering references so moves preserve concurrent edits. The raw JSON endpoint
+materializes these lists for Lexical consumers. Browser persistence and gossip
+use separate Automerge namespaces. Existing pre-Automerge documents still require an
+explicit data migration; use this port with fresh isolated data only.
+
+Use only `wrangler.automerge.toml` for this rollout. It creates the separate
+`sync-service-playground-automerge` worker, fresh D1/KV bindings, and separate
+Durable Object storage. It omits DSS callbacks so native snapshots cannot reach
+the existing application's pre-Automerge storage. The old `wrangler.toml` resources remain
+listed for reference, but its build and the legacy deployment workflow fail
+closed. Do not bypass that guard with `--no-bundle` or a prebuilt deployment.
+
+## Protocol
+
+The Bebop envelope and WebSocket framing remain in `bebop/schema.bop` and
+`packages/collaboration/src/websocket/platform/framing`. Payloads are now:
+
+- Snapshot: `Automerge.save` bytes, retaining causal history.
+- Update: concatenated Automerge change chunks (`Automerge.saveSince`), with
+  checksum, size, operation-count, and dependency validation before mutation.
+  Snapshots are not accepted as update deltas.
+- Revision: UTF-8 JSON array of sorted hexadecimal change hashes. The legacy
+  Bebop field name `vv` carries these bytes. Historical copy's `version_id` is
+  a JSON array of change hashes, not peer/counter entries.
+- Presence: UTF-8 JSON `{ "decimalPeerId": { "clock": 1, "value": {...} } }`.
+  Null values are tombstones; presence expires independently of document state.
+  Clients should refresh active presence within five seconds.
+
+`GET /document/:id/state` returns `{snapshot, revision}`, both standard base64.
+`POST /document/:id/update` accepts `{expectedRevision, update}` in base64.
+Signed document permission tokens are required. Edit/owner permissions allow
+writes; viewers and commenters cannot write. Stale revisions return 409.
+Retrying an already-applied delta returns `applied: false`, including after other
+edits. Successful writes are acknowledged after persistence.
+
+WebSocket updates persist each accepted batch atomically, including batches
+whose changes arrive out of causal order. A batch supports at most 64 deltas.
+Reconnects resend unacknowledged changes and request missing changes by heads.
+Recovery replays the pending log before checking the saved snapshot heads.
+Surface freeze/import/verify/activate/retire receipts also use Automerge heads.
+
+`client/document.ts` provides `AutomergeSession` and `initializeDocument` for
+native TypeScript clients. Pending offline edits survive disconnection in memory;
+applications must add snapshot/pending-change persistence for process recovery.
+`crates/sync_service_client/src/automerge.rs` provides native Rust copy and surface
+lifecycle contracts alongside the existing legacy client types.
+
+## Local testing
+
+Install the service dependencies with `npm ci` (Node 22.12+, 24, or 26+).
+The service has its own `package-lock.json`. From this directory:
+
+```sh
+worker-build --profile sync-service-release --features create-default-state,migration-test-hooks
+SYNC_MIGRATION_FAULT_TESTS=1 npx vitest run
 ```
 
-## Architecture
-The sync service leverages Cloudflare's Durable Objects to create session servers or "rooms" for each document. A Durable Object functions as a worker with both in-memory state and persistent storage capabilities.
+The integration suite runs the compiled Rust Worker in Miniflare. It covers
+authorization, malformed updates, convergence, offline replay, large framed
+messages, historical copy, storage recovery, and surface migration faults.
+Test hooks must never be enabled in a deployed build.
 
-Using Cloudflare's Durable Objects API, we can dynamically create and request these objects on demand for individual documents. To connect and receive updates from a document, a client establishes a WebSocket connection to /document/:document_id.
+Run Rust tests from the repository root, with `SQLX_OFFLINE` unset:
 
-When a connection is established, the worker checks if a Durable Object already exists for the document and creates a new one if necessary. Each Durable Object maintains two types of state:
-
-- In-memory state: Contains the loro_document itself, along with metadata about the document's current state
-- Persistable state: Stores data that survives even when the in-memory state is cleared
-
-The in-memory state and loro_document are initialized using a loro-snapshot retrieved from the Durable Object's persistent storage. By default, Durable Objects evict in-memory state after 10 seconds of inactivity. This can occur even when connections to the Durable Object exist, as long as there are no WebSocket messages or alarm invocations within that timeframe.
-
-Since generating and importing loro snapshots is computationally expensive, we want to maintain the in-memory state as long as active connections exist. To accomplish this, we implement a "heartbeat" system by scheduling an alarm for 5 seconds into the future, similar to a debounce mechanism. Even without incoming WebSocket messages, this alarm fires regularly, preventing the in-memory state from being evicted.
-When a client updates a document via a WebSocket message, we apply the update to the in-memory loro document. Whenever the alarm fires, we generate a new loro snapshot and store it in the Durable Object's persistent storage. When a new user connects to the document, we retrieve both the latest snapshot and any pending operations from persistent storage, then send a complete snapshot to the client.
-
-### Authentication
-
-`document_storage_service` will generate a jwt with permissions for the document. This jwt will be passed to the connecting websocket using queryParams.  
-Unfortunately, query params are the best way to authenticate a websocket connection. Since we use tls, query params should be encrypted in transit.
-the `sync-service` will verify the jwt and ensure that the user has the correct permissions to access the document.
-
-TODO: eventually we will want to validate based on the `access_level` field in the token that the user only receives updates and does not push any updates to the document.
-
-
-## Bebop
-The bebop schema is defined in `./bebop/schema.bop`.
-
-#### Generating typescript bindings locally
-The typescript bindings are primarily used for testing and QA environemnt.
-```bash
-cd bebop && npx bebop-tools build
+```sh
+cargo test -p sync_service
+cargo test -p sync_service_client
+just check
 ```
 
-#### Generating rust bindings locally
-Rust bindings get automatically generated when building the worker.
-The behavior for this is defined in `./build.rs`.
-```bash
-worker-build --profile sync-service-release
+The Rust client transitively requires the local database configuration described
+in `docs/DATABASE_DEVELOPMENT.md`. For a standalone worker, `just local-automerge`
+uses port 8791 and separate `.wrangler-automerge` persistence. Documents must be
+initialized with native snapshots before connecting; deployed builds do not
+create missing documents implicitly.
+
+For the full local infrastructure use the repository's `just run_local` flow
+(`docs/RUNNING_LOCALLY.md`) with an isolated instance and a rebuilt sync image.
+Its `/sync` proxy route reaches the local worker. The browser harness uses a new
+random document and the local-only permission key:
+
+```sh
+bun scripts/serve-smoke.ts http://localhost:<proxy-port>/sync
+# Open http://localhost:3000 in Chrome.
 ```
 
-#### Generating bindings elsewhere
-The sync_service exposes an endpoint `/schema` which returns the bebop schema.
-A consuming client can fetch this schema during build time and generate the corresponding typescript / rust bindings.
+It verifies two native browser peers, concurrent offline/online edits, reconnect,
+matching heads, and reload into a fresh peer. This verifies the service protocol;
+it does not exercise the existing Macro editor.
 
-## Features
+## Isolated PLAYGROUND deployment
 
-By default `bebop-owned-all`, `alarm-keep-alive` and `create-default-state` are all enabled.
+Authenticate Wrangler with the intended Cloudflare account, then run here:
 
-- `bebop-owned-all`: Enables all bebop owned types
-- `create-default-state`: As of writing this there is no mechanism to initialize a document's state 
-from existing state on the client. If a client fetches a document for the first time the worker will create
-some default state for it. In the future, this feature should be disabled, and we should be inheriting default state
-from the client.
-- `alarm-keep-alive`: This feature is used to prevent the in-memory state from being evicted when there are still
-active connections to the document. :warning: Tests should be run with both this feature enabled and disabled, to ensure
-that in a case where eviction logic is not working as expected, the core logic is still correct even though it might be slower.
-
-## Development
-
-We have 3 environments "test", "dev", and "prod". When developing we typically use "testing". This is deployed with `npx wrangler deploy`, dev with `npx wrangler deploy --env dev`, and prod with `npx wrangler deploy --env prod`.
-
-#### Testing
-
-The tests run in Node.js with Vitest and start the compiled Rust Worker through
-Miniflare directly (`tests/utils.ts`); no Vitest worker-pool plugin is needed.
-Use Node.js 22.12+ (22.x), 24.x, or 26+ for Vitest 5. Install dependencies with
-`npm ci`; `package-lock.json` is the lockfile used by setup and deployment.
-
-#### Running Locally
-Run:
-
-```bash
-just dev
+```sh
+just deploy-playground-dry
+just deploy-playground
 ```
 
-`just dev` applies the local D1 migrations before starting Wrangler. If you run Wrangler directly, apply the migrations first:
+Wrangler provisions the fresh resources on first deploy; the recipe then applies
+the D1 migrations. Set `SYNC_SERVICE_KEY_PLAYGROUND` as a secret on the new worker
+before exercising internal copy or surface lifecycle endpoints. The PLAYGROUND
+permission signing key is the local test key; this environment is only for
+disposable test documents. The native browser harness can also target the
+deployed worker URL. No production or shared dev deployment is part of this port.
 
-```bash
-CI=true npx wrangler d1 migrations apply USER_PEER_MAPPING --local
-npx wrangler dev
-```
+## Side effects
 
-If you run into build errors related to clang, follow [this fix](https://github.com/briansmith/ring/issues/1824#issuecomment-2059955073):
-
-Ensure you have llvm installed and available on your `PATH`. For mac with zsh this looks like:
-```
-# install llvm
-brew install llvm
-# add it to your PATH for zsh
-echo 'export PATH="/opt/homebrew/opt/llvm/bin:$PATH"' >> ~/.zshrc
-```
-
-#### Running tests locally
-```bash
-# runs only unit tests
-cargo test
-
-# runs both unit tests and e2e tests
-just test
-
-# runs e2e tests with the alarm-keep-alive feature disabled
-just test-no-alarm
-```
-
-when making a new deploy you need to make a cloudflare KV store
-and D1 database 
-
-### Atomic document updates
-
-`GET /document/:id/state` returns JSON `{snapshot, revision}`.
-Both fields use standard base64: `snapshot` is a full Loro snapshot and `revision`
-is an encoded Loro version vector from that same state. Requests require a signed
-Bearer document permission token. An internal API key does not replace this token.
-
-`POST /document/:id/update` accepts JSON
-`{expectedRevision, update}`, where `update` is a base64 Loro update exported from
-the snapshot revision. Edit or owner access is required; viewers can read only.
-The service validates a disposable fork, compares the current revision, and
-imports synchronously before its first persistence await, sharing the websocket
-operation log and broadcast pipeline. It returns `{revision, applied}` only after
-persistence. A stale revision returns 409 without applying changes. Retrying a
-fully applied delta succeeds with `applied: false`, even after intervening edits.
-
-Sync accepts arbitrary Loro document schemas. It validates the update encoding,
-operation/byte limits and causal dependencies, but does not interpret cells,
-styles, sheet names or document content types. Spreadsheet validation and
-operations live in `packages/spreadsheet` and the backend AI editing worker.
-Binary updates and read snapshots are limited to 4 MiB, revisions to 64 KiB,
-and HTTP bodies are bounded while streaming. Signed actor/user attribution is
-bounded and stored beside the existing operation log; request bodies cannot
-specify attribution.
-
-The existing binary `/snapshot` endpoint is unchanged.
-
-Content notifications go to DSS's internal
-`POST /internal/documents/:id/sync-content-updated` endpoint. The documents domain
-loads the stored file type and publishes `document.sync_content_updated`, which
-lets search choose its supported extractor. Sync no longer infers Markdown from
-CRDT roots or labels updates as Markdown. The `search-service` feature continues
-to control these notifications for compatibility with existing build commands.
-
-Deploy DSS first, then roll out Sync and the AI editing worker together.
-
-Content edits collect the editing socket's verified actor, or its user ID for
-human editors, in an in-memory list. Existing snapshot/search notifications
-flush distinct editors to DSS; collecting an editor adds no storage writes,
-network requests, background tasks, or timers to Sync. Anonymous edits,
-duplicate updates, and idle peers do not add editors.
-
-DSS's independent Activity consumer records one event at the start of editing
-and refreshes a shared five-minute inactivity window on each subsequent batch.
-An edit after five quiet minutes starts another session. Timing follows the
-existing snapshot notification cadence. Redis or notification failures may drop
-Activity hints; they never block document saving or search extraction. If Redis
-applies a session refresh before timing out, that session can remain suppressed
-without an Activity row until five minutes of inactivity. This is an accepted
-best-effort delivery limit, rather than a reason to retry or emit on every batch.
-
-Deploy DSS before Sync to enable Activity hints immediately. If an older DSS
-rejects the optional `editors` field, Sync retries once without it so search
-continues working. Old Sync requests and old Kafka events remain supported.
+When configured for a compatible application, snapshot/content notifications go
+to DSS and carry distinct verified editor identities. Notification failures do
+not block document saving. Anonymous edits, duplicate deltas, and idle presence
+do not add editors. The isolated configuration deliberately leaves these
+application callbacks unconfigured.

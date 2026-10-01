@@ -1,26 +1,25 @@
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
-import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
-
+import { AutomergeMap, type ContainerID } from '@macro-inc/automerge';
+import type { AutomergeManager } from '@macro-inc/collaboration/collab/manager';
 import type { NodeIdMappings } from '@macro-inc/lexical-core';
 import { $getNodeByKey, type LexicalNode } from 'lexical';
-import { type ContainerID, LoroMap } from 'loro-crdt';
 
 const warn = (...args: any[]) => {
-  if (DEV_MODE_ENV) console.warn('LoroNodeMappings:', ...args);
+  if (DEV_MODE_ENV) console.warn('AutomergeNodeMappings:', ...args);
 };
 
-/** Finds the [LexicalNode] for the given [LoroDoc] and [LoroLexicalNodeMappings]
+/** Finds the [LexicalNode] for the given [AutomergeDoc] and [AutomergeLexicalNodeMappings]
  *
- * @param loroManager The [LoroDoc] to search
- * @param mappings The [LoroLexicalNodeMappings] to search
+ * @param automergeManager The [AutomergeDoc] to search
+ * @param mappings The [AutomergeLexicalNodeMappings] to search
  * @param containerId The [ContainerID] to search
  */
-function _$findLexicalNodeForLoroContainer(
-  loroManager: LoroManager,
+function _$findLexicalNodeForAutomergeContainer(
+  automergeManager: AutomergeManager,
   mappings: NodeIdMappings,
   containerId: ContainerID
 ): LexicalNode | null {
-  let maybeContainer = loroManager.getContainerById(containerId);
+  let maybeContainer = automergeManager.getContainerById(containerId);
 
   if (maybeContainer.isErr()) {
     warn('Failed to get container', maybeContainer);
@@ -36,15 +35,18 @@ function _$findLexicalNodeForLoroContainer(
     return null;
   }
 
-  if (!(container instanceof LoroMap)) {
+  if (!(container instanceof AutomergeMap)) {
     if (!container.parent) {
       warn('no parent for text');
       return null;
     }
-    container = container.parent()?.getAttached() as LoroMap;
+    container = container.parent()?.getAttached() as AutomergeMap;
   }
 
-  const idMap = (container as LoroMap).getOrCreateContainer('$', new LoroMap());
+  const idMap = (container as AutomergeMap).getOrCreateContainer(
+    '$',
+    new AutomergeMap()
+  );
 
   const value = idMap.getShallowValue();
 
@@ -59,14 +61,14 @@ function _$findLexicalNodeForLoroContainer(
   return $getNodeByKey(nodeKey);
 }
 
-/** Finds the given loro container's [ContainerID] given the node id
+/** Finds the given automerge container's [ContainerID] given the node id
  *
- * @param loroManager The [LoroDoc] to search
+ * @param automergeManager The [AutomergeDoc] to search
  * @param node The [LexicalNode] to search
- * @param mappings The [LoroLexicalNodeMappings] to search
+ * @param mappings The [AutomergeLexicalNodeMappings] to search
  */
-export function $findLoroContainerForLexicalNode(
-  loroManager: LoroManager,
+export function $findAutomergeContainerForLexicalNode(
+  automergeManager: AutomergeManager,
   node: LexicalNode,
   mappings: NodeIdMappings
 ): ContainerID | null {
@@ -78,7 +80,7 @@ export function $findLoroContainerForLexicalNode(
     return null;
   }
 
-  const containerId = smartSearchContainersForNode(loroManager, nodeId);
+  const containerId = smartSearchContainersForNode(automergeManager, nodeId);
 
   if (!containerId) {
     // %BOOKMARK - no container
@@ -90,11 +92,11 @@ export function $findLoroContainerForLexicalNode(
 }
 
 function getMapValueOrContainer(
-  container: LoroMap,
+  container: AutomergeMap,
   key: string
 ): Record<string, any> {
   const maybeContainer = container.get(key);
-  if (maybeContainer instanceof LoroMap) {
+  if (maybeContainer instanceof AutomergeMap) {
     return maybeContainer.getShallowValue();
   } else if (typeof maybeContainer === 'object' && maybeContainer !== null) {
     return maybeContainer;
@@ -103,10 +105,10 @@ function getMapValueOrContainer(
 }
 
 function smartSearchContainersForNode(
-  loroManager: LoroManager,
+  automergeManager: AutomergeManager,
   nodeId: string
 ): ContainerID | undefined {
-  const res = loroManager.getAllContainerIds();
+  const res = automergeManager.getAllContainerIds();
 
   if (res.isErr()) {
     warn('Failed to get all container ids', res);
@@ -116,7 +118,7 @@ function smartSearchContainersForNode(
   const containerIds: ContainerID[] = res.value.reverse();
 
   for (const containerId of containerIds) {
-    const maybeContainer = loroManager.getContainerById(containerId);
+    const maybeContainer = automergeManager.getContainerById(containerId);
 
     if (maybeContainer.isErr()) {
       warn('Failed to get container', maybeContainer);
@@ -127,7 +129,7 @@ function smartSearchContainersForNode(
 
     container = container?.getAttached();
 
-    if (!container || !(container instanceof LoroMap)) continue;
+    if (!container || !(container instanceof AutomergeMap)) continue;
 
     const innerValue = getMapValueOrContainer(container, '$');
 

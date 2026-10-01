@@ -14,7 +14,7 @@ use models_permissions::share_permission::access_level::ViewAccessLevel;
 use super::{DocumentRouterState, Params};
 use crate::domain::ports::DocumentService;
 
-/// Proxies the cached Loro snapshot bytes, or 404 if none exists.
+/// Proxies the cached Automerge snapshot bytes, or 404 if none exists.
 #[tracing::instrument(skip(state, _access))]
 pub async fn get_cached_snapshot_url_handler<
     T: DocumentService,

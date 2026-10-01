@@ -836,7 +836,7 @@ fn only_markdown_is_editable() {
     for file_type in ["py", "pdf", "docx", "png", "csv", "not-a-file-type"] {
         assert!(
             ensure_markdown(&document_with_file_type(Some(file_type))).is_err(),
-            "{file_type} never gets a Loro doc and must be rejected"
+            "{file_type} never gets an Automerge doc and must be rejected"
         );
     }
 

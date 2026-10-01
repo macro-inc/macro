@@ -15,10 +15,10 @@ use tokio_retry::{Retry, strategy::FixedInterval};
 use crate::domain::models::CollabSurfaceError;
 use crate::domain::ports::SurfaceInitializer;
 
-/// Canonical blank-markdown Loro "golden" snapshot — the same bytes the
+/// Canonical blank-markdown Automerge "golden" snapshot — the same bytes the
 /// documents crate seeds empty markdown documents with.
 const MARKDOWN_GOLDEN_SNAPSHOT: &[u8] =
-    include_bytes!("../../../../static_assets/markdown-golden.1.bin");
+    include_bytes!("../../../../static_assets/markdown-golden.2.bin");
 
 const MAX_ATTEMPTS: usize = 3;
 const RETRY_DELAY: Duration = Duration::from_secs(1);
@@ -47,12 +47,14 @@ impl SurfaceInitializer for LexicalSyncSurfaceInitializer {
             MARKDOWN_GOLDEN_SNAPSHOT.to_vec()
         } else {
             self.lexical_client
-                .markdown_to_loro_snapshot(markdown)
+                .markdown_to_automerge_snapshot(markdown)
                 .await
                 .map_err(|e| {
                     CollabSurfaceError::Internal(
-                        rootcause::report!("failed to convert markdown to loro snapshot: {e:?}")
-                            .into_dynamic(),
+                        rootcause::report!(
+                            "failed to convert markdown to automerge snapshot: {e:?}"
+                        )
+                        .into_dynamic(),
                     )
                 })?
         };

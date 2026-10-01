@@ -1,5 +1,5 @@
+import type { Revision } from '@macro-inc/automerge';
 import type { Listen } from '@solid-primitives/event-bus';
-import type { VersionVector } from 'loro-crdt';
 import { okAsync, type ResultAsync } from 'neverthrow';
 import type { Accessor } from 'solid-js';
 import type { RawUpdate } from './shared';
@@ -75,9 +75,7 @@ export type LiveSyncSource = {
   pushAwareness: (awareness: RawUpdate) => void;
   registerPeerId: (peerId: bigint) => void;
   status: Accessor<SyncSourceStatus>;
-  requestUpdatesSince: (
-    version: VersionVector
-  ) => ResultAsync<RawUpdate, SyncError>;
+  requestUpdatesSince: (version: Revision) => ResultAsync<RawUpdate, SyncError>;
   requestSnapshot: () => ResultAsync<RawUpdate, SyncError>;
   reconnect: () => void;
   cleanup: () => void;

@@ -24,7 +24,7 @@ import {
   restoreScrollAnchor,
   type ScrollAnchor,
 } from '@core/util/scrollAnchor';
-import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
+import type { AutomergeManager } from '@macro-inc/collaboration/collab/manager';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import { makePersisted } from '@solid-primitives/storage';
 import {
@@ -103,7 +103,7 @@ function useCanUseLexicalStateDebugger() {
 }
 
 export function Notebook(props: {
-  loroManager: LoroManager;
+  automergeManager: AutomergeManager;
   documentId: string;
   hotkeyScope: string | undefined;
   autoFocus: boolean;
@@ -380,7 +380,7 @@ export function Notebook(props: {
           <div class="relative">
             <MarkdownEditor
               resolveAppLink={resolveAppLink}
-              loroManager={props.loroManager}
+              automergeManager={props.automergeManager}
               showLexicalStateDebugger={
                 canUseLexicalStateDebugger() && showLexicalStateDebugger()
               }
@@ -432,7 +432,7 @@ export function Notebook(props: {
 }
 
 export function InstructionsNotebook(props: {
-  loroManager: LoroManager;
+  automergeManager: AutomergeManager;
   hotkeyScope: string | undefined;
 }) {
   const { state } = useMarkdownDocument();
@@ -484,7 +484,7 @@ export function InstructionsNotebook(props: {
       <div class="grow max-w-3xl pt-12 min-w-0 mx-auto" ref={contentRef}>
         <InstructionsEditor
           resolveAppLink={resolveAppLink}
-          loroManager={props.loroManager}
+          automergeManager={props.automergeManager}
           showLexicalStateDebugger={
             canUseLexicalStateDebugger() && showLexicalStateDebugger()
           }

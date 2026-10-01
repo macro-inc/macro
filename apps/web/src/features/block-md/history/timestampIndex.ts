@@ -1,45 +1,43 @@
+import { Automerge, type AutomergeDoc, plain } from '@macro-inc/automerge';
 import type { HistoryVersionId } from '@service-sync/client';
 import type { SerializedEditorState } from 'lexical';
-import type { Change, LoroDoc } from 'loro-crdt';
 
-function frontiersAt(changes: Change[], targetMs: number) {
-  // Maintain a proper frontier antichain: when a change's deps cover a peer already
-  // in the frontier, that peer is now in the causal past and must be pruned. Without
-  // this, we'd pass non-antichain frontiers to checkout() which Loro rejects.
-  const frontier = new Map<Change['peer'], number>();
-  for (const { peer, counter, length, timestamp, deps } of changes) {
-    if (timestamp * 1000 > targetMs) break;
-    const endCounter = counter + length - 1;
-    for (const dep of deps) {
-      const cur = frontier.get(dep.peer);
-      if (cur !== undefined && cur <= dep.counter) frontier.delete(dep.peer);
-    }
-    if (endCounter > (frontier.get(peer) ?? -1)) frontier.set(peer, endCounter);
+export function buildTimestampIndex(doc: AutomergeDoc) {
+  // Native changes are topologically ordered. Include dependencies even when
+  // a collaborator's wall clock is ahead of the selected timestamp.
+  const changes = Automerge.getAllChanges(doc.value).map(
+    Automerge.decodeChange
+  );
+  const byHash = new Map(changes.map((change) => [change.hash, change]));
+  function headsAt(targetMs: number): string[] {
+    const included = new Set<string>();
+    const include = (hash: string) => {
+      if (included.has(hash)) return;
+      const change = byHash.get(hash);
+      if (!change) return;
+      change.deps.forEach(include);
+      included.add(hash);
+    };
+    changes
+      .filter((change) => change.time * 1000 <= targetMs)
+      .forEach((change) => include(change.hash));
+    const heads = new Set(included);
+    for (const hash of included)
+      byHash.get(hash)?.deps.forEach((dep) => heads.delete(dep));
+    return [...heads].sort();
   }
-  return [...frontier.entries()].map(([peer, counter]) => ({ peer, counter }));
-}
-
-export function buildTimestampIndex(doc: LoroDoc) {
-  const changes = [...doc.getAllChanges().values()]
-    .flat()
-    .sort((a, b) => a.timestamp - b.timestamp || a.counter - b.counter);
-
   return {
     checkoutAt(targetMs: number): SerializedEditorState | null {
-      const frontiers = frontiersAt(changes, targetMs);
-      if (frontiers.length === 0) return null;
-      doc.checkoutToLatest();
-      doc.checkout(frontiers);
-      const state = doc.toJSON();
-      if (!state.root?.type) return null;
-      return state;
+      const heads = headsAt(targetMs);
+      if (!heads.length) return null;
+      const state = plain(
+        Automerge.view(doc.value, heads)
+      ) as unknown as SerializedEditorState;
+      return state.root?.type ? state : null;
     },
-
     versionIdAt(targetMs: number): HistoryVersionId | null {
-      const frontiers = frontiersAt(changes, targetMs);
-      if (frontiers.length === 0) return null;
-      const f = frontiers[frontiers.length - 1];
-      return { peer: String(f.peer), counter: f.counter };
+      const heads = headsAt(targetMs);
+      return heads.length ? heads : null;
     },
   };
 }

@@ -1,4 +1,4 @@
-import { LoroDoc, UndoManager } from 'loro-crdt';
+import { AutomergeDoc, UndoManager } from '@macro-inc/automerge';
 import { describe, expect, it } from 'vitest';
 import {
   appendSpreadsheetRows,
@@ -20,7 +20,7 @@ import {
   type SpreadsheetSheetInput,
 } from './workbook-document';
 
-function synchronize(left: LoroDoc, right: LoroDoc) {
+function synchronize(left: AutomergeDoc, right: AutomergeDoc) {
   const a = left.export({ mode: 'update' });
   const b = right.export({ mode: 'update' });
   left.import(b);
@@ -35,8 +35,8 @@ const blank = (name: string): SpreadsheetSheetInput => ({
 });
 
 function concurrentLastSheetDeletion() {
-  const left = new LoroDoc();
-  const right = new LoroDoc();
+  const left = new AutomergeDoc();
+  const right = new AutomergeDoc();
   writeSpreadsheetCells(left, { A1: { value: 'retained work' } });
   const otherId = addSpreadsheetSheet(left, 'Other');
   synchronize(left, right);
@@ -48,7 +48,7 @@ function concurrentLastSheetDeletion() {
 
 describe('collaborative workbook', () => {
   it('opens legacy cells and layout as Sheet1 without adding operations', () => {
-    const doc = new LoroDoc();
+    const doc = new AutomergeDoc();
     writeSpreadsheetCells(doc, { A1: { value: 'legacy', italic: true } });
     resizeSpreadsheetColumn(doc, 0, 180);
     appendSpreadsheetRows(doc, 100);
@@ -66,7 +66,7 @@ describe('collaborative workbook', () => {
   });
 
   it('isolates equal cell addresses and dimensions across stable sheet IDs', () => {
-    const doc = new LoroDoc();
+    const doc = new AutomergeDoc();
     const id = addSpreadsheetSheet(doc, 'Budget');
     writeSpreadsheetCells(doc, { A1: { value: 'original' } });
     writeSpreadsheetCells(doc, { A1: { value: 'second', bold: true } }, id);
@@ -89,8 +89,8 @@ describe('collaborative workbook', () => {
   });
 
   it('merges independent styles, cells and appended rows on a new shared sheet', () => {
-    const left = new LoroDoc();
-    const right = new LoroDoc();
+    const left = new AutomergeDoc();
+    const right = new AutomergeDoc();
     const id = addSpreadsheetSheet(left, 'Shared');
     synchronize(left, right);
     writeSpreadsheetCells(left, { A1: { value: '42' } }, id);
@@ -115,8 +115,8 @@ describe('collaborative workbook', () => {
   });
 
   it('preserves both concurrent same-name sheets with deterministic unique display names', () => {
-    const left = new LoroDoc();
-    const right = new LoroDoc();
+    const left = new AutomergeDoc();
+    const right = new AutomergeDoc();
     const a = addSpreadsheetSheet(left, 'Budget');
     const b = addSpreadsheetSheet(right, 'Budget');
     writeSpreadsheetCells(left, { A1: { value: 'alice' } }, a);
@@ -138,7 +138,7 @@ describe('collaborative workbook', () => {
   });
 
   it('does not take another sheet’s requested name when resolving concurrent collisions', () => {
-    const doc = new LoroDoc();
+    const doc = new AutomergeDoc();
     doc.getMap('spreadsheetSheetNames').set('a', 'Budget');
     doc.getMap('spreadsheetSheetNames').set('b', 'Budget');
     doc.getMap('spreadsheetSheetNames').set('c', 'Budget (2)');
@@ -153,7 +153,7 @@ describe('collaborative workbook', () => {
   });
 
   it('duplicates full cell styling and layout in a single undoable change', () => {
-    const doc = new LoroDoc();
+    const doc = new AutomergeDoc();
     writeSpreadsheetCells(doc, {
       A1: {
         value: '=B1+2',
@@ -177,8 +177,8 @@ describe('collaborative workbook', () => {
   });
 
   it('retains collaborator edits when a deleted sheet is restored through local undo', () => {
-    const left = new LoroDoc();
-    const right = new LoroDoc();
+    const left = new AutomergeDoc();
+    const right = new AutomergeDoc();
     const id = addSpreadsheetSheet(left, 'Shared');
     synchronize(left, right);
     const history = new UndoManager(left, { mergeInterval: 0 });
@@ -197,8 +197,8 @@ describe('collaborative workbook', () => {
   it.each(['value', 'format', 'resize', 'rows'] as const)(
     'keeps peer %s changes visible when the creator undoes adding their sheet',
     (action) => {
-      const left = new LoroDoc();
-      const right = new LoroDoc();
+      const left = new AutomergeDoc();
+      const right = new AutomergeDoc();
       const history = new UndoManager(left, { mergeInterval: 0 });
       const id = addSpreadsheetSheet(left, 'Collaborative');
       synchronize(left, right);
@@ -231,8 +231,8 @@ describe('collaborative workbook', () => {
   );
 
   it('preserves a newly added sheet used only by another peer’s formula when creation is undone', () => {
-    const left = new LoroDoc();
-    const right = new LoroDoc();
+    const left = new AutomergeDoc();
+    const right = new AutomergeDoc();
     const history = new UndoManager(left, { mergeInterval: 0 });
     const id = addSpreadsheetSheet(left, "O'Brien");
     synchronize(left, right);
@@ -254,8 +254,8 @@ describe('collaborative workbook', () => {
   });
 
   it('keeps peer work and referenced sheet identities when undoing a replaced multi-sheet workbook', () => {
-    const left = new LoroDoc();
-    const right = new LoroDoc();
+    const left = new AutomergeDoc();
+    const right = new AutomergeDoc();
     writeSpreadsheetCells(left, { A1: { value: 'original workbook' } });
     const history = new UndoManager(left, { mergeInterval: 0 });
     const [data, summary, unused] = importSpreadsheetSheets(
@@ -298,8 +298,8 @@ describe('collaborative workbook', () => {
   });
 
   it('bounds identity retention to one record per peer and sheet, and removes unused creation on undo', () => {
-    const left = new LoroDoc();
-    const right = new LoroDoc();
+    const left = new AutomergeDoc();
+    const right = new AutomergeDoc();
     const history = new UndoManager(left, { mergeInterval: 0 });
     const id = importSpreadsheetSheets(left, [
       {
@@ -339,8 +339,8 @@ describe('collaborative workbook', () => {
   });
 
   it('keeps a deterministic final sheet after concurrent deletions', () => {
-    const left = new LoroDoc();
-    const right = new LoroDoc();
+    const left = new AutomergeDoc();
+    const right = new AutomergeDoc();
     const id = addSpreadsheetSheet(left, 'Other');
     synchronize(left, right);
     deleteSpreadsheetSheet(left, DEFAULT_SHEET_ID);
@@ -608,8 +608,8 @@ describe('collaborative workbook', () => {
   );
 
   it('never revives a hidden deleted sheet for a late value or layout operation', () => {
-    const left = new LoroDoc();
-    const right = new LoroDoc();
+    const left = new AutomergeDoc();
+    const right = new AutomergeDoc();
     const deleted = addSpreadsheetSheet(left, 'Deleted');
     synchronize(left, right);
     deleteSpreadsheetSheet(left, deleted);
@@ -664,7 +664,7 @@ describe('collaborative workbook', () => {
   });
 
   it('blocks referenced-sheet mutations while ignoring formula string literals', () => {
-    const doc = new LoroDoc();
+    const doc = new AutomergeDoc();
     const id = addSpreadsheetSheet(doc, "O'Brien");
     writeSpreadsheetCells(doc, { A1: { value: "='O''BRIEN'!A1" } });
     expect(() => renameSpreadsheetSheet(doc, id, 'New name')).toThrow(
@@ -685,7 +685,7 @@ describe('collaborative workbook', () => {
   });
 
   it('replaces workbooks atomically with fresh identities and restores the old workbook on undo', () => {
-    const doc = new LoroDoc();
+    const doc = new AutomergeDoc();
     writeSpreadsheetCells(doc, { A1: { value: 'before' } });
     const history = new UndoManager(doc, { mergeInterval: 0 });
     const ids = importSpreadsheetSheets(
@@ -720,7 +720,7 @@ describe('collaborative workbook', () => {
   });
 
   it('validates all import inputs before mutating the original workbook', () => {
-    const doc = new LoroDoc();
+    const doc = new AutomergeDoc();
     writeSpreadsheetCells(doc, { A1: { value: 'keep' } });
     const before = doc.version().toJSON();
     for (const inputs of [
@@ -739,8 +739,8 @@ describe('collaborative workbook', () => {
   });
 
   it('enforces local sheet limits without hiding concurrent additions', () => {
-    const left = new LoroDoc();
-    const right = new LoroDoc();
+    const left = new AutomergeDoc();
+    const right = new AutomergeDoc();
     importSpreadsheetSheets(
       left,
       Array.from({ length: 8 }, (_, index) => blank(`Tab${index}`))
@@ -775,7 +775,7 @@ describe('sheet formula references', () => {
 });
 
 it('duplicates local definitions without duplicating global names and rejects colliding appended names atomically', () => {
-  const doc = new LoroDoc();
+  const doc = new AutomergeDoc();
   try {
     importSpreadsheetSheets(
       doc,

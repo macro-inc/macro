@@ -1,4 +1,4 @@
-import type { LoroDoc } from 'loro-crdt';
+import type { AutomergeDoc } from '@macro-inc/automerge';
 import {
   DEFAULT_SHEET_ID,
   retainSpreadsheetSheets,
@@ -246,7 +246,7 @@ export function spreadsheetSheetKey(key: string, sheetId = DEFAULT_SHEET_ID) {
   return sheetId === DEFAULT_SHEET_ID ? key : `${sheetId}!${key}`;
 }
 
-function sheetEntries(doc: LoroDoc, name: string, sheetId: string) {
+function sheetEntries(doc: AutomergeDoc, name: string, sheetId: string) {
   const entries = Object.entries(doc.getMap(name).toJSON());
   if (sheetId === DEFAULT_SHEET_ID)
     return entries.filter(([key]) => !key.includes('!'));
@@ -263,7 +263,7 @@ type SpreadsheetEntryReader = (
 
 /** Decode each field map once when reading a whole workbook. */
 export function createSpreadsheetEntryReader(
-  doc: LoroDoc
+  doc: AutomergeDoc
 ): SpreadsheetEntryReader {
   const maps = new Map<string, Map<string, [string, unknown][]>>();
   return (name, sheetId) => {
@@ -286,7 +286,7 @@ export function createSpreadsheetEntryReader(
 }
 
 export function readSpreadsheetLayout(
-  doc: LoroDoc,
+  doc: AutomergeDoc,
   sheetId = DEFAULT_SHEET_ID,
   readEntries: SpreadsheetEntryReader = (name, id) =>
     sheetEntries(doc, name, id)
@@ -328,7 +328,7 @@ export function readSpreadsheetLayout(
 }
 
 export function resizeSpreadsheetColumn(
-  doc: LoroDoc,
+  doc: AutomergeDoc,
   column: number,
   width: number,
   sheetId = DEFAULT_SHEET_ID,
@@ -353,7 +353,7 @@ export function resizeSpreadsheetColumn(
 }
 
 export function appendSpreadsheetRows(
-  doc: LoroDoc,
+  doc: AutomergeDoc,
   count: number,
   sheetId = DEFAULT_SHEET_ID,
   commit = true
@@ -405,7 +405,7 @@ export function isSpreadsheetFormat(
 
 /** Validate the wire document rather than trusting arbitrary remote values. */
 export function readSpreadsheetCells(
-  doc: LoroDoc,
+  doc: AutomergeDoc,
   sheetId = DEFAULT_SHEET_ID,
   readEntries: SpreadsheetEntryReader = (name, id) =>
     sheetEntries(doc, name, id)
@@ -454,7 +454,7 @@ export function validateSpreadsheetCellEdits(
 }
 
 export function writeSpreadsheetCells(
-  doc: LoroDoc,
+  doc: AutomergeDoc,
   edits: SpreadsheetCellEdits,
   sheetId = DEFAULT_SHEET_ID,
   commit = true

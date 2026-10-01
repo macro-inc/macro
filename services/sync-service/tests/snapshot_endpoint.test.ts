@@ -1,5 +1,5 @@
 import { Miniflare } from "miniflare";
-import { LoroDoc } from "loro-crdt";
+import { TestDocument } from "./automerge";
 import { expect, test, describe, beforeEach } from "vitest";
 import { createTestUser, getTokenForDocument, setupMiniflare } from "./utils";
 
@@ -36,7 +36,7 @@ describe("snapshot endpoint tests", async () => {
     expect(response.status).toBe(200);
 
     const rawData = await response.arrayBuffer();
-    let doc = new LoroDoc();
+    let doc = new TestDocument();
     doc.import(Buffer.from(rawData));
     expect(l(doc.getText('content').toString()), HELLO_MSG);
 
@@ -73,7 +73,7 @@ describe("snapshot endpoint tests", async () => {
 
     expect(response.status).toBe(200);
     const rawData = await response.arrayBuffer();
-    let doc = new LoroDoc();
+    let doc = new TestDocument();
     doc.import(Buffer.from(rawData));
     expect(l(doc.getText('content').toString()), changes.join(''));
 

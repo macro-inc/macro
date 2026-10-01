@@ -45,14 +45,14 @@ pub struct EditDocument {
 }
 
 /// The editing worker opens a sync-service session and blocks on the initial
-/// Loro snapshot. Only markdown documents ever get a Loro doc, so anything else
+/// Automerge snapshot. Only markdown documents ever get an Automerge doc, so anything else
 /// waits out the worker's handshake timeout and surfaces as an opaque gateway
 /// error. Reject those up front instead.
 ///
 /// This gates on the file type rather than the document's current content
 /// location on purpose. Markdown uploaded to S3 is initialized into sync-service
 /// when its upload finalizes, so its location is legitimately `object_storage`
-/// for the width of that window while the Loro doc is still being created. The
+/// for the width of that window while the Automerge doc is still being created. The
 /// sync session tolerates that -- the server broadcasts the snapshot to sockets
 /// already waiting once `/initialize` lands. Gating on location would reject an
 /// edit that window is designed to serve; the file type does not move.
