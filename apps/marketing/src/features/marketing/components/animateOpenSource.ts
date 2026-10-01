@@ -3,7 +3,12 @@ export function animateOpenSource(section: HTMLElement, scroller: HTMLElement) {
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
   let sourceSection = scroller.querySelector('.homepage-unification');
   const target = section.querySelector<HTMLElement>('.homepage-github-mark')!;
-  const animations: Animation[] = [];
+  const animations: {
+    animation: Animation;
+    start: number;
+    end: number;
+    time: number;
+  }[] = [];
   const sources = new Map<HTMLElement, string>();
   let overlay: HTMLDivElement | undefined;
   let start = 0;
@@ -13,7 +18,7 @@ export function animateOpenSource(section: HTMLElement, scroller: HTMLElement) {
   let traveling = false;
 
   const clear = () => {
-    animations.forEach((animation) => animation.cancel());
+    animations.forEach(({ animation }) => animation.cancel());
     animations.length = 0;
     for (const [source, visibility] of sources)
       source.style.visibility = visibility;
@@ -38,7 +43,12 @@ export function animateOpenSource(section: HTMLElement, scroller: HTMLElement) {
     });
     animation.pause();
     animation.currentTime = 0;
-    animations.push(animation);
+    animations.push({
+      animation,
+      start: delay,
+      end: delay + duration,
+      time: 0,
+    });
   };
   const prepare = () => {
     prepared = true;
@@ -46,10 +56,13 @@ export function animateOpenSource(section: HTMLElement, scroller: HTMLElement) {
     overlay.className = 'homepage-open-source-travel';
     overlay.setAttribute('aria-hidden', 'true');
     overlay.inert = true;
-    section.append(overlay);
     const origin = section.getBoundingClientRect();
     const destination = target.getBoundingClientRect();
     const scale = section.offsetWidth / origin.width;
+    const scene = sourceSection?.querySelector<HTMLElement>('.feature-flow');
+    const sceneRect = scene?.getBoundingClientRect();
+    const sceneScale =
+      scene && sceneRect ? sceneRect.width / scene.offsetWidth : 1;
     const icons =
       sourceSection?.querySelectorAll<HTMLElement>(
         '.feature-flow-icon, .feature-flow-core'
@@ -60,9 +73,24 @@ export function animateOpenSource(section: HTMLElement, scroller: HTMLElement) {
       const styles = getComputedStyle(source);
       const svg = source.querySelector('svg');
       const svgStyles = svg ? getComputedStyle(svg) : undefined;
+      const node = source.closest<HTMLElement>(
+        '.feature-flow-node, .feature-flow-core'
+      )!;
+      // The previous transition may still be seeking the parent node. Cache its
+      // settled layout position so this scene can be prepared before scrolling.
+      const rect = sceneRect
+        ? new DOMRect(
+            sceneRect.left +
+              (node.offsetLeft - node.offsetWidth / 2) * sceneScale,
+            sceneRect.top +
+              (node.offsetTop - node.offsetHeight / 2) * sceneScale,
+            source.offsetWidth * sceneScale,
+            source.offsetHeight * sceneScale
+          )
+        : source.getBoundingClientRect();
       return {
         source,
-        rect: source.getBoundingClientRect(),
+        rect,
         background: styles.background,
         borderRadius: styles.borderRadius,
         boxShadow: styles.boxShadow,
@@ -71,6 +99,8 @@ export function animateOpenSource(section: HTMLElement, scroller: HTMLElement) {
         svgHeight: svgStyles?.height,
       };
     });
+    // Finish all layout/style reads before inserting travel layers.
+    section.append(overlay);
     snapshots.forEach(
       ({ source, rect, svgWidth, svgHeight, ...surface }, index) => {
         const ghost = source.cloneNode(true) as HTMLElement;
@@ -157,8 +187,11 @@ export function animateOpenSource(section: HTMLElement, scroller: HTMLElement) {
     if (progress === lastProgress) return;
     lastProgress = progress;
     if (!prepared && progress > 0) prepare();
-    animations.forEach((animation) => {
-      animation.currentTime = progress * 1450;
+    animations.forEach((entry) => {
+      const time = Math.max(entry.start, Math.min(entry.end, progress * 1450));
+      if (time === entry.time) return;
+      entry.animation.currentTime = time;
+      entry.time = time;
     });
     if (overlay) overlay.hidden = progress === 0 || progress === 1;
     const active = progress > 0 && progress < 1;
@@ -179,21 +212,39 @@ export function animateOpenSource(section: HTMLElement, scroller: HTMLElement) {
       viewport.top +
       scroller.scrollTop +
       target.offsetHeight / 2;
-    start = top - scroller.clientHeight * 0.82;
-    // Finish when the GitHub mark reaches the upper third of the viewport.
-    distance = Math.max(1, center - scroller.clientHeight * 0.32 - start);
+    // Hold the readable constellation for 100px longer before it leaves.
+    const delay = 100;
+    start = top - scroller.clientHeight * 0.82 + delay;
+    // Shift the whole transition, preserving its travel length and speed.
+    distance = Math.max(
+      1,
+      center - scroller.clientHeight * 0.32 + delay - start
+    );
+    if (!reduced.matches) {
+      prepare();
+      overlay!.hidden = true;
+    }
     update();
   };
   const resize = new ResizeObserver(measure);
   resize.observe(section);
   resize.observe(scroller);
   if (sourceSection) resize.observe(sourceSection);
-  scroller.addEventListener('scroll', update, { passive: true });
+  let updateFrame = 0;
+  const scheduleUpdate = () => {
+    if (updateFrame) return;
+    updateFrame = requestAnimationFrame(() => {
+      updateFrame = 0;
+      update();
+    });
+  };
+  scroller.addEventListener('scroll', scheduleUpdate, { passive: true });
   reduced.addEventListener('change', measure);
   measure();
   return () => {
     resize.disconnect();
-    scroller.removeEventListener('scroll', update);
+    scroller.removeEventListener('scroll', scheduleUpdate);
+    cancelAnimationFrame(updateFrame);
     reduced.removeEventListener('change', measure);
     clear();
   };

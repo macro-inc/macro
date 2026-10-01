@@ -119,7 +119,7 @@
 
 .homepage-email-app-surface {
   position: relative; display: flex; flex-direction: column;
-  min-height: var(--homepage-email-height, 560px); padding: 16px;
+  min-height: var(--homepage-email-height, 500px); padding: 16px;
 }
 .homepage-email-app-toolbar {
   display: flex; flex: none; align-items: center; justify-content: flex-end;

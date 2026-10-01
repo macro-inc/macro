@@ -137,11 +137,11 @@ export function WelcomeStep(props: {
         <h1
           tabindex="-1"
           data-welcome-heading
-          class="font-[Roboto_Slab_Variable] font-[315] text-4xl leading-[1.12] tracking-tight sm:text-5xl md:text-[60px]"
+          class="font-[Roboto_Slab_Variable] font-[315] text-[clamp(24px,8vw,36px)] leading-[1.12] tracking-tight sm:text-5xl md:text-[60px]"
         >
           {props.title ?? (
             <>
-              The unified workspace
+              <span class="whitespace-nowrap">The unified workspace</span>
               <br />
               <span class="inline-block" data-welcome-company>
                 for your company.
