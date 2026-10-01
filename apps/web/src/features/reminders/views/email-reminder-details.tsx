@@ -27,10 +27,14 @@ export function EmailReminderDetails(props: {
   const save = async (command: EmailFollowupCommand) => {
     if (pending()) return;
     // Preserve the identity for retries with the same requested fields.
+    const retry =
+      lastCommand && command.expectedRevision === lastCommand.operationId
+        ? { ...command, expectedRevision: lastCommand.expectedRevision }
+        : command;
     if (
       !lastCommand ||
       JSON.stringify({ ...lastCommand, operationId: undefined }) !==
-        JSON.stringify({ ...command, operationId: undefined })
+        JSON.stringify({ ...retry, operationId: undefined })
     )
       lastCommand = command;
     setPending(true);

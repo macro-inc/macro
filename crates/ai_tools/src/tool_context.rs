@@ -1046,25 +1046,37 @@ pub type ToolNotificationService = notification::domain::service::NotificationRe
 pub type ToolNotificationToolContext = NotificationToolContext<ToolNotificationService>;
 
 /// Type alias for the reminders service implementation used by AI tools.
-pub type ToolRemindersService = reminders::domain::service::RemindersServiceImpl<
-    reminders::outbound::pg_reminders_repo::PgRemindersRepo,
->;
+pub type ToolRemindersService =
+    reminders::domain::email_followup::reminder_service::EmailRemindersService<
+        reminders::domain::service::RemindersServiceImpl<
+            reminders::outbound::pg_reminders_repo::PgRemindersRepo,
+        >,
+        reminders::outbound::pg_reminders_repo::PgRemindersRepo,
+        ToolUserEmailService,
+        reminders::domain::ports::SystemClock,
+    >;
 
 /// Type alias for the reminders tool context.
 pub type ToolRemindersToolContext =
     RemindersToolContext<ToolRemindersService, ToolEntityAccessService>;
 
-/// Build the reminders tool context from a database pool.
+/// Build the reminders tool context with the same email lifecycle as HTTP.
 ///
 /// The reminder tools go through the same access receipts the HTTP API does,
 /// so this needs the entity access service as well as the repository.
 pub fn build_reminders_tool_context(
     pool: sqlx::PgPool,
+    email_service: Arc<ToolUserEmailService>,
     entity_access_service: Arc<ToolEntityAccessService>,
 ) -> ToolRemindersToolContext {
+    let repo = reminders::outbound::pg_reminders_repo::PgRemindersRepo::new(pool);
     RemindersToolContext::new(
-        reminders::domain::service::RemindersServiceImpl::new(
-            reminders::outbound::pg_reminders_repo::PgRemindersRepo::new(pool),
+        reminders::domain::email_followup::reminder_service::EmailRemindersService::new(
+            reminders::domain::service::RemindersServiceImpl::new(repo.clone()),
+            reminders::domain::email_followup::service::EmailFollowupService::new(
+                repo,
+                (*email_service).clone(),
+            ),
         ),
         entity_access_service,
     )

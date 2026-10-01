@@ -427,7 +427,7 @@ pub async fn build_tool_service_context_from_env(
         entity_access_service.clone(),
         document_tool_context.service.clone(),
         chat_tool_context.service.clone(),
-        user_email_service,
+        user_email_service.clone(),
     );
 
     let anthropic_tool_context = build_anthropic_tool_context();
@@ -469,6 +469,7 @@ pub async fn build_tool_service_context_from_env(
         notification_tool_context,
         reminders_tool_context: crate::tool_context::build_reminders_tool_context(
             pool.clone(),
+            user_email_service.clone(),
             entity_access_service.clone(),
         ),
         import_tool_context: ToolImportToolContext::unwired(),
