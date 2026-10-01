@@ -119,10 +119,14 @@ import type { GithubPullRequestsResponse } from './generated/schemas/githubPullR
 import type { GroupedSoupGroupPage } from './generated/schemas/groupedSoupGroupPage';
 import type { GroupedSoupInitialPage } from './generated/schemas/groupedSoupInitialPage';
 import type { GroupedSoupSort } from './generated/schemas/groupedSoupSort';
+import type { ImportPage } from './generated/schemas/importPage';
+import type { ImportProgress } from './generated/schemas/importProgress';
 import type { Item } from './generated/schemas/item';
+import type { JobId } from './generated/schemas/jobId';
 import type { ListFavoritesParams } from './generated/schemas/listFavoritesParams';
 import type { ListOccurrencesParams } from './generated/schemas/listOccurrencesParams';
 import type { ListRemindersParams } from './generated/schemas/listRemindersParams';
+import type { ListSlackImportsParams } from './generated/schemas/listSlackImportsParams';
 import type { ListTeamOutOfOfficeParams } from './generated/schemas/listTeamOutOfOfficeParams';
 import type { LocationResponseV3 } from './generated/schemas/locationResponseV3';
 import type { PairingDetails } from './generated/schemas/pairingDetails';
@@ -148,6 +152,9 @@ import type { SetChannelPictureRequest } from './generated/schemas/setChannelPic
 import type { SetCompanyNameRequest } from './generated/schemas/setCompanyNameRequest';
 import type { SetContactNameRequest } from './generated/schemas/setContactNameRequest';
 import type { SharePermissionV2 } from './generated/schemas/sharePermissionV2';
+import type { SlackCompleteRequest } from './generated/schemas/slackCompleteRequest';
+import type { SlackCreateRequest } from './generated/schemas/slackCreateRequest';
+import type { SlackRegisterRequest } from './generated/schemas/slackRegisterRequest';
 import type { SmartTagPreview } from './generated/schemas/smartTagPreview';
 import type { SoupPage } from './generated/schemas/soupPage';
 import type { SyncServiceVersionID } from './generated/schemas/syncServiceVersionID';
@@ -158,6 +165,7 @@ import type { UpdateAgentRequest } from './generated/schemas/updateAgentRequest'
 import type { UpdateCrmTeamSettingsRequest } from './generated/schemas/updateCrmTeamSettingsRequest';
 import type { UpdateReminderRequest } from './generated/schemas/updateReminderRequest';
 import type { UploadExtractFolderHandler200 } from './generated/schemas/uploadExtractFolderHandler200';
+import type { UploadGrant } from './generated/schemas/uploadGrant';
 import type { UserApiKeysList } from './generated/schemas/userApiKeysList';
 import type { UserPinsResponse } from './generated/schemas/userPinsResponse';
 import type { UserViewsResponse } from './generated/schemas/userViewsResponse';
@@ -382,7 +390,88 @@ const { showPaywall } = usePaywallState();
 /** Machine-readable code the backend returns when a document name is too long. */
 export const DOCUMENT_NAME_TOO_LONG_CODE = 'DOCUMENT_NAME_TOO_LONG' as const;
 
+type SlackImportJobArgs = { jobId: JobId; signal?: AbortSignal };
+
 export const storageServiceClient = {
+  async createSlackImport(args: {
+    body: SlackCreateRequest;
+    signal?: AbortSignal;
+  }) {
+    return dssFetch<ImportProgress>('/slack/imports', {
+      method: 'POST',
+      body: JSON.stringify(args.body),
+      signal: args.signal,
+    });
+  },
+
+  async listSlackImports(
+    args: ListSlackImportsParams & { signal?: AbortSignal } = {}
+  ) {
+    const params = new URLSearchParams();
+    if (args.before) params.set('before', args.before);
+    const query = params.toString();
+    return dssFetch<ImportPage>(`/slack/imports${query ? `?${query}` : ''}`, {
+      method: 'GET',
+      signal: args.signal,
+    });
+  },
+
+  async getSlackImport(args: SlackImportJobArgs) {
+    return dssFetch<ImportProgress>(
+      `/slack/imports/${encodeURIComponent(args.jobId)}`,
+      {
+        method: 'GET',
+        signal: args.signal,
+      }
+    );
+  },
+
+  async registerSlackImportUploads(
+    args: SlackImportJobArgs & { body: SlackRegisterRequest }
+  ) {
+    return dssFetch<UploadGrant[]>(
+      `/slack/imports/${encodeURIComponent(args.jobId)}/uploads`,
+      {
+        method: 'POST',
+        body: JSON.stringify(args.body),
+        signal: args.signal,
+      }
+    );
+  },
+
+  async completeSlackImportUploads(
+    args: SlackImportJobArgs & { body: SlackCompleteRequest }
+  ) {
+    return dssFetch<ImportProgress>(
+      `/slack/imports/${encodeURIComponent(args.jobId)}/uploads/complete`,
+      {
+        method: 'POST',
+        body: JSON.stringify(args.body),
+        signal: args.signal,
+      }
+    );
+  },
+
+  async finalizeSlackImport(args: SlackImportJobArgs) {
+    return dssFetch<ImportProgress>(
+      `/slack/imports/${encodeURIComponent(args.jobId)}/finalize`,
+      {
+        method: 'POST',
+        signal: args.signal,
+      }
+    );
+  },
+
+  async cancelSlackImport(args: SlackImportJobArgs) {
+    return dssFetch<ImportProgress>(
+      `/slack/imports/${encodeURIComponent(args.jobId)}/cancel`,
+      {
+        method: 'POST',
+        signal: args.signal,
+      }
+    );
+  },
+
   async ping() {
     return (await dssFetch<SuccessResponse>(`/ping`)).map(
       (result) => result.data
