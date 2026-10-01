@@ -375,6 +375,11 @@ Email's Tags sidebar uses the same [nested tag tree as Tasks](tasks.md#nested-si
 Carets and folder-only parents expand branches; actual tags select their exact ID
 and switch the mailbox to All. Parent selection does not include descendant tags.
 
+An open thread's side panel `Tags` section is personal-only: it lists and offers
+just the user's own tags, never the team's shared set, and its `Create new tag`
+flow goes straight from color to a personal tag with no `Shared with <team>` step.
+Any team tags already on the thread stay untouched when the section saves.
+
 Full email client. Tabs: `Signal` / `Noise` / `Favorites` / `Sent` / `Scheduled` / `Calendar` / `Drafts` / `Shared` /
 `All`. Compose via the `Email` button (or `Create` → `Email E`). On a fresh local user it
 shows `Connect your email` (Gmail/Google Workspace OAuth) — most functionality needs a
