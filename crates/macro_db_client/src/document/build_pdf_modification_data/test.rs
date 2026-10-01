@@ -71,6 +71,23 @@ async fn deleted_bodies_are_not_exported_but_root_location_survives(pool: PgPool
 }
 
 #[sqlx::test(fixtures(path = "../../../fixtures", scripts("message_annotations")))]
+async fn highlight_on_a_deleted_discussion_exports_without_comments(pool: PgPool) {
+    sqlx::query(
+        "UPDATE comms_message_threads SET deleted_at = now() \
+         WHERE root_id = '00000000-0000-0000-0000-000000000004'",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let data = get_complete_pdf_modification_data(&pool, "document-with-comments", None)
+        .await
+        .unwrap();
+    let highlights = data.highlights.unwrap();
+    assert_eq!(highlights.values().map(Vec::len).sum::<usize>(), 2);
+    assert!(highlights.values().flatten().all(|h| h.thread.is_none()));
+}
+
+#[sqlx::test(fixtures(path = "../../../fixtures", scripts("message_annotations")))]
 async fn empty_document_keeps_non_comment_modification_data(pool: PgPool) {
     let initial = PdfModificationData {
         bookmarks: vec![serde_json::json!({"label":"Saved bookmark"})],

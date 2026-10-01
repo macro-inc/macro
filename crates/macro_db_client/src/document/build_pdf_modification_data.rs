@@ -205,9 +205,10 @@ pub async fn get_complete_pdf_modification_data(
             })
             .collect::<Vec<HighlightRect>>();
 
-        // Get associated thread if exists
-        let thread_opt = if let Some(thread_id) = highlight_anchor.root_id {
-            let thread_data = sqlx::query!(
+        // Get associated thread if exists. A root whose discussion was deleted
+        // (or is being deleted) exports as a plain highlight.
+        let thread_data = match highlight_anchor.root_id {
+            Some(thread_id) => sqlx::query!(
                 r#"
                 SELECT resolved as is_resolved
                 FROM comms_message_threads
@@ -215,9 +216,12 @@ pub async fn get_complete_pdf_modification_data(
                 "#,
                 thread_id
             )
-            .fetch_one(db)
-            .await?;
-
+            .fetch_optional(db)
+            .await?
+            .map(|thread| (thread_id, thread)),
+            None => None,
+        };
+        let thread_opt = if let Some((thread_id, thread_data)) = thread_data {
             // Get comments for this thread
             let comments = sqlx::query!(
                 r#"
