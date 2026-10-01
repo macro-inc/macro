@@ -11,6 +11,7 @@ import {
   hasToolRenderer,
   RenderTool,
 } from '@core/component/AI/component/tool/handler';
+import { parseLegacyGeneratedImage } from '@core/component/AI/component/tool/legacy-generated-image';
 import ReadIcon from '@phosphor/file-text.svg';
 import GlobeIcon from '@phosphor/globe.svg';
 import ListIcon from '@phosphor/list-bullets.svg';
@@ -44,6 +45,9 @@ export function MacroToolCall(props: {
       name: props.common.label,
       json: props.detail.output,
     }).unwrapOr(undefined)
+  );
+  const legacyImage = createMemo(() =>
+    parseLegacyGeneratedImage(props.common.label, props.detail.output)
   );
   const call = createMemo(() =>
     deserializeToolCall({
@@ -106,7 +110,7 @@ export function MacroToolCall(props: {
     props.common.trailing == null &&
     !failure() &&
     call() !== undefined &&
-    response() !== undefined &&
+    (response() !== undefined || legacyImage() !== undefined) &&
     hasToolRenderer(props.common.label);
 
   return (

@@ -56,6 +56,8 @@ aspect ratio and fits the available width. A status appears while generation is
 pending; a failed image load shows “Preview unavailable”. The tool already renders
 the result in chat, so the assistant should not add a document mention or duplicate
 image there. In channel messages, embed the returned URL as a Markdown image.
+Earlier generations saved as DSS documents still render their original document
+card when viewing historical conversations.
 Refused prompts, provider failures, and hosts without a Google Generative AI key
 display a failed tool call; the error tells the agent whether to rephrase, retry,
 or stop.

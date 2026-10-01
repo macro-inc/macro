@@ -1226,16 +1226,29 @@ describe('ToolCallPart result summaries', () => {
 });
 
 describe('generated image dispatch', () => {
-  it.each(['native', 'mcp'] as const)(
-    'uses the image result renderer for %s calls outside group chrome',
-    (kind) => {
+  it.each([
+    ['native', 'staticFile'],
+    ['mcp', 'staticFile'],
+    ['native', 'document'],
+    ['mcp', 'document'],
+  ] as const)(
+    'uses the image result renderer for %s calls with %s images outside group chrome',
+    (kind, storage) => {
       const input = { prompt: 'A frog under a leaf' };
-      const output = {
-        staticFileId: '01a0eecf-1162-7bea-9ba9-925769372a8a',
-        url: 'https://static.example/file/01a0eecf-1162-7bea-9ba9-925769372a8a',
-        mimeType: 'image/png',
-        sizeBytes: 132421,
-      };
+      const output =
+        storage === 'document'
+          ? {
+              documentId: '01a0eecf-1162-7bea-9ba9-925769372a8a',
+              fileName: 'frog.png',
+              mimeType: 'image/png',
+              sizeBytes: 132421,
+            }
+          : {
+              staticFileId: '01a0eecf-1162-7bea-9ba9-925769372a8a',
+              url: 'https://static.example/file/01a0eecf-1162-7bea-9ba9-925769372a8a',
+              mimeType: 'image/png',
+              sizeBytes: 132421,
+            };
       const part: ToolUsePart = {
         kind: 'tool_use',
         id: 'image-call',
