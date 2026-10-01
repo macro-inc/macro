@@ -46,7 +46,7 @@ pub trait RemindersRepo: Send + Sync + 'static {
         query: &super::collection::CollectionQuery,
         as_of: DateTime<Utc>,
         limit: i64,
-    ) -> impl Future<Output = Result<Vec<super::collection::ReminderCollectionRow>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<super::collection::CollectionBatch, Self::Err>> + Send;
 
     /// Insert a reminder for the user.
     fn create_reminder(

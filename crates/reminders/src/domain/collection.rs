@@ -21,6 +21,17 @@ pub struct ReminderCollectionRow {
     pub email_followup: Option<EmailFollowup>,
 }
 
+/// A storage batch retains progress through malformed rows as well as readable ones.
+#[derive(Debug, Clone, Default)]
+pub struct CollectionBatch {
+    /// Decoded rows in collection order.
+    pub items: Vec<ReminderCollectionRow>,
+    /// Number of stored rows examined, including those skipped during decoding.
+    pub examined: usize,
+    /// Last position examined, even when that row could not be decoded.
+    pub last_examined: Option<CollectionCursor>,
+}
+
 /// Stable position within the collection's actionable-first ordering.
 #[derive(Debug, Clone, Copy)]
 pub struct CollectionCursor {
@@ -89,11 +100,25 @@ pub struct ReminderCollectionPage {
 
 /// Done recurring reminders remain actionable while their next schedule is enabled.
 pub fn is_history(reminder: &Reminder, now: DateTime<Utc>) -> bool {
-    !((reminder.completed_at.is_none() && reminder.next_run_at <= now)
-        || (reminder.enabled
-            && (reminder.completed_at.is_none()
-                || matches!(
-                    reminder.schedule,
-                    super::models::ReminderSchedule::Recurring { .. }
-                ))))
+    is_history_facts(
+        reminder.completed_at.is_some(),
+        reminder.enabled,
+        matches!(
+            reminder.schedule,
+            super::models::ReminderSchedule::Recurring { .. }
+        ),
+        reminder.next_run_at,
+        now,
+    )
+}
+
+/// Ordering facts remain usable when a stored schedule cannot be decoded.
+pub fn is_history_facts(
+    completed: bool,
+    enabled: bool,
+    recurring: bool,
+    next_run_at: DateTime<Utc>,
+    now: DateTime<Utc>,
+) -> bool {
+    !((!completed && next_run_at <= now) || (enabled && (!completed || recurring)))
 }

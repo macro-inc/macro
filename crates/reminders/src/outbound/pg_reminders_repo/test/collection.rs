@@ -75,7 +75,8 @@ async fn collection_paginates_due_upcoming_and_history_without_starvation(pool: 
         let page = repo
             .list_collection(&user(USER_A), &query, now, 100)
             .await
-            .unwrap();
+            .unwrap()
+            .items;
         let Some(last) = page.last() else { break };
         query.cursor = Some(CollectionCursor {
             as_of: now,
@@ -108,6 +109,73 @@ async fn collection_paginates_due_upcoming_and_history_without_starvation(pool: 
         )
         .await
         .unwrap();
+    let done = done.items;
     assert_eq!(done.len(), 106);
     assert_eq!(done[0].reminder.id, recurring.id);
+}
+
+#[derive(Clone)]
+struct CollectionClock(DateTime<Utc>);
+impl crate::domain::ports::Clock for CollectionClock {
+    fn now(&self) -> DateTime<Utc> {
+        self.0
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn collection_skips_unreadable_probe_rows_without_losing_following_pages(pool: PgPool) {
+    use crate::domain::{ports::RemindersService, service::RemindersServiceImpl};
+    insert_user(&pool, USER_A).await;
+    let repo = PgRemindersRepo::new(pool.clone());
+    let now = at(2026, 10, 1, 12);
+    let mut expected = Vec::new();
+    for i in 0..105 {
+        let row = repo
+            .create_reminder(
+                &user(USER_A),
+                &new_reminder("row", once_at(now + Duration::seconds(i))),
+            )
+            .await
+            .unwrap();
+        if i == 0 || i == 100 {
+            sqlx::query("UPDATE reminder SET entity_type = 'unknown_type', entity_id = $2::uuid WHERE id = $1")
+                .bind(row.id).bind(DOC_1).execute(&pool).await.unwrap();
+        } else {
+            expected.push(row.id);
+        }
+    }
+    let batch = repo
+        .list_collection(&user(USER_A), &CollectionQuery::default(), now, 101)
+        .await
+        .unwrap();
+    assert_eq!(batch.examined, 101);
+    assert_eq!(batch.items.len(), 99);
+    assert!(batch.last_examined.is_some());
+    let service = RemindersServiceImpl::with_clock(repo, CollectionClock(now));
+    let first = service
+        .list_collection(&user(USER_A), CollectionQuery::default())
+        .await
+        .unwrap();
+    assert_eq!(first.items.len(), 100);
+    let second = service
+        .list_collection(
+            &user(USER_A),
+            CollectionQuery {
+                cursor: Some(
+                    CollectionCursor::decode(first.next_cursor.as_deref().unwrap()).unwrap(),
+                ),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(second.items.len(), 3);
+    assert!(second.next_cursor.is_none());
+    let actual: Vec<_> = first
+        .items
+        .into_iter()
+        .chain(second.items)
+        .map(|row| row.reminder.id)
+        .collect();
+    assert_eq!(actual, expected);
 }

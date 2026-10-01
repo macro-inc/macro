@@ -69,19 +69,30 @@ export function useReminderCollectionQuery(
 
 /** Confirmed writes update rows in place; completion alone never removes an unfiltered row. */
 export function updateReminderCollection(reminder: Reminder) {
-  queryClient.setQueriesData<InfiniteData<ReminderCollectionPage>>(
-    { queryKey: reminderKeys.collection._def },
-    (data) =>
-      data
-        ? {
-            ...data,
-            pages: data.pages.map((page) => ({
-              ...page,
-              items: page.items.map((row) =>
-                row.reminder.id === reminder.id ? { ...row, reminder } : row
-              ),
-            })),
-          }
-        : data
-  );
+  for (const [key, data] of queryClient.getQueriesData<
+    InfiniteData<ReminderCollectionPage>
+  >({ queryKey: reminderKeys.collection._def })) {
+    if (!data) continue;
+    const filters = key.at(-1);
+    const completed =
+      typeof filters === 'object' && filters !== null && 'completed' in filters
+        ? filters.completed
+        : undefined;
+    const matches =
+      typeof completed !== 'boolean' ||
+      (reminder.completedAt != null) === completed;
+    queryClient.setQueryData(key, {
+      ...data,
+      pages: data.pages.map((page) => ({
+        ...page,
+        items: page.items.flatMap((row) =>
+          row.reminder.id !== reminder.id
+            ? [row]
+            : matches
+              ? [{ ...row, reminder }]
+              : []
+        ),
+      })),
+    });
+  }
 }

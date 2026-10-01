@@ -301,22 +301,45 @@ where
             .cursor
             .map(|cursor| cursor.as_of)
             .unwrap_or_else(|| self.clock.now());
-        let mut items = self
-            .repo
-            .list_collection(user, &query, as_of, i64::from(limit) + 1)
-            .await
-            .map_err(|error| rootcause::Report::new(error).into_dynamic())?;
-        let has_more = items.len() > limit as usize;
-        items.truncate(limit as usize);
-        let next_cursor = has_more.then(|| items.last()).flatten().map(|row| {
-            CollectionCursor {
-                as_of,
-                history: is_history(&row.reminder, as_of),
-                position: super::models::ReminderCursor::after(&row.reminder),
+        let mut items = Vec::new();
+        let mut cursor = query.cursor;
+        let mut next_cursor = None;
+        // Match the ordinary reminder list's bounded recovery from malformed rows.
+        for _ in 0..MAX_LIST_BATCHES {
+            let probe = super::collection::CollectionQuery {
+                cursor,
+                ..query.clone()
+            };
+            let batch = self
+                .repo
+                .list_collection(user, &probe, as_of, i64::from(limit) + 1)
+                .await
+                .map_err(|error| rootcause::Report::new(error).into_dynamic())?;
+            let exhausted = batch.examined <= limit as usize;
+            items.extend(batch.items);
+            if items.len() > limit as usize {
+                items.truncate(limit as usize);
+                next_cursor = items.last().map(|row| CollectionCursor {
+                    as_of,
+                    history: is_history(&row.reminder, as_of),
+                    position: super::models::ReminderCursor::after(&row.reminder),
+                });
+                break;
             }
-            .encode()
-        });
-        Ok(ReminderCollectionPage { items, next_cursor })
+            if exhausted {
+                next_cursor = None;
+                break;
+            }
+            cursor = batch.last_examined;
+            next_cursor = cursor;
+            if items.len() == limit as usize {
+                break;
+            }
+        }
+        Ok(ReminderCollectionPage {
+            items,
+            next_cursor: next_cursor.map(CollectionCursor::encode),
+        })
     }
 
     // `user_id` is the auth-provider composite id (it embeds the user's email)

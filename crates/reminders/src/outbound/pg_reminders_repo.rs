@@ -255,7 +255,7 @@ impl RemindersRepo for PgRemindersRepo {
         query: &crate::domain::collection::CollectionQuery,
         as_of: DateTime<Utc>,
         limit: i64,
-    ) -> Result<Vec<crate::domain::collection::ReminderCollectionRow>, Self::Err> {
+    ) -> Result<crate::domain::collection::CollectionBatch, Self::Err> {
         self.read_collection(user, query, as_of, limit).await
     }
     type Err = RemindersRepoErr;

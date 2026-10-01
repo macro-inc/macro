@@ -208,7 +208,7 @@ impl RemindersRepo for FakeRemindersRepo {
         query: &crate::domain::collection::CollectionQuery,
         as_of: DateTime<Utc>,
         limit: i64,
-    ) -> Result<Vec<crate::domain::collection::ReminderCollectionRow>, Self::Err> {
+    ) -> Result<crate::domain::collection::CollectionBatch, Self::Err> {
         use crate::domain::collection::{ReminderCollectionRow, is_history};
         self.check_failing()?;
         let key = |r: &Reminder| (is_history(r, as_of), r.next_run_at, r.created_at, r.id);
@@ -234,14 +234,25 @@ impl RemindersRepo for FakeRemindersRepo {
             .collect();
         rows.sort_by_key(key);
         rows.truncate(limit as usize);
-        Ok(rows
-            .into_iter()
-            .map(|reminder| ReminderCollectionRow {
-                reminder,
-                reference: None,
-                email_followup: None,
-            })
-            .collect())
+        let last_examined = rows
+            .last()
+            .map(|r| crate::domain::collection::CollectionCursor {
+                as_of,
+                history: is_history(r, as_of),
+                position: ReminderCursor::after(r),
+            });
+        Ok(crate::domain::collection::CollectionBatch {
+            examined: rows.len(),
+            last_examined,
+            items: rows
+                .into_iter()
+                .map(|reminder| ReminderCollectionRow {
+                    reminder,
+                    reference: None,
+                    email_followup: None,
+                })
+                .collect(),
+        })
     }
 
     type Err = FakeRepoError;

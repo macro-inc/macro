@@ -1,8 +1,10 @@
 use super::{PgRemindersRepo, ReminderRow, RemindersRepoErr};
 use crate::domain::{
-    collection::{CollectionQuery, ReminderCollectionRow},
+    collection::{
+        CollectionBatch, CollectionCursor, CollectionQuery, ReminderCollectionRow, is_history_facts,
+    },
     email_followup::FollowupRecord,
-    models::ReminderReference,
+    models::{ReminderCursor, ReminderReference},
 };
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -15,7 +17,7 @@ impl PgRemindersRepo {
         query: &CollectionQuery,
         as_of: DateTime<Utc>,
         limit: i64,
-    ) -> Result<Vec<ReminderCollectionRow>, RemindersRepoErr> {
+    ) -> Result<CollectionBatch, RemindersRepoErr> {
         let cursor = query.cursor;
         let rows = sqlx::query!(
             r#"
@@ -54,35 +56,60 @@ impl PgRemindersRepo {
         )
         .fetch_all(&self.pool)
         .await?;
-        rows.into_iter()
-            .map(|row| {
-                let reminder = ReminderRow {
-                    id: row.id,
-                    description: row.description,
-                    entity_type: row.entity_type,
-                    entity_id: row.entity_id,
-                    remind_at: row.remind_at,
-                    cron: row.cron,
-                    timezone: row.timezone,
-                    next_run_at: row.next_run_at,
-                    enabled: row.enabled,
-                    completed_at: row.completed_at,
-                    created_at: row.created_at,
-                    updated_at: row.updated_at,
+        let last_examined = rows.last().map(|row| CollectionCursor {
+            as_of,
+            history: is_history_facts(
+                row.completed_at.is_some(),
+                row.enabled,
+                row.cron.is_some(),
+                row.next_run_at,
+                as_of,
+            ),
+            position: ReminderCursor {
+                next_run_at: row.next_run_at,
+                created_at: row.created_at,
+                id: row.id,
+            },
+        });
+        let mut batch = CollectionBatch {
+            items: Vec::with_capacity(rows.len()),
+            examined: rows.len(),
+            last_examined,
+        };
+        for row in rows {
+            let reminder = ReminderRow {
+                id: row.id,
+                description: row.description,
+                entity_type: row.entity_type,
+                entity_id: row.entity_id,
+                remind_at: row.remind_at,
+                cron: row.cron,
+                timezone: row.timezone,
+                next_run_at: row.next_run_at,
+                enabled: row.enabled,
+                completed_at: row.completed_at,
+                created_at: row.created_at,
+                updated_at: row.updated_at,
+            }
+            .into_reminder();
+            let reminder = match reminder {
+                Ok(reminder) => reminder,
+                Err(error) => {
+                    tracing::error!(error = ?error, "skipping unreadable reminder in collection");
+                    continue;
                 }
-                .into_reminder()?;
-                let reference = (row.file_type.is_some() || row.sub_type.is_some()).then_some(
-                    ReminderReference {
-                        file_type: row.file_type,
-                        sub_type: row.sub_type,
-                    },
-                );
-                Ok(ReminderCollectionRow {
-                    reminder,
-                    reference,
-                    email_followup: row.followup.map(|f| f.0.followup),
-                })
+            };
+            let reference =
+                (row.file_type.is_some() || row.sub_type.is_some()).then_some(ReminderReference {
+                    file_type: row.file_type,
+                    sub_type: row.sub_type,
+                });
+            batch.items.push(ReminderCollectionRow {
+                reminder,
+                reference,
+                email_followup: row.followup.map(|f| f.0.followup),
             })
-            .collect()
+        }
+        Ok(batch)
     }
 }
