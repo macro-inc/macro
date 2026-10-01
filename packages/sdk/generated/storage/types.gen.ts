@@ -9674,7 +9674,7 @@ export type SoupReminderSoupPropertiesField = {
     properties: Array<SoupProperty>;
 } & {
     /**
-     * Set once a one-shot reminder has fired.
+     * When the owner acknowledged the occurrence; independent of future scheduling.
      */
     completedAt?: string | null;
     /**

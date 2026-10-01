@@ -29369,7 +29369,7 @@
               "completedAt": {
                 "type": ["string", "null"],
                 "format": "date-time",
-                "description": "Set once a one-shot reminder has fired."
+                "description": "When the owner acknowledged the occurrence; independent of future scheduling."
               },
               "createdAt": {
                 "type": "string",

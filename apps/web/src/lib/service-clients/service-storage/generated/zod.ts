@@ -12507,7 +12507,9 @@ export const getItemsSoupResponse = zod
                     completedAt: zod.iso
                       .datetime({})
                       .nullish()
-                      .describe('Set once a one-shot reminder has fired.'),
+                      .describe(
+                        'When the owner acknowledged the occurrence; independent of future scheduling.'
+                      ),
                     createdAt: zod.iso
                       .datetime({})
                       .describe('When the reminder was created.'),
@@ -16905,7 +16907,9 @@ export const postItemsSoupResponse = zod
                     completedAt: zod.iso
                       .datetime({})
                       .nullish()
-                      .describe('Set once a one-shot reminder has fired.'),
+                      .describe(
+                        'When the owner acknowledged the occurrence; independent of future scheduling.'
+                      ),
                     createdAt: zod.iso
                       .datetime({})
                       .describe('When the reminder was created.'),
@@ -20711,7 +20715,9 @@ export const postItemsSoupAstResponse = zod
                     completedAt: zod.iso
                       .datetime({})
                       .nullish()
-                      .describe('Set once a one-shot reminder has fired.'),
+                      .describe(
+                        'When the owner acknowledged the occurrence; independent of future scheduling.'
+                      ),
                     createdAt: zod.iso
                       .datetime({})
                       .describe('When the reminder was created.'),
@@ -24892,7 +24898,7 @@ export const postItemsSoupAstGroupedResponse = zod
                             .datetime({})
                             .nullish()
                             .describe(
-                              'Set once a one-shot reminder has fired.'
+                              'When the owner acknowledged the occurrence; independent of future scheduling.'
                             ),
                           createdAt: zod.iso
                             .datetime({})
@@ -28702,7 +28708,7 @@ export const postItemsSoupAstGroupedResponse = zod
                             .datetime({})
                             .nullish()
                             .describe(
-                              'Set once a one-shot reminder has fired.'
+                              'When the owner acknowledged the occurrence; independent of future scheduling.'
                             ),
                           createdAt: zod.iso
                             .datetime({})
