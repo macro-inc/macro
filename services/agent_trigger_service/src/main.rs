@@ -115,7 +115,6 @@ async fn run() -> anyhow::Result<()> {
         ai_usage::pg_recorder_with_enforcement(pool.clone(), config.enable_ai_usage_enforcement);
     let admission = ai_billing::composition::pg_admission_service(
         pool.clone(),
-        config.environment,
         config.enable_ai_usage_enforcement,
     );
     let task_context = DssTaskAssignmentContext::new(

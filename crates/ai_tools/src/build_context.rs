@@ -487,11 +487,7 @@ pub async fn build_tool_service_context_from_env(
         skill_tool_context,
         schedule_tool_context: crate::NoOpScheduleContext,
         anthropic_tool_context,
-        admission: ai_billing::composition::pg_admission_service(
-            pool.clone(),
-            environment,
-            enforcement,
-        ),
+        admission: ai_billing::composition::pg_admission_service(pool.clone(), enforcement),
         recorder: ai_usage::pg_recorder_with_enforcement(pool.clone(), enforcement),
         usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
     })

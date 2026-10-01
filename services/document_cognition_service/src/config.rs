@@ -73,6 +73,11 @@ pub struct Config {
     /// Default-off quota admission and prospective usage counting.
     #[macro_config_default(ai_usage::AiUsageEnforcement::Disabled)]
     pub enable_ai_usage_enforcement: ai_usage::AiUsageEnforcement,
+    /// Default-off settlement of usage past allowances. When enabled, counted
+    /// usage recorded here asks the authentication service to settle; that
+    /// service's own policy decides whether it does.
+    #[macro_config_default(ai_billing::AiUsageBilling::Disabled)]
+    pub enable_ai_usage_billing: ai_billing::AiUsageBilling,
     /// The connection URL for the Postgres database this application should use.
     pub database_url: DatabaseUrl,
     /// The port to listen for HTTP requests on.
@@ -153,9 +158,12 @@ impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
         let enforcement = ai_usage::config::load_ai_usage_enforcement()
             .map_err(|error| anyhow::anyhow!("{error}"))?;
+        let billing = ai_billing::config::load_ai_usage_billing()
+            .map_err(|error| anyhow::anyhow!("{error}"))?;
         let mut config =
             macro_config::ConfigLoader::load::<Config>().context("failed to load config")?;
         config.enable_ai_usage_enforcement = enforcement;
+        config.enable_ai_usage_billing = billing;
         Ok(config)
     }
 
@@ -168,6 +176,7 @@ impl Config {
     pub fn new_empty_for_test() -> Self {
         Config {
             enable_ai_usage_enforcement: ai_usage::AiUsageEnforcement::Disabled,
+            enable_ai_usage_billing: ai_billing::AiUsageBilling::Disabled,
             environment: Environment::Local,
             database_url: DatabaseUrl::Comptime("DATABASE_URL"),
             port: Default::default(),

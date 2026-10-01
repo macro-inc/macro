@@ -442,7 +442,6 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         anthropic_tool_context: ai_tools::build_anthropic_tool_context(),
         admission: ai_billing::composition::pg_admission_service(
             db.clone(),
-            config.environment,
             config.enable_ai_usage_enforcement,
         ),
         recorder: ai_usage::pg_recorder_with_enforcement(

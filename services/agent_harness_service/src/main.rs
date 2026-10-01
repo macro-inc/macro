@@ -290,7 +290,6 @@ async fn run() -> anyhow::Result<()> {
     });
     let admission = ai_billing::composition::pg_admission_service(
         pool.clone(),
-        config.environment,
         config.enable_ai_usage_enforcement,
     );
     let recorder =

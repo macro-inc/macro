@@ -16,8 +16,8 @@ pub use admission::{
 };
 pub use ledger::{SettlementPlan, SettlementPolicy, SettlementState, plan_settlement};
 pub use models::{
-    AllowanceDecision, AllowanceStore, BillingError, BillingPeriod, BillingSettings,
-    CREDIT_PACKS_CENTS, DenyReason, Entitlement, MIN_STRIPE_CHARGE_CENTS,
+    AiUsageBilling, AllowanceDecision, AllowanceStore, BillingError, BillingPeriod,
+    BillingSettings, CREDIT_PACKS_CENTS, DenyReason, Entitlement, MIN_STRIPE_CHARGE_CENTS,
     OVERAGE_CHARGE_THRESHOLD_CENTS, OVERAGE_LIMIT_MAX_CENTS, OVERAGE_LIMIT_MIN_CENTS,
     OpenPeriodStart, OverageChargeStatus, PayerScope, PeriodAllowance, PeriodLedger, PlanTier,
     Result, SeatAllowance, SeatGeneration, SeatUsage, SubscriptionScope, TARGET_GROSS_MARGIN_BPS,

@@ -12,11 +12,12 @@ The separate [legacy quota rollout](AI_QUOTA_ENFORCEMENT.md) adds default-off
 `ai_usage.count_usage` writes by existing aggregate producers. Billing reads only
 persisted counted rows; historical/default-false rows remain uncounted. This is
 not the financial journal's reservation/admission system. Free/unlimited policy,
-feature exclusions, and the existing $40 subscription remain unchanged. Production
-usage-driven credit consumption and Stripe settlement remain dev-gated even when
-legacy quota enforcement is enabled. Follow that document for coordinated Doppler
-registration, rollout, rollback, coverage, and limitations; this observation
-matrix alone is not an enforcement or collection activation checklist.
+feature exclusions, and the existing $40 subscription remain unchanged. Usage-driven
+credit consumption and Stripe settlement are gated separately by the default-off
+`ENABLE_AI_USAGE_BILLING` policy in every environment, even when legacy quota
+enforcement is enabled. Follow that document for coordinated Doppler registration,
+rollout, rollback, coverage, and limitations; this observation matrix alone is not
+an enforcement or collection activation checklist.
 
 `UsageRecorder::tracking()` explicitly bridges the existing analytics injection to
 an object-safe `UsageTracking` capability. `agent::complete`, history/image and
@@ -31,9 +32,10 @@ constructs configured prospective analytics counting alongside the owning-domain
 observation service and adapter. The default-disabled `pg_recorder` remains for
 internal/evaluation callers. DCS wraps its configured settling recorder with
 `with_tracking(..., pg_tracking(...))`; only enabled, counted usage can request
-legacy settlement, and that path remains dev-only. The observation service accepts
-**no funding or rate-authorization capability**. No host selects `FinancialMode::Activated` here;
-its strict admission, budget validation, and error propagation remain intact.
+legacy settlement, and only when `ENABLE_AI_USAGE_BILLING` is enabled. The
+observation service accepts **no funding or rate-authorization capability**. No
+host selects `FinancialMode::Activated` here; its strict admission, budget
+validation, and error propagation remain intact.
 
 ### Persistence and failure semantics
 

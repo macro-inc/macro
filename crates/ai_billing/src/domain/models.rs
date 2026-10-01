@@ -10,6 +10,27 @@ use std::collections::HashSet;
 use thiserror::Error;
 use utoipa::ToSchema;
 
+/// Whether usage past a payer's allowance is settled: prepaid credits consumed
+/// and overage collected through Stripe. Hosts load it from
+/// `ENABLE_AI_USAGE_BILLING` at startup. It is independent of quota admission
+/// ([`AiUsageEnforcement`](ai_usage::AiUsageEnforcement)) and of the deployment
+/// environment.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum AiUsageBilling {
+    /// Never consume credits, reserve overage, or collect payment.
+    #[default]
+    Disabled,
+    /// Settle uncovered usage from credits, then collect overage.
+    Enabled,
+}
+
+impl AiUsageBilling {
+    /// Whether settlement is enabled.
+    pub const fn is_enabled(self) -> bool {
+        matches!(self, Self::Enabled)
+    }
+}
+
 /// Persisted usage-policy identity, independent of purchase availability or today's roles.
 /// A verified period activation selects this value; legacy records are never repriced.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

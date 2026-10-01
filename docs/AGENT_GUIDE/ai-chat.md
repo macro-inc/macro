@@ -375,7 +375,9 @@ documents:
 
 Quota admission uses the backend's default-off `ENABLE_AI_USAGE_ENFORCEMENT`
 policy once configured by the host; it is independent of environment. Settlement
-still runs only in `Environment::Develop`. With admission enabled, cognition chat
+(credit consumption and Stripe overage collection) is gated by the separate
+default-off `ENABLE_AI_USAGE_BILLING` policy, also independent of environment.
+With admission enabled, cognition chat
 and structured completion return 402 for exhausted allowance or 503 with
 `ai_billing_unavailable` when validation is unavailable. Neither starts AI work;
 chat admission also precedes chat/message creation. Existing model and chat
@@ -387,8 +389,8 @@ is unavailable, the successful chat continues with its existing/default title.
 Usage meters, credit controls, out-of-credit dialogs, and model usage multipliers
 are hidden outside frontend development mode. Normal paid-model access rules
 still apply everywhere. Backend enforcement does not depend on those frontend
-controls, and enabling it does not enable production credit collection. There is
-no new upgrade prompt in this rollout.
+controls, and enabling it does not enable credit collection; that needs
+`ENABLE_AI_USAGE_BILLING`. There is no new upgrade prompt in this rollout.
 
 Session creation and spending controls also return 402/503 for admission failures.
 Waiting prompts are checked again before execution: exhaustion removes rejected

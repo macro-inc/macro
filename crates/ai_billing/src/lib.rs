@@ -28,6 +28,8 @@
 //!   wrapper that triggers settlement after usage lands.
 //! - [`inbound`] — the axum router (summary, overage settings, credit
 //!   checkout, internal settle).
+//! - [`config`] — the startup loader for `ENABLE_AI_USAGE_BILLING`, the
+//!   default-off policy that gates settlement in every environment.
 //!
 //! The *payer* is the account that owns credits, overage settings, and the
 //! Stripe customer: the personal subscriber, or the team owner for members
@@ -35,13 +37,14 @@
 //! only its own plan allowance; credits and overage are shared by the payer.
 
 pub mod composition;
+pub mod config;
 pub mod domain;
 pub mod inbound;
 pub mod outbound;
 
 pub use ai_usage::{AiFeature, AiUsageEnforcement};
 pub use domain::{
-    AdmissionFuture, AiAdmissionError, AiAdmissionService, AllowanceDecision,
+    AdmissionFuture, AiAdmissionError, AiAdmissionService, AiUsageBilling, AllowanceDecision,
     BillingAdmissionService, BillingError, BillingPeriod, BillingService, BillingSettings,
     CREDIT_PACKS_CENTS, DenyReason, DisabledAiAdmissionService, Entitlement, PayerScope, PlanTier,
     TARGET_GROSS_MARGIN_BPS, UsageSnapshot, list_rate_cents,

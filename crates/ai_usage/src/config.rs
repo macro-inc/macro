@@ -24,28 +24,37 @@ impl<'de> serde::Deserialize<'de> for AiUsageEnforcement {
 ///
 /// Missing means disabled. Only `true` and `false` are accepted when present;
 /// malformed or non-Unicode values return an error that the host must propagate
-/// to fail startup. This does not enable financial settlement.
-///
-/// Hosts using MacroConfig must call this loader as well: its defaulted fields
-/// treat `null` as absent, but a present non-boolean flag must fail startup. The
-/// returned policy is authoritative (including process-env fallback when the
-/// Doppler application configuration omits the key).
+/// to fail startup. This does not enable financial settlement; that is the
+/// separately loaded `ENABLE_AI_USAGE_BILLING` policy.
 pub fn load_ai_usage_enforcement() -> Result<AiUsageEnforcement, rootcause::Report> {
-    // Unlike maybe_env_var!, this preserves errors for present non-Unicode values.
-    let value = macro_env_var::optional_read_env_var("ENABLE_AI_USAGE_ENFORCEMENT")
-        .context("failed to read ENABLE_AI_USAGE_ENFORCEMENT")?;
-    parse_enforcement(value.as_deref())
-}
-
-fn parse_enforcement(value: Option<&str>) -> Result<AiUsageEnforcement, rootcause::Report> {
-    let enabled = value
-        .map(str::parse::<bool>)
-        .transpose()
-        .context("ENABLE_AI_USAGE_ENFORCEMENT must be true or false")?
-        .unwrap_or(false);
-    if enabled {
+    if load_startup_flag("ENABLE_AI_USAGE_ENFORCEMENT")? {
         Ok(AiUsageEnforcement::Enabled)
     } else {
         Ok(AiUsageEnforcement::Disabled)
     }
+}
+
+/// Load a default-off `true`/`false` policy flag once at service startup.
+///
+/// Missing means `false`. Only raw `true` and `false` are accepted when present;
+/// malformed or non-Unicode values return an error that the host must propagate
+/// to fail startup.
+///
+/// Hosts using MacroConfig must call this loader as well: its defaulted fields
+/// treat `null` as absent, but a present non-boolean flag must fail startup. The
+/// returned value is authoritative (including process-env fallback when the
+/// Doppler application configuration omits the key).
+pub fn load_startup_flag(name: &'static str) -> Result<bool, rootcause::Report> {
+    // Unlike maybe_env_var!, this preserves errors for present non-Unicode values.
+    let value =
+        macro_env_var::optional_read_env_var(name).context(format!("failed to read {name}"))?;
+    parse_startup_flag(name, value.as_deref())
+}
+
+fn parse_startup_flag(name: &str, value: Option<&str>) -> Result<bool, rootcause::Report> {
+    Ok(value
+        .map(str::parse::<bool>)
+        .transpose()
+        .context(format!("{name} must be true or false"))?
+        .unwrap_or(false))
 }

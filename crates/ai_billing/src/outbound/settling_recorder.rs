@@ -4,10 +4,9 @@
 #[cfg(test)]
 mod test;
 
-use crate::domain::{BillingService, SettlementTrigger};
+use crate::domain::{AiUsageBilling, BillingService, SettlementTrigger};
 use ai_usage::domain::service::UsageServiceImpl;
 use ai_usage::{UsageEvent, UsageRecorder, UsageRepo};
-use macro_env::Environment;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -19,10 +18,11 @@ const RECORD_RETRY_BACKOFF: [Duration; 3] = [
     Duration::from_secs(5),
 ];
 
-/// Wraps the Postgres usage recorder. After a counted row lands in dev it reads
-/// the payer's position and, when there is uncovered usage, triggers settlement
-/// (credit consumption and overage collection) in the service that owns
-/// Stripe. Recording stays best-effort and never delays the completion.
+/// Wraps the Postgres usage recorder. With settlement enabled, after a counted
+/// row lands it reads the payer's position and, when there is uncovered usage,
+/// triggers settlement (credit consumption and overage collection) in the
+/// service that owns Stripe. Recording stays best-effort and never delays the
+/// completion.
 ///
 /// A row that cannot be written is billable usage lost, so the write is
 /// retried with backoff before it is given up on. The retry is bounded and
@@ -32,23 +32,24 @@ pub struct SettlingUsageRecorder<Repo, B, T> {
     inner: Arc<UsageServiceImpl<Repo>>,
     billing: Arc<B>,
     trigger: T,
-    environment: Environment,
+    settlement: AiUsageBilling,
 }
 
 impl<Repo, B, T> SettlingUsageRecorder<Repo, B, T> {
-    /// Build the recorder. Usage is recorded everywhere; only counted usage in
-    /// dev can request settlement. The inner service owns the counting policy.
+    /// Build the recorder. Usage is always recorded; only counted usage can
+    /// request settlement, and only when the host's `ENABLE_AI_USAGE_BILLING`
+    /// policy is enabled. The inner service owns the counting policy.
     pub fn new(
         inner: Arc<UsageServiceImpl<Repo>>,
         billing: Arc<B>,
         trigger: T,
-        environment: Environment,
+        settlement: AiUsageBilling,
     ) -> Self {
         Self {
             inner,
             billing,
             trigger,
-            environment,
+            settlement,
         }
     }
 }
@@ -63,8 +64,7 @@ where
         let inner = self.inner.clone();
         let billing = self.billing.clone();
         let trigger = self.trigger.clone();
-        let should_settle =
-            matches!(self.environment, Environment::Develop) && inner.counts_usage(&event);
+        let should_settle = self.settlement.is_enabled() && inner.counts_usage(&event);
         tokio::spawn(async move {
             let user = event.user.clone();
             let mut backoff = RECORD_RETRY_BACKOFF.iter();

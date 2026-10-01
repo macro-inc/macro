@@ -119,7 +119,7 @@ impl SettlementTrigger for FakeTrigger {
 }
 
 async fn record(
-    environment: Environment,
+    settlement: AiUsageBilling,
     user: MacroUserIdStr<'static>,
     tier: PlanTier,
     unlimited: bool,
@@ -127,7 +127,7 @@ async fn record(
     fail_first: bool,
 ) -> (usize, usize, usize) {
     record_with_policy(
-        environment,
+        settlement,
         user,
         tier,
         unlimited,
@@ -139,7 +139,7 @@ async fn record(
 }
 
 async fn record_with_policy(
-    environment: Environment,
+    settlement: AiUsageBilling,
     user: MacroUserIdStr<'static>,
     tier: PlanTier,
     unlimited: bool,
@@ -171,13 +171,13 @@ async fn record_with_policy(
         Arc::new(UsageServiceImpl::new(repo.clone()).with_enforcement(enforcement)),
         billing.clone(),
         trigger.clone(),
-        environment,
+        settlement,
     );
     let should_count = enforcement.should_count(&user, feature);
     recorder.record(UsageContext::new(feature, user).into_event("test-model".into(), 10, 10));
     tokio::time::timeout(Duration::from_secs(2), repo.recorded.notified())
         .await
-        .expect("usage must be recorded in every environment, including after a retry");
+        .expect("usage must be recorded under either settlement policy, including after a retry");
     // All fake billing/trigger calls are immediately ready; let the recording task finish.
     tokio::task::yield_now().await;
     assert_eq!(repo.counted.load(Ordering::SeqCst), should_count);
@@ -193,15 +193,11 @@ fn user() -> MacroUserIdStr<'static> {
 }
 
 #[tokio::test]
-async fn records_everywhere_but_only_requests_settlement_in_dev() {
-    for (environment, expected) in [
-        (Environment::Develop, 1),
-        (Environment::Production, 0),
-        (Environment::Local, 0),
-    ] {
+async fn records_everywhere_but_only_requests_settlement_when_enabled() {
+    for (settlement, expected) in [(AiUsageBilling::Enabled, 1), (AiUsageBilling::Disabled, 0)] {
         for fail_first in [false, true] {
             let (attempts, snapshots, requests) = record(
-                environment,
+                settlement,
                 user(),
                 PlanTier::Premium,
                 false,
@@ -228,7 +224,7 @@ async fn uncounted_usage_never_reads_billing_or_requests_settlement() {
         for fail_first in [false, true] {
             assert_eq!(
                 record_with_policy(
-                    Environment::Develop,
+                    AiUsageBilling::Enabled,
                     user(),
                     PlanTier::Premium,
                     false,
@@ -247,7 +243,7 @@ async fn uncounted_usage_never_reads_billing_or_requests_settlement() {
 async fn system_usage_never_requests_settlement() {
     assert_eq!(
         record(
-            Environment::Develop,
+            AiUsageBilling::Enabled,
             SYSTEM_USER_ID.clone(),
             PlanTier::Premium,
             false,
@@ -260,7 +256,7 @@ async fn system_usage_never_requests_settlement() {
 }
 
 #[tokio::test]
-async fn dev_does_not_settle_free_unlimited_or_covered_usage() {
+async fn enabled_settlement_skips_free_unlimited_or_covered_usage() {
     for (tier, unlimited, chargeable) in [
         (PlanTier::Free, false, 1_000),
         (PlanTier::Premium, true, 1_000),
@@ -268,7 +264,7 @@ async fn dev_does_not_settle_free_unlimited_or_covered_usage() {
     ] {
         assert_eq!(
             record(
-                Environment::Develop,
+                AiUsageBilling::Enabled,
                 user(),
                 tier,
                 unlimited,

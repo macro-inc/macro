@@ -6,9 +6,10 @@
 prospective counting of existing `ai_usage` producers**. It is not a provider-spend
 cap, a reservation system, or activation of financial admission. It does not select
 `FinancialMode::Activated`, authorize credit holds, or convert observations into
-customer debt. Production usage-driven credit consumption and Stripe settlement
-remain disabled by the existing `Environment::Develop` safeguard, even with the
-flag true. See [the separate observation/financial rollout](AI_BILLING_ROLLOUT.md).
+customer debt. Usage-driven credit consumption and Stripe settlement are gated by
+the separate default-off [`ENABLE_AI_USAGE_BILLING`](#settlement-enable_ai_usage_billing)
+policy, never by this flag or the deployment environment. See
+[the separate observation/financial rollout](AI_BILLING_ROLLOUT.md).
 
 The [startup loader](../crates/ai_usage/src/config.rs) accepts only raw `true` or
 `false`; absent means false. Empty, quoted, `null`, or otherwise malformed present
@@ -56,6 +57,38 @@ uncounted rows; repricing can change totals, never eligibility.
 and [billing-reader tests](../crates/ai_billing/src/outbound/pg_usage_reader/test.rs)
 cover these distinctions. Historical analytics and observations must never be
 backfilled into counted usage or financial authorizations.
+
+## Settlement: `ENABLE_AI_USAGE_BILLING`
+
+`ENABLE_AI_USAGE_BILLING` enables **legacy settlement of counted usage past a
+payer's allowance**: prepaid credits are consumed and opt-in overage is reserved
+and collected through Stripe. The [startup loader](../crates/ai_billing/src/config.rs)
+parses it exactly like the enforcement flag (absent means false; only raw `true`
+or `false`; malformed present values fail startup) and hosts load it once. It is
+independent of `ENABLE_AI_USAGE_ENFORCEMENT` and of the deployment environment:
+there is no longer an `Environment::Develop` safeguard, so a true value settles
+in production.
+
+Only two hosts participate:
+
+| Host | Gate | When disabled |
+| --- | --- | --- |
+| Authentication service | [`BillingServiceImpl::settle`](../crates/ai_billing/src/domain/service.rs) guards every caller: summary reads, overage changes, credit-purchase webhooks, and the internal settle endpoint | Returns without reading entitlements, consuming credits, or touching Stripe. Credit purchases are still booked and remain unconsumed |
+| Document cognition service | [`SettlingUsageRecorder`](../crates/ai_billing/src/outbound/settling_recorder.rs) requests settlement after counted usage lands | Usage is still recorded and counted; no settlement request is sent |
+
+Every other host composes admission through
+[`pg_admission_service`](../crates/ai_billing/src/composition.rs), which never
+settles regardless of configuration. The authentication service's policy is
+authoritative: a request from document cognition is a no-op there while its flag
+is false, and with document cognition false the authentication service still
+settles on summary reads, overage changes, and credit purchases. Enable both
+together. Settlement without `ENABLE_AI_USAGE_ENFORCEMENT` finds nothing to
+settle, because only counted rows are chargeable.
+
+The frontend is not tied to this flag. The usage meter, credit packs,
+usage-billing controls, the out-of-credits dialog, and model usage multipliers
+keep their existing development-mode gate (`DEV_MODE_ENV`), so they show on
+`dev.macro.com` and local dev builds regardless of backend settlement.
 
 ## Public failure contracts
 
@@ -170,7 +203,7 @@ admission and R. Admission itself never records usage or calls settlement.
 | Scheduled agent targets / session funding policy | [target runner](../services/scheduled_action/src/domain/target_runner.rs) → session/harness admission | Target runtime's recorder, not duplicate scheduler metering | [delegation and typed errors](../services/scheduled_action/src/domain/target_runner/test.rs), [routine error transport](../crates/agent_session/src/inbound/routine_sessions/test.rs) |
 | Memory, projection, call summary, dictation / exempt | [shared admission policy](../crates/ai_billing/src/domain/admission.rs) skips quota; ordinary permissions still apply | DCS/DSS configured recorders; [memory context](../crates/memory/src/context.rs) uses T; DSS independent call-summary/dictation recorders use R | [all exempt features](../crates/ai_usage/src/domain/counting/test.rs), [no billing I/O](../crates/ai_billing/src/domain/admission/test.rs), [configured recording](../crates/ai_billing/src/composition/test.rs) |
 | Existing system task duplicate judge / Automation | [system attribution](../crates/task_dedup/src/outbound/judge.rs), no user quota gate | DSS main, independent R; system events stay uncounted | [system counting](../crates/ai_usage/src/domain/counting/test.rs), [system recorder behavior](../crates/ai_billing/src/outbound/settling_recorder/test.rs) |
-| Billing summary (not execution) | [billing service policy](../crates/ai_billing/src/domain/service.rs) | [authentication main](../services/authentication_service/src/main.rs) configures same flag, no usage producer | [environment/free/unlimited/settlement](../crates/ai_billing/src/domain/service/test.rs), [authentication configuration](../services/authentication_service/src/config/test.rs) |
+| Billing summary (not execution) | [billing service policy](../crates/ai_billing/src/domain/service.rs) | [authentication main](../services/authentication_service/src/main.rs) configures the same flag plus `ENABLE_AI_USAGE_BILLING`, no usage producer | [settlement policy/free/unlimited/settlement](../crates/ai_billing/src/domain/service/test.rs), [authentication configuration](../services/authentication_service/src/config/test.rs) |
 
 ## Limits and operational risks
 
@@ -227,15 +260,17 @@ procedure. Operators must approve and record each release gate.
    hosted access require operator approval; code defaults are not proof of it.
 4. **Validate locally, then in an approved staging environment.** Use the checklist
    below and review counts, index plans, failure rates, queue cleanup, and known
-   metering gaps. Confirm missing/false/true/invalid parsing and that production
-   settlement is still suppressed. Validate the observation privacy gate too.
+   metering gaps. Confirm missing/false/true/invalid parsing and that settlement
+   stays suppressed while `ENABLE_AI_USAGE_BILLING` is false. Validate the
+   observation privacy gate too.
 5. **Coordinated, operator-approved enablement only.** Record participating hosts,
    deployment versions, approved environment/time, monitoring owner, and rollback
    decision. Coordinate configuration and restart/redeploy so traffic does not
    rely on mixed-policy replicas; drain/pause affected work if needed. Check actual
    startup policy, 402/503 behavior, new counted rows, summaries, and background
    queues before declaring activation complete. This enables legacy quotas, **not
-   production credit collection or Stripe settlement**.
+   credit collection or Stripe settlement**; those need `ENABLE_AI_USAGE_BILLING`
+   registered and enabled for the authentication and document cognition services.
 
 ### Rollback
 

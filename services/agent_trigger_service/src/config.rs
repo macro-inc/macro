@@ -17,9 +17,6 @@ pub struct Config {
     /// Default-off quota admission and prospective usage counting.
     #[macro_config_default(ai_usage::AiUsageEnforcement::Disabled)]
     pub enable_ai_usage_enforcement: ai_usage::AiUsageEnforcement,
-    /// Deployment environment; settlement remains disabled in this worker.
-    #[macro_config_default(macro_env::Environment::new_or_prod())]
-    pub environment: macro_env::Environment,
     /// MacroDB connection URL.
     pub database_url: DatabaseUrl,
     /// Kafka bootstrap servers.

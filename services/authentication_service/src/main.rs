@@ -508,9 +508,9 @@ async fn main() -> anyhow::Result<()> {
             ai_billing::outbound::PgUsageReader::new(db.clone()),
             ai_billing::outbound::PgBillingRepo::new(db.clone()),
             ai_billing::outbound::StripePaymentGateway::new(stripe_client.clone()),
-            config.environment,
         )
-        .with_enforcement(config.enable_ai_usage_enforcement),
+        .with_enforcement(config.enable_ai_usage_enforcement)
+        .with_billing(config.enable_ai_usage_billing),
     );
     let teams_service_impl = TeamServiceImpl::new_with_analytics(
         teams_repo_impl.clone(),

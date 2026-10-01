@@ -2,8 +2,7 @@ use authentication_service::service::signup_policy::SignupPolicyDenial;
 
 use super::*;
 
-#[test]
-fn billing_enforcement_config_defaults_off_and_requires_a_boolean() {
+fn config_values() -> serde_json::Value {
     let mut values = serde_json::json!({ "ENVIRONMENT": "local" });
     for key in [
         "BASE_URL",
@@ -31,6 +30,12 @@ fn billing_enforcement_config_defaults_off_and_requires_a_boolean() {
     ] {
         values[key] = serde_json::json!("test");
     }
+    values
+}
+
+#[test]
+fn billing_enforcement_config_defaults_off_and_requires_a_boolean() {
+    let mut values = config_values();
     let config: Config = serde_json::from_value(values.clone()).unwrap();
     assert_eq!(
         config.enable_ai_usage_enforcement,
@@ -42,6 +47,25 @@ fn billing_enforcement_config_defaults_off_and_requires_a_boolean() {
         assert_eq!(config.enable_ai_usage_enforcement.is_enabled(), enabled);
     }
     values["ENABLE_AI_USAGE_ENFORCEMENT"] = serde_json::json!("invalid");
+    assert!(serde_json::from_value::<Config>(values).is_err());
+}
+
+#[test]
+fn billing_settlement_config_defaults_off_and_requires_a_boolean() {
+    let mut values = config_values();
+    let config: Config = serde_json::from_value(values.clone()).unwrap();
+    assert_eq!(
+        config.enable_ai_usage_billing,
+        ai_billing::AiUsageBilling::Disabled
+    );
+    for enabled in [false, true] {
+        values["ENABLE_AI_USAGE_BILLING"] = serde_json::json!(enabled);
+        let config: Config = serde_json::from_value(values.clone()).unwrap();
+        assert_eq!(config.enable_ai_usage_billing.is_enabled(), enabled);
+        // The two policies are independent.
+        assert!(!config.enable_ai_usage_enforcement.is_enabled());
+    }
+    values["ENABLE_AI_USAGE_BILLING"] = serde_json::json!("invalid");
     assert!(serde_json::from_value::<Config>(values).is_err());
 }
 
