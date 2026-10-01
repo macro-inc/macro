@@ -17,8 +17,15 @@ describe('sameRecordScope', () => {
       false
     );
     expect(sameRecordScope(acme, undefined)).toBe(false);
-    const ada = { type: 'contact' as const, id: 'p1', email: 'ada@acme.com' };
+    const ada = {
+      type: 'contact' as const,
+      id: 'p1',
+      email: 'ada@acme.com',
+      companyId: 'c1',
+    };
+    expect(sameRecordScope(ada, { ...ada })).toBe(true);
     expect(sameRecordScope(ada, { ...ada, email: 'ada@acme.io' })).toBe(false);
+    expect(sameRecordScope(ada, { ...ada, companyId: 'c2' })).toBe(false);
     expect(sameRecordScope(ada, { ...acme, id: 'p1' })).toBe(false);
   });
 });

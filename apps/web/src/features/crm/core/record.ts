@@ -16,7 +16,7 @@ export function sameRecordScope(
     return a.id === b.id && a.domains.join('\n') === b.domains.join('\n');
   }
   if (a.type === 'contact' && b.type === 'contact') {
-    return a.id === b.id && a.email === b.email;
+    return a.id === b.id && a.email === b.email && a.companyId === b.companyId;
   }
   return false;
 }

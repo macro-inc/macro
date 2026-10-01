@@ -1,7 +1,11 @@
 import { SidePanel } from '@components/app/side-panel';
 import { createMemo, Match, Show, Suspense, Switch } from 'solid-js';
 import { useCrmContext } from '../context/crm-context';
-import type { ContactSection, CrmRecordScope } from '../core/record';
+import {
+  type ContactSection,
+  type CrmRecordScope,
+  sameRecordScope,
+} from '../core/record';
 import { ContactDiscussionSection } from './contact-discussion-section';
 import { ContactEmailsSection } from './contact-emails-section';
 import { ContactHeader } from './contact-header';
@@ -26,16 +30,20 @@ export function Contact(props: {
   const contact = () => contactQuery.data;
   const isTeamAdmin = useIsTeamAdmin();
   const section = () => props.section ?? 'overview';
-  const scope = createMemo((): CrmRecordScope | undefined => {
-    const current = contact();
-    if (!current) return;
-    return {
-      type: 'contact',
-      id: current.id,
-      email: current.email,
-      companyId: current.companyId,
-    };
-  });
+  const scope = createMemo(
+    (): CrmRecordScope | undefined => {
+      const current = contact();
+      if (!current) return;
+      return {
+        type: 'contact',
+        id: current.id,
+        email: current.email,
+        companyId: current.companyId,
+      };
+    },
+    undefined,
+    { equals: sameRecordScope }
+  );
 
   return (
     <SidePanel.Layout headerToggle={props.headerToggle}>
@@ -66,7 +74,14 @@ export function Contact(props: {
                 </div>
               }
             >
-              <Show when={scope()}>
+              <Show
+                when={scope()}
+                fallback={
+                  <div class="p-6 text-center text-sm text-ink-muted">
+                    Loading…
+                  </div>
+                }
+              >
                 {(current) => <context.RecordTasks scope={current()} />}
               </Show>
             </Suspense>
