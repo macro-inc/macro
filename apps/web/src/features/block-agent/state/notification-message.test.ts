@@ -65,4 +65,17 @@ describe('isNotificationMessage', () => {
     ).toBe(false);
     expect(isNotificationMessage(message('user', []))).toBe(false);
   });
+
+  it.each([
+    `${NOTIFICATION}\nPlease fix this\n${NOTIFICATION}`,
+    `<system_notification source="github">${NOTIFICATION}</system_notification>`,
+    `\`\`\`xml\n${NOTIFICATION}\n\`\`\``,
+  ])(
+    'keeps mixed, nested, or code-fenced content in a prompt bubble',
+    (text) => {
+      expect(
+        isNotificationMessage(message('user', [{ kind: 'text', text }]))
+      ).toBe(false);
+    }
+  );
 });

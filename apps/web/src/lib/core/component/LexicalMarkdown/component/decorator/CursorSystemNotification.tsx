@@ -93,9 +93,23 @@ function conclusionLabel(conclusion: string): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
+function safeHttpUrl(value: string): string | undefined {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' || url.protocol === 'http:'
+      ? url.href
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** A repository as Cursor spells it (`github.com/org/repo`, sometimes with a scheme) as a URL. */
-function repositoryUrl(repo: string): string {
-  return /^[a-z]+:\/\//i.test(repo) ? repo : `https://${repo}`;
+function repositoryUrl(repo: string): string | undefined {
+  const value = repo.trim();
+  return safeHttpUrl(
+    /^[a-z][a-z\d+.-]*:/i.test(value) ? value : `https://${value}`
+  );
 }
 
 /** `github.com/org/repo` reads as `org/repo`; anything else is left alone. */
@@ -130,12 +144,13 @@ type Detail = {
 export function details(attributes: Record<string, string>): Detail[] {
   const repo = attributes.repo ?? attributes.repository;
   const sha = attributes.commit ?? attributes.sha;
+  const repoHref = repo ? repositoryUrl(repo) : undefined;
   const chips: Detail[] = [];
   if (repo) {
     chips.push({
       label: repositoryName(repo),
       icon: GithubLogoIcon,
-      href: repositoryUrl(repo),
+      href: repoHref,
     });
   }
   if (attributes.branch) {
@@ -146,7 +161,9 @@ export function details(attributes: Record<string, string>): Detail[] {
       label: sha.slice(0, 7),
       icon: GitCommitIcon,
       title: sha,
-      href: repo ? `${repositoryUrl(repo)}/commit/${sha}` : undefined,
+      href: repoHref
+        ? `${repoHref.replace(/\/$/, '')}/commit/${encodeURIComponent(sha)}`
+        : undefined,
     });
   }
   if (attributes.checks) {
@@ -159,7 +176,8 @@ export function details(attributes: Record<string, string>): Detail[] {
   }
   const link = attributes.url ?? attributes.link;
   if (link) {
-    chips.push({ label: 'Open', icon: ArrowUpRightIcon, href: link });
+    const href = safeHttpUrl(link);
+    if (href) chips.push({ label: 'Open', icon: ArrowUpRightIcon, href });
   }
   for (const [name, value] of Object.entries(attributes)) {
     if (FEATURED.has(name) || !value) continue;

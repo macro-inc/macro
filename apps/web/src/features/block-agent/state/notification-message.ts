@@ -13,7 +13,7 @@
 import type { FoldedMessage } from '@service-agent-fold/generated/types';
 
 const NOTIFICATION_ONLY =
-  /^\s*<system_notification\b[^>]*>[\s\S]*?<\/system_notification>\s*$/;
+  /^\s*(?:<system_notification\b[^>]*>(?:(?!<\/?system_notification\b)[\s\S])*<\/system_notification>\s*)+$/;
 
 /**
  * Every part is a notification Cursor wrote: the message is an event, not a

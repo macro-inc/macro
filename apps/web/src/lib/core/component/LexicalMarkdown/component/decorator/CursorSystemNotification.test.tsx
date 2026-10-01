@@ -96,6 +96,40 @@ describe('CursorSystemNotification', () => {
     expect(card.textContent).not.toContain('sub_x');
     expect(card.querySelector('[data-tone]')).toBeNull();
   });
+
+  it.each([
+    'javascript:alert(1)',
+    'javascript://example.com/%0aalert(1)',
+    'data:text/html,<script>alert(1)</script>',
+    'file:///etc/passwd',
+    'https://',
+  ])('does not render actionable links for %s', (url) => {
+    const view = render(() => (
+      <CursorSystemNotification
+        {...ci}
+        attributes={{ repo: url, commit: ci.attributes.commit, url }}
+      />
+    ));
+    expect(view.queryAllByRole('link')).toHaveLength(0);
+    fireEvent.click(view.getByText('ca515d3'));
+    expect(mocks.openExternalUrl).not.toHaveBeenCalled();
+    expect(
+      details({ repository: url, link: url, sha: ci.attributes.commit }).every(
+        (detail) => detail.href === undefined
+      )
+    ).toBe(true);
+  });
+
+  it.each(['http://example.com/event', 'https://example.com/event'])(
+    'opens an HTTP event link: %s',
+    (url) => {
+      const view = render(() => (
+        <CursorSystemNotification {...ci} attributes={{ link: url }} />
+      ));
+      fireEvent.click(view.getByRole('link', { name: 'Open' }));
+      expect(mocks.openExternalUrl).toHaveBeenCalledWith(url);
+    }
+  );
 });
 
 describe('labels', () => {

@@ -571,7 +571,10 @@ renders that as a full-width event card, not a prompt bubble: a source header
 commit and check count (repository and commit chips open GitHub). Attributes
 the card has no face for appear as `name: value` chips; the subscription id
 is hidden. The same tag renders as the same card anywhere internal markdown
-is shown; a tag inside a code fence stays code.
+is shown; a tag inside a code fence stays code. Text between notification
+blocks keeps the message in its author's prompt bubble. Card links accept
+only HTTP or HTTPS URLs; invalid repository links stay as plain chips and
+invalid event links are omitted.
 
 On mobile the composer (and any queued prompts above it) floats in the bottom
 accessory region above the dock — same placement as channel and AI chat — so it
