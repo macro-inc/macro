@@ -24,7 +24,7 @@ use chat::domain::events::{ChatMacroEvent, ChatTopicEvent};
 use documents::domain::events::{DocumentMacroEvent, DocumentTopicEvent, InteractionReason};
 use email::domain::events::{EmailMacroEvent, EmailTopicEvent};
 use initiative::domain::events::{InitiativeMacroEvent, InitiativeTopicEvent};
-use kafka_util::{GroupName, KafkaEventConsumer};
+use kafka_util::{GroupName, InitialOffset, KafkaEventConsumer};
 use macro_event_broker::{
     KafkaConsumerAdapter, MacroEvent as _, MacroEventCollection as _, MacroEventConsumerService,
 };
@@ -45,6 +45,9 @@ struct SoupRealtimeConsumerGroup;
 
 impl GroupName for SoupRealtimeConsumerGroup {
     const GROUP_NAME: &'static str = "soup-realtime";
+    // `macro.messages` joined this group's subscription with no committed
+    // offset; starting at its head avoids replaying the topic's retention.
+    const INITIAL_OFFSET: InitialOffset = InitialOffset::Latest;
 }
 
 type SoupRealtimeKafkaAdapter = KafkaConsumerAdapter<SoupRealtimeConsumerGroup, DeclaredMacroEvent>;

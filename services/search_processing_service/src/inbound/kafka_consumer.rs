@@ -45,7 +45,7 @@ use ::email::domain::events::EmailMacroEvent;
 use calendar_events::domain::events::CalendarMacroEvent;
 use channels::domain::broker_events::ChannelMacroEvent;
 use documents::domain::events::DocumentMacroEvent;
-use kafka_util::{GroupName, KafkaEventConsumer};
+use kafka_util::{GroupName, InitialOffset, KafkaEventConsumer};
 use macro_event_broker::{
     KafkaConsumerAdapter, MacroEvent as _, MacroEventCollection, MacroEventConsumerService,
 };
@@ -79,6 +79,9 @@ pub(crate) struct SearchProcessingConsumerGroup;
 
 impl GroupName for SearchProcessingConsumerGroup {
     const GROUP_NAME: &'static str = "search-processing-service";
+    // `macro.messages` joined this group's subscription with no committed
+    // offset; starting at its head avoids replaying the topic's retention.
+    const INITIAL_OFFSET: InitialOffset = InitialOffset::Latest;
 }
 
 type SearchProcessingKafkaAdapter =
