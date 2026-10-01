@@ -21,9 +21,11 @@ pub use installation_state::{
 pub use link::{GithubAccessToken, GithubExchangeTokenResponse, GithubLink, GithubUserInfo};
 pub use pull_request::{
     EnrichGithubPullRequestsProxyRequest, EnrichGithubPullRequestsResponse,
-    EnrichedGithubPullRequest, GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE,
-    GithubPullRequestCheckRun, GithubPullRequestComment, GithubPullRequestDetails,
-    GithubPullRequestRef, GithubPullRequestStatus,
+    EnrichedGithubPullRequest, GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE, GithubMergeMethod,
+    GithubMergeOutcome, GithubMergeRejection, GithubPullRequestCheckRun, GithubPullRequestComment,
+    GithubPullRequestDetails, GithubPullRequestMerge, GithubPullRequestRef,
+    GithubPullRequestStatus, GithubRepositoryMergeSettings, MergeGithubPullRequestRequest,
+    MergeGithubPullRequestResponse,
 };
 pub use repository::GithubRepository;
 pub use sync::{
@@ -78,4 +80,13 @@ pub enum GithubError {
     /// what they report about other people's accounts.
     #[error("no GitHub App installation for this user and repository")]
     RepositoryUnavailable,
+    /// GitHub declined to merge the pull request. The message is GitHub's
+    /// own and is written for the person who asked, so it is safe to show.
+    #[error("GitHub declined to merge the pull request: {message}")]
+    PullRequestMergeRejected {
+        /// Why GitHub declined.
+        rejection: GithubMergeRejection,
+        /// GitHub's message for the user.
+        message: String,
+    },
 }

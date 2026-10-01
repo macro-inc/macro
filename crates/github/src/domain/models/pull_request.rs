@@ -380,6 +380,157 @@ impl EnrichedGithubPullRequest {
     }
 }
 
+/// How GitHub combines a pull request's commits into its base branch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "lowercase")]
+pub enum GithubMergeMethod {
+    /// A merge commit joining both histories.
+    Merge,
+    /// One squashed commit on the base branch.
+    Squash,
+    /// The pull request's commits replayed onto the base branch.
+    Rebase,
+}
+
+impl GithubMergeMethod {
+    /// The method as GitHub's `merge_method` request value.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Merge => "merge",
+            Self::Squash => "squash",
+            Self::Rebase => "rebase",
+        }
+    }
+}
+
+impl fmt::Display for GithubMergeMethod {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
+/// Which merge methods a repository's settings allow.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GithubRepositoryMergeSettings {
+    /// Merge commits are allowed.
+    pub allow_merge_commit: bool,
+    /// Squash merges are allowed.
+    pub allow_squash_merge: bool,
+    /// Rebase merges are allowed.
+    pub allow_rebase_merge: bool,
+}
+
+impl GithubRepositoryMergeSettings {
+    /// The method a merge should use when the caller expressed no preference:
+    /// the first allowed one in GitHub's own order, or `None` when the
+    /// repository has disabled every method.
+    pub fn default_method(self) -> Option<GithubMergeMethod> {
+        [
+            (self.allow_merge_commit, GithubMergeMethod::Merge),
+            (self.allow_squash_merge, GithubMergeMethod::Squash),
+            (self.allow_rebase_merge, GithubMergeMethod::Rebase),
+        ]
+        .into_iter()
+        .find_map(|(allowed, method)| allowed.then_some(method))
+    }
+}
+
+/// Why GitHub declined to merge a pull request.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GithubMergeRejection {
+    /// The pull request cannot be merged as it stands: conflicts, failing or
+    /// pending required checks, missing reviews, a draft, or a merge method
+    /// the repository does not allow.
+    NotMergeable,
+    /// The head branch moved since the merge was requested.
+    HeadChanged,
+    /// The user's token cannot see the pull request.
+    NotFound,
+    /// The user has no push access to the base repository.
+    Forbidden,
+    /// GitHub rejected the request as invalid.
+    Invalid,
+}
+
+/// A merge GitHub performed.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct GithubPullRequestMerge {
+    /// The merge commit's SHA.
+    pub sha: String,
+    /// GitHub's own summary of the merge.
+    pub message: String,
+}
+
+/// GitHub's answer to a merge request: performed, or declined with its reason.
+///
+/// A rejection is a fact about the pull request rather than a transport
+/// failure, so the client reports it as a value and the domain decides what
+/// to do with it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GithubMergeOutcome {
+    /// The pull request was merged.
+    Merged(GithubPullRequestMerge),
+    /// GitHub declined, with the message it gave for the user.
+    Rejected {
+        /// Why GitHub declined.
+        rejection: GithubMergeRejection,
+        /// GitHub's message, written for the person who asked.
+        message: String,
+    },
+}
+
+/// A request to merge one pull request on the user's behalf.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct MergeGithubPullRequestRequest {
+    /// The GitHub repository owner or organization.
+    pub owner: String,
+    /// The GitHub repository name.
+    pub repo: String,
+    /// The GitHub pull request number.
+    pub number: u64,
+    /// The merge method to use. Omitted means the first method the
+    /// repository allows, in the order merge, squash, rebase.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub merge_method: Option<GithubMergeMethod>,
+}
+
+impl MergeGithubPullRequestRequest {
+    /// The reference enrichment uses for this pull request.
+    pub fn to_reference(&self) -> GithubPullRequestRef {
+        GithubPullRequestRef {
+            github_key: format!("{}/{}/pull/{}", self.owner, self.repo, self.number),
+            owner: self.owner.clone(),
+            repo: self.repo.clone(),
+            number: self.number,
+            url: format!(
+                "https://github.com/{}/{}/pull/{}",
+                self.owner, self.repo, self.number
+            ),
+            display_name: format!("{}/{}#{}", self.owner, self.repo, self.number),
+        }
+    }
+}
+
+/// Response body for a merged pull request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct MergeGithubPullRequestResponse {
+    /// The merge commit's SHA.
+    pub sha: String,
+    /// GitHub's own summary of the merge.
+    pub message: String,
+    /// The pull request as GitHub reports it after the merge, when the
+    /// refresh succeeded.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pull_request: Option<EnrichedGithubPullRequest>,
+}
+
 /// Request body for the authenticated pull request enrichment proxy.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
