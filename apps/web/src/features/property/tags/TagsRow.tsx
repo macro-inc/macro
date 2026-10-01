@@ -7,7 +7,6 @@ import PencilIcon from '@phosphor/pencil-simple.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import XIcon from '@phosphor/x.svg';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import type { TagScope } from '@service-properties/generated/schemas/tagScope';
 import { Badge, badgeTriggerClasses, Layer } from '@ui';
 import { createSignal, For, Match, Show, Switch } from 'solid-js';
 import { TagDot } from './TagDot';
@@ -114,12 +113,8 @@ export function TagsRow(props: {
   entityType: EntityType;
   canEdit: boolean;
   triggerVariant?: 'icon' | 'pill';
-  /** Tag sets to show and offer; defaults to personal and team. */
-  scopes?: readonly TagScope[];
 }) {
-  const docTags = useDocTags(props.entityId, props.entityType, {
-    scopes: props.scopes,
-  });
+  const docTags = useDocTags(props.entityId, props.entityType);
   const triggerVariant = () => props.triggerVariant ?? 'icon';
   const hasTags = () => docTags.appliedTags().length > 0;
   const [editorMode, setEditorMode] = createSignal<TagEditorDialogMode | null>(

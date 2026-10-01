@@ -229,10 +229,7 @@ function TagPickerBodyOwner(props: {
         <TagEditorDialog
           open
           mode={props.editorMode()}
-          teamAvailable={
-            docTags.scopes.includes('team') &&
-            Boolean(currentTeamQuery.data?.team)
-          }
+          teamAvailable={Boolean(currentTeamQuery.data?.team)}
           onCreateSuccess={async (result) => {
             await props.createSuccessHandler()?.(result);
           }}
@@ -306,10 +303,7 @@ export function TagPickerPopover(props: {
       <TagEditorDialog
         open={editorMode() !== null}
         mode={editorMode()}
-        teamAvailable={
-          props.docTags.scopes.includes('team') &&
-          Boolean(currentTeamQuery.data?.team)
-        }
+        teamAvailable={Boolean(currentTeamQuery.data?.team)}
         onCreateSuccess={async (result) => {
           await createSuccessHandler()?.(result);
         }}
@@ -519,15 +513,10 @@ function TagPickerBody(props: {
   const createRowIndex = () =>
     filteredItems().length + (showClearAllRow() ? 1 : 0);
   const teamName = () => currentTeamQuery.data?.team.name?.trim() || 'Team';
-  const scopeOptions = createMemo<{ scope: TagScope; label: string }[]>(() =>
-    [
-      { scope: 'team' as const, label: `Shared with ${teamName()}` },
-      { scope: 'user' as const, label: 'Personal' },
-    ].filter((option) => props.docTags.scopes.includes(option.scope))
-  );
-  // A single available scope needs no choice; the color step creates directly.
-  const soleScope = () =>
-    scopeOptions().length === 1 ? scopeOptions()[0]?.scope : undefined;
+  const scopeOptions = createMemo<{ scope: TagScope; label: string }[]>(() => [
+    { scope: 'team', label: `Shared with ${teamName()}` },
+    { scope: 'user', label: 'Personal' },
+  ]);
   const selectedColor = () =>
     TAG_COLOR_OPTIONS[selectedColorIndex()]?.color ?? DEFAULT_TAG_COLOR;
   const createItemCount = () =>
@@ -636,9 +625,7 @@ function TagPickerBody(props: {
     } else if (event.key === 'Enter') {
       event.preventDefault();
       if (step === 'color') {
-        const scope = soleScope();
-        if (scope) void createTag(scope);
-        else setCreateStep('scope');
+        setCreateStep('scope');
       } else {
         const scope = scopeOptions()[selectedScopeIndex()]?.scope;
         if (scope) void createTag(scope);
@@ -889,9 +876,7 @@ function TagPickerBody(props: {
                 onColorMouseEnter={setSelectedColorIndex}
                 onColorSelect={(index) => {
                   setSelectedColorIndex(index);
-                  const scope = soleScope();
-                  if (scope) void createTag(scope);
-                  else setCreateStep('scope');
+                  setCreateStep('scope');
                 }}
                 onScopeMouseEnter={setSelectedScopeIndex}
                 onScopeSelect={(scope) => void createTag(scope)}

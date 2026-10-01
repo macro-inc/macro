@@ -18,25 +18,6 @@ import type { ResolvedTag } from './useSoupResolvedTags';
 
 export type { ResolvedTag } from './useSoupResolvedTags';
 
-export const ALL_TAG_SCOPES: readonly TagScope[] = ['user', 'team'];
-
-export type DocTagsOptions = {
-  /**
-   * Tag sets the surface shows and edits. Sets outside this list are invisible
-   * to it: their applied tags are not listed, their options are not offered,
-   * and `setTagSelection` leaves them untouched. Defaults to every set.
-   */
-  scopes?: readonly TagScope[];
-};
-
-function scopedTagSets(
-  tagSets: Accessor<TagSetResponse[]>,
-  scopes: readonly TagScope[]
-): Accessor<TagSetResponse[]> {
-  if (scopes === ALL_TAG_SCOPES) return tagSets;
-  return () => tagSets().filter((set) => scopes.includes(set.scope));
-}
-
 function optionLabel(option: PropertyOptionResponse): string {
   return option.value.type === 'string' ? option.value.value : '';
 }
@@ -102,16 +83,14 @@ function usePersistTagSelection(
 function createDocTags(
   appliedOptionIdsForDefinition: (definitionId: string) => string[],
   persistTagSelection: PersistTagSelection,
-  allTagSets: Accessor<TagSetResponse[]>,
+  tagSets: Accessor<TagSetResponse[]>,
   // Optimistic overlay for sources a mutation cannot write through (query
   // results, and soup rows whose property record does not exist yet).
   // Undefined for local sources, which are set synchronously.
   inFlightOptionIdsForDefinition?: (
     definitionId: string
-  ) => string[] | undefined,
-  scopes: readonly TagScope[] = ALL_TAG_SCOPES
+  ) => string[] | undefined
 ) {
-  const tagSets = scopedTagSets(allTagSets, scopes);
   const ensureTagSet = useEnsureTagSetMutation();
   const [displayOptionOrder, setDisplayOptionOrder] = createSignal<string[]>(
     []
@@ -180,9 +159,6 @@ function createDocTags(
   const resolveDefinition = async (
     scope: TagScope
   ): Promise<PropertyDefinitionDetailResponse> => {
-    if (!scopes.includes(scope)) {
-      throw new Error(`Tag scope "${scope}" is not available here`);
-    }
     const existing = definitionByScope().get(scope);
     if (existing) return existing;
     const provisioned = await ensureTagSet.mutateAsync({ scope });
@@ -278,7 +254,6 @@ function createDocTags(
   };
 
   return {
-    scopes,
     tagSets,
     appliedTags,
     optionById,
@@ -291,11 +266,7 @@ function createDocTags(
   };
 }
 
-export function useDocTags(
-  entityId: string,
-  entityType: EntityType,
-  options?: DocTagsOptions
-) {
+export function useDocTags(entityId: string, entityType: EntityType) {
   const { properties } = useEntityProperties(entityId, entityType, false);
   const appliedOptionIdsForDefinition = (definitionId: string) => {
     const property = properties().find(
@@ -324,8 +295,7 @@ export function useDocTags(
     appliedOptionIdsForDefinition,
     persistTagSelection,
     tagSets,
-    inFlightOptionIdsForDefinition,
-    options?.scopes
+    inFlightOptionIdsForDefinition
   );
 }
 
