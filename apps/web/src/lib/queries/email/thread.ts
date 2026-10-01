@@ -158,18 +158,13 @@ export async function fetchFreshEmailThread(
 }
 
 /**
- * Whether a thread's done state can actually be reversed.
+ * Legacy REST eligibility preflight. GraphQL validates received-message history
+ * in the email domain instead of guessing from an inbox-sorting timestamp or a
+ * partial message page. Bulk callers must settle each email independently: one
+ * rejected unarchive must not roll back successful or durably queued siblings.
  *
- * Doneness is derived, not stored: `inbox_visible` is recomputed server-side
- * as "some message has INBOX and not SENT", and the inbox view additionally
- * requires an inbound message. A thread with only sent messages satisfies
- * neither, so it is permanently done — unarchiving it reverts on the next
- * recompute and meanwhile labels its own sent messages INBOX, in Gmail too.
- *
- * Soup rows carry no inbound-message field, so this resolves the thread
- * (served from cache when it is already loaded). A failed lookup resolves to
- * `true`: the unarchive that follows would fail the same way, and blocking on
- * a transient error would misreport ordinary threads as unreversible.
+ * Failed legacy lookups remain permissive, so a transient read error does not
+ * misreport an ordinary thread as permanently done.
  */
 export async function threadCanBeMarkedNotDone(
   threadId: string

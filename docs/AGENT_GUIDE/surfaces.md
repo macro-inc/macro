@@ -492,6 +492,12 @@ offline action followed by reconnect. Also wait for provider/metadata synchroniz
 before Undo, and repeat after reloading: an archived received thread can lose its
 inbox-sorting timestamp but must still be unarchivable. Sent-only threads and
 unsent drafts cannot be unarchived; sent mail addressed back to its sender can.
+Bulk Mark Not Done settles per email: a rejected sent-only/draft thread stays done,
+while successful and durably queued siblings remain restored. Only accepted
+threads get their notifications restored. Notification or list-refresh failures
+warn without rolling back accepted unarchives. Verify mixed committed/queued/
+rejected selections, partial-success counts, and that a queued sibling prevents
+shared-list refetch even when notification restoration fails.
 
 The service retains both replica-backed Soup reads and a primary-backed email
 writer. Email mutations and their uncached reply reloads use the primary; ordinary

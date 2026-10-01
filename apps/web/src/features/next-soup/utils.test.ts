@@ -680,6 +680,68 @@ describe('mark-done orchestration', () => {
     });
   }
 
+  it('reports every unarchive outcome without refreshing over a queued sibling', async () => {
+    const failure = new Error('thread has no received messages');
+    operationMocks.archive
+      .mockResolvedValueOnce('committed')
+      .mockRejectedValueOnce(failure)
+      .mockResolvedValueOnce('queued');
+    const onEmailSettled = vi.fn();
+    await expect(
+      executeMarkEntitiesUndone({
+        emailIds: ['received', 'sent-only', 'queued'],
+        notificationIds: [],
+        onEmailSettled,
+      })
+    ).rejects.toBe(failure);
+    expect(onEmailSettled.mock.calls).toEqual([
+      ['received', { status: 'fulfilled', value: 'committed' }],
+      ['sent-only', { status: 'rejected', reason: failure }],
+      ['queued', { status: 'fulfilled', value: 'queued' }],
+    ]);
+    expect(invalidatedEmailList()).toBe(false);
+    expect(operationMocks.invalidateSoupEntity).not.toHaveBeenCalled();
+  });
+
+  it('reports committed email writes even when notification reversal fails', async () => {
+    operationMocks.bulkMarkNotificationsAsUndone.mockRejectedValueOnce(
+      new Error('notification failed')
+    );
+    const onEmailSettled = vi.fn();
+    await expect(
+      executeMarkEntitiesUndone({
+        emailIds: ['received'],
+        notificationIds: ['notification'],
+        onEmailSettled,
+      })
+    ).rejects.toThrow('notification failed');
+    expect(onEmailSettled).toHaveBeenCalledWith('received', {
+      status: 'fulfilled',
+      value: 'committed',
+    });
+  });
+
+  it.each([false, true])(
+    'notification-only reversal never refreshes shared email lists (failure=%s)',
+    async (failure) => {
+      if (failure)
+        operationMocks.bulkMarkNotificationsAsUndone.mockRejectedValueOnce(
+          new Error('notification failed')
+        );
+      const write = executeMarkEntitiesUndone({
+        emailIds: [],
+        notificationIds: ['notification'],
+      });
+      if (failure) await expect(write).rejects.toThrow('notification failed');
+      else await expect(write).resolves.toBe('committed');
+      expect(invalidatedEmailList()).toBe(false);
+      expect(operationMocks.cancelQueries).not.toHaveBeenCalledWith({
+        queryKey: queryKeys.all.email,
+      });
+      expect(operationMocks.archive).not.toHaveBeenCalled();
+    }
+  );
+
   it('executes entity notification writes directly and returns exact ids', async () => {
     operationMocks.updateNotificationsForEntities.mockResolvedValueOnce([
       { id: 'entity-notification' },

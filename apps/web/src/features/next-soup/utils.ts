@@ -1731,26 +1731,39 @@ export async function executeMarkEntitiesUndone(args: {
   emailIds: string[];
   notificationIds: string[];
   reminderIds?: string[];
+  /** Report each write before reconciliation, so bulk actions can settle or
+   * roll back just that thread even when a sibling write fails. */
+  onEmailSettled?: (
+    id: string,
+    result: PromiseSettledResult<EmailArchiveDisposition>
+  ) => void;
 }): Promise<EmailArchiveDisposition> {
   const { emailIds, notificationIds, reminderIds = [] } = args;
   await Promise.all([
-    queryClient.cancelQueries({ queryKey: queryKeys.all.email }),
+    ...(emailIds.length > 0
+      ? [queryClient.cancelQueries({ queryKey: queryKeys.all.email })]
+      : []),
     queryClient.cancelQueries({ queryKey: notificationKeys.user._def }),
   ]);
 
-  const results = await Promise.allSettled([
-    ...emailIds.map((id) => archiveEmailThread({ value: false, id })),
-    notificationIds.length > 0
-      ? bulkMarkNotificationsAsUndone(notificationIds)
-      : Promise.resolve(),
-    ...setRemindersCompleted(reminderIds, false),
+  const [emailResults, otherResults] = await Promise.all([
+    Promise.allSettled(
+      emailIds.map((id) => archiveEmailThread({ value: false, id }))
+    ),
+    Promise.allSettled([
+      notificationIds.length > 0
+        ? bulkMarkNotificationsAsUndone(notificationIds)
+        : Promise.resolve(),
+      ...setRemindersCompleted(reminderIds, false),
+    ]),
   ]);
-
-  const hasQueuedEmail = results
-    .slice(0, emailIds.length)
-    .some(
-      (result) => result.status === 'fulfilled' && result.value === 'queued'
-    );
+  for (const [index, result] of emailResults.entries()) {
+    args.onEmailSettled?.(emailIds[index], result);
+  }
+  const results = [...emailResults, ...otherResults];
+  const hasQueuedEmail = emailResults.some(
+    (result) => result.status === 'fulfilled' && result.value === 'queued'
+  );
   const rejected = results.find(
     (r): r is PromiseRejectedResult => r.status === 'rejected'
   );
@@ -1762,7 +1775,7 @@ export async function executeMarkEntitiesUndone(args: {
     // unarchived thread would sit there still showing as done.
     invalidateRemindersById(reminderIds, { refetch: true });
     await Promise.all([
-      ...(!hasQueuedEmail
+      ...(emailIds.length > 0 && !hasQueuedEmail
         ? [
             queryClient.invalidateQueries({ queryKey: queryKeys.all.email }),
             ...emailIds.map((id) => invalidateSoupEntity(id)),
@@ -1777,7 +1790,7 @@ export async function executeMarkEntitiesUndone(args: {
   invalidateRemindersById(reminderIds);
 
   await Promise.all([
-    ...(!hasQueuedEmail
+    ...(emailIds.length > 0 && !hasQueuedEmail
       ? [
           queryClient.invalidateQueries({
             queryKey: queryKeys.all.email,
