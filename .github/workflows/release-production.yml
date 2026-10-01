@@ -197,6 +197,18 @@ jobs:
       environment: prod
     secrets: inherit
 
+  deploy-website:
+    if: github.event_name == 'release'
+    name: Deploy Website
+    # Also owns the macro.com CloudFront distribution in front of the web app.
+    uses: ./.github/workflows/deploy_website.yml
+    with:
+      environment: prod
+    secrets:
+      AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+
   build:
     if: github.event_name == 'release'
     name: Build Web App
