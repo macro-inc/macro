@@ -22,7 +22,7 @@ import { storageServiceClient } from '@service-storage/client';
 import { useQueryClient } from '@tanstack/solid-query';
 import { createMemo, lazy } from 'solid-js';
 import type { CrmContext } from './context/crm-context';
-import type { ItemListSource } from './context/crm-sources';
+import type { CrmQuery, ItemListSource } from './context/crm-sources';
 import {
   openCreateCompanyModal,
   openCreateContactModal,
@@ -113,6 +113,31 @@ function withRowNotifications(source: ItemListSource): ItemListSource {
   };
 }
 
+/**
+ * A query contract whose `data` reads as `undefined` until the query is
+ * ready, so views can read it eagerly (e.g. in a memo) without suspending.
+ */
+function withReadyGate<T>(query: CrmQuery<T>): CrmQuery<T> {
+  return {
+    get data() {
+      return queryReadyGate(query) ? query.data : undefined;
+    },
+    get isPending() {
+      return query.isPending;
+    },
+    get isSuccess() {
+      return query.isSuccess;
+    },
+    get isLoading() {
+      return query.isLoading;
+    },
+    get isError() {
+      return query.isError;
+    },
+    refetch: () => query.refetch(),
+  };
+}
+
 /** Only this app-facing adapter constructs production capabilities. */
 export function createAppCrmContext(): CrmContext {
   const deps = {
@@ -200,7 +225,8 @@ export function createAppCrmContext(): CrmContext {
     userId,
     isTeamAdmin: useIsTeamAdmin,
     createCompanySource: (...args) => useCompanyQuery(deps, ...args),
-    createContactSource: (...args) => useContactQuery(deps, ...args),
+    createContactSource: (...args) =>
+      withReadyGate(useContactQuery(deps, ...args)),
     createTeamSource: useCurrentTeamQuery,
     createTeamConfigSource: createSettings,
     createCapabilities: () =>
