@@ -79,10 +79,11 @@ export const SAVINGS_TOOLS: readonly SavingsTool[] = [
     ],
   },
   {
+    // Sales Hub, HubSpot's per-seat CRM plans.
     id: 'hubspot',
     name: 'HubSpot',
     plans: [
-      { id: 'starter', name: 'Starter', monthlyCents: 900 },
+      { id: 'starter', name: 'Starter', monthlyCents: 700 },
       { id: 'professional', name: 'Professional', monthlyCents: 9000 },
     ],
   },

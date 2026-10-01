@@ -27,7 +27,7 @@ const unselected = (...ids: SavingsToolId[]) =>
 
 describe('savings calculator', () => {
   it('multiplies every selected entry plan by seats and months', () => {
-    const monthly = 1000 + 1000 + 791 + 1099 + 700 + 900 + 2500 + 725 + 2500;
+    const monthly = 1000 + 1000 + 791 + 1099 + 700 + 700 + 2500 + 725 + 2500;
     expect(summarizeSavings(choices(), 5)).toEqual({
       toolsCents: monthly * 12 * 5,
       macroCents: 4000 * 12 * 5,
