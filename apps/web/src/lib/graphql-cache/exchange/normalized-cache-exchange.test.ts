@@ -3395,9 +3395,14 @@ describe('normalizedCacheExchange', () => {
       }
     );
 
-    it.each([undefined, 'txn-2'])(
-      'settles an identity failure without replaying the failed attempt (replacement %s)',
-      async (replacementTransactionId) => {
+    it.each([
+      { replacementTransactionId: undefined, callbackThrows: false },
+      { replacementTransactionId: undefined, callbackThrows: true },
+      { replacementTransactionId: 'txn-2', callbackThrows: false },
+      { replacementTransactionId: 'txn-2', callbackThrows: true },
+    ])(
+      'settles an identity failure without replaying the failed attempt (replacement $replacementTransactionId, callback throws=$callbackThrows)',
+      async ({ replacementTransactionId, callbackThrows }) => {
         const commit = host.commitOptimisticWrite.bind(host);
         host.commitOptimisticWrite = async (transactionId, claim, args) => ({
           ...(await commit(transactionId, claim, args)),
@@ -3405,7 +3410,9 @@ describe('normalizedCacheExchange', () => {
           error: 'missing identity response id',
           replacementTransactionId,
         });
-        const onCacheError = vi.fn();
+        const onCacheError = vi.fn(() => {
+          if (callbackThrows) throw new Error('diagnostic failed');
+        });
         const { ops, results, client, forwarded } = harness(host, undefined, {
           onCacheError,
         });
@@ -3416,6 +3423,7 @@ describe('normalizedCacheExchange', () => {
           expect.objectContaining({ message: 'missing identity response id' }),
           expect.anything()
         );
+        expect(onCacheError).toHaveBeenCalledTimes(1);
         expect(host.commits).toHaveLength(1);
         expect(host.defers).toHaveLength(0);
         expect(forwarded).toHaveLength(1);

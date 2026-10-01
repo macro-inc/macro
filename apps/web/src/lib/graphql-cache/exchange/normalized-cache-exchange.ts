@@ -1466,7 +1466,11 @@ export function normalizedCacheExchange(
                 }
                 if (committed.kind === 'failed') {
                   const error = new Error(committed.error);
-                  options.onCacheError?.(error, op);
+                  try {
+                    options.onCacheError?.(error, op);
+                  } catch {
+                    // A diagnostic callback cannot undo confirmed settlement.
+                  }
                   result = {
                     ...result,
                     data: undefined,
