@@ -174,6 +174,11 @@ export async function fetchFreshEmailThread(
 export async function threadCanBeMarkedNotDone(
   threadId: string
 ): Promise<boolean> {
+  // GraphQL validates received-message history in the email domain. Its inbox
+  // sort timestamp can be null after archive, and a partial cached message page
+  // cannot prove a thread is sent-only. Let the mutation decide and roll back
+  // on rejection, without delaying the optimistic UI for another thread fetch.
+  if (isFeatureEnabled(enableGraphqlSoup)) return true;
   const result = await fetchAndCacheThread(threadId);
   if (result.isErr()) return true;
   return result.value.thread.latest_inbound_message_ts != null;

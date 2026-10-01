@@ -9,6 +9,11 @@ vi.mock('@queries/client', () => ({
   },
 }));
 
+const refresh = vi.hoisted(() => vi.fn(async () => {}));
+vi.mock('./active-queries', () => ({
+  refreshActiveGraphqlSoupQueries: refresh,
+}));
+
 import {
   GRAPHQL_SOUP_DONE_RETENTION_MS,
   hideGraphqlSoupEntitiesAsDone,
@@ -20,6 +25,8 @@ import {
 let client: QueryClient;
 let dispose: (() => void) | undefined;
 beforeEach(() => {
+  refresh.mockReset();
+  refresh.mockResolvedValue();
   client = new QueryClient();
 });
 afterEach(() => {
@@ -49,9 +56,14 @@ const pending = (
   entityIds: string[],
   notificationIds: string[] = []
 ): PendingGraphqlSoupDone => ({
+  operation: {},
+  done: true,
+  observe: vi.fn(),
+  unobserve: vi.fn(),
   entityIds: new Set(entityIds),
   notificationIds: new Set(notificationIds),
   startedAt: STARTED_AT,
+  notificationStartedAt: STARTED_AT,
   scopeChannelThreads: false,
 });
 
@@ -169,15 +181,151 @@ describe('hideGraphqlSoupEntitiesAsDone', () => {
     await vi.waitFor(() => expect(read()).toEqual([]));
   });
 
-  it('expires overlays that are never released', async () => {
+  it('does not expire a write that is still pending', async () => {
     vi.useFakeTimers();
     const read = observePending();
-    hideGraphqlSoupEntitiesAsDone({ entityIds: ['a'], notificationIds: [] });
-    hideGraphqlSoupEntitiesAsDone({ entityIds: ['b'], notificationIds: [] });
-    await vi.advanceTimersByTimeAsync(1);
-    expect(read()).toHaveLength(2);
+    const overlay = hideGraphqlSoupEntitiesAsDone({
+      entityIds: ['a'],
+      notificationIds: [],
+    });
+    await vi.advanceTimersByTimeAsync(GRAPHQL_SOUP_DONE_RETENTION_MS * 2);
+    expect(read()).toHaveLength(1);
+    expect(refresh).not.toHaveBeenCalled();
+    overlay.release();
+  });
 
+  it('collects settled intents with no mounted readers', async () => {
+    vi.useFakeTimers();
+    const read = observePending();
+    const overlay = hideGraphqlSoupEntitiesAsDone({
+      entityIds: ['a'],
+      notificationIds: [],
+    });
+    overlay.settle();
     await vi.advanceTimersByTimeAsync(GRAPHQL_SOUP_DONE_RETENTION_MS);
     expect(read()).toEqual([]);
+  });
+
+  it('waits for both settlement and every mounted reader to acknowledge', async () => {
+    const read = observePending();
+    const overlay = hideGraphqlSoupEntitiesAsDone({
+      entityIds: ['a'],
+      notificationIds: [],
+    });
+    await vi.waitFor(() => expect(read()).toHaveLength(1));
+    const entry = read()[0];
+    const all = {},
+      signal = {};
+    entry.observe(all, true);
+    entry.observe(signal, false);
+    overlay.settle();
+    await Promise.resolve();
+    expect(read()).toHaveLength(1);
+    entry.observe(signal, true);
+    await vi.waitFor(() => expect(read()).toEqual([]));
+  });
+
+  it('retains intent when reconciliation is stale or fails past the old expiry', async () => {
+    vi.useFakeTimers();
+    refresh.mockRejectedValue(new Error('offline'));
+    const read = observePending();
+    const overlay = hideGraphqlSoupEntitiesAsDone({
+      entityIds: ['a'],
+      notificationIds: [],
+    });
+    await vi.advanceTimersByTimeAsync(1);
+    read()[0].observe({}, false);
+    overlay.settle();
+    await vi.advanceTimersByTimeAsync(GRAPHQL_SOUP_DONE_RETENTION_MS);
+    expect(refresh).toHaveBeenCalledOnce();
+    expect(read()).toHaveLength(1);
+    overlay.release();
+  });
+
+  it('retires superseded intent after acknowledgement without losing other bulk targets', async () => {
+    const read = observePending();
+    const first = hideGraphqlSoupEntitiesAsDone({
+      entityIds: ['a', 'b'],
+      notificationIds: [],
+    });
+    const latest = hideGraphqlSoupEntitiesAsDone({
+      entityIds: ['a'],
+      notificationIds: [],
+      done: false,
+    });
+    await vi.waitFor(() => expect(read()).toHaveLength(2));
+    read()[1].observe({}, true);
+    latest.settle();
+    await vi.waitFor(() => expect(read()).toHaveLength(1));
+    expect([...read()[0].entityIds]).toEqual(['b']);
+    first.release();
+  });
+
+  it('does not let a delayed old acknowledgement release an intent with new exact IDs', async () => {
+    const read = observePending();
+    const overlay = hideGraphqlSoupEntitiesAsDone({
+      entityIds: ['a'],
+      notificationIds: ['known'],
+    });
+    await vi.waitFor(() => expect(read()).toHaveLength(1));
+    const old = read()[0];
+    const reader = {};
+    old.observe(reader, true);
+    overlay.settle(['known', 'authoritative']);
+    old.observe(reader, true);
+    await vi.waitFor(() =>
+      expect(read()[0].notificationIds.has('authoritative')).toBe(true)
+    );
+    expect(read()).toHaveLength(1);
+    read()[0].observe(reader, true);
+    await vi.waitFor(() => expect(read()).toEqual([]));
+  });
+
+  it('keeps the original notification cutoff across Undo/Redo', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(STARTED_AT);
+    const read = observePending();
+    const overlay = hideGraphqlSoupEntitiesAsDone({
+      entityIds: ['a'],
+      notificationIds: ['n1'],
+    });
+    await vi.advanceTimersByTimeAsync(1);
+    overlay.setDone(false);
+    await vi.advanceTimersByTimeAsync(2_000);
+    overlay.setDone(true);
+    await vi.advanceTimersByTimeAsync(1);
+    const entry = read()[0];
+    expect(entry.startedAt).toBeGreaterThan(STARTED_AT);
+    expect(entry.notificationStartedAt).toBe(STARTED_AT);
+    const document = {
+      ...entity('a', [{ id: 'n2', state: 'unseen', created_at: AFTER_ACTION }]),
+      type: 'document',
+    } as EntityData;
+    expect(withPendingDoneIds(new Set(), [document], [entry]).has('a')).toBe(
+      false
+    );
+    overlay.release();
+  });
+
+  it('retains operation identity across Undo and ignores acknowledgements of older intent', async () => {
+    const read = observePending();
+    const overlay = hideGraphqlSoupEntitiesAsDone({
+      entityIds: ['a'],
+      notificationIds: ['n1'],
+    });
+    await vi.waitFor(() => expect(read()).toHaveLength(1));
+    const old = read()[0];
+    overlay.setDone(false);
+    await vi.waitFor(() => expect(read()[0].done).toBe(false));
+    const undone = read()[0];
+    expect(undone.operation).toBe(old.operation);
+    const reader = {};
+    undone.observe(reader, false);
+    old.observe(reader, true);
+    overlay.settle();
+    await Promise.resolve();
+    expect(read()).toHaveLength(1);
+    undone.observe(reader, true);
+    await vi.waitFor(() => expect(read()).toEqual([]));
   });
 });

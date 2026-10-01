@@ -116,7 +116,7 @@ vi.mock('@queries/soup/cache', () => ({
   })),
 }));
 const hideGraphqlSoupEntitiesAsDone = vi.hoisted(() =>
-  vi.fn(() => ({ release: vi.fn() }))
+  vi.fn(() => ({ release: vi.fn(), setDone: vi.fn(), settle: vi.fn() }))
 );
 vi.mock('@queries/soup/graphql/optimistic-done', () => ({
   hideGraphqlSoupEntitiesAsDone,
@@ -718,11 +718,18 @@ describe('mark-done optimism', () => {
     expect(applied?.release).toHaveBeenCalledOnce();
 
     context.reapply();
-    const reapplied = hideGraphqlSoupEntitiesAsDone.mock.results[1]?.value;
-    expect(reapplied).toBeDefined();
+    expect(applied?.setDone).toHaveBeenLastCalledWith(true);
+    expect(hideGraphqlSoupEntitiesAsDone).toHaveBeenCalledOnce();
 
     context.applyUndone();
-    expect(reapplied?.release).toHaveBeenCalledOnce();
+    expect(applied?.setDone).toHaveBeenLastCalledWith(false);
+    context.settle(['notification-1', 'authoritative-id']);
+    expect(applied?.settle).toHaveBeenCalledWith([
+      'notification-1',
+      'authoritative-id',
+    ]);
+    context.releaseGraphql();
+    expect(applied?.release).toHaveBeenCalledTimes(2);
   });
 });
 

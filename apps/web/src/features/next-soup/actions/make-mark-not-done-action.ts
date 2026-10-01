@@ -33,6 +33,7 @@ const uncompleteReminders = async (reminders: EntityData[]) => {
       notificationIds: [],
       reminderIds,
     });
+    optimistic.settle();
     toast.success(
       reminderIds.length > 1
         ? `Marked ${reminderIds.length} reminders as not done`
@@ -111,6 +112,7 @@ export const makeMarkNotDoneAction = (options: MakeMarkNotDoneOptions) => {
           ...new Set([...notificationIds, ...serverNotificationIds]),
         ],
       });
+      optimistic.settle();
       // Match the mark-done action's success feedback (and the direct
       // unarchive fallback's toast in EmailContext).
       toast.success(

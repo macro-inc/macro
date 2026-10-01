@@ -347,6 +347,66 @@ describe('makeMarkDoneAction', () => {
     dispose();
   });
 
+  it('applies Undo before its server reply and settles only afterwards', async () => {
+    const { dispose } = createAction();
+    const variables = {
+      emailIds: ['current'],
+      exactNotificationIds: { current: ['exact-id'] },
+      reminderIds: [],
+    };
+    const context = {
+      applyUndone: vi.fn(),
+      reapply: vi.fn(),
+      settle: vi.fn(),
+      releaseGraphql: vi.fn(),
+    };
+    const options = mocks.undoableOptionsFactory() as {
+      undoFn: (input: typeof variables, ctx: typeof context) => Promise<void>;
+    };
+    let finish!: () => void;
+    mocks.executeMarkEntitiesUndone.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        })
+    );
+    const undo = options.undoFn(variables, context);
+    expect(context.applyUndone).toHaveBeenCalledOnce();
+    expect(context.settle).not.toHaveBeenCalled();
+    finish();
+    await undo;
+    expect(context.settle).toHaveBeenCalledWith(['exact-id']);
+    dispose();
+  });
+
+  it('does not pin guessed GraphQL state after a partially failed reversal', async () => {
+    const { dispose } = createAction();
+    const variables = {
+      emailIds: ['current'],
+      exactNotificationIds: { current: ['exact-id'] },
+      reminderIds: [],
+    };
+    const context = {
+      applyUndone: vi.fn(),
+      reapply: vi.fn(),
+      settle: vi.fn(),
+      releaseGraphql: vi.fn(),
+    };
+    const options = mocks.undoableOptionsFactory() as {
+      undoFn: (input: typeof variables, ctx: typeof context) => Promise<void>;
+    };
+    mocks.executeMarkEntitiesUndone.mockRejectedValueOnce(
+      new Error('partial failure')
+    );
+    await expect(options.undoFn(variables, context)).rejects.toThrow(
+      'partial failure'
+    );
+    expect(context.reapply).toHaveBeenCalledOnce();
+    expect(context.releaseGraphql).toHaveBeenCalledOnce();
+    expect(context.settle).not.toHaveBeenCalled();
+    dispose();
+  });
+
   it('retains authoritative entity results for exact undo and ID-scoped redo', async () => {
     mocks.graphqlSoupEnabled.mockReturnValue(true);
     mocks.resolveMarkEntitiesDoneVariables.mockReturnValue({

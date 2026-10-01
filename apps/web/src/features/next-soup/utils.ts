@@ -1315,6 +1315,10 @@ export type MarkEntitiesDoneContext = {
   reapply: () => void;
   /** Reverts email/soup caches and forces `done=false` override. Use for undo. */
   applyUndone: () => void;
+  /** Release GraphQL intent only after mounted cache readers acknowledge it. */
+  settle: (notificationIds?: readonly string[]) => void;
+  /** After a partial inverse failure, let authoritative GraphQL state reconcile. */
+  releaseGraphql: () => void;
 };
 
 function notificationsForMarkDone(
@@ -1474,6 +1478,7 @@ export function applyEntitiesDoneOptimistic(args: {
 
   let soupTxn: ReturnType<typeof removeSoupEntities> | null = null;
   let graphqlDone: GraphqlSoupDoneOverlay | null = null;
+  let rollbackNotifications: ReturnType<typeof setDoneOverride> | undefined;
   let emailRowTxns: { rollback: () => void }[] = [];
   let reminderRowTxns: { rollback: () => void }[] = [];
   const completedStamp = new Date().toISOString();
@@ -1490,15 +1495,14 @@ export function applyEntitiesDoneOptimistic(args: {
     // notification mutation waits for the server, and even the optimistic
     // archive only drops a row after its durable enqueue and a list
     // re-evaluation, so hide the rows locally until the cache catches up.
-    graphqlDone?.release();
-    graphqlDone =
-      entityIds.length > 0
-        ? hideGraphqlSoupEntitiesAsDone({
-            entityIds,
-            notificationIds,
-            scopeChannelThreads: args.scopeChannelThreads,
-          })
-        : null;
+    if (graphqlDone) graphqlDone.setDone(true);
+    else if (entityIds.length > 0) {
+      graphqlDone = hideGraphqlSoupEntitiesAsDone({
+        entityIds,
+        notificationIds,
+        scopeChannelThreads: args.scopeChannelThreads,
+      });
+    }
     // Rows that remain visible flip to the done state.
     emailRowTxns = emailIds.map((id) =>
       optimisticUpdateSoupEntity({
@@ -1518,7 +1522,7 @@ export function applyEntitiesDoneOptimistic(args: {
       })
     );
     filterEmailCache();
-    setDoneOverride(notificationIds, true);
+    rollbackNotifications = setDoneOverride(notificationIds, true);
   };
 
   const rollbackSoup = () => {
@@ -1532,28 +1536,37 @@ export function applyEntitiesDoneOptimistic(args: {
     emailRowTxns = [];
     soupTxn?.rollback();
     soupTxn = null;
-    graphqlDone?.release();
-    graphqlDone = null;
   };
 
   const rollback = () => {
     rollbackSoup();
+    graphqlDone?.release();
     restoreEmailCache();
-    setDoneOverride(notificationIds, undefined);
+    rollbackNotifications?.();
   };
 
   const applyUndone = () => {
     rollbackSoup();
+    graphqlDone?.setDone(false);
     restoreEmailCache();
     restoreUserNotifications(notificationSnapshots);
     // Force `done=false` — cache may have reconciled to `done=true` from the
     // server, so clearing the override would leave the UI hidden after undo.
-    setDoneOverride(notificationIds, false);
+    rollbackNotifications = setDoneOverride(notificationIds, false);
   };
 
   reapply();
 
-  return { rollback, reapply, applyUndone };
+  return {
+    rollback,
+    reapply,
+    applyUndone,
+    settle: (ids) => graphqlDone?.settle(ids),
+    releaseGraphql: () => {
+      graphqlDone?.release();
+      rollbackNotifications?.release();
+    },
+  };
 }
 
 /**
@@ -1566,8 +1579,13 @@ export function applyEntitiesNotDoneOptimistic(args: {
   emailIds: string[];
   notificationIds: string[];
   reminderIds?: string[];
-}): { rollback: () => void } {
+}): { rollback: () => void; settle: () => void } {
   const { emailIds, notificationIds, reminderIds = [] } = args;
+  const graphqlDone = hideGraphqlSoupEntitiesAsDone({
+    entityIds: [...emailIds, ...reminderIds],
+    notificationIds,
+    done: false,
+  });
   // Clearing `completedAt` is what returns a reminder to Active or Scheduled
   // (whichever its `nextRunAt` puts it in); both predicates require it unset.
   const reminderRowTxns = reminderIds.map((id) =>
@@ -1585,17 +1603,19 @@ export function applyEntitiesNotDoneOptimistic(args: {
       frecency_score: getSoupEntityById(id)?.frecency_score ?? 0,
     })
   );
-  setDoneOverride(notificationIds, false);
+  const rollbackNotifications = setDoneOverride(notificationIds, false);
 
   return {
+    settle: () => graphqlDone.settle(),
     rollback: () => {
+      graphqlDone.release();
       for (const txn of [...reminderRowTxns].reverse()) {
         txn.rollback();
       }
       for (const txn of [...emailRowTxns].reverse()) {
         txn.rollback();
       }
-      setDoneOverride(notificationIds, undefined);
+      rollbackNotifications?.();
     },
   };
 }

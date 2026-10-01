@@ -146,6 +146,9 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
         ]),
       ];
     },
+    onSuccess: (_data, variables, context) => {
+      context?.settle(variables.exactNotificationIds.current);
+    },
     onError: (_err, _variables, context) => {
       context?.rollback();
       toast.failure('Failed to mark as done');
@@ -158,8 +161,10 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
           notificationIds: variables.exactNotificationIds.current,
           reminderIds: variables.reminderIds,
         });
+        context?.settle(variables.exactNotificationIds.current);
       } catch (err) {
         context?.reapply();
+        context?.releaseGraphql();
         throw err;
       }
     },
@@ -171,8 +176,10 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
           notificationIds: variables.exactNotificationIds.current,
           reminderIds: variables.reminderIds,
         });
+        context?.settle(variables.exactNotificationIds.current);
       } catch (err) {
         context?.applyUndone();
+        context?.releaseGraphql();
         throw err;
       }
     },

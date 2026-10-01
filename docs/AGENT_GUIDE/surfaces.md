@@ -101,14 +101,25 @@ other entity partitions, and notified-at sorting still use the network path.
 
 The Mark done action (`e`, row menu) hides its rows at once from GraphQL lists that
 exclude done items, such as Email Important/Noise and Home Signal, without waiting
-for the server. Lists that show done items, such as Email All, keep the row. Undo
-or a failed write brings the row back, and so does a new active notification on the
-entity. To verify, mark a row done and watch it for a few seconds. It must not
-reappear once the server reply lands, and it must stay gone after a reload.
+for the server. Email All keeps the row and flips its done indicator immediately.
+Undo restores a previously admitted row even after the cache has removed it,
+without waiting for the reversal's server reply; changing filters/sort clears
+those view-local restoration snapshots. Home's separate recent-activity inclusion
+rules are unchanged. Test Done/Undo/Redo with delayed replies and verify both flat
+and grouped rows/counts. A failure must roll back only its own local intent.
+Newer in-scope activity can re-admit a row, but loading an older notification or
+activity in a separate channel thread must not. Redo targets the original exact
+notification IDs, not notifications received since the original action. A newer
+Done must win over an older retained overlay. Delay reconciliation past a minute:
+pending/stale state must not simply expire and resurrect the row. Once committed,
+mounted cache readers must acknowledge the intent before its overlay is released.
+After a successful Done, verify that the row stays gone after a reload.
 In Tasks, Email, Home and Drive, rows keep their DOM when the list updates. A
 property edit or a rename updates the edited row in place instead of rebuilding
 every visible row. To verify, watch the row nodes with a `MutationObserver` while
-editing: only moved or removed rows should be added or removed.
+editing: only moved or removed rows should be added or removed. Rename a row and
+then drag it: its drag label/payload must use the new fields without another
+registration/layout measurement.
 
 Channels use the same general Soup reconciliation path, not a separate local page
 chain. Channel ID, type, team, organization, importance, and participant-scoped
