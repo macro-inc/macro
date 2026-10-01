@@ -52,7 +52,7 @@ pub use build_context::{
     build_anthropic_tool_context, build_image_generator_from_env,
     build_tool_service_context_from_env,
 };
-pub use mcp_app_catalog::pipedream_client_from_env;
+pub use mcp_app_catalog::{PipedreamMcpAppCatalog, pipedream_client_from_env};
 pub use search::search_toolset;
 pub use tool_context::{
     ChannelSideEffectClients, NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress,
