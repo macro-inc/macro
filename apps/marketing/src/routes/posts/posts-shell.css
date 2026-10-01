@@ -1,0 +1,792 @@
+.posts-shell {
+  box-sizing: border-box;
+  color: var(--c2);
+  font-family: 'cyberreader', system-ui, sans-serif;
+  width: 100%;
+}
+
+.posts-shell,
+.posts-shell * {
+  box-sizing: border-box;
+}
+
+.posts-shell a {
+  color: var(--a0);
+  text-decoration: none;
+}
+
+.posts-shell a:hover {
+  color: var(--c0);
+}
+
+.posts-article {
+  margin: 0 auto;
+  max-width: 792px;
+  padding: 116px 24px 120px;
+}
+
+.posts-article--with-footer {
+  padding-bottom: 0;
+}
+
+.posts-page-footer {
+  padding-bottom: 48px;
+  padding-inline: 24px;
+}
+
+.posts-home-cta-wrap {
+  display: grid;
+  justify-items: center;
+  padding-block: 68px;
+  padding-inline: 24px;
+}
+
+.posts-index-shell--with-tail {
+  padding-bottom: 0;
+}
+
+/* ---- Linear-style article header (centered) ---- */
+.posts-article-header {
+  margin: 0 auto;
+  text-align: center;
+}
+
+.posts-eyebrow {
+  align-items: center;
+  color: var(--c4);
+  display: flex;
+  flex-wrap: wrap;
+  font-family: 'cyberreader', system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  gap: 8px;
+  justify-content: center;
+}
+
+.posts-shell .posts-eyebrow a {
+  color: var(--c4);
+}
+
+.posts-shell .posts-eyebrow a:hover {
+  color: var(--c1);
+}
+
+.posts-eyebrow-sep {
+  color: var(--c4);
+  opacity: 0.5;
+}
+
+.posts-title {
+  color: var(--c0);
+  font-family: 'cyberreader', system-ui, sans-serif;
+  font-size: clamp(32px, 5vw, 48px);
+  font-weight: 400;
+  letter-spacing: -0.022em;
+  line-height: 1.05;
+  margin: 18px auto 0;
+  max-width: 836px;
+}
+
+.posts-title-line2 {
+  color: var(--c2);
+  display: inline-block;
+  font-size: 0.62em;
+  letter-spacing: -0.018em;
+  line-height: 1.2;
+  margin-top: 0.28em;
+}
+
+.posts-hero-art {
+  background: radial-gradient(60% 70% at 50% 50%, color-mix(in srgb, var(--ambient-ink) 5%, transparent), transparent 72%);
+  container-type: inline-size;
+  margin: 56px auto 28px;
+  padding: 48px 0;
+  position: relative;
+}
+
+/* Dividers stay within the centered reading column. */
+.posts-hero-art::before,
+.posts-hero-art::after {
+  background: color-mix(in srgb, var(--b4) 22%, transparent);
+  content: '';
+  height: 1px;
+  left: 50%;
+  position: absolute;
+  transform: translateX(-50%);
+  width: 100%;
+}
+
+.posts-hero-art::before {
+  top: 0;
+}
+
+.posts-hero-art::after {
+  bottom: 0;
+}
+
+.posts-hero-art .post-cover {
+  border-bottom: 0;
+}
+
+.posts-byline {
+  align-items: center;
+  color: var(--c4);
+  display: flex;
+  flex-wrap: wrap;
+  font-family: 'cyberreader', system-ui, sans-serif;
+  font-size: 16px;
+  gap: 9px;
+  justify-content: center;
+}
+
+.posts-byline-avatar {
+  border-radius: 50%;
+  height: 26px;
+  object-fit: cover;
+  width: 26px;
+}
+
+.posts-byline-name {
+  color: var(--c1);
+  font-weight: 500;
+}
+
+.posts-byline-sep {
+  opacity: 0.6;
+}
+
+.posts-byline time {
+  color: var(--c4);
+}
+
+.posts-updated {
+  color: var(--c4);
+  font-family: 'cyberreader', system-ui, sans-serif;
+  font-size: 13px;
+  margin: 10px 0 0;
+  text-align: center;
+}
+
+.posts-updated time {
+  color: var(--c3);
+}
+
+.posts-not-found {
+  display: grid;
+  gap: 12px;
+  margin: 0 auto;
+  max-width: 680px;
+  padding: 64px 24px;
+}
+
+.posts-hero {
+  border-bottom: 1px solid var(--b3);
+  display: grid;
+  gap: 24px;
+  margin-bottom: 48px;
+  padding-bottom: 40px;
+}
+
+.posts-hero-topline,
+.posts-index-meta {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  justify-content: space-between;
+}
+
+.posts-breadcrumb,
+.posts-kicker,
+.posts-index-date,
+.posts-toc-title {
+  color: var(--c4);
+  font-family: 'cyberreader', system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.posts-header-text time {
+  color: var(--a0);
+  display: block;
+  font-family: 'cyberreader', system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  margin-bottom: 16px;
+  text-transform: uppercase;
+}
+
+.posts-header-text h1,
+.posts-index-hero h1,
+.posts-shell .posts-index-title {
+  color: var(--c0);
+  font-family: 'cyberreader', system-ui, sans-serif;
+  font-weight: 400;
+}
+
+.posts-header-text h1 {
+  font-size: clamp(38px, 5.6vw, 60px);
+  line-height: 1.04;
+  margin: 0;
+}
+
+.posts-lede {
+  color: var(--c4);
+  font-family: 'cyberreader', system-ui, sans-serif;
+  font-size: clamp(13px, 1.3vw, 14px);
+  line-height: 1.45;
+  margin: 18px auto 0;
+  max-width: 32rem;
+  text-align: center;
+  width: fit-content;
+}
+
+.post-body {
+  color: var(--c4);
+  font-family: 'cyberreader', system-ui, sans-serif;
+  font-size: 17px;
+  line-height: 1.6;
+  margin: 52px auto 0;
+  max-width: 695px;
+}
+
+.post-body > :first-child {
+  margin-top: 0;
+}
+
+.post-body p {
+  margin: 0 0 20px;
+  text-align: left;
+}
+
+.post-body h2,
+.post-body h3 {
+  color: var(--c0);
+  font-family: 'cyberreader', system-ui, sans-serif;
+  font-weight: 400;
+  letter-spacing: -0.018em;
+}
+
+.post-body h2 {
+  font-size: 24px;
+  letter-spacing: -0.012em;
+  line-height: 1.33;
+  margin: 76px 0 14px;
+}
+
+.post-body h2:first-child {
+  margin-top: 0;
+}
+
+.post-body h3 {
+  font-size: 20px;
+  line-height: 1.3;
+  margin: 48px 0 10px;
+}
+
+/* Faded section numbers in the left margin (FIG-style motif) */
+.post-body {
+  counter-reset: post-h2;
+}
+
+.post-body h2 {
+  counter-increment: post-h2;
+  counter-reset: post-h3;
+  position: relative;
+}
+
+.post-body h3 {
+  counter-increment: post-h3;
+  position: relative;
+}
+
+.post-body h2::before,
+.post-body h3::before {
+  color: color-mix(in srgb, var(--c4) 42%, transparent);
+  font-family: 'body', system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  position: absolute;
+  text-align: right;
+  top: 0.55em;
+}
+
+.post-body h2::before {
+  content: counter(post-h2, decimal-leading-zero);
+  left: -5rem;
+  width: 2.75rem;
+}
+
+.post-body h3::before {
+  content: counter(post-h2, decimal-leading-zero) "." counter(post-h3);
+  left: -6.25rem;
+  width: 4rem;
+}
+
+/* Not enough left gutter on smaller screens — sit the number above instead */
+@media (max-width: 980px) {
+  .post-body h2::before,
+  .post-body h3::before {
+    display: block;
+    left: auto;
+    margin-bottom: 8px;
+    position: static;
+    text-align: left;
+    width: auto;
+  }
+}
+
+.post-body code {
+  color: var(--c1);
+  font-family: 'rajdhani', body, system-ui, sans-serif;
+  font-size: 0.95em;
+}
+
+.posts-tags {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.post-tag {
+  border: 1px solid var(--b4);
+  color: var(--c4);
+  display: inline-flex;
+  font-family: 'cyberreader', system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  padding: 6px 8px 5px;
+  text-transform: uppercase;
+}
+
+.posts-shell a.post-tag:hover,
+.post-tag--active {
+  border-color: var(--a0);
+  color: var(--a0);
+}
+
+.post-tag--inactive {
+  pointer-events: none;
+}
+
+/* ------------------------------------------------------------------ */
+/* Blog index — Linear /now style                                       */
+/* ------------------------------------------------------------------ */
+
+.posts-index-shell {
+  margin: 0 auto;
+  max-width: 1280px;
+  padding: 104px 24px 100px;
+}
+
+.posts-index-hero {
+  margin-bottom: 0;
+  padding-bottom: 44px;
+  position: relative;
+}
+
+/* Rule between hero and post grid. */
+.posts-index-hero::after {
+  background: color-mix(in srgb, var(--b4) 22%, transparent);
+  bottom: 0;
+  content: '';
+  height: 1px;
+  left: 50%;
+  position: absolute;
+  transform: translateX(-50%);
+  width: 100%;
+}
+
+.posts-index-hero h1 {
+  color: var(--c1);
+  font-family: 'display', Georgia, serif;
+  font-size: clamp(38px, 9vw, 56px);
+  font-weight: 420;
+  letter-spacing: normal;
+  line-height: 1.12;
+  margin: 0;
+}
+
+.posts-index-sub {
+  color: color-mix(in srgb, var(--c4) 60%, transparent);
+  font-family: 'body', system-ui, sans-serif;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.5;
+  margin: 18px 0 0;
+  max-width: 440px;
+}
+
+/* Toolbar: category filters (left) + search (right) */
+.post-toolbar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 24px;
+  justify-content: space-between;
+  margin-bottom: 54px;
+  margin-top: 40px;
+  padding-bottom: 46px;
+  position: relative;
+}
+
+/* Rule under the toolbar. */
+.post-toolbar::after {
+  background: color-mix(in srgb, var(--b4) 22%, transparent);
+  bottom: 0;
+  content: '';
+  height: 1px;
+  left: 50%;
+  position: absolute;
+  transform: translateX(-50%);
+  width: 100%;
+}
+
+.post-filter {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 20px;
+  margin: 0;
+  padding: 0;
+}
+
+.posts-shell a.post-filter-link {
+  color: var(--c4);
+  font-family: 'rajdhani', 'body', system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  transition: color 0.15s ease;
+}
+
+.posts-shell a.post-filter-link:hover {
+  color: var(--c2);
+}
+
+.posts-shell a.post-filter-link--active {
+  color: var(--c0);
+}
+
+/* Search pill — copied from Linear's openSearchButton */
+.post-search {
+  align-items: center;
+  background: var(--b2);
+  border: 0;
+  border-radius: 100px;
+  margin-top: -3px;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.03),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.04),
+    0 0 0 1px rgba(0, 0, 0, 0.6),
+    0 4px 4px 0 rgba(0, 0, 0, 0.1);
+  color: var(--c4);
+  display: flex;
+  gap: 10px;
+  height: 40px;
+  padding: 0 16px;
+  transition: box-shadow 0.15s ease;
+  width: 260px;
+}
+
+.post-search:focus-within {
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.05),
+    0 0 0 1px var(--b4),
+    0 0 0 3px color-mix(in srgb, var(--c4) 18%, transparent);
+}
+
+.post-search-icon {
+  color: var(--c4);
+  flex: none;
+  height: 18px;
+  width: 18px;
+}
+
+.post-search input {
+  background: transparent;
+  border: 0;
+  color: var(--c1);
+  font-family: 'cyberreader', system-ui, sans-serif;
+  font-size: 14px;
+  outline: none;
+  width: 100%;
+}
+
+.post-search input::placeholder {
+  color: var(--c4);
+}
+
+.posts-index-shell .post-grid {
+  margin-top: 0;
+}
+
+/* Cover graphic: the actual "switch to Macro" SVGs (competitor → Macro) */
+.post-cover {
+  align-items: center;
+  background: transparent;
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
+  width: 100%;
+}
+
+.post-cover-svg {
+  display: block;
+  height: auto;
+  width: 100%;
+}
+
+/* Icon boxes in the hero switch graphic — give them the same panel + ring as
+ * the index card graphics / search pill (overrides the SVG's fill/stroke). */
+.post-cover-svg rect[rx] {
+  fill: color-mix(in oklch, var(--b2), var(--b0));
+  stroke: color-mix(in srgb, #fff 6%, transparent);
+  stroke-width: 1px;
+  filter: drop-shadow(0 4px 4px rgba(0, 0, 0, 0.1));
+}
+
+/* Card grid — columns/rows separated by thin rules (Linear /now + home figures) */
+.post-grid {
+  --post-rule: color-mix(in srgb, var(--b4) 22%, transparent);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.post-card {
+  border-top: 1px solid var(--post-rule);
+  min-width: 0;
+  padding: 36px 0 0;
+}
+
+.post-card:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+/* Card content — mirrors the home SectionHomeIntro figure cells */
+.posts-shell a.post-card-link {
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  height: 100%;
+}
+
+.post-card-byline {
+  align-items: center;
+  color: color-mix(in srgb, var(--c4) 80%, transparent);
+  display: flex;
+  flex-wrap: wrap;
+  font-family: 'body', system-ui, sans-serif;
+  font-size: 13.5px;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 4px;
+}
+
+.post-card-dot {
+  opacity: 0.55;
+}
+
+.post-card-fig {
+  color: color-mix(in srgb, var(--c4) 60%, transparent);
+  font-family: 'body', system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.post-card-graphic {
+  align-items: center;
+  background: color-mix(in oklch, var(--b2), var(--b0));
+  border-radius: 14px;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.03),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.04),
+    0 0 0 1px rgba(0, 0, 0, 0.6),
+    0 4px 4px 0 rgba(0, 0, 0, 0.1);
+  color: color-mix(in srgb, var(--a0) 34%, transparent);
+  display: flex;
+  height: 190px;
+  justify-content: center;
+  transition: transform 0.15s ease;
+}
+
+@media (hover) {
+  .posts-shell a.post-card-link:hover .post-card-graphic {
+    transform: scale(1.02);
+  }
+}
+
+.post-card-text {
+  display: grid;
+  gap: 10px;
+}
+
+.post-card-title {
+  color: var(--c2);
+  font-family: 'body', system-ui, sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  line-height: 1.2;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.post-card-desc {
+  color: color-mix(in srgb, var(--c4) 60%, transparent);
+  display: -webkit-box;
+  font-family: 'body', system-ui, sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.5;
+  margin: 0;
+  max-width: 360px;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.post-empty {
+  color: var(--c4);
+  font-family: 'cyberreader', system-ui, sans-serif;
+  padding: 24px 0;
+}
+
+/* 2 columns */
+@media (min-width: 721px) and (max-width: 980px) {
+  .post-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .post-card {
+    border-left: 1px solid var(--post-rule);
+    border-top: 1px solid var(--post-rule);
+    padding: 40px 30px;
+  }
+
+  .post-card:nth-child(2n + 1) {
+    border-left: 0;
+    padding-left: 0;
+  }
+
+  .post-card:nth-child(2n) {
+    padding-right: 0;
+  }
+
+  .post-card:nth-child(-n + 2) {
+    border-top: 0;
+    padding-top: 0;
+  }
+}
+
+/* 3 columns */
+@media (min-width: 981px) {
+  .post-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .post-card {
+    border-left: 1px solid var(--post-rule);
+    border-top: 1px solid var(--post-rule);
+    padding: 44px 34px;
+  }
+
+  .post-card:nth-child(3n + 1) {
+    border-left: 0;
+    padding-left: 0;
+  }
+
+  .post-card:nth-child(3n) {
+    padding-right: 0;
+  }
+
+  .post-card:nth-child(-n + 3) {
+    border-top: 0;
+    padding-top: 0;
+  }
+}
+
+@media (max-width: 720px) {
+  /* Hide the category filters + search on mobile — not needed there and the row
+     reads awkwardly at narrow widths. Desktop keeps the full toolbar. */
+  .post-toolbar {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .posts-article {
+    padding: 72px 20px 80px;
+  }
+
+  .posts-article--with-footer {
+    padding-bottom: 0;
+  }
+
+  .posts-page-footer {
+    padding-bottom: 40px;
+    padding-inline: 18px;
+  }
+
+  .posts-home-cta-wrap {
+    padding-block: 52px;
+    padding-inline: 18px;
+  }
+
+  .posts-index-shell {
+    padding: 72px 20px 72px;
+  }
+
+  .posts-index-shell--with-tail {
+    padding-bottom: 0;
+  }
+
+  .posts-title {
+    font-size: clamp(30px, 9vw, 40px);
+  }
+
+  .posts-lede {
+    font-size: 13px;
+    max-width: 22rem;
+  }
+
+  .posts-hero-art {
+    margin: 48px auto 22px;
+  }
+
+  .posts-index-hero h1 {
+    font-size: clamp(38px, 9vw, 52px);
+  }
+
+  .posts-index-lead {
+    font-size: 17px;
+  }
+
+  .post-body {
+    font-size: 17px;
+    line-height: 1.6;
+  }
+
+  .post-body h2 {
+    margin-top: 56px;
+  }
+}

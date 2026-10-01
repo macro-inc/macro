@@ -1,3 +1,7 @@
+import {
+  materializeCachedGraphqlCrmCompanies,
+  useQuickAccessCrmCompaniesQuery,
+} from '@app/features/crm/crm-search';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { itemToSafeName } from '@core/constant/allBlocks';
 import { enableCrm } from '@core/constant/featureFlags';
@@ -22,12 +26,10 @@ import {
   type CachedGraphqlChannel,
   materializeCachedGraphqlChannels,
 } from '@queries/channel/graphql';
-import { materializeCachedGraphqlCrmCompanies } from '@queries/crm/graphql';
 import { queryReadyGate } from '@queries/gate';
 import { materializeCachedGraphqlHistoryItems } from '@queries/history/graphql';
 import { type HistoryItem, useHistoryQuery } from '@queries/history/history';
 import { useQuickAccessAgentSessionsQuery } from '@queries/soup/quick-access-agent-sessions';
-import { useQuickAccessCrmCompaniesQuery } from '@queries/soup/quick-access-crm-companies';
 import { useQuickAccessSkillsQuery } from '@queries/soup/quick-access-skills';
 import { useQuickAccessSnippetsQuery } from '@queries/soup/quick-access-snippets';
 import { useRecentlyViewedSoupQuery } from '@queries/soup/recently-viewed';
@@ -39,7 +41,10 @@ import { formatDocumentName } from '@service-storage/util/filename';
 import { createLazyMemo } from '@solid-primitives/memo';
 import { toDate } from 'date-fns';
 import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
-import { searchQuickAccessItems } from './entity-search';
+import {
+  filterQuickAccessItems,
+  searchQuickAccessItems,
+} from './entity-search';
 import { createProjectedList } from './projected-list';
 import type {
   Bucket,
@@ -357,18 +362,26 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     equals: equalActivityMaps,
   });
   const isConnectedSecondaryInbox = useIsConnectedSecondaryInbox();
-  const graphqlCacheHost = getGraphqlSoupCacheHost();
-  const cacheHost = graphqlCacheHost?.disabled ? undefined : graphqlCacheHost;
-  const [cacheRevision, setCacheRevision] = createSignal(0);
+  // Read reactively: if the session abandons its cache mid-session, Quick
+  // Access falls back to the REST channel list instead of the dead host. The
+  // memo keeps the subscription below until the host itself changes.
+  const cacheHost = createMemo(() => {
+    const graphqlCacheHost = getGraphqlSoupCacheHost();
+    return graphqlCacheHost?.disabled ? undefined : graphqlCacheHost;
+  });
+  const [manualRefreshRevision, setManualRefreshRevision] = createSignal(0);
   const cachedChannelsQuery = useCachedGraphqlChannelsQuery(cacheHost);
-  if (cacheHost) {
+  createEffect(() => {
+    const host = cacheHost();
+    if (!host) return;
     onCleanup(
-      subscribeToVisibleCacheChanges(cacheHost, () => {
-        setCacheRevision((revision) => revision + 1);
-        return cachedChannelsQuery.refetch({ cancelRefetch: false });
-      })
+      subscribeToVisibleCacheChanges(
+        host,
+        () => cachedChannelsQuery.refetch({ cancelRefetch: false }),
+        { searchBuckets: () => ['channel', 'dm'] }
+      )
     );
-  }
+  });
   const instructionsIdQuery = useInstructionsMdIdQuery();
   const { query: crmCompaniesQuery, companies: crmCompaniesAccessor } =
     useQuickAccessCrmCompaniesQuery();
@@ -487,7 +500,8 @@ export function createQuickAccessValue(): QuickAccessContextValue {
 
     // The GraphQL cache is authoritative while enabled. Otherwise preserve the
     // existing channel-list source unchanged.
-    const channelData = cacheHost
+    const usesCache = cacheHost() !== undefined;
+    const channelData = usesCache
       ? queryReadyGate(cachedChannelsQuery)
         ? cachedChannelsQuery.data
         : []
@@ -943,19 +957,35 @@ export function createQuickAccessValue(): QuickAccessContextValue {
         ? searchQuickAccessItems(baseList(), options.searchTerm?.() ?? '')
         : baseList()
     );
+    // A retired host degrades this list to local items; later lists skip it.
+    const projectionHost = options ? cacheHost() : undefined;
+    const [cacheRevision, setCacheRevision] = createSignal(0);
+    createEffect(() => {
+      if (!projectionHost || cacheHost() !== projectionHost) return;
+      onCleanup(
+        subscribeToVisibleCacheChanges(
+          projectionHost,
+          () => {
+            setCacheRevision((revision) => revision + 1);
+          },
+          { searchBuckets: projectedBuckets }
+        )
+      );
+    });
     const projected =
-      options && cacheHost
+      options && projectionHost
         ? createProjectedList<QuickAccessItem>({
-            host: cacheHost,
+            host: projectionHost,
             get buckets() {
               return projectedBuckets();
             },
-            revision: cacheRevision,
+            revision: () => cacheRevision() + manualRefreshRevision(),
             searchTerm: options.searchTerm,
             // An empty bucket list means "all" to the cache, not "none".
             enabled: () =>
               projectedBuckets().length > 0 && options.enabled?.() !== false,
             existingItems: localItems,
+            filterPreviousItems: filterQuickAccessItems,
             materialize: async (documents) => {
               const idOf = (recordKey: string) =>
                 recordKey.slice(recordKey.indexOf(':') + 1);
@@ -964,9 +994,9 @@ export function createQuickAccessValue(): QuickAccessContextValue {
               );
               const [historyItems, cachedChannelItems, cachedCompanies] =
                 await Promise.all([
-                  materializeCachedGraphqlHistoryItems(cacheHost, missing),
-                  materializeCachedGraphqlChannels(cacheHost, missing),
-                  materializeCachedGraphqlCrmCompanies(cacheHost, missing),
+                  materializeCachedGraphqlHistoryItems(projectionHost, missing),
+                  materializeCachedGraphqlChannels(projectionHost, missing),
+                  materializeCachedGraphqlCrmCompanies(projectionHost, missing),
                 ]);
               const historyById = new Map(
                 historyItems.map((item) => [item.id, item])
@@ -1062,7 +1092,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
         Boolean(
           projected?.isLoading() ||
             historyQuery.isLoading ||
-            (cacheHost ? cachedChannelsQuery.isLoading : channelsLoading())
+            (cacheHost() ? cachedChannelsQuery.isLoading : channelsLoading())
         ),
       isLoadingMore: () => projected?.isLoadingMore() ?? false,
       loadMore: async () => {
@@ -1075,11 +1105,11 @@ export function createQuickAccessValue(): QuickAccessContextValue {
   // resolves rather than gating quick access on a slower/failing CRM fetch.
   const isLoading = () =>
     historyQuery.isLoading ||
-    (cacheHost ? cachedChannelsQuery.isLoading : channelsLoading());
+    (cacheHost() ? cachedChannelsQuery.isLoading : channelsLoading());
 
   const refresh = () => {
-    if (cacheHost) {
-      setCacheRevision((revision) => revision + 1);
+    if (cacheHost()) {
+      setManualRefreshRevision((revision) => revision + 1);
       void cachedChannelsQuery.refetch();
     }
     historyQuery.refetch();
@@ -1092,7 +1122,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
   return {
     useList,
     usesRecordSelection: () => false,
-    usesSearchProjection: () => cacheHost !== undefined,
+    usesSearchProjection: () => cacheHost() !== undefined,
     isLoading,
     refresh,
     getById,

@@ -4,6 +4,7 @@ import { useMobileSearchText } from '@app/features/command/mobile/use-mobile-sea
 import { markChannelNotificationsSeenOnOpen } from '@app/features/next-soup/utils';
 import { MaybeSoupEntityActionDrawerManager } from '@app/features/soup';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
+import { ViewTour } from '@app/features/tours/ViewTour';
 import { SplitRouter } from '@app/lib/split-router';
 import { DebugSuspense } from '@channel/DebugSuspense';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
@@ -14,10 +15,8 @@ import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import {
   createContext,
-  createEffect,
   createMemo,
   createSignal,
-  on,
   onMount,
   Show,
   useContext,
@@ -25,7 +24,9 @@ import {
 import { ChannelsViewProvider, useChannelsView } from './channels-view-context';
 import { ChannelDetailView } from './components/ChannelDetailView';
 import { ChannelsMobileView } from './components/ChannelsMobileView';
+import { ChannelThreadsView } from './components/ChannelThreadsView';
 import { ChannelsRail } from './components/rail/ChannelsRail';
+import { createChannelDetail } from './primitives/create-channel-detail';
 import {
   type ChannelsSources,
   deduplicateChannels,
@@ -33,7 +34,9 @@ import {
   useChannelByIdQuery,
   useChannelsSources,
 } from './queries';
+import { createChannelDetailSource } from './queries/channel-detail-source';
 import { createChannelSearchSource } from './queries/channel-search-source';
+import { channelsTour } from './tour';
 
 const ChannelSourcesContext =
   createContext<ReturnType<typeof useChannelsSources>>();
@@ -89,10 +92,37 @@ function DesktopChannelsRail(props: {
   );
 }
 
+function DesktopChannelThreads(props: { sources: ChannelsSources }) {
+  const { threadsChannelId, setTab, setSelectedChannel } = useChannelsView();
+  const channelsById = createMemo(
+    () =>
+      new Map(
+        deduplicateChannels([
+          props.sources.threads.items(),
+          props.sources.channels.items(),
+          props.sources.direct_messages.items(),
+          props.sources.recents.items(),
+        ]).map((channel) => [channel.id, channel])
+      )
+  );
+
+  return (
+    <ChannelThreadsView
+      channelId={threadsChannelId()}
+      resolveChannel={(channelId) => channelsById().get(channelId)}
+      onOpenThread={(thread) => {
+        setTab('browse');
+        setSelectedChannel(thread);
+      }}
+    />
+  );
+}
+
 function ChannelsViewRoot() {
   const panel = useSplitPanelOrThrow();
-  const { state, mobileLayout, selectedChannel, setAsideWidth } =
+  const { state, tab, mobileLayout, selectedChannel, setAsideWidth } =
     useChannelsView();
+  const threadsTab = () => !mobileLayout() && tab() === 'threads';
   const [railSearchOpen, setRailSearchOpen] = createSignal(false);
 
   const sources = useChannelsSources(
@@ -101,8 +131,9 @@ function ChannelsViewRoot() {
         return scope !== 'search' && state.mobileTab === scope;
       if (railSearchOpen()) return scope === 'search';
       if (scope === 'search') return false;
-      if (scope === 'recents') return state.tab === 'recents';
-      return state.tab === 'browse';
+      if (scope === 'recents') return tab() === 'recents';
+      if (scope === 'threads') return tab() === 'threads';
+      return tab() === 'browse';
     },
     (group) => state.sortBy[group]
   );
@@ -120,7 +151,9 @@ function ChannelsViewRoot() {
                   <ViewShell.Root
                     asidePreferenceKey="channels"
                     // The empty state only points at the rail, so keep it open.
-                    asideRequired={selectedChannel() === undefined}
+                    asideRequired={
+                      threadsTab() || selectedChannel() === undefined
+                    }
                     aside={{
                       width: state.asideWidth,
                       preserveDuringResize: false,
@@ -146,32 +179,42 @@ function ChannelsViewRoot() {
                       </DebugSuspense>
                     </ViewShell.Aside>
                     <ViewShell.Main class="overflow-hidden">
-                      <ChannelSourcesContext.Provider value={sources}>
-                        <DebugSuspense name="ChannelsView.outlet">
-                          <SplitRouter.Outlet
-                            fallback={() => (
-                              <>
-                                <ViewShell.TopBar>
-                                  <span class="text-sm font-semibold">
-                                    Chat
-                                  </span>
-                                </ViewShell.TopBar>
-                                <div class="flex min-h-0 flex-1 items-center justify-center px-6 text-center">
-                                  <div class="flex max-w-sm flex-col gap-2">
-                                    <h2 class="text-base font-semibold text-ink">
-                                      Select a conversation
-                                    </h2>
-                                    <p class="text-sm leading-5 text-ink-muted">
-                                      Choose a channel or person from the
-                                      sidebar to open the conversation here.
-                                    </p>
+                      <ViewTour tour={channelsTour} />
+                      <Show
+                        when={!threadsTab()}
+                        fallback={
+                          <DebugSuspense name="ChannelsView.threads">
+                            <DesktopChannelThreads sources={sources} />
+                          </DebugSuspense>
+                        }
+                      >
+                        <ChannelSourcesContext.Provider value={sources}>
+                          <DebugSuspense name="ChannelsView.outlet">
+                            <SplitRouter.Outlet
+                              fallback={() => (
+                                <>
+                                  <ViewShell.TopBar>
+                                    <span class="text-sm font-semibold">
+                                      Chat
+                                    </span>
+                                  </ViewShell.TopBar>
+                                  <div class="flex min-h-0 flex-1 items-center justify-center px-6 text-center">
+                                    <div class="flex max-w-sm flex-col gap-2">
+                                      <h2 class="text-base font-semibold text-ink">
+                                        Select a conversation
+                                      </h2>
+                                      <p class="text-sm leading-5 text-ink-muted">
+                                        Choose a channel or person from the
+                                        sidebar to open the conversation here.
+                                      </p>
+                                    </div>
                                   </div>
-                                </div>
-                              </>
-                            )}
-                          />
-                        </DebugSuspense>
-                      </ChannelSourcesContext.Provider>
+                                </>
+                              )}
+                            />
+                          </DebugSuspense>
+                        </ChannelSourcesContext.Provider>
+                      </Show>
                     </ViewShell.Main>
                   </ViewShell.Root>
                 </div>
@@ -203,7 +246,7 @@ function ChannelsViewRoot() {
 function ChannelDetailRouteContent() {
   const { selectedChannel } = useChannelsView();
   const notificationSource = useGlobalNotificationSource();
-  const channelId = () => selectedChannel()?.id;
+  const channelId = createMemo(() => selectedChannel()?.id);
   const sources = useContext(ChannelSourcesContext);
   const loaded = createMemo(() =>
     resolveSelectedChannel(
@@ -218,81 +261,73 @@ function ChannelDetailRouteContent() {
         : []
     )
   );
-  const needsFullEdge = createMemo(
-    on(
-      channelId,
-      () =>
-        loaded() === undefined ||
-        (loaded()?.unreadNotifications?.length ?? 0) > 0
-    )
-  );
-  const query = useChannelByIdQuery(
+  const source = createChannelDetailSource({
     channelId,
-    () =>
-      channelId() !== undefined && (needsFullEdge() || loaded() === undefined)
-  );
-  const hydrated = createMemo((previous: ReturnType<typeof loaded>) => {
-    const selection = selectedChannel();
-    if (!selection || selection.type !== 'channel') return;
-    const cached = loaded();
-    if (cached && !needsFullEdge())
-      return { ...cached, target: selection.target, notifications: () => [] };
-    if (
-      !query.isEnabled ||
-      query.isLoading ||
-      query.isFetching ||
-      query.error
-    ) {
-      return previous?.id === selection.id ? previous : undefined;
-    }
-    const full = resolveSelectedChannel(selection.id, [], query.data?.entities);
-    if (!full) return;
+    cached: loaded,
+    createQuery: useChannelByIdQuery,
+  });
+  const detail = createChannelDetail({
+    selection: selectedChannel,
+    cached: loaded,
+    source,
+    markRead: (channel) =>
+      markChannelNotificationsSeenOnOpen(
+        withEntityNotifications(channel, notificationSource),
+        notificationSource,
+        { channelReadScope: 'top-level' }
+      ),
+  });
+  const visibleChannel = createMemo(() => {
+    const view = detail.view();
+    if (view.status !== 'ready') return;
     return withEntityNotifications(
-      { ...full, target: selection.target },
+      { ...view.channel, target: selectedChannel()?.target },
       notificationSource
     );
   });
-  const unavailable = () =>
-    Boolean(query.error) ||
-    (query.isEnabled && !query.isLoading && !query.isFetching && !hydrated());
+  const unavailable = () => detail.view().status === 'unavailable';
   const retry = async () => {
     try {
-      await query.refresh();
+      await detail.refresh();
     } catch {
-      /* Query state presents the failure. */
+      /* The source presents the failure. */
     }
   };
-  const readyId = createMemo(() => hydrated()?.id);
-  createEffect(
-    on(readyId, () => {
-      const channel = hydrated();
-      if (channel && channel.isParticipant !== false)
-        markChannelNotificationsSeenOnOpen(channel, notificationSource, {
-          scopeChannelThreads: false,
-        });
-    })
-  );
 
   return (
     <DebugSuspense name="ChannelsView.detail-content">
       <Show
-        when={hydrated()}
+        when={visibleChannel()}
         fallback={
-          <div class="flex size-full flex-col items-center justify-center gap-2 text-ink-muted">
-            <h2>
-              {unavailable()
-                ? 'Conversation unavailable'
-                : 'Loading conversation'}
-            </h2>
-            <Show when={unavailable()}>
-              <button type="button" onClick={retry}>
-                Retry
-              </button>
-            </Show>
-          </div>
+          <>
+            <ViewShell.TopBar>
+              <span class="truncate text-sm font-semibold">
+                {loaded()?.name ?? 'Conversation'}
+              </span>
+            </ViewShell.TopBar>
+            <div
+              class="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 text-ink-muted"
+              role="status"
+            >
+              <h2>
+                {unavailable()
+                  ? 'Conversation unavailable'
+                  : 'Loading conversation'}
+              </h2>
+              <Show when={unavailable()}>
+                <button type="button" onClick={retry}>
+                  Retry
+                </button>
+              </Show>
+            </div>
+          </>
         }
       >
-        {(channel) => <ChannelDetailView channel={channel()} />}
+        {(channel) => (
+          <div class="flex size-full min-h-0 flex-col">
+            <ChannelDetailView channel={channel()} target={detail.target()} />
+          </div>
+        )}
       </Show>
     </DebugSuspense>
   );

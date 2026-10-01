@@ -43,16 +43,25 @@ export function openShareModal(props: ShareModalInput): DialogHandle {
  * modal follows `props` while open and closes when the component unmounts.
  * Return `undefined` from `props` until the share data has loaded; opening
  * before then waits for it, so the modal never shows placeholder permissions.
+ * `onClose` runs when the person closes an opened modal, not when a newer
+ * one replaces it or its owner unmounts.
  */
 export function useShareModal(
-  props: Accessor<ShareModalInput | undefined>
+  props: Accessor<ShareModalInput | undefined>,
+  options: { onClose?: () => void } = {}
 ): () => void {
   const dialog = useImperativeDialog(SuspendedShareModal);
   const [pending, setPending] = createSignal(false);
 
+  const notifyClosed = async (handle: DialogHandle) => {
+    const { reason } = await handle.closed;
+    if (reason === 'dismissed' || reason === 'programmatic')
+      options.onClose?.();
+  };
+
   const openWith = (initial: ShareModalInput) => {
     setPending(false);
-    dialog.open(() => props() ?? initial);
+    void notifyClosed(dialog.open(() => props() ?? initial));
   };
 
   createEffect(() => {

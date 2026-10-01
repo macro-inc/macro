@@ -3,7 +3,6 @@ import { isListViewID, TAGGABLE_LIST_VIEWS } from '@app/constants/list-views';
 import {
   type FilterContext,
   NO_ASSIGNEE,
-  NO_STAGE,
 } from '@app/features/next-soup/filters/configs/';
 import {
   buildDocumentTypeQuery,
@@ -21,22 +20,18 @@ import {
   type ReadFilter,
   useSoupView,
 } from '@app/features/next-soup/soup-view/soup-view-context';
-import { useDealStages } from '@companies/crm/deal-stages';
-import { CrmStageIcon } from '@companies/crm/StageIcon';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import { useUserId } from '@core/context/user';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
-import { idToDisplayName } from '@core/user/util';
 import CircleDashedIcon from '@phosphor/circle-dashed.svg';
 import FilterIcon from '@phosphor/funnel-simple.svg';
 import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { useGithubLinkStatusQuery } from '@queries/auth';
 import { useContacts } from '@queries/contacts/contacts';
-import { useCurrentTeamQuery } from '@queries/team/teams';
 import { cn, Dropdown, Tooltip } from '@ui';
 import {
   type Accessor,
@@ -431,18 +426,13 @@ export const UnifiedFilterDropdown = (
     queryFilters,
     assigneeFilter,
     setAssigneeFilter,
-    ownerFilter,
-    setOwnerFilter,
-    stageFilter,
-    setStageFilter,
     activeTab,
     readFilter,
     setReadFilter,
   } = useSoupView();
   const contacts = useContacts();
-  const teamQuery = useCurrentTeamQuery();
   const userId = useUserId();
-  const dealStages = useDealStages();
+  const selectFilters = useSoupView().extensions?.selectFilters ?? [];
 
   const currentView = createMemo((): ListView | undefined => {
     const content = panel.handle.content();
@@ -603,99 +593,6 @@ export const UnifiedFilterDropdown = (
     });
   };
 
-  // Owner options for the Customers view (team members, plus a "No owner"
-  // row) — company owners are always teammates, so the broader contacts
-  // list (anyone ever interacted with) would mostly be noise here.
-  const ownerOptions = createMemo((): SearchableOption[] => {
-    const currentUserId = userId();
-    const noOwnerOption: SearchableOption = {
-      id: NO_ASSIGNEE,
-      label: 'No owner',
-      icon: () => <CircleDashedIcon class="size-3.5 text-ink-muted" />,
-    };
-    let meOption: SearchableOption | undefined;
-    const memberOptions: SearchableOption[] = [];
-    for (const member of teamQuery.data?.members ?? []) {
-      const id = member.user_id;
-      const opt: SearchableOption = {
-        id,
-        label: buildContactLabel(
-          { id, name: idToDisplayName(id) },
-          currentUserId
-        ),
-        icon: () => (
-          <UserIcon id={id} size="sm" suppressClick showTooltip={false} />
-        ),
-      };
-      if (id === currentUserId) {
-        meOption = opt;
-      } else {
-        memberOptions.push(opt);
-      }
-    }
-    memberOptions.sort((a, b) => a.label.localeCompare(b.label));
-    return [...(meOption ? [meOption] : []), noOwnerOption, ...memberOptions];
-  });
-
-  // Owner filtering is a client-side predicate (companies come back from a
-  // dedicated capped CRM request), so no query filters to maintain here.
-  const handleOwnerChange = (ids: string[]) => {
-    batch(() => {
-      setOwnerFilter(ids);
-      const shouldBeActive = ids.length > 0;
-      if (shouldBeActive !== soup.predicates.isActive('company-owner')) {
-        soup.predicates.toggle({ and: ['company-owner'] });
-      }
-    });
-  };
-
-  // Stage options for the Customers view: the team's active deal-stage set
-  // (plus retired legacy stages on the default set) and a trailing
-  // "No stage" row.
-  const stageOptions = createMemo((): SearchableOption[] => [
-    ...dealStages.filterStages().map((stage, index) => ({
-      id: stage.id,
-      label: stage.label,
-      icon: () => (
-        <CrmStageIcon optionId={stage.id} index={index} class="size-3.5" />
-      ),
-    })),
-    {
-      id: NO_STAGE,
-      label: 'No stage',
-      icon: () => <CircleDashedIcon class="size-3.5 text-ink-muted" />,
-    },
-  ]);
-
-  // The stage set shown when no filter is active: the active deal stages
-  // plus "No stage" — retired legacy stages only display when filtered in.
-  const defaultStageIds = createMemo(
-    () => new Set([...dealStages.stages().map((stage) => stage.id), NO_STAGE])
-  );
-
-  // The stage submenu reflects what's on screen: an empty filter shows the
-  // default columns, so exactly those read as checked (legacy stages don't).
-  const effectiveStageFilter = () =>
-    stageFilter().length > 0 ? stageFilter() : [...defaultStageIds()];
-
-  // Stage filtering is a client-side predicate, mirroring the owner filter.
-  const handleStageChange = (ids: string[]) => {
-    // Checking exactly the default set is the same as no filter — store it
-    // as empty so the predicate deactivates.
-    const next =
-      ids.length === defaultStageIds().size &&
-      ids.every((id) => defaultStageIds().has(id))
-        ? []
-        : ids;
-    batch(() => {
-      setStageFilter(next);
-      const shouldBeActive = next.length > 0;
-      if (shouldBeActive !== soup.predicates.isActive('company-stage')) {
-        soup.predicates.toggle({ and: ['company-stage'] });
-      }
-    });
-  };
-
   const isTasksView = () => currentView() === 'tasks';
   const isDocumentsView = () => currentView() === 'documents';
   const isCreatedByFilterView = () => {
@@ -704,7 +601,6 @@ export const UnifiedFilterDropdown = (
   };
   const showCreatedByFilter = () =>
     isCreatedByFilterView() && !(isDocumentsView() && activeTab() === 'owned');
-  const isCompaniesView = () => currentView() === 'companies';
 
   // The Files "Owned" tab has a creator constraint as part of its base
   // preset. Keep that constraint when a user clears an explicit Created by
@@ -805,7 +701,7 @@ export const UnifiedFilterDropdown = (
       when={
         categories().length > 0 ||
         isTasksView() ||
-        isCompaniesView() ||
+        selectFilters.length > 0 ||
         isHomeView() ||
         showTagsFilter()
       }
@@ -848,7 +744,7 @@ export const UnifiedFilterDropdown = (
                 categories().length === 1 &&
                 !isDocumentsView() &&
                 !isTasksView() &&
-                !isCompaniesView() &&
+                selectFilters.length === 0 &&
                 !isHomeView()
               }
               fallback={
@@ -896,25 +792,19 @@ export const UnifiedFilterDropdown = (
                     />
                   </Show>
 
-                  {/* Stage + Owner filters for the Customers view */}
-                  <Show when={isCompaniesView()}>
-                    <SearchableFilterSubmenu
-                      label="Stage"
-                      active={stageFilter().length > 0}
-                      options={stageOptions}
-                      activeIds={effectiveStageFilter}
-                      onChange={handleStageChange}
-                      placeholder="Filter stages..."
-                      preserveOrder
-                    />
-                    <SearchableFilterSubmenu
-                      label="Owner"
-                      options={ownerOptions}
-                      activeIds={ownerFilter}
-                      onChange={handleOwnerChange}
-                      placeholder="Search owners..."
-                    />
-                  </Show>
+                  <For each={selectFilters}>
+                    {(filter) => (
+                      <SearchableFilterSubmenu
+                        label={filter.label}
+                        active={filter.active?.()}
+                        options={filter.options}
+                        activeIds={filter.effectiveValues}
+                        onChange={filter.change}
+                        placeholder={filter.placeholder}
+                        preserveOrder={filter.preserveOrder}
+                      />
+                    )}
+                  </For>
                 </>
               }
             >

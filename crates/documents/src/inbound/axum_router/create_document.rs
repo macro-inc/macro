@@ -5,6 +5,7 @@ use std::str::FromStr;
 use axum::{Json, extract::State};
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::ProjectBodyAccessLevelExtractorV2;
+use entity_registry::CreationPrincipalExtractor;
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, UserOrInternal, UserOrInternalCaller,
 };
@@ -14,7 +15,6 @@ use model_owner::CreationPrincipal;
 use models_permissions::share_permission::access_level::EditAccessLevel;
 
 use super::DocumentRouterState;
-use super::creation_principal::CreationPrincipalExtractor;
 use crate::domain::models::{
     DocumentError, ImportEmailAttachmentRepoArgs, InitialLinkShare, NewDocument,
 };

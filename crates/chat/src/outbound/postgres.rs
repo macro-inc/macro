@@ -12,14 +12,18 @@ use crate::domain::models::{
 use crate::domain::ports::{ChatRepo, MessageRepo};
 use agent::types::ChatMessageContent;
 use attachment::FormattedParts;
+use entity_registry::BotFacts;
+use entity_registry_db_utils::{NewEntityRecord, OwnedEntityRegistrar, RegisteredEntityType};
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::chat::ChatMessageWithAttachments;
 use model::chat::NewChatMessage;
+use model_owner::Owner;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::team_share::TeamShareFacts;
 use models_permissions::share_permission::{SharePermissionV2, TeamLinkShareDefault};
-use sqlx::PgPool;
+use sqlx::{PgPool, Postgres, Transaction};
+use uuid::Uuid;
 
 /// Convert an [`anyhow::Error`] to a [`ChatErr`], detecting `sqlx::RowNotFound`.
 fn to_chat_err(e: anyhow::Error) -> ChatErr {
@@ -32,16 +36,50 @@ fn to_chat_err(e: anyhow::Error) -> ChatErr {
     }
 }
 
-/// Postgres adapter for chat repository operations.
-#[derive(Clone)]
-pub struct PgChatRepo {
-    pool: PgPool,
+/// Insert a chat row for `owner` with its share permission and recency rows,
+/// returning the chat id and its registry uuid.
+async fn insert_owned_chat(
+    tx: &mut Transaction<'_, Postgres>,
+    owner: &Owner,
+    name: &str,
+    project_id: Option<&str>,
+    share_permission: &SharePermissionV2,
+) -> Result<(String, Uuid)> {
+    let chat_id = queries::insert_chat::insert_chat(tx, owner, name, project_id)
+        .await
+        .map_err(to_chat_err)?;
+
+    queries::create_chat_permission::create_chat_permission(tx, &chat_id, share_permission)
+        .await
+        .map_err(to_chat_err)?;
+
+    // `UserHistory."userId"` still references `"User"`, so only a user owner has history.
+    if let Some(user_id) = owner.as_user() {
+        queries::upsert_user_history::upsert_user_history(tx, user_id.copied(), &chat_id)
+            .await
+            .map_err(to_chat_err)?;
+    }
+
+    queries::upsert_item_last_accessed::upsert_item_last_accessed(tx, &chat_id)
+        .await
+        .map_err(to_chat_err)?;
+
+    let chat_uuid = macro_uuid::string_to_uuid(&chat_id).map_err(to_chat_err)?;
+    Ok((chat_id, chat_uuid))
 }
 
-impl PgChatRepo {
-    /// Create a new [`PgChatRepo`] with the given connection pool.
-    pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+/// Postgres adapter for chat repository operations.
+#[derive(Clone)]
+pub struct PgChatRepo<B> {
+    pool: PgPool,
+    registrar: OwnedEntityRegistrar<B>,
+}
+
+impl<B: BotFacts + 'static> PgChatRepo<B> {
+    /// Create a new [`PgChatRepo`] with the given connection pool. Created and
+    /// copied chats register their owner grants through `registrar`.
+    pub fn new(pool: PgPool, registrar: OwnedEntityRegistrar<B>) -> Self {
+        Self { pool, registrar }
     }
 
     async fn get_messages(&self, chat_id: &str) -> anyhow::Result<Vec<ChatMessageWithAttachments>> {
@@ -76,11 +114,11 @@ impl PgChatRepo {
     }
 }
 
-impl ChatRepo for PgChatRepo {
+impl<B: BotFacts + 'static> ChatRepo for PgChatRepo<B> {
     #[tracing::instrument(err, skip(self, share_permission))]
     async fn create(
         &self,
-        user_id: MacroUserIdStr<'static>,
+        owner: Owner,
         args: CreateChatArgs,
         share_permission: SharePermissionV2,
     ) -> Result<String> {
@@ -90,53 +128,22 @@ impl ChatRepo for PgChatRepo {
             .await
             .map_err(|e| ChatErr::Unknown(e.into()))?;
 
-        let chat_id = queries::insert_chat::insert_chat(
+        let (chat_id, chat_uuid) = insert_owned_chat(
             &mut tx,
-            &user_id,
+            &owner,
             &args.name,
             args.project_id.as_deref(),
-        )
-        .await
-        .map_err(to_chat_err)?;
-
-        queries::create_chat_permission::create_chat_permission(
-            &mut tx,
-            &chat_id,
             &share_permission,
         )
-        .await
-        .map_err(to_chat_err)?;
+        .await?;
 
-        queries::upsert_user_history::upsert_user_history(&mut tx, user_id.copied(), &chat_id)
+        self.registrar
+            .register_owned_entity(
+                &mut tx,
+                NewEntityRecord::new(chat_uuid, RegisteredEntityType::Chat, owner),
+            )
             .await
-            .map_err(to_chat_err)?;
-
-        queries::upsert_item_last_accessed::upsert_item_last_accessed(&mut tx, &chat_id)
-            .await
-            .map_err(to_chat_err)?;
-
-        let chat_uuid = macro_uuid::string_to_uuid(&chat_id).map_err(to_chat_err)?;
-        entity_access_db_utils::insert_entity_access_row(
-            &mut tx,
-            &chat_uuid,
-            entity_access_db_utils::EntityType::Chat,
-            user_id.as_ref(),
-            entity_access_db_utils::EntityAccessSourceType::User,
-            entity_access_db_utils::AccessLevel::Owner,
-        )
-        .await
-        .map_err(|e| ChatErr::Unknown(e.into()))?;
-
-        entity_registry_db_utils::insert_entity(
-            &mut tx,
-            entity_registry_db_utils::NewEntityRecord::new(
-                chat_uuid,
-                entity_registry_db_utils::RegisteredEntityType::Chat,
-                model_owner::Owner::User(user_id),
-            ),
-        )
-        .await
-        .map_err(|e| ChatErr::Unknown(e.into()))?;
+            .map_err(|e| ChatErr::Unknown(e.into()))?;
 
         tx.commit().await.map_err(|e| {
             tracing::error!(error=?e, "create_chat transaction error");
@@ -149,11 +156,11 @@ impl ChatRepo for PgChatRepo {
     #[tracing::instrument(err, skip(self))]
     async fn get_team_default_link_share(
         &self,
-        user_id: &str,
+        owner: &Owner,
     ) -> Result<Option<TeamLinkShareDefault>> {
-        share_permission_db_utils::get_team_default_link_share(&self.pool, user_id)
+        queries::owner_team_link_share::owner_team_link_share(&self.pool, owner)
             .await
-            .map_err(|e| ChatErr::Unknown(e.into()))
+            .map_err(to_chat_err)
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -195,7 +202,7 @@ impl ChatRepo for PgChatRepo {
     #[tracing::instrument(err, skip(self, share_permission))]
     async fn copy_chat(
         &self,
-        user_id: MacroUserIdStr<'static>,
+        owner: Owner,
         source_chat_id: &str,
         args: CopyChatArgs,
         share_permission: SharePermissionV2,
@@ -206,57 +213,26 @@ impl ChatRepo for PgChatRepo {
             .await
             .map_err(|e| ChatErr::Unknown(e.into()))?;
 
-        let chat_id = queries::insert_chat::insert_chat(
+        let (chat_id, chat_uuid) = insert_owned_chat(
             &mut tx,
-            &user_id,
+            &owner,
             &args.name,
             args.project_id.as_deref(),
-        )
-        .await
-        .map_err(to_chat_err)?;
-
-        queries::create_chat_permission::create_chat_permission(
-            &mut tx,
-            &chat_id,
             &share_permission,
         )
-        .await
-        .map_err(to_chat_err)?;
-
-        queries::upsert_user_history::upsert_user_history(&mut tx, user_id.copied(), &chat_id)
-            .await
-            .map_err(to_chat_err)?;
-
-        queries::upsert_item_last_accessed::upsert_item_last_accessed(&mut tx, &chat_id)
-            .await
-            .map_err(to_chat_err)?;
-
-        let chat_uuid = macro_uuid::string_to_uuid(&chat_id).map_err(to_chat_err)?;
-        entity_access_db_utils::insert_entity_access_row(
-            &mut tx,
-            &chat_uuid,
-            entity_access_db_utils::EntityType::Chat,
-            user_id.as_ref(),
-            entity_access_db_utils::EntityAccessSourceType::User,
-            entity_access_db_utils::AccessLevel::Owner,
-        )
-        .await
-        .map_err(|e| ChatErr::Unknown(e.into()))?;
+        .await?;
 
         queries::copy_messages::copy_messages(&mut tx, source_chat_id, &chat_id)
             .await
             .map_err(to_chat_err)?;
 
-        entity_registry_db_utils::insert_entity(
-            &mut tx,
-            entity_registry_db_utils::NewEntityRecord::new(
-                chat_uuid,
-                entity_registry_db_utils::RegisteredEntityType::Chat,
-                model_owner::Owner::User(user_id),
-            ),
-        )
-        .await
-        .map_err(|e| ChatErr::Unknown(e.into()))?;
+        self.registrar
+            .register_owned_entity(
+                &mut tx,
+                NewEntityRecord::new(chat_uuid, RegisteredEntityType::Chat, owner),
+            )
+            .await
+            .map_err(|e| ChatErr::Unknown(e.into()))?;
 
         tx.commit().await.map_err(|e| {
             tracing::error!(error=?e, "copy_chat transaction error");
@@ -427,7 +403,7 @@ impl ChatRepo for PgChatRepo {
     }
 }
 
-impl MessageRepo for PgChatRepo {
+impl<B: BotFacts + 'static> MessageRepo for PgChatRepo<B> {
     #[tracing::instrument(err, skip(self, message))]
     async fn create(&self, chat_id: &str, message: NewChatMessage) -> Result<String> {
         queries::create_message::create_message(&self.pool, chat_id, message)

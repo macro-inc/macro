@@ -33,9 +33,11 @@ export function SidebarCreateHeader(props: {
 export function SidebarCreateButton(props: {
   label: string;
   onCreate: () => void;
+  ref?: (element: HTMLElement) => void;
 }) {
   return (
     <ViewSidebar.Action
+      ref={props.ref}
       {...pressHandlers((event) => {
         event.preventDefault();
         props.onCreate();

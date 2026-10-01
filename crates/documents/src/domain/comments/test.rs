@@ -564,3 +564,40 @@ async fn deleted_threads_do_not_count_toward_the_cap() {
         vec![id(1)]
     );
 }
+
+#[tokio::test]
+async fn spreadsheet_ranges_are_inline_and_workbook_comments_are_discussions() {
+    let mut messages = MockMessageReader::new();
+    messages.expect_timeline().returning(|_, _| {
+        Ok(page(
+            vec![
+                item(message(2, None, "Workbook comment"), None, vec![]),
+                item(
+                    message(1, None, "Range comment"),
+                    Some(ThreadAnchor::Spreadsheet {
+                        sheet_id: "sheet-1".into(),
+                        sheet_name: "Budget".into(),
+                        range: "B4:C9".into(),
+                    }),
+                    vec![],
+                ),
+            ],
+            None,
+        ))
+    });
+    let discussions = reader(messages, no_marks())
+        .discussions(receipt())
+        .await
+        .unwrap();
+    assert_eq!(discussions[0].kind, CommentThreadKind::Inline);
+    assert_eq!(
+        discussions[0].anchor,
+        CommentAnchor::Spreadsheet {
+            sheet_id: "sheet-1".into(),
+            sheet_name: "Budget".into(),
+            range: "B4:C9".into()
+        }
+    );
+    assert_eq!(discussions[1].kind, CommentThreadKind::Discussion);
+    assert_eq!(discussions[1].anchor, CommentAnchor::Document);
+}

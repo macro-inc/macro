@@ -11,6 +11,111 @@ env:
   MODE: "production"
 
 jobs:
+  build-android:
+    name: Build signed Android APK
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    timeout-minutes: 90
+    env:
+      CI: "true"
+      RELEASE_TAG: ${{ github.event.release.tag_name }}
+    steps:
+      - name: Checkout release
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Install Android SDK components
+        shell: bash
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_21_X64"
+          export PATH="$JAVA_HOME/bin:$PATH"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            'platforms;android-36' 'build-tools;36.0.0' 'ndk;30.0.16248370'
+          echo "JAVA_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/30.0.16248370" >> "$GITHUB_ENV"
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
+      - name: Setup prerequisites
+        uses: ./.github/actions/setup-reqs-web
+      - name: Prepare version and signing
+        id: metadata
+        working-directory: apps/web
+        env:
+          DOPPLER_TOKEN: ${{ secrets.ANDROID_RELEASE_DOPPLER_TOKEN }}
+        run: |
+          set -euo pipefail
+          filename=$(bun scripts/android-release.ts metadata "$RELEASE_TAG" "$RUNNER_TEMP/android-release.json")
+          echo "filename=$filename" >> "$GITHUB_OUTPUT"
+          bun scripts/android-release.ts signing "$RUNNER_TEMP/android-signing" \
+            tauri/src-tauri/gen/android/keystore.properties
+          bun scripts/android-firebase.ts build --doppler "$RUNNER_TEMP/android-google-services.json"
+      - name: Build production APK
+        working-directory: apps/web
+        env:
+          VITE_SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}
+          VITE_POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
+          VITE_OTEL_EXPORTER_URL: https://macro-prox-prod.macroverse.workers.dev/i/otlp/v1/traces
+          VITE_OTEL_ENV: prod
+        run: |
+          just android-build --firebase-config "$RUNNER_TEMP/android-google-services.json" \
+            --apk true --aab false --ci --config "$RUNNER_TEMP/android-release.json"
+      - name: Verify and collect APK
+        working-directory: apps/web
+        env:
+          APK_FILENAME: ${{ steps.metadata.outputs.filename }}
+        run: |
+          set -euo pipefail
+          mapfile -t apks < <(find tauri/src-tauri/gen/android/app/build/outputs/apk -type f -name '*-release.apk')
+          if [ "${#apks[@]}" -ne 1 ]; then
+            echo "Expected exactly one signed ARM64 release APK, found ${#apks[@]}" >&2
+            exit 1
+          fi
+          bun scripts/android-release.ts verify "$RELEASE_TAG" "${apks[0]}" \
+            "$ANDROID_HOME/build-tools/36.0.0" "$RUNNER_TEMP/android-signing/certificate-sha256"
+          mkdir -p "$GITHUB_WORKSPACE/android-artifacts"
+          cp "${apks[0]}" "$GITHUB_WORKSPACE/android-artifacts/$APK_FILENAME"
+          \cd "$GITHUB_WORKSPACE/android-artifacts"
+          sha256sum "$APK_FILENAME" > "$APK_FILENAME.sha256"
+      - name: Upload verified Android artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: android-release
+          path: android-artifacts/*
+          if-no-files-found: error
+          retention-days: 30
+      - name: Remove signing material
+        if: always()
+        run: |
+          rm -f apps/web/tauri/src-tauri/gen/android/keystore.properties \
+            apps/web/tauri/src-tauri/gen/android/app/google-services.json \
+            "$RUNNER_TEMP/android-google-services.json"
+          rm -rf "$RUNNER_TEMP/android-signing"
+      - name: Teardown Nix
+        if: always()
+        uses: ./.github/actions/teardown-nix
+
+  upload-android:
+    name: Publish Android release artifact
+    needs: [build-android, deploy, deploy-sync-service, deploy-ai-editing-worker]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download verified Android artifact
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          name: android-release
+          path: android-artifacts
+      - name: Attach APK and checksum to release
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
+        with:
+          tag_name: ${{ github.event.release.tag_name }}
+          files: android-artifacts/*
+          fail_on_unmatched_files: true
+
   deploy-cloud-storage:
     name: Deploy Cloud Storage Services
     uses: ./.github/workflows/deploy_all_services.yml

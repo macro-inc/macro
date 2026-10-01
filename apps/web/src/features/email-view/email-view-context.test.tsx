@@ -18,9 +18,6 @@ vi.mock('@app/components/list', () => ({
   listOwnedSlotName: (name: string) => name,
 }));
 vi.mock('@app/components/view-shell', () => ({}));
-vi.mock('@app/features/next-soup/soup-view/inbox-filter-controllers', () => ({
-  registerInboxFilterSplit: () => () => {},
-}));
 vi.mock(
   '@app/features/soup',
   async () => import('../soup/filters/facets/selection')

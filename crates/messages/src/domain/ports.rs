@@ -204,6 +204,10 @@ pub enum MessageChange {
     ReactionChanged {
         /// Persisted message.
         message: Message,
+        /// Emoji whose membership changed.
+        emoji: String,
+        /// Whether the reaction was added (`true`) or removed (`false`).
+        added: bool,
     },
     /// Thread resolution, placement, or deletion changed.
     ThreadUpdated {
@@ -219,6 +223,14 @@ pub enum MessageChange {
     },
 }
 
+/// Persisted reaction state and whether this operation changed membership.
+pub struct ReactionResult {
+    /// Current message, including its reactions.
+    pub message: Message,
+    /// False for an idempotent add or remove that changed no rows.
+    pub changed: bool,
+}
+
 /// Persistence boundary. Implementations enforce parent/thread integrity atomically.
 pub trait MessageRepository: Send + Sync + 'static {
     /// Whether the parent still exists and permits messaging lifecycle-wise.
@@ -226,6 +238,11 @@ pub trait MessageRepository: Send + Sync + 'static {
         &self,
         parent: &MessageParent,
     ) -> impl Future<Output = Result<bool, MessageError>> + Send;
+    /// File type of a live document, for document-specific anchor validation.
+    fn document_file_type(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = Result<Option<String>, MessageError>> + Send;
     /// Read a message belonging to the specified parent, including root tombstones.
     fn get(
         &self,
@@ -277,7 +294,7 @@ pub trait MessageRepository: Send + Sync + 'static {
         parent: &MessageParent,
         id: Uuid,
     ) -> impl Future<Output = Result<Message, MessageError>> + Send;
-    /// Add or remove the caller's reaction and return the current message.
+    /// Add or remove the caller's reaction and report whether membership changed.
     fn react(
         &self,
         parent: &MessageParent,
@@ -285,7 +302,7 @@ pub trait MessageRepository: Send + Sync + 'static {
         user_id: &str,
         emoji: &str,
         add: bool,
-    ) -> impl Future<Output = Result<Message, MessageError>> + Send;
+    ) -> impl Future<Output = Result<ReactionResult, MessageError>> + Send;
     /// Apply authorized thread resolution or Markdown anchor detachment.
     fn patch_thread(
         &self,

@@ -16,6 +16,7 @@ import {
   type UrqlInfiniteData,
 } from '@app/lib/urql-solid';
 import { createBrowserOfflineSignal } from '@core/util/connectivity';
+import { isTransientRequestError } from '@core/util/request-error';
 import { Telemetry } from '@macro-inc/observability';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import type { SoupApiItem } from '@service-storage/generated/schemas';
@@ -54,6 +55,7 @@ import {
   untrack,
 } from 'solid-js';
 import { NIL as NIL_UUID } from 'uuid';
+import { registerChannelNotificationRefresh } from '../../channel/register-notification-refresh';
 import type { SoupAstBody, SoupAstItemsData, SoupAstParams } from '../items';
 import { soupPageTimestamp } from '../page-timestamp';
 import {
@@ -399,12 +401,15 @@ export function createGraphqlSoupAstItemsQuery(
 
     void (async () => {
       const span = Telemetry.span('graphql_cache.soup_local_evaluation');
-      let expectedRevision = revision;
       let retryCount = 0;
       let discarded = false;
       let outcome: 'success' | 'incomplete' | 'error' = 'incomplete';
       try {
         for (let attempt = 0; attempt < 3; attempt += 1) {
+          if (requestId !== localRequest) {
+            discarded = true;
+            return;
+          }
           let result = await host.entityFilter({
             filters,
             sortMethod,
@@ -458,12 +463,10 @@ export function createGraphqlSoupAstItemsQuery(
           }
           if (
             chunks.some((chunk) => result.revision !== chunk.revision) ||
-            result.revision !== latestRevision ||
-            result.revision !== expectedRevision
+            result.revision !== latestRevision
           ) {
             discarded = true;
             retryCount += 1;
-            expectedRevision = latestRevision;
             setCurrentCacheRevision(latestRevision);
             continue;
           }
@@ -492,37 +495,44 @@ export function createGraphqlSoupAstItemsQuery(
             const item = mapGraphqlSoupItem(record);
             return item ? [item] : [];
           });
-          setLocalProjection({
-            input,
-            generation: requestGeneration,
-            baselineKeys: new Set(
-              result.kind === 'mail-page' ? [] : records.map(soupItemKey)
-            ),
-            displayedKeys: new Set(reconciledRecords.map(soupItemKey)),
-            withoutEmail,
-            ...(result.kind === 'mail-page'
-              ? {
-                  mail: {
-                    nextCursor: result.nextCursor,
-                    revision: result.revision,
-                    optimistic: result.optimistic,
-                    records: reconciledRecords,
-                  },
-                }
-              : {}),
-            data: {
-              cachedMail: result.kind === 'mail-page',
-              itemsById: itemsById(items),
-              entities: mapSoupPageToEntityList(
-                { items, next_cursor: undefined },
-                {
-                  instructionsIdQuery,
-                  showSupportedForeignEntities:
-                    queryOptions.showSupportedForeignEntities,
-                }
+          batch(() => {
+            setLocalProjection({
+              input,
+              generation: requestGeneration,
+              baselineKeys: new Set(
+                result.kind === 'mail-page' ? [] : records.map(soupItemKey)
               ),
-              groups: undefined,
-            },
+              displayedKeys: new Set(reconciledRecords.map(soupItemKey)),
+              withoutEmail,
+              ...(result.kind === 'mail-page'
+                ? {
+                    mail: {
+                      nextCursor: result.nextCursor,
+                      revision: result.revision,
+                      optimistic: result.optimistic,
+                      records: reconciledRecords,
+                    },
+                  }
+                : {}),
+              data: {
+                cachedMail: result.kind === 'mail-page',
+                itemsById: itemsById(items),
+                entities: mapSoupPageToEntityList(
+                  { items, next_cursor: undefined },
+                  {
+                    instructionsIdQuery,
+                    showSupportedForeignEntities:
+                      queryOptions.showSupportedForeignEntities,
+                  }
+                ),
+                groups: undefined,
+              },
+            });
+            // The filter, fragments, and final revision agree. A newer coherent
+            // page is valid even if hydration advanced past the initial read.
+            // Publish both result kinds' watermarks: the Mail guard avoids a
+            // rescan, and reconnect cannot make an older network snapshot authoritative.
+            setCurrentCacheRevision(result.revision);
           });
           outcome = 'success';
           recordAuthority('local');
@@ -696,8 +706,37 @@ export function createGraphqlSoupAstItemsQuery(
           ? [{ document: queryDocument(), variables: { input } }]
           : [];
       });
-    })
+    }, getGraphqlSoupClient)
   );
+
+  registerChannelNotificationRefresh(() => ({
+    client: getGraphqlSoupClient(),
+    // urql retains loaded pages after errors; keep them registered for retry.
+    queries:
+      options().projection === 'channel-list'
+        ? [...new Set([null, ...(query.data?.pageParams ?? [])])].flatMap(
+            (cursor) => {
+              const input = inputForCursor(cursor);
+              return input
+                ? [{ document: queryDocument(), variables: { input } }]
+                : [];
+            }
+          )
+        : [],
+    reader: {
+      enabled: query.isEnabled && !options().networkPaused,
+      fetching: query.isFetching,
+      filtered: true,
+      notificationIds: query.isSuccess
+        ? (query.data?.records() ?? []).flatMap((item) =>
+            item.__typename === 'GraphqlSoupChannel' &&
+            'unreadNotifications' in item
+              ? (item.unreadNotifications?.map((n) => n.id) ?? [])
+              : []
+          )
+        : [],
+    },
+  }));
 
   // Capture membership/sort evidence for each published projection, so a later
   // cache revision cannot change the baseline of an in-flight reconciliation.
@@ -787,9 +826,9 @@ export function createGraphqlSoupAstItemsQuery(
     // Keep server responses (including HTTP auth failures), GraphQL errors,
     // and failures without current-query local proof visible.
     if (
-      error?.networkError &&
+      error &&
+      isTransientRequestError(error) &&
       !error.response &&
-      error.graphQLErrors.length === 0 &&
       displayLocalProjection()
     ) {
       return undefined;
@@ -932,6 +971,8 @@ export function createGraphqlSoupAstItemsQuery(
     },
     refresh: async () => {
       if (firstPageInput() === undefined) return;
+      // An explicit list refresh rebuilds the cursor chain in order. The
+      // notification queue observes isFetching and waits for this to finish.
       await query.refetch({
         requestPolicy: 'network-only',
         throwOnError: true,

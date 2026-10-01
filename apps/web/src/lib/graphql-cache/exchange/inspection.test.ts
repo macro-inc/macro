@@ -129,7 +129,7 @@ describe('typed generated query inspection', () => {
   it('returns no selections through the no-op host', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
-      const host = createNoopCacheHost('test');
+      const host = createNoopCacheHost();
       const selection = selectAll(GroupSoupMembershipDocument)
         .field('user')
         .field('groupSoup');

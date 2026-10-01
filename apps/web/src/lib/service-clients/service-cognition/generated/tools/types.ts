@@ -9,6 +9,15 @@
  */
 
 /**
+ * Tool-facing status of a task assignment.
+ */
+export type TaskAssignmentStatus =
+  | 'assigned'
+  | 'moved'
+  | 'not_a_task'
+  | 'not_found'
+  | 'skipped_no_permission';
+/**
  * Content of a bash code execution response - either a result or an error
  */
 export type BashCodeExecutionContent =
@@ -515,6 +524,30 @@ export type SpreadsheetOperation =
       columns: SpreadsheetColumnWidth[];
       type: 'resize_columns';
     };
+export type AspectRatio =
+  | 'square'
+  | 'landscape'
+  | 'portrait'
+  | 'widescreen'
+  | 'tall';
+/**
+ * A reference photo already stored in Macro.
+ */
+export type ImageReferenceInput =
+  | {
+      /**
+       * The Macro document ID.
+       */
+      id: string;
+      type: 'document';
+    }
+  | {
+      /**
+       * Uploaded file ID from the /file/<id> segment of its attachment URL.
+       */
+      id: string;
+      type: 'staticFile';
+    };
 /**
  * Entity types that can be returned by the list entities AI tool.
  */
@@ -971,6 +1004,21 @@ export type CommentThreadKind = 'inline' | 'discussion';
  */
 export type CommentAnchor =
   | {
+      /**
+       * Stable sheet identity within the workbook.
+       */
+      sheetId: string;
+      /**
+       * Sheet name when the discussion was created.
+       */
+      sheetName: string;
+      /**
+       * A1 cell or range, such as B4 or B4:C9.
+       */
+      range: string;
+      type: 'spreadsheet';
+    }
+  | {
       type: 'document';
     }
   | {
@@ -1132,6 +1180,10 @@ export type TextEditorCodeExecutionContent =
       type: 'text_editor_code_execution_tool_result_error';
     });
 /**
+ * Tool-facing status of a task unassignment.
+ */
+export type TaskUnassignmentStatus = 'unassigned' | 'not_assigned';
+/**
  * How much of a recurring series an update applies to.
  */
 export type UpdateScopeInput = 'all' | 'this_event';
@@ -1223,6 +1275,42 @@ export type ReadThreadReadContent =
       type: 'itemPreviews';
     };
 
+/**
+ * Move tasks into an initiative. A task already in another initiative is moved; duplicates are ignored; at most 100 unique task ids per call. Requires edit access to the initiative and to each task. Returns one status per task id: assigned, moved, not_a_task, not_found, or skipped_no_permission.
+ */
+export interface AssignTasksToInitiative {
+  /**
+   * The id of the initiative to assign tasks to. Requires edit access.
+   */
+  initiativeId: string;
+  /**
+   * Task document ids to assign, at least one and at most 100 unique ids per call. Duplicates are ignored. Requires edit access to each task.
+   */
+  taskIds: string[];
+}
+/**
+ * Response from [`AssignTasksToInitiative`].
+ */
+export interface AssignTasksToInitiativeResponse {
+  /**
+   * The id of the initiative receiving the tasks.
+   */
+  initiativeId: string;
+  /**
+   * Outcomes in request order after removing duplicates.
+   */
+  results: TaskAssignmentOutcome[];
+}
+/**
+ * The result of assigning one task to an initiative.
+ */
+export interface TaskAssignmentOutcome {
+  /**
+   * The task id this outcome describes.
+   */
+  taskId: string;
+  status: TaskAssignmentStatus;
+}
 /**
  * Execute a bash command in a sandboxed environment using Claude's built-in code execution tool.
  */
@@ -1672,36 +1760,40 @@ export interface SpreadsheetChange {
   range?: string | null;
 }
 /**
- * Start a new inline comment on a passage of a Macro markdown document, on behalf of the user: the passage is highlighted in the document and the comment floats beside it, as when a person selects text and comments. Only use this when explicitly asked to comment on part of a document. Quote the passage exactly as the document reads, within a single paragraph, heading, list item or table cell. If the passage appears more than once the tool refuses and lists each occurrence so you can choose one; if the text is not found, read the document again rather than guessing. Use ReplyToDocumentComment to reply in an existing thread or to comment on the document as a whole.
+ * Comment on a document on behalf of the user. Pass threadId to reply in an existing inline or Discussion thread; pass quote to start a new inline comment on a passage of a Macro markdown document; omit both to start a new Discussion comment on the document as a whole. Replies and Discussion comments support any document type. Only use this when explicitly asked to reply to or comment on a document. Thread ids come from the comments ReadContent returns. For an inline comment, quote the passage exactly as the document reads, as plain text without markdown syntax, within a single paragraph, heading, list item or table cell. If the passage appears more than once the tool refuses and lists each occurrence so you can choose one with occurrence, counting from 1; if the text is not found, read the document again rather than guessing. Do not combine threadId with quote. occurrence only applies with quote.
  */
-export interface CommentOnDocumentText {
+export interface CommentOnDocument {
   /**
-   * The id of the markdown document to comment on.
+   * The id of the document to comment on.
    */
   documentId: string;
-  /**
-   * The passage to comment on, quoted exactly as the document reads: plain text without markdown syntax such as ** or link brackets. Keep it to the words the comment is about; a longer quote is more likely to be unique.
-   */
-  text: string;
-  /**
-   * Which appearance of the passage to comment on, counting from 1 in document order. Only needed when the passage appears more than once.
-   */
-  occurrence?: number | null;
   /**
    * Comment content in macro markdown format. This uses the same syntax as markdown documents.
    */
   content: string;
+  /**
+   * The id of the inline or Discussion thread to reply in, from ReadContent. Cannot be combined with quote. Omit both threadId and quote to post a new Discussion comment on the document as a whole.
+   */
+  threadId?: string | null;
+  /**
+   * The passage to comment on, quoted exactly as the document reads: plain text without markdown syntax such as ** or link brackets. Keep it to the words the comment is about; a longer quote is more likely to be unique. Starts a new inline comment on a markdown document only. Cannot be combined with threadId.
+   */
+  quote?: string | null;
+  /**
+   * Which appearance of the quoted passage to comment on, counting from 1 in document order. Only applies with quote; only needed when the passage appears more than once.
+   */
+  occurrence?: number | null;
 }
 /**
- * The inline comment that was started.
+ * The posted comment.
  */
-export interface CommentOnDocumentTextResponse {
+export interface CommentOnDocumentResponse {
   /**
    * The document the comment was posted on.
    */
   documentId: string;
   /**
-   * The new thread; replies and resolution address it by this id.
+   * The thread the comment is in; a new comment starts its own.
    */
   threadId: string;
   /**
@@ -1709,9 +1801,9 @@ export interface CommentOnDocumentTextResponse {
    */
   commentId: string;
   /**
-   * The text the comment is anchored to, as the document reads.
+   * The text the new inline comment is anchored to, as the document reads.
    */
-  markedText: string;
+  markedText?: string | null;
 }
 /**
  * Configure a manageable bot's profile. Provide only fields that should change. Use avatarUrl to set a profile picture from an image already uploaded to Macro static files or another reachable image URL; pass an empty string to clear the current picture. Passing an empty string for description clears it. Confirm handle changes because integrations and mentions may rely on the stable handle.
@@ -3440,6 +3532,63 @@ export interface EditTagResponse {
    * Human-readable summary.
    */
   summary: string;
+}
+/**
+ * Generate or edit an image with Google's Nano Banana image model and save the result as a new image document in Macro. Use for pictures, illustrations, diagram concepts, logo ideas, mockups, or edits based on reference photos. When the user supplies photos or asks to modify an existing image, pass them in referenceImages; describing a photo in the prompt alone does not send it to the image model. Describe the subject, style, composition, lighting, and any text to render; only the prompt is required. Refer to reference images by their order (image 1, image 2, image 3) when explaining how to use them. Returns the new document ID to cite inline. Generation takes several seconds.
+ */
+export interface GenerateImage {
+  /**
+   * Detailed description of the image to generate: subject, style (photo, illustration, flat vector...), composition, colours, mood, and any text that must appear.
+   */
+  prompt: string;
+  /**
+   * Optional short descriptive name for the saved image, for example `sunset-lighthouse`. The file extension is added from the generated format. No directory path. Omit to name the image after the prompt.
+   */
+  fileName?: string | null;
+  /**
+   * Shape of the image. Omit for the model default (square). `widescreen` (16:9) suits banners and slides, `tall` (9:16) suits phone screens and stories.
+   */
+  aspectRatio?: AspectRatio | null;
+  /**
+   * Optional destination project (folder) ID. Requires edit access. Omit to save to the user's top-level files.
+   */
+  projectId?: string | null;
+  /**
+   * Up to three reference photos, in the order used by the prompt. Use type document with a Macro image document ID, or type staticFile with the UUID from /file/<id> in an uploaded attachment's source URL. Use the actual IDs supplied in the conversation or by tools; do not invent IDs. Omit for text-only generation.
+   *
+   * @maxItems 3
+   */
+  referenceImages?:
+    | []
+    | [ImageReferenceInput]
+    | [ImageReferenceInput, ImageReferenceInput]
+    | [ImageReferenceInput, ImageReferenceInput, ImageReferenceInput]
+    | null;
+}
+/**
+ * Where the generated image landed. Does not echo the image bytes.
+ */
+export interface GenerateImageResponse {
+  /**
+   * ID of the new image document.
+   */
+  documentId: string;
+  /**
+   * Saved filename, including its extension.
+   */
+  fileName: string;
+  /**
+   * IANA media type of the image, e.g. `image/png`.
+   */
+  mimeType: string;
+  /**
+   * Size of the image in bytes.
+   */
+  sizeBytes: number;
+  /**
+   * Commentary the model produced alongside the image, when any.
+   */
+  note?: string | null;
 }
 /**
  * Get the channel-specific webhook URLs for a bot the current user can manage. A bot has one URL per channel it can access. POST message content to a returned webhookUrl and authenticate with a token minted from the chat card or bot settings after IssueBotCredential or CreateBot; send it in the returned credentialHeader and send credentialScope in credentialScopeHeader. If no URLs are returned, add the bot to a channel with ManageBotChannelAccess or recreate it with CreateBot and channelId.
@@ -6055,40 +6204,6 @@ export interface RenameDocumentResponse {
   message: string;
 }
 /**
- * Reply in a comment thread on a document, or post a new comment in the document's Discussion panel, on behalf of the user. Only use this when explicitly asked to reply to or comment on a document. Thread ids come from the comments ReadContent returns. To start a new inline comment on a passage of the document, use CommentOnDocumentText.
- */
-export interface ReplyToDocumentComment {
-  /**
-   * The id of the document the comment is on.
-   */
-  documentId: string;
-  /**
-   * Comment content in macro markdown format. This uses the same syntax as markdown documents.
-   */
-  content: string;
-  /**
-   * The id of the inline or Discussion thread to reply in, from ReadContent. Omit to post a new Discussion comment on the document as a whole.
-   */
-  threadId?: string | null;
-}
-/**
- * The posted comment.
- */
-export interface ReplyToDocumentCommentResponse {
-  /**
-   * The document the comment was posted on.
-   */
-  documentId: string;
-  /**
-   * The thread the comment is in; a new Discussion comment starts its own.
-   */
-  threadId: string;
-  /**
-   * The posted comment.
-   */
-  commentId: string;
-}
-/**
  * Resolve or reopen a comment thread on a document on behalf of the user. Only use this when explicitly asked to resolve or reopen a comment. Thread ids come from the comments ReadContent returns.
  */
 export interface ResolveDocumentComment {
@@ -6554,6 +6669,42 @@ export interface TextEditorCodeExecutionResult {
  */
 export interface TextEditorCodeExecutionToolError {
   error_code: CodeExecutionErrorCode;
+}
+/**
+ * Move tasks out of a specific initiative (project). Requires edit access to the initiative and each task; at most 100 unique tasks. Returns one status per task id: unassigned, or not_assigned when the task was not in this initiative. Tasks in other initiatives are left unchanged. An access or service failure stops the batch; earlier removals may have succeeded.
+ */
+export interface UnassignTasksFromInitiative {
+  /**
+   * The id of the initiative to remove tasks from. Requires edit access.
+   */
+  initiativeId: string;
+  /**
+   * Task document ids to remove. Provide at least one and at most 100 unique ids; duplicates are ignored. Requires edit access to each task.
+   */
+  taskIds: string[];
+}
+/**
+ * Response from [`UnassignTasksFromInitiative`].
+ */
+export interface UnassignTasksFromInitiativeResponse {
+  /**
+   * The id of the initiative the tasks were removed from.
+   */
+  initiativeId: string;
+  /**
+   * Outcomes in request order after removing duplicates.
+   */
+  results: TaskUnassignmentOutcome[];
+}
+/**
+ * The result of removing one task from an initiative.
+ */
+export interface TaskUnassignmentOutcome {
+  /**
+   * The task id this outcome describes.
+   */
+  taskId: string;
+  status: TaskUnassignmentStatus;
 }
 /**
  * Update an existing calendar event. Only the supplied fields change; omitted fields keep their current values. The change is written to Google immediately and attendees are notified of it, so confirm details with the user first. Get the `eventId` from ListCalendarEvents.

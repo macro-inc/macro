@@ -9,6 +9,7 @@ import { channelsSearch } from '@app/features/channels-view/channels-route';
 import { channelDetailRoute } from '@app/features/channels-view/route';
 import { driveSearch } from '@app/features/drive-view/primitives/drive-search';
 import { driveRootDocumentRoute } from '@app/features/drive-view/route';
+import { HOME_REMINDER_DETAIL_ROUTE_ID } from '@app/features/reminders/reminder-navigation';
 import {
   createSearchParams,
   defineRoute,
@@ -20,16 +21,16 @@ import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import { URL_PARAMS as MARKDOWN_URL_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_URL_PARAMS } from '@block-pdf/constants';
 import {
-  NewAppView,
+  AppView,
   RedirectSplit,
   withAuth,
 } from '@components/app/split-layout/split-router/app-route-shell';
 import { uuidRouteReference } from '@components/app/split-layout/split-router/mention-links';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { lazy, Show } from 'solid-js';
+import { Show } from 'solid-js';
+import { z } from 'zod';
 import { URL_PARAMS as EMAIL_URL_PARAMS } from '../email-thread/core/location';
-import { getViewPreset } from '../next-soup/sidebar/soup-filter-presets';
 import { HomeEntityDetailRouteView } from './components/HomeEntityDetailRouteView';
+import { HomeReminderDetailRouteView } from './components/HomeReminderDetailRouteView';
 import {
   homeCalendarLegacyTarget,
   homeDetailParamsFromRoute,
@@ -47,29 +48,13 @@ import {
   HomeView,
 } from './home-view';
 
-const SoupView = lazy(async () => ({
-  default: (await import('../next-soup/soup-view/soup-view')).SoupView,
-}));
-
 type HomeDetailParams = Partial<HomePreviewRouteParams> & {
   channelId?: string;
   documentType?: string;
   documentId?: string;
+  reminderId?: string;
   period?: CalendarPeriodView;
 };
-
-function LegacyHomeView() {
-  const preset = getViewPreset('home');
-  return (
-    <SoupView
-      viewName={isTouchDevice() ? 'Notifications' : 'Home'}
-      initialFilters={preset?.filters}
-      initialClientFilters={preset?.clientFilters}
-      initialGroupBy={preset?.groupBy}
-      disableLocalSearch
-    />
-  );
-}
 
 function HomeLegacyRouteView() {
   const params = useParams<HomeDetailParams>();
@@ -88,7 +73,7 @@ function HomeLegacyRouteView() {
   };
 
   return (
-    <Show when={legacyTarget()} fallback={<LegacyHomeView />}>
+    <Show when={legacyTarget()}>
       {(target) => <RedirectSplit to={target()} />}
     </Show>
   );
@@ -98,19 +83,18 @@ export const HomeRouteView = withAuth(() => {
   const params = useParams<HomeDetailParams>();
   const detailRequested = () =>
     homeDetailParamsFromRoute(params) !== undefined ||
+    typeof params.reminderId === 'string' ||
     typeof params.period === 'string';
 
   return (
-    <NewAppView
+    <AppView
       id="home"
-      composableOnTouch
       detailDesktopOnly
       detailRequested={detailRequested}
       detailFallback={<HomeLegacyRouteView />}
-      fallback={<LegacyHomeView />}
     >
       <HomeView />
-    </NewAppView>
+    </AppView>
   );
 });
 
@@ -153,6 +137,16 @@ export const homeDocumentRoute = defineRoute({
   remountKey: ({ documentType, documentId }) =>
     `${homeBaseBlockType(documentType)}:${documentId}`,
 });
+
+export const homeReminderRoute = defineRoute({
+  id: HOME_REMINDER_DETAIL_ROUTE_ID,
+  path: 'reminder/:reminderId',
+  params: z.object({ reminderId: z.string().min(1) }),
+  component: HomeReminderDetailRouteView,
+  remountKey: ({ reminderId }) => reminderId,
+  claim: ({ reminderId }) => ({ namespace: 'reminder', id: reminderId }),
+});
+
 export const homePreviewRoute = defineRoute({
   id: 'home-preview',
   path: ':blockType/:previewId',
@@ -180,8 +174,11 @@ export const homePreviewRoute = defineRoute({
   remountKey: ({ blockType, previewId }) =>
     `${homeBaseBlockType(blockType)}:${previewId}`,
   claim: ({ blockType, previewId }) => ({
-    namespace: 'block',
-    id: `${homeBaseBlockType(blockType)}:${previewId}`,
+    namespace: blockType === 'agent' ? 'agent' : 'block',
+    id:
+      blockType === 'agent'
+        ? previewId
+        : `${homeBaseBlockType(blockType)}:${previewId}`,
   }),
   toReference: ({ previewId, blockType }) =>
     blockType === 'pr'
@@ -199,6 +196,7 @@ export const homeSplitRoute = defineRoute({
     homeCalendarRoute,
     homeChannelRoute,
     homeDocumentRoute,
+    homeReminderRoute,
     homePreviewRoute,
   ],
 });

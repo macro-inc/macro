@@ -20,6 +20,7 @@ import { SplitFileMenu } from '@components/app/split-layout/components/SplitFile
 import { ListNavigationButtons } from '@components/app/split-layout/components/SplitHeader';
 import {
   useCanAutofocusSplitContent,
+  useSplitDisplayName,
   useSplitPanelOrThrow,
 } from '@components/app/split-layout/layoutUtils';
 import { createSplitAutofocus } from '@components/app/split-layout/utils/createSplitAutofocus';
@@ -102,6 +103,7 @@ function EmailDetailHeader(
 export function EmailDetailView(props: {
   thread: EmailThreadTarget;
   targetMessageId?: string;
+  targetRequest?: string;
 }) {
   const { closeThread, selectedThread } = useEmailView();
   const panel = useSplitPanelOrThrow();
@@ -125,6 +127,7 @@ export function EmailDetailView(props: {
       'Email'
     );
   };
+  useSplitDisplayName(title);
   const openShare = useShareModal(() => {
     const thread = threadData();
     if (!thread) return;
@@ -170,6 +173,7 @@ export function EmailDetailView(props: {
     listNavigation,
     focusContainer,
     targetMessageId: () => props.targetMessageId,
+    targetRequest: () => props.targetRequest,
     isActive: panel.isPanelActive,
     registerKeyboard: (handlers) => {
       registerEmailHotkeys(hotkeyScope(), handlers);
@@ -285,6 +289,7 @@ export function EmailDetailRouteView() {
     <EmailDetailView
       thread={{ id: params.threadId }}
       targetMessageId={search.messageId || undefined}
+      targetRequest={search.seek}
     />
   );
 }

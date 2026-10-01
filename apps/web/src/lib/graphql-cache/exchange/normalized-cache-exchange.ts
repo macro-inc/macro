@@ -35,6 +35,7 @@
  */
 
 import {
+  type Client,
   CombinedError,
   type Exchange,
   makeOperation,
@@ -71,6 +72,7 @@ import {
   isAdmittedEnqueueUncertainError,
   isCacheRevision,
   isOwnerEpochLostError,
+  isOwnerLockUnavailableError,
   type QueryRevalidationWire,
 } from '../protocol';
 import { createDeferredQueryRereads } from './deferred-query-rereads';
@@ -78,6 +80,7 @@ import {
   compileEntityResolvers,
   type EntityResolverConfig,
 } from './entity-resolvers';
+import type { QueryRevalidation } from './optimistic';
 import {
   normalizedEntityKey,
   notifyOptimisticMutationEnqueued,
@@ -111,6 +114,8 @@ const NORMALIZED_CACHE_RESULT_METADATA_KEY = '__macroNormalizedCache';
 export type NormalizedCacheResultMetadata =
   | {
       source: 'live-network';
+      /** Subscription effects finished successfully in this cache generation. */
+      cacheEffectsApplied?: boolean;
       revision?: CacheRevision;
       /** Local-only acknowledgement; never rejects or republishes response data. */
       persistence?: Promise<CacheRevision | undefined>;
@@ -129,12 +134,16 @@ export function normalizedCacheResultMetadata(
     return { source };
   }
   if (source !== 'live-network') return;
-  const { revision, persistence } = metadata as {
+  const { revision, persistence, cacheEffectsApplied } = metadata as {
+    cacheEffectsApplied?: unknown;
     revision?: unknown;
     persistence?: unknown;
   };
   return {
     source,
+    ...(typeof cacheEffectsApplied === 'boolean'
+      ? { cacheEffectsApplied }
+      : {}),
     ...(isCacheRevision(revision) ? { revision } : {}),
     ...(persistence instanceof Promise
       ? { persistence: persistence as Promise<CacheRevision | undefined> }
@@ -421,6 +430,9 @@ function queuedMutationResult(
 export interface NormalizedCacheExchangeOptions {
   /** Domain-specific deletions inferred from a successful server response. */
   deletedRecordKeys?: (result: OperationResult) => string[];
+  /** Return true to transfer a committed query refresh to an active reader's queue.
+   * Persisted descriptors without an owner retain the normal network fallback. */
+  delegateRevalidation?: (client: Client, query: QueryRevalidation) => boolean;
   /** Schema-typed singular entity relations derived from field arguments. */
   entityResolvers?: EntityResolverConfig;
   /** Called when cache work fails; the operation may degrade or emit uncertainty. */
@@ -769,7 +781,7 @@ export function normalizedCacheExchange(
           resolveRoute: (result: OperationResult | undefined) => void;
         }
       >();
-      const subscriptionEffectChains = new Map<number, Promise<void>>();
+      const subscriptionEffectChains = new Map<number, Promise<boolean>>();
       // Teardown invalidates queued effects, including when the same operation
       // is immediately resubscribed after a back/forward-cache restore.
       const subscriptionGenerations = new Map<number, object>();
@@ -956,12 +968,21 @@ export function normalizedCacheExchange(
             ) {
               throw new Error('cache revalidation variables are not an object');
             }
+            const document = replayDocument(
+              revalidation.query,
+              revalidation.operationName
+            );
+            if (
+              options.delegateRevalidation?.(client, {
+                document,
+                variables: variables as Record<string, unknown>,
+              })
+            )
+              continue;
             void client
-              .query(
-                replayDocument(revalidation.query, revalidation.operationName),
-                variables as Record<string, unknown>,
-                { requestPolicy: 'network-only' }
-              )
+              .query(document, variables as Record<string, unknown>, {
+                requestPolicy: 'network-only',
+              })
               .toPromise()
               .then((result) => {
                 if (result.error) throw result.error;
@@ -1088,6 +1109,12 @@ export function normalizedCacheExchange(
             // unsafe to forward or retry without a coordinator fence.
             return uncertainEnqueueResult(op, error);
           }
+          // Another context holds the database, so the enqueue never reached
+          // an engine. Send it as a disabled cache would.
+          if (isOwnerLockUnavailableError(error)) {
+            enqueueForward(op);
+            return undefined;
+          }
           // A cached bin/page may disappear between inspect and enqueue. Do
           // not expose a partial relation move: retain entity optimism and
           // the post-success revalidation descriptors instead.
@@ -1115,11 +1142,15 @@ export function normalizedCacheExchange(
                 linkPatches: [],
                 revalidations: [
                   ...args.revalidations,
-                  ...args.linkPatches.map((patch) => ({
-                    query: patch.query,
-                    operationName: patch.operationName,
-                    variablesJson: patch.variablesJson,
-                  })),
+                  // Fragment recipes are not executable queries. Their callers
+                  // provide targeted recovery queries in args.revalidations.
+                  ...args.linkPatches
+                    .filter((patch) => !patch.recordRoot)
+                    .map((patch) => ({
+                      query: patch.query,
+                      operationName: patch.operationName,
+                      variablesJson: patch.variablesJson,
+                    })),
                 ],
               },
               claim
@@ -1184,9 +1215,10 @@ export function normalizedCacheExchange(
         op: Operation,
         effects: CacheEffect[],
         isCurrent: () => boolean = () => true
-      ): Promise<void> {
+      ): Promise<boolean> {
+        let applied = true;
         for (const effect of effects) {
-          if (!isCurrent()) return;
+          if (!isCurrent()) return false;
           try {
             if (effect.kind === 'write') {
               await host.writeQuery({
@@ -1199,11 +1231,13 @@ export function normalizedCacheExchange(
               await host.deleteRecords([effect.key]);
             }
           } catch (error) {
+            applied = false;
             // One failed cache effect must neither skip later effects nor
             // prevent delivery of the original operation result.
             options.onCacheError?.(error, op);
           }
         }
+        return applied && isCurrent();
       }
 
       // Persistence is still ordered/durable, but foreground query consumers do
@@ -1319,7 +1353,7 @@ export function normalizedCacheExchange(
           // overtake a later delete. Subscribers still receive each original
           // result after its effects settle.
           const previousEffects =
-            subscriptionEffectChains.get(op.key) ?? Promise.resolve();
+            subscriptionEffectChains.get(op.key) ?? Promise.resolve(true);
           const generation = subscriptionGenerations.get(op.key);
           const effects = previousEffects.then(() =>
             applyOperationCacheEffects(
@@ -1332,7 +1366,11 @@ export function normalizedCacheExchange(
           );
           subscriptionEffectChains.set(op.key, effects);
           try {
-            await effects;
+            const cacheEffectsApplied = await effects;
+            return withResultMetadata(result, {
+              source: 'live-network',
+              cacheEffectsApplied,
+            });
           } finally {
             if (subscriptionEffectChains.get(op.key) === effects) {
               subscriptionEffectChains.delete(op.key);

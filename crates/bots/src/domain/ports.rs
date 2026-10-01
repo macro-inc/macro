@@ -1,10 +1,10 @@
 //! Bot ports.
 
 use super::models::{
-    Agent, AuthenticatedBot, Bot, BotChannel, BotChannelListCaller, BotId, BotOwner, BotProfile,
-    BotToken, BotTokenCandidate, CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest,
-    CreateBotTokenResponse, CreateChannelScopedBotRequest, CreateChannelScopedBotResponse,
-    HarnessFacts, HarnessId, PatchBotRequest, UpdateAgentRequest,
+    Agent, AuthenticatedBot, Bot, BotChannel, BotChannelListCaller, BotId, BotOwner,
+    BotOwnerProfile, BotProfile, BotToken, BotTokenCandidate, CreateAgentRequest, CreateBotRequest,
+    CreateBotTokenRequest, CreateBotTokenResponse, CreateChannelScopedBotRequest,
+    CreateChannelScopedBotResponse, HarnessFacts, HarnessId, PatchBotRequest, UpdateAgentRequest,
 };
 use bot_token::HashedBotToken;
 use entity_access::domain::models::{EntityAccessReceipt, MemberParticipantRole};
@@ -86,6 +86,12 @@ pub trait BotRepo: Send + Sync + 'static {
         &self,
         bot_ids: &[BotId],
     ) -> impl Future<Output = Result<HashMap<BotId, BotProfile>, Self::Err>> + Send;
+
+    /// Load owner profiles, including soft-deleted rows.
+    fn get_owner_profiles(
+        &self,
+        bot_ids: &[BotId],
+    ) -> impl Future<Output = Result<HashMap<BotId, BotOwnerProfile>, Self::Err>> + Send;
 
     /// Get an active persisted agent by bot id.
     fn get_agent(
@@ -260,6 +266,12 @@ pub trait BotService: Send + Sync + 'static {
         caller: MacroUserIdStr<'static>,
         bot_id: BotId,
     ) -> impl Future<Output = Result<Bot, BotError>> + Send;
+
+    /// Load owner profiles in request order.
+    fn get_owner_profiles(
+        &self,
+        ids: &[BotId],
+    ) -> impl Future<Output = Result<Vec<BotOwnerProfile>, BotError>> + Send;
 
     /// Get the authenticated bot's own record.
     fn get_self(&self, bot_id: BotId) -> impl Future<Output = Result<Bot, BotError>> + Send;

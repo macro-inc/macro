@@ -12,7 +12,6 @@ import { useBlockId } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
-import { whenSettled } from '@core/util/whenSettled';
 import { formatDateAndTime } from '@entity';
 import CopyIcon from '@phosphor/copy.svg';
 import RenameIcon from '@phosphor/pencil-line.svg';
@@ -24,21 +23,29 @@ import {
   useRunScheduleNowMutation,
   useScheduleHistoryQuery,
   useSchedulesQuery,
+  useSetScheduleEnabledMutation,
   useUpdateScheduleMutation,
 } from '@queries/agent-schedule/schedules';
 import { getCronTrigger } from '@queries/agent-schedule/triggers';
+import { useAgentSessionQuery } from '@queries/agent-session/session';
 import { useChatQuery } from '@queries/chat';
-import { debounce } from '@solid-primitives/scheduled';
-import { Button, cn } from '@ui';
+import { Button, cn, ToggleSwitch } from '@ui';
 import {
+  type Accessor,
+  createEffect,
   createMemo,
   createSignal,
   For,
   Match,
+  on,
   onMount,
   Show,
   Switch,
 } from 'solid-js';
+import { match } from 'ts-pattern';
+import { createRoutineAutosave } from '../primitives/routine-autosave';
+import { RoutineExecutionPicker } from '../routine-execution-picker';
+import { type HistoryMetadata, RoutineHistory } from '../views/routine-history';
 import { AutomationPromptEditor } from './AutomationPromptEditor';
 import { AutomationRenameModal } from './AutomationRenameModal';
 import { AutomationTimePicker } from './AutomationTimePicker';
@@ -56,96 +63,38 @@ import {
 } from './automationUtils';
 import type { ScheduleDraft } from './types';
 
-type HistoryRecord = {
-  id?: string | null;
-  resource_id?: string | null;
-  start_time?: string | null;
-  is_success?: boolean | null;
-};
-
-function HistoryRow(props: { record: HistoryRecord }) {
-  const { openWithSplit } = useSplitLayout();
-  const chatId = () => props.record.resource_id ?? undefined;
-  const chatQuery = useChatQuery(chatId);
-  const name = () =>
-    chatQuery.data?.chat?.name?.trim() ||
-    (chatQuery.isLoading ? '' : 'Untitled run');
-
-  const clickable = () => Boolean(chatId());
-  // Synthetic pending rows (no id) are inserted by the websocket sync on
-  // `started` and replaced on `stopped`. Treat them as neutral rather than
-  // failures — the panel header already surfaces running state.
-  const isPending = () => !props.record.id;
-
-  return (
-    <div
-      class={cn(
-        'flex items-center gap-2 border-b border-edge-muted px-3 py-2 text-sm',
-        clickable() ? 'cursor-default hover:bg-hover' : 'cursor-default'
-      )}
-      onClick={(event) => {
-        const id = chatId();
-        if (id)
-          openWithSplit(
-            { type: 'chat', id },
-            { activate: true, preferNewSplit: event.shiftKey }
-          );
-      }}
-    >
-      <div class="size-4 shrink-0">
-        <EntityIcon targetType="chat" size="xs" />
-      </div>
-      <span class="min-w-0 flex-1 truncate">{name()}</span>
-      <span
-        class={cn(
-          'ml-auto shrink-0 text-xs font-mono uppercase font-light',
-          isPending() || props.record.is_success
-            ? 'text-ink-extra-muted'
-            : 'text-failure'
-        )}
-      >
-        {formatDateAndTime(props.record.start_time ?? new Date())}
-      </span>
-    </div>
-  );
+function createChatHistoryMetadata(id: string): Accessor<HistoryMetadata> {
+  const query = useChatQuery(() => id);
+  return () => {
+    if (query.isPending) return { status: 'pending' };
+    if (!query.isSuccess) return { status: 'unavailable' };
+    const chat = query.data?.chat;
+    return chat
+      ? { status: 'ready', name: chat.name }
+      : { status: 'unavailable' };
+  };
 }
 
-function HistoryList(props: { records: HistoryRecord[]; isPending: boolean }) {
-  return (
-    <Show
-      when={props.records.length > 0}
-      fallback={
-        <Show
-          when={!props.isPending}
-          fallback={
-            <div class="px-3 py-8 text-center text-xs text-ink-muted">
-              Loading…
-            </div>
-          }
-        >
-          <div class="px-3 py-8 text-center text-xs text-ink-muted">
-            No runs yet.
-          </div>
-        </Show>
-      }
-    >
-      <div class="min-h-0 h-full overflow-y-scroll">
-        <For each={props.records.slice(0, 50)}>
-          {(record) => <HistoryRow record={record} />}
-        </For>
-      </div>
-    </Show>
-  );
+function createAgentHistoryMetadata(id: string): Accessor<HistoryMetadata> {
+  const query = useAgentSessionQuery(() => id);
+  return () => {
+    if (query.isPending) return { status: 'pending' };
+    if (!query.isSuccess) return { status: 'unavailable' };
+    const session = query.data;
+    return session
+      ? { status: 'ready', name: session.name }
+      : { status: 'unavailable' };
+  };
 }
 
 export function Automation() {
   const scheduleId = useBlockId();
   const panel = useSplitPanelOrThrow();
-  const { replaceOrInsertSplit } = useSplitLayout();
+  const { openWithSplit, replaceOrInsertSplit } = useSplitLayout();
 
   const schedulesQuery = useSchedulesQuery(() => true);
   const schedule = createMemo(() =>
-    !schedulesQuery.isPending
+    schedulesQuery.isSuccess || schedulesQuery.isError
       ? schedulesQuery.data?.find((item) => item.id === scheduleId)
       : undefined
   );
@@ -157,6 +106,9 @@ export function Automation() {
     const current = schedule();
     return current ? scheduleToEntity(current) : undefined;
   };
+  const status = () => scheduleEntity()?.status;
+  const isRunning = () => status()?.kind === 'running';
+  const isActive = () => schedule()?.enabled ?? false;
 
   const [state, setRawState] = createSignal<ScheduleDraft | undefined>();
 
@@ -183,35 +135,41 @@ export function Automation() {
     return null;
   });
 
-  const updateMutation = useUpdateScheduleMutation({
-    onError: (error) =>
-      toast.alert('Failed to update automation', {
-        subtext: getErrorMessage(error),
-      }),
+  const updateMutation = useUpdateScheduleMutation();
+  const autosave = createRoutineAutosave<ScheduleDraft>(async (draft) => {
+    const previous = schedule();
+    if (!previous || !getCronTrigger(previous)) {
+      throw new Error('This routine is no longer editable.');
+    }
+    const body = draftToUpdateBody(draft, previous);
+    if (!body) throw new Error('Choose a valid execution target.');
+    await updateMutation.mutateAsync({ scheduleId, body });
   });
 
-  const save = () => {
-    if (formError()) return;
-    const d = state();
-    const previous = schedule();
-    if (!d || !previous) return;
-    const body = draftToUpdateBody(d, previous);
-    if (!body) return;
-    updateMutation.mutate({ scheduleId, body });
-  };
-
-  const debouncedSave = debounce(save, 300);
-
-  const setState = (update: (prev: ScheduleDraft) => ScheduleDraft) => {
+  function setState(update: (prev: ScheduleDraft) => ScheduleDraft): void {
     const current = state();
-    if (!current || !cronTrigger()) return;
+    if (!current || !cronTrigger() || isRunning()) return;
     const next = update(current);
     setRawState(next);
     if (next.name !== current.name) {
       panel.handle.setDisplayName(next.name);
     }
-    debouncedSave();
-  };
+    autosave.queue(formError() ? undefined : next);
+  }
+
+  function runNow(): void {
+    if (
+      !cronTrigger() ||
+      !state() ||
+      formError() ||
+      autosave.dirty() ||
+      autosave.saving() ||
+      runNowMutation.isPending ||
+      isRunning()
+    )
+      return;
+    runNowMutation.mutate({ scheduleId });
+  }
 
   function initializeDraft(): void {
     const current = schedule();
@@ -220,7 +178,15 @@ export function Automation() {
     panel.handle.setDisplayName(current.name);
   }
 
-  whenSettled(schedulesQuery, initializeDraft, initializeDraft);
+  // Only entering/leaving cron editing resets the draft, never save responses.
+  const cronEditable = createMemo(() => Boolean(cronTrigger()));
+  createEffect(
+    on(cronEditable, (editable) => {
+      autosave.cancel();
+      if (editable) initializeDraft();
+      else setRawState(undefined);
+    })
+  );
 
   const historyQuery = useScheduleHistoryQuery(
     () => scheduleId,
@@ -235,6 +201,13 @@ export function Automation() {
   const runNowMutation = useRunScheduleNowMutation({
     onError: (error) =>
       toast.alert('Failed to start run', { subtext: getErrorMessage(error) }),
+  });
+
+  const setEnabledMutation = useSetScheduleEnabledMutation({
+    onError: (error) =>
+      toast.alert('Failed to update routine', {
+        subtext: getErrorMessage(error),
+      }),
   });
 
   const duplicateMutation = useCreateScheduleMutation({
@@ -276,18 +249,6 @@ export function Automation() {
       onError: () => toast.failure('Failed to delete'),
     });
   };
-
-  // Treat an action as "running" when the server has a fresh claim on it.
-  // The backend's MAX_ACTION_TIME is 20 minutes — after that a claim is
-  // considered stale (e.g. executor crashed) and we stop showing the
-  // running indicator. The websocket sync patches `claimed` live; GETs seed
-  // it on page load.
-  const MAX_CLAIMED_MS = 20 * 60 * 1000;
-  const isRunning = createMemo(() => {
-    const claimed = schedule()?.claimed;
-    if (!claimed) return false;
-    return Date.now() - Date.parse(claimed) < MAX_CLAIMED_MS;
-  });
 
   onMount(() => {
     void invalidateSchedules();
@@ -389,46 +350,65 @@ export function Automation() {
                   variant="accent"
                   size="sm"
                   class="cursor-default"
-                  disabled={runNowMutation.isPending || isRunning()}
-                  onClick={() => runNowMutation.mutate({ scheduleId })}
+                  disabled={
+                    runNowMutation.isPending ||
+                    isRunning() ||
+                    autosave.dirty() ||
+                    autosave.saving() ||
+                    Boolean(formError())
+                  }
+                  onClick={runNow}
                 >
                   Run Now
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  class="cursor-default"
-                  onClick={() =>
-                    setState((current) => ({
-                      ...current,
-                      enabled: !current.enabled,
-                    }))
+                <ToggleSwitch
+                  label="Active"
+                  labelClass="text-xs text-ink-muted"
+                  checked={isActive()}
+                  // Resuming conflicts with the claim until the run finishes.
+                  disabled={
+                    setEnabledMutation.isPending || (isRunning() && !isActive())
                   }
-                >
-                  {d().enabled ? 'Pause' : 'Resume'}
-                </Button>
+                  onChange={(active) =>
+                    setEnabledMutation.mutate({ scheduleId, enabled: active })
+                  }
+                />
                 <div class="ml-auto text-xs font-mono text-right uppercase font-light">
-                  <Show
-                    when={isRunning()}
-                    fallback={
-                      <span class="text-ink-extra-muted">
-                        <Show
-                          when={d().enabled && schedule()?.next_run_at}
-                          fallback={<>Paused</>}
-                        >
-                          {(nextRunAt) => (
-                            <>Next run {formatDateAndTime(nextRunAt())}</>
-                          )}
-                        </Show>
+                  {match(status())
+                    .with({ kind: 'running' }, () => (
+                      <span class="flex items-center justify-end gap-1.5 text-accent">
+                        <span class="size-1.5 animate-pulse rounded-full bg-accent" />
+                        Running
                       </span>
-                    }
-                  >
-                    <span class="flex items-center justify-end gap-1.5 text-accent">
-                      <span class="size-1.5 animate-pulse rounded-full bg-accent" />
-                      Running
-                    </span>
-                  </Show>
+                    ))
+                    .with({ kind: 'scheduled' }, ({ nextRunAt }) => (
+                      <span class="text-ink-extra-muted">
+                        Next run {formatDateAndTime(nextRunAt)}
+                      </span>
+                    ))
+                    .with(
+                      { kind: 'paused' },
+                      { kind: 'unscheduled' },
+                      undefined,
+                      () => undefined
+                    )
+                    .exhaustive()}
                 </div>
+              </div>
+
+              <div class="grid gap-1.5">
+                <h1 class="text-sm font-semibold">Execution target</h1>
+                <RoutineExecutionPicker
+                  target={d().target}
+                  onChange={(target) =>
+                    setState((current) => ({ ...current, target }))
+                  }
+                />
+                <Show when={isRunning()}>
+                  <p class="text-xs text-ink-muted">
+                    Configuration cannot be changed while running.
+                  </p>
+                </Show>
               </div>
 
               <div class="grid gap-1.5">
@@ -553,6 +533,19 @@ export function Automation() {
                 />
               </div>
 
+              <Show when={autosave.error()}>
+                <div role="alert" class="text-xs text-failure">
+                  Changes not saved. {getErrorMessage(autosave.error())}
+                  <button
+                    type="button"
+                    class="ml-2 underline"
+                    onClick={autosave.retry}
+                  >
+                    Retry save
+                  </button>
+                </div>
+              </Show>
+
               <Show when={formError()}>
                 {(message) => (
                   <div class="border border-failure/20 bg-failure/5 rounded-sm px-2 py-1.5 text-xs text-failure">
@@ -566,9 +559,17 @@ export function Automation() {
               <div class="border-b border-edge-muted px-3 py-2 text-xs font-semibold uppercase tracking-wide text-ink-muted">
                 History
               </div>
-              <HistoryList
+              <RoutineHistory
                 records={history()}
                 isPending={historyQuery.isPending}
+                createChatMetadata={createChatHistoryMetadata}
+                createAgentMetadata={createAgentHistoryMetadata}
+                onOpen={(resource, newSplit) =>
+                  openWithSplit(resource, {
+                    activate: true,
+                    preferNewSplit: newSplit,
+                  })
+                }
               />
             </div>
           </div>

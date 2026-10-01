@@ -106,18 +106,6 @@ export function isFeatureEnabled(flag: Flag): boolean {
 }
 
 /**
- * Switches Inbox, Tasks, and Channels from the current SoupView implementations
- * to the new composable view implementations. On everywhere without waiting
- * for PostHog: a late PostHog answer swaps the app shell after first paint.
- * Override locally with VITE_ENABLE_NEW_APP_VIEWS=false.
- */
-export const enableNewAppViews = defineFlag({
-  key: 'enable-new-app-views',
-  env: 'ENABLE_NEW_APP_VIEWS',
-  default: true,
-});
-
-/**
  * This constant reflects whether the app is running in production mode with prod backend environment
  *
  * @returns true in macro.com, false otherwise
@@ -537,12 +525,6 @@ export function isAutoUpdateUiEnabled(): boolean {
   return !isFeatureEnabled(disableAutoUpdateUi);
 }
 
-export const enableNewPricing = defineFlag({
-  key: 'enable-new-pricing',
-  env: 'ENABLE_NEW_PRICING',
-  default: onInDev,
-});
-
 // Bot management in Settings, channels, and the command menu. Override locally
 // with VITE_BOT_MANAGEMENT.
 export const botManagement = defineFlag({
@@ -641,6 +623,15 @@ export const enableTagTeamSharing = defineFlag({
 export const enableChannelTags = defineFlag({
   key: 'enable-channel-tags',
   env: 'ENABLE_CHANNEL_TAGS',
+});
+
+// The Chat view's Threads tab: channel threads filtered by conversation.
+// On in development; PostHog decides elsewhere. Override with
+// VITE_ENABLE_CHANNEL_THREADS_PREVIEW.
+export const enableChannelThreadsPreview = defineFlag({
+  key: 'enable-channel-threads-preview',
+  env: 'ENABLE_CHANNEL_THREADS_PREVIEW',
+  default: onInDev,
 });
 
 // The "Activity" section in the entity side panel: the entity's recent
@@ -742,4 +733,14 @@ export const enableUnifiedDocumentDiscussions = defineFlag({
   key: 'enable-unified-document-discussions',
   env: 'ENABLE_UNIFIED_DOCUMENT_DISCUSSIONS',
   default: onInDev,
+});
+
+/**
+ * Automatic in-app feature tours on desktop views (`features/tours`). Follows
+ * PostHog everywhere, including the local dev server; set
+ * VITE_ENABLE_IN_APP_TOURS=true to turn tours on locally.
+ */
+export const enableInAppTours = defineFlag({
+  key: 'enable-in-app-tours',
+  env: 'ENABLE_IN_APP_TOURS',
 });

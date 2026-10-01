@@ -199,3 +199,21 @@ fn receipt_is_for(
         _ => false,
     }
 }
+
+impl<Svc, MarkdownInit, BytesUpload, MentionTracker>
+    crate::domain::ports::create::DocumentUploadService
+    for DocumentCreator<Svc, MarkdownInit, BytesUpload, MentionTracker>
+where
+    Svc: DocumentCreationService + Clone + 'static,
+    BytesUpload: DocumentBytesUploadPort + Clone + 'static,
+    MarkdownInit: Send + Sync,
+    MentionTracker: Send + Sync,
+{
+    async fn upload_file(
+        &self,
+        principal: &CreationPrincipal,
+        upload: NewFileUpload,
+    ) -> Result<CreatedDocument, DocumentError> {
+        DocumentCreator::upload_file(self, principal, upload).await
+    }
+}

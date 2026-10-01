@@ -29,6 +29,7 @@ graphql_initiative = { path = "../graphql_initiative" }
 graphql_notification = { path = "../graphql_notification" }
 graphql_permission = { path = "../graphql_permission" }
 graphql_properties = { path = "../graphql_properties" }
+graphql_scheduled_action = { path = "../graphql_scheduled_action" }
 graphql_soup = { path = "../graphql_soup" }
 macro_authorization = { path = "../macro_authorization", features = [
   "axum",
@@ -58,6 +59,7 @@ models_pagination = { path = "../models_pagination" }
 models_properties = { path = "../models_properties" }
 models_soup = { path = "../models_soup" }
 rootcause = { workspace = true }
+scheduled_action = { path = "../../services/scheduled_action" }
 serde = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }

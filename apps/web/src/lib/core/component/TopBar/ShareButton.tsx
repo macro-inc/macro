@@ -27,10 +27,10 @@ import { isMobile } from '@core/mobile/isMobile';
 import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import { blockEditPermissionEnabledSignal } from '@core/signal/load';
 import { useIsDocumentOwner } from '@core/signal/permissions';
-import { idToEmail } from '@core/user';
 import type { ResultError } from '@core/util/result';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { useCopyLink } from '@core/util/useCopyLink';
+import { OwnerLabel } from '@entity/owner/owner-display';
 import IconShared from '@icon/share.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import ChevronDownIcon from '@phosphor/caret-down.svg';
@@ -380,7 +380,7 @@ function TeamAccessSection(props: { teamShare: TeamShareControls }) {
         <Dropdown.Trigger
           variant="outline"
           aria-label="Team access"
-          class="min-w-16.75 py-1 pl-2 pr-1 rounded-md flex items-center gap-1"
+          class="min-w-16.75 py-1 pl-2 pr-1 flex items-center gap-1"
         >
           {getTeamShareScopeCopy(teamShareScope())}
           <ChevronDownIcon class="size-4 text-ink-extra-muted" />
@@ -492,7 +492,6 @@ interface MobileShareDrawerProps {
   userPermissions: Permissions;
   recipients: SharePermissionV2ChannelSharePermissions | undefined;
   channelNameMap: Map<string, { name: string; type: string }>;
-  formattedOwner: string;
   linkShare: LinkShare | null | undefined;
   linkShareAccessLevel: AccessLevel | null | undefined;
   teamShare?: TeamShareControls;
@@ -632,11 +631,8 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
             <div class="grid gap-3 text-ink text-sm select-none py-3 px-4">
               <Show when={props.owner}>
                 <div class="flex justify-between">
-                  <div class="flex items-center gap-2 overflow-hidden">
-                    <UserIcon isDeleted={false} id={props.owner!} size="sm" />
-                    <div class="font-medium truncate">
-                      {props.formattedOwner}
-                    </div>
+                  <div class="flex items-center gap-2 overflow-hidden font-medium">
+                    <OwnerLabel ownerId={props.owner} viewerLabel="Me" />
                   </div>
                   <div class="flex items-center">
                     <div class="font-medium text-ink-muted text-xs">Owner</div>
@@ -1269,14 +1265,6 @@ export function ShareModal(props: ShareModalProps) {
     }
   );
 
-  const formattedOwner = createMemo(() => {
-    const ownerValue = props.owner;
-    if (!ownerValue) {
-      return '';
-    }
-    return ownerValue === userId() ? 'Me' : idToEmail(ownerValue).split('@')[0];
-  });
-
   return (
     <Show
       when={!isMobile()}
@@ -1296,7 +1284,6 @@ export function ShareModal(props: ShareModalProps) {
           userPermissions={userPermissions()}
           recipients={recipients()}
           channelNameMap={channelNameMap()}
-          formattedOwner={formattedOwner()}
           linkShare={linkShare()}
           linkShareAccessLevel={linkShareAccessLevel()}
           teamShare={teamShareControls()}
@@ -1396,15 +1383,11 @@ export function ShareModal(props: ShareModalProps) {
                         <div class="grid gap-3 text-ink text-sm select-none p-4">
                           <Show when={props.owner}>
                             <div class="flex justify-between">
-                              <div class="flex items-center gap-2 overflow-hidden">
-                                <UserIcon
-                                  isDeleted={false}
-                                  id={props.owner!}
-                                  size="sm"
+                              <div class="flex items-center gap-2 overflow-hidden font-medium">
+                                <OwnerLabel
+                                  ownerId={props.owner}
+                                  viewerLabel="Me"
                                 />
-                                <div class="font-medium truncate">
-                                  {formattedOwner()}
-                                </div>
                               </div>
                               <div class="flex items-center">
                                 <div class="font-medium text-ink-muted text-xs">
@@ -1657,9 +1640,8 @@ export function ShareTrigger(props: {
         }
       >
         <Button
-          variant="plain"
+          variant="ghost"
           size="md"
-          class="rounded-xl"
           onClick={() => {
             if (!isAuthenticated()) {
               openLoginModal();
@@ -1675,10 +1657,9 @@ export function ShareTrigger(props: {
       </Tooltip>
 
       <Button
-        variant="plain"
+        variant="ghost"
         tooltip="Copy Share Link"
         size="icon-md"
-        class="rounded-xl"
         onClick={ShareLinkAction().action}
       >
         <Dynamic component={ShareLinkAction().icon} class="size-3.5!" />
@@ -1775,7 +1756,7 @@ export function ShareOptions(props: {
       <Dropdown.Trigger
         variant="outline"
         disabled={props.disabled}
-        class={`min-w-16.75 py-1 pl-2 pr-1 rounded-md flex items-center gap-1 ${props.noBorder ? 'border-0 sm:border' : ''}`}
+        class={`min-w-16.75 py-1 pl-2 pr-1 flex items-center gap-1 ${props.noBorder ? 'border-0 sm:border' : ''}`}
         on:keydown={(e: KeyboardEvent) => {
           if (e.key === 'Enter' || e.key === ' ') {
             e.stopPropagation();

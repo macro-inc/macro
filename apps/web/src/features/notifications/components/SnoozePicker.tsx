@@ -1,4 +1,5 @@
 import {
+  Button,
   CommandMenuEmptyState,
   CommandMenuList,
   CommandMenuSearchInput,
@@ -117,13 +118,14 @@ export function SnoozePicker(
               <span class="hidden mobile:inline">Tap a time to snooze</span>
             </Show>
           </span>
-          <button
+          <Button
+            variant="ghost"
             type="button"
             class="ml-auto shrink-0 text-ink-muted hover:text-ink mobile:min-h-11 mobile:px-2"
             onClick={() => props.onOpenChange(false)}
           >
             Cancel
-          </button>
+          </Button>
         </CommandMenuShell.Footer>
       </CommandMenuShell>
     </Dialog>

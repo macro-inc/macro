@@ -32,7 +32,8 @@ initial database and test envs; apply new migrations as needed. Use
 Follow the [run-app skill](../.claude/skills/run-app/SKILL.md) for the full browser
 walkthrough, frontend restarts, and login troubleshooting.
 
-- App: <http://localhost:3000/app>; backend proxy: <http://localhost:8090>.
+- App: <http://localhost:3000/app>; backend proxy: <https://localhost:8090>
+  (self-signed; trust `infra/local/certs/ca.pem`).
   These URLs are inside the VM, not reachable from the user's laptop.
 - `stack.sh` leaves a healthy backend running. After Rust edits, use `rebuild.sh`:
   it builds Nix binaries and remounts them via `just stack update --binaries-dir`,

@@ -54,7 +54,7 @@ const mailOnlyFilters = {
 const previewFields =
   'id subject snippet isDraft senderEmail senderName senderPhotoUrl';
 const previews = `mailAllPreview { ${previewFields} } mailDraftPreview { ${previewFields} } mailSentPreview { ${previewFields} }`;
-const query = `query MailSeed { user { id emailLinks { id } soup(input:{initial:{limit:100,emailView:ALL}}) { items { __typename id cacheProjection ... on GraphqlSoupEmailThread { name linkId ownerId isRead inboxVisible isSignal isFavorited latestInboundMessageTs ${previews} updatedAt properties { id } } } } } }`;
+const query = `query MailSeed { user { id emailLinks { id } soup(input:{initial:{limit:100,emailView:ALL}}) { items { __typename id cacheProjection isFavorited ... on GraphqlSoupEmailThread { name linkId ownerId isRead inboxVisible isSignal latestInboundMessageTs  ${previews} updatedAt properties { id } } } } } }`;
 const fragment = `fragment MailRow on GraphqlSoupEmailThread { __typename id emailName:name isRead inboxVisible ${previews} }`;
 const preview = (n: number, subject: string, isDraft: boolean) => ({
   id: id(n),

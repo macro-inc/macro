@@ -28,7 +28,11 @@ fn every_host_toolset_passes_schema_validation() {
         AiHost::ChannelBot,
         AiHost::Mcp,
     ] {
-        let _ = tools_for(host);
+        let tools = tools_for(host);
+        assert!(
+            tools.toolset.tools.contains_key("GenerateImage"),
+            "{host:?} must expose image generation"
+        );
     }
 }
 
@@ -45,8 +49,7 @@ fn project_workflows_are_available_in_every_host_alongside_folder_and_property_t
         "ReadTaskInitiatives",
         "ReadInitiativeActivity",
         "SetEntityProperty",
-        "ReplyToDocumentComment",
-        "CommentOnDocumentText",
+        "CommentOnDocument",
         "ResolveDocumentComment",
         "CreateProject",
         "ReadProject",

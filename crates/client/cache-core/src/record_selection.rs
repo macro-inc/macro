@@ -4,6 +4,8 @@
 //! only to normalized entity objects. Explicit entity keys are projected with
 //! the ordinary denormalizer without scanning normalized storage.
 
+pub mod cache;
+
 use crate::document::{ArgValue, Document, DocumentError, FieldNode, Selection};
 use crate::meta::{self, FieldKind, TypeKind};
 use crate::value::EntityKey;

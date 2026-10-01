@@ -65,6 +65,11 @@ use teams::{inbound::toolset::TeamToolContext, outbound::team_repo::TeamReposito
 use tokio_util::task::TaskTracker;
 
 mod activity_metadata;
+mod images;
+#[cfg(any(test, feature = "test-support"))]
+pub use images::build_image_generation_tool_context_test;
+pub use images::{ToolImageGenerationToolContext, build_image_generation_tool_context};
+
 mod initiatives;
 pub use initiatives::{ToolInitiativeToolContext, build_initiative_tool_context};
 
@@ -1055,7 +1060,8 @@ pub fn build_reminders_tool_context(
 
 /// Type alias for the chat service implementation used by AI tools.
 /// Uses an empty toolset — the read-only tool never invokes tool execution.
-pub type ToolChatService = ChatServiceImpl<PgChatRepo, (), ToolEntityAccessManagementService>;
+pub type ToolChatService =
+    ChatServiceImpl<PgChatRepo<PgBotsRepo>, (), ToolEntityAccessManagementService>;
 
 /// Type alias for the project service implementation used by AI tools.
 /// Upload, content-hash, and search-cleanup ports are unwired — project
@@ -1489,6 +1495,7 @@ pub struct ToolServiceContext {
     pub email_service: Arc<ToolEmailService>,
     pub activity_tool_context: ToolActivityToolContext,
     pub document_tool_context: ToolDocumentToolContext,
+    pub image_generation_tool_context: ToolImageGenerationToolContext,
     pub properties_tool_context: ToolPropertiesToolContext,
     pub email_tool_context: ToolEmailToolContext,
     pub call_tool_context: ToolCallToolContext,
@@ -1512,6 +1519,7 @@ pub struct ToolServiceContext {
     pub crm_tool_context: ToolCrmToolContext,
     pub skill_tool_context: ToolSkillToolContext,
     pub schedule_tool_context: NoOpScheduleContext,
+    #[from_ref(skip)]
     pub anthropic_tool_context: AnthropicToolContext,
     /// Records token usage / cost for AI calls made with this context.
     pub recorder: std::sync::Arc<dyn ai_usage::UsageRecorder>,
@@ -1521,12 +1529,22 @@ pub struct ToolServiceContext {
     pub usage_context: ai_usage::UsageContext,
 }
 
+impl FromRef<ToolServiceContext> for AnthropicToolContext {
+    fn from_ref(context: &ToolServiceContext) -> Self {
+        let mut tools = context.anthropic_tool_context.clone();
+        tools.recorder = context.recorder.clone();
+        tools.usage_context = context.usage_context.clone();
+        tools
+    }
+}
+
 impl ToolServiceContext {
     /// Run the mutating tools as `actor`, delegated for the requesting user,
     /// instead of the default Macro AI bot. Hosts running a specific agent
     /// call this once when they build the context for that agent's session.
     pub fn with_actor(mut self, actor: bot_id::BotId) -> Self {
         self.document_tool_context = self.document_tool_context.with_actor(actor);
+        self.image_generation_tool_context = self.image_generation_tool_context.with_actor(actor);
         self.properties_tool_context = self.properties_tool_context.with_actor(actor);
         self.project_tool_context = self.project_tool_context.with_actor(actor);
         self.initiative_tool_context = self.initiative_tool_context.with_actor(actor);

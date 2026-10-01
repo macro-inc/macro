@@ -22,6 +22,7 @@ type KnownNotificationMetadata =
 const CHANNEL_NOTIFICATION_TYPES = [
   'channel_mention',
   'channel_message_send',
+  'channel_message_reaction',
   'channel_message_reply',
   'document_mention',
 ] as const;
@@ -236,6 +237,7 @@ export function getNotificationActionText(n: Notification): string {
   return match(tag)
     .with('channel_mention', () => 'mentioned')
     .with('channel_message_send', () => 'sent')
+    .with('channel_message_reaction', () => 'reacted')
     .with('channel_message_reply', () => 'replied')
     .with('document_mention', () => 'mentioned')
     .with('mentioned_in_document_comment', () => 'mentioned')
@@ -281,6 +283,10 @@ export function extractMessageContent(notification: Notification): string {
     .with({ tag: 'channel_mention' }, (m) => m.content.messageContent || '')
     .with(
       { tag: 'channel_message_send' },
+      (m) => m.content.messageContent || ''
+    )
+    .with(
+      { tag: 'channel_message_reaction' },
       (m) => m.content.messageContent || ''
     )
     .with(

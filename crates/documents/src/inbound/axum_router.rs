@@ -28,7 +28,6 @@ pub mod create_skill;
 #[cfg(feature = "document_create")]
 pub mod create_snippet;
 pub mod create_task;
-pub mod creation_principal;
 pub mod delete_document;
 pub mod edit_document;
 pub mod get_branch_name;

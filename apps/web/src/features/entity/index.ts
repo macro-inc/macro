@@ -30,6 +30,7 @@ export {
   getSnippetHit,
   isHitSnippetEntity,
 } from './extractors-search/snippet-entity';
+export { OwnerLabel } from './owner/owner-display';
 export { EntityProvider } from './Provider';
 export {
   createBulkCopyDssEntityMutation,

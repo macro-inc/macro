@@ -277,6 +277,7 @@ fn messages_patch() -> OptimisticLinkPatch {
 
 fn messages_patch_with(operation: LinkOperation) -> OptimisticLinkPatch {
     OptimisticLinkPatch {
+        record_root: None,
         query: PAGE_QUERY.into(),
         operation_name: Some("EmailThreadPage".into()),
         variables_json: serde_json::to_string(&page_variables()).unwrap(),

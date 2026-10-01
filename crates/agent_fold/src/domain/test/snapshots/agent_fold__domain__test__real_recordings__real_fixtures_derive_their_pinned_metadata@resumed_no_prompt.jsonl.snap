@@ -1,5 +1,6 @@
 ---
 source: crates/agent_fold/src/domain/test/real_recordings.rs
+assertion_line: 256
 expression: machine.metadata()
 input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
 ---
@@ -48,6 +49,219 @@ SessionMetadata {
                 "Haiku 4.5 · Fastest for quick answers",
             ),
             group: None,
+        },
+    ],
+    config_options: [
+        SessionConfigOption {
+            id: "mode",
+            name: "Mode",
+            description: Some(
+                "Session permission mode",
+            ),
+            category: Some(
+                "mode",
+            ),
+            kind: Select {
+                current_value: "bypassPermissions",
+                options: [
+                    SessionConfigSelectOption {
+                        value: "auto",
+                        name: "Auto",
+                        description: Some(
+                            "Use a model classifier to approve/deny permission prompts",
+                        ),
+                        group: None,
+                    },
+                    SessionConfigSelectOption {
+                        value: "default",
+                        name: "Manual",
+                        description: Some(
+                            "Standard behavior, prompts for dangerous operations",
+                        ),
+                        group: None,
+                    },
+                    SessionConfigSelectOption {
+                        value: "acceptEdits",
+                        name: "Accept Edits",
+                        description: Some(
+                            "Auto-accept file edit operations",
+                        ),
+                        group: None,
+                    },
+                    SessionConfigSelectOption {
+                        value: "plan",
+                        name: "Plan Mode",
+                        description: Some(
+                            "Planning mode, no actual tool execution",
+                        ),
+                        group: None,
+                    },
+                    SessionConfigSelectOption {
+                        value: "dontAsk",
+                        name: "Don't Ask",
+                        description: Some(
+                            "Don't prompt for permissions, deny if not pre-approved",
+                        ),
+                        group: None,
+                    },
+                    SessionConfigSelectOption {
+                        value: "bypassPermissions",
+                        name: "Bypass Permissions",
+                        description: Some(
+                            "Bypass all permission checks",
+                        ),
+                        group: None,
+                    },
+                ],
+            },
+        },
+        SessionConfigOption {
+            id: "model",
+            name: "Model",
+            description: Some(
+                "AI model to use",
+            ),
+            category: Some(
+                "model",
+            ),
+            kind: Select {
+                current_value: "opus[1m]",
+                options: [
+                    SessionConfigSelectOption {
+                        value: "default",
+                        name: "Default (recommended)",
+                        description: Some(
+                            "Opus 5 with 1M context · Best for everyday, complex tasks",
+                        ),
+                        group: None,
+                    },
+                    SessionConfigSelectOption {
+                        value: "opus[1m]",
+                        name: "Opus (1M context)",
+                        description: Some(
+                            "Opus 5 with 1M context · Best for everyday, complex tasks",
+                        ),
+                        group: None,
+                    },
+                    SessionConfigSelectOption {
+                        value: "claude-fable-5[1m]",
+                        name: "Fable",
+                        description: Some(
+                            "Fable 5 · Most capable for your hardest and longest-running tasks",
+                        ),
+                        group: None,
+                    },
+                    SessionConfigSelectOption {
+                        value: "sonnet",
+                        name: "Sonnet",
+                        description: Some(
+                            "Sonnet 5 · Efficient for routine tasks",
+                        ),
+                        group: None,
+                    },
+                    SessionConfigSelectOption {
+                        value: "haiku",
+                        name: "Haiku",
+                        description: Some(
+                            "Haiku 4.5 · Fastest for quick answers",
+                        ),
+                        group: None,
+                    },
+                ],
+            },
+        },
+        SessionConfigOption {
+            id: "effort",
+            name: "Effort",
+            description: Some(
+                "Available effort levels for this model",
+            ),
+            category: Some(
+                "thought_level",
+            ),
+            kind: Select {
+                current_value: "max",
+                options: [
+                    SessionConfigSelectOption {
+                        value: "default",
+                        name: "Default",
+                        description: None,
+                        group: None,
+                    },
+                    SessionConfigSelectOption {
+                        value: "low",
+                        name: "Low",
+                        description: None,
+                        group: None,
+                    },
+                    SessionConfigSelectOption {
+                        value: "medium",
+                        name: "Medium",
+                        description: None,
+                        group: None,
+                    },
+                    SessionConfigSelectOption {
+                        value: "high",
+                        name: "High",
+                        description: None,
+                        group: None,
+                    },
+                    SessionConfigSelectOption {
+                        value: "xhigh",
+                        name: "Xhigh",
+                        description: None,
+                        group: None,
+                    },
+                    SessionConfigSelectOption {
+                        value: "max",
+                        name: "Max",
+                        description: None,
+                        group: None,
+                    },
+                ],
+            },
+        },
+        SessionConfigOption {
+            id: "fast",
+            name: "Fast mode",
+            description: Some(
+                "Faster responses on supported models",
+            ),
+            category: Some(
+                "model_config",
+            ),
+            kind: Boolean {
+                current_value: false,
+            },
+        },
+        SessionConfigOption {
+            id: "agent",
+            name: "Agent",
+            description: Some(
+                "Main-thread agent persona",
+            ),
+            category: None,
+            kind: Select {
+                current_value: "default",
+                options: [
+                    SessionConfigSelectOption {
+                        value: "default",
+                        name: "Default",
+                        description: Some(
+                            "Standard Claude Code agent",
+                        ),
+                        group: None,
+                    },
+                    SessionConfigSelectOption {
+                        value: "ticket-builder",
+                        name: "ticket-builder",
+                        description: Some(
+                            "Implements a SINGLE Macro ticket end-to-end — sets up a jj worktree, makes the change, opens a PR on the task's branch with a one-sentence description, and cleans up. Invoked by ticket-manager (one builder per ticket). Use directly only when doing exactly one ticket.",
+                        ),
+                        group: None,
+                    },
+                ],
+            },
         },
     ],
     title: None,

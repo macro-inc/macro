@@ -2,7 +2,10 @@ import { useInfiniteQuery } from '@tanstack/solid-query';
 import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const testState = vi.hoisted(() => ({ graphqlEnabled: false }));
+const testState = vi.hoisted(() => ({
+  graphqlEnabled: false,
+  restPending: false,
+}));
 const restRefetch = vi.hoisted(() => vi.fn(async () => undefined));
 const fetchSoup = vi.hoisted(() => vi.fn());
 const flatQuery = vi.hoisted(() => makeGraphqlQuery(false));
@@ -69,6 +72,9 @@ vi.mock('@tanstack/solid-query', () => ({
   useInfiniteQuery: vi.fn(() => ({
     data: undefined,
     error: null,
+    get isPending() {
+      return testState.restPending;
+    },
     isLoading: false,
     isFetching: false,
     isPlaceholderData: false,
@@ -100,19 +106,22 @@ import {
 
 let disposeRoot: (() => void) | undefined;
 
-function mountAutoTransportQuery(): SoupAstItemsQuery {
+function mountAutoTransportQuery(networkPaused = false): SoupAstItemsQuery {
   let query: SoupAstItemsQuery | undefined;
   createRoot((dispose) => {
     disposeRoot = dispose;
-    query = useSoupAstItemsQuery(() => ({
-      params: {},
-      body: {},
-      groupBy: {
-        type: 'property',
-        propertyDefinitionId: 'priority',
-        entityType: 'TASK',
-      },
-    }));
+    query = useSoupAstItemsQuery(
+      () => ({
+        params: {},
+        body: {},
+        groupBy: {
+          type: 'property',
+          propertyDefinitionId: 'priority',
+          entityType: 'TASK',
+        },
+      }),
+      () => ({ networkPaused })
+    );
   });
   return query!;
 }
@@ -120,12 +129,37 @@ function mountAutoTransportQuery(): SoupAstItemsQuery {
 describe('Soup refetch transport selection', () => {
   beforeEach(() => {
     testState.graphqlEnabled = false;
+    testState.restPending = false;
     vi.clearAllMocks();
   });
 
   afterEach(() => {
     disposeRoot?.();
     disposeRoot = undefined;
+  });
+
+  it('exposes paused REST requests as pending even when they are not loading', () => {
+    testState.restPending = true;
+    const query = mountAutoTransportQuery();
+    expect(query.isLoading).toBe(false);
+    expect(query.isPending).toBe(true);
+  });
+
+  it('keeps paused GraphQL requests pending until data or an error arrives, unless disabled', () => {
+    testState.graphqlEnabled = true;
+    const query = mountAutoTransportQuery(true);
+    expect(query.transport).toBe('graphql');
+    expect(query.isLoading).toBe(false);
+    expect(query.isPending).toBe(true);
+
+    groupedQuery.data.mockReturnValueOnce({ entities: [] });
+    expect(query.isPending).toBe(false);
+
+    groupedQuery.error.mockReturnValueOnce(new Error('Request failed'));
+    expect(query.isPending).toBe(false);
+
+    groupedQuery.isEnabled.mockReturnValueOnce(false);
+    expect(query.isPending).toBe(false);
   });
 
   it('forwards the channel list projection only to the flat GraphQL query', () => {

@@ -246,6 +246,11 @@ export function parseCron(cron: string): CronParts {
   return interpretCron(cron).parts;
 }
 
+/** Whether the shared recurrence controls can round-trip this expression. */
+export function isCronRepresentable(cron: string): boolean {
+  return interpretCron(cron).representable;
+}
+
 /**
  * A parse, plus whether the expression was one the pickers can actually say.
  *

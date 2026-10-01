@@ -1,5 +1,7 @@
 interface ImportMetaEnv {
   readonly __APP_VERSION__: string;
+  /** When this build was made, in ms since the epoch. Unset outside app builds. */
+  readonly __APP_BUILD_TIME__?: number;
   readonly __LOCAL_JWT__: string;
   readonly __GIT_BRANCH__: string;
 

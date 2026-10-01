@@ -1,6 +1,8 @@
 import type { Property, PropertyDefinitionDomain } from '@property/types';
+import { EntityPropertiesDocument } from '@service-storage/graphql/generated/graphql';
 import { validate as validateUuid } from 'uuid';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { buildGraphqlEntitySoupInput } from '../../soup/graphql/entity-input';
 
 const executeOptimisticMutationMock = vi.hoisted(() => vi.fn());
 const optimisticMutationDispositionOfMock = vi.hoisted(() => vi.fn());
@@ -76,6 +78,9 @@ describe('updateGraphqlEntityPropertyOptions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     cacheHostState.current = {};
+    inspectMock.mockRejectedValue(
+      new Error('query inspection variant count 129 exceeds limit 128')
+    );
     executeOptimisticMutationMock.mockReturnValue({
       toPromise: () => Promise.resolve({ data: undefined, error: undefined }),
     });
@@ -154,30 +159,7 @@ describe('updateGraphqlEntityPropertyOptions', () => {
     expect(new Set(uuids).size).toBe(2);
   });
 
-  it('revalidates only the cached queries holding the entity when it has no record for the definition', async () => {
-    inspectMock
-      .mockResolvedValueOnce([
-        {
-          variables: { input: 'soup-with' },
-          value: { items: [{ id: 'doc-1' }] },
-        },
-        {
-          variables: { input: 'soup-without' },
-          value: { items: [{ id: 'other' }] },
-        },
-        { variables: { input: 'soup-unreadable' }, value: undefined },
-      ])
-      .mockResolvedValueOnce([
-        {
-          variables: { input: 'grouped-with' },
-          value: { bins: [{ items: [{ id: 'doc-1' }] }] },
-        },
-        {
-          variables: { input: 'grouped-without' },
-          value: { bins: [{ items: [] }] },
-        },
-      ]);
-
+  it('saves a first tag without inspection when the cache exceeds the variant budget', async () => {
     await updateGraphqlEntityPropertyOptions({
       entityType: 'DOCUMENT',
       entityId: 'doc-1',
@@ -200,12 +182,13 @@ describe('updateGraphqlEntityPropertyOptions', () => {
     ]);
     // No assignment id exists yet, so nothing can be patched before the commit.
     expect(optimisticData.updateEntityPropertyOptions).toEqual([]);
-    expect(
-      options.revalidations.map(
-        (revalidation: { variables: { input: string } }) =>
-          revalidation.variables.input
-      )
-    ).toEqual(['soup-with', 'grouped-with']);
+    expect(options.revalidations).toEqual([
+      {
+        document: EntityPropertiesDocument,
+        variables: { input: buildGraphqlEntitySoupInput('DOCUMENT', 'doc-1') },
+      },
+    ]);
+    expect(inspectMock).not.toHaveBeenCalled();
   });
 
   it('skips revalidation discovery when the normalized cache is unavailable', async () => {
@@ -226,6 +209,66 @@ describe('updateGraphqlEntityPropertyOptions', () => {
     expect(inspectMock).not.toHaveBeenCalled();
     expect(optimisticArgs().options.revalidations).toEqual([]);
   });
+
+  it('uses the supplied assignment identity and preserves TAG metadata', async () => {
+    await updateGraphqlEntityPropertyOptions({
+      entityType: 'DOCUMENT',
+      entityId: 'doc-1',
+      properties: [
+        {
+          property: tagDefinition,
+          assignmentId: 'assignment-1',
+          currentOptionIds: ['spotlight'],
+          nextOptionIds: [],
+        },
+      ],
+    });
+
+    const { variables, optimisticData, options } = optimisticArgs();
+    expect(variables.input.properties[0].removeOptionIds).toEqual([
+      'spotlight',
+    ]);
+    expect(optimisticData.updateEntityPropertyOptions).toMatchObject([
+      { id: 'assignment-1', dataType: 'TAG', value: null },
+    ]);
+    expect(options.revalidations).toEqual([]);
+    expect(inspectMock).not.toHaveBeenCalled();
+  });
+
+  it.each(['TASK', 'THREAD', 'INITIATIVE', 'CALL_RECORD'] as const)(
+    'durably revalidates only the %s target after a queued first-tag commit',
+    async (entityType) => {
+      optimisticMutationDispositionOfMock.mockReturnValue({
+        kind: 'queued',
+        transactionId: 'txn-1',
+      });
+
+      await expect(
+        updateGraphqlEntityPropertyOptions({
+          entityType,
+          entityId: 'target-1',
+          properties: [
+            {
+              property: tagDefinition,
+              currentOptionIds: [],
+              nextOptionIds: ['spotlight'],
+            },
+          ],
+        })
+      ).resolves.toEqual([
+        { propertyDefinitionId: 'tag-def', optionIds: ['spotlight'] },
+      ]);
+      expect(optimisticArgs().options.revalidations).toEqual([
+        {
+          document: EntityPropertiesDocument,
+          variables: {
+            input: buildGraphqlEntitySoupInput(entityType, 'target-1'),
+          },
+        },
+      ]);
+      expect(inspectMock).not.toHaveBeenCalled();
+    }
+  );
 
   it('resolves a queued commit with the requested selection', async () => {
     optimisticMutationDispositionOfMock.mockReturnValue({

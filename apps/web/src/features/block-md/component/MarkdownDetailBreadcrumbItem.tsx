@@ -1,7 +1,10 @@
 import { ViewBreadcrumbs } from '@app/components/view-shell';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
-import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import {
+  useSplitDisplayName,
+  useSplitPanelOrThrow,
+} from '@components/app/split-layout/layoutUtils';
 import type { BlockAlias, BlockName } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { Permissions } from '@core/component/SharePermissions';
@@ -38,6 +41,7 @@ export function MarkdownDetailBreadcrumbItem(props: {
     displayName() ??
     props.fallbackName ??
     (props.kind === 'task' ? 'New Task' : 'Untitled');
+  useSplitDisplayName(documentName);
   const focusDocument = () => state.editor.md.editor?.focus();
 
   const menuPermissions = () => {

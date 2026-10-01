@@ -46,10 +46,11 @@ use teams::inbound::toolset::team_toolset;
 
 #[cfg(any(test, feature = "test-support"))]
 pub use build_context::build_anthropic_tool_context_test;
-pub use build_context::{build_anthropic_tool_context, build_tool_service_context_from_env};
+pub use build_context::{
+    build_anthropic_tool_context, build_image_generator_from_env,
+    build_tool_service_context_from_env,
+};
 pub use search::search_toolset;
-#[cfg(any(test, feature = "test-support"))]
-pub use tool_context::no_op_schedule_context;
 pub use tool_context::{
     ChannelSideEffectClients, NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress,
     NoOpNotificationService, NoOpScheduleContext, NoOpSnsEndpointManager, NoOpTaskProperties,
@@ -60,21 +61,24 @@ pub use tool_context::{
     ToolChatService, ToolChatToolContext, ToolCommsService, ToolCrmService, ToolCrmToolContext,
     ToolDocumentService, ToolDocumentToolContext, ToolEmailService, ToolEmailToolContext,
     ToolEntityAccessManagementService, ToolEntityAccessService, ToolEntityCreator,
-    ToolForeignEntityService, ToolFrecencyService, ToolImportService, ToolImportToolContext,
-    ToolInitiativeToolContext, ToolMcpSelector, ToolNotificationQueue, ToolNotificationService,
-    ToolNotificationToolContext, ToolPipedreamConnection, ToolProjectService,
-    ToolProjectToolContext, ToolPropertiesService, ToolPropertiesToolContext, ToolRemindersService,
-    ToolRemindersToolContext, ToolServiceContext, ToolSkillService, ToolSkillToolContext,
-    ToolSoupService, ToolSystemPropertiesService, ToolTeamService, ToolTeamToolContext,
-    ToolUserEmailService, build_activity_tool_context, build_bot_tool_context,
-    build_calendar_tool_context, build_channel_tool_context_with_dispatcher,
-    build_channel_tool_context_with_side_effects, build_channel_tool_context_without_side_effects,
-    build_crm_tool_context, build_initiative_tool_context, build_message_service_with_side_effects,
-    build_message_service_without_side_effects, build_project_tool_context,
-    build_properties_service, build_properties_service_with_broker, build_properties_tool_context,
-    build_reminders_tool_context, build_skill_tool_context, build_task_properties_adapter,
-    build_team_repository, build_team_tool_context,
+    ToolForeignEntityService, ToolFrecencyService, ToolImageGenerationToolContext,
+    ToolImportService, ToolImportToolContext, ToolInitiativeToolContext, ToolMcpSelector,
+    ToolNotificationQueue, ToolNotificationService, ToolNotificationToolContext,
+    ToolPipedreamConnection, ToolProjectService, ToolProjectToolContext, ToolPropertiesService,
+    ToolPropertiesToolContext, ToolRemindersService, ToolRemindersToolContext, ToolServiceContext,
+    ToolSkillService, ToolSkillToolContext, ToolSoupService, ToolSystemPropertiesService,
+    ToolTeamService, ToolTeamToolContext, ToolUserEmailService, build_activity_tool_context,
+    build_bot_tool_context, build_calendar_tool_context,
+    build_channel_tool_context_with_dispatcher, build_channel_tool_context_with_side_effects,
+    build_channel_tool_context_without_side_effects, build_crm_tool_context,
+    build_image_generation_tool_context, build_initiative_tool_context,
+    build_message_service_with_side_effects, build_message_service_without_side_effects,
+    build_project_tool_context, build_properties_service, build_properties_service_with_broker,
+    build_properties_tool_context, build_reminders_tool_context, build_skill_tool_context,
+    build_task_properties_adapter, build_team_repository, build_team_tool_context,
 };
+#[cfg(any(test, feature = "test-support"))]
+pub use tool_context::{build_image_generation_tool_context_test, no_op_schedule_context};
 pub type AiToolSet = AsyncToolCollection<ToolServiceContext>;
 
 pub struct ToolSetWithPrompt {
@@ -100,6 +104,9 @@ pub(crate) fn subagent_toolset() -> AiToolSet {
         .add_tool::<ListEntities, SoupToolContext<ToolSoupService, ToolEmailService>>()
         .add_subtoolset::<ToolActivityToolContext>(activity_toolset())
         .add_subtoolset::<ToolDocumentToolContext>(document_toolset())
+        .add_subtoolset::<ToolImageGenerationToolContext>(
+            image_generation::inbound::toolset::image_generation_toolset(),
+        )
         .add_subtoolset::<ToolProjectToolContext>(project_toolset())
         .add_subtoolset::<ToolInitiativeToolContext>(initiative_toolset())
         .add_subtoolset::<ToolPropertiesToolContext>(properties_toolset())

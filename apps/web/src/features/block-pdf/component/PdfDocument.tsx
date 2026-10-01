@@ -66,6 +66,7 @@ export type PdfDocumentProps = {
   portalScope?: PortalScope;
   permissions: PdfDocumentPermissions;
   locationParams?: LocationSearchParams;
+  navigationTarget?: LocationBlockParams;
   registerMethods?: (methods: Partial<PdfDocumentMethods>) => void;
   children: JSX.Element;
 };
@@ -112,11 +113,25 @@ function PdfDocumentBehavior(props: PdfDocumentProps) {
     createSignal<LocationBlockParams>();
   const goToInitialLocation = useGoToLinkLocation();
   const goToLocationFromParams = useGoToLinkLocationFromParams();
-  let imperativeNavigationQueued = false;
+  let targetedNavigationStarted = false;
+  let routeOwnsTarget = false;
+
+  createEffect(() => {
+    const target = props.navigationTarget;
+    if (!target) {
+      if (routeOwnsTarget) {
+        routeOwnsTarget = false;
+        setPendingLocationParams(undefined);
+      }
+      return;
+    }
+    routeOwnsTarget = true;
+    setPendingLocationParams({ ...target });
+  });
 
   props.registerMethods?.({
     goToLocationFromParams: async (params) => {
-      imperativeNavigationQueued = true;
+      routeOwnsTarget = false;
       setPendingLocationParams({ ...params });
     },
   });
@@ -141,7 +156,12 @@ function PdfDocumentBehavior(props: PdfDocumentProps) {
   });
 
   createEffect(() => {
-    if (imperativeNavigationQueued || !pdfViewer.root.isReady()) return;
+    if (
+      targetedNavigationStarted ||
+      pendingLocationParams() ||
+      !pdfViewer.root.isReady()
+    )
+      return;
     void goToInitialLocation(pdf.locationParams());
   });
 
@@ -154,6 +174,7 @@ function PdfDocumentBehavior(props: PdfDocumentProps) {
     ) {
       return;
     }
+    targetedNavigationStarted = true;
     setPendingLocationParams(undefined);
     pdfViewer.root.instance()?.clearAllOverlays();
     void goToLocationFromParams(params);

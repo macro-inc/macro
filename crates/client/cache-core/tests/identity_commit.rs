@@ -156,6 +156,7 @@ async fn enqueue_aliased(engine: &mut Engine<InMemoryStorage>) -> MutationId {
                     },
                 ],
                 link_patches: &[OptimisticLinkPatch {
+                    record_root: None,
                     query: PROPERTIES.into(),
                     operation_name: None,
                     variables_json: "{}".into(),

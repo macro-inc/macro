@@ -6,7 +6,7 @@ import type { EventEditorInitialValues } from '@app/features/calendar/components
 import type { CalendarEvent } from '@app/features/calendar/types';
 import { CalendarRouteView } from '@app/features/calendar-view/route';
 import { ChannelsRouteView } from '@app/features/channels-view/route';
-import { CompaniesRouteView } from '@app/features/companies/route';
+import { CompaniesRouteView } from '@app/features/crm/route';
 import { DriveRouteView } from '@app/features/drive-view/route';
 import { EmailCompose } from '@app/features/email-compose/email-compose';
 import { MailRouteView } from '@app/features/email-view/route';
@@ -25,6 +25,7 @@ import {
   ProjectView,
 } from '@app/features/projects/project-view';
 import { ReminderEditorSplit } from '@app/features/reminders/ReminderEditorSplit';
+import { REMINDER_DETAIL_COMPONENT_ID } from '@app/features/reminders/reminder-navigation';
 import { RemindersRouteView } from '@app/features/reminders/route';
 import { ReviewsRouteView } from '@app/features/reviews-view/route';
 import { SettingsRouteView } from '@app/features/settings/route';
@@ -38,7 +39,6 @@ import { LoadingBlock } from '@core/component/LoadingBlock';
 import {
   DEV_MODE_ENV,
   enableChatV3Agents,
-  enableNewAppViews,
   enableProjects,
   isFeatureEnabled,
   LOCAL_ONLY,
@@ -66,6 +66,7 @@ type ComponentFactory = (params: ComponentParams) => JSXElement;
 export type ComponentMeta = {
   kind?: string;
   splitPanelLayout?: 'legacy' | 'composable';
+  ownsCollectionState?: boolean;
 };
 
 export type UnifiedListMeta = ComponentMeta & {
@@ -84,10 +85,8 @@ type ComponentRegistration = {
 
 const REGISTRY = new Map<string, ComponentRegistration>();
 
-/** Shell for views that draw their own top bar. New app views are on by default,
- * so this is fixed when the mount is created instead of written after paint. */
+/** Shell for views that draw their own top bar. */
 function composableLayout(onTouch = false): ComponentMeta | undefined {
-  if (!isFeatureEnabled(enableNewAppViews)) return;
   if (isTouchDevice() && !onTouch) return;
   return { splitPanelLayout: 'composable' };
 }
@@ -113,13 +112,6 @@ type ResolvedComponent = {
   initialMeta?: ComponentMeta;
 };
 
-/**
- * A reminder view carries its reminder id in the id slot — `reminder-view~<id>`
- * — because component params are dropped on URL restore (see `contentUrlSegments`)
- * and split identity is keyed on the id, so each reminder needs a distinct one.
- */
-const REMINDER_VIEW_PREFIX = 'reminder-view~';
-
 export function resolveComponent(
   name: string,
   params?: ComponentParams
@@ -141,16 +133,6 @@ export function resolveComponent(
         return {
           element: () => base.factory({ ...(params ?? {}), agentsRoute: name }),
           initialMeta: resolveInitialMeta('agents', base.initialMeta),
-        };
-      }
-    }
-    if (name.startsWith(REMINDER_VIEW_PREFIX)) {
-      const base = REGISTRY.get('reminder-view');
-      if (base) {
-        const reminderId = name.slice(REMINDER_VIEW_PREFIX.length);
-        return {
-          element: () => base.factory({ ...(params ?? {}), reminderId }),
-          initialMeta: resolveInitialMeta('reminder-view', base.initialMeta),
         };
       }
     }
@@ -281,7 +263,10 @@ registerComponent('calls', () => <CallsRouteView />);
 registerComponent(
   'companies',
   () => <CompaniesRouteView />,
-  () => (isTouchDevice() ? undefined : { splitPanelLayout: 'composable' })
+  () => ({
+    ownsCollectionState: true,
+    ...(isTouchDevice() ? {} : { splitPanelLayout: 'composable' as const }),
+  })
 );
 registerComponent('folders', () => <FoldersRouteView />);
 registerComponent('search', () => <SearchRouteView />);
@@ -358,8 +343,8 @@ registerComponent('skill-compose', (params) => {
   usePageViewTracking('skill-compose');
   return <ComposeSkill {...params} />;
 });
-registerComponent('reminder-view', (params) => {
-  usePageViewTracking('reminder-view');
+registerComponent(REMINDER_DETAIL_COMPONENT_ID, (params) => {
+  usePageViewTracking('reminder');
   return <ReminderEditorSplit reminderId={params.reminderId as string} />;
 });
 registerComponent(

@@ -39,7 +39,7 @@ fn row(n: u16) -> Value {
     json!({
         "__typename": "GraphqlSoupEmailThread", "id": id(n), "name": format!("Mail {n}"),
         "ownerId": VIEWER, "linkId": id(1000), "isRead": n.is_multiple_of(4),
-        "inboxVisible": n.is_multiple_of(2), "isSignal": n.is_multiple_of(3),
+        "inboxVisible": n.is_multiple_of(2), "isSignal": n.is_multiple_of(3), "isFavorited": false,
         "cacheProjection": capsule, "latestInboundMessageTs": TIMESTAMP, "updatedAt": TIMESTAMP, "properties": [],
         "mailAllPreview": preview(n, 1000),
         "mailDraftPreview": n.is_multiple_of(3).then(|| preview(n, 2000)),
@@ -367,7 +367,7 @@ fn native_general_soup_filter_and_server_baseline_reconciliation() {
         json!({"user": {"id": VIEWER, "soup": {
             "items": [{"__typename": "GraphqlSoupProject", "id": id(100), "cacheProjection": null,
                 "ownerId": VIEWER, "parentId": null, "createdAt": TIMESTAMP, "updatedAt": TIMESTAMP,
-                "notifications": [], "properties": []}],
+                "notifications": [], "properties": [], "isFavorited": false}],
         }}}),
         Some(VIEWER),
     );

@@ -150,7 +150,11 @@ async fn edits_and_reactions_only_publish_live_updates() {
     let MessageChange::Posted { message, .. } = event.change else {
         unreachable!()
     };
-    event.change = MessageChange::ReactionChanged { message };
+    event.change = MessageChange::ReactionChanged {
+        message,
+        emoji: "👍".to_string(),
+        added: true,
+    };
     DiscussionDelivery::new(Context, Access, log.clone(), log.clone())
         .publish(event)
         .await

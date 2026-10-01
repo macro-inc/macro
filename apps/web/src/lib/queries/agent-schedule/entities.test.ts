@@ -1,6 +1,7 @@
+import type { RoutineStatus } from '@entity/types/entity';
 import type { ScheduledAction } from '@service-scheduled-action/generated/schemas';
 import { createRoot } from 'solid-js';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { scheduleToEntity, useAutomationEntities } from './entities';
 import { getCronTrigger } from './triggers';
 
@@ -34,20 +35,62 @@ const events: ScheduledAction = {
   trigger: { type: 'events', filters: [{ events: ['document.updated'] }] },
 };
 
+describe('routine status', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-28T12:00:00Z'));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it.each<{
+    name: string;
+    fields: Partial<ScheduledAction>;
+    status: RoutineStatus;
+  }>([
+    {
+      name: 'a fresh claim as running',
+      fields: { claimed: '2026-09-28T11:55:00Z' },
+      status: { kind: 'running' },
+    },
+    {
+      name: 'a run that outlives its pause as running',
+      fields: { claimed: '2026-09-28T11:55:00Z', enabled: false },
+      status: { kind: 'running' },
+    },
+    {
+      name: 'a stale claim as scheduled',
+      fields: { claimed: '2026-09-28T11:35:00Z' },
+      status: { kind: 'scheduled', nextRunAt: '2026-09-28T09:00:00Z' },
+    },
+    {
+      name: 'a paused routine with a leftover next run as paused',
+      fields: { enabled: false },
+      status: { kind: 'paused' },
+    },
+    {
+      name: 'an active routine without a next run as unscheduled',
+      fields: { next_run_at: null },
+      status: { kind: 'unscheduled' },
+    },
+  ])('reports $name', ({ fields, status }) => {
+    expect(scheduleToEntity({ ...cron, ...fields })?.status).toEqual(status);
+  });
+});
+
 describe('cron-only automation entities', () => {
-  it('converts canonical cron actions and preserves run state', () => {
-    expect(
-      scheduleToEntity({ ...cron, claimed: new Date().toISOString() })
-    ).toMatchObject({
+  it('converts canonical cron actions', () => {
+    expect(scheduleToEntity(cron)).toEqual({
       id: 'cron-id',
       type: 'automation',
+      name: 'Summary',
+      ownerId: 'macro|owner@example.com',
+      createdAt: '2026-09-22T12:00:00Z',
+      updatedAt: '2026-09-22T12:00:00Z',
       cron: '0 0 9 * * 2',
-      nextRunAt: cron.next_run_at,
-      isRunning: true,
+      status: { kind: 'scheduled', nextRunAt: '2026-09-28T09:00:00Z' },
     });
-    expect(
-      scheduleToEntity({ ...cron, claimed: '2020-01-01T00:00:00Z' })?.isRunning
-    ).toBe(false);
   });
 
   it('omits events and actions without an id', () => {

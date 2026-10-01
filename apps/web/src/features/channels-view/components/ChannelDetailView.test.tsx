@@ -5,26 +5,30 @@ import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  getTarget:
-    vi.fn<
-      typeof import('@app/features/next-soup/utils').getChannelEntityTarget
-    >(),
+  routeSearch: vi.fn((): { seek?: string } => ({})),
+}));
+vi.mock('@app/lib/split-router', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@app/lib/split-router')>()),
+  createSearchParams: () => [mocks.routeSearch()],
 }));
 vi.mock('@app/features/next-soup/actions', () => ({
   useBlockEntityCommands: vi.fn(),
-}));
-vi.mock('@app/features/next-soup/utils', () => ({
-  getChannelEntityTarget: mocks.getTarget,
 }));
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanelOrThrow: () => ({ splitHotkeyScope: 'test' }),
 }));
 vi.mock('@channel/Channel/ChannelDetail', () => ({
-  ChannelDetail: (props: { target?: ChannelTargetRequest }) => (
-    <output data-testid="target">{JSON.stringify(props.target)}</output>
+  ChannelDetail: (props: {
+    target?: ChannelTargetRequest;
+    navigationRequest?: string;
+  }) => (
+    <output data-testid="target" data-request={props.navigationRequest}>
+      {JSON.stringify(props.target)}
+    </output>
   ),
   ChannelDetailTopBar: () => null,
 }));
+vi.mock('./ChannelTitleMenu', () => ({ ChannelTitleMenu: () => null }));
 
 import { ChannelDetailView } from './ChannelDetailView';
 
@@ -43,50 +47,54 @@ const replyTarget = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.getTarget.mockReturnValue(replyTarget);
+  mocks.routeSearch.mockReturnValue({});
 });
 afterEach(cleanup);
 
 describe('Chat detail navigation', () => {
-  it('requests a channel-wide target for unstamped route and favorite selections', () => {
-    render(() => <ChannelDetailView channel={channel} />);
-
-    expect(mocks.getTarget).toHaveBeenCalledExactlyOnceWith(channel, {
-      scopeChannelThreads: false,
-    });
+  it('passes an explicit destination to the channel surface', () => {
+    render(() => <ChannelDetailView channel={channel} target={replyTarget} />);
     expect(screen.getByTestId('target').textContent).toBe(
       JSON.stringify(replyTarget)
     );
   });
 
-  it('keeps the initial target when notification reads replace the channel', () => {
-    const [selected, setSelected] = createSignal(channel);
-    render(() => <ChannelDetailView channel={selected()} />);
+  it('accepts the initial unread destination after the channel has mounted', () => {
+    const [target, setTarget] = createSignal<ChannelTargetRequest>();
+    render(() => <ChannelDetailView channel={channel} target={target()} />);
+    expect(screen.getByTestId('target').textContent).toBe('');
+    setTarget(replyTarget);
+    expect(screen.getByTestId('target').textContent).toBe(
+      JSON.stringify(replyTarget)
+    );
+  });
 
-    mocks.getTarget.mockReturnValue({ kind: 'latest' });
+  it('does not derive navigation from notification changes', () => {
+    const [selected, setSelected] = createSignal(channel);
+    render(() => (
+      <ChannelDetailView channel={selected()} target={replyTarget} />
+    ));
     setSelected({ ...channel, notifications: () => [] });
-
-    expect(mocks.getTarget).toHaveBeenCalledOnce();
     expect(screen.getByTestId('target').textContent).toBe(
       JSON.stringify(replyTarget)
     );
   });
 
-  it('resolves a new explicit target rather than retaining the initial unread target', () => {
-    const [selected, setSelected] = createSignal(channel);
-    render(() => <ChannelDetailView channel={selected()} />);
-    const explicit = { messageId: 'search-hit', threadId: 'search-thread' };
-    const target = { kind: 'message' as const, ...explicit };
-    mocks.getTarget.mockReturnValue(target);
+  it('replays the same search target without re-deriving it from notifications', () => {
+    const [seek, setSeek] = createSignal('first');
+    mocks.routeSearch.mockReturnValue({
+      get seek() {
+        return seek();
+      },
+    });
+    render(() => <ChannelDetailView channel={channel} target={replyTarget} />);
+    expect(screen.getByTestId('target').dataset.request).toBe('first');
 
-    setSelected({ ...channel, target: explicit });
+    setSeek('repeat');
 
-    expect(mocks.getTarget).toHaveBeenLastCalledWith(
-      expect.objectContaining({ target: explicit }),
-      { scopeChannelThreads: false }
-    );
+    expect(screen.getByTestId('target').dataset.request).toBe('repeat');
     expect(screen.getByTestId('target').textContent).toBe(
-      JSON.stringify(target)
+      JSON.stringify(replyTarget)
     );
   });
 });

@@ -21,6 +21,7 @@ import type {
   EntityFilterCacheArgs,
   EntityFilterCacheResult,
   HydrationResult,
+  HydrationSearchChanges,
   MutationClaim,
   MutationSettlement,
   OptimisticLinkPatchWire,
@@ -85,6 +86,12 @@ export interface InitialMutationClaimArgs {
   nowMs: number;
   leaseExpiresAtMs: number;
 }
+
+export type CacheChangeListener = (
+  revision: CacheRevision,
+  /** Undefined for ordinary writes/resets and older runtimes: refresh conservatively. */
+  searchChanges?: HydrationSearchChanges
+) => void;
 
 export type CacheChangeOptions = {
   /** Also observe background hydration without re-executing foreground queries. */
@@ -178,7 +185,7 @@ export interface CacheHost {
 
   /** Subscribes whenever the effective normalized-cache view changes. */
   onCacheChanged(
-    cb: (revision: CacheRevision) => void,
+    cb: CacheChangeListener,
     options?: CacheChangeOptions
   ): () => void;
 

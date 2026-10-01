@@ -3,7 +3,13 @@ import type { FileTypeString, MimeType } from '@core/block';
 import { createUploadToast, toast } from '@core/component/Toast/Toast';
 import { blockAcceptedMimetypeToFileExtension } from '@core/constant/allBlocks';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
-import { contentHash } from '@core/util/hash';
+import {
+  getUploadFileSize,
+  nativeUploadChecksum,
+  resolveUploadSource,
+  type UploadSource,
+  uploadNativeStagedFileToPresignedUrl,
+} from '@core/mobile/nativeStagedUpload';
 import type { ResultError } from '@core/util/result';
 import { toaster } from '@kobalte/core/toast';
 import { waitForDocumentContentReady } from '@queries/storage/document-location';
@@ -133,7 +139,7 @@ export async function upload(
     analytics.track('upload_file', {
       fileType: fileTypeOrExtension,
       fileName: file.name,
-      fileSize: file.size,
+      fileSize: getUploadFileSize(file),
       destination: 'dss',
       folder: isZip,
     });
@@ -146,8 +152,37 @@ export async function upload(
     ? createUploadToast(`Uploading ${name}`)
     : null;
 
-  const buffer = await file.arrayBuffer();
-  const sha = await contentHash(buffer);
+  let source: UploadSource;
+  try {
+    source = await resolveUploadSource(file);
+  } catch (error) {
+    return handleUploadError(
+      error instanceof Error ? error : String(error),
+      toastId
+    );
+  }
+  const { sha } = source;
+  const putFile = async (presignedUrl: string, type: MimeType) => {
+    if (source.kind === 'bytes') {
+      return uploadWithPresignedUrl({
+        presignedUrl,
+        buffer: source.buffer,
+        sha,
+        type,
+      });
+    }
+    try {
+      await uploadNativeStagedFileToPresignedUrl(
+        { ...source.staged, mimeType: type },
+        presignedUrl,
+        nativeUploadChecksum(sha)
+      );
+      return true;
+    } catch (error) {
+      console.error('Native staged upload failed', error);
+      return false;
+    }
+  };
 
   if (isZip && options?.unzipFolder) {
     const res = await storageServiceClient.projects.createUploadZipRequest({
@@ -164,12 +199,7 @@ export async function upload(
     if (
       !presignedUrl ||
       !requestId ||
-      !(await uploadWithPresignedUrl({
-        presignedUrl,
-        buffer,
-        sha,
-        type: 'application/zip',
-      }))
+      !(await putFile(presignedUrl, 'application/zip'))
     ) {
       return handleUploadError('Failed to upload zip file', toastId);
     }
@@ -236,14 +266,7 @@ export async function upload(
     fallbackMime ||
     'application/octet-stream') as MimeType;
 
-  if (
-    !(await uploadWithPresignedUrl({
-      presignedUrl,
-      buffer,
-      sha,
-      type: resolvedContentType,
-    }))
-  ) {
+  if (!(await putFile(presignedUrl, resolvedContentType))) {
     console.error('failed to upload', documentId, 'removing...');
     await storageServiceClient.deleteDocument({ documentId });
     return handleUploadError('Failed to upload file', toastId);

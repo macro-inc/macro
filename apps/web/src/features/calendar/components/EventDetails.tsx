@@ -590,7 +590,7 @@ export function EventDetails(props: {
               <Button
                 variant="ghost"
                 size="sm"
-                class="h-8 min-w-0 rounded-lg bg-hover text-ink not-touch:not-disabled:hover:bg-active [&_svg]:size-3.5!"
+                class="h-8 min-w-0 bg-hover text-ink not-touch:not-disabled:hover:bg-active [&_svg]:size-3.5!"
                 onClick={() => openExternalUrl(url())}
               >
                 {conferenceLabel()}

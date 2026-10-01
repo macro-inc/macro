@@ -14,6 +14,8 @@ struct Repo {
     thread_deletes: Arc<Mutex<Vec<Uuid>>>,
     creates: Arc<Mutex<Vec<CreateMessage>>>,
     edits: Arc<Mutex<Vec<EditMessage>>>,
+    reaction_changed: bool,
+    file_type: Option<String>,
 }
 
 impl Repo {
@@ -25,6 +27,10 @@ impl Repo {
 }
 
 impl MessageRepository for Repo {
+    async fn document_file_type(&self, _: &str) -> Result<Option<String>, MessageError> {
+        Ok(self.file_type.clone())
+    }
+
     async fn preceding(
         &self,
         _: &MessageParent,
@@ -140,8 +146,11 @@ impl MessageRepository for Repo {
         _: &str,
         _: &str,
         _: bool,
-    ) -> Result<Message, MessageError> {
-        unimplemented!()
+    ) -> Result<ReactionResult, MessageError> {
+        Ok(ReactionResult {
+            message: self.message.clone(),
+            changed: self.reaction_changed,
+        })
     }
     async fn patch_thread(
         &self,
@@ -232,6 +241,8 @@ fn fixture() -> Repo {
         thread_deletes: Arc::default(),
         creates: Arc::default(),
         edits: Arc::default(),
+        reaction_changed: true,
+        file_type: Some("md".into()),
     }
 }
 
@@ -323,26 +334,35 @@ async fn commenters_can_resolve_but_cannot_detach_document_text() {
 }
 
 #[tokio::test]
-async fn thread_patch_cannot_detach_pdf_annotations() {
-    let mut repo = fixture();
-    repo.state.anchor = Some(ThreadAnchor::PdfHighlight {
-        anchor_id: Uuid::from_u128(3),
-        marked_text: None,
-    });
-    let events = Events::default();
-    let service = MessageService::new(repo.clone(), events.clone());
-    let result = service
-        .patch_thread(
-            access("macro|editor@example.com", "doc", AccessLevel::Edit),
-            repo.state.root_id,
-            ThreadPatch {
-                detach_anchor: true,
-                ..Default::default()
-            },
-        )
-        .await;
-    assert!(matches!(result, Err(MessageError::Invalid(_))));
-    assert!(events.0.lock().unwrap().is_empty());
+async fn thread_patch_cannot_detach_non_markdown_anchors() {
+    for anchor in [
+        ThreadAnchor::PdfHighlight {
+            anchor_id: Uuid::from_u128(3),
+            marked_text: None,
+        },
+        ThreadAnchor::Spreadsheet {
+            sheet_id: "sheet-1".into(),
+            sheet_name: "Budget".into(),
+            range: "B4:C9".into(),
+        },
+    ] {
+        let mut repo = fixture();
+        repo.state.anchor = Some(anchor);
+        let events = Events::default();
+        let service = MessageService::new(repo.clone(), events.clone());
+        let result = service
+            .patch_thread(
+                access("macro|editor@example.com", "doc", AccessLevel::Edit),
+                repo.state.root_id,
+                ThreadPatch {
+                    detach_anchor: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+        assert!(matches!(result, Err(MessageError::Invalid(_))));
+        assert!(events.0.lock().unwrap().is_empty());
+    }
 }
 
 #[tokio::test]
@@ -1066,6 +1086,10 @@ struct StrictRepo {
 }
 
 impl MessageRepository for StrictRepo {
+    async fn document_file_type(&self, id: &str) -> Result<Option<String>, MessageError> {
+        self.inner.document_file_type(id).await
+    }
+
     async fn preceding(
         &self,
         parent: &MessageParent,
@@ -1122,7 +1146,7 @@ impl MessageRepository for StrictRepo {
         user: &str,
         emoji: &str,
         add: bool,
-    ) -> Result<Message, MessageError> {
+    ) -> Result<ReactionResult, MessageError> {
         self.inner.react(parent, id, user, emoji, add).await
     }
     async fn patch_thread(
@@ -1373,4 +1397,105 @@ fn client_ids_must_be_recent_uuid_v7() {
         validate_client_id(Uuid::new_v4(), now),
         Err(MessageError::Invalid(_))
     ));
+}
+
+#[tokio::test]
+async fn reaction_retries_return_the_message_without_publishing_another_change() {
+    for add in [true, false] {
+        for changed in [true, false] {
+            let mut repo = fixture();
+            repo.reaction_changed = changed;
+            let events = Events::default();
+            let service = MessageService::new(repo.clone(), events.clone());
+            let message = service
+                .react(
+                    access("macro|author@example.com", "doc", AccessLevel::Comment),
+                    repo.message.id,
+                    "👍".into(),
+                    add,
+                    Some("reaction-request".into()),
+                )
+                .await
+                .unwrap();
+            assert_eq!(message.id, repo.message.id);
+            let events = events.0.lock().unwrap();
+            assert_eq!(events.len(), usize::from(changed));
+            if changed {
+                assert!(
+                    matches!(&events[0].change, MessageChange::ReactionChanged { added, emoji, .. } if *added == add && emoji == "👍")
+                );
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn spreadsheet_anchors_require_a_spreadsheet_root_and_valid_range() {
+    for file_type in [
+        None,
+        Some("md"),
+        Some("pdf"),
+        Some("xlsx"),
+        Some("spreadsheet"),
+    ] {
+        let mut repo = fixture();
+        repo.file_type = file_type.map(str::to_owned);
+        let creates = repo.creates.clone();
+        let service = MessageService::new(repo, Events::default());
+        let mut input = post_input();
+        input.anchor = Some(NewThreadAnchor::Spreadsheet {
+            sheet_id: "sheet-1".into(),
+            sheet_name: "Budget".into(),
+            range: "B4:C9".into(),
+        });
+        let result = service
+            .post(
+                access("macro|author@example.com", "doc", AccessLevel::Comment),
+                input.clone(),
+            )
+            .await;
+        assert_eq!(result.is_ok(), file_type == Some("spreadsheet"));
+        assert_eq!(
+            creates.lock().unwrap().len(),
+            usize::from(file_type == Some("spreadsheet"))
+        );
+        input.thread_id = Some(Uuid::from_u128(1));
+        assert!(
+            service
+                .post(
+                    access("macro|author@example.com", "doc", AccessLevel::Comment),
+                    input.clone()
+                )
+                .await
+                .is_err()
+        );
+        input.thread_id = None;
+        assert!(validate_post(&MessageParent::Channel(Uuid::from_u128(2)), &input).is_err());
+    }
+    for range in ["A1", "B4:C9", "Z100:AA101"] {
+        assert!(valid_spreadsheet_range(range));
+    }
+    for range in [
+        "",
+        "A0",
+        "A01",
+        "a1",
+        "1",
+        "A",
+        "A1:",
+        "A1:B2:C3",
+        "Sheet!A1",
+        "A-1",
+        "A4294967296",
+        "ZZZZZZZZZZ1",
+    ] {
+        assert!(!valid_spreadsheet_range(range), "{range}");
+    }
+    let mut input = post_input();
+    input.anchor = Some(NewThreadAnchor::Spreadsheet {
+        sheet_id: " ".into(),
+        sheet_name: "Budget".into(),
+        range: "A1".into(),
+    });
+    assert!(validate_post(&MessageParent::parse("document", "doc").unwrap(), &input).is_err());
 }

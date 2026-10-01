@@ -62,15 +62,18 @@ impl ScheduledActionRepo for FakeRepository {
         Ok(action)
     }
 
-    async fn get_actions(&self, _user_id: MacroUserIdStr<'static>) -> Result<Vec<ScheduledAction>> {
+    async fn get_owned_actions(
+        &self,
+        _owner: &MacroUserIdStr<'static>,
+    ) -> Result<Vec<ScheduledAction>> {
         Ok(Vec::new())
     }
 
-    async fn get_action(
-        &self,
-        _id: &Uuid,
-        _user_id: MacroUserIdStr<'static>,
-    ) -> Result<Option<ScheduledAction>> {
+    async fn get_actions_by_ids(&self, _ids: &[Uuid]) -> Result<Vec<ScheduledAction>> {
+        Ok(Vec::new())
+    }
+
+    async fn get_action(&self, _id: &Uuid) -> Result<Option<ScheduledAction>> {
         Ok(None)
     }
 
@@ -86,15 +89,15 @@ impl ScheduledActionRepo for FakeRepository {
         Ok(action)
     }
 
-    async fn delete_action(
-        &self,
-        _id: &Uuid,
-        _macro_user_id: MacroUserIdStr<'static>,
-    ) -> Result<()> {
+    async fn delete_action(&self, _id: &Uuid) -> Result<()> {
         Ok(())
     }
 
-    async fn claim_action(&self, _id: &Uuid) -> Result<crate::domain::event_runs::ClaimToken> {
+    async fn claim_action(
+        &self,
+        _id: &Uuid,
+        _revision: ConfigurationRevision,
+    ) -> Result<crate::domain::event_runs::ClaimToken> {
         Ok(crate::domain::event_runs::ClaimToken::generate())
     }
 
@@ -133,6 +136,7 @@ impl ScheduledActionExecutor for RecordingExecutor {
         Ok(InProgressExecution {
             action_id: action.id.expect("test action should have an id"),
             chat_id: None,
+            resource: None,
         })
     }
 }
@@ -160,6 +164,7 @@ impl ScheduledActionExecutor for GatedExecutor {
         Ok(InProgressExecution {
             action_id: action.id.expect("test action should have an id"),
             chat_id: None,
+            resource: None,
         })
     }
 }

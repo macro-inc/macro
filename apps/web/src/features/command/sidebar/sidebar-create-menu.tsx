@@ -8,6 +8,7 @@ import { activateClosestDOMScope } from '@core/hotkey/utils';
 import CreateIcon from '@phosphor/note-pencil.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import { Button, Dropdown, Hotkey, NavRow } from '@ui';
+import { tourTarget } from '@ui/components/Tour';
 import {
   createSignal,
   For,
@@ -16,6 +17,7 @@ import {
   type ValidComponent,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { APP_TOUR } from './tour';
 
 export type SidebarCreateMenuProps = {
   /** Only read by the built-in `row` variant, for its tooltip. */
@@ -91,6 +93,7 @@ export const SidebarCreateMenu = (props: SidebarCreateMenuProps) => {
     return true;
   });
 
+  const createMenuTarget = tourTarget(APP_TOUR.createMenu);
   return (
     <Dropdown
       open={open()}
@@ -105,6 +108,7 @@ export const SidebarCreateMenu = (props: SidebarCreateMenuProps) => {
             when={props.variant === 'icon'}
             fallback={
               <Dropdown.Trigger
+                ref={createMenuTarget}
                 as={NavRow}
                 class="center h-8 bg-ink/4 text-[13px]"
                 fullWidth
@@ -135,11 +139,12 @@ export const SidebarCreateMenu = (props: SidebarCreateMenuProps) => {
             }
           >
             <Dropdown.Trigger
+              ref={createMenuTarget}
               as={Button}
               variant="outline"
               size="icon-sm"
               depth={1}
-              class="size-[26px] rounded-full bg-surface shadow-md shadow-drop-shadow [&_svg]:size-4!"
+              class="size-[26px] bg-surface shadow-md shadow-drop-shadow [&_svg]:size-4!"
               label="Create"
               hotkey={TOKENS.global.createCommand}
               onMouseDown={(e: MouseEvent) => {
@@ -154,6 +159,7 @@ export const SidebarCreateMenu = (props: SidebarCreateMenuProps) => {
       >
         {(trigger) => (
           <Dropdown.Trigger
+            ref={createMenuTarget}
             as={trigger()}
             // `Dropdown.Trigger` hardcodes `variant`/`size` for its default
             // `as={Button}` and spreads props after them, so both leak into a

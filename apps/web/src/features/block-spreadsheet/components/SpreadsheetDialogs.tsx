@@ -132,7 +132,7 @@ export function SpreadsheetFindDialog(props: {
           </Button>
           <Button
             size="sm"
-            variant="accent"
+            variant="strong"
             disabled={!props.matchCount}
             onClick={() => props.onFind()}
           >
