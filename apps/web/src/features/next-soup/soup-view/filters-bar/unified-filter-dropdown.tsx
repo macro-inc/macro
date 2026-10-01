@@ -373,6 +373,7 @@ export const VIEW_FILTER_CATEGORIES: Record<ListView, FilterCategory[]> = {
     {
       id: 'completion',
       label: 'Completion',
+      multiple: false,
       options: [
         { id: 'reminders-not-done', label: 'Not done' },
         { id: 'reminders-done', label: 'Done' },

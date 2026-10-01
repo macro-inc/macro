@@ -20,15 +20,26 @@ export function toggleReminderCompletionFilter(
   const requested = optionId === 'reminders-done';
   const completed =
     query.state.include.reminderCompleted === requested ? undefined : requested;
+  setReminderCompletionFilter(completed, predicates, query);
+  return true;
+}
+
+/** Preserve the collection and unrelated refinements when changing or clearing completion. */
+export function setReminderCompletionFilter(
+  completed: boolean | undefined,
+  predicates: CompletionPredicates,
+  query: Pick<QueryStore, 'set'>
+): void {
   batch(() => {
     predicates.set({
       and: [
         ...predicates.andIds().filter((id) => !isCompletion(id)),
-        ...(completed === undefined ? [] : [optionId]),
+        ...(completed === undefined
+          ? []
+          : [completed ? 'reminders-done' : 'reminders-not-done']),
       ],
       or: predicates.orIds().filter((id) => !isCompletion(id)),
     });
     query.set({ include: { reminderCompleted: completed } });
   });
-  return true;
 }
