@@ -1,3 +1,5 @@
+import { webcrypto } from 'node:crypto';
+import { fetchWithToken } from '@core/util/fetchWithToken';
 import {
   importIsActive,
   type SlackImportClient,
@@ -5,6 +7,7 @@ import {
   slackImportListOptions,
 } from '@queries/slack-import';
 import { slackImportKeys } from '@queries/slack-import/keys';
+import { storageServiceClient } from '@service-storage/client';
 import type { ImportPage } from '@service-storage/generated/schemas/importPage';
 import type { ImportProgress } from '@service-storage/generated/schemas/importProgress';
 import type { UploadGrant } from '@service-storage/generated/schemas/uploadGrant';
@@ -14,10 +17,22 @@ import { err, ok } from 'neverthrow';
 import { createRoot, createSignal, onCleanup } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type CreateImport, ImportUploadError } from '../context/contracts';
+import { createImportController } from '../primitives/import-controller';
+import { archiveDiscovery, fakeImportSources } from '../tests/fake-sources';
 import {
   createImportSource,
   type ImportSourceDependencies,
 } from './import-source';
+
+// Keep the real storage-client serialization; replace only authentication/transport
+// and unrelated application singletons imported by the legacy client module.
+vi.mock('@core/util/fetchWithToken', () => ({ fetchWithToken: vi.fn() }));
+vi.mock('@core/constant/featureFlags', () => ({ ENABLE_DOCX_TO_PDF: false }));
+vi.mock('@core/constant/PaywallState', () => ({
+  PaywallKey: {},
+  usePaywallState: () => ({ showPaywall: vi.fn() }),
+}));
+vi.mock('@core/util/mockClient', () => ({ registerClient: vi.fn() }));
 
 const teamId = '01900000-0000-7000-8000-000000000001';
 const jobId = '01900000-0000-7000-8000-000000000002';
@@ -108,9 +123,11 @@ afterEach(() => {
   for (const cleanup of cleanups.splice(0)) cleanup();
   focusManager.setFocused(undefined);
   vi.useRealTimers();
+  vi.unstubAllGlobals();
+  vi.mocked(fetchWithToken).mockReset();
 });
 
-function mount(initialEnabled = true) {
+function mount(initialEnabled = true, transport?: SlackImportClient) {
   const client = fakeClient();
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -127,7 +144,7 @@ function mount(initialEnabled = true) {
   const mounted = createRoot((dispose) => {
     const adapter = createImportSource(
       {
-        client,
+        client: transport ?? client,
         queryClient,
         upload,
         gatewayEffect(listener) {
@@ -413,6 +430,141 @@ const grant: UploadGrant = {
 };
 
 describe('import commands', () => {
+  it('serializes exactly the frozen A/C confirmation through the real storage client, including retry and zero-history seals', async () => {
+    vi.useRealTimers();
+    vi.stubGlobal('crypto', webcrypto);
+    const fake = fakeImportSources();
+    const found = archiveDiscovery();
+    found.conversations = ['CA', 'CB', 'CC'].map((slackChannelId) => ({
+      ...found.conversations[0],
+      slackChannelId,
+      name: 'duplicate name',
+      folder: slackChannelId,
+      memberIds: ['U1', 'U2'],
+      creatorId: 'U1',
+      createdAt: '1700000000.000001',
+      archived: slackChannelId === 'CC',
+      messageCount: null,
+    }));
+    fake.archive.discover.mockResolvedValue(found);
+    fake.archive.prepare.mockImplementation(async (options) => {
+      expect(options.selectedIds).toEqual(['CA', 'CC']);
+      expect(options.includeMessageHistory).toBe(false);
+      for (const slackChannelId of options.selectedIds)
+        await options.seal({
+          slackChannelId,
+          partCount: 0,
+          manifestSha256: 'b'.repeat(64),
+        });
+    });
+    const confirmed: CreateImport = {
+      idempotencyToken: jobId,
+      source: { kind: 'confirmed_unknown' },
+      includeMessageHistory: false,
+      conversations: structuredClone([
+        found.conversations[0],
+        found.conversations[2],
+      ]),
+    };
+    const persisted = receipt({
+      conversations: confirmed.conversations.map((metadata) => ({
+        ...receipt().conversations[0],
+        slackChannelId: metadata.slackChannelId,
+        name: metadata.name,
+        kind: metadata.kind,
+        archived: metadata.archived,
+      })),
+    });
+    const creates: unknown[] = [];
+    const writes: { url: string; body: unknown }[] = [];
+    vi.mocked(fetchWithToken).mockImplementation(async (input, init) => {
+      const url = typeof input === 'string' ? input : input.url;
+      const body =
+        typeof init?.body === 'string' ? JSON.parse(init.body) : undefined;
+      if (init?.method === 'POST') writes.push({ url, body });
+      if (url.endsWith('/slack/imports') && init?.method === 'POST') {
+        creates.push(body);
+        // A caller mutating discovery after confirmation must not change the retry.
+        found.conversations[0].memberIds.push('U3');
+        found.conversations[2].name = 'changed locally';
+        if (creates.length === 1)
+          return err([{ code: 'NETWORK_ERROR', message: 'lost response' }]);
+        return ok(persisted);
+      }
+      if (url.endsWith('/uploads'))
+        return ok(
+          body.descriptors.map((descriptor: UploadGrant['descriptor']) => ({
+            ...grant,
+            descriptor,
+          }))
+        );
+      if (url.endsWith('/slack/imports')) return ok(page(persisted));
+      return ok(persisted);
+    });
+    const adapter = mount(true, storageServiceClient);
+    const controller = createRoot((dispose) => {
+      cleanups.push(dispose);
+      return createImportController({
+        ...fake,
+        teamId,
+        commands: adapter.commands,
+        source: adapter.source,
+        newToken: () => jobId,
+      });
+    });
+    await controller.discover(new Blob(['zip']));
+    expect(writes).toEqual([]);
+    const selection = {
+      selectedIds: ['CA', 'CC'],
+      includeMessageHistory: false,
+      sourceConfirmed: true,
+    };
+    await Promise.all([
+      controller.start(selection),
+      controller.start({ ...selection, selectedIds: ['CB'] }),
+    ]);
+    expect(controller.phase()).toBe('monitoring');
+    expect(creates).toEqual([confirmed, confirmed]);
+    expect(
+      writes
+        .filter((write) => write.url.endsWith('/uploads'))
+        .map((write) => write.body)
+    ).toEqual([
+      { descriptors: [expect.objectContaining({ upload: { kind: 'users' } })] },
+    ]);
+    expect(
+      writes
+        .filter((write) => write.url.endsWith('/uploads/complete'))
+        .map((write) => write.body)
+    ).toEqual(
+      expect.arrayContaining([
+        {
+          uploads: [],
+          seal: {
+            slackChannelId: 'CA',
+            partCount: 0,
+            manifestSha256: 'b'.repeat(64),
+          },
+        },
+        {
+          uploads: [],
+          seal: {
+            slackChannelId: 'CC',
+            partCount: 0,
+            manifestSha256: 'b'.repeat(64),
+          },
+        },
+      ])
+    );
+    await adapter.source.refresh();
+    expect(
+      adapter.source
+        .job()
+        ?.conversations.map((conversation) => conversation.slackChannelId)
+    ).toEqual(['CA', 'CC']);
+    expect(adapter.source.job()?.includeMessageHistory).toBe(false);
+  });
+
   it('rejects oversized route batches before sending them', async () => {
     const h = mount();
     await expect(
