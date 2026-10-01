@@ -1,5 +1,6 @@
 import { createRoot } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createCalendarEventFormController } from '../components/composer/create-calendar-event-form-controller';
 import {
   calendarEventToEditorInitialValues,
   type EventEditorSubmitValues,
@@ -95,6 +96,105 @@ beforeEach(() => {
   });
   mocks.fetchMeeting.mockResolvedValue({ id: 'meeting-1' });
   mocks.updateMeeting.mockResolvedValue({ id: 'meeting-1' });
+});
+
+describe('editing event times', () => {
+  function editorFor(overrides: Partial<CalendarEvent> = {}) {
+    return createRoot((dispose) => {
+      const event: CalendarEvent = {
+        ...savedEvent,
+        location: '',
+        recurrenceLines: ['RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR'],
+        reminders: {
+          useDefault: false,
+          overrides: [{ method: 'popup', minutes: 10 }],
+        },
+        ...overrides,
+      };
+      const onSaved = vi.fn();
+      const editor = useEventEditor({
+        event: () => event,
+        onSaved,
+        macroCallsEnabled: () => false,
+      });
+      const form = createCalendarEventFormController({
+        initialValue: calendarEventToEditorInitialValues(event),
+        isEdit: true,
+        calendarOptions: editor.calendarOptions,
+        guestOptions: () => [],
+      });
+      return { editor, form, event, onSaved, dispose };
+    });
+  }
+
+  describe.each(['all', 'this_event'] as const)('%s scope', (scope) => {
+    it.each([
+      { label: 'timed', overrides: {} },
+      {
+        label: 'timed with seconds and an explicit offset',
+        overrides: {
+          start: '2026-09-22T10:00:37-04:00',
+          end: '2026-09-22T11:00:42-04:00',
+        },
+      },
+      {
+        label: 'all-day',
+        overrides: {
+          allDay: true,
+          start: '2026-09-22',
+          end: '2026-09-24',
+        },
+      },
+    ])(
+      'preserves $label timing when only reminders change',
+      async ({ overrides }) => {
+        const { editor, form, event, onSaved, dispose } = editorFor(overrides);
+        try {
+          form.setReminderMinutes([5]);
+          const submitted = form.submitValues();
+          expect(submitted).toBeDefined();
+          await editor.save(submitted!, scope);
+
+          expect(mocks.updateEvent).toHaveBeenCalledOnce();
+          const request = mocks.updateEvent.mock.lastCall?.[0];
+          expect(request.scope).toBe(scope);
+          expect(request.recurrenceId).toBe(
+            scope === 'this_event' ? event.occurrenceKey : undefined
+          );
+          expect(request.patch).not.toHaveProperty('time');
+          expect(request.patch).not.toHaveProperty('recurrenceLines');
+          expect(request.patch.reminders).toEqual({
+            useDefault: false,
+            overrides: [{ method: 'popup', minutes: 5 }],
+          });
+          expect(onSaved).toHaveBeenCalledOnce();
+          expect(mocks.failure).not.toHaveBeenCalled();
+        } finally {
+          dispose();
+        }
+      }
+    );
+
+    it.each(['start', 'end', 'allDay'] as const)(
+      'still sends intentional %s changes',
+      async (field) => {
+        const { editor, form, dispose } = editorFor();
+        try {
+          if (field === 'allDay') form.setAllDay(true);
+          else if (field === 'start') form.setStart('2026-09-21T18:00');
+          else form.setField('end', '2026-10-01T18:30');
+          const submitted = form.submitValues();
+          expect(submitted).toBeDefined();
+          await editor.save(submitted!, scope);
+          expect(mocks.updateEvent.mock.lastCall?.[0].patch.time).toEqual(
+            submitted!.time
+          );
+        } finally {
+          dispose();
+        }
+      }
+    );
+  });
 });
 
 describe('scheduling a Macro call', () => {

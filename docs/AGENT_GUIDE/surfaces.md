@@ -1227,6 +1227,12 @@ the copy Macro's alerts fire from and whose guest list and join link Macro recor
 editor only lets them be changed there. Answering an invitation likewise addresses the
 primary copy. The details popover and the editor act on the displayed copy, so editing or
 deleting it targets that calendar's event at Google.
+When changing only a reminder in the event editor, choose `All events` to apply it
+to the recurring series or `This event` for one occurrence. Saving preserves the
+existing dates and time zone unless the time controls changed. To verify, open a
+later occurrence, change the reminder, and inspect the PATCH: it should include
+`reminders` and the selected scope, with no `time` field. Also verify that changing
+the start, end, or all-day setting still sends the new time.
 As in Google Calendar, the guests row of the details popover (a bottom sheet on phones)
 carries `Copy guest emails` and `Email guests` icon buttons. Copying puts every guest's
 address on the clipboard, comma-separated. Emailing opens a new email addressed to every

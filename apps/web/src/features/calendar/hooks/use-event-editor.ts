@@ -13,7 +13,9 @@ import {
 } from '@queries/call/meetings';
 import type { CalendarUpdateScope } from '@service-email/client';
 import { type Accessor, createMemo, createSignal } from 'solid-js';
+import { match } from 'ts-pattern';
 import {
+  buildEventTime,
   calendarEventToEditorInitialValues,
   type EventEditorDisabledFields,
   type EventEditorSubmitValues,
@@ -49,6 +51,29 @@ const EDIT_DISABLED_FIELDS = {
  */
 function editsPrimaryCopy(event: CalendarEvent) {
   return reminderCalendarIdOf(event) === event.calendarId;
+}
+
+function hasTimeChanged(
+  event: CalendarEvent,
+  time: EventEditorSubmitValues['time']
+) {
+  // Compare at the editor's precision, which omits seconds. An unchanged
+  // occurrence must not replace the series start or its provider time zone.
+  const initial = buildEventTime(calendarEventToEditorInitialValues(event));
+  return match([initial, time])
+    .with(
+      [{ kind: 'timed' }, { kind: 'timed' }],
+      ([before, after]) =>
+        new Date(before.startsAt).getTime() !==
+          new Date(after.startsAt).getTime() ||
+        new Date(before.endsAt).getTime() !== new Date(after.endsAt).getTime()
+    )
+    .with(
+      [{ kind: 'allDay' }, { kind: 'allDay' }],
+      ([before, after]) =>
+        before.startDate !== after.startDate || before.endDate !== after.endDate
+    )
+    .otherwise(() => true);
 }
 
 interface UseEventEditorProps {
@@ -298,7 +323,7 @@ export function useEventEditor(props: UseEventEditorProps) {
         occurrenceKey: targetsOneOccurrence ? event.occurrenceKey : undefined,
         patch: {
           title: values.title,
-          time: values.time,
+          ...(hasTimeChanged(event, values.time) ? { time: values.time } : {}),
           location: content.location,
           description: content.description,
           ...(recurrenceChanged
