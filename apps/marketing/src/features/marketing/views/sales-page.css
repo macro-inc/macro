@@ -6,6 +6,9 @@
    otherwise give them slab and Inter. */
 .tour-hero, .tour-constellation .feature-flow, .tour-page .unification-subtext { font-family: -apple-system, BlinkMacSystemFont, "Inter Variable", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"; }
 .feature-page .tour-cta { color: #000; }
+/* Pull the CTA up to the subtitle: 16px instead of the homepage's 36px
+   (24px row gap + 12px margin from homepage-scroll-cue.css). */
+.tour-hero .ob-welcome:has(.homepage-hero-cta) > [data-welcome-copy] > .homepage-hero-action { margin-top: -8px; }
 /* The shared header's "Talk to us" link leaves the page for cal.com; here the
    booker is inline, so hide it while this page is mounted. */
 body:has(.tour-page) .site-nav-demo { display: none; }
