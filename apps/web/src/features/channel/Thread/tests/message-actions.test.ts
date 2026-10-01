@@ -47,6 +47,30 @@ describe('message-actions helpers', () => {
     ).toBe(false);
   });
 
+  it('lets a document owner delete a comment they did not write', () => {
+    expect(
+      canDeleteMessage(
+        { sender_id: 'user-2', deleted_at: null },
+        'user-1',
+        true
+      )
+    ).toBe(true);
+    expect(
+      canDeleteMessage(
+        { sender_id: 'user-2', deleted_at: null },
+        'user-1',
+        false
+      )
+    ).toBe(false);
+    expect(
+      canDeleteMessage(
+        { sender_id: 'user-2', deleted_at: '2026-02-25T00:00:00.000Z' },
+        'user-1',
+        true
+      )
+    ).toBe(false);
+  });
+
   it('allows reply for non-deleted top-level messages and thread replies', () => {
     expect(canReplyToMessage({ thread_id: null, deleted_at: null })).toBe(true);
     expect(

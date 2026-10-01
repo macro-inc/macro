@@ -766,6 +766,11 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
     }
 }
 
+/// Parent moderation beyond authorship.
+///
+/// A document owner may delete any comment on that document, including a
+/// discussion they did not start. Channel admins and owners may moderate
+/// channel messages the same way. Edit and comment access do not.
 fn can_moderate(permission: &EntityPermission) -> bool {
     permission.satisfies::<OwnerAccessLevel>() || permission.satisfies::<AdminParticipantRole>()
 }

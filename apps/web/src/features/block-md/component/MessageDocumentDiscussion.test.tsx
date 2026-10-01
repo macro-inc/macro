@@ -130,6 +130,7 @@ describe('mobile document discussion accessory behind the flag', () => {
       expect.objectContaining({
         parent: { type: 'document', id: 'document' },
         canWrite: true,
+        canModerate: false,
         hideComposer: true,
         hideWhenEmpty: true,
       })

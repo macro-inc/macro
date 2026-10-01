@@ -459,6 +459,32 @@ async fn a_reply_author_can_delete_their_reply_but_not_the_root_above_it() {
 }
 
 #[tokio::test]
+async fn document_owner_can_delete_another_authors_reply() {
+    let mut repo = fixture();
+    repo.replies = vec![reply_from(&repo.message, 7, "macro|other@example.com")];
+    let service = MessageService::new(repo.clone(), Events::default());
+    let denied = service
+        .delete(
+            access("macro|editor@example.com", "doc", AccessLevel::Edit),
+            repo.replies[0].id,
+            None,
+        )
+        .await;
+    assert!(matches!(denied, Err(MessageError::Forbidden)));
+    assert!(repo.deletes.lock().unwrap().is_empty());
+    service
+        .delete(
+            access("macro|owner@example.com", "doc", AccessLevel::Owner),
+            repo.replies[0].id,
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(*repo.deletes.lock().unwrap(), vec![repo.replies[0].id]);
+    assert!(repo.thread_deletes.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn other_commenter_cannot_delete_but_parent_owner_can_moderate() {
     let repo = fixture();
     let service = MessageService::new(repo.clone(), Events::default());

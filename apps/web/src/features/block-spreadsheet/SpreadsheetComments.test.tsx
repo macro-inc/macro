@@ -51,6 +51,7 @@ vi.mock('@solidjs/router', () => ({
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'me' }));
 vi.mock('@core/signal/permissions', () => ({
   useCanComment: () => () => mocks.canComment,
+  useIsDocumentOwner: () => () => false,
 }));
 vi.mock('@core/util/url', () => ({ buildSimpleEntityUrl: () => 'link' }));
 vi.mock('@ui/components/Button', () => ({

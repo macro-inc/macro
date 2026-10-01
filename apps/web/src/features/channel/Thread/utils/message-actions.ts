@@ -42,11 +42,16 @@ export function canEditMessage(
 
 export function canDeleteMessage(
   message: Pick<ActionableMessage, 'sender_id' | 'deleted_at'>,
-  currentUserId: string | undefined
+  currentUserId: string | undefined,
+  /**
+   * Document owners may delete comments they did not write. Channel members
+   * leave this false; bot posts stay deletable without it.
+   */
+  canModerate = false
 ): boolean {
+  if (message.deleted_at) return false;
   return (
-    (isOwnMessage(message, currentUserId) || isBotMessage(message)) &&
-    !message.deleted_at
+    canModerate || isOwnMessage(message, currentUserId) || isBotMessage(message)
   );
 }
 
