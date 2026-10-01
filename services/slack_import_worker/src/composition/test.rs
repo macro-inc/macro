@@ -1,3 +1,5 @@
+mod reference_reconciliation;
+
 use std::collections::HashSet;
 
 use channels::domain::historical::{HistoricalChannel, HistoricalChannelKind};
@@ -359,6 +361,7 @@ fn message(context: &ClaimedConversation, channel: Uuid, seconds: u32) -> Histor
         imported_author: Some("Source name".into()),
         content: "history".into(),
         user_mentions: vec![],
+        body_references: vec![],
         import_order: u64::from(seconds),
         reactions: vec![
             HistoricalReaction {
@@ -408,19 +411,24 @@ async fn failures_after_each_insert_roll_back_every_batch_effect(pool: PgPool) {
         .unwrap();
     for table in [
         "slack_import_message_map",
+        "slack_import_message_reference",
+        "slack_import_outbox",
         "comms_messages",
         "comms_reactions",
     ] {
         // Identifiers are this test's closed list, not archive input. DDL is dynamic.
         pool.execute(format!("CREATE TRIGGER fail_insert AFTER INSERT ON {table} FOR EACH ROW EXECUTE FUNCTION fail_import_insert()").as_str()).await.unwrap();
-        assert!(
-            sink(&pool)
-                .commit(batch(&context, plan.channel_id, &[2], end()))
-                .await
-                .is_err(),
-            "{table}"
-        );
+        let mut linked = batch(&context, plan.channel_id, &[2], end());
+        reference_reconciliation::linked(&mut linked.messages[0], "<#C1|source>");
+        assert!(sink(&pool).commit(linked).await.is_err(), "{table}");
         assert_eq!(counts(&pool).await, before, "{table}");
+        assert_eq!(
+            sqlx::query_scalar!("SELECT count(*) FROM slack_import_message_reference")
+                .fetch_one(&pool)
+                .await
+                .unwrap(),
+            Some(0)
+        );
         let progress = repo(&pool)
             .progress(team, context.lease.event.job_id)
             .await
@@ -522,11 +530,24 @@ async fn stale_lease_and_cancellation_keep_committed_search_work(pool: PgPool) {
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(progress.status, JobStatus::Cancelled);
+    assert_eq!(progress.status, JobStatus::Cancelling);
     assert_eq!(progress.conversations[0].counters, first);
     let search = repo(&pool).pending_search(10).await.unwrap();
     assert_eq!(search.len(), 1);
     assert_eq!(search[0].channel_ids, vec![plan.channel_id]);
+    repo(&pool)
+        .record_search(&search[0], SearchState::Completed)
+        .await
+        .unwrap();
+    assert_eq!(
+        repo(&pool)
+            .progress(team, context.lease.event.job_id)
+            .await
+            .unwrap()
+            .unwrap()
+            .status,
+        JobStatus::Cancelled
+    );
 }
 
 #[sqlx::test(migrations = "../../crates/macro_db_client/migrations")]

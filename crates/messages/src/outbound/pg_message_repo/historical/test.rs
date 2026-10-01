@@ -69,6 +69,111 @@ async fn read_targets_validate_live_roots_and_preserve_orphan_structure(pool: Pg
     );
 }
 
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn body_patch_is_guarded_silent_and_transactional(pool: PgPool) {
+    use crate::domain::historical::HistoricalBodyPatch;
+    let channel_id = channel(&pool).await;
+    let repo = PgMessageRepository::new(pool.clone());
+    let job = Uuid::now_v7();
+    let mut original = message(None, 0);
+    original.updated_at = original.created_at;
+    original.edited_at = None;
+    original.import_metadata = serde_json::json!({"slack_import_job": job, "body_version": 1});
+    let mut rows = vec![];
+    for index in 0..6 {
+        let mut row = original.clone();
+        row.id = Uuid::now_v7();
+        row.import_order = index;
+        rows.push(row);
+    }
+    repo.insert_historical(&HistoricalBatch {
+        channel_id,
+        messages: rows.clone(),
+    })
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE comms_messages SET content = 'live edit', edited_at = now() WHERE id = $1",
+        rows[1].id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE comms_messages SET deleted_at = now() WHERE id = $1",
+        rows[2].id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    // Edit/revert has the same text but must still be protected.
+    sqlx::query!(
+        "UPDATE comms_messages SET edited_at = now() WHERE id = $1",
+        rows[3].id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE comms_message_threads SET deleted_at = now() WHERE root_id = $1",
+        rows[4].id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    for (index, row) in rows.iter().enumerate() {
+        let patch = HistoricalBodyPatch {
+            message_id: row.id,
+            channel_id,
+            job_id: job,
+            importer_version: if index == 5 { 2 } else { 1 },
+            expected_body: row.content.clone(),
+            body: "resolved body".into(),
+        };
+        let mut tx = pool.begin().await.unwrap();
+        assert_eq!(
+            PgMessageRepository::patch_historical_body_in(&mut tx, &patch)
+                .await
+                .unwrap(),
+            index == 0
+        );
+        tx.rollback().await.unwrap();
+        let mut tx = pool.begin().await.unwrap();
+        assert_eq!(
+            PgMessageRepository::patch_historical_body_in(&mut tx, &patch)
+                .await
+                .unwrap(),
+            index == 0
+        );
+        tx.commit().await.unwrap();
+    }
+    let stored = repo
+        .get(&MessageParent::Channel(channel_id), rows[0].id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(stored.content, "resolved body");
+    assert_eq!(stored.created_at, original.created_at);
+    assert_eq!(stored.updated_at, original.updated_at);
+    assert_eq!(stored.edited_at, None);
+    assert_eq!(stored.sender_id, original.sender);
+    assert!(stored.thread_id.is_none());
+    assert_eq!(
+        sqlx::query_scalar!("SELECT count(*) FROM comms_entity_mentions")
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        Some(0)
+    );
+    assert_eq!(
+        sqlx::query_scalar!("SELECT count(*) FROM comms_reactions")
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        Some(0)
+    );
+}
+
 fn historical_time() -> DateTime<Utc> {
     DateTime::from_timestamp(1_600_000_000, 123_456_000).unwrap()
 }

@@ -528,6 +528,8 @@ pub(super) async fn pending_search(pool: &PgPool, limit: u32) -> PortResult<Vec<
              AND o.kind = 'search' AND o.generation = c.search_dirty_generation
            WHERE c.channel_id IS NOT NULL AND c.search_state IN ('pending', 'submitted', 'failed')
              AND o.cancelled_at IS NULL AND o.available_at <= clock_timestamp()
+             AND NOT EXISTS (SELECT 1 FROM slack_import_message_reference r
+                 WHERE r.job_id = c.job_id AND r.completed_at IS NULL)
            ORDER BY c.search_updated_at, c.job_id, c.slack_channel_id LIMIT $1"#, i64::from(limit),
     ).fetch_all(pool).await.map_err(internal)?;
     rows.into_iter()
@@ -604,6 +606,7 @@ pub(super) async fn record_search(
             Uuid::from(request.job_id), &channels, number(request.generation)?, status,
         ).execute(&mut *tx).await.map_err(internal)?;
         bump_revision(&mut tx, team.try_into().map_err(internal)?, request.job_id).await?;
+        super::lifecycle::recompute(&mut tx, request.job_id).await?;
     }
     tx.commit().await.map_err(internal)?;
     Ok(())

@@ -28,8 +28,12 @@ use slack_integration::{
         },
         models::*,
         ports::{HistoricalSink, ImportAuthorizer, PortResult},
+        reference_reconciliation::IMPORTER_BODY_VERSION,
     },
-    outbound::pg_slack_import_repo::batches::{self, BatchStart, WriteContext},
+    outbound::pg_slack_import_repo::{
+        batches::{self, BatchStart, WriteContext},
+        references,
+    },
 };
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -125,16 +129,20 @@ impl<A: EntityAccessService> HistoricalSink for ChannelImportSink<A> {
             .await?
             .into_iter()
             .collect();
-        let mut remapped = HashMap::new();
+        let original_ids: Vec<_> = batch.messages.iter().map(|message| message.id).collect();
         for message in &mut batch.messages {
             let id = existing
                 .get(&message.source)
                 .copied()
                 .unwrap_or_else(Uuid::now_v7);
-            remapped.insert(message.id, id);
             message.id = id;
         }
         let mappings = fenced.reserve_mappings(&batch.messages).await?;
+        // Reservation arbitration, not the earlier read, determines final IDs.
+        let remapped: HashMap<_, _> = original_ids
+            .into_iter()
+            .zip(mappings.iter().map(|mapping| mapping.message_id))
+            .collect();
         let missing_parents: Vec<_> = batch
             .messages
             .iter()
@@ -169,7 +177,8 @@ impl<A: EntityAccessService> HistoricalSink for ChannelImportSink<A> {
                 message.parent_id = Some(*parent);
                 message.orphaned_thread_ts = None;
             }
-            let message = convert(message)?;
+            references::insert_in(fenced.transaction(), &batch.lease, &message).await?;
+            let message = convert(message, batch.lease.event.job_id)?;
             reactions += message.reactions.len() as u64;
             messages.push(message);
         }
@@ -394,7 +403,10 @@ fn timestamp(ts: SlackTimestamp) -> PortResult<DateTime<Utc>> {
         .ok_or_else(|| ImportError::InvalidInput.into())
 }
 
-fn convert(message: HistoricalMessage) -> PortResult<messages_model::HistoricalMessage> {
+fn convert(
+    message: HistoricalMessage,
+    job: JobId,
+) -> PortResult<messages_model::HistoricalMessage> {
     let created_at = timestamp(message.source.ts)?;
     let mut seen = HashSet::new();
     let mut reactions = Vec::new();
@@ -432,7 +444,14 @@ fn convert(message: HistoricalMessage) -> PortResult<messages_model::HistoricalM
         created_at,
         updated_at: created_at,
         edited_at: None,
-        import_metadata: serde_json::json!({ "source": "slack", "slack_channel_id": message.source.slack_channel_id, "slack_ts": message.source.ts, "orphaned_thread_ts": message.orphaned_thread_ts }),
+        import_metadata: serde_json::json!({
+            "source": "slack",
+            "slack_channel_id": message.source.slack_channel_id,
+            "slack_ts": message.source.ts,
+            "orphaned_thread_ts": message.orphaned_thread_ts,
+            "slack_import_job": Uuid::from(job),
+            "body_version": IMPORTER_BODY_VERSION,
+        }),
         import_order: i64::try_from(message.import_order).map_err(|_| ImportError::InvalidInput)?,
         reactions,
         mentions,

@@ -32,6 +32,7 @@ fn message(team: TeamId, channel: Uuid, seconds: u32) -> HistoricalMessage {
         imported_author: None,
         content: "historical".into(),
         user_mentions: vec![],
+        body_references: vec![],
         import_order: 0,
         reactions: vec![],
     }
@@ -442,10 +443,21 @@ async fn duplicates_keep_first_mapping_and_partial_failure_keeps_search(pool: Pg
     .await
     .unwrap();
     let progress = repo.finalize(team, event.job_id).await.unwrap();
-    assert_eq!(progress.status, JobStatus::CompletedWithErrors);
+    assert_eq!(progress.status, JobStatus::Processing);
     assert_eq!(progress.conversations[0].counters.imported, 1);
     assert_eq!(progress.conversations[0].counters.duplicates, 1);
-    assert_eq!(repo.pending_search(50).await.unwrap().len(), 1);
+    let request = repo.pending_search(50).await.unwrap().pop().unwrap();
+    repo.record_search(&request, SearchState::Completed)
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.progress(team, event.job_id)
+            .await
+            .unwrap()
+            .unwrap()
+            .status,
+        JobStatus::CompletedWithErrors
+    );
 }
 
 #[sqlx::test(migrations = "../macro_db_client/migrations")]

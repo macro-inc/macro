@@ -12,6 +12,7 @@ struct State {
     send_fails: bool,
     mark_fails: bool,
     reconciled: usize,
+    references_reconciled: usize,
     active: bool,
     failed: bool,
     searches: Vec<SearchBackfill>,
@@ -102,20 +103,34 @@ impl SearchBackfillClient for Fake {
     }
 }
 
+impl ReferenceReconciler for Fake {
+    async fn reconcile_references(&self, limit: u32) -> PortResult<()> {
+        assert_eq!(limit, PAGE_SIZE);
+        self.0.lock().unwrap().references_reconciled += 1;
+        Ok(())
+    }
+}
+
 impl Clock for Fake {
     fn now(&self) -> DateTime<Utc> {
         Utc::now()
     }
 }
 
-fn fixture() -> (Fake, ImportMaintenance<Fake, Fake, Fake, Fake>) {
+fn fixture() -> (Fake, ImportMaintenance<Fake, Fake, Fake, Fake, Fake>) {
     let fake = Fake::default();
     fake.0.lock().unwrap().pending.push(ImportEvent {
         job_id: Uuid::now_v7().try_into().unwrap(),
         slack_channel_id: "C123".parse().unwrap(),
         generation: 1,
     });
-    let service = ImportMaintenance::new(fake.clone(), fake.clone(), fake.clone(), fake.clone());
+    let service = ImportMaintenance::new(
+        fake.clone(),
+        fake.clone(),
+        fake.clone(),
+        fake.clone(),
+        fake.clone(),
+    );
     (fake, service)
 }
 
@@ -171,6 +186,7 @@ async fn recovery_reconciles_partial_search_without_publishing_new_imports() {
     {
         let mut state = fake.0.lock().unwrap();
         assert_eq!(state.reconciled, 1);
+        assert_eq!(state.references_reconciled, 1);
         assert!(state.sent.is_empty());
         assert!(matches!(
             state.search_states[0],

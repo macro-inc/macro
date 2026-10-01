@@ -279,14 +279,15 @@ Cancellation closes registration and atomically stops future claims/publication,
 skips unclaimed work, and enters `cancelling`. Running fenced workers may finish.
 If a running worker dies after cancellation, settle its expired lease without
 restarting; retain committed history and schedule its indexing. `cancelled` is
-terminal only when all active leases settle. Cancellation is **not rollback**.
+terminal only when active leases, committed reference intents and required search
+publication settle. Cancellation is **not rollback**.
 Finalize, cancel and completion share one job lock/CAS. A publication already in
 flight can still arrive; claim rejects it. Repeated cancel/finalize of a terminal
 job returns its existing receipt, not a new lifecycle.
 
 Job states are `uploading` while registration remains open, then `processing`
-while queued/importing work remains. Once registration is closed and all work is
-settled: `completed` if no failures (including deliberate skips),
+while queued/importing work, body reconciliation or required search publication
+remains. Once registration is closed and all work is settled: `completed` if no failures (including deliberate skips),
 `completed_with_errors` if failures coexist with completed conversations, or
 `failed` if failures exist without a completed conversation. Cancellation takes
 precedence while settling and becomes `cancelled`. Failed/cancelled imports may
@@ -383,8 +384,8 @@ at most 1 MiB source text, 1 MiB cumulative generated token/fallback bytes,
 256 references, and 256 emitted user mentions per body. Metadata expansion and
 occurrence budgets are checked as tokens are emitted; excess is an explicit
 `LimitExceeded`, not silent truncation. `italic` is used for
-Slack `me_message`. Baseline worker interfaces are unchanged; persistence and
-resolution wiring are separate follow-ups.
+Slack `me_message`. The importer uses `message_with_references` and carries this
+evidence to its atomic historical sink.
 
 Native representations match Lexical `INTERNAL_TRANSFORMERS`:
 
@@ -489,6 +490,37 @@ against live edits/deletion and atomically complete intents with search-dirty/ou
 work. Close unresolved intents to fallback when the job's opportunity ends, including
 cancellation, without restarting imports or adding members/mention effects. This is
 within-job reconciliation, not cross-job edit synchronization.
+
+The sink records one job-owned `slack_import_message_reference` template per newly
+won source mapping, plus `slack_import_job` and `body_version` in message import
+metadata. Duplicate-import losers never write intents or replace the winning body.
+No speculative UUID is rendered: all body references, including same-batch links,
+wait until canonical arbitration and selected-conversation settlement.
+
+Maintenance uses a transaction-held job row lock (`SKIP LOCKED`) as its fence,
+not a reclaimed conversation lease. It processes at most 50 templates per tick,
+one bounded template (at most 4 MiB) per transaction. A process crash rolls back
+body, completion checkpoint and search writes together; a competing process cannot
+patch the same job concurrently. No S3 object is needed to finish. The read-only
+resolver rechecks source proof and current disclosure access immediately before a
+message-owned compare-and-set. Body, owning job/version, unchanged timestamps,
+absence of edits and deletion must still match. Live edits/deletions are skipped;
+a successful patch changes only content, not author, timestamps, counters,
+reactions, thread structure, membership or live-message effects.
+
+Missing/pending targets at this final opportunity retain source-only fallbacks.
+Unsupported template versions close without a rewrite. Expired/abandoned/failed
+and cancelled partial imports follow the same rule after their conversations
+settle, without reclaiming cancelled import work. Completion clears bulky template
+data and retains a small checkpoint until job cleanup. Later exports or restored
+access never reopen it. Job deletion cascades only into these temporary intents,
+never into messages or long-lived dedupe mappings.
+
+Changed bodies increment the conversation's durable search generation in the same
+transaction. Scoped search publication waits for the job's pending templates to
+close, then uses the existing receipt/retry path. Job completion waits for required
+publication (not eventual OpenSearch refresh); terminal jobs never oscillate. These
+are internal settlement rules, with no new public progress enum.
 
 `tests/fixtures/native-message-links.json` in `slack_integration` is shared with
 `packages/lexical-core/tests/slack-import-links.test.ts`. Rust checks converter/shared

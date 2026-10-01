@@ -23,27 +23,29 @@ pub trait Maintenance: Send + Sync {
 }
 
 /// Domain service for outbox delivery, cancellation settlement and search recovery.
-pub struct ImportMaintenance<R, Q, S, C> {
+pub struct ImportMaintenance<R, Q, S, C, F> {
     repo: R,
     queue: Q,
     search: S,
     clock: C,
+    references: F,
 }
 
-impl<R, Q, S, C> ImportMaintenance<R, Q, S, C> {
+impl<R, Q, S, C, F> ImportMaintenance<R, Q, S, C, F> {
     /// Compose only domain capabilities; configuration is supplied by the application.
-    pub fn new(repo: R, queue: Q, search: S, clock: C) -> Self {
+    pub fn new(repo: R, queue: Q, search: S, clock: C, references: F) -> Self {
         Self {
             repo,
             queue,
             search,
             clock,
+            references,
         }
     }
 }
 
-impl<R: ExecutionRepo, Q: ImportQueue, S: SearchBackfillClient, C: Clock> Maintenance
-    for ImportMaintenance<R, Q, S, C>
+impl<R: ExecutionRepo, Q: ImportQueue, S: SearchBackfillClient, C: Clock, F: ReferenceReconciler>
+    Maintenance for ImportMaintenance<R, Q, S, C, F>
 {
     async fn publish(&self) -> PortResult<()> {
         let mut failure = None;
@@ -64,7 +66,8 @@ impl<R: ExecutionRepo, Q: ImportQueue, S: SearchBackfillClient, C: Clock> Mainte
 
     async fn reconcile(&self) -> PortResult<()> {
         self.repo.reconcile(PAGE_SIZE).await?;
-        let mut failure = None;
+        // Search recovery must continue even if one reference batch needs retry.
+        let mut failure = self.references.reconcile_references(PAGE_SIZE).await.err();
         for request in self.repo.pending_search(PAGE_SIZE).await? {
             if let Err(error) =
                 reconcile_search(&self.repo, &self.search, &self.clock, &request).await

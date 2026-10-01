@@ -13,6 +13,7 @@ use macro_queues::{SlackImportDlq, SlackImportQueue};
 use macro_service_urls::SearchProcessingServiceUrl;
 use slack_import_worker::composition::{
     authorizer::WorkerAuthorizer, channel_sink::ChannelImportSink,
+    reference_reconciliation::WorkerReferenceReconciler,
 };
 use slack_integration::{
     domain::{
@@ -84,13 +85,19 @@ async fn run() -> Result<(), rootcause::Report> {
     let importer = ConversationImporter::new(
         repo.clone(),
         storage,
-        CanonicalImportLedger::new(PgImportRepo::new(pool)),
+        CanonicalImportLedger::new(PgImportRepo::new(pool.clone())),
         sink.clone(),
         sink,
         authorizer,
         ImporterConfig { limits },
     )?;
-    let maintenance = ImportMaintenance::new(repo, queue.clone(), search, SystemClock);
+    let maintenance = ImportMaintenance::new(
+        repo,
+        queue.clone(),
+        search,
+        SystemClock,
+        WorkerReferenceReconciler::new(pool, limits),
+    );
     let stop = CancellationToken::new();
     let signal = async {
         shutdown_signal().await;

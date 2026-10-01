@@ -394,6 +394,7 @@ where
             imported_author,
             content: converted.body,
             user_mentions: converted.user_mentions,
+            body_references: converted.references,
             import_order: order,
             reactions,
         }))

@@ -28,6 +28,23 @@ pub struct HistoricalMessageTarget {
     pub root_id: Uuid,
 }
 
+/// Compare-and-set body reconciliation, not a live edit. The importer must still
+/// authorize disclosure and atomically persist its checkpoint/search marker.
+pub struct HistoricalBodyPatch {
+    /// Exact first-committed message and owning channel.
+    pub message_id: Uuid,
+    /// Expected channel ownership.
+    pub channel_id: Uuid,
+    /// Job recorded by the original writer, never a later duplicate import.
+    pub job_id: Uuid,
+    /// Original importer schema/body guard.
+    pub importer_version: i16,
+    /// Original fallback body, compared exactly at update time.
+    pub expected_body: String,
+    /// Authorized rendered replacement.
+    pub body: String,
+}
+
 /// A channel already authorized by the importing domain and its bounded messages.
 /// Source deduplication, fencing, mappings and checkpoints belong to the caller.
 #[derive(Debug, Clone, Serialize)]
