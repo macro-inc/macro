@@ -22,7 +22,6 @@ vi.mock('@entity', () => ({
   Entity: { Title: () => 'Recent chat', Timestamp: () => 'now' },
   MaybeEntityRow: (props: { children: JSX.Element }) => props.children,
 }));
-vi.mock('@entity/utils/filter', () => ({ unreadFilterFn: () => false }));
 vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalNotificationSource: () => ({ mutedEntities: () => [] }),
 }));
@@ -177,7 +176,10 @@ describe('Home document comment row', () => {
     },
   });
 
-  const renderRow = (state: 'unseen' | 'seen' | 'done') =>
+  const renderRow = (
+    state: 'unseen' | 'seen' | 'done',
+    notificationDisplayCutoff?: string
+  ) =>
     render(() => (
       <HomeListEntity
         entity={
@@ -187,6 +189,7 @@ describe('Home document comment row', () => {
             name: 'Plan',
             ownerId: 'test-user',
             fileType: 'md',
+            notificationDisplayCutoff,
             notifications: () => [commentNotification(state)],
           } as never
         }
@@ -205,6 +208,24 @@ describe('Home document comment row', () => {
 
   it('reads as the plain document once the notification is done', () => {
     expect(renderRow('done').textContent).not.toContain('mentioned you');
+  });
+
+  it.each(['unseen', 'seen'] as const)(
+    'shows the task instead of an older %s comment after newer activity',
+    (state) => {
+      const row = renderRow(state, '2026-10-01T17:02:49Z');
+      expect(row.textContent).toContain('Recent chat');
+      expect(row.textContent).not.toContain('Peter mentioned');
+      expect(row.querySelector('[aria-label="Unread"]') !== null).toBe(
+        state === 'unseen'
+      );
+    }
+  );
+
+  it('announces a comment that supplied the row timestamp', () => {
+    expect(renderRow('seen', '2026-09-23T00:00:00Z').textContent).toContain(
+      'Peter mentioned you on Recent chat'
+    );
   });
 
   it('names the agent that replied instead of someone', () => {

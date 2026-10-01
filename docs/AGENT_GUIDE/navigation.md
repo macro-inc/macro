@@ -127,6 +127,13 @@ targets, spreadsheets, unknown items, and other unsupported block types retain
 the legacy inline preview so their navigation still works. The URL shape stays
 `/app/home/<block-type>/<uuid>` in either rendering mode.
 
+Desktop Home names a document comment event only when it is the latest
+outstanding notification and is at least as recent as the activity that placed
+the row there. Newer own activity, or an event without a supported comment
+description, shows the document/task title and opens the entity without a
+comment target. Older notifications retain their unread state and remain
+available to notification actions.
+
 On touch devices, documents (including tasks) open in legacy blocks rather than
 inline Drive details. Canonical `/app/drive/.../<document-type>/<uuid>` links also
 fall back to legacy document routes. This uses touch detection, not the native-app

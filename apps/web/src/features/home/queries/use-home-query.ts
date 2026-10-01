@@ -255,7 +255,10 @@ export function useHomeDataSource(state: HomeDataSourceInput): HomeDataSource {
             matchesCapabilities(entity, viewContext().capabilities)
           ),
           viewContext()
-        ).map(attachNotifications)
+        ).map((entity) => ({
+          ...attachNotifications(entity),
+          notificationDisplayCutoff: entity.sortTs,
+        }))
       : transformEntities(entities);
 
   const { entityPool } = useSearchContext();

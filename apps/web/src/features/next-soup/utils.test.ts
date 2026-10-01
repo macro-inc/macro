@@ -1657,6 +1657,63 @@ const documentRow = (notifications: UnifiedNotification[]) =>
   }) as unknown as EntityData;
 
 describe('getDocumentCommentTarget', () => {
+  it('opens the entity without replaying an older comment after own activity', async () => {
+    const notification = commentNotification('old', 'comment-old', {
+      created_at: '2026-09-24T20:39:45Z',
+    });
+    const entity = {
+      ...documentRow([notification]),
+      notificationDisplayCutoff: '2026-10-01T17:02:49Z',
+    };
+    expect(getDocumentCommentTarget(entity)).toBeUndefined();
+    expect(previewBlockTarget(entity as never).params).toBeUndefined();
+    expect(homePreviewNavigation(entity as never).search.drive).toBeUndefined();
+
+    const openWithSplit = vi.fn(() => ({ status: 'unavailable' }));
+    setGlobalSplitManager({
+      activeSplit: vi.fn(),
+      getOrchestrator: vi.fn(() => ({})),
+      getSplitByContent: vi.fn(),
+      openWithSplit,
+    } as unknown as SplitManager);
+    await openEntityInSplitFromUnifiedList(entity, {});
+    expect(openWithSplit).toHaveBeenCalledWith(
+      {
+        type: 'component',
+        id: 'documents',
+        entryMetadata: {
+          route: {
+            matches: [
+              { id: 'drive', params: {} },
+              {
+                id: 'drive-document',
+                params: { documentId: 'doc-1', documentType: 'md' },
+              },
+            ],
+          },
+        },
+      },
+      expect.objectContaining({ activate: true, search: undefined })
+    );
+    expect(notification.state).toBe('unseen');
+  });
+
+  it('does not borrow an older comment target for a newer unsupported event', () => {
+    const entity = documentRow([
+      commentNotification('old', 'comment-old', {
+        created_at: '2026-09-24T20:39:45Z',
+      }),
+      commentNotification('assigned', '', {
+        created_at: '2026-10-01T17:02:49Z',
+        notification_metadata: {
+          tag: 'task_assigned',
+          content: { taskId: 'doc-1', assignedBy: 'alice', taskName: 'Plan' },
+        },
+      }),
+    ]);
+    expect(getDocumentCommentTarget(entity)).toBeUndefined();
+  });
+
   it('targets the newest comment notification that is not done, read or not', () => {
     expect(
       getDocumentCommentTarget(
