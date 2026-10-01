@@ -402,6 +402,7 @@ export const storageBacklog = [
   'listInitiatives',
   'listOccurrences',
   'listReminders',
+  'listReminderCollection',
   'listTeamOutOfOffice',
   'listUserApiKeys',
   // Meeting management uses the generated client.
