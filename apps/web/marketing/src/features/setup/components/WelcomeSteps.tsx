@@ -136,16 +136,22 @@ export function WelcomeStep(props: {
           data-welcome-heading
           class="font-[Roboto_Slab_Variable] font-[315] text-4xl leading-[1.12] tracking-tight sm:text-5xl md:text-[60px]"
         >
-          One unified interface
+          The unified workspace
           <br />
-          for all your work.
+          <span class="inline-block" data-welcome-company>
+            for your company.
+          </span>
         </h1>
         <p
           data-welcome-copy
-          class="mx-auto max-w-sm text-sm leading-6 text-ink-muted md:max-w-[480px] md:text-[17.5px] md:leading-[30px]"
+          class="mx-auto max-w-sm text-balance text-[13px] leading-[1.8] text-ink-muted md:max-w-none md:text-[clamp(14px,1.4vw,17.5px)]"
         >
-          Emails, messages, tasks, and agent responses in one inbox. Documents
-          you and your agents can edit live.
+          <span class="md:mx-auto md:block md:w-fit md:whitespace-nowrap">
+            Macro brings your email, chat, tasks, docs, agents and customers
+          </span>{' '}
+          <span class="md:mx-auto md:block md:w-fit md:whitespace-nowrap">
+            into one tab with team level memory for your agents.
+          </span>
         </p>
       </div>
       <div

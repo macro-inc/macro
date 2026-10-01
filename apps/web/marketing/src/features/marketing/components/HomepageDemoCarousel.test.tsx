@@ -64,3 +64,48 @@ it('keeps the carousel in place during iframe interaction and cleans up load lis
   fireEvent.load(frame);
   expect(openView).not.toHaveBeenCalled();
 });
+
+it('captures horizontal drags and ignores vertical or cancelled gestures', () => {
+  mountCarousel();
+  const pointer = (
+    type: string,
+    target: Element,
+    values: { clientX: number; clientY: number }
+  ) => {
+    const event = new MouseEvent(type, { bubbles: true, button: 0, ...values });
+    Object.defineProperties(event, {
+      pointerId: { value: 1 },
+      isPrimary: { value: true },
+    });
+    fireEvent(target, event);
+  };
+  const carousel = screen.getByRole('region');
+  const capture = vi.fn();
+  carousel.setPointerCapture = capture;
+  const down = {
+    pointerId: 1,
+    isPrimary: true,
+    button: 0,
+    clientX: 300,
+    clientY: 100,
+  };
+  pointer('pointerdown', screen.getByRole('heading'), down);
+  expect(capture).toHaveBeenCalledWith(1);
+  pointer('pointerup', carousel, { ...down, clientX: 200 });
+  expect(screen.getByRole('heading').textContent).toContain(
+    'first-class participants'
+  );
+
+  pointer('pointerdown', carousel, down);
+  pointer('pointerup', carousel, { ...down, clientX: 400 });
+  expect(screen.getByRole('heading').textContent).toContain('One inbox');
+
+  pointer('pointerdown', carousel, down);
+  pointer('pointerup', carousel, { ...down, clientX: 200, clientY: 250 });
+  expect(screen.getByRole('heading').textContent).toContain('One inbox');
+
+  pointer('pointerdown', carousel, down);
+  pointer('pointercancel', carousel, down);
+  pointer('pointerup', carousel, { ...down, clientX: 200 });
+  expect(screen.getByRole('heading').textContent).toContain('One inbox');
+});

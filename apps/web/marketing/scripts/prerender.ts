@@ -479,7 +479,7 @@ function writeSitemapAndRobots(
 }
 
 const JOURNEY_SEO: PageSeo = {
-  title: 'Macro — One unified interface for all your work.',
+  title: 'Macro — The unified workspace for your company.',
   description:
     'Email, messages, tasks, and agents in one inbox. CRDT documents with live agent edits, workspace search and memory, and a CRM built from your email.',
   path: '/',

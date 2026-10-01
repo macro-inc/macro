@@ -330,9 +330,9 @@ export function HomepageUnification(
       <FeatureConstellation expanded />
       <div class="unification-copy">
         <div class="unification-before" aria-hidden="true">
-          One unified interface
+          The unified workspace
           <br />
-          for all your work.
+          for your company.
         </div>
         <h2 id="unification-heading">
           Replace 27+ apps

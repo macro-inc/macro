@@ -1,54 +1,35 @@
 import { createSignal, For, onCleanup, onMount } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
-import IconChat from '../../../assets/icons/wide-chat.svg';
-import IconCompany from '../../../assets/icons/wide-company.svg';
-import IconDocs from '../../../assets/icons/wide-file-md.svg';
-import IconInbox from '../../../assets/icons/wide-inbox.svg';
-import IconAi from '../../../assets/icons/wide-star.svg';
-import IconTasks from '../../../assets/icons/wide-task.svg';
 
 const SLIDES = [
   {
     label: 'Inbox',
     target: 'Home',
     title: 'One inbox for emails, agents,\ntasks, and messages',
-    Icon: IconInbox,
-    viewBox: '0 0 18 12',
   },
   {
     label: 'Chat',
     target: 'Chat',
     title: 'Agents are first-class participants\nin channels and DMs',
-    Icon: IconChat,
-    viewBox: '0 0 24 19',
   },
   {
     label: 'Docs',
     target: 'Drive',
     title: 'Agents can edit docs\nas collaborative peers',
-    Icon: IconDocs,
-    viewBox: '0 0 24 16.5',
   },
   {
     label: 'CRM',
     target: 'Customers',
     title: 'Agents keep deals current\nfrom email and chat',
-    Icon: IconCompany,
-    viewBox: '0 0 18 12.2',
   },
   {
     label: 'Tasks',
     target: 'Tasks',
     title: 'Tasks from messages and email,\nassigned to people and agents',
-    Icon: IconTasks,
-    viewBox: '0 0 18 12',
   },
   {
     label: 'Agents',
     target: 'Agents',
     title: 'Agents with memory built\nfrom your workspace',
-    Icon: IconAi,
-    viewBox: '0 0 24 16',
   },
 ];
 
@@ -79,7 +60,7 @@ export function HomepageDemoCarousel(props: {
   const [ready, setReady] = createSignal(false);
   let document: Document | null = null;
   let transition: Animation | undefined;
-  let swipeX: number | undefined;
+  let swipe: { x: number; y: number; pointerId: number } | undefined;
   const slide = () => SLIDES[active()];
   const buttonFor = (target: string) =>
     document?.querySelector<HTMLButtonElement>(
@@ -185,39 +166,36 @@ export function HomepageDemoCarousel(props: {
       role="region"
       aria-label="What you can do with Macro"
       onPointerDown={(event) => {
-        swipeX = (event.target as Element).closest('button')
-          ? undefined
-          : event.clientX;
+        if (
+          !ready() ||
+          !event.isPrimary ||
+          event.button !== 0 ||
+          (event.target as Element).closest('button')
+        )
+          return;
+        swipe = {
+          x: event.clientX,
+          y: event.clientY,
+          pointerId: event.pointerId,
+        };
+        event.currentTarget.setPointerCapture(event.pointerId);
       }}
       onPointerUp={(event) => {
-        if (
-          swipeX !== undefined &&
-          Math.abs(event.clientX - swipeX) > 60 &&
-          ready()
-        ) {
-          select(active() + (event.clientX < swipeX ? 1 : -1));
+        if (!swipe || swipe.pointerId !== event.pointerId) return;
+        const dx = event.clientX - swipe.x;
+        const dy = event.clientY - swipe.y;
+        swipe = undefined;
+        if (Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(dy) && ready()) {
+          select(active() + (dx < 0 ? 1 : -1));
         }
-        swipeX = undefined;
+      }}
+      onLostPointerCapture={() => {
+        swipe = undefined;
       }}
       onPointerCancel={() => {
-        swipeX = undefined;
+        swipe = undefined;
       }}
     >
-      <div
-        class="homepage-demo-slide-copy"
-        aria-live="polite"
-        aria-atomic="true"
-      >
-        <span class="homepage-demo-slide-label">
-          <Dynamic
-            component={slide().Icon}
-            viewBox={slide().viewBox}
-            aria-hidden="true"
-          />
-          {slide().label}
-        </span>
-        <h2>{slide().title}</h2>
-      </div>
       <div
         class="homepage-demo-slide-controls"
         onKeyDown={(event) => {
@@ -262,6 +240,13 @@ export function HomepageDemoCarousel(props: {
         >
           <CarouselCaret direction="right" />
         </button>
+      </div>
+      <div
+        class="homepage-demo-slide-copy"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        <h2>{slide().title}</h2>
       </div>
     </div>
   );

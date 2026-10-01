@@ -202,9 +202,14 @@ export function animateDemoEntrance(
       viewport.top +
       scroller.scrollTop +
       target.offsetHeight / 2;
-    start = top - scroller.clientHeight * 0.82;
-    // Finish 50px before the workspace reaches the viewport center.
-    distance = Math.max(1, center - scroller.clientHeight * 0.5 - 50 - start);
+    // Start the reveal 100px earlier.
+    const advance = 100;
+    start = top - scroller.clientHeight * 0.82 - advance;
+    // Finish 250px before the workspace reaches the viewport center.
+    distance = Math.max(
+      1,
+      center - scroller.clientHeight * 0.5 - 150 - advance - start
+    );
     update();
   };
   // Once somebody uses the workspace, scrolling must never hide their work.

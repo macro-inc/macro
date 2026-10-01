@@ -23,13 +23,12 @@
 
 .homepage-embedded-stage { position: relative; }
 
-.homepage-embedded-stage::after { content: ''; position: absolute; inset: 35% 0 -1px; background: linear-gradient(to bottom, transparent, #0008 35%, #000e 65%, #000 92%); pointer-events: none; transition: opacity 300ms ease; }
-.homepage-demo-carousel { position: relative; z-index: 1; margin-top: -170px; text-align: center; touch-action: pan-y; }
-.homepage-demo-slide-copy { min-height: 120px; display: grid; justify-items: center; align-content: start; gap: 14px; }
-.homepage-demo-slide-label { display: inline-flex; align-items: baseline; gap: .4em; color: #f69232; font-size: 15px; font-weight: 600; line-height: 1cap; letter-spacing: .1em; text-transform: uppercase; }
-.homepage-demo-slide-label svg { display: block; flex-shrink: 0; width: auto; height: 1cap; }
+.homepage-embedded-stage::after { content: ''; position: absolute; inset: 45% 0 -1px; background: linear-gradient(to bottom, transparent, #0005 35%, #000b 65%, #000 96%); pointer-events: none; transition: opacity 300ms ease; }
+.homepage-demo-carousel { position: relative; z-index: 1; margin-top: -120px; text-align: center; touch-action: pan-y; }
+.homepage-demo-slide-copy { min-height: 120px; display: grid; justify-items: center; align-content: start; user-select: none; cursor: grab; }
+.homepage-demo-slide-copy:active { cursor: grabbing; }
 .homepage-demo-slide-copy h2 { margin: 0; max-width: 900px; color: #eee; font-family: 'Roboto Slab Variable', display, serif; font-size: 34px; font-weight: 315; letter-spacing: -.015em; line-height: 1.2; white-space: pre-line; }
-.homepage-demo-slide-controls { display: flex; align-items: center; justify-content: center; gap: 0; margin: 22px 0 8px; }
+.homepage-demo-slide-controls { display: flex; align-items: center; justify-content: center; gap: 0; margin: 0 0 12px; }
 .homepage-demo-carousel button { color: #999; background: transparent; border: 0; font: inherit; }
 .homepage-demo-carousel button:hover { color: #eee; }
 .homepage-demo-carousel button:focus-visible { outline: 2px solid #aaa; outline-offset: 4px; border-radius: 6px; }
@@ -37,9 +36,9 @@
 .homepage-demo-carousel .homepage-demo-arrow { display: grid; place-items: center; width: 42px; height: 36px; }
 .homepage-demo-slide-dot { display: grid; place-items: center; width: auto; height: 36px; padding: 0 4px; }
 .homepage-demo-slide-dot span { display: block; width: 7px; height: 7px; border-radius: 8px; background: #444; transition: width 200ms ease, background 200ms ease; }
-.homepage-demo-slide-dot[aria-pressed=true] span { width: 24px; background: #f69232; }
+.homepage-demo-slide-dot[aria-pressed=true] span { width: 24px; background: #5da6ff; }
 @media (max-width: 767px) {
-  .homepage-demo-carousel { margin-top: -130px; padding: 0 12px; }
+  .homepage-demo-carousel { margin-top: -80px; padding: 0 12px; }
   .homepage-demo-slide-copy { min-height: 250px; }
   .homepage-demo-slide-copy h2 { font-size: clamp(26px, 6.7vw, 36px); }
 }

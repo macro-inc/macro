@@ -203,11 +203,12 @@ the same frame. The iframe uses native lazy loading.
 A benefit carousel fades the live preview into slab-serif headlines. The first
 highlight opens an email inside Home’s mixed activity feed; subsequent highlights
 show Chat, Docs, CRM, Tasks, and Agents. Arrows, dots, left/right keys, and swiping
-the caption select highlights without reloading the frame. There is no autoplay.
+the caption select highlights without reloading the frame. Horizontal drags
+capture the pointer; vertical gestures keep scrolling the page. There is no autoplay.
 The workspace is always interactive. Clicking or typing inside it keeps the fade,
 headline, controls, and layout intact. Sidebar navigation updates the active
-highlight without overriding the visitor’s navigation. The icon labels, orange
-indicator, chevrons, and benefit copy follow the live-site carousel. Verify direct
+highlight without overriding the visitor’s navigation. Slab headlines sit directly
+below the blue indicator and chevrons, without small category headers. Verify direct
 interaction, slide navigation, and reduced motion when changing this section.
 Below the carousel, the original open-source section shows GitHub stars, a16z
 backing, and ISO/SOC 2/CASA badges. A continuous grainy gradient funnels into the
