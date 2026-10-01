@@ -48,6 +48,13 @@ it('keeps H on entities available for reminders and consumes it on headers', () 
         expect(call).toBeDefined();
         return call![0].keyDownHandler!();
       };
+      const collapseCommands = vi
+        .mocked(registerHotkey)
+        .mock.calls.map(([options]) => options)
+        .filter((options) => options.description?.startsWith('Collapse'));
+      expect(
+        new Set(collapseCommands.map((command) => command.hotkeyToken)).size
+      ).toBe(2);
       list.focus.set('task');
       expect(handler('h')).toBe(false);
       expect(expanded()).toBe(true);

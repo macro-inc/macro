@@ -58,6 +58,7 @@ vi.mock('@core/hotkey/tokens', () => ({
     unifiedList: {
       navigation: {
         parent: 'unifiedList.navigation.parent',
+        collapseGroup: 'unifiedList.navigation.collapseGroup',
         child: 'unifiedList.navigation.child',
       },
     },

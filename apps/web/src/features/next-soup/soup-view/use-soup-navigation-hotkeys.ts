@@ -294,7 +294,7 @@ export const useSoupNavigationHotkeys = (
     hotkey: ['h'],
     scopeId,
     description: 'Collapse group',
-    hotkeyToken: TOKENS.unifiedList.navigation.parent,
+    hotkeyToken: TOKENS.unifiedList.navigation.collapseGroup,
     // Consume H on headers even when already collapsed; selected entities
     // elsewhere must not turn this into a reminder action.
     keyDownHandler: () => toggleFocusedGroupHeader(false) !== undefined,

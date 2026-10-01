@@ -221,7 +221,7 @@ export function useListInteractions<TItem, TMetadata = unknown>(
 
     registerHotkey({
       hotkey: ['h'],
-      hotkeyToken: TOKENS.unifiedList.navigation.parent,
+      hotkeyToken: TOKENS.unifiedList.navigation.collapseGroup,
       scopeId: options.scopeId,
       description: 'Collapse group',
       condition: () => canHandle(options.conditions?.disclosure),
