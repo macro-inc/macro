@@ -143,6 +143,42 @@ pub async fn invite_users<
     Ok(StatusCode::NO_CONTENT)
 }
 
+/// Reserve a room while the authenticated caller configures a new call.
+#[utoipa::path(post, operation_id = "meeting_prepare", path = "/call/meetings/prepare",
+    responses((status = 200, body = crate::domain::meetings::MeetingPreparation), (status = 401, body = ErrorResponse)))]
+#[tracing::instrument(err, skip_all)]
+pub async fn prepare<S: CallService, Svc: EntityAccessService, Auth: MacroAuthorizationService>(
+    State(state): State<CallRouterState<S, Svc, Auth>>,
+    actor: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+) -> Result<Json<crate::domain::meetings::MeetingPreparation>, CallError> {
+    Ok(Json(
+        state
+            .service
+            .prepare_meeting(actor.authorization.user.macro_user_id.clone())
+            .await?,
+    ))
+}
+
+/// Cancel an unused room; the domain owns ownership and activation checks.
+#[utoipa::path(delete, operation_id = "meeting_cancel_preparation", path = "/call/meetings/prepare/{preparation_id}",
+    params(("preparation_id" = Uuid, Path)), responses((status = 204), (status = 401, body = ErrorResponse)))]
+#[tracing::instrument(err, skip_all)]
+pub async fn cancel_preparation<
+    S: CallService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<CallRouterState<S, Svc, Auth>>,
+    Path(id): Path<Uuid>,
+    actor: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+) -> Result<StatusCode, CallError> {
+    state
+        .service
+        .cancel_meeting_preparation(actor.authorization.user.macro_user_id.clone(), id)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 /// Handle `POST /call/meetings` through the call domain service.
 #[utoipa::path(post, operation_id = "meeting_create", path = "/call/meetings",
     request_body = CreateMeetingRequest,
@@ -330,4 +366,84 @@ pub async fn update<S: CallService, Svc: EntityAccessService, Auth: MacroAuthori
             )
             .await?,
     ))
+}
+
+/// Read the participant preview for an authenticated invitation holder.
+#[utoipa::path(get, operation_id = "meeting_participants", path = "/call/meetings/join/{token}/participants",
+    params(("token" = String, Path)),
+    responses((status = 200, body = crate::domain::meetings::MeetingParticipants), (status = 404, body = ErrorResponse)))]
+#[tracing::instrument(err, skip_all)]
+pub async fn participants<
+    S: CallService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<CallRouterState<S, Svc, Auth>>,
+    Path(token): Path<String>,
+    actor: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+) -> Result<Json<crate::domain::meetings::MeetingParticipants>, CallError> {
+    Ok(Json(
+        state
+            .service
+            .get_meeting_participants(
+                MeetingToken::try_from(token)?,
+                Some(actor.authorization.user.macro_user_id.clone()),
+            )
+            .await?,
+    ))
+}
+
+/// Read a standalone meeting preview without admitting a guest to the room.
+#[utoipa::path(get, operation_id = "meeting_guest_participants", path = "/call/join/{token}/participants",
+    params(("token" = String, Path)),
+    responses((status = 200, body = crate::domain::meetings::MeetingParticipants), (status = 403, body = ErrorResponse), (status = 404, body = ErrorResponse)))]
+#[tracing::instrument(err, skip_all)]
+pub async fn guest_participants<S: CallService>(
+    State(state): State<WebhookRouterState<S>>,
+    Path(token): Path<String>,
+) -> Result<Json<crate::domain::meetings::MeetingParticipants>, CallError> {
+    Ok(Json(
+        state
+            .service
+            .get_meeting_participants(MeetingToken::try_from(token)?, None)
+            .await?,
+    ))
+}
+
+/// Separate polling budget so previews cannot exhaust the guest join budget.
+pub struct PerIpMeetingPreview(ClientIp);
+
+impl<S: Send + Sync> RateLimitExtractable<S> for PerIpMeetingPreview {
+    fn config() -> RateLimitConfig {
+        RateLimitConfig {
+            max_count: 600,
+            window: Duration::from_mins(60),
+        }
+    }
+    fn key(&self) -> RateLimitKey {
+        RateLimitKey::builder(&"per-ip-call-meeting-preview")
+            .append(&self.0.origin_ip())
+            .finish()
+    }
+}
+impl<S: Send + Sync> FromRequestParts<S> for PerIpMeetingPreview {
+    type Rejection = <ClientIp as FromRequestParts<S>>::Rejection;
+    async fn from_request_parts(
+        parts: &mut axum::http::request::Parts,
+        state: &S,
+    ) -> Result<Self, Self::Rejection> {
+        Ok(Self(parts.extract_with_state(state).await?))
+    }
+}
+
+/// Rate-limit polling independently of join and leave requests.
+pub async fn enforce_preview_rate_limit<R>(
+    _permit: RateLimitExtractor<PerIpMeetingPreview, R>,
+    req: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response
+where
+    R: RateLimitService + Clone + Send + Sync + 'static,
+{
+    next.run(req).await
 }

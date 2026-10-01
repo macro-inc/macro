@@ -126,6 +126,9 @@ pub fn build_image_generator_from_env() -> Arc<dyn ImageGenerator> {
 /// - `ENABLE_GMAIL_OPS_QUEUE` (if disabled, thread-label updates can't enqueue Gmail sync ops)
 /// - `ENABLE_NOTIFICATION_QUEUE` (if disabled, notification status updates skip push clearing)
 ///
+/// `enforcement` is validated by the host at startup and shared with all other
+/// AI entry points. It configures both quota admission and prospective counting.
+///
 /// `event_task_tracker` tracks event publishes started by the context. Callers
 /// must retain the original tracker, pass a clone here, and close and drain the
 /// original after the host stops broker-backed work.
@@ -133,6 +136,7 @@ pub fn build_image_generator_from_env() -> Arc<dyn ImageGenerator> {
 pub async fn build_tool_service_context_from_env(
     pool: sqlx::PgPool,
     event_task_tracker: TaskTracker,
+    enforcement: ai_usage::AiUsageEnforcement,
 ) -> anyhow::Result<ToolServiceContext> {
     let env = ToolContextEnvVars::new()?;
     let maybe_env = ToolContextMaybeEnvVars::new();
@@ -215,10 +219,7 @@ pub async fn build_tool_service_context_from_env(
         sync_service_url,
     ));
     let email_ext_client = Arc::new(EmailServiceClientExternal::new(email_service_url.clone()));
-    let lexical_client = LexicalClient::new(
-        env.document_storage_service_auth_key.to_string(),
-        lexical_service_url,
-    );
+    let lexical_client = LexicalClient::new(env.internal_api_key.to_string(), lexical_service_url);
 
     let frecency_storage = FrecencyPgStorage::new(pool.clone());
     let frecency_service = FrecencyQueryServiceImpl::new(frecency_storage.clone());
@@ -426,7 +427,7 @@ pub async fn build_tool_service_context_from_env(
         entity_access_service.clone(),
         document_tool_context.service.clone(),
         chat_tool_context.service.clone(),
-        user_email_service,
+        user_email_service.clone(),
     );
 
     let anthropic_tool_context = build_anthropic_tool_context();
@@ -468,6 +469,7 @@ pub async fn build_tool_service_context_from_env(
         notification_tool_context,
         reminders_tool_context: crate::tool_context::build_reminders_tool_context(
             pool.clone(),
+            user_email_service.clone(),
             entity_access_service.clone(),
         ),
         import_tool_context: ToolImportToolContext::unwired(),
@@ -478,6 +480,7 @@ pub async fn build_tool_service_context_from_env(
             crate::tool_context::ToolBotEventBroker::Real(macro_event_broker.clone()),
             entity_access_service.clone(),
             document_storage_service_url,
+            crate::mcp_app_catalog::pipedream_client_from_env()?,
         ),
         project_tool_context,
         initiative_tool_context,
@@ -486,7 +489,8 @@ pub async fn build_tool_service_context_from_env(
         skill_tool_context,
         schedule_tool_context: crate::NoOpScheduleContext,
         anthropic_tool_context,
-        recorder: ai_usage::pg_recorder(pool.clone()),
+        admission: ai_billing::composition::pg_admission_service(pool.clone(), enforcement),
+        recorder: ai_usage::pg_recorder_with_enforcement(pool.clone(), enforcement),
         usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
     })
 }

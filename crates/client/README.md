@@ -136,7 +136,18 @@ projection version do not scan the corpus.
 
 ## Local filter execution
 
-Local SQL materializes Boolean result sets once, but enumerates a universe only
+Single-partition queries first probe at most `max(64, 2 * limit)` sort-index
+candidates from each of the authoritative and optimistic tables. Predicates,
+scope, and shadow suppression are evaluated only for that bounded window. A
+result is accepted only when both windows are exhausted or extend strictly past
+the result's cutoff timestamp, proving that record-key ties are complete. Keyset
+cursors seek inclusively to their timestamp; the full predicate handles ties.
+Sparse matches, truncated ties, and multi-partition queries use the original
+set-based plan in the same read transaction. No schema change or migration is
+required. This keeps dense Mail pages independent of mailbox size without
+changing results or optimistic visibility.
+
+The fallback SQL materializes Boolean result sets once, but enumerates a universe only
 within the requested profile and partition. Empty predicates do not enumerate
 cached documents. Conjunctions with an indexable positive term filter one scoped
 candidate set using document-leading fact probes, rather than materializing every

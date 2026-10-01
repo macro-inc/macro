@@ -6,12 +6,14 @@ use agent_trigger::domain::service::AgentTriggerService;
 use agent_trigger::domain::sources::{
     ChannelTriggerEvents, MessageTriggerEvents, TriggerEventSource, TriggerEvents,
 };
+use agent_trigger::domain::task_assignment::process_task_assignment;
 use agent_trigger::outbound::{
-    BotRepoAgentLookup, ChannelRepoTypeLookup, FastModelTriggerJudge,
+    BotRepoAgentLookup, ChannelRepoTypeLookup, DssTaskAssignmentContext, FastModelTriggerJudge,
     LexicalExplicitReplyExtractor, MessageThreadHistory, VisionImageCaptioner,
 };
 use bots::outbound::pg_bots_repo::PgBotsRepo;
 use channels::outbound::pg_channels_repo::PgChannelsRepo;
+use document_storage_service_client::DocumentStorageServiceClient;
 use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
 use kafka_util::{GroupName, KafkaEventConsumer, consumer_span, record_span_error};
@@ -20,11 +22,13 @@ use macro_event_broker::{
     KafkaConsumerAdapter, KafkaEventPublisher, MacroEventBrokerService, MacroEventCollection,
     MacroEventConsumerService,
 };
-use macro_service_urls::{LexicalServiceUrl, StaticFileServiceUrl};
+use macro_service_urls::{DocumentStorageServiceUrl, LexicalServiceUrl, StaticFileServiceUrl};
+use messages::domain::api::MessageServiceApi;
 use messages::outbound::pg_message_repo::PgMessageRepository;
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message as _};
 use sqlx::PgPool;
+use std::sync::Arc;
 use tokio::time::{Duration, sleep};
 use tracing::Instrument as _;
 
@@ -64,19 +68,34 @@ fn commit_message<M: MacroEventCollection + 'static>(
         .map_err(|error| anyhow::anyhow!("failed to commit trigger event offset: {error:?}"))
 }
 
+/// Shared domain services retained across trigger-consumer restarts.
+#[derive(Clone)]
+pub struct TriggerServices {
+    /// Recorder configured with the host's quota policy.
+    pub recorder: Arc<dyn ai_usage::UsageRecorder>,
+    /// Admission gate for Macro-funded inference.
+    pub admission: Arc<dyn ai_billing::AiAdmissionService>,
+    /// Message service used to announce task assignments.
+    pub messages: Arc<dyn MessageServiceApi>,
+}
+
 /// Keeps the trigger consumer running across transient failures.
 pub async fn supervise(
     pool: PgPool,
     kafka_brokers: String,
     internal_api_key: String,
+    document_storage_service_auth_key: String,
     source: TriggerEventSource,
+    services: TriggerServices,
 ) {
     loop {
         if let Err(error) = run(
             pool.clone(),
             kafka_brokers.clone(),
             internal_api_key.clone(),
+            document_storage_service_auth_key.clone(),
             source,
+            services.clone(),
         )
         .await
         {
@@ -90,10 +109,23 @@ async fn run(
     pool: PgPool,
     kafka_brokers: String,
     internal_api_key: String,
+    document_storage_service_auth_key: String,
     source: TriggerEventSource,
+    services: TriggerServices,
 ) -> anyhow::Result<()> {
+    let TriggerServices {
+        recorder,
+        admission,
+        messages,
+    } = services;
     let lexical = LexicalClient::new(internal_api_key, LexicalServiceUrl::new()?.to_string());
-    let recorder = ai_usage::pg_recorder(pool.clone());
+    let task_context = DssTaskAssignmentContext::new(
+        DocumentStorageServiceClient::new(
+            document_storage_service_auth_key,
+            DocumentStorageServiceUrl::new()?.to_string(),
+        ),
+        lexical.clone(),
+    );
     let images = VisionImageCaptioner::new(
         static_file::outbound::CdnStaticFileRepo::new(StaticFileServiceUrl::new()?.to_string()),
         recorder.clone(),
@@ -121,7 +153,8 @@ async fn run(
                 entity_access::outbound::PgAccessRepository::new(pool.clone()),
             ),
         ),
-    );
+    )
+    .with_admission(admission);
     let channel_types = ChannelRepoTypeLookup::new(PgChannelsRepo::new(pool));
     let publisher = MacroEventBrokerService::new(
         KafkaEventPublisher::new(&kafka_brokers)?,
@@ -131,10 +164,26 @@ async fn run(
     let consumer = KafkaConsumerAdapter::<AgentTriggerConsumerGroup, ()>::new(consumer);
     match source {
         TriggerEventSource::Messages => {
-            consume::<MessageTriggerEvents>(consumer, &trigger, &publisher, &channel_types).await
+            consume::<MessageTriggerEvents>(
+                consumer,
+                &trigger,
+                &publisher,
+                &channel_types,
+                messages.as_ref(),
+                &task_context,
+            )
+            .await
         }
         TriggerEventSource::Channels => {
-            consume::<ChannelTriggerEvents>(consumer, &trigger, &publisher, &channel_types).await
+            consume::<ChannelTriggerEvents>(
+                consumer,
+                &trigger,
+                &publisher,
+                &channel_types,
+                messages.as_ref(),
+                &task_context,
+            )
+            .await
         }
     }
 }
@@ -145,6 +194,8 @@ async fn consume<Events: TriggerEvents>(
     trigger: &Trigger,
     publisher: &Publisher,
     channel_types: &ChannelTypes,
+    messages: &dyn MessageServiceApi,
+    task_context: &DssTaskAssignmentContext,
 ) -> anyhow::Result<()> {
     let consumer = consumer
         .subscribe::<Events>()
@@ -190,6 +241,10 @@ async fn consume<Events: TriggerEvents>(
 
             if let Some(posted) = &decoded.posted {
                 process_message_event(trigger, publisher, channel_types, posted).await?;
+            }
+            if let Some(assignment) = &decoded.assignment {
+                process_task_assignment(trigger, publisher, messages, task_context, assignment)
+                    .await?;
             }
             commit_message(&consumer, kafka_message)?;
             Ok(())

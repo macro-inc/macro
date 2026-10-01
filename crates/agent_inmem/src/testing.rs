@@ -1,9 +1,112 @@
 //! Test doubles shared by this crate's tests.
 
 use agent::{AgentError, StreamPart};
+use ai_billing::domain::{AdmissionFuture, AiAdmissionError, AiAdmissionService};
+use ai_usage::AiFeature;
+use macro_user_id::user_id::MacroUserIdStr;
+use std::sync::Mutex;
 use tokio::sync::mpsc;
 
 use crate::domain::engine::{AgentIdentity, TurnEngine, TurnRequest};
+
+/// Mutable admission result, recording the trusted identity and feature.
+pub(crate) struct TestAdmission {
+    pub(crate) result: Mutex<Result<(), AiAdmissionError>>,
+    pub(crate) calls: Mutex<Vec<(String, AiFeature)>>,
+}
+
+impl TestAdmission {
+    pub(crate) fn new(result: Result<(), AiAdmissionError>) -> Self {
+        Self {
+            result: Mutex::new(result),
+            calls: Mutex::new(Vec::new()),
+        }
+    }
+}
+
+impl AiAdmissionService for TestAdmission {
+    fn admit<'a>(
+        &'a self,
+        user: &'a MacroUserIdStr<'_>,
+        feature: AiFeature,
+    ) -> AdmissionFuture<'a> {
+        self.calls.lock().unwrap().push((user.to_string(), feature));
+        let result = *self.result.lock().unwrap();
+        Box::pin(async move { result })
+    }
+}
+
+/// Real disabled policy around unavailable billing: no admission path may touch it.
+pub(crate) fn disabled_admission() -> std::sync::Arc<dyn AiAdmissionService> {
+    std::sync::Arc::new(ai_billing::domain::BillingAdmissionService::new(
+        std::sync::Arc::new(UnavailableBilling),
+        ai_usage::AiUsageEnforcement::Disabled,
+    ))
+}
+
+struct UnavailableBilling;
+
+impl ai_billing::domain::BillingService for UnavailableBilling {
+    async fn check_allowance(
+        &self,
+        _: &MacroUserIdStr<'_>,
+    ) -> ai_billing::domain::Result<ai_billing::domain::AllowanceDecision> {
+        panic!("disabled policy must not contact unavailable billing")
+    }
+
+    async fn snapshot(
+        &self,
+        _: &MacroUserIdStr<'_>,
+    ) -> ai_billing::domain::Result<ai_billing::domain::UsageSnapshot> {
+        panic!("admission must not fetch snapshots")
+    }
+
+    async fn settle(&self, _: &MacroUserIdStr<'_>) -> ai_billing::domain::Result<()> {
+        panic!("admission must not settle")
+    }
+
+    async fn update_overage(
+        &self,
+        _: &MacroUserIdStr<'_>,
+        _: bool,
+        _: i64,
+    ) -> ai_billing::domain::Result<ai_billing::domain::UsageSnapshot> {
+        panic!("admission must not change settings")
+    }
+
+    async fn create_credit_checkout(
+        &self,
+        _: &MacroUserIdStr<'_>,
+        _: i64,
+        _: String,
+        _: String,
+    ) -> ai_billing::domain::Result<String> {
+        panic!("admission must not purchase credits")
+    }
+
+    async fn apply_credit_purchase(
+        &self,
+        _: &MacroUserIdStr<'_>,
+        _: i64,
+        _: &str,
+    ) -> ai_billing::domain::Result<()> {
+        panic!("admission must not apply credits")
+    }
+
+    async fn sync_period(
+        &self,
+        _: &MacroUserIdStr<'_>,
+        _: sqlx::types::chrono::DateTime<sqlx::types::chrono::Utc>,
+        _: sqlx::types::chrono::DateTime<sqlx::types::chrono::Utc>,
+        _: Option<ai_billing::domain::period::SubscriptionPeriod>,
+    ) -> ai_billing::domain::Result<()> {
+        panic!("admission must not sync periods")
+    }
+
+    async fn mark_overage_invoice(&self, _: &str, _: bool) -> ai_billing::domain::Result<()> {
+        panic!("admission must not handle invoices")
+    }
+}
 
 /// Models advertised by shared test engines.
 pub(crate) const TEST_MODELS: &[&str] = &["anthropic/claude-sonnet-5", "other-model"];

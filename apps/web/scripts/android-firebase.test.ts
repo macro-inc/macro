@@ -1,10 +1,22 @@
-import { spawnSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
-import { validateAndroidFirebase } from './android-firebase';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  fetchAndroidFirebase,
+  prepareAndroidFirebase,
+  validateAndroidFirebase,
+} from './android-firebase';
+
+vi.mock('node:child_process', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('node:child_process')>()),
+  execFileSync: vi.fn(),
+}));
+
+afterEach(() => vi.mocked(execFileSync).mockReset());
 
 const config = (project: string, packageName = 'com.macro.app.prod') => ({
   project_info: { project_id: project, project_number: '123456789' },
@@ -38,6 +50,18 @@ describe('Android Firebase environment selection', () => {
     ).toThrow('must use macro-app-dev-12ae0');
   });
 
+  it('allows a fork project only with an explicit override', () => {
+    const fork = config('my-fork');
+    expect(() => validateAndroidFirebase(fork, 'build')).toThrow();
+    expect(() => validateAndroidFirebase(fork, 'build', true)).not.toThrow();
+    expect(() =>
+      validateAndroidFirebase(config('macro-app-dev-12ae0'), 'build', true)
+    ).toThrow('must use macro-app-955f1');
+    expect(() =>
+      validateAndroidFirebase(config('my-fork', 'wrong.package'), 'build', true)
+    ).toThrow('must contain com.macro.app.prod');
+  });
+
   it.each([undefined, ''])(
     'rejects missing or empty Firebase fields (%s)',
     (value) => {
@@ -57,7 +81,10 @@ describe('Android Firebase environment selection', () => {
             },
           ],
         },
-        { ...valid, client: [{ ...client, api_key: [{ current_key: value }] }] },
+        {
+          ...valid,
+          client: [{ ...client, api_key: [{ current_key: value }] }],
+        },
         { ...valid, client: [{ ...client, api_key: [] }] },
         { ...valid, client: [{ ...client, api_key: undefined }] },
       ]) {
@@ -98,5 +125,92 @@ describe('Android Firebase environment selection', () => {
     expect(() => validateAndroidFirebase(null, 'dev')).toThrow(
       'Invalid Android Firebase configuration'
     );
+  });
+});
+
+describe('Pinned Android Firebase download', () => {
+  const contents = JSON.stringify(config('macro-app-955f1'));
+  const pin = {
+    project: 'android-release',
+    config: 'prd',
+    secret: 'GOOGLE_SERVICES_JSON_V1',
+    sha256: createHash('sha256').update(contents).digest('hex'),
+  };
+
+  it('fetches only the pinned key and verifies it, ignoring CLI whitespace', () => {
+    vi.mocked(execFileSync).mockReturnValue(`${contents}\n`);
+    expect(fetchAndroidFirebase(pin)).toBe(contents);
+    expect(execFileSync).toHaveBeenCalledWith(
+      'doppler',
+      [
+        'secrets',
+        'get',
+        pin.secret,
+        '--project',
+        pin.project,
+        '--config',
+        pin.config,
+        '--plain',
+        '--raw',
+        '--no-check-version',
+      ],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }
+    );
+  });
+
+  it('rejects a changed remote value without printing its contents', () => {
+    vi.mocked(execFileSync).mockReturnValue('private-config-marker');
+    expect(() => fetchAndroidFirebase(pin)).toThrow('checksum mismatch');
+    expect(() => fetchAndroidFirebase(pin)).not.toThrow(
+      'private-config-marker'
+    );
+  });
+
+  it('reports authentication or CLI failures without exposing subprocess output', () => {
+    vi.mocked(execFileSync).mockImplementation(() => {
+      throw new Error('private-config-marker');
+    });
+    expect(() => fetchAndroidFirebase(pin)).toThrow('Install the Doppler CLI');
+    expect(() => fetchAndroidFirebase(pin)).not.toThrow(
+      'private-config-marker'
+    );
+  });
+
+  it('never falls back to an existing destination when fetching fails', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'android-firebase-'));
+    const destination = join(root, 'google-services.json');
+    try {
+      await writeFile(destination, contents);
+      vi.mocked(execFileSync).mockImplementation(() => {
+        throw new Error('offline');
+      });
+      await expect(
+        prepareAndroidFirebase('build', '--doppler', destination)
+      ).rejects.toThrow('Unable to fetch');
+      expect(await readFile(destination, 'utf8')).toBe(contents);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps the destination intact on invalid JSON and supports offline overrides', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'android-firebase-'));
+    const source = join(root, 'source.json');
+    const destination = join(root, 'google-services.json');
+    try {
+      await writeFile(destination, contents);
+      await writeFile(source, 'invalid-private-config-marker');
+      await expect(
+        prepareAndroidFirebase('build', source, destination)
+      ).rejects.toThrow('Invalid Android Firebase configuration JSON');
+      expect(await readFile(destination, 'utf8')).toBe(contents);
+      const fork = JSON.stringify(config('my-fork'));
+      await writeFile(source, fork);
+      await prepareAndroidFirebase('build', source, destination);
+      expect(await readFile(destination, 'utf8')).toBe(fork);
+      expect(execFileSync).not.toHaveBeenCalled();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });

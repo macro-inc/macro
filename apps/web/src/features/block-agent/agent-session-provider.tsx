@@ -36,9 +36,8 @@ export function AgentSessionProvider(
     onSessionId?: (sessionId: string) => void;
   }
 ) {
-  const { sessionId, pending, failed, error, pendingPrompt } = resolveSessionId(
-    () => props.blockId
-  );
+  const { sessionId, pending, failed, error, pendingPrompt, initialInput } =
+    resolveSessionId(() => props.blockId);
 
   createEffect(() => {
     const id = sessionId();
@@ -135,6 +134,7 @@ export function AgentSessionProvider(
           displayName: idToDisplayName,
           sessionId,
           pending,
+          initialInput: initialInput(),
           startupError: error,
           session: live.session,
           bot: live.bot,

@@ -8,6 +8,7 @@
   ],
   "permissions": [
     "android-auth:allow-authenticate",
+    "android-mobile:default",
     "android-push:default"
   ]
 }

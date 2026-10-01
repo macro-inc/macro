@@ -173,6 +173,26 @@ fn frontend_schemas_distinguish_user_tool_response_types() {
     );
 }
 
+/// The configure-agent system skill walks an agent through `ListAgents` and
+/// `ConfigureAgent`; a host that reads the skill must be able to follow it.
+#[test]
+fn every_host_exposes_agent_configuration() {
+    for host in [
+        AiHost::Chat,
+        AiHost::AgentSession,
+        AiHost::ChannelBot,
+        AiHost::Mcp,
+    ] {
+        let tools = tools_for(host);
+        for name in ["ListAgents", "ConfigureAgent", "ConfigureBot"] {
+            assert!(
+                tools.toolset.tools.contains_key(name),
+                "{host:?} missing {name}"
+            );
+        }
+    }
+}
+
 #[test]
 fn every_host_exposes_skill_discovery_and_reading() {
     for host in [

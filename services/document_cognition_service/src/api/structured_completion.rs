@@ -3,7 +3,7 @@ use crate::model::stream::ToolSet;
 use agent::structured_output::DynamicSchema;
 use agent::types::{ChatMessage, ChatMessageContent, Role};
 use agent::{AgentLoop, StreamAccumulator};
-use ai_billing::BillingService;
+use ai_billing::inbound::admission::admission_status;
 use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
@@ -36,7 +36,7 @@ pub struct StructuredCompletionError {
     pub error: String,
     #[serde(skip)]
     pub status: StatusCode,
-    /// Stable machine-readable code for payment-required errors.
+    /// Stable machine-readable code for admission errors (402 or 503).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub code: Option<String>,
 }
@@ -61,8 +61,9 @@ impl IntoResponse for StructuredCompletionError {
         (status = 200, description = "Structured completion result", body = StructuredCompletionResponse),
         (status = 400, description = "Bad request", body = StructuredCompletionError),
         (status = 401, description = "Unauthorized"),
-        (status = 402, description = "Payment required"),
+        (status = 402, description = "Payment required", body = StructuredCompletionError),
         (status = 500, description = "Internal error", body = StructuredCompletionError),
+        (status = 503, description = "AI usage validation unavailable — retry later", body = StructuredCompletionError),
     )
 )]
 #[tracing::instrument(skip(state, model_access, user, request), fields(user_id = %user.authorization.user.macro_user_id), err)]
@@ -77,23 +78,15 @@ pub async fn structured_completion(
 
     let user_id = user.authorization.user.macro_user_id.clone();
 
-    // Paid users draw on a monthly AI allowance (then credits, then overage).
-    // A gate failure is logged and lets the request through.
-    if model_access.professional() {
-        match ctx.ai_billing.check_allowance(&user_id).await {
-            Ok(ai_billing::AllowanceDecision::Allow) => {}
-            Ok(ai_billing::AllowanceDecision::Deny(reason)) => {
-                return Err(StructuredCompletionError {
-                    error: reason.message().to_string(),
-                    status: StatusCode::PAYMENT_REQUIRED,
-                    code: Some(reason.code().to_string()),
-                });
-            }
-            Err(e) => {
-                tracing::error!(error = ?e, user_id = %user_id, "ai billing gate failed; allowing request");
-            }
-        }
-    }
+    // One admission covers both the agent and final formatting phases.
+    ctx.ai_admission
+        .admit(&user_id, ai_usage::AiFeature::DynamicCompletionsApi)
+        .await
+        .map_err(|error| StructuredCompletionError {
+            error: error.to_string(),
+            status: admission_status(error),
+            code: Some(error.code().to_string()),
+        })?;
 
     let tools_prompt: &(dyn std::fmt::Display + Sync) = match request.toolset {
         ToolSet::All => &ctx.all_tools_prompt,
@@ -198,3 +191,6 @@ pub async fn structured_completion(
 
     Ok(Json(StructuredCompletionResponse { result }))
 }
+
+#[cfg(test)]
+mod test;

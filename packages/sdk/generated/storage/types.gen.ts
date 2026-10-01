@@ -261,6 +261,12 @@ export type AgentSessionLifecycleEvent = {
      */
     metadata: TurnEndedMetadata;
 } | {
+    event_type: 'agent_session.command_rejected';
+    /**
+     * An accepted command was refused before runtime execution.
+     */
+    metadata: CommandRejectedMetadata;
+} | {
     event_type: 'agent_session.settled';
     /**
      * A turn ended with nothing queued behind it.
@@ -3176,6 +3182,47 @@ export type CollabSurfaceTokenResponse = {
     token: string;
 };
 
+/**
+ * Sanitized public details of a command refused before runtime execution.
+ */
+export type CommandFailure = {
+    /**
+     * Stable public denial or unavailability code.
+     */
+    code: string;
+    /**
+     * Public explanation, never an internal error report.
+     */
+    message: string;
+    /**
+     * Whether retrying later may succeed without a policy change.
+     */
+    retryable: boolean;
+};
+
+/**
+ * An accepted command was refused before it could start a runtime turn.
+ */
+export type CommandRejectedMetadata = {
+    /**
+     * The command that will not execute.
+     */
+    action_id: AgentActionId;
+    actor?: null | MacroUserIdStr;
+    /**
+     * The command's thread announcement, when one was created.
+     */
+    announcement_message_id?: string | null;
+    /**
+     * Safe details for clients and downstream consumers.
+     */
+    failure: CommandFailure;
+    /**
+     * The session.
+     */
+    identity: SessionIdentity;
+};
+
 export type Comment = {
     commentId: number;
     createdAt?: string | null;
@@ -3751,6 +3798,10 @@ export type CreateMarkdownDocumentResponse = {
  * Inputs for creating a meeting without starting its RTC room.
  */
 export type CreateMeetingRequest = {
+    /**
+     * Optional unused room reserved by this actor on the setup screen.
+     */
+    preparationId?: string | null;
     /**
      * Optional scheduled end.
      */
@@ -5439,6 +5490,89 @@ export type EmailFilters = {
 };
 
 /**
+ * Public status shown on email and in the Reminders editor.
+ */
+export type EmailFollowup = {
+    /**
+     * Condition, defaulting to no reply for new follow-ups.
+     */
+    condition: EmailReminderCondition;
+    /**
+     * Canonical owned/delegated inbox.
+     */
+    linkId: string;
+    /**
+     * Confirmed schedule.
+     */
+    remindAt: string;
+    /**
+     * Its ordinary reminder, used by the existing alert/management surfaces.
+     */
+    reminderId: string;
+    /**
+     * Last accepted operation; edits/removal compare this to prevent stale undo.
+     */
+    revision: string;
+    /**
+     * Durable lifecycle progress.
+     */
+    state: FollowupState;
+    /**
+     * Conversation identity.
+     */
+    threadId: string;
+};
+
+/**
+ * Idempotent email command. Reusing an operation ID with different data fails.
+ */
+export type EmailFollowupCommand = {
+    /**
+     * Reply condition.
+     */
+    condition: EmailReminderCondition;
+    /**
+     * None for creation, the current revision for edits.
+     */
+    expectedRevision?: string | null;
+    /**
+     * Unique request identity retained across network retries.
+     */
+    operationId: string;
+    /**
+     * One future instant; conditional recurrence is deliberately absent.
+     */
+    remindAt: string;
+    type: 'set';
+} | {
+    /**
+     * Reject removal if a newer edit has replaced this operation.
+     */
+    expectedRevision: string;
+    /**
+     * Unique request identity.
+     */
+    operationId: string;
+    type: 'remove';
+    /**
+     * Undo restores original visibility; ordinary Remove returns to inbox.
+     */
+    undo?: boolean;
+};
+
+/**
+ * Lookup response, including an email with no follow-up yet.
+ */
+export type EmailFollowupResponse = {
+    followup?: null | EmailFollowup;
+};
+
+/**
+ * When an email follow-up should return the conversation.
+ */
+export type EmailReminderCondition = 'if_no_reply' | 'regardless';
+
+/**
  * Empty response is required due to custom fetch forcing `response.json()`
  */
 export type EmptyResponse = {
@@ -5849,6 +5983,11 @@ export type FolderItem = {
      */
     sha: string;
 };
+
+/**
+ * Durable progress of an email operation.
+ */
+export type FollowupState = 'archiving' | 'pending' | 'returning' | 'returned' | 'cancelled' | 'removed';
 
 /**
  * A persisted mapping to an entity owned by an external system.
@@ -7029,6 +7168,44 @@ export type MeetingInvitePermissions = {
      * True for the owner of an uncancelled standalone meeting.
      */
     canInvite: boolean;
+};
+
+/**
+ * Minimal waiting-room display data, without account identities or call content.
+ */
+export type MeetingParticipant = {
+    /**
+     * Profile image, when available for a Macro member.
+     */
+    avatarUrl?: string | null;
+    /**
+     * Name displayed in the waiting room.
+     */
+    displayName: string;
+};
+
+/**
+ * People currently connected to a meeting's room.
+ */
+export type MeetingParticipants = {
+    /**
+     * Human attendees only; transcription agents are excluded.
+     */
+    participants: Array<MeetingParticipant>;
+};
+
+/**
+ * An empty room reservation, not a started call or an invitation.
+ */
+export type MeetingPreparation = {
+    /**
+     * After this deadline Start falls back to ordinary room creation.
+     */
+    expiresAt: string;
+    /**
+     * Also the reserved RTC room's UUID and prospective call ID.
+     */
+    id: string;
 };
 
 /**
@@ -11831,6 +12008,28 @@ export type MeetingLeaveResponses = {
 
 export type MeetingLeaveResponse = MeetingLeaveResponses[keyof MeetingLeaveResponses];
 
+export type MeetingGuestParticipantsData = {
+    body?: never;
+    path: {
+        token: string;
+    };
+    query?: never;
+    url: '/call/join/{token}/participants';
+};
+
+export type MeetingGuestParticipantsErrors = {
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingGuestParticipantsError = MeetingGuestParticipantsErrors[keyof MeetingGuestParticipantsErrors];
+
+export type MeetingGuestParticipantsResponses = {
+    200: MeetingParticipants;
+};
+
+export type MeetingGuestParticipantsResponse = MeetingGuestParticipantsResponses[keyof MeetingGuestParticipantsResponses];
+
 export type MeetingListData = {
     body?: never;
     path?: never;
@@ -11985,6 +12184,67 @@ export type MeetingJoinResponses = {
 };
 
 export type MeetingJoinResponse = MeetingJoinResponses[keyof MeetingJoinResponses];
+
+export type MeetingParticipantsData = {
+    body?: never;
+    path: {
+        token: string;
+    };
+    query?: never;
+    url: '/call/meetings/join/{token}/participants';
+};
+
+export type MeetingParticipantsErrors = {
+    404: ErrorResponse;
+};
+
+export type MeetingParticipantsError = MeetingParticipantsErrors[keyof MeetingParticipantsErrors];
+
+export type MeetingParticipantsResponses = {
+    200: MeetingParticipants;
+};
+
+export type MeetingParticipantsResponse = MeetingParticipantsResponses[keyof MeetingParticipantsResponses];
+
+export type MeetingPrepareData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/call/meetings/prepare';
+};
+
+export type MeetingPrepareErrors = {
+    401: ErrorResponse;
+};
+
+export type MeetingPrepareError = MeetingPrepareErrors[keyof MeetingPrepareErrors];
+
+export type MeetingPrepareResponses = {
+    200: MeetingPreparation;
+};
+
+export type MeetingPrepareResponse = MeetingPrepareResponses[keyof MeetingPrepareResponses];
+
+export type MeetingCancelPreparationData = {
+    body?: never;
+    path: {
+        preparation_id: string;
+    };
+    query?: never;
+    url: '/call/meetings/prepare/{preparation_id}';
+};
+
+export type MeetingCancelPreparationErrors = {
+    401: ErrorResponse;
+};
+
+export type MeetingCancelPreparationError = MeetingCancelPreparationErrors[keyof MeetingCancelPreparationErrors];
+
+export type MeetingCancelPreparationResponses = {
+    204: void;
+};
+
+export type MeetingCancelPreparationResponse = MeetingCancelPreparationResponses[keyof MeetingCancelPreparationResponses];
 
 export type MeetingCancelData = {
     body?: never;
@@ -16976,6 +17236,51 @@ export type CreateReminderResponses = {
 };
 
 export type CreateReminderResponse = CreateReminderResponses[keyof CreateReminderResponses];
+
+export type GetEmailFollowupData = {
+    body?: never;
+    path: {
+        thread_id: string;
+    };
+    query?: never;
+    url: '/reminders/email/{thread_id}';
+};
+
+export type GetEmailFollowupErrors = {
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetEmailFollowupError = GetEmailFollowupErrors[keyof GetEmailFollowupErrors];
+
+export type GetEmailFollowupResponses = {
+    200: EmailFollowupResponse;
+};
+
+export type GetEmailFollowupResponse = GetEmailFollowupResponses[keyof GetEmailFollowupResponses];
+
+export type SetEmailFollowupData = {
+    body: EmailFollowupCommand;
+    path: {
+        thread_id: string;
+    };
+    query?: never;
+    url: '/reminders/email/{thread_id}';
+};
+
+export type SetEmailFollowupErrors = {
+    400: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SetEmailFollowupError = SetEmailFollowupErrors[keyof SetEmailFollowupErrors];
+
+export type SetEmailFollowupResponses = {
+    200: EmailFollowup;
+};
+
+export type SetEmailFollowupResponse = SetEmailFollowupResponses[keyof SetEmailFollowupResponses];
 
 export type DeleteReminderData = {
     body?: never;

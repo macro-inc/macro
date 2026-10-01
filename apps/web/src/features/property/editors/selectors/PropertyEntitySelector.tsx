@@ -1,4 +1,5 @@
 import { UserIcon } from '@core/component/UserIcon';
+import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { useEmail, useUserId } from '@core/context/user';
 import { emailToId, useAugmentUserWithDmActivity } from '@core/user';
 import { createFreshSearch } from '@core/util/freshSort';
@@ -221,9 +222,15 @@ export function PropertyEntitySelector(props: EntityInputProps) {
 
     // Convert quickAccess items to CombinedEntity
     const items = quickAccessItems();
-    const converted: CombinedEntity[] = [];
+    const additionalUsers =
+      specificEntityType === 'USER'
+        ? (props.config.additionalUsers?.() ?? [])
+        : [];
+    const converted: CombinedEntity[] = additionalUsers.map(userToEntity);
+    const additionalIds = new Set(additionalUsers.map((user) => user.id));
 
     for (const item of items) {
+      if (additionalIds.has(item.id)) continue;
       // Augment users with DM activity
       if (item.kind === 'user') {
         const augmentedUser = augmentUserWithDmActivity(item.data);
@@ -562,6 +569,11 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                                   size="sm"
                                   isDeleted={false}
                                   suppressClick={true}
+                                  photoUrl={
+                                    entity.kind === 'user'
+                                      ? entity.data.photoUrl
+                                      : undefined
+                                  }
                                 />
                               }
                             >
@@ -594,6 +606,11 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                               />
                             </Show>
                           </span>
+                          <Show when={isBotPrincipalId(entity.id)}>
+                            <span class="shrink-0 text-xs text-ink-muted">
+                              Agent
+                            </span>
+                          </Show>
                         </div>
                         <Show
                           when={!props.config.isMultiSelect && isSelected()}

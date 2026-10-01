@@ -115,6 +115,12 @@ vi.mock('@queries/soup/cache', () => ({
     rollback: vi.fn(),
   })),
 }));
+const hideGraphqlSoupEntitiesAsDone = vi.hoisted(() =>
+  vi.fn(() => ({ release: vi.fn() }))
+);
+vi.mock('@queries/soup/graphql/optimistic-done', () => ({
+  hideGraphqlSoupEntitiesAsDone,
+}));
 vi.mock('@service-email/client', () => ({
   emailClient: { flagArchived: operationMocks.flagArchived },
 }));
@@ -143,6 +149,7 @@ import { type ChannelEntityTarget, type EntityData, queryKeys } from '@entity';
 import type { NotificationSource, UnifiedNotification } from '@notifications';
 import { hydrateChannelNotificationSelection } from '@queries/channel/notification-selection';
 import {
+  applyEntitiesDoneOptimistic,
   type CalendarPreviewSelection,
   type ChannelPreviewSelection,
   channelIdForPreviewNavigation,
@@ -206,6 +213,54 @@ describe('reminder navigation', () => {
       );
     }
   );
+
+  it('opens an attached task in its requested Drive route rather than reusing another document', async () => {
+    const openWithSplit = vi.fn(() => ({ status: 'navigating' as const }));
+    setGlobalSplitManager({
+      activeSplit: () => undefined,
+      openWithSplit,
+    } as unknown as SplitManager);
+    await openEntityInSplitFromUnifiedList(
+      {
+        ...reminder,
+        referencedEntity: {
+          id: 'task-b',
+          type: 'document',
+          fileType: 'md',
+          subType: 'task',
+        },
+      } as EntityData,
+      {}
+    );
+    expect(openWithSplit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'component',
+        id: 'documents',
+        entryMetadata: expect.objectContaining({
+          route: expect.objectContaining({
+            matches: expect.arrayContaining([
+              expect.objectContaining({
+                params: { documentId: 'task-b', documentType: 'task' },
+              }),
+            ]),
+          }),
+        }),
+      }),
+      expect.objectContaining({ allowDuplicate: true })
+    );
+  });
+
+  it('opens an attached email directly in a new tab', () => {
+    openEntityInNewTab({
+      entity: {
+        ...reminder,
+        referencedEntity: { id: 'email-1', type: 'email' },
+      } as EntityData,
+    });
+    expect(operationMocks.openExternalUrl).toHaveBeenCalledWith(
+      expect.stringMatching(/\/app\/email\/email-1$/)
+    );
+  });
 
   it('uses the same reminder component URL for a new browser tab', () => {
     openEntityInNewTab({ entity: reminder });
@@ -690,6 +745,31 @@ describe('mark-done orchestration', () => {
       entities: [{ type: 'document', id: 'document-1' }],
       operation: 'MARK_DONE',
     });
+  });
+});
+
+describe('mark-done optimism', () => {
+  it('hides GraphQL rows until a rollback or undo releases them', () => {
+    const context = applyEntitiesDoneOptimistic({
+      entityIds: ['document-1'],
+      emailIds: [],
+      notificationIds: ['notification-1'],
+    });
+    expect(hideGraphqlSoupEntitiesAsDone).toHaveBeenCalledWith({
+      entityIds: ['document-1'],
+      notificationIds: ['notification-1'],
+    });
+    const applied = hideGraphqlSoupEntitiesAsDone.mock.results[0]?.value;
+
+    context.rollback();
+    expect(applied?.release).toHaveBeenCalledOnce();
+
+    context.reapply();
+    const reapplied = hideGraphqlSoupEntitiesAsDone.mock.results[1]?.value;
+    expect(reapplied).toBeDefined();
+
+    context.applyUndone();
+    expect(reapplied?.release).toHaveBeenCalledOnce();
   });
 });
 
@@ -1625,6 +1705,63 @@ const documentRow = (notifications: UnifiedNotification[]) =>
   }) as unknown as EntityData;
 
 describe('getDocumentCommentTarget', () => {
+  it('opens the entity without replaying an older comment after own activity', async () => {
+    const notification = commentNotification('old', 'comment-old', {
+      created_at: '2026-09-24T20:39:45Z',
+    });
+    const entity = {
+      ...documentRow([notification]),
+      notificationDisplayCutoff: '2026-10-01T17:02:49Z',
+    };
+    expect(getDocumentCommentTarget(entity)).toBeUndefined();
+    expect(previewBlockTarget(entity as never).params).toBeUndefined();
+    expect(homePreviewNavigation(entity as never).search.drive).toBeUndefined();
+
+    const openWithSplit = vi.fn(() => ({ status: 'unavailable' }));
+    setGlobalSplitManager({
+      activeSplit: vi.fn(),
+      getOrchestrator: vi.fn(() => ({})),
+      getSplitByContent: vi.fn(),
+      openWithSplit,
+    } as unknown as SplitManager);
+    await openEntityInSplitFromUnifiedList(entity, {});
+    expect(openWithSplit).toHaveBeenCalledWith(
+      {
+        type: 'component',
+        id: 'documents',
+        entryMetadata: {
+          route: {
+            matches: [
+              { id: 'drive', params: {} },
+              {
+                id: 'drive-document',
+                params: { documentId: 'doc-1', documentType: 'md' },
+              },
+            ],
+          },
+        },
+      },
+      expect.objectContaining({ activate: true, search: undefined })
+    );
+    expect(notification.state).toBe('unseen');
+  });
+
+  it('does not borrow an older comment target for a newer unsupported event', () => {
+    const entity = documentRow([
+      commentNotification('old', 'comment-old', {
+        created_at: '2026-09-24T20:39:45Z',
+      }),
+      commentNotification('assigned', '', {
+        created_at: '2026-10-01T17:02:49Z',
+        notification_metadata: {
+          tag: 'task_assigned',
+          content: { taskId: 'doc-1', assignedBy: 'alice', taskName: 'Plan' },
+        },
+      }),
+    ]);
+    expect(getDocumentCommentTarget(entity)).toBeUndefined();
+  });
+
   it('targets the newest comment notification that is not done, read or not', () => {
     expect(
       getDocumentCommentTarget(

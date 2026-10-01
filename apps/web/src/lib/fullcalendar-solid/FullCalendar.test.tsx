@@ -121,6 +121,7 @@ describe('FullCalendar Solid connector', () => {
         .map((event) => event.title)
     ).toEqual(['First']);
 
+    const resetOptions = vi.spyOn(getCalendar(), 'resetOptions');
     setEvents([{ id: 'first', title: 'Updated', start: '2025-01-16' }]);
 
     await waitFor(() => {
@@ -130,6 +131,61 @@ describe('FullCalendar Solid connector', () => {
           .map((event) => event.title)
       ).toEqual(['Updated']);
     });
+    expect(resetOptions).toHaveBeenCalledOnce();
+    expect(resetOptions.mock.calls[0][1]).toEqual(['events']);
+  });
+
+  it('restores defaults when a reactive option is removed', () => {
+    const [options, setOptions] = createSignal<{ dayHeaders?: boolean }>({
+      dayHeaders: false,
+    });
+    const { container } = render(() => (
+      <FullCalendar.Root
+        {...options()}
+        plugins={[dayGridPlugin]}
+        initialView="dayGridMonth"
+        initialDate="2025-01-15"
+        headerToolbar={false}
+        handleWindowResize={false}
+      >
+        <FullCalendar.Host />
+      </FullCalendar.Root>
+    ));
+    expect(container.querySelector('.fc-col-header')).toBeNull();
+    setOptions({});
+    expect(container.querySelector('.fc-col-header')).not.toBeNull();
+  });
+
+  it('uses the latest datesSet callback without resetting unchanged options', () => {
+    const first = vi.fn();
+    const second = vi.fn();
+    const [callback, setCallback] =
+      createSignal<(info: DatesSetArg) => void>(first);
+    let calendarContext: ReturnType<typeof useFullCalendar> | undefined;
+    function Capture() {
+      calendarContext = useFullCalendar();
+      return null;
+    }
+    render(() => (
+      <FullCalendar.Root
+        plugins={[dayGridPlugin]}
+        initialView="dayGridMonth"
+        initialDate="2025-01-15"
+        headerToolbar={false}
+        handleWindowResize={false}
+        datesSet={callback()}
+      >
+        <Capture />
+        <FullCalendar.Host />
+      </FullCalendar.Root>
+    ));
+    const api = calendarContext!.api()!;
+    const resetOptions = vi.spyOn(api, 'resetOptions');
+    setCallback(() => second);
+    expect(resetOptions).not.toHaveBeenCalled();
+    api.next();
+    expect(first).toHaveBeenCalledOnce();
+    expect(second).toHaveBeenCalledOnce();
   });
 
   it('exposes date info before invoking the datesSet callback', () => {

@@ -17,6 +17,7 @@ use crate::domain::models::{
     ExecutionResult, InProgressExecution, LegacyActionConfiguration, RoutineModelId, Schedule,
     ScheduledAction, ScheduledActionUpdate, UpdateScheduledAction,
 };
+use ai_billing::inbound::admission::AiAdmissionErrorBody;
 use model::response::EmptyResponse;
 
 #[derive(OpenApi)]
@@ -38,6 +39,7 @@ use model::response::EmptyResponse;
     ),
     components(
         schemas(
+            AiAdmissionErrorBody,
             ScheduledAction,
             ScheduledActionResponse,
             ActionConfiguration,

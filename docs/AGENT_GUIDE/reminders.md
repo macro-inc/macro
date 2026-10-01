@@ -8,9 +8,13 @@ inspection.
 
 ## Create or edit a reminder
 
-The create dialog is titled **New reminder**. A standalone reminder requires the
-**Reminder description** field; an entity-attached reminder may derive its title
-from the source badge. The **When** field accepts date language such as
+**New reminder** opens **Remind me about…**, an entity picker with recent items.
+Search using **Search reminder items**, use Up/Down and Enter to select, or click
+an item. Selecting an email opens the conditional email follow-up flow below;
+selecting a task/document opens a time-first form with its title and icon.
+**Add a note** is optional; no duplicate title is required. **Change** returns to
+selection. **Write a reminder instead** opens the freeform form, where
+**Reminder description** is required. The **When** field accepts date language such as
 `tomorrow 9am`, `in 30 minutes`, weekdays, and explicit dates. The resolved
 weekday, date, time, and timezone appear in the **Scheduled:** preview before
 saving.
@@ -35,6 +39,16 @@ The primary action reads **Set reminder** for create and **Save** for edit.
 **Cancel** dismisses without saving. A description-only edit of an overdue
 reminder keeps its old schedule instead of trying to reschedule it in the past.
 
+## Open or manage an attached reminder
+
+Attached rows lead with their source icon and current title. A personal note,
+when different, appears as secondary text. Click or Enter opens the email, task,
+or other source directly, including in Home and when opening a new split/tab.
+Freeform reminders open their editor. Use **Edit reminder** in the row menu to
+change the schedule or note of an attached reminder. Completion and removal
+still act on the reminder itself, not on its source. Inaccessible sources show
+an unavailable label rather than a cached private title.
+
 ## Verify save failure without changing dev data
 
 Intercept `POST **/dss/reminders` and hold or reject the response. While held,
@@ -49,3 +63,35 @@ duplicate-safe.
 After a confirmed response, the dialog closes and the success toast includes the
 exact persisted time or recurrence. Only a confirmed create runs the invoking
 surface's follow-up action.
+
+## Email follow-ups (H)
+
+On one selected email or an open conversation, **H**, **Remind me** in the menu,
+and the bell control open the same time-first picker. The subject is already
+known; the first field is **When**, with no required title. Bare H remains text
+inside reply, compose, search and other editable fields. Escape cancels without
+moving the conversation. Saving uses one server operation to schedule and move
+it out of the inbox; successful creation advances within the invoking list.
+
+**If no reply** is the default. A genuinely new inbound message after scheduling
+cancels it; drafts, outgoing mail (including provider SENT aliases), known own
+inbox senders, replays and historical backfill do not. **Regardless** survives a
+reply. Existing H opens the pending follow-up for editing or **Remove**. Remove
+returns the conversation to its inbox; **Undo** cancels a newly scheduled
+follow-up and restores its original inbox visibility. A stale undo cannot
+remove a newer edit. Generic reminders attached to the same thread remain
+separate reminders.
+
+The bell is accented for pending and returned reminders and its accessible label
+includes the pending time. Server dispatch returns eligible conversations to
+the top of the corresponding inbox, including sent-only conversations, then
+uses the existing persistent reminder alert. Trash, deleted and inaccessible
+conversations are not returned. The server sweep runs once a minute; this is
+not exact-second delivery, and it does not promise a closed-browser OS alert.
+Pending operations and replies reconcile without an open browser.
+
+Email writes use `PUT /dss/reminders/email/{threadId}` with a retained operation
+ID. Unlike generic creation, retrying the same email request cannot duplicate
+it. For failure verification, intercept that endpoint and verify the time and
+condition remain, no client archive request is sent, and no navigation occurs
+before the server confirms the operation.

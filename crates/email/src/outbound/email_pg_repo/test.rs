@@ -46,3 +46,5 @@ async fn sync_all_signal_flags(pool: &Pool<Postgres>) -> anyhow::Result<()> {
     }
     Ok(())
 }
+
+mod followup;

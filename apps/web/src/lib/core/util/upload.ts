@@ -359,7 +359,7 @@ async function uploadToDSS(
   file: UploadFile,
   options: DssUploadFileOptions
 ): Promise<DssUploadSuccessResult> {
-  if (isNativeStagedUpload(file)) {
+  if (isNativeStagedUpload(file) && !file.sha256) {
     throw new UploadError(
       file,
       'dss',

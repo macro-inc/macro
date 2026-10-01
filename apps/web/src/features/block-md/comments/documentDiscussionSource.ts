@@ -107,6 +107,7 @@ export function createDocumentDiscussionSource(): DiscussionSource {
   return {
     threads,
     canEdit: permissions.canComment,
+    canModerate: permissions.isOwner,
     currentUserId: userId,
     targetCommentId,
     targetRevision,

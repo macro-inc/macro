@@ -54,6 +54,11 @@ export type CreateChannelMessageActionsOptions = {
   parent: Accessor<MessageParent>;
   userId: Accessor<string | undefined>;
   canWrite?: (message: MessageData) => boolean;
+  /**
+   * Delete comments the caller did not write. Document owners set this; it
+   * does not grant edit.
+   */
+  canModerate?: Accessor<boolean>;
   buildLink?: (message: MessageData) => string;
   deleteMessage: (input: DeleteMessageInput) => void;
   addReaction: (input: AddReactionInput) => void;
@@ -106,7 +111,13 @@ export function createChannelMessageActions(
     const currentUserId = options.userId();
     const writable = options.canWrite?.(message) ?? true;
     const canEdit = writable && canEditMessage(message, currentUserId);
-    const canDelete = writable && canDeleteMessage(message, currentUserId);
+    const canDelete =
+      writable &&
+      canDeleteMessage(
+        message,
+        currentUserId,
+        options.canModerate?.() ?? false
+      );
     const canReply = writable && canReplyToMessage(message);
     const isDeleted = !!message.deleted_at;
 

@@ -1,0 +1,14 @@
+{
+  "dev": {
+    "project": "android-release",
+    "config": "dev",
+    "secret": "GOOGLE_SERVICES_JSON_V1",
+    "sha256": "2462d00a44657518daad1da298f57e108811ebc2e6dea00673696a30dd8dbbae"
+  },
+  "build": {
+    "project": "android-release",
+    "config": "prd",
+    "secret": "GOOGLE_SERVICES_JSON_V1",
+    "sha256": "8d16839be88a544f205edfbf25e9561f20fd5016bcc0c0fdf3f8a313d29b780a"
+  }
+}

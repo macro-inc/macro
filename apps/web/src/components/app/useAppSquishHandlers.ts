@@ -5,6 +5,7 @@ import {
   virtualKeyboardVisible,
 } from '@core/mobile/virtualKeyboard';
 import { isEditableInput } from '@core/util/isEditableInput';
+import { isPlatform } from '@core/util/platform';
 import { isIOS } from '@solid-primitives/platform';
 import { onCleanup, onMount } from 'solid-js';
 
@@ -74,6 +75,10 @@ function createActiveElementPolling(onActiveElementLost: () => void) {
  * Functionality for responding to virtual keyboard appearance in web app and native mobile app.
  */
 export function useAppSquishHandlers() {
+  if (isPlatform('android')) {
+    // Native Android insets are owned by TauriProvider, including login routes.
+    return;
+  }
   if (isNativeMobilePlatform()) {
     let activeElementPolling: ReturnType<typeof createActiveElementPolling>;
 

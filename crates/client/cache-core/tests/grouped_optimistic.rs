@@ -304,6 +304,7 @@ fn cache_only_read_observes_move_and_rollback_restores_it() {
                     link_patches: &patches,
                     revalidations: &[],
                     created_at_ms: 0,
+                    identity_bindings: &[],
                 },
             )
             .await
@@ -388,6 +389,7 @@ fn success_reapplies_recipe_and_returns_deduplicated_revalidation() {
                     link_patches: &patches,
                     revalidations: &[],
                     created_at_ms: 0,
+                    identity_bindings: &[],
                 },
             )
             .await
@@ -468,6 +470,7 @@ fn missing_destination_is_created_with_the_updated_item() {
                     link_patches: &patches,
                     revalidations: &[],
                     created_at_ms: 0,
+                    identity_bindings: &[],
                 },
             )
             .await
@@ -546,6 +549,7 @@ fn missing_destination_rejects_the_whole_patch_set_without_enqueueing() {
                         link_patches: &patches,
                         revalidations: &[],
                         created_at_ms: 0,
+                        identity_bindings: &[],
                     },
                 )
                 .await

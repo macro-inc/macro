@@ -50,6 +50,10 @@ and [repeatable iOS smoke test](../../apps/web/tests/native/ios/README.md).
 
 ## Native Android
 
+If a signed-out page shows the bottom `Login` / `Sign Up` banner, both buttons
+must sit above Android's navigation bar. Verify that `Login` is tappable with
+three-button navigation as well as gesture navigation.
+
 The Android welcome screen also offers `Create new account` and `Log into existing
 account`. Google sign-in opens a system browser Auth Tab; completing or canceling
 returns to Macro. Cancel and retry should open a fresh attempt. Enter provider

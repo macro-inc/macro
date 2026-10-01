@@ -1,6 +1,6 @@
 import type { DateValue } from '@core/util/date';
 import type { ChannelEntity } from '@entity';
-import type { ChannelsGroup } from './types';
+import type { ChannelsGroup, ChannelsTab } from './types';
 
 export function isDirectMessage(channel: ChannelEntity) {
   return channel.channelType === 'direct_message';
@@ -48,4 +48,15 @@ export function formatDetailedTimestamp(timestamp: DateValue) {
     dateStyle: 'medium',
     timeStyle: 'short',
   });
+}
+
+/**
+ * The tab to render for a stored choice. Threads falls back to All while its
+ * flag is off or still loading, without rewriting the stored choice.
+ */
+export function activeChannelsTab(
+  tab: ChannelsTab,
+  threadsEnabled: boolean
+): ChannelsTab {
+  return tab === 'threads' && !threadsEnabled ? 'browse' : tab;
 }

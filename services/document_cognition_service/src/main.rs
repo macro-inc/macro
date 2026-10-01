@@ -474,33 +474,45 @@ async fn main() -> anyhow::Result<()> {
 
     // The AI billing gate reads allowances, credits, and overage state here;
     // collection (Stripe) lives in the authentication service, which the
-    // recorder below asks to settle once a payer runs past their allowance.
-    let ai_billing = Arc::new(ai_billing::domain::BillingServiceImpl::new(
-        ai_billing::outbound::RolesTeamsEntitlementSource::new(
-            (*user_permissions_service).clone(),
-            teams::outbound::team_repo::TeamRepositoryImpl::new(db.clone()),
-        ),
-        ai_billing::outbound::PgUsageReader::new(db.clone()),
-        ai_billing::outbound::PgBillingRepo::new(db.clone()),
-        ai_billing::outbound::NoOpPaymentGateway,
-        config.environment,
-    ));
+    // recorder below asks to settle once a payer runs past their allowance
+    // and ENABLE_AI_USAGE_BILLING is enabled. This instance never settles.
+    let ai_billing = Arc::new(
+        ai_billing::domain::BillingServiceImpl::new(
+            ai_billing::outbound::RolesTeamsEntitlementSource::new(
+                (*user_permissions_service).clone(),
+                teams::outbound::team_repo::TeamRepositoryImpl::new(db.clone()),
+            ),
+            ai_billing::outbound::PgUsageReader::new(db.clone()),
+            ai_billing::outbound::PgBillingRepo::new(db.clone()),
+            ai_billing::outbound::NoOpPaymentGateway,
+        )
+        .with_enforcement(config.enable_ai_usage_enforcement),
+    );
+    let admission: Arc<dyn ai_billing::AiAdmissionService> =
+        Arc::new(ai_billing::BillingAdmissionService::new(
+            ai_billing.clone(),
+            config.enable_ai_usage_enforcement,
+        ));
     let auth_service_client = Arc::new(authentication_service_client::AuthServiceClient::new(
         internal_api_key.clone(),
         AuthServiceUrl::new()?.to_string(),
     ));
     let recorder: Arc<dyn ai_usage::UsageRecorder> =
         Arc::new(ai_billing::outbound::SettlingUsageRecorder::new(
-            Arc::new(ai_usage::domain::service::UsageServiceImpl::new(
-                ai_usage::outbound::PgUsageRepo::new(db.clone()),
-            )),
+            Arc::new(
+                ai_usage::domain::service::UsageServiceImpl::new(
+                    ai_usage::outbound::PgUsageRepo::new(db.clone()),
+                )
+                .with_enforcement(config.enable_ai_usage_enforcement),
+            ),
             ai_billing.clone(),
             ai_billing::outbound::HttpSettlementTrigger::new(auth_service_client),
-            config.environment,
+            config.enable_ai_usage_billing,
         ));
 
-    // Keep existing analytics/legacy settlement unchanged. Per-attempt observations
-    // use a separate journal and never feed this settlement trigger.
+    // Per-attempt observations use a separate journal and never feed the
+    // legacy settlement trigger, which remains counted-usage-only and gated by
+    // ENABLE_AI_USAGE_BILLING.
     let recorder = ai_usage::with_tracking(recorder, ai_usage::pg_tracking(db.clone()));
 
     // The import pipeline: staged/imported external items, gather jobs over
@@ -621,6 +633,7 @@ async fn main() -> anyhow::Result<()> {
             Arc::new(entity_creator),
             recorder.clone(),
         )
+        .with_admission(admission.clone())
         .with_notifier(import_notify),
     );
 
@@ -635,7 +648,7 @@ async fn main() -> anyhow::Result<()> {
         entity_access_service.clone(),
         document_tool_context.service.clone(),
         chat_tool_context.service.clone(),
-        user_email_service,
+        user_email_service.clone(),
     );
 
     let initiative_tool_context = ai_tools::build_initiative_tool_context(
@@ -673,6 +686,7 @@ async fn main() -> anyhow::Result<()> {
         notification_tool_context: notification_tool_context.clone(),
         reminders_tool_context: ai_tools::build_reminders_tool_context(
             db.clone(),
+            user_email_service.clone(),
             entity_access_service.clone(),
         ),
         import_tool_context: import::inbound::toolset::ImportToolContext::wired(
@@ -685,6 +699,7 @@ async fn main() -> anyhow::Result<()> {
             ai_tools::ToolBotEventBroker::Real(macro_event_broker.clone()),
             entity_access_service.clone(),
             DocumentStorageServiceUrl::new()?.to_string(),
+            pipedream_client.clone(),
         ),
         project_tool_context,
         initiative_tool_context,
@@ -697,6 +712,7 @@ async fn main() -> anyhow::Result<()> {
         ),
         schedule_tool_context: ai_tools::NoOpScheduleContext,
         anthropic_tool_context: ai_tools::build_anthropic_tool_context(),
+        admission,
         recorder,
         usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
     };
@@ -717,9 +733,12 @@ async fn main() -> anyhow::Result<()> {
 
     // Build the AI cost service. It backs both the admin query/pricing router
     // and the usage recorder threaded through the tool service context.
-    let usage_service = Arc::new(ai_usage::domain::service::UsageServiceImpl::new(
-        ai_usage::outbound::PgUsageRepo::new(db.clone()),
-    ));
+    let usage_service = Arc::new(
+        ai_usage::domain::service::UsageServiceImpl::new(ai_usage::outbound::PgUsageRepo::new(
+            db.clone(),
+        ))
+        .with_enforcement(config.enable_ai_usage_enforcement),
+    );
 
     tracing::info!("initialized ai cost service");
 
@@ -852,6 +871,7 @@ async fn main() -> anyhow::Result<()> {
         authorization_state,
         user_permissions_service,
         non_user_owners,
+        ai_admission: tool_service_context.admission.clone(),
         ai_billing,
         internal_api_key: config.internal_api_key.clone(),
         config: Arc::new(config),

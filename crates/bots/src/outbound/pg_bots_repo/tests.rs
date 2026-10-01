@@ -3,9 +3,9 @@ use crate::domain::{
     models::{
         AgentChannelScope, AgentMcpServer, AgentMcpServers, BotChannelListCaller, BotChannelType,
         CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest, CreateChannelScopedBotRequest,
-        PatchBotRequest, UpdateAgentRequest,
+        PatchAgentRequest, PatchBotRequest, UpdateAgentRequest,
     },
-    ports::{BotError, BotService},
+    ports::{BotError, BotService, McpAppCatalog},
     service::BotServiceImpl,
 };
 use entity_access::domain::models::{
@@ -109,6 +109,15 @@ fn update_agent_req(handle: &str, channel_scope: AgentChannelScope) -> UpdateAge
 
 fn service(pool: &PgPool) -> BotServiceImpl<PgBotsRepo, NoopMacroEventBroker> {
     BotServiceImpl::new(PgBotsRepo::new(pool.clone()), NoopMacroEventBroker)
+}
+
+/// A directory that knows only the slugs it is given.
+struct KnownApps(&'static [&'static str]);
+
+impl McpAppCatalog for KnownApps {
+    async fn is_connectable_app(&self, slug: &str) -> Result<bool, BotError> {
+        Ok(self.0.contains(&slug))
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -742,6 +751,152 @@ async fn updated_agent_replaces_every_field_and_selected_channel(
         .await?
         .expect("updated agent should still be addressable by bot id");
     assert_eq!(fetched.auto_accept_permissions, Some(false));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn patched_agent_changes_only_what_the_patch_names(pool: PgPool) -> anyhow::Result<()> {
+    let channel_id = Uuid::new_v4();
+    insert_channel_member(&pool, channel_id, USER_OWNER).await?;
+    let service = service(&pool);
+    let mut create = create_agent_req("bug-fixer", AgentChannelScope::Selected);
+    create.channel_ids = vec![channel_id];
+    create.mcp = AgentMcpServers::Selected {
+        servers: vec![mcp_server("linear", "Linear")],
+    };
+    let created = service.create_agent(user_id(USER_OWNER), create).await?;
+
+    let patched = service
+        .patch_agent(
+            user_id(USER_OWNER),
+            created.bot.id,
+            PatchAgentRequest {
+                instructions: Some(
+                    "Diagnose first, then make the smallest tested fix.".to_string(),
+                ),
+                default_model: Some("cursor-large".to_string()),
+                ..PatchAgentRequest::default()
+            },
+        )
+        .await?;
+
+    assert_eq!(
+        patched.instructions,
+        "Diagnose first, then make the smallest tested fix."
+    );
+    assert_eq!(patched.default_model, "cursor-large");
+    // Everything the patch left unnamed survives, the selected channel and
+    // apps included - a patch is not a reset to defaults.
+    assert_eq!(patched.bot.name, "Bug fixer");
+    assert_eq!(patched.bot.handle, "bug-fixer");
+    assert_eq!(
+        patched.bot.description.as_deref(),
+        Some("Finds and fixes bugs")
+    );
+    assert_eq!(patched.harness, "cursor");
+    assert_eq!(patched.channel_scope, AgentChannelScope::Selected);
+    assert_eq!(patched.channel_ids, vec![channel_id]);
+    assert_eq!(
+        patched.mcp,
+        AgentMcpServers::Selected {
+            servers: vec![mcp_server("linear", "Linear")],
+        }
+    );
+    assert!(patched.is_coding);
+    assert_eq!(
+        active_channel_participant_count(&pool, channel_id, created.bot.id).await?,
+        1
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn patch_agent_refuses_an_mcp_slug_the_directory_does_not_list(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let service = service(&pool).with_mcp_apps(KnownApps(&["linear"]));
+    let created = service
+        .create_agent(
+            user_id(USER_OWNER),
+            create_agent_req("bug-fixer", AgentChannelScope::All),
+        )
+        .await?;
+
+    let error = service
+        .patch_agent(
+            user_id(USER_OWNER),
+            created.bot.id,
+            PatchAgentRequest {
+                mcp: Some(AgentMcpServers::Selected {
+                    servers: vec![mcp_server("not-a-real-app", "Not real")],
+                }),
+                ..PatchAgentRequest::default()
+            },
+        )
+        .await
+        .expect_err("an invented Pipedream slug is refused");
+    assert!(matches!(error, BotError::BadRequest(_)));
+
+    let stored = PgBotsRepo::new(pool.clone())
+        .get_agent(created.bot.id)
+        .await?
+        .expect("the agent is unchanged");
+    assert_eq!(stored.mcp, AgentMcpServers::OwnerConnections);
+
+    let patched = service
+        .patch_agent(
+            user_id(USER_OWNER),
+            created.bot.id,
+            PatchAgentRequest {
+                mcp: Some(AgentMcpServers::Selected {
+                    servers: vec![mcp_server("linear", "Linear")],
+                }),
+                ..PatchAgentRequest::default()
+            },
+        )
+        .await?;
+    assert_eq!(
+        patched.mcp,
+        AgentMcpServers::Selected {
+            servers: vec![mcp_server("linear", "Linear")],
+        }
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn patch_agent_is_refused_for_strangers_and_plain_bots(pool: PgPool) -> anyhow::Result<()> {
+    insert_user(&pool, USER_OTHER).await?;
+    let service = service(&pool);
+    let agent = service
+        .create_agent(
+            user_id(USER_OWNER),
+            create_agent_req("bug-fixer", AgentChannelScope::All),
+        )
+        .await?;
+    let plain_bot = service
+        .create_bot(user_id(USER_OWNER), create_req("alerts"))
+        .await?;
+    let patch = PatchAgentRequest {
+        instructions: Some("Be terse.".to_string()),
+        ..PatchAgentRequest::default()
+    };
+
+    let stranger = service
+        .patch_agent(user_id(USER_OTHER), agent.bot.id, patch.clone())
+        .await;
+    assert!(
+        matches!(stranger, Err(BotError::Unauthorized)),
+        "{stranger:?}"
+    );
+
+    let not_an_agent = service
+        .patch_agent(user_id(USER_OWNER), plain_bot.id, patch)
+        .await;
+    assert!(
+        matches!(not_an_agent, Err(BotError::NotFound(_))),
+        "{not_an_agent:?}"
+    );
     Ok(())
 }
 

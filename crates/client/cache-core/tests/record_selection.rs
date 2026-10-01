@@ -300,6 +300,7 @@ fn merges_optimistic_updates_with_cold_linked_bases() {
                     link_patches: &[],
                     revalidations: &[],
                     created_at_ms: 1,
+                    identity_bindings: &[],
                 },
             )
             .await
@@ -360,6 +361,7 @@ fn includes_optimistic_only_records() {
                     link_patches: &[],
                     revalidations: &[],
                     created_at_ms: 1,
+                    identity_bindings: &[],
                 },
             )
             .await

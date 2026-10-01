@@ -31,6 +31,7 @@ import {
   type LexicalEditor,
 } from 'lexical';
 import type { MenuOperations } from '../../shared/inlineMenu';
+import { registerInlineMenuTrigger } from '../../shared/registerInlineMenuTrigger';
 import { $collapseSelection, $traverseNodes, nodeByKey } from '../../utils';
 import {
   CLOSE_INLINE_SEARCH_COMMAND,
@@ -72,22 +73,15 @@ function registerHashSymbolListener(
   editor: LexicalEditor,
   props: TagsPluginProps
 ) {
-  const listener = (e: KeyboardEvent) => {
-    if (e.key === '#') {
-      if (props.menu?.isOpen()) {
-        editor.update(() => {
-          $collapseInlineSearch(props.peerIdValidator);
-        });
-        props.menu.closeMenu();
-        return;
-      }
-      editor.dispatchCommand(TYPE_HASH_SYMBOL_COMMAND, undefined);
+  return registerInlineMenuTrigger(editor, '#', () => {
+    if (props.menu?.isOpen()) {
+      editor.update(() => {
+        $collapseInlineSearch(props.peerIdValidator);
+      });
+      props.menu.closeMenu();
+      return;
     }
-  };
-
-  return editor.registerRootListener((root, prev) => {
-    if (root) root.addEventListener('keydown', listener);
-    if (prev) prev.removeEventListener('keydown', listener);
+    editor.dispatchCommand(TYPE_HASH_SYMBOL_COMMAND, undefined);
   });
 }
 

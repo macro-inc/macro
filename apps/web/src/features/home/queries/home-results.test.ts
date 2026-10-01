@@ -39,6 +39,7 @@ const staleTaskFreshComment = {
 const freshEmail = {
   id: 'email',
   type: 'email',
+  isSignal: true,
   name: 'Welcome',
   ownerId: 'macro|alice@example.com',
   updatedAt: '2026-09-02T16:00:00Z',

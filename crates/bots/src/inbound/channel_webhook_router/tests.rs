@@ -2,7 +2,7 @@ use super::*;
 use crate::domain::models::{
     Agent, AuthenticatedBot, Bot, BotChannel, BotChannelListCaller, BotKind, BotOwner,
     BotOwnerProfile, BotToken, CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest,
-    CreateBotTokenResponse, PatchBotRequest, UpdateAgentRequest,
+    CreateBotTokenResponse, PatchAgentRequest, PatchBotRequest, UpdateAgentRequest,
 };
 use axum::{
     Router,
@@ -169,6 +169,15 @@ impl BotService for TestBotService {
         _caller: MacroUserIdStr<'static>,
         _bot_id: BotId,
         _req: UpdateAgentRequest,
+    ) -> Result<Agent, BotError> {
+        unimplemented!()
+    }
+
+    async fn patch_agent(
+        &self,
+        _caller: MacroUserIdStr<'static>,
+        _bot_id: BotId,
+        _req: PatchAgentRequest,
     ) -> Result<Agent, BotError> {
         unimplemented!()
     }
@@ -500,6 +509,15 @@ impl TestChannelPoster {
 
 #[async_trait::async_trait]
 impl messages::domain::api::MessageCommands for TestChannelPoster {
+    async fn post_from_event(
+        &self,
+        _: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        _: Uuid,
+        _: messages::domain::models::PostMessage,
+    ) -> Result<messages::domain::models::Message, messages::domain::ports::MessageError> {
+        unimplemented!("channel webhooks do not post broker events")
+    }
+
     async fn post(
         &self,
         access: EntityAccessReceipt<messages::domain::service::MessageWrite>,

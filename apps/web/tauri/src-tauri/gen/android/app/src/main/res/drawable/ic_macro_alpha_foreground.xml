@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Shared by adaptive and legacy icons. Keep artwork inside the central 66dp circle. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="72dp"
+    android:height="72dp"
+    android:viewportWidth="72"
+    android:viewportHeight="72">
+    <group android:translateX="10" android:translateY="18.75" android:scaleX="0.281" android:scaleY="0.281">
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="m48.143,0 -17.297,6.7832v44.893l-13.547,-12.793 -17.299,6.7812v51.516c0,0.98 0.20089,1.9496 0.58789,2.8496 0.388,0.9 0.95402,1.7108 1.666,2.3848l21.559,20.387 17.312,-6.7812v-44.891l54.654,51.672 17.313,-6.7812v-44.891l54.672,51.674 17.299,-6.7812v-51.516c0,-0.98 -0.20089,-1.9496 -0.58789,-2.8496 -0.388,-0.9 -0.95402,-1.7118 -1.666,-2.3848l-62.682,-59.271 -17.316,6.7832v44.893z" />
+    </group>
+    <!-- Overlay the centered logo; the badge does not reserve space or shift it.
+         Fill: Macro Dark accent oklch(0.7 0.12 250deg), converted to sRGB. -->
+    <path
+        android:fillColor="#61A3E6"
+        android:strokeColor="#000000"
+        android:strokeWidth="1"
+        android:pathData="M30,43 H60 A3,3 0,0 1,63 46 V53 A3,3 0,0 1,60 56 H30 A3,3 0,0 1,27 53 V46 A3,3 0,0 1,30 43 Z" />
+    <!-- ALPHA: Arial Bold (Arial-BoldMT), shaped with CoreText and converted to outlines.
+         Uniformly scaled to 29dp wide and centered at (45, 49.5). -->
+    <path android:fillColor="#000000"
+        android:pathData="M36.554,52.517 L35.229,52.517 L34.702,51.146 L32.290,51.146 L31.792,52.517 L30.500,52.517 L32.850,46.483 L34.138,46.483 Z M34.311,50.130 L33.480,47.891 L32.665,50.130 Z M37.233,52.517 L37.233,46.533 L38.452,46.533 L38.452,51.500 L41.481,51.500 L41.481,52.517 Z M42.349,52.517 L42.349,46.483 L44.304,46.483 Q45.416,46.483 45.753,46.574 Q46.272,46.709 46.622,47.164 Q46.971,47.619 46.971,48.339 Q46.971,48.895 46.770,49.274 Q46.568,49.652 46.257,49.868 Q45.947,50.084 45.626,50.154 Q45.189,50.241 44.362,50.241 L43.568,50.241 L43.568,52.517 Z M43.568,47.504 L43.568,49.216 L44.234,49.216 Q44.955,49.216 45.198,49.121 Q45.440,49.027 45.578,48.825 Q45.716,48.623 45.716,48.356 Q45.716,48.027 45.523,47.813 Q45.329,47.598 45.033,47.545 Q44.815,47.504 44.156,47.504 Z M47.976,52.517 L47.976,46.483 L49.194,46.483 L49.194,48.858 L51.581,48.858 L51.581,46.483 L52.799,46.483 L52.799,52.517 L51.581,52.517 L51.581,49.879 L49.194,49.879 L49.194,52.517 Z M59.500,52.517 L58.175,52.517 L57.648,51.146 L55.236,51.146 L54.738,52.517 L53.446,52.517 L55.796,46.483 L57.084,46.483 Z M57.257,50.130 L56.425,47.891 L55.611,50.130 Z" />
+</vector>

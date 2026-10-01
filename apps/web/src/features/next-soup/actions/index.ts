@@ -8,6 +8,7 @@ export {
   resolveEntityActionViewContext,
   type ToEntityActionListStateOptions,
   toEntityActionListState,
+  toSingleEntityActionListState,
 } from './entity-action-context';
 export { makeAddTagAction } from './make-add-tag-action';
 export { makeBlockSenderAction } from './make-block-sender-action';

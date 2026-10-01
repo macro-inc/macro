@@ -147,17 +147,24 @@ function HomeThreadTitle(
     const entity = props.entity;
     if (entity.type !== 'channel_thread') return undefined;
     const notification = entity.notifications?.()?.[0];
-    if (
-      notification?.notification_metadata?.tag === 'channel_message_reply' &&
-      notification.sender_id
-    ) {
-      return { id: notification.sender_id };
+    if (notification?.notification_metadata?.tag === 'channel_message_reply') {
+      return {
+        id: notification.sender_id,
+        displayName:
+          notification.notification_metadata.content.senderDisplayName,
+        details: undefined,
+      };
     }
-    return { id: entity.senderId, details: entity.sender };
+    return {
+      id: entity.senderId,
+      displayName: undefined,
+      details: entity.sender,
+    };
   };
   const senderLabel = () => {
     const value = sender();
     if (!value) return 'Someone';
+    if (!value.id) return value.displayName?.trim() || 'Someone';
     if (value.id === currentUserId()) return 'You';
     return (
       getBotDisplayName(value.id, value.details) ||
