@@ -161,7 +161,9 @@ describe('MarkMessageNotifications', () => {
     expect(bulkMarkAsRead).toHaveBeenCalledOnce();
     finishMark!();
     await waitFor(() => expect(bulkMarkAsRead).toHaveBeenCalledTimes(2));
-    expect(bulkMarkAsRead.mock.calls[1][0].map((n) => n.id)).toEqual(['second']);
+    expect(bulkMarkAsRead.mock.calls[1][0].map((n) => n.id)).toEqual([
+      'second',
+    ]);
     setNotifications(1, 'state', 'seen');
     finishMark!();
   });

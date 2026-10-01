@@ -21,7 +21,13 @@ function notification(
     notification_event_type: 'document_mention',
     notification_metadata: {
       tag: 'document_mention',
-      content,
+      content: {
+        channelType: 'private',
+        documentName: 'Document',
+        owner: 'user',
+        messageContent: 'Message',
+        ...content,
+      },
     } as UnifiedNotification['notification_metadata'],
   };
 }
@@ -80,16 +86,26 @@ describe('indexUnreadMessageNotifications', () => {
         const [records, setRecords] = createStore([
           notification('one', { messageId: 'message' }, 'seen'),
         ]);
-        const index = createMemo(() => indexUnreadMessageNotifications(records));
+        const index = createMemo(() =>
+          indexUnreadMessageNotifications(records)
+        );
         expect(index().size).toBe(0);
 
         setRecords(0, 'state', 'unseen');
-        expect(index().get('message')?.map((n) => n.id)).toEqual(['one']);
+        expect(
+          index()
+            .get('message')
+            ?.map((n) => n.id)
+        ).toEqual(['one']);
         setRecords(0, 'state', 'done');
         expect(index().size).toBe(0);
 
         setRecords([notification('two', { messageId: 'reply' })]);
-        expect(index().get('reply')?.map((n) => n.id)).toEqual(['two']);
+        expect(
+          index()
+            .get('reply')
+            ?.map((n) => n.id)
+        ).toEqual(['two']);
         setRecords([]);
         expect(index().size).toBe(0);
       } finally {
