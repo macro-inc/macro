@@ -31,7 +31,7 @@ export function HomeAgentComposer(props: { autoFocus?: boolean }) {
   const userId = useUserId();
   const { draft, setDraft } = createPersistedComposerDraft(
     HOME_CONVERSATION_DRAFT_KEY,
-    userId()
+    userId
   );
   let focus: (() => void) | undefined;
   let draftVersion = 0;

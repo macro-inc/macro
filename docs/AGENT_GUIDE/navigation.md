@@ -615,7 +615,9 @@ Home does not bind Delete or Backspace to deleting list items. These keys remain
 available to the open editor (for example, clearing a selected spreadsheet range).
 Use the item menu to delete an item from Home.
 
-Home and Agents unsent composer storage uses an account-specific key. Logout
+Home and Agents unsent composer storage follows the current account identity.
+Before identity is available, it uses memory only and does not restore legacy
+shared drafts or attachment projections. Logout
 clears composer drafts and attachment projections, including legacy keys. When
 checking Android draft recovery, verify the actual editor text after process
 death; storage unit tests alone do not establish lifecycle recovery.

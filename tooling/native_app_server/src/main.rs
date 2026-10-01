@@ -16,24 +16,20 @@ use tokio::io::AsyncReadExt;
 use tower_http::services::ServeFile;
 use url::Url;
 
-/// Bundle fetcher that always reports a very high bundle build, forcing an update.
+/// Bundle fetcher that reads compatibility metadata from the served archive.
 /// The checksum is recomputed from the archive on disk each time it is
 /// requested, so rebuilding the archive doesn't require restarting the server.
-struct AlwaysUpdateFetcher {
+struct ArchiveBundleFetcher {
     bundle_url: Url,
     archive_path: PathBuf,
 }
 
-impl GetJsBundleManifest for AlwaysUpdateFetcher {
+impl GetJsBundleManifest for ArchiveBundleFetcher {
     async fn get_app_bundle_manifest(&self) -> Result<BundleManifest, Report<UpdateErr>> {
-        Ok(BundleManifest {
-            schema_version: 2,
-            min_native_builds: None,
-            bundle_build: 999_000_000_000,
-            min_native_build: 0,
-            git_sha: None,
-            app_version: "999.0.0".to_string(),
-        })
+        let archive_path = self.archive_path.clone();
+        tokio::task::spawn_blocking(move || read_archive_manifest(&archive_path))
+            .await
+            .map_err(|e| report!(e).context(UpdateErr::Network))?
     }
 
     fn get_app_bundle_path(&self) -> Url {
@@ -49,6 +45,16 @@ impl GetJsBundleManifest for AlwaysUpdateFetcher {
             report!(e).context(UpdateErr::Network)
         })
     }
+}
+
+fn read_archive_manifest(path: &Path) -> Result<BundleManifest, Report<UpdateErr>> {
+    let file = std::fs::File::open(path).map_err(|e| report!(e).context(UpdateErr::Network))?;
+    let mut archive =
+        zip::ZipArchive::new(file).map_err(|e| report!(e).context(UpdateErr::Network))?;
+    let manifest = archive
+        .by_name("bundle-manifest.json")
+        .map_err(|e| report!(e).context(UpdateErr::Network))?;
+    serde_json::from_reader(manifest).map_err(|e| report!(e).context(UpdateErr::Network))
 }
 
 async fn sha256_hex(path: &Path) -> std::io::Result<String> {
@@ -83,7 +89,7 @@ async fn main() {
         .expect("BUNDLE_URL must be a valid URL");
 
     let service = NativeAppServiceImpl {
-        bundle_fetcher: AlwaysUpdateFetcher {
+        bundle_fetcher: ArchiveBundleFetcher {
             bundle_url,
             archive_path: PathBuf::from(ARCHIVE_PATH),
         },
@@ -106,3 +112,6 @@ async fn main() {
     let listener = tokio::net::TcpListener::bind(ADDR).await.unwrap();
     axum::serve(listener, app).await.unwrap();
 }
+
+#[cfg(test)]
+mod test;

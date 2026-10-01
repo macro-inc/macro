@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 
-import { createRoot } from 'solid-js';
+import { createRoot, createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   createPersistedComposerDraft,
@@ -11,11 +11,35 @@ import {
 } from './composer-draft';
 
 describe('createPersistedComposerDraft', () => {
+  it('never restores shared storage and follows a late or changed identity', () => {
+    localStorage.setItem(
+      NEW_CONVERSATION_DRAFT_KEY,
+      JSON.stringify('legacy secret')
+    );
+    createRoot((dispose) => {
+      const [identity, setIdentity] = createSignal<string>();
+      const draft = createPersistedComposerDraft(undefined, identity);
+      expect(draft.draft()).toBe('');
+      draft.setDraft('anonymous memory only');
+      expect(localStorage.getItem(`${NEW_CONVERSATION_DRAFT_KEY}:`)).toBeNull();
+      setIdentity('alice');
+      expect(draft.draft()).toBe('');
+      draft.setDraft('Alice private');
+      setIdentity('bob');
+      expect(draft.draft()).toBe('');
+      draft.setDraft('Bob private');
+      setIdentity(undefined);
+      expect(draft.draft()).toBe('');
+      setIdentity('alice');
+      expect(draft.draft()).toBe('Alice private');
+      dispose();
+    });
+  });
   it('restores each account draft without exposing another account draft', () => {
     createRoot((dispose) => {
       const alice = createPersistedComposerDraft(
         HOME_CONVERSATION_DRAFT_KEY,
-        'alice'
+        () => 'alice'
       );
       alice.setDraft('Private Alice draft');
       dispose();
@@ -23,13 +47,13 @@ describe('createPersistedComposerDraft', () => {
     createRoot((dispose) => {
       const bob = createPersistedComposerDraft(
         HOME_CONVERSATION_DRAFT_KEY,
-        'bob'
+        () => 'bob'
       );
       expect(bob.draft()).toBe('');
       bob.setDraft('Private Bob draft');
       const alice = createPersistedComposerDraft(
         HOME_CONVERSATION_DRAFT_KEY,
-        'alice'
+        () => 'alice'
       );
       expect(alice.draft()).toBe('Private Alice draft');
       expect(bob.draft()).toBe('Private Bob draft');
@@ -38,22 +62,30 @@ describe('createPersistedComposerDraft', () => {
   });
   it('keeps Home and Agents drafts independent when either is cleared', () => {
     createRoot((dispose) => {
-      const home = createPersistedComposerDraft(HOME_CONVERSATION_DRAFT_KEY);
-      const agents = createPersistedComposerDraft();
+      const home = createPersistedComposerDraft(
+        HOME_CONVERSATION_DRAFT_KEY,
+        () => 'user'
+      );
+      const agents = createPersistedComposerDraft(undefined, () => 'user');
       home.setDraft('Home prompt');
       agents.setDraft('Agents prompt');
       dispose();
     });
     createRoot((dispose) => {
-      const home = createPersistedComposerDraft(HOME_CONVERSATION_DRAFT_KEY);
-      const agents = createPersistedComposerDraft();
+      const home = createPersistedComposerDraft(
+        HOME_CONVERSATION_DRAFT_KEY,
+        () => 'user'
+      );
+      const agents = createPersistedComposerDraft(undefined, () => 'user');
       expect(home.draft()).toBe('Home prompt');
       expect(agents.draft()).toBe('Agents prompt');
       home.setDraft('');
       expect(agents.draft()).toBe('Agents prompt');
       dispose();
     });
-    expect(localStorage.getItem(HOME_CONVERSATION_DRAFT_KEY)).toBeNull();
+    expect(
+      localStorage.getItem(`${HOME_CONVERSATION_DRAFT_KEY}:user`)
+    ).toBeNull();
   });
   beforeEach(() => {
     localStorage.clear();
@@ -61,14 +93,14 @@ describe('createPersistedComposerDraft', () => {
 
   it('rehydrates the persisted draft for the same key', () => {
     createRoot((dispose) => {
-      const draft = createPersistedComposerDraft();
+      const draft = createPersistedComposerDraft(undefined, () => 'user');
       draft.setDraft('keep this prompt');
       expect(draft.draft()).toBe('keep this prompt');
       dispose();
     });
 
     createRoot((dispose) => {
-      const draft = createPersistedComposerDraft();
+      const draft = createPersistedComposerDraft(undefined, () => 'user');
       expect(draft.draft()).toBe('keep this prompt');
       dispose();
     });
@@ -76,16 +108,18 @@ describe('createPersistedComposerDraft', () => {
 
   it('removes the persisted value when the draft becomes empty', () => {
     createRoot((dispose) => {
-      const draft = createPersistedComposerDraft();
+      const draft = createPersistedComposerDraft(undefined, () => 'user');
       draft.setDraft('keep this prompt');
       draft.setDraft('');
       dispose();
     });
 
-    expect(localStorage.getItem(NEW_CONVERSATION_DRAFT_KEY)).toBeNull();
+    expect(
+      localStorage.getItem(`${NEW_CONVERSATION_DRAFT_KEY}:user`)
+    ).toBeNull();
 
     createRoot((dispose) => {
-      const draft = createPersistedComposerDraft();
+      const draft = createPersistedComposerDraft(undefined, () => 'user');
       expect(draft.draft()).toBe('');
       dispose();
     });

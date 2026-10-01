@@ -1,6 +1,6 @@
 import { createPersistenceKey } from '@queries/persistence';
 import { makePersisted } from '@solid-primitives/storage';
-import { createSignal } from 'solid-js';
+import { type Accessor, createMemo, createSignal } from 'solid-js';
 
 /** Same localStorage projection channel composers use for unsent drafts. */
 export const NEW_CONVERSATION_DRAFT_KEY = createPersistenceKey(
@@ -22,14 +22,19 @@ export const NEW_CONVERSATION_ATTACHMENTS_KEY = createPersistenceKey(
 /** Keep a composer draft after the New conversation page remounts. */
 export function createPersistedComposerDraft(
   name = NEW_CONVERSATION_DRAFT_KEY,
-  userId?: string
+  userId: Accessor<string | undefined> = () => undefined
 ) {
-  const raw = createSignal<string | undefined>(undefined);
-  const [persisted, setPersisted] = makePersisted(raw, {
-    name: userId ? `${name}:${encodeURIComponent(userId)}` : name,
+  const state = createMemo(() => {
+    const identity = userId();
+    const raw = createSignal<string | undefined>(undefined);
+    return identity
+      ? makePersisted(raw, {
+          name: `${name}:${encodeURIComponent(identity)}`,
+        })
+      : raw;
   });
   return {
-    draft: () => persisted() ?? '',
-    setDraft: (value: string) => setPersisted(value || undefined),
+    draft: () => state()[0]() ?? '',
+    setDraft: (value: string) => state()[1](value || undefined),
   };
 }
