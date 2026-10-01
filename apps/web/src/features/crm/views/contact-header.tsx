@@ -103,7 +103,7 @@ export function ContactHeader(props: {
       <Show when={props.contact}>
         {(contact) => (
           <div
-            class="mb-6 mt-3 flex flex-wrap items-center gap-2"
+            class="mt-3 flex flex-wrap items-center gap-2"
             aria-label="Contact details"
           >
             <Badge variant="outline" size="sm">
