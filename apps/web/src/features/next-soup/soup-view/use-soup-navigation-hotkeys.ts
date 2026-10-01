@@ -291,7 +291,20 @@ export const useSoupNavigationHotkeys = (
   };
 
   registerHotkey({
-    hotkey: ['h', 'arrowleft'],
+    hotkey: ['h'],
+    scopeId,
+    description: 'Collapse group',
+    hotkeyToken: TOKENS.unifiedList.navigation.parent,
+    // Consume H on headers even when already collapsed; selected entities
+    // elsewhere must not turn this into a reminder action.
+    keyDownHandler: () => toggleFocusedGroupHeader(false) !== undefined,
+    registrationType: 'add',
+    handlerPriority: 4,
+    hide: true,
+  }).withGroup(group);
+
+  registerHotkey({
+    hotkey: ['arrowleft'],
     scopeId,
     description: 'Collapse item',
     hotkeyToken: TOKENS.unifiedList.navigation.parent,

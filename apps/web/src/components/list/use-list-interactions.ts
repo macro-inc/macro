@@ -64,6 +64,8 @@ export type ListInteractionActivation<TMetadata> = {
 };
 
 export type ListInteractionDisclosure<TItem> = {
+  /** H collapses only structural headers; entity rows keep their own actions. */
+  isHeader: (item: TItem) => boolean;
   getKey: (item: TItem) => string | undefined;
   isExpanded: (key: string) => boolean;
   setExpanded: (key: string, expanded: boolean) => void;
@@ -218,7 +220,24 @@ export function useListInteractions<TItem, TMetadata = unknown>(
     };
 
     registerHotkey({
-      hotkey: ['h', 'arrowleft'],
+      hotkey: ['h'],
+      hotkeyToken: TOKENS.unifiedList.navigation.parent,
+      scopeId: options.scopeId,
+      description: 'Collapse group',
+      condition: () => canHandle(options.conditions?.disclosure),
+      keyDownHandler: () => {
+        const item = list.focus.item();
+        if (item === undefined || !disclosure.isHeader(item)) return false;
+        setExpanded(false);
+        return true;
+      },
+      registrationType: 'add',
+      handlerPriority: 4,
+      hide: true,
+    }).withGroup(group);
+
+    registerHotkey({
+      hotkey: ['arrowleft'],
       hotkeyToken: TOKENS.unifiedList.navigation.parent,
       scopeId: options.scopeId,
       description: 'Collapse item',

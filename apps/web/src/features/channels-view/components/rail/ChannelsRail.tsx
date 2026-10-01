@@ -775,6 +775,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
       // Labels disclose like sections: `h`/`l` on a label heading or one of
       // its channels collapse or expand that label; anywhere else, the section.
       disclosure: {
+        isHeader: (row) => row.kind === 'section' || row.kind === 'label',
         getKey: (row) =>
           row.kind === 'label'
             ? row.id

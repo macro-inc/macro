@@ -95,7 +95,7 @@ const createTestGroup = (key: string, count: number): GroupMeta => ({
   label: key,
   value: key,
   count,
-  isExpanded: () => true,
+  isExpanded: vi.fn(() => true),
   toggle: () => {},
 });
 
@@ -167,6 +167,39 @@ describe('useSoupNavigationHotkeys', () => {
     vi.mocked(withSplitPanelOwner).mockImplementation((_name, factory) =>
       factory()
     );
+  });
+
+  it('reserves H for reminders on child rows while ArrowLeft collapses their group', () => {
+    const { soup, dispose } = setupHotkeys();
+    try {
+      soup.focus.set('a1');
+      const group = soup.focus.row()!.group!;
+      const toggle = vi.spyOn(group, 'toggle');
+      expect(handlerFor('h')()).toBe(false);
+      expect(toggle).not.toHaveBeenCalled();
+      expect(soup.focus.id()).toBe('a1');
+      expect(handlerFor('arrowleft')()).toBe(true);
+      expect(toggle).toHaveBeenCalledOnce();
+      expect(soup.focus.id()).toBe('header:a');
+    } finally {
+      dispose();
+    }
+  });
+
+  it('consumes H on expanded and collapsed headers', () => {
+    const { soup, dispose } = setupHotkeys();
+    try {
+      soup.focus.set('header:a');
+      const group = soup.focus.row()!.group!;
+      const toggle = vi.spyOn(group, 'toggle');
+      expect(handlerFor('h')()).toBe(true);
+      expect(toggle).toHaveBeenCalledOnce();
+      vi.mocked(group.isExpanded).mockReturnValue(false);
+      expect(handlerFor('h')()).toBe(true);
+      expect(toggle).toHaveBeenCalledOnce();
+    } finally {
+      dispose();
+    }
   });
 
   it('makes the legacy list available to a separate native detail split', async () => {
