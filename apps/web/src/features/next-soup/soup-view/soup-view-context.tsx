@@ -67,6 +67,7 @@ import {
   unreadFilterFn,
 } from '@entity';
 import { useQueryClient } from '@queries/client';
+import { useReminderCollectionQuery } from '@queries/reminders/collection';
 import { invalidateUserNotifications } from '@queries/notification/user-notifications';
 import { createGroupedSoupQueries } from '@queries/soup/grouped/create-grouped-soup-queries';
 import type {
@@ -372,6 +373,10 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
             : undefined)
       )
     : undefined;
+  const legacyReminderTab =
+    initialView === 'reminders' &&
+    (initialEntryState?.['soup.tab'] ?? persistedActiveTabs().reminders) !==
+      'all';
   const initialPersistedQuery =
     filterPersistenceEnabled() && initialView && initialTab
       ? persistedQueryFor(initialView, initialTab)
@@ -383,14 +388,14 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
 
   const store = createQueryStore({
     initial:
-      initialEntryQuery ??
+      (legacyReminderTab ? undefined : initialEntryQuery) ??
       (props.preferInitialFilters ? props.initialQuery : undefined) ??
       initialPersistedQuery ??
       props.initialQuery,
   });
 
   const initialPredicates =
-    initialEntryPredicates ??
+    (legacyReminderTab ? undefined : initialEntryPredicates) ??
     (props.preferInitialFilters ? props.initialClientFilters : undefined) ??
     initialPersistedPredicates ??
     props.initialClientFilters;
@@ -703,11 +708,13 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
   // inbox's All and Reminders tabs stay on update recency even when a row
   // carries a notification stamp from a Signal page or a live delivery.
   const clientSort = createMemo((): SortConfig<SoupEntity>[] =>
-    presetSortMethod() === 'notified_at'
-      ? [SORT_CONFIGS.notified_at]
-      : config().sortMethod?.() === 'touched_by_me'
-        ? []
-        : soup.sort.active()
+    activeListView() === 'reminders'
+      ? []
+      : presetSortMethod() === 'notified_at'
+        ? [SORT_CONFIGS.notified_at]
+        : config().sortMethod?.() === 'touched_by_me'
+          ? []
+          : soup.sort.active()
   );
 
   const isClientPropertyGroup = createMemo(
@@ -871,19 +878,23 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
             : undefined;
 
         queryFilters.replace(
-          entryQuery ??
+          (legacyReminderTab ? undefined : entryQuery) ??
             (options.preferInitialFilters ? options.initialQuery : undefined) ??
             persistedQuery ??
-            options.initialQuery ??
+            (legacyReminderTab
+              ? getViewPreset('reminders')?.filters
+              : options.initialQuery) ??
             null
         );
         soup.predicates.set(
-          entryPredicates ??
+          (legacyReminderTab ? undefined : entryPredicates) ??
             (options.preferInitialFilters
               ? options.initialClientFilters
               : undefined) ??
             savedPredicates ??
-            options.initialClientFilters ??
+            (legacyReminderTab
+              ? { and: ['reminders'] }
+              : options.initialClientFilters) ??
             {}
         );
         setSearchText(options.initialSearchText ?? '');
@@ -949,6 +960,28 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
     );
   };
 
+  const usesReminderCollection = () =>
+    activeListView() === 'reminders' && !search.isSearching();
+  const reminderCollection = useReminderCollectionQuery(() => ({
+    userId: userId(),
+    enabled: enabled() && usesReminderCollection(),
+    completed: queryFilters.state.include.reminderCompleted,
+  }));
+  const reminderCollectionData = () =>
+    reminderCollection.isSuccess ? reminderCollection.data : undefined;
+  const reminderSource = {
+    data: reminderCollectionData,
+    error: () => reminderCollection.error,
+    hasData: () => reminderCollectionData() !== undefined,
+    isLoading: () => reminderCollection.isLoading,
+    isFetching: () => reminderCollection.isFetching,
+    isPlaceholderData: () => false,
+    isFetchingNextPage: () => reminderCollection.isFetchingNextPage,
+    isEnabled: () => enabled() && usesReminderCollection(),
+    hasNextPage: () => reminderCollection.hasNextPage,
+    fetchNextPage: () => reminderCollection.fetchNextPage(),
+  };
+
   // The Soup query facade owns GraphQL eligibility and REST fallback. Its urql
   // implementation keeps loaded pages subscribed to the normalized cache.
   const itemsQuery = useSoupAstItemsQuery(
@@ -967,7 +1000,8 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
       // after a tab switch.
       const emailImportance = queryFilters.state.include.emailImportance;
       return {
-        enabled: enabled() && !search.isSearching(),
+        enabled:
+          enabled() && !search.isSearching() && !usesReminderCollection(),
         showSupportedForeignEntities: showSupportedForeignEntitiesFF().enabled,
         onBeforeGraphqlRefresh: () => groupQueries.resetToInitialPage(),
         meta: {
@@ -992,7 +1026,7 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
   const itemsQueryError = () =>
     itemsQuery.error ?? nativeOfflineLoadError(itemsQueryHasData);
 
-  const itemsSource = {
+  const soupItemsSource = {
     data: itemsQueryData,
     error: itemsQueryError,
     hasData: itemsQueryHasData,
@@ -1005,12 +1039,15 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
     fetchNextPage: () => itemsQuery.fetchNextPage(),
   };
 
+  const itemsSource = () =>
+    usesReminderCollection() ? reminderSource : soupItemsSource;
+
   const items = createMemo<SoupEntity[]>(
     (prev) => {
       const searching = search.isSearching();
 
       if (!searching) {
-        const data = itemsSource.data();
+        const data = itemsSource().data();
         const extras = config().additionalEntities?.() ?? [];
         const extraEntities = extras.map((e) =>
           isWithNotification(e) ? e : attachNotifications(e)
@@ -1022,7 +1059,9 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
           // navigation. Once the active query fails, those rows belong to
           // the previous query and must go so the load-error state can
           // render — only client-local rows remain valid.
-          return itemsSource.error() ? extraEntities : prev;
+          return usesReminderCollection() || itemsSource().error()
+            ? extraEntities
+            : prev;
         }
         if (data.groups) return prev;
 
@@ -1147,12 +1186,12 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
 
   const groupQueries = createGroupedSoupQueries({
     initialPage: createMemo(() => {
-      if (itemsSource.isPlaceholderData()) return;
+      if (itemsSource().isPlaceholderData()) return;
 
-      const groups = itemsSource.data()?.groups;
-      const items = itemsSource.data()?.itemsById;
+      const groups = itemsSource().data()?.groups;
+      const items = itemsSource().data()?.itemsById;
       if (!groups || !items) return;
-      return { groups, items, cachedMail: itemsSource.data()?.cachedMail };
+      return { groups, items, cachedMail: itemsSource().data()?.cachedMail };
     }),
     groupByField: serverGroupByField,
     soupParams,
@@ -1237,7 +1276,7 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
 
   const builtRows = createMemo((): SoupRow[] => {
     const field = groupByField();
-    const groups = itemsSource.data()?.groups;
+    const groups = itemsSource().data()?.groups;
 
     // Client-side property grouping (Customers view): bucket the flat
     // (paginated) list by property value; option order comes from the
@@ -1463,28 +1502,28 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
       cachedMail: () =>
         !search.isSearching() && itemsQueryData()?.cachedMail === true,
       error: () =>
-        search.isSearching() ? searchSourceError() : itemsSource.error(),
+        search.isSearching() ? searchSourceError() : itemsSource().error(),
       hasData: () =>
         search.isSearching()
           ? searchSourceHasData()
-          : itemsSource.hasData() ||
+          : itemsSource().hasData() ||
             // Rows retained across a query rebind count as data so the view
             // doesn't flash, but once the query errors only client-local
             // rows remain and must not suppress the load-error state.
-            (!itemsSource.error() &&
-              !itemsSource.isPlaceholderData() &&
+            (!itemsSource().error() &&
+              !itemsSource().isPlaceholderData() &&
               entities().length > 0),
-      isLoading: () => itemsSource.isLoading(),
-      isFetching: () => itemsSource.isFetching() || searchQuery.isFetching,
+      isLoading: () => itemsSource().isLoading(),
+      isFetching: () => itemsSource().isFetching() || searchQuery.isFetching,
       isPlaceholderData: () =>
-        itemsSource.isPlaceholderData() && !search.isSearching(),
+        itemsSource().isPlaceholderData() && !search.isSearching(),
       isFetchingNextPage: () =>
-        itemsSource.isFetchingNextPage() || searchQuery.isFetchingNextPage,
+        itemsSource().isFetchingNextPage() || searchQuery.isFetchingNextPage,
       hasNextPage: () => {
         if (!enabled()) return false;
 
         return (
-          (itemsSource.isEnabled() && itemsSource.hasNextPage()) ||
+          (itemsSource().isEnabled() && itemsSource().hasNextPage()) ||
           (searchQuery.isEnabled && searchQuery.hasNextPage)
         );
       },
@@ -1492,7 +1531,7 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
         if (!enabled()) return;
 
         await Promise.all([
-          itemsSource.isEnabled() ? itemsSource.fetchNextPage() : undefined,
+          itemsSource().isEnabled() ? itemsSource().fetchNextPage() : undefined,
           searchQuery.isEnabled ? searchQuery.fetchNextPage() : undefined,
         ]);
       },
@@ -1525,6 +1564,10 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
 
         // This covers both transports: urql pages sit outside the TanStack
         // invalidation above, and the REST refetch dedupes against it.
+        if (usesReminderCollection()) {
+          await reminderCollection.refetch({ throwOnError: true });
+          return;
+        }
         await itemsQuery.refresh();
       },
     },

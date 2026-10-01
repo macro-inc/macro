@@ -39,6 +39,15 @@ pub trait RemindersRepo: Send + Sync + 'static {
     /// The error type returned by repository operations.
     type Err: std::error::Error + Send + Sync + 'static;
 
+    /// Read private native rows in actionable-first order, with filters and cursor applied before the limit.
+    fn list_collection(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        query: &super::collection::CollectionQuery,
+        as_of: DateTime<Utc>,
+        limit: i64,
+    ) -> impl Future<Output = Result<Vec<super::collection::ReminderCollectionRow>, Self::Err>> + Send;
+
     /// Insert a reminder for the user.
     fn create_reminder(
         &self,
@@ -297,6 +306,12 @@ pub trait ReminderDispatch: Send + Sync + 'static {
 
 /// Inbound service port: the reminders API used by drivers (HTTP).
 pub trait RemindersService: Send + Sync + 'static {
+    /// Paginate the caller's private Reminders collection with native source metadata.
+    fn list_collection(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        query: super::collection::CollectionQuery,
+    ) -> impl Future<Output = Result<super::collection::ReminderCollectionPage, ReminderError>> + Send;
     /// Read the email workflow when this service has email capabilities wired.
     fn get_email_followup(
         &self,

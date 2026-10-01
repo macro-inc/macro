@@ -12,13 +12,15 @@ import { EmailReminderForm } from '../components/email-reminder-form';
 /** Generic email-attached reminders retain their ordinary editor. */
 export function EmailReminderDetails(props: {
   reminder: Reminder;
+  isEmailFollowup?: boolean;
   threadId: string;
   onClose: () => void;
   children: JSX.Element;
 }) {
   const query = useEmailFollowupQuery(() => props.threadId);
   const followup = () =>
-    query.isSuccess && query.data?.reminderId === props.reminder.id
+    query.isSuccess &&
+    (props.isEmailFollowup || query.data?.reminderId === props.reminder.id)
       ? query.data
       : undefined;
   const [pending, setPending] = createSignal(false);
@@ -60,8 +62,17 @@ export function EmailReminderDetails(props: {
       fallback={<p role="status">Loading reminder…</p>}
     >
       <Show
-        when={followup()?.state === 'pending' ? followup() : undefined}
-        fallback={props.children}
+        when={followup()}
+        fallback={
+          props.isEmailFollowup ? (
+            <p>
+              This email reminder is no longer available. Open the email to set
+              a new reminder.
+            </p>
+          ) : (
+            props.children
+          )
+        }
       >
         {(current) => (
           <>
@@ -70,7 +81,11 @@ export function EmailReminderDetails(props: {
             </div>
             <EmailReminderForm
               subject={props.reminder.description}
-              initialTime={current().remindAt}
+              initialTime={
+                current().state === 'pending' || current().state === 'archiving'
+                  ? current().remindAt
+                  : undefined
+              }
               initialCondition={current().condition}
               pending={pending()}
               error={error()}
@@ -84,13 +99,16 @@ export function EmailReminderDetails(props: {
                   condition,
                 })
               }
-              onRemove={() =>
-                void save({
-                  type: 'remove',
-                  operationId: crypto.randomUUID(),
-                  expectedRevision: current().revision,
-                  undo: false,
-                })
+              onRemove={
+                current().state === 'pending' || current().state === 'archiving'
+                  ? () =>
+                      void save({
+                        type: 'remove',
+                        operationId: crypto.randomUUID(),
+                        expectedRevision: current().revision,
+                        undo: false,
+                      })
+                  : undefined
               }
             />
           </>

@@ -1,3 +1,5 @@
+import type { ReminderCollectionPage } from './generated/schemas/reminderCollectionPage';
+import type { ListReminderCollectionParams } from './generated/schemas/listReminderCollectionParams';
 import {
   PdfCoParseSchema as CoParseSchema,
   type PdfCoParse as ICoParse,
@@ -2409,6 +2411,18 @@ export const storageServiceClient = {
     },
   },
   reminders: {
+    async listCollection(params: ListReminderCollectionParams) {
+      const query = new URLSearchParams();
+      if (params.completed !== undefined)
+        query.set('completed', String(params.completed));
+      if (params.limit !== undefined) query.set('limit', String(params.limit));
+      if (params.cursor) query.set('cursor', params.cursor);
+      return await dssFetch<ReminderCollectionPage>(
+        `/reminders/collection?${query}`,
+        { method: 'GET' }
+      );
+    },
+
     async getEmailFollowup(threadId: string) {
       return (
         await dssFetch<{ followup: EmailFollowup | null }>(

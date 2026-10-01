@@ -10,4 +10,8 @@ export const reminderKeys = createQueryKeys('reminders', {
   /** A single reminder by id. */
   detail: (id: string) => [id],
   email: (threadId: string) => [threadId],
+  collection: (userId: string | undefined, completed?: boolean) => [
+    userId,
+    { completed },
+  ],
 });

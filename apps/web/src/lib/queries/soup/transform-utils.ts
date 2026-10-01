@@ -1,3 +1,4 @@
+import { reminderEntityFromData } from '../reminders/entity';
 import {
   blockNameToDefaultFile,
   itemToSafeName,
@@ -49,7 +50,6 @@ import type {
   SoupApiItem,
   SoupCalendarEventTime,
   SoupPage,
-  SoupReminderReference,
 } from '@service-storage/generated/schemas';
 import type { ChannelType } from '@service-storage/generated/schemas/channelType';
 import { formatDocumentName } from '@service-storage/util/filename';
@@ -706,52 +706,6 @@ function calendarReminderTimestamp(
   return latest;
 }
 
-type ReferencedEntityType = NonNullable<
-  ReminderEntity['referencedEntity']
->['type'];
-
-/**
- * Map a reminder's referenced entity from canonical API names onto the display
- * {@link EntityType} names used across the frontend. The inverse of
- * `toNotificationEntity`.
- *
- * Types with no display entity (`user`, `team`, `static_file`, and a reminder
- * referencing another reminder) yield `undefined`, which renders the reminder
- * as standalone rather than linking somewhere unresolvable.
- */
-function toReferencedEntity(
-  reference: SoupReminderReference | null | undefined
-): ReminderEntity['referencedEntity'] {
-  if (!reference) return undefined;
-  const type = match<string, ReferencedEntityType | undefined>(
-    reference.entityType
-  )
-    .with('email_thread', () => 'email')
-    .with('foreign_entity', () => 'foreign')
-    .with(
-      P.union(
-        'document',
-        'chat',
-        'agent_session',
-        'project',
-        'channel',
-        'channel_message',
-        'call',
-        'crm_company',
-        'crm_contact'
-      ),
-      (t) => t
-    )
-    .otherwise(() => undefined);
-  if (!type) return undefined;
-  return {
-    id: reference.id,
-    type,
-    fileType: reference.fileType ?? undefined,
-    subType: reference.subType ?? undefined,
-  };
-}
-
 export const mapApiSoupItemToEntity = (
   item: DisplayableSoupItem
 ): SoupEntity => {
@@ -1014,31 +968,9 @@ export const mapApiSoupItemToEntity = (
         properties: item.data.properties,
       } satisfies CrmCompanyEntity;
     })
-    .with({ tag: 'reminder' }, (item) => {
-      const schedule = item.data.schedule;
-      const recurring = schedule.type === 'recurring';
-      return {
-        type: 'reminder',
-        id: item.data.id,
-        // A reminder has no separate title — its description is its name.
-        name: item.data.description,
-        description: item.data.description,
-        // Reminders are private to their owner, so the row carries no owner id.
-        ownerId: '',
-        referencedEntity: toReferencedEntity(item.data.referencedEntity),
-        scheduleType: recurring ? 'recurring' : 'once',
-        cron: recurring ? schedule.cron : undefined,
-        timezone: recurring ? schedule.timezone : undefined,
-        nextRunAt: item.data.nextRunAt,
-        enabled: item.data.enabled,
-        completedAt: item.data.completedAt,
-        createdAt: item.data.createdAt,
-        updatedAt: item.data.updatedAt,
-        // Soup orders reminders by when they fire, not when they changed.
-        sortTs: item.data.nextRunAt,
-        frecencyScore: item.frecency_score,
-      } satisfies ReminderEntity;
-    })
+    .with({ tag: 'reminder' }, (item) =>
+      reminderEntityFromData(item.data, item.frecency_score)
+    )
     .with({ tag: 'calendarEvent' }, (item) => {
       return {
         type: 'calendar_event',

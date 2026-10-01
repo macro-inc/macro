@@ -33810,6 +33810,210 @@ export const createReminderBody = zod
   .describe('Request body for creating a reminder.');
 
 /**
+ * @summary Native reminder rows, ordered and paginated by the owning domain.
+ */
+export const listReminderCollectionQueryLimitMin = 0;
+
+export const listReminderCollectionQueryParams = zod.object({
+  completed: zod
+    .boolean()
+    .optional()
+    .describe('Omit to include both done and not-done occurrences.'),
+  limit: zod
+    .number()
+    .min(listReminderCollectionQueryLimitMin)
+    .optional()
+    .describe('Page size, bounded to 1–500.'),
+  cursor: zod
+    .string()
+    .optional()
+    .describe('Position returned by the previous page.'),
+});
+
+export const listReminderCollectionResponse = zod
+  .object({
+    items: zod
+      .array(
+        zod
+          .object({
+            emailFollowup: zod
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    condition: zod
+                      .enum(['if_no_reply', 'regardless'])
+                      .describe(
+                        'When an email follow-up should return the conversation.'
+                      ),
+                    linkId: zod
+                      .uuid()
+                      .describe('Canonical owned\/delegated inbox.'),
+                    remindAt: zod.iso
+                      .datetime({})
+                      .describe('Confirmed schedule.'),
+                    reminderId: zod
+                      .uuid()
+                      .describe(
+                        'Its ordinary reminder, used by the existing alert\/management surfaces.'
+                      ),
+                    revision: zod
+                      .uuid()
+                      .describe(
+                        'Last accepted operation; edits\/removal compare this to prevent stale undo.'
+                      ),
+                    state: zod
+                      .enum([
+                        'archiving',
+                        'pending',
+                        'returning',
+                        'returned',
+                        'cancelled',
+                        'removed',
+                      ])
+                      .describe('Durable progress of an email operation.'),
+                    threadId: zod.uuid().describe('Conversation identity.'),
+                  })
+                  .describe(
+                    'Public status shown on email and in the Reminders editor.'
+                  ),
+              ])
+              .optional(),
+            reference: zod
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    fileType: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "The referenced document's file type, e.g. `md` or `pdf`."
+                      ),
+                    subType: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "The referenced document's sub type, e.g. `task` or `snippet`."
+                      ),
+                  })
+                  .describe(
+                    "Display details of the entity a reminder is about, resolved alongside the\nreminder itself.\n\nA reminder has no block of its own — it opens, and is iconed as, whatever it\nreferences. Which block that is depends on the referenced document's file\ntype, so resolving it client-side would mean a second fetch per row against\na synchronous icon path. Reading it here keeps Soup to one round trip.\n\nOnly documents populate these; every other entity type is identified by its\n[`EntityType`] alone."
+                  ),
+              ])
+              .optional(),
+            reminder: zod
+              .object({
+                completedAt: zod.iso
+                  .datetime({})
+                  .nullish()
+                  .describe(
+                    'Set once the owner marks the reminder as dealt with. Firing does not\nset it — a delivered reminder is waiting on its owner, not finished.'
+                  ),
+                createdAt: zod.iso
+                  .datetime({})
+                  .describe('When the reminder was created.'),
+                description: zod
+                  .string()
+                  .describe('What to remind the user about.'),
+                enabled: zod
+                  .boolean()
+                  .describe('When false, the dispatcher skips this reminder.'),
+                entityId: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Id of the associated entity, when the reminder is attached to one.'
+                  ),
+                entityType: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .enum([
+                        'user',
+                        'chat',
+                        'channel',
+                        'channel_message',
+                        'document',
+                        'project',
+                        'email_thread',
+                        'calendar_event',
+                        'team',
+                        'call',
+                        'foreign_entity',
+                        'static_file',
+                        'crm_company',
+                        'crm_contact',
+                        'reminder',
+                        'skill',
+                        'agent_session',
+                        'scheduled_action',
+                        'initiative',
+                      ])
+                      .describe('The type of an entity in Macro'),
+                  ])
+                  .optional()
+                  .describe(
+                    'Type of the associated entity, when the reminder is attached to one.'
+                  ),
+                id: zod.uuid().describe('Reminder id.'),
+                nextRunAt: zod.iso
+                  .datetime({})
+                  .describe(
+                    'The next firing, derived from `schedule` on write.'
+                  ),
+                schedule: zod
+                  .union([
+                    zod
+                      .object({
+                        remindAt: zod.iso
+                          .datetime({})
+                          .describe('The instant to fire at.'),
+                        type: zod.enum(['once']),
+                      })
+                      .describe('Fires once, at a fixed instant.'),
+                    zod
+                      .object({
+                        cron: zod
+                          .string()
+                          .describe(
+                            'Cron expression, either the conventional 5-field\n`min hour dom mon dow` or the 6-\/7-field\n`sec min hour dom mon dow [year]`. A 5-field expression is stored\nnormalized to 6 fields with a zero seconds field, so `0 9 \* \* \*` and\n`0 0 9 \* \* \*` are the same schedule and both read back as the latter.'
+                          ),
+                        timezone: zod
+                          .string()
+                          .describe(
+                            'The timezone the cron expression is evaluated in.'
+                          ),
+                        type: zod.enum(['recurring']),
+                      })
+                      .describe(
+                        'Fires repeatedly, on a cron schedule evaluated in `timezone`.'
+                      ),
+                  ])
+                  .describe('When a reminder fires.'),
+                updatedAt: zod.iso
+                  .datetime({})
+                  .describe('When the reminder was last modified.'),
+              })
+              .describe(
+                'A reminder belonging to a user.\n\n`user_id` is deliberately absent: a reminder is only ever read by its owner,\nso the field would be redundant on the wire.'
+              ),
+          })
+          .describe(
+            'A native reminder row with its source and workflow capabilities resolved in bulk.'
+          )
+      )
+      .describe('Rows in server order.'),
+    nextCursor: zod
+      .string()
+      .nullish()
+      .describe('Absent only on the final page.'),
+  })
+  .describe(
+    'One continuous collection, including completed recurring reminders that still fire.'
+  );
+
+/**
  * @summary Read an email follow-up and reconcile inbound reply cancellation.
  */
 export const getEmailFollowupParams = zod.object({

@@ -173,9 +173,11 @@ async function restoreEmailNotifications(
  * queued writes; only a completely failed email selection rejects the action.
  */
 export const makeMarkNotDoneAction = (options: MakeMarkNotDoneOptions) => {
-  // Always reversible — unlike a done thread there is no "permanently done" case.
+  // Email workflow mirrors reject generic reopening: Remind me owns rescheduling.
   const isCompletedReminder = (entity: EntityData): boolean =>
-    entity.type === 'reminder' && entity.completedAt != null;
+    entity.type === 'reminder' &&
+    entity.completedAt != null &&
+    !entity.emailFollowup;
 
   const canExecute = (entity: EntityData): boolean =>
     (entity.type === 'email' && entity.done === true) ||

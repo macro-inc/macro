@@ -12,6 +12,7 @@ import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 
 import { reminderKeys } from './keys';
+import { updateReminderCollection } from './collection';
 
 /** The entity types a reminder can be attached to, as the API names them. */
 export type ReminderEntityType = NonNullable<
@@ -98,9 +99,11 @@ type CreateReminderCallbacks = MutationCallbacks<
  * here; `next-soup/utils` keeps only the orchestration.
  */
 export async function setReminderCompleted(id: string, completed: boolean) {
-  return await throwOnErr(() =>
+  const reminder = await throwOnErr(() =>
     storageServiceClient.reminders.updateReminder(id, { completed })
   );
+  updateReminderCollection(reminder);
+  return reminder;
 }
 
 /**
@@ -116,6 +119,9 @@ export function invalidateRemindersById(
   { refetch = false }: { refetch?: boolean } = {}
 ) {
   if (ids.length === 0) return;
+  void queryClient.invalidateQueries({
+    queryKey: reminderKeys.collection._def,
+  });
   const refetchType = refetch ? undefined : ('none' as const);
   void queryClient.invalidateQueries({
     queryKey: reminderKeys.list._def,
@@ -131,6 +137,9 @@ export function invalidateRemindersById(
 
 /** Invalidate every reminder list, plus one detail when the id is known. */
 function invalidateReminders(id?: string) {
+  void queryClient.invalidateQueries({
+    queryKey: reminderKeys.collection._def,
+  });
   void queryClient.invalidateQueries({ queryKey: reminderKeys.list._def });
   if (id) {
     void queryClient.invalidateQueries({

@@ -42,12 +42,7 @@ const VALID_MARK_DONE_LIST_VIEWS: `${ListView}-${string}`[] = [
   // stay in place and flip to the done state exactly like mail "All".
   'mail-calendar',
   'mail-shared',
-  // Completing a reminder is the whole point of the Reminders view: without
-  // it the only way to clear one is to delete it. Done is listed too so a
-  // reminder marked by mistake can be reopened from where it landed.
-  'reminders-active',
-  'reminders-scheduled',
-  'reminders-done',
+  'reminders-all',
 ];
 
 export const canExecuteMarkDoneOnView = (view: ListView, tabId: string) => {
@@ -58,7 +53,8 @@ export const canExecuteMarkDoneOnView = (view: ListView, tabId: string) => {
  *  not-done rows in views that show done content, e.g. mail "All"). done
  *  state is email-specific; other entity types are never filtered. */
 const isMarkDoneTarget = (e: EntityData) =>
-  !(e.type === 'email' && e.done === true);
+  !(e.type === 'email' && e.done === true) &&
+  !(e.type === 'reminder' && e.completedAt != null);
 
 type MakeMarkDoneOptions = {
   userId?: () => string | undefined;
@@ -185,6 +181,20 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     },
     undoLabel: 'Mark Done',
     onPushed: (handle, variables) => {
+      // Email follow-up mirrors deliberately reject completed:false. Reopening
+      // requires a new time through their owning composer, not generic Undo.
+      if (
+        variables.entities.some(
+          (entity) => entity.type === 'reminder' && entity.emailFollowup
+        )
+      ) {
+        handle.dispose();
+        if (!variables.silent)
+          toast.success(
+            'Marked as done. Use Remind me to schedule the email again.'
+          );
+        return;
+      }
       variables.onUndoHandle?.(handle);
       const firstEntityId = variables.entities[0]?.id;
       const count = variables.entities.length;

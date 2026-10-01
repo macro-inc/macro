@@ -289,6 +289,36 @@ where
     R: RemindersRepo,
     C: Clock,
 {
+    #[tracing::instrument(err, skip_all)]
+    async fn list_collection(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        query: super::collection::CollectionQuery,
+    ) -> Result<super::collection::ReminderCollectionPage, ReminderError> {
+        use super::collection::{CollectionCursor, ReminderCollectionPage, is_history};
+        let limit = query.limit.unwrap_or(100).clamp(1, 500);
+        let as_of = query
+            .cursor
+            .map(|cursor| cursor.as_of)
+            .unwrap_or_else(|| self.clock.now());
+        let mut items = self
+            .repo
+            .list_collection(user, &query, as_of, i64::from(limit) + 1)
+            .await
+            .map_err(|error| rootcause::Report::new(error).into_dynamic())?;
+        let has_more = items.len() > limit as usize;
+        items.truncate(limit as usize);
+        let next_cursor = has_more.then(|| items.last()).flatten().map(|row| {
+            CollectionCursor {
+                as_of,
+                history: is_history(&row.reminder, as_of),
+                position: super::models::ReminderCursor::after(&row.reminder),
+            }
+            .encode()
+        });
+        Ok(ReminderCollectionPage { items, next_cursor })
+    }
+
     // `user_id` is the auth-provider composite id (it embeds the user's email)
     // and `request`/`patch` carry the user-authored description, so neither is
     // recorded as a span field.
@@ -508,6 +538,17 @@ where
 pub struct NoOpRemindersService;
 
 impl RemindersService for NoOpRemindersService {
+    async fn list_collection(
+        &self,
+        _user: &MacroUserIdStr<'_>,
+        _query: super::collection::CollectionQuery,
+    ) -> Result<super::collection::ReminderCollectionPage, ReminderError> {
+        Ok(super::collection::ReminderCollectionPage {
+            items: vec![],
+            next_cursor: None,
+        })
+    }
+
     async fn create_reminder(
         &self,
         _user_id: &MacroUserIdStr<'_>,
