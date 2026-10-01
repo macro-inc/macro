@@ -6,6 +6,7 @@ use bot_id::BotId;
 
 fn announcement() -> SessionAnnouncement {
     SessionAnnouncement {
+        reuse_origin_message: false,
         bot_id: BotId::TEST_A,
         is_coding: true,
         session_id: agent_session::domain::model::AgentSessionId::TEST_A,

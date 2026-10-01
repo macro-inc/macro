@@ -48,12 +48,7 @@ function createCalendarPeriodControls(onSelect?: () => void) {
     () => calendarPager.activeDateInfo()?.view.calendar.getDate() ?? initialDate
   );
 
-  const activeView = createMemo<CalendarPeriodView>(
-    () =>
-      (calendarPager.activeDateInfo()?.view.type as
-        | CalendarPeriodView
-        | undefined) ?? calendarView.displaySettings.periodView
-  );
+  const activeView = calendarPager.periodView;
 
   const highlightedRange = createMemo(() => {
     const dateInfo = calendarPager.activeDateInfo();
@@ -75,7 +70,7 @@ function createCalendarPeriodControls(onSelect?: () => void) {
   const changeView = (view: CalendarPeriodView) => {
     setPickerState('open', false);
     onSelect?.();
-    if (calendarPager.activeDateInfo()?.view.type === view) return;
+    if (calendarPager.periodView() === view) return;
 
     calendarPager.changeView(view);
   };

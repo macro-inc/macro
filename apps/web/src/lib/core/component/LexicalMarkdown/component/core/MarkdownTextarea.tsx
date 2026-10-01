@@ -382,6 +382,10 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
             });
           }}
           contentEditable={props.editable()}
+          role="textbox"
+          aria-multiline="true"
+          aria-readonly={!props.editable()}
+          aria-label={props.placeholder || 'Message'}
         />
 
         <DecoratorRenderer editor={editor} />

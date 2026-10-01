@@ -68,7 +68,7 @@ export function reminderDetailContent(reminderId: string): SplitContent {
   };
 }
 
-/** A reminder always opens its details first; source navigation lives there. */
+/** Explicit management destination, also used for freeform reminders. */
 export type ReminderDetailDestination = {
   kind: 'reminder-detail';
   reminderId: string;

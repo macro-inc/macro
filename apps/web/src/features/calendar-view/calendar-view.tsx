@@ -178,7 +178,7 @@ export function CalendarView(props: CalendarViewProps) {
     const request = targetRequest();
     if (
       !request ||
-      occurrencesQuery.isLoading ||
+      !occurrencesQuery.isSuccess ||
       occurrencesQuery.isPlaceholderData
     ) {
       return undefined;

@@ -40,6 +40,8 @@ export function threadListItem(thread: ThreadData): MessageListItem {
 
 type ThreadOptions = {
   canWrite: boolean;
+  /** Delete comments the caller did not write. Document owners set this. */
+  canModerate?: boolean;
   buildLink?: (message: MessageData) => string;
   targetId?: string | null;
   /** Releases the highlight on `targetId`; called when the linked message is clicked. */
@@ -75,6 +77,7 @@ export function MessageThread(
     parent: () => props.data.parent,
     userId,
     canWrite: () => props.canWrite,
+    canModerate: () => props.canModerate ?? false,
     buildLink: (message) =>
       message.parent?.type === 'channel'
         ? buildMessageLink(message.parent.id, message.id, message.thread_id)

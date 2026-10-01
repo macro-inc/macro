@@ -28,6 +28,35 @@ const version = {
   coordinatorVersion: CACHE_COORDINATOR_PROTOCOL_VERSION,
 } as const;
 
+it.each([undefined, 'DRAFT_ALREADY_SENT', 'INTERNAL', 42, null])(
+  'validates optional rollback and settlement domain code %j',
+  (errorCode) => {
+    const expected = errorCode === undefined || typeof errorCode === 'string';
+    expect(
+      isCacheRequest({
+        id: 1,
+        kind: 'rollback-optimistic-write',
+        transactionId: '1',
+        leaseOwner: 'runner',
+        leaseGeneration: '1',
+        error: 'rejected',
+        errorCode,
+      })
+    ).toBe(expected);
+    expect(
+      isCachePush({
+        kind: 'mutation-settled',
+        settlement: {
+          transactionId: '1',
+          status: 'permanently-failed',
+          error: 'rejected',
+          errorCode,
+        },
+      })
+    ).toBe(expected);
+  }
+);
+
 const enginePort = {
   postMessage() {},
   close() {},

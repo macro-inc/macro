@@ -122,6 +122,10 @@ pub enum RoutineFailureReason {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, thiserror::Error)]
 #[serde(rename_all = "snake_case")]
 pub enum RoutineSessionError {
+    /// Definitive refusal before Macro-funded work was accepted.
+    #[cfg(feature = "admission")]
+    #[error(transparent)]
+    Admission(#[from] crate::domain::error::AiAdmissionError),
     /// Non-v7 execution ids, empty prompt, or blank supplied model.
     #[error("invalid routine session command")]
     InvalidCommand,

@@ -31,7 +31,7 @@ vi.mock(
     useOpenEventComposer: () => sources.openEvent,
   })
 );
-vi.mock('@app/features/companies/CreateCompanyModal', () => ({
+vi.mock('@app/features/crm/crm-create', () => ({
   openCreateCompanyModal: sources.openCompany,
 }));
 vi.mock('@core/mobile/haptics', () => ({ hapticImpact: vi.fn() }));

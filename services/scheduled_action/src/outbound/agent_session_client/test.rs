@@ -197,6 +197,16 @@ async fn all_commands_use_internal_auth_and_domain_wire_contract_at_both_prefixe
 #[tokio::test]
 async fn typed_sanitized_domain_errors_are_preserved() {
     for (status, code) in [
+        (
+            402,
+            RoutineSessionError::Admission(ai_billing::AiAdmissionError::Denied(
+                ai_billing::DenyReason::AllowanceExhausted,
+            )),
+        ),
+        (
+            503,
+            RoutineSessionError::Admission(ai_billing::AiAdmissionError::Unavailable),
+        ),
         (400, RoutineSessionError::InvalidCommand),
         (403, RoutineSessionError::Forbidden),
         (404, RoutineSessionError::PersonaUnavailable),

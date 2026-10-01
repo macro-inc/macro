@@ -1,5 +1,6 @@
 import type { LexicalEditor } from 'lexical';
 import type { Accessor } from 'solid-js';
+import type { EmailMessage } from '../../email-message/core/email-message';
 import type { EmailDraft } from '../core/email-draft';
 import type { EmailRecipient } from '../core/email-recipient';
 
@@ -95,6 +96,24 @@ export interface EmailAttachmentChange {
 }
 
 export interface EmailDraftStorage {
+  /** Resolve durable local drafts before mounting an editor. */
+  readDraft?(draftId: string): Promise<
+    | {
+        /** Sent records retain mutation identity but never editable content. */
+        draft?: EmailMessage;
+        persistence: 'committed' | 'queued';
+        mutationUuid?: string;
+      }
+    | undefined
+  >;
+  /** Notify mounted composers to refresh identity, without reseeding their content. */
+  watchDrafts?(
+    changed: (settlement?: {
+      mutationUuid?: string;
+      failed: boolean;
+      code?: DraftPersistFailureCode;
+    }) => void
+  ): () => void;
   saveDraft(input: SaveEmailDraft): Promise<DraftSaveResult>;
   deleteDraft(input: DeleteEmailDraft): Promise<void>;
   restoreDraft(input: {
@@ -200,7 +219,10 @@ export interface EmailComposeFeedback {
       message: string,
       options?: ComposeNoticeOptions
     ): number | undefined;
-    failure(message: string, options?: ComposeNoticeOptions): void;
+    failure(
+      message: string,
+      options?: ComposeNoticeOptions
+    ): number | undefined;
     alert(message: string, options?: ComposeNoticeOptions): void;
     dismiss(id: number): void;
   };
@@ -268,6 +290,7 @@ export interface EmailComposeContext {
 export interface ComposeNoticeOptions {
   subtext?: string;
   duration?: number;
+  persistent?: boolean;
   /** `kind` picks the action's icon; actions default to undo. */
   actions?: { label: string; onClick: () => void; kind?: 'undo' | 'open' }[];
 }

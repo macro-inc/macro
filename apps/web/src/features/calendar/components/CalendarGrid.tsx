@@ -18,6 +18,7 @@ import {
   createSignal,
   type JSX,
   Show,
+  untrack,
 } from 'solid-js';
 import { useTimeGridOpeningScroll } from '../hooks/use-time-grid-opening-scroll';
 import {
@@ -152,6 +153,9 @@ function CalendarGridHost(props: {
 
 /** Query-free, single-page calendar grid. */
 export function CalendarGrid(props: CalendarGridProps) {
+  // FullCalendar only consumes initialView on mount. Tracking route changes
+  // here resets every page's options before the pager can schedule changeView.
+  const initialView = untrack(() => props.settings.initialView);
   const mappedEvents = createMemo<EventInput[]>(() =>
     mergeWorkingLocationEvents(props.events).map(({ event, occurrenceIds }) => {
       const mapped = mapCalendarEventToFullCalendar(event);
@@ -226,7 +230,7 @@ export function CalendarGrid(props: CalendarGridProps) {
         timeGridPlugin,
         multiDaySelectionRenderingPlugin,
       ]}
-      initialView={props.settings.initialView}
+      initialView={initialView}
       initialDate={props.initialDate}
       dayCount={props.settings.dayCount}
       dateIncrement={

@@ -8,6 +8,7 @@ import type { ChannelTargetRequest } from '@channel/Channel/ChannelSurface';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import type { ChannelEntity } from '@entity';
 import { channelsSearch } from '../channels-route';
+import { ChannelTitleMenu } from './ChannelTitleMenu';
 
 /** Adapts a resolved conversation and navigation intent to the shared surface. */
 export function ChannelDetailView(props: {
@@ -34,6 +35,7 @@ export function ChannelDetailView(props: {
         <ChannelDetailTopBar
           channelId={channel.channelId}
           fallbackName={props.channel.name}
+          leading={<ChannelTitleMenu channel={props.channel} />}
         />
       )}
     </ChannelDetail>

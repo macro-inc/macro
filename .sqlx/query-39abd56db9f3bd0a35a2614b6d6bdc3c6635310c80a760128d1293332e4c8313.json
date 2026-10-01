@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT m.id, m.internal_date_ts AS received_at,\n                (m.is_sent OR m.is_draft) AS \"outgoing!\",\n                EXISTS (\n                    SELECT 1 FROM email_links l\n                    WHERE lower(l.email_address) = lower(c.email_address)\n                      AND (l.macro_id = $3 OR EXISTS (\n                          SELECT 1 FROM macro_user_links mul\n                          WHERE mul.link_id = l.id AND mul.primary_macro_id = $3\n                      ))\n                ) AS \"from_self!\"\n            FROM email_messages m\n            LEFT JOIN email_contacts c ON c.id = m.from_contact_id\n            WHERE m.thread_id = $1 AND m.link_id = $2\n            ORDER BY m.id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "received_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "outgoing!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "from_self!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      null,
+      null
+    ]
+  },
+  "hash": "39abd56db9f3bd0a35a2614b6d6bdc3c6635310c80a760128d1293332e4c8313"
+}

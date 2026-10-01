@@ -65,6 +65,7 @@ export function MessageDocumentDiscussion(props: {
       parent={parent()}
       targetId={discussionTarget()}
       canWrite={permissions.canComment()}
+      canModerate={permissions.isOwner()}
       link={{ type: blockName, id }}
       label={props.label}
       floatingComposerOnTouch={props.floatingComposerOnTouch}

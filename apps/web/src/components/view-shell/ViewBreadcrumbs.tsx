@@ -137,11 +137,19 @@ function BreadcrumbButton(props: ViewBreadcrumbsButtonProps) {
 
   return (
     <Show when={local.tooltip} fallback={button()}>
-      {(tooltip) => (
-        <Tooltip class="min-w-0" label={tooltip()}>
-          {button()}
-        </Tooltip>
-      )}
+      {(tooltip) => {
+        // The trigger is the flex item in the breadcrumb row. Sizing on the
+        // button never reaches it, so a shrink-0 return crumb still collapses
+        // and its label paints over the separator and the next item.
+        return (
+          <Tooltip
+            class={cn('min-w-0', local.isActive && 'shrink', local.class)}
+            label={tooltip()}
+          >
+            {button()}
+          </Tooltip>
+        );
+      }}
     </Show>
   );
 }

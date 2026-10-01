@@ -179,7 +179,7 @@ where
     }
 
     #[tracing::instrument(err, skip(self, link))]
-    async fn update_thread_labels_with_actor(
+    pub(super) async fn update_thread_labels_with_actor(
         &self,
         link: &Link,
         thread_id: Uuid,

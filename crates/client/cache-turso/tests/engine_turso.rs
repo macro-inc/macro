@@ -211,6 +211,7 @@ fn optimistic_hydration_retry_complete_and_reopen_run_over_turso() {
                     link_patches: &[],
                     revalidations: &[],
                     created_at_ms: 10,
+                    identity_bindings: &[],
                 },
             )
             .await
@@ -325,6 +326,7 @@ fn stale_local_head_and_storage_settlement_races_report_stale_claims() {
                     link_patches: &[],
                     revalidations: &[],
                     created_at_ms: 1,
+                    identity_bindings: &[],
                 },
             )
             .await
@@ -341,6 +343,7 @@ fn stale_local_head_and_storage_settlement_races_report_stale_claims() {
                     link_patches: &[],
                     revalidations: &[],
                     created_at_ms: 2,
+                    identity_bindings: &[],
                 },
             )
             .await
@@ -424,6 +427,7 @@ fn optimistic_discard_restores_durable_base_over_turso() {
                     link_patches: &[],
                     revalidations: &[],
                     created_at_ms: 1,
+                    identity_bindings: &[],
                 },
             )
             .await

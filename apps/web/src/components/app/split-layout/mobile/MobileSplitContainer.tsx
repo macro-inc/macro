@@ -1,4 +1,5 @@
 import { ContentLoading } from '@components/app/ContentLoading';
+import { useAndroidBackNavigation } from '@core/mobile/androidBack';
 import { type Accessor, createMemo, Show, Suspense } from 'solid-js';
 import { SplitPanel } from '../components/SplitPanel';
 import type {
@@ -19,6 +20,12 @@ export type MobileSplitContainerProps = {
 
 export function MobileSplitContainer(props: MobileSplitContainerProps) {
   const { splitManager, mobileSwipeLayout } = props;
+
+  useAndroidBackNavigation(() => {
+    if (!mobileSwipeLayout.canGoBack()) return false;
+    mobileSwipeLayout.swipeBack();
+    return true;
+  });
 
   const motion = createMobileSplitMotion({
     mobileSwipeLayout,

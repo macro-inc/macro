@@ -1,4 +1,5 @@
 import { compareDateDesc } from '@core/util/date';
+import type { WithNotification } from '@entity/types/notification';
 import type { UnifiedNotification } from './types';
 
 export const DOCUMENT_COMMENT_EVENT_TYPES = [
@@ -11,19 +12,31 @@ const isDocumentCommentTag = (tag: string) =>
   (DOCUMENT_COMMENT_EVENT_TYPES as readonly string[]).includes(tag);
 
 /**
- * The comment notification a document row stands for: its newest one that is
- * not done. Like a channel thread row, the row keeps pointing at that comment
- * after it is read; marking it done is what returns the row to the document.
+ * A document row can announce its newest outstanding event when it is a
+ * comment. Home supplies a cutoff so newer own activity cannot borrow an old
+ * comment's label or click target. Reading a comment does not dismiss it.
  */
-export function getDocumentCommentNotification(entity: {
-  type: string;
-  notifications?: () => UnifiedNotification[];
-}): UnifiedNotification | undefined {
+export function getDocumentCommentNotification(
+  entity: WithNotification<{
+    type: string;
+  }>
+): UnifiedNotification | undefined {
   if (entity.type !== 'document') return undefined;
-  return (entity.notifications?.() ?? [])
-    .filter(
-      (n) =>
-        n.state !== 'done' && isDocumentCommentTag(n.notification_metadata.tag)
-    )
+  const notification = (entity.notifications?.() ?? [])
+    .filter((n) => n.state !== 'done')
     .sort((a, b) => compareDateDesc(a.created_at, b.created_at))[0];
+  if (
+    !notification ||
+    !isDocumentCommentTag(notification.notification_metadata.tag)
+  ) {
+    return undefined;
+  }
+  if (
+    entity.notificationDisplayCutoff != null &&
+    compareDateDesc(notification.created_at, entity.notificationDisplayCutoff) >
+      0
+  ) {
+    return undefined;
+  }
+  return notification;
 }

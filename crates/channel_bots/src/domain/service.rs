@@ -4,6 +4,7 @@ use std::collections::HashSet;
 use std::fmt::Write as _;
 use std::sync::Arc;
 
+use ai_billing::{AiAdmissionService, AiFeature, DisabledAiAdmissionService};
 use entity_access::domain::models::EntityAccessReceipt;
 use messages::domain::{
     api::MessageServiceApi,
@@ -269,6 +270,7 @@ pub struct MacroAiHandler<R, Z> {
     responder: Arc<R>,
     time_zones: Arc<Z>,
     marks: Arc<dyn CommentMarks>,
+    admission: Arc<dyn AiAdmissionService>,
 }
 
 impl<R, Z> MacroAiHandler<R, Z>
@@ -290,7 +292,14 @@ where
             responder,
             time_zones,
             marks,
+            admission: Arc::new(DisabledAiAdmissionService),
         }
+    }
+
+    /// Configure admission for response generation on behalf of the invoking user.
+    pub fn with_admission(mut self, admission: Arc<dyn AiAdmissionService>) -> Self {
+        self.admission = admission;
+        self
     }
 
     /// What a mark covers in the document now. Called only after the thread
@@ -530,8 +539,31 @@ where
         //    conversation stops here: nothing is prompted from the event alone.
         let prompt = self.build_prompt(event).await?;
 
-        // 2. Post the immediate "thinking" message in the thread. The capability
-        //    carries the requesting user, so the message records who triggered it.
+        let admission = self
+            .admission
+            .admit(&event.requesting_user, AiFeature::ChannelBot)
+            .await;
+        if let Err(error) = admission {
+            tracing::info!(code = error.code(), "bot response admission rejected");
+            if event.trigger == BotTrigger::Inferred {
+                return Ok(());
+            }
+        }
+
+        // Explicit requests get a visible rejection, not a thinking placeholder
+        // or an error that could cause queued callers to redeliver the request.
+        let (content, notification_policy) = match admission {
+            Ok(()) => (
+                THINKING_MESSAGE.to_string(),
+                PostMessageNotificationPolicy::Silent,
+            ),
+            Err(error) => (
+                format!("{} ({})", error, error.code()),
+                PostMessageNotificationPolicy::Default,
+            ),
+        };
+
+        // 2. Post under the requesting user's current capability.
         let access = self
             .access
             .bot_write(&event.requesting_user, parent)
@@ -544,8 +576,8 @@ where
                 PostMessage {
                     id: None,
                     attribution: MessageAttribution::ActingUser,
-                    notification_policy: PostMessageNotificationPolicy::Silent,
-                    content: THINKING_MESSAGE.to_string(),
+                    notification_policy,
+                    content,
                     thread_id: Some(event.reply_thread_id),
                     anchor: None,
                     mentions: Vec::new(),
@@ -554,6 +586,9 @@ where
                 },
             )
             .await?;
+        if admission.is_err() {
+            return Ok(());
+        }
         let message_id = thinking.id;
 
         // 3. Run the agent loop to produce the reply.

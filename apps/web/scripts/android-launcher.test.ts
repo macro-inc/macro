@@ -66,6 +66,33 @@ describe('Android launcher arguments', () => {
     readFileSync(path, 'utf8').split('\0').slice(0, -1);
 
   for (const action of ['dev', 'build']) {
+    it(`fetches pinned config for android-${action} even when local files exist`, () => {
+      for (const directory of [
+        'firebase/dev',
+        'firebase/prod',
+        'gen/android/app',
+      ]) {
+        const path = join(app, 'tauri/src-tauri', directory);
+        mkdirSync(path, { recursive: true });
+        writeFileSync(join(path, 'google-services.json'), '{}');
+      }
+      const result = spawnSync(
+        'bash',
+        [join(app, 'scripts/android.sh'), action],
+        {
+          cwd: caller,
+          env,
+        }
+      );
+      expect(result.status, result.stderr.toString()).toBe(0);
+      expect(captured(join(root, 'bun.args'))).toEqual([
+        'scripts/android-firebase.ts',
+        action,
+        '--doppler',
+        'tauri/src-tauri/gen/android/app/google-services.json',
+      ]);
+    });
+
     it(`forwards spaced paths and literal shell characters through android-${action}`, () => {
       const config = join(caller, 'config files/google-services.json');
       const extra = '{"label":"two words; $HOME"}';
@@ -97,6 +124,22 @@ describe('Android launcher arguments', () => {
       expect(args).toContain(extra);
     });
   }
+
+  it('does not invoke Cargo when Firebase setup fails', () => {
+    writeFileSync(join(root, 'bin', 'bun'), '#!/bin/sh\nexit 1\n', {
+      mode: 0o700,
+    });
+    const result = spawnSync(
+      'bash',
+      [join(app, 'scripts/android.sh'), 'build'],
+      {
+        cwd: caller,
+        env,
+      }
+    );
+    expect(result.status).toBe(1);
+    expect(() => captured(join(root, 'cargo.args'))).toThrow();
+  });
 
   it('resolves a relative Firebase path against the direct caller directory', () => {
     const result = spawnSync(

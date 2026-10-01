@@ -8,12 +8,15 @@ import { useCallRecordQuery } from '@queries/call/call';
 import {
   leaveMeeting,
   useJoinMeetingMutation,
+  useMeetingParticipantsQuery,
   useMeetingQuery,
   useUpdateMeetingMutation,
 } from '@queries/call/meetings';
 import { useLocation, useNavigate, useSearchParams } from '@solidjs/router';
 import { Show } from 'solid-js';
 import { browserMeetingMedia } from './browser/meeting-media';
+import { preloadMeetingRuntime } from './browser/meeting-runtime';
+import type { MeetingParticipantsState } from './components/meeting-participants';
 import type { MeetingPageState } from './context/meeting-session';
 import { useMeetingSessionLifecycle } from './context/meeting-session-lifecycle';
 import { MeetingPage } from './views/meeting-page';
@@ -32,6 +35,21 @@ export function MeetingRouteContent(props: {
   const author = useAuthor();
   const userId = useUserId();
   const meeting = useMeetingQuery(() => props.shareToken);
+  const participants = useMeetingParticipantsQuery(
+    () => props.shareToken,
+    userId,
+    () =>
+      meeting.isSuccess &&
+      (authenticated() === false ||
+        (authenticated() === true && Boolean(userId()))) &&
+      (meeting.data.channelId === null || authenticated() === true) &&
+      !call.isInCall()
+  );
+  const participantState = (): MeetingParticipantsState => {
+    if (participants.isError) return { kind: 'unavailable' };
+    if (!participants.isSuccess) return { kind: 'loading' };
+    return { kind: 'ready', participants: participants.data.participants };
+  };
   const join = useJoinMeetingMutation();
   const update = useUpdateMeetingMutation();
   const record = useCallRecordQuery(() =>
@@ -64,6 +82,7 @@ export function MeetingRouteContent(props: {
   return (
     <MeetingPage
       source={source}
+      participants={participantState()}
       onCallStateChange={props.onCallStateChange}
       onLeave={props.onLeave}
       mediaAccess={browserMeetingMedia}
@@ -95,6 +114,7 @@ export function MeetingRouteContent(props: {
       }}
       session={{
         lifecycle,
+        warmup: preloadMeetingRuntime,
         shareToken: () => props.shareToken,
         isInCall: call.isInCall,
         activeCallId: call.activeCallId,

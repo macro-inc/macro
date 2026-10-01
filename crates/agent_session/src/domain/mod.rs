@@ -7,6 +7,8 @@ pub mod error;
 pub mod events;
 pub mod lifecycle;
 pub mod model;
+#[cfg(feature = "admission")]
+pub mod name_generation;
 pub mod ports;
 pub mod pull_request;
 mod sandbox_size;

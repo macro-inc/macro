@@ -95,6 +95,9 @@ pub struct DocumentToolContext<
     /// JWT secret used to mint document permission tokens for the editing worker.
     pub document_permission_jwt_secret: String,
 
+    /// Shared admission used by the domain AI-editing use case.
+    pub admission: Arc<dyn ai_billing::domain::admission::AiAdmissionService>,
+
     /// Records the token usage the editing worker reports. Defaults to a no-op;
     /// the chat path injects the real (Postgres-backed) recorder per request.
     pub recorder: Arc<dyn ai_usage::UsageRecorder>,
@@ -129,6 +132,7 @@ impl<
             messages: self.messages.clone(),
             spreadsheet: self.spreadsheet.clone(),
             document_permission_jwt_secret: self.document_permission_jwt_secret.clone(),
+            admission: self.admission.clone(),
             recorder: self.recorder.clone(),
             actor: self.actor,
             actor_name: self.actor_name.clone(),
@@ -186,10 +190,29 @@ impl<
             messages,
             spreadsheet,
             document_permission_jwt_secret,
+            admission: Arc::new(ai_billing::domain::admission::DisabledAiAdmissionService),
             recorder: Arc::new(ai_usage::NoOpUsageRecorder),
             actor: bot_id::MACRO_AI_BOT_ID,
             actor_name: None,
         }
+    }
+
+    /// Configure admission for AI edits; deterministic operations do not use it.
+    pub fn with_admission(
+        mut self,
+        admission: Arc<dyn ai_billing::domain::admission::AiAdmissionService>,
+    ) -> Self {
+        self.admission = admission;
+        self
+    }
+
+    /// The AI-editing use case using the currently injected services.
+    pub fn ai_editing(&self) -> crate::domain::ai_editing::AiEditingService<EDSvc> {
+        crate::domain::ai_editing::AiEditingService::new(
+            self.editing.clone(),
+            self.admission.clone(),
+            self.recorder.clone(),
+        )
     }
 
     /// Set the usage recorder the EditDocument tool logs worker token usage to.

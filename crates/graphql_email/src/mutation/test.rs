@@ -220,11 +220,13 @@ impl EmailMutationService for CapturingEmailMutationService {
             .load(std::sync::atomic::Ordering::SeqCst)
         {
             return Ok(DeletedUserDraft {
+                thread_id: None,
                 deleted: false,
                 thread_deleted: false,
             });
         }
         Ok(DeletedUserDraft {
+            thread_id: None,
             deleted: true,
             thread_deleted: true,
         })

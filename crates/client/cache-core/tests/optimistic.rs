@@ -306,6 +306,7 @@ async fn reconciliation_engine() -> (Engine<ClaimFailingStorage>, MutationId) {
                 link_patches: &[],
                 revalidations: &[],
                 created_at_ms: 123,
+                identity_bindings: &[],
             },
         )
         .await
@@ -384,6 +385,7 @@ async fn begin_value(
                 link_patches: &[],
                 revalidations: &[],
                 created_at_ms,
+                identity_bindings: &[],
             },
         )
         .await
@@ -424,6 +426,7 @@ fn begin_persists_mutation_and_optimistic_layer() {
                     link_patches: &[],
                     revalidations: &[],
                     created_at_ms: 123,
+                    identity_bindings: &[],
                 },
             )
             .await
@@ -461,6 +464,7 @@ fn enqueue_claims_new_mutation_when_queue_was_empty() {
                     link_patches: &[],
                     revalidations: &[],
                     created_at_ms: 123,
+                    identity_bindings: &[],
                 },
                 MutationClaimRequest {
                     owner: "runner".into(),
@@ -495,6 +499,7 @@ fn enqueue_claims_older_strict_head() {
                     link_patches: &[],
                     revalidations: &[],
                     created_at_ms: 1,
+                    identity_bindings: &[],
                 },
             )
             .await
@@ -511,6 +516,7 @@ fn enqueue_claims_older_strict_head() {
                     link_patches: &[],
                     revalidations: &[],
                     created_at_ms: 2,
+                    identity_bindings: &[],
                 },
                 MutationClaimRequest {
                     owner: "runner".into(),
@@ -546,6 +552,7 @@ fn enqueue_does_not_skip_a_leased_or_deferred_head() {
                         link_patches: &[],
                         revalidations: &[],
                         created_at_ms: 1,
+                        identity_bindings: &[],
                     },
                 )
                 .await
@@ -570,6 +577,7 @@ fn enqueue_does_not_skip_a_leased_or_deferred_head() {
                         link_patches: &[],
                         revalidations: &[],
                         created_at_ms: 20,
+                        identity_bindings: &[],
                     },
                     MutationClaimRequest {
                         owner: "second-runner".into(),
@@ -628,6 +636,7 @@ fn claim_failure_after_enqueue_preserves_one_durable_visible_mutation() {
                     link_patches: &[],
                     revalidations: &[],
                     created_at_ms: 123,
+                    identity_bindings: &[],
                 },
                 MutationClaimRequest {
                     owner: "runner".into(),
@@ -738,6 +747,7 @@ fn claimed_success_atomically_commits_real_response() {
                     link_patches: &[],
                     revalidations: &[],
                     created_at_ms: 0,
+                    identity_bindings: &[],
                 },
             )
             .await
@@ -790,6 +800,7 @@ fn retryable_failure_keeps_optimistic_layer_and_blocks_later_mutations() {
                     link_patches: &[],
                     revalidations: &[],
                     created_at_ms: 0,
+                    identity_bindings: &[],
                 },
             )
             .await
@@ -806,6 +817,7 @@ fn retryable_failure_keeps_optimistic_layer_and_blocks_later_mutations() {
                     link_patches: &[],
                     revalidations: &[],
                     created_at_ms: 1,
+                    identity_bindings: &[],
                 },
             )
             .await
@@ -853,6 +865,7 @@ fn permanent_failure_rolls_back_only_the_claimed_head() {
                     link_patches: &[],
                     revalidations: &[],
                     created_at_ms: 0,
+                    identity_bindings: &[],
                 },
             )
             .await
@@ -869,6 +882,7 @@ fn permanent_failure_rolls_back_only_the_claimed_head() {
                     link_patches: &[],
                     revalidations: &[],
                     created_at_ms: 1,
+                    identity_bindings: &[],
                 },
             )
             .await
@@ -905,6 +919,7 @@ fn stale_claim_cannot_settle_mutation() {
                     link_patches: &[],
                     revalidations: &[],
                     created_at_ms: 0,
+                    identity_bindings: &[],
                 },
             )
             .await
@@ -976,6 +991,7 @@ fn pending_replacement_restores_fields_omitted_by_the_new_intent() {
                     link_patches: &[],
                     revalidations: &[],
                     created_at_ms: 1,
+                    identity_bindings: &[],
                 },
             )
             .await
@@ -1002,6 +1018,7 @@ fn pending_replacement_restores_fields_omitted_by_the_new_intent() {
                     link_patches: &[],
                     revalidations: &[],
                     created_at_ms: 2,
+                    identity_bindings: &[],
                 },
             )
             .await
@@ -1058,6 +1075,7 @@ fn active_uuid_replacement_is_superseded_and_failed_attempt_is_discarded() {
             .unwrap()
             .unwrap();
         assert!(recovered.queued.superseded);
+        assert!(!recovered.queued.requires_confirmation());
         let deferred = engine
             .defer_optimistic_write(
                 active,
@@ -1136,6 +1154,7 @@ fn invalid_uuid_is_rejected_before_queue_hydration() {
                     link_patches: &[],
                     revalidations: &[],
                     created_at_ms: 1,
+                    identity_bindings: &[],
                 },
             )
             .await
@@ -1172,6 +1191,7 @@ fn clear_and_identity_reset_drop_durable_queue() {
                     link_patches: &[],
                     revalidations: &[],
                     created_at_ms: 0,
+                    identity_bindings: &[],
                 },
             )
             .await

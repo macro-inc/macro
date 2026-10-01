@@ -570,11 +570,11 @@ async fn period_sync_is_gated_and_never_calls_payments_or_changes_item_anchors()
 type Service = BillingServiceImpl<FakeEntitlements, FakeUsage, FakeRepo, FakePayments>;
 
 fn premium_service(used_cents: i64) -> (Service, FakeRepo, FakePayments, FakeUsage) {
-    premium_service_in(Environment::Develop, used_cents)
+    premium_service_with(AiUsageBilling::Enabled, used_cents)
 }
 
-fn premium_service_in(
-    environment: Environment,
+fn premium_service_with(
+    billing: AiUsageBilling,
     used_cents: i64,
 ) -> (Service, FakeRepo, FakePayments, FakeUsage) {
     let payer = user("payer@x.com");
@@ -588,13 +588,9 @@ fn premium_service_in(
     let repo = FakeRepo::default();
     let payments = FakePayments::default();
     (
-        BillingServiceImpl::new(
-            ents,
-            usage.clone(),
-            repo.clone(),
-            payments.clone(),
-            environment,
-        ),
+        BillingServiceImpl::new(ents, usage.clone(), repo.clone(), payments.clone())
+            .with_enforcement(AiUsageEnforcement::Enabled)
+            .with_billing(billing),
         repo,
         payments,
         usage,
@@ -646,8 +642,8 @@ async fn policy_activation_during_analytics_read_cannot_double_bill() {
         ActivatingUsage(repo.clone()),
         repo.clone(),
         payments.clone(),
-        Environment::Develop,
-    );
+    )
+    .with_billing(AiUsageBilling::Enabled);
     svc.settle(&user("payer@x.com")).await.unwrap();
     assert!(repo.state.lock().unwrap().consumed.is_empty());
     assert!(repo.charges().is_empty());
@@ -674,9 +670,10 @@ async fn allows_within_allowance_and_denies_past_it() {
 }
 
 #[tokio::test]
-async fn outside_dev_allows_exhausted_allowances_caps_and_failed_payments() {
-    for environment in [Environment::Production, Environment::Local] {
-        let (svc, repo, _, _) = premium_service_in(environment, 1_000_000);
+async fn disabled_allows_exhausted_allowances_caps_and_failed_payments_regardless_of_settlement() {
+    for billing in [AiUsageBilling::Disabled, AiUsageBilling::Enabled] {
+        let (svc, repo, _, _) = premium_service_with(billing, 1_000_000);
+        let svc = svc.with_enforcement(AiUsageEnforcement::Disabled);
         let payer = user("payer@x.com");
         assert_eq!(
             svc.check_allowance(&payer).await.unwrap(),
@@ -684,8 +681,9 @@ async fn outside_dev_allows_exhausted_allowances_caps_and_failed_payments() {
         );
         assert_eq!(svc.snapshot(&payer).await.unwrap().blocked_reason, None);
 
-        let snapshot = svc.update_overage(&payer, true, 1_000).await.unwrap();
-        assert_eq!(snapshot.blocked_reason, None);
+        // Changing settings directly keeps this admission test independent of settlement.
+        repo.update_overage(&payer, true, 1_000).await.unwrap();
+        assert_eq!(svc.snapshot(&payer).await.unwrap().blocked_reason, None);
         assert_eq!(
             svc.check_allowance(&payer).await.unwrap(),
             AllowanceDecision::Allow
@@ -701,68 +699,126 @@ async fn outside_dev_allows_exhausted_allowances_caps_and_failed_payments() {
 }
 
 #[tokio::test]
-async fn outside_dev_preserves_credits_and_never_reserves_or_collects_overage() {
-    for environment in [Environment::Production, Environment::Local] {
-        let (mut svc, repo, payments, usage, _, payer, previous, current) =
-            anchored_premium(1_000_000);
-        svc.environment = environment;
-        svc.sync_period(&payer, current.start, current.end, None)
-            .await
-            .unwrap();
-        usage.add(
-            &payer,
-            previous.start + chrono::Duration::days(2),
-            1_000_000,
+async fn enabled_enforces_allowances_under_either_settlement_policy_without_settling() {
+    for billing in [AiUsageBilling::Disabled, AiUsageBilling::Enabled] {
+        let (svc, repo, payments, usage) = premium_service_with(billing, 4_000);
+        let payer = user("payer@x.com");
+        assert_eq!(
+            svc.check_allowance(&payer).await.unwrap(),
+            AllowanceDecision::Deny(DenyReason::AllowanceExhausted)
         );
-
-        svc.update_overage(&payer, true, 10_000).await.unwrap();
-        svc.apply_credit_purchase(&payer, 2_500, "cs_paused")
-            .await
-            .unwrap();
-        svc.apply_credit_purchase(&payer, 2_500, "cs_paused")
-            .await
-            .unwrap();
-        svc.settle(&payer).await.unwrap();
-        svc.settle(&payer).await.unwrap();
-
-        let snapshot = svc.snapshot(&payer).await.unwrap();
-        assert_eq!(snapshot.used_cents, 1_000_000);
-        assert_eq!(snapshot.credit_balance_cents, 2_500);
-        assert_eq!(snapshot.credits_consumed_cents, 0);
-        assert_eq!(snapshot.overage_charged_cents, 0);
-        assert!(repo.state.lock().unwrap().consumed.is_empty());
+        assert_eq!(
+            svc.snapshot(&payer).await.unwrap().blocked_reason,
+            Some(DenyReason::AllowanceExhausted)
+        );
+        repo.update_overage(&payer, true, 1_000).await.unwrap();
+        *usage.cents.lock().unwrap() = 5_000;
+        assert_eq!(
+            svc.check_allowance(&payer).await.unwrap(),
+            AllowanceDecision::Deny(DenyReason::OverageLimitReached)
+        );
+        repo.state.lock().unwrap().suspended = true;
+        assert_eq!(
+            svc.check_allowance(&payer).await.unwrap(),
+            AllowanceDecision::Deny(DenyReason::OveragePaymentFailed)
+        );
         assert!(repo.charges().is_empty());
+        assert!(repo.state.lock().unwrap().consumed.is_empty());
         assert!(payments.opened().is_empty());
         assert!(payments.payments().is_empty());
     }
 }
 
 #[tokio::test]
-async fn outside_dev_does_not_retry_pending_or_failed_charges() {
-    for environment in [Environment::Production, Environment::Local] {
-        for status in [OverageChargeStatus::Pending, OverageChargeStatus::Failed] {
-            for invoice in [None, Some("in_existing".to_string())] {
-                let (svc, repo, payments, _) = premium_service_in(environment, 1_000_000);
-                let payer = user("payer@x.com");
-                let period = BillingPeriod::current(None, Utc::now());
-                repo.state.lock().unwrap().charges.push(FakeCharge {
-                    id: macro_uuid::generate_uuid_v7(),
-                    period_start: period.start,
-                    amount_cents: 1_000,
-                    status,
-                    invoice: invoice.clone(),
-                });
+async fn default_disabled_gate_and_disabled_settlement_do_not_read_entitlements() {
+    struct PanicEntitlements;
+    impl EntitlementSource for PanicEntitlements {
+        async fn entitlement(&self, _: &MacroUserIdStr<'_>) -> Result<Entitlement> {
+            panic!("must not read entitlements")
+        }
+        async fn stripe_customer_id(&self, _: &MacroUserIdStr<'_>) -> Result<Option<String>> {
+            panic!("must not resolve a payment customer")
+        }
+        async fn team_payer(&self, _: Uuid) -> Result<Option<MacroUserIdStr<'static>>> {
+            panic!("must not resolve a team payer")
+        }
+    }
+    let svc = BillingServiceImpl::new(
+        PanicEntitlements,
+        FakeUsage::default(),
+        FakeRepo::default(),
+        FakePayments::default(),
+    );
+    assert_eq!(
+        svc.check_allowance(&user("payer@x.com")).await.unwrap(),
+        AllowanceDecision::Allow
+    );
+    // Quota enforcement alone never turns settlement on.
+    svc.with_enforcement(AiUsageEnforcement::Enabled)
+        .settle(&user("payer@x.com"))
+        .await
+        .unwrap();
+}
 
-                svc.update_overage(&payer, true, 10_000).await.unwrap();
-                svc.settle(&payer).await.unwrap();
+#[tokio::test]
+async fn disabled_settlement_preserves_credits_and_never_reserves_or_collects_overage() {
+    let (mut svc, repo, payments, usage, _, payer, previous, current) = anchored_premium(1_000_000);
+    svc.billing = AiUsageBilling::Disabled;
+    svc.sync_period(&payer, current.start, current.end, None)
+        .await
+        .unwrap();
+    usage.add(
+        &payer,
+        previous.start + chrono::Duration::days(2),
+        1_000_000,
+    );
 
-                let charges = repo.charges();
-                assert_eq!(charges.len(), 1);
-                assert_eq!(charges[0].status, status);
-                assert_eq!(charges[0].invoice, invoice);
-                assert!(payments.opened().is_empty());
-                assert!(payments.payments().is_empty());
-            }
+    svc.update_overage(&payer, true, 10_000).await.unwrap();
+    svc.apply_credit_purchase(&payer, 2_500, "cs_paused")
+        .await
+        .unwrap();
+    svc.apply_credit_purchase(&payer, 2_500, "cs_paused")
+        .await
+        .unwrap();
+    svc.settle(&payer).await.unwrap();
+    svc.settle(&payer).await.unwrap();
+
+    let snapshot = svc.snapshot(&payer).await.unwrap();
+    assert_eq!(snapshot.used_cents, 1_000_000);
+    assert_eq!(snapshot.credit_balance_cents, 2_500);
+    assert_eq!(snapshot.credits_consumed_cents, 0);
+    assert_eq!(snapshot.overage_charged_cents, 0);
+    assert!(repo.state.lock().unwrap().consumed.is_empty());
+    assert!(repo.charges().is_empty());
+    assert!(payments.opened().is_empty());
+    assert!(payments.payments().is_empty());
+}
+
+#[tokio::test]
+async fn disabled_settlement_does_not_retry_pending_or_failed_charges() {
+    for status in [OverageChargeStatus::Pending, OverageChargeStatus::Failed] {
+        for invoice in [None, Some("in_existing".to_string())] {
+            let (svc, repo, payments, _) =
+                premium_service_with(AiUsageBilling::Disabled, 1_000_000);
+            let payer = user("payer@x.com");
+            let period = BillingPeriod::current(None, Utc::now());
+            repo.state.lock().unwrap().charges.push(FakeCharge {
+                id: macro_uuid::generate_uuid_v7(),
+                period_start: period.start,
+                amount_cents: 1_000,
+                status,
+                invoice: invoice.clone(),
+            });
+
+            svc.update_overage(&payer, true, 10_000).await.unwrap();
+            svc.settle(&payer).await.unwrap();
+
+            let charges = repo.charges();
+            assert_eq!(charges.len(), 1);
+            assert_eq!(charges[0].status, status);
+            assert_eq!(charges[0].invoice, invoice);
+            assert!(payments.opened().is_empty());
+            assert!(payments.payments().is_empty());
         }
     }
 }
@@ -1010,8 +1066,8 @@ async fn only_the_payer_manages_billing_and_needs_a_paid_plan() {
         FakeUsage::default(),
         FakeRepo::default(),
         FakePayments::default(),
-        Environment::Develop,
-    );
+    )
+    .with_billing(AiUsageBilling::Enabled);
 
     assert!(matches!(
         svc.update_overage(&member, true, 1_000).await,
@@ -1071,13 +1127,10 @@ async fn team_seats_keep_allowances_separate_and_share_credits() {
     let usage = FakeUsage::default();
     usage.add(&member, Utc::now(), 5_000);
     let repo = FakeRepo::default();
-    let service = BillingServiceImpl::new(
-        entitlements,
-        usage,
-        repo.clone(),
-        FakePayments::default(),
-        Environment::Develop,
-    );
+    let service =
+        BillingServiceImpl::new(entitlements, usage, repo.clone(), FakePayments::default())
+            .with_billing(AiUsageBilling::Enabled)
+            .with_enforcement(AiUsageEnforcement::Enabled);
 
     let owner_snapshot = service.snapshot(&owner).await.unwrap();
     assert_eq!(owner_snapshot.used_cents, 0);
@@ -1233,13 +1286,8 @@ fn anchored_premium(
     };
     let repo = FakeRepo::default();
     let payments = FakePayments::default();
-    let svc = BillingServiceImpl::new(
-        ents.clone(),
-        usage.clone(),
-        repo.clone(),
-        payments.clone(),
-        Environment::Develop,
-    );
+    let svc = BillingServiceImpl::new(ents.clone(), usage.clone(), repo.clone(), payments.clone())
+        .with_billing(AiUsageBilling::Enabled);
     let current_start = Utc::now() - chrono::Duration::days(3);
     let current_end = current_start + chrono::Duration::days(30);
     let current = BillingPeriod {
@@ -1360,13 +1408,8 @@ async fn previous_period_usage_uses_the_frozen_billed_users() {
     let usage = FakeUsage::default();
     let repo = FakeRepo::default();
     let payments = FakePayments::default();
-    let svc = BillingServiceImpl::new(
-        ents.clone(),
-        usage.clone(),
-        repo.clone(),
-        payments.clone(),
-        Environment::Develop,
-    );
+    let svc = BillingServiceImpl::new(ents.clone(), usage.clone(), repo.clone(), payments.clone())
+        .with_billing(AiUsageBilling::Enabled);
     let current_start = Utc::now() - chrono::Duration::days(3);
     let current_end = current_start + chrono::Duration::days(30);
     let current = BillingPeriod {
@@ -1462,8 +1505,8 @@ async fn release_targets_the_payer_open_period() {
         FakeUsage::default(),
         repo.clone(),
         FakePayments::default(),
-        Environment::Develop,
-    );
+    )
+    .with_billing(AiUsageBilling::Enabled);
 
     svc.release(team_id, &member).await.unwrap();
 
@@ -1497,8 +1540,8 @@ async fn release_missing_team_leaves_allowances_unchanged() {
         FakeUsage::default(),
         repo.clone(),
         FakePayments::default(),
-        Environment::Develop,
-    );
+    )
+    .with_billing(AiUsageBilling::Enabled);
 
     svc.release(Uuid::from_u128(8), &member).await.unwrap();
 
@@ -1535,8 +1578,8 @@ async fn release_refuses_to_remove_the_payer() {
         FakeUsage::default(),
         repo.clone(),
         FakePayments::default(),
-        Environment::Develop,
-    );
+    )
+    .with_billing(AiUsageBilling::Enabled);
 
     svc.release(team_id, &owner).await.unwrap();
 
@@ -1588,8 +1631,8 @@ async fn position_keeps_matching_pairs_in_their_stored_order() {
         FakeUsage::default(),
         repo.clone(),
         FakePayments::default(),
-        Environment::Develop,
-    );
+    )
+    .with_billing(AiUsageBilling::Enabled);
 
     svc.position(&owner, now).await.unwrap();
 
@@ -1651,8 +1694,8 @@ async fn position_does_not_restore_a_member_released_between_entitlement_reads()
         FakeUsage::default(),
         repo.clone(),
         FakePayments::default(),
-        Environment::Develop,
-    );
+    )
+    .with_billing(AiUsageBilling::Enabled);
 
     let position = svc.position(&owner, now).await.unwrap();
 

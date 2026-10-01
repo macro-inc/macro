@@ -31,13 +31,6 @@ pub(crate) struct QueryDependencies {
     pub viewer_fields: ViewerFields,
 }
 
-impl QueryDependencies {
-    pub fn clear(&mut self) {
-        self.records.clear();
-        self.viewer_fields.clear();
-    }
-}
-
 impl DependencyTracker for QueryDependencies {
     fn record(&mut self, key: &EntityKey<'static>) {
         self.records.insert(key.clone());

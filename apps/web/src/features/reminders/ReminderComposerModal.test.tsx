@@ -9,6 +9,7 @@ import { createSignal, type ParentProps, Show } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ReminderComposerModal } from './ReminderComposerModal';
 import {
+  chooseReminderTarget,
   closeReminderComposer,
   openStandaloneReminderComposer,
   reminderComposerOpen,
@@ -34,6 +35,10 @@ vi.mock('@core/component/Toast/Toast', () => ({
 vi.mock('@entity/components/EntitySelectionBadge', () => ({
   EntitySelectionBadge: () => null,
 }));
+vi.mock('./views/reminder-entity-picker', () => ({
+  ReminderEntityPicker: () => null,
+}));
+vi.mock('@entity', () => ({ Entity: { Icon: () => null, Title: () => null } }));
 vi.mock('@ui', () => {
   const Slot = (props: ParentProps) => props.children;
   return {
@@ -111,6 +116,7 @@ it('keeps the draft open and prevents concurrent duplicate submits', async () =>
   );
   const onCreated = vi.fn();
   openStandaloneReminderComposer({ onCreated });
+  chooseReminderTarget();
   render(() => <ReminderComposerModal />);
 
   const input = screen.getByRole('textbox', {
@@ -148,6 +154,7 @@ it('retries with the same draft and opens View while route application is deferr
     .mockResolvedValueOnce(savedReminder());
   const onCreated = vi.fn();
   openStandaloneReminderComposer({ onCreated });
+  chooseReminderTarget();
   render(() => <ReminderComposerModal />);
 
   const input = screen.getByRole('textbox', {
@@ -187,6 +194,7 @@ it('waits for a deferred mutation before closing and running the follow-up', asy
   );
   const onCreated = vi.fn();
   openStandaloneReminderComposer({ onCreated });
+  chooseReminderTarget();
   render(() => <ReminderComposerModal />);
 
   fireEvent.submit(screen.getByRole('form', { name: 'Reminder form' }));

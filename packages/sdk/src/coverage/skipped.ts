@@ -330,10 +330,15 @@ export const storageExcluded = [
   'jobProcessingResultHandler',
   'joinChannelByCode',
   'leaveOrEndCall',
-  // Joining and leaving live meetings are app session flows.
+  // Live meeting admission and participant previews are app session flows.
   'meetingGuestJoin',
+  // Browser setup reserves an empty RTC room before creating a meeting.
+  'meetingPrepare',
+  'meetingCancelPreparation',
+  'meetingGuestParticipants',
   'meetingJoin',
   'meetingLeave',
+  'meetingParticipants',
   'mentionPreviews',
   'patchViewHandler',
   'postChannelMessages',
@@ -351,6 +356,9 @@ export const storageExcluded = [
 ] as const satisfies readonly (keyof StorageSdk)[];
 
 export const storageBacklog = [
+  // Email follow-ups are available through the generated client, like reminders.
+  'getEmailFollowup',
+  'setEmailFollowup',
   'approveHarnessPairing',
   'assignInitiativeTasks',
   'claimHarnessPairing',

@@ -45,8 +45,8 @@ row additions are not duplicated after a lost acknowledgement.
 
 ## Ask Macro and spreadsheet tools
 
-Ask Macro uses the shared chat creation flow and opens an adjacent chat with one
-document mention plus a trailing space. The mention includes the active sheet
+Ask Macro uses the shared agent session flow and opens an adjacent agent with one
+unsent document mention plus a trailing space. The mention includes the active sheet
 ID/name and selection snapshot. Local demos save through the existing acknowledged
 draft path first. Selection remains local presence, not persisted workbook data.
 

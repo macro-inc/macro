@@ -22,6 +22,7 @@ export type ResolvedSessionId = {
   /** The first prompt of a create this block started, to show as sent while
    *  the create is still on the wire. */
   pendingPrompt: Accessor<string | undefined>;
+  initialInput: Accessor<string | undefined>;
 };
 
 export function resolveSessionId(blockId: Accessor<string>): ResolvedSessionId {
@@ -45,5 +46,6 @@ export function resolveSessionId(blockId: Accessor<string>): ResolvedSessionId {
     failed: () => entry()?.failed() ?? false,
     error: () => entry()?.error(),
     pendingPrompt: () => entry()?.prompt,
+    initialInput: () => entry()?.initialInput,
   };
 }

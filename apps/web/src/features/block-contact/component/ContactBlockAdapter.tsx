@@ -1,7 +1,7 @@
-import { CrmCopyLinkButton } from '@companies/components/CrmCopyLinkButton';
+import { Contact } from '@app/features/crm/crm-contact';
+import { CrmCopyLinkButton } from '@app/features/crm/crm-link';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import { SplitHeaderRight } from '@components/app/split-layout/components/SplitHeader';
-import { Contact } from '@contacts/Contact/Contact';
 import { useBlockId } from '@core/block';
 import {
   createParamsState,

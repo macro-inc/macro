@@ -29,6 +29,7 @@ export function mountEmailComposer(
   root.state.context.onContentChange('');
   return {
     ...root,
+    editor,
     edit(text: string, subject = 'Review') {
       setEmailEditorText(editor, text);
       root.state.context.setSubject(subject);

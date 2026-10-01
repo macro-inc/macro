@@ -104,10 +104,14 @@ export function useTeamOooEvents(
     })
   );
   const events = createMemo(() => {
-    // Read data only on success: a failed overlay fetch degrades to no events
-    // since the grid's own state is driven by the occurrences query, and gating
-    // on success keeps this off the pending/errored resource read that suspends.
-    if (!teamOooEnabled() || !isRangeSupported() || !query.isSuccess) {
+    // Pending reads suspend, and placeholder data belongs to the previous
+    // range. Neither can supply events for the current viewport.
+    if (
+      !teamOooEnabled() ||
+      !isRangeSupported() ||
+      !query.isSuccess ||
+      query.isPlaceholderData
+    ) {
       return [];
     }
     return query.data.map(mapTeamOooItem);

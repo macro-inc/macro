@@ -399,12 +399,16 @@ impl IntoResponse for ChannelBotWebhookHandlerErr {
             Self::Bot(BotError::NotFound(_)) | Self::Message(MessageError::NotFound) => {
                 StatusCode::NOT_FOUND
             }
+            Self::Bot(BotError::Unavailable(_)) => StatusCode::SERVICE_UNAVAILABLE,
             Self::Bot(BotError::Repo(_)) | Self::Message(MessageError::Repository(_)) => {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
         };
 
-        if status == StatusCode::INTERNAL_SERVER_ERROR {
+        if matches!(
+            status,
+            StatusCode::INTERNAL_SERVER_ERROR | StatusCode::SERVICE_UNAVAILABLE
+        ) {
             tracing::error!(error=?self, "channel bot webhook handler error");
         }
 

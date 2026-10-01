@@ -9,4 +9,5 @@ export const reminderKeys = createQueryKeys('reminders', {
   list: (params: ListRemindersParams = {}) => [params],
   /** A single reminder by id. */
   detail: (id: string) => [id],
+  email: (threadId: string) => [threadId],
 });

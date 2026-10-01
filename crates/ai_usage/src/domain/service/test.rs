@@ -119,11 +119,15 @@ fn normalize_model_id_strips_provider_prefix() {
 struct FakeRepo {
     pricing: std::sync::Arc<std::sync::Mutex<Option<ModelPricing>>>,
     rows: std::sync::Arc<std::sync::Mutex<Vec<CompletionUsage>>>,
+    counting: std::sync::Arc<std::sync::Mutex<Vec<bool>>>,
+    recorded: std::sync::Arc<tokio::sync::Notify>,
 }
 
 impl UsageRepo for FakeRepo {
-    async fn insert_usage(&self, usage: &CompletionUsage) -> Result<()> {
+    async fn insert_usage(&self, usage: &CompletionUsage, count_usage: bool) -> Result<()> {
         self.rows.lock().unwrap().push(usage.clone());
+        self.counting.lock().unwrap().push(count_usage);
+        self.recorded.notify_one();
         Ok(())
     }
 
@@ -147,7 +151,10 @@ async fn records_duration_with_the_model_rate_and_user_attribution() {
     *repo.pricing.lock().unwrap() = Some(ModelPricing::Audio { per_minute: 0.006 });
     let event = UsageContext::new(AiFeature::Dictation, user())
         .into_audio_event("whisper-1".into(), std::time::Duration::from_millis(90_500));
-    UsageServiceImpl::record_event(&repo, event).await.unwrap();
+    UsageServiceImpl::new(repo.clone())
+        .record_now(event)
+        .await
+        .unwrap();
     let rows = repo.rows.lock().unwrap();
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].user, user());
@@ -179,7 +186,10 @@ async fn missing_audio_rate_keeps_usage_unpriced() {
             "unpriced-audio-model".into(),
             std::time::Duration::from_secs(60),
         );
-        UsageServiceImpl::record_event(&repo, event).await.unwrap();
+        UsageServiceImpl::new(repo.clone())
+            .record_now(event)
+            .await
+            .unwrap();
         let rows = repo.rows.lock().unwrap();
         assert_eq!(
             rows[0].cost.amount,
@@ -189,6 +199,82 @@ async fn missing_audio_rate_keeps_usage_unpriced() {
         );
         assert!(rows[0].cost.price.is_none());
     }
+}
+
+#[tokio::test]
+async fn both_recording_paths_persist_the_same_counting_policy() {
+    let real_user = MacroUserIdStr::try_from("macro|someone@example.com".to_owned()).unwrap();
+    for enforcement in [AiUsageEnforcement::Disabled, AiUsageEnforcement::Enabled] {
+        for actor in [real_user.clone(), SYSTEM_USER_ID.clone()] {
+            for feature in [
+                AiFeature::Chat,
+                AiFeature::AiEditing,
+                AiFeature::Memory,
+                AiFeature::AiProjection,
+                AiFeature::CallSummary,
+                AiFeature::Dictation,
+            ] {
+                for pricing in [
+                    None,
+                    Some(ModelPricing::Tokens {
+                        input: 5.0,
+                        output: 25.0,
+                    }),
+                ] {
+                    let repo = FakeRepo::default();
+                    *repo.pricing.lock().unwrap() = pricing;
+                    let service = UsageServiceImpl::new(repo.clone()).with_enforcement(enforcement);
+                    let event = UsageContext::new(feature, actor.clone()).into_event(
+                        "anthropic/test-model".into(),
+                        100,
+                        200,
+                    );
+                    let expected = enforcement == AiUsageEnforcement::Enabled
+                        && actor == real_user
+                        && matches!(feature, AiFeature::Chat | AiFeature::AiEditing);
+
+                    service.record_now(event.clone()).await.unwrap();
+                    repo.recorded.notified().await;
+                    service.record(event);
+                    tokio::time::timeout(
+                        std::time::Duration::from_secs(2),
+                        repo.recorded.notified(),
+                    )
+                    .await
+                    .expect("background recording must finish");
+
+                    assert_eq!(*repo.counting.lock().unwrap(), vec![expected, expected]);
+                    let rows = repo.rows.lock().unwrap();
+                    assert_eq!(rows.len(), 2);
+                    assert!(rows.iter().all(|row| row.user == actor
+                        && row.feature == feature
+                        && row.cost.model == "test-model"
+                        && row.cost.price.is_some() == pricing.is_some()));
+                }
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn default_disabled_writes_do_not_change_previously_counted_usage() {
+    let repo = FakeRepo::default();
+    let enabled = UsageServiceImpl::new(repo.clone()).with_enforcement(AiUsageEnforcement::Enabled);
+    let disabled = UsageServiceImpl::new(repo.clone());
+    let actor = MacroUserIdStr::try_from("macro|someone@example.com".to_owned()).unwrap();
+    let event = UsageContext::new(AiFeature::Chat, actor).into_event("model".into(), 100, 200);
+    enabled.record_now(event.clone()).await.unwrap();
+    disabled.record_now(event).await.unwrap();
+    assert_eq!(*repo.counting.lock().unwrap(), vec![true, false]);
+    let summary = disabled
+        .get_usage(user(), UsageApiParams::default())
+        .await
+        .unwrap();
+    assert_eq!(
+        summary.entries[0].entries.len(),
+        2,
+        "analytics stays unfiltered"
+    );
 }
 
 #[tokio::test]

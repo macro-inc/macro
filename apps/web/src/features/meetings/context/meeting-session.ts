@@ -32,6 +32,8 @@ export type MeetingMediaPreferences = {
 /** The session owns only the connection it joined, including late replies. */
 export type MeetingSessionCapabilities = {
   lifecycle: MeetingSessionLifecycle;
+  /** Fetch browser call code during setup, without creating or connecting a call. */
+  warmup?: () => Promise<void>;
   shareToken: Accessor<string>;
   isInCall: Accessor<boolean>;
   activeCallId: Accessor<string | null>;

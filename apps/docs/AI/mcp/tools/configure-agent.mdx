@@ -1,0 +1,24 @@
+---
+title: ConfigureAgent
+description: "Update the instructions or settings of an AI agent the current user can manage. Provide only the fields that should change; everything else keeps its current value. Read the agent first with ListAgents: instructions are replaced whole, so to edit them, apply the edit to the current text and pass the complete result. Changes apply to sessions opened afterwards; running sessions keep the instructions they started with. Use ConfigureBot for the display name, handle, description, or picture, and ManageBotChannelAccess for plain webhook bots."
+---
+
+# ConfigureAgent
+
+Update the instructions or settings of an AI agent the current user can manage. Provide only the fields that should change; everything else keeps its current value. Read the agent first with ListAgents: instructions are replaced whole, so to edit them, apply the edit to the current text and pass the complete result. Changes apply to sessions opened afterwards; running sessions keep the instructions they started with. Use ConfigureBot for the display name, handle, description, or picture, and ManageBotChannelAccess for plain webhook bots.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `botId` | string | Yes | The agent's bot id: `bot.botId` from ListAgents. |
+| `instructions` | string | No | The complete new instructions in markdown. Replaces the current instructions entirely; omit to keep them. |
+| `harness` | `"in-memory"` \| `"cursor"` \| `"claude-cloud"` \| `"macrod"` | No | Runtime to move the agent onto. `macrod` also needs harnessId; the other runtimes must not have one. The current model may not exist on the new runtime, so usually pass defaultModel with it. Omit to keep the current runtime. |
+| `harnessId` | string | No | Id of the registered self-hosted harness, required when harness is `macrod` and forbidden otherwise. |
+| `defaultModel` | string | No | Model id the agent's new sessions should use, as the runtime names it (e.g. `claude-sonnet-4-5`). Valid ids depend on the runtime. Omit to keep the current model. |
+| `channelScope` | `"all"` \| `"selected"` | No | `all` makes the agent mentionable in every channel its owner can use; `selected` limits it to channelIds. Omit to keep the current scope, or omit it and pass channelIds alone to switch to `selected`. |
+| `channelIds` | string[] | No | The complete list of channel ids the agent is limited to; the user must be a member of each. Required with the `selected` scope and forbidden with `all`. |
+| `mcpScope` | `"owner_connections"` \| `"selected"` | No | `owner_connections` hands sessions whatever apps the person running them has connected; `selected` hands exactly mcpServers. Omit to keep the current scope, or omit it and pass mcpServers alone to switch to `selected`. |
+| `mcpServers` | AgentMcpServerSummary[] | No | The complete list of connected apps for the `selected` MCP scope, each as its Pipedream app slug (e.g. `linear`) and display name. A slug Pipedream does not list as a connectable app is rejected and nothing is saved. Forbidden with `owner_connections`. |
+| `autoAcceptPermissions` | boolean | No | `true` lets sessions approve tool permission requests without asking, where the runtime allows it; `false` makes them ask every time. Omit to leave unchanged. |
+| `isCoding` | boolean | No | `true` for a coding agent, which works in a repository and answers a mention with a live session; `false` for a chat agent, which replies in the thread. Omit to leave unchanged. |

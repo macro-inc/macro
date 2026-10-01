@@ -1,6 +1,7 @@
 import type { SettingsTab } from '@core/constant/SettingsState';
 import { useSettingsTabAvailable } from '@core/constant/settingsTabsConfig';
 import { Show, Suspense } from 'solid-js';
+import { CrmSettings as Crm } from '../crm/crm-settings';
 import { Account } from './Account';
 import { Admin } from './Admin';
 import { Agent } from './Agent';
@@ -10,7 +11,6 @@ import { Appearance } from './Appearance';
 import { Billing } from './Billing';
 import { Bots } from './Bots';
 import { ConnectedAccounts } from './ConnectedAccounts';
-import { Crm } from './Crm';
 import { MobileApp } from './MobileApp';
 import { Notifications } from './Notifications';
 import { Shortcuts } from './Shortcuts';
