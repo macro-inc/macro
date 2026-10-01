@@ -264,11 +264,13 @@ export function useTasksDataSource(
           const task = tasksById.get(id);
           return task ? [task] : [];
         });
+        const reference = options.reference?.();
         const continuationTasks = continuations
           .entities(group.key)
           .filter(
             (task) =>
               (!options.taskIds || options.taskIds().includes(task.id)) &&
+              (!reference || referencesEntity(task, reference)) &&
               taskMatchesView(task, viewContext())
           );
         const entities = sortItems(
