@@ -432,3 +432,182 @@ fn valid_identity_absent_from_normalization_keeps_existing_error_behavior() {
         );
     });
 }
+
+#[test]
+fn cross_inbox_draft_settlement_preserves_source_thread_and_rebases_queued_edits() {
+    block_on(async {
+        const SAVE: &str = "mutation SaveEmailDraft { saveEmailDraft { draft { id threadId subject } thread { id messages(offset: 0, limit: 20) { id subject } } } }";
+        const PAGE: &str = "query EmailThreadPage($threadId: ID!) { user { id emailThread(input: { threadId: $threadId }) { id messages(offset: 0, limit: 20) { id subject } } } }";
+        let variables = json!({ "threadId": "source-thread" })
+            .as_object()
+            .unwrap()
+            .clone();
+        let source = json!({ "user": { "id": "viewer", "emailThread": {
+            "id": "source-thread", "messages": [{ "id": "received", "subject": "Original conversation" }]
+        } } });
+        let bindings = [
+            IdentityBinding {
+                local_key: EntityKey("GraphqlSoupEmailMessage:local-draft".into()),
+                response_path: vec!["saveEmailDraft".into(), "draft".into()],
+                delete_record: false,
+                reference_fields: vec![],
+                revalidation_variables: vec![],
+            },
+            // This is an existing source conversation, not a local handle for
+            // the new destination conversation returned by a cross-inbox save.
+            IdentityBinding {
+                local_key: EntityKey("GraphqlSoupEmailThread:source-thread".into()),
+                response_path: vec![],
+                delete_record: false,
+                reference_fields: vec!["GraphqlSoupEmailMessage.threadId".into()],
+                revalidation_variables: vec!["threadId".into()],
+            },
+        ];
+        let mut engine = Engine::new(InMemoryStorage::new());
+        engine
+            .write_query(None, PAGE, None, &variables, &source, None)
+            .await
+            .unwrap();
+        let pending = |subject| {
+            json!({ "saveEmailDraft": {
+            "draft": { "id": "local-draft", "threadId": "source-thread", "subject": subject },
+            "thread": { "id": "source-thread", "messages": [
+                { "id": "local-draft", "subject": subject },
+                { "id": "received", "subject": "Original conversation" }
+            ] }
+        } })
+        };
+        let mut transactions = Vec::new();
+        let mut first_claim = None;
+        for subject in ["First edit", "Newer edit"] {
+            let transaction = engine
+                .begin_optimistic_write(
+                    None,
+                    BeginOptimisticWrite {
+                        uuid: UUID,
+                        query: SAVE,
+                        operation_name: None,
+                        variables: &Default::default(),
+                        data: &pending(subject),
+                        link_patches: &[],
+                        revalidations: &[],
+                        created_at_ms: 0,
+                        identity_bindings: &bindings,
+                    },
+                )
+                .await
+                .unwrap()
+                .0;
+            transactions.push(transaction);
+            if first_claim.is_none() {
+                first_claim = Some(claim(&mut engine).await);
+            }
+        }
+        // The snapshot uses the thread page's exact message arguments, keeping
+        // an offline reply reopenable without a link patch reapplied at commit.
+        let mut engine = Engine::new(engine.into_storage());
+        let ReadResult::Hit { data } = engine
+            .read_query(None, PAGE, None, &variables)
+            .await
+            .unwrap()
+        else {
+            panic!("the queued reply must remain reopenable after restart");
+        };
+        assert_eq!(data["user"]["emailThread"]["id"], "source-thread");
+        assert_eq!(
+            data["user"]["emailThread"]["messages"],
+            pending("Newer edit")["saveEmailDraft"]["thread"]["messages"]
+        );
+        let committed = |subject| {
+            json!({ "saveEmailDraft": {
+            "draft": { "id": "server-draft", "threadId": "destination-thread", "subject": subject },
+            "thread": { "id": "destination-thread", "messages": [{ "id": "server-draft", "subject": subject }] }
+        } })
+        };
+        let outcome = engine
+            .commit_optimistic_write_with_outcome(
+                transactions[0],
+                first_claim.unwrap(),
+                SAVE,
+                None,
+                &Default::default(),
+                &committed("First edit"),
+            )
+            .await
+            .unwrap();
+        let CommitOptimisticWriteResult::CommittedSuperseded(result) = outcome else {
+            panic!("the older save must commit beneath the newer edit");
+        };
+        assert_eq!(result.replacement_transaction_id, transactions[1]);
+
+        let mut engine = Engine::new(engine.into_storage());
+        let selection = cache_core::record_selection::RecordSelection::parse(
+            "fragment Draft on GraphqlSoupEmailMessage { id subject }",
+            "Draft",
+        )
+        .unwrap();
+        let draft = engine
+            .read_records_by_keys(
+                &selection,
+                &[EntityKey("GraphqlSoupEmailMessage:local-draft".into())],
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            draft.value[0].record,
+            json!({ "id": "server-draft", "subject": "Newer edit" })
+        );
+        assert!(draft.value[0].identity.pending);
+        let ReadResult::Hit { data } = engine
+            .read_query(None, PAGE, None, &variables)
+            .await
+            .unwrap()
+        else {
+            panic!("source conversation remains readable while the newer edit is pending");
+        };
+        assert_eq!(data["user"]["emailThread"]["id"], "source-thread");
+        assert_eq!(
+            data["user"]["emailThread"]["messages"],
+            json!([
+                { "id": "server-draft", "subject": "Newer edit" },
+                { "id": "received", "subject": "Original conversation" }
+            ])
+        );
+
+        let token = claim(&mut engine).await;
+        engine
+            .commit_optimistic_write(
+                transactions[1],
+                token,
+                SAVE,
+                None,
+                &Default::default(),
+                &committed("Newer edit"),
+            )
+            .await
+            .unwrap();
+        let mut engine = Engine::new(engine.into_storage());
+        let ReadResult::Hit { data } = engine
+            .read_query(None, PAGE, None, &variables)
+            .await
+            .unwrap()
+        else {
+            panic!("source conversation remains readable after restart");
+        };
+        assert_eq!(data, source);
+        let source_record = engine
+            .storage()
+            .get_batch(&[EntityKey("GraphqlSoupEmailThread:source-thread".into())])
+            .await
+            .unwrap();
+        assert!(cache_core::identity::alias_target(source_record[0].as_ref().unwrap()).is_none());
+        assert!(
+            engine
+                .storage()
+                .load_mutation_queue()
+                .await
+                .unwrap()
+                .is_empty()
+        );
+    });
+}

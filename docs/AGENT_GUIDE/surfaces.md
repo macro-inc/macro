@@ -693,6 +693,10 @@ Keep a reopened offline draft open while reconnecting: the composer must remain
 mounted when the local thread handle resolves to its server ID. After syncing,
 reopen the original local thread URL and confirm the composer still loads; then
 open a different thread and confirm the previous draft is not shown there.
+Reply from a different sending inbox, save, and reopen the original conversation:
+its original messages must remain there even if the reply belongs to a new thread.
+Repeat after changing the sender on a saved reply; neither conversation may become
+an alias for the other.
 Throttle the next email's response while navigating within the inline detail:
 the previous subject and composer must disappear during loading, and the new
 thread must not be marked read using the previous thread's sending inbox.
@@ -1581,6 +1585,9 @@ to **Edit signature**. Unsaved edits remain when reopened; closing does not save
 or remove the signature.
 The inbox row's trash icon removes the inbox through the existing confirmation;
 it is separate from the signature editor's close control.
+With a composer open, save a changed signature or reply-signature preference and
+verify its preview updates. Once the account refresh completes, reopen a composer
+offline and confirm it uses the saved settings.
 
 ### Notification snoozes
 

@@ -140,6 +140,7 @@ it('creates a complete standalone thread with the account classification and sta
     expect.arrayContaining([
       expect.objectContaining({
         localKey: `GraphqlSoupEmailThread:${args.threadDbId}`,
+        responsePath: ['saveEmailDraft', 'thread'],
         revalidationVariables: ['threadId'],
       }),
       expect.objectContaining({
@@ -152,6 +153,116 @@ it('creates a complete standalone thread with the account classification and sta
     ])
   );
 });
+
+it.each(['new reply', 'existing reply', 'standalone draft'])(
+  'does not redirect a canonical conversation or insert a moved %s into it',
+  async (kind) => {
+    const { client, operations, draft, thread } = await standalone();
+    const existingThread = { ...thread, cacheProjection: 'server-capsule' };
+    await executeGraphqlSaveEmailDraft(client, {
+      ...args,
+      senderLinkId: 'other-inbox',
+      replyingToId: kind === 'standalone draft' ? undefined : 'reply-target',
+      existingDraft: kind === 'new reply' ? undefined : draft,
+      existingThread,
+      // A settlement can resolve the snapshot after the caller prepared its
+      // new-thread hint. The server capsule takes precedence over that hint.
+      newThreadOwnerId: 'macro|owner@example.com',
+    });
+    const context = optimisticContextOf(operations[1])!;
+    const response = context.optimisticResponse as SaveEmailDraftMutation;
+    expect(context.identityBindings).toContainEqual({
+      localKey: `GraphqlSoupEmailThread:${args.threadDbId}`,
+      responsePath: [],
+      referenceFields: ['GraphqlSoupEmailMessage.threadId'],
+      revalidationVariables: ['threadId'],
+    });
+    expect(context.identityBindings).toContainEqual(
+      expect.objectContaining({
+        localKey: `GraphqlSoupEmailMessage:${args.draftId}`,
+        responsePath: ['saveEmailDraft', 'draft'],
+      })
+    );
+    expect(context.linkPatches).toEqual([]);
+    // The optimistic snapshot keeps the queued draft discoverable/reopenable;
+    // without a commit patch it cannot splice the moved draft into the source.
+    expect(response.saveEmailDraft.thread).toMatchObject({
+      id: args.threadDbId,
+      messages: [{ id: args.draftId }],
+      mailDraftState: { drafts: [{ id: args.draftId }] },
+    });
+    expect(context.revalidations).toContainEqual(
+      expect.objectContaining({
+        variablesJson: JSON.stringify({
+          threadId: args.threadDbId,
+          offset: 0,
+          limit: 20,
+        }),
+      })
+    );
+  }
+);
+
+it('keeps canonical same-inbox reply updates without aliasing the conversation', async () => {
+  const { client, operations, thread } = await standalone();
+  await executeGraphqlSaveEmailDraft(client, {
+    ...args,
+    replyingToId: 'reply-target',
+    existingThread: { ...thread, cacheProjection: 'server-capsule' },
+  });
+  const context = optimisticContextOf(operations[1])!;
+  expect(context.identityBindings).toContainEqual(
+    expect.objectContaining({
+      localKey: `GraphqlSoupEmailThread:${args.threadDbId}`,
+      responsePath: [],
+    })
+  );
+  expect(context.linkPatches).toHaveLength(1);
+  expect(context.optimisticResponse).toMatchObject({
+    saveEmailDraft: {
+      thread: { id: args.threadDbId, messages: [{ id: args.draftId }] },
+    },
+  });
+});
+
+it('does not infer a local thread from an uncached reply hint', async () => {
+  const { client, operations } = queuedClient();
+  await executeGraphqlSaveEmailDraft(client, {
+    ...args,
+    replyingToId: 'reply-target',
+  });
+  const context = optimisticContextOf(operations[0])!;
+  expect(context.identityBindings).toContainEqual(
+    expect.objectContaining({
+      localKey: `GraphqlSoupEmailThread:${args.threadDbId}`,
+      responsePath: [],
+    })
+  );
+  expect(context.linkPatches).toEqual([]);
+});
+
+it.each([args.senderLinkId, 'other-inbox'])(
+  'keeps local identity reconciliation for a reopened queued draft saved from %s',
+  async (senderLinkId) => {
+    const { client, operations, draft, thread } = await standalone();
+    await executeGraphqlSaveEmailDraft(client, {
+      ...args,
+      senderLinkId,
+      existingDraft: draft,
+      existingThread: thread,
+    });
+    const context = optimisticContextOf(operations[1])!;
+    expect(context.identityBindings).toContainEqual(
+      expect.objectContaining({
+        localKey: `GraphqlSoupEmailThread:${args.threadDbId}`,
+        responsePath: ['saveEmailDraft', 'thread'],
+        referenceFields: ['GraphqlSoupEmailMessage.threadId'],
+        revalidationVariables: ['threadId'],
+      })
+    );
+    expect(context.linkPatches).toHaveLength(1);
+  }
+);
 
 it('editing an older draft keeps the later received preview and discarding restores the full baseline', async () => {
   const { draft, thread } = await standalone();

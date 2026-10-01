@@ -254,6 +254,15 @@ export async function executeGraphqlSaveEmailDraft(
     limit: DEFAULT_THREAD_MESSAGES_LIMIT,
   };
   const draft = optimisticDraftEntity(args);
+  // Only a newly minted thread may adopt a server identity. A reply can move
+  // to another inbox without moving its original conversation with it.
+  const localThread = args.existingThread
+    ? args.existingThread.cacheProjection === null
+    : !!args.newThreadOwnerId;
+  const canPatchThread =
+    localThread || args.existingThread?.linkId === args.senderLinkId;
+  // Keep a queued cross-inbox reply reopenable in its source conversation.
+  // Settlement replaces this layer with the actual destination thread.
   const thread = args.existingThread
     ? updateDraftThread(args.existingThread, draft, args.senderIsSignal ?? true)
     : args.newThreadOwnerId
@@ -262,11 +271,7 @@ export async function executeGraphqlSaveEmailDraft(
           args.newThreadOwnerId,
           args.senderIsSignal ?? true
         )
-      : {
-          __typename: 'GraphqlSoupEmailThread' as const,
-          id: args.threadDbId,
-          updatedAt: draft.updatedAt,
-        };
+      : undefined;
   const optimisticData: OptimisticResponse<SaveEmailDraftMutation> = {
     saveEmailDraft: {
       draftId: String(args.draftId),
@@ -300,7 +305,9 @@ export async function executeGraphqlSaveEmailDraft(
         },
         {
           localKey: `GraphqlSoupEmailThread:${args.threadDbId}`,
-          responsePath: ['saveEmailDraft', 'thread'],
+          // Keep reference-only bindings so already queued local saves still
+          // rebase through a preceding save's durable alias.
+          responsePath: localThread ? ['saveEmailDraft', 'thread'] : [],
           referenceFields: ['GraphqlSoupEmailMessage.threadId'],
           revalidationVariables: ['threadId'],
         },
@@ -308,21 +315,25 @@ export async function executeGraphqlSaveEmailDraft(
       // Splice the optimistic entity into the thread page's message list so
       // draftMap sees it. Idempotent; reapplied at commit; a non-resolving
       // path is skipped and recovered by the revalidation below.
-      updates: [
-        update(
-          select<EmailThreadPageQuery, EmailThreadPageQueryVariables>(
-            EmailThreadPageDocument,
-            threadPageVariables
-          )
-            .field('user')
-            .field('emailThread')
-            .field('messages'),
-          prependUnique({
-            __typename: 'GraphqlSoupEmailMessage',
-            id: String(args.draftId),
-          })
-        ),
-      ],
+      // A different sending inbox can create a new conversation. Never splice
+      // its committed draft back into the existing source conversation.
+      updates: canPatchThread
+        ? [
+            update(
+              select<EmailThreadPageQuery, EmailThreadPageQueryVariables>(
+                EmailThreadPageDocument,
+                threadPageVariables
+              )
+                .field('user')
+                .field('emailThread')
+                .field('messages'),
+              prependUnique({
+                __typename: 'GraphqlSoupEmailMessage',
+                id: String(args.draftId),
+              })
+            ),
+          ]
+        : [],
       revalidations: [
         ...getActiveGraphqlSoupRevalidations(),
         {

@@ -1,5 +1,6 @@
 import { toast } from '@core/component/Toast/Toast';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
+import ExclamationIcon from '@phosphor-icons/core/regular/exclamation-mark.svg?component-solid';
 import { createSignal, Show } from 'solid-js';
 import type {
   EmailDraftStorage,
@@ -60,7 +61,16 @@ function RecoveryEditor() {
         ...toast,
         failure: (message, options) => {
           if (options?.persistent)
-            return toast.failure(message, { ...options, persistent: true });
+            return toast.custom(
+              {
+                title: message,
+                content: () => options.subtext,
+                icon: ExclamationIcon,
+                color: 'var(--color-failure)',
+                actions: options.actions,
+              },
+              { persistent: true }
+            );
           toast.failure(message, options);
           return undefined;
         },

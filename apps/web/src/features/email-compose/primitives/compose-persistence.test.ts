@@ -349,7 +349,7 @@ it('only commits a selected time through the primary action', async () => {
   const host = { showThread: vi.fn(), showDraft: vi.fn() };
   const root = mountEmailComposer(composeContext, host);
   root.edit('Schedule this');
-  const firstTime = new Date('2026-12-01T12:00:00Z');
+  const firstTime = new Date(2026, 11, 1, 12);
   expect(root.state.context.schedule.onSelect(firstTime)).toBe(true);
   expect(root.state.context.schedule.selectedTime()).toEqual(firstTime);
   expect(root.state.context.deliveryState?.()).toBe('draft');
