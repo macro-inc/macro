@@ -248,6 +248,7 @@ fn query_updates_remain_scoped_while_an_optimistic_layer_is_pending() {
                     operation_name: None,
                     variables: &serde_json::Map::new(),
                     data: &json!({"setEntityProperty":{"id":"pending-property"}}),
+                    identity_bindings: &[],
                     link_patches: &[],
                     revalidations: &[],
                     created_at_ms: 1,

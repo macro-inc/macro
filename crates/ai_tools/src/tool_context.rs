@@ -111,11 +111,11 @@ pub type ToolEmailService = EmailServiceImpl<
 /// graceful shutdown by the hosting process.
 pub type ToolEventBroker = MacroEventBrokerService<KafkaEventPublisher, TaskTracker>;
 
-/// Event broker used by bot tools across hosts that either do or do not have
+/// Event broker used by bot and property tools across hosts that either do or do not have
 /// Kafka lifecycle publishing configured.
 #[derive(Clone)]
 pub enum ToolBotEventBroker {
-    /// Publish bot lifecycle events through the shared Kafka broker.
+    /// Publish lifecycle events through the shared Kafka broker.
     Real(ToolEventBroker),
     /// Drop lifecycle events in hosts that do not configure Kafka.
     NoOp(NoopMacroEventBroker),
@@ -462,6 +462,8 @@ pub fn build_crm_tool_context(pool: sqlx::PgPool) -> ToolCrmToolContext {
             entity_access::outbound::PgAccessRepository::new(pool.clone()),
         ),
     );
+    // This CRM-only context does not assign tasks. Task writes use the host's
+    // shared properties context, which carries its lifecycle event broker.
     let properties = build_properties_service(pool.clone(), entity_access_service.clone());
     CrmToolContext {
         service: Arc::new(crm::domain::service::CrmServiceImpl::new(
@@ -645,6 +647,9 @@ impl ConnectionService for NoOpConnectionService {
 pub struct NoOpCallRtcClient;
 
 impl CallRtcClient for NoOpCallRtcClient {
+    async fn prepare_room(&self, room_name: &str) -> anyhow::Result<()> {
+        self.create_room(room_name).await
+    }
     async fn generate_guest_token(
         &self,
         _room_name: &str,
@@ -694,6 +699,13 @@ impl CallRtcClient for NoOpCallRtcClient {
         _participant_identity: MacroUserIdStr<'a>,
     ) -> anyhow::Result<()> {
         Ok(())
+    }
+
+    async fn list_meeting_participants(
+        &self,
+        _room_name: &str,
+    ) -> anyhow::Result<Option<Vec<call::domain::meetings::MeetingRtcParticipant>>> {
+        Ok(None)
     }
 
     async fn list_participant_identities(
@@ -1494,6 +1506,7 @@ pub struct ToolServiceContext {
     pub soup_service: Arc<ToolSoupService>,
     pub email_service: Arc<ToolEmailService>,
     pub activity_tool_context: ToolActivityToolContext,
+    #[from_ref(skip)]
     pub document_tool_context: ToolDocumentToolContext,
     pub image_generation_tool_context: ToolImageGenerationToolContext,
     pub properties_tool_context: ToolPropertiesToolContext,
@@ -1521,6 +1534,9 @@ pub struct ToolServiceContext {
     pub schedule_tool_context: NoOpScheduleContext,
     #[from_ref(skip)]
     pub anthropic_tool_context: AnthropicToolContext,
+    /// Shared admission for independently initiated AI work. Hosts must inject
+    /// their configured service; request identity always comes from RequestContext.
+    pub admission: Arc<dyn ai_billing::domain::admission::AiAdmissionService>,
     /// Records token usage / cost for AI calls made with this context.
     pub recorder: std::sync::Arc<dyn ai_usage::UsageRecorder>,
     /// The usage context (feature/user/entity) of the request currently using
@@ -1532,9 +1548,20 @@ pub struct ToolServiceContext {
 impl FromRef<ToolServiceContext> for AnthropicToolContext {
     fn from_ref(context: &ToolServiceContext) -> Self {
         let mut tools = context.anthropic_tool_context.clone();
+        tools.admission = context.admission.clone();
         tools.recorder = context.recorder.clone();
         tools.usage_context = context.usage_context.clone();
         tools
+    }
+}
+
+impl FromRef<ToolServiceContext> for ToolDocumentToolContext {
+    fn from_ref(context: &ToolServiceContext) -> Self {
+        context
+            .document_tool_context
+            .clone()
+            .with_admission(context.admission.clone())
+            .with_recorder(context.recorder.clone())
     }
 }
 

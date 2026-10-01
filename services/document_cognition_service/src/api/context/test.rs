@@ -9,6 +9,62 @@ use stream::domain::{
 use tokio::sync::broadcast::{self, Receiver};
 use tokio_util::task::TaskTracker;
 
+pub const ADMISSION_TEST_USER: &str = "macro|admission@example.com";
+
+pub struct TestAdmission {
+    pub result: Result<(), ai_billing::AiAdmissionError>,
+    pub calls: std::sync::Mutex<Vec<(String, ai_usage::AiFeature)>>,
+}
+
+impl TestAdmission {
+    pub fn rejecting(error: ai_billing::AiAdmissionError) -> Arc<Self> {
+        Arc::new(Self {
+            result: Err(error),
+            calls: Default::default(),
+        })
+    }
+}
+
+impl ai_billing::AiAdmissionService for TestAdmission {
+    fn admit<'a>(
+        &'a self,
+        user: &'a macro_user_id::user_id::MacroUserIdStr<'_>,
+        feature: ai_usage::AiFeature,
+    ) -> ai_billing::domain::admission::AdmissionFuture<'a> {
+        self.calls.lock().unwrap().push((user.to_string(), feature));
+        Box::pin(async { self.result })
+    }
+}
+
+pub fn admission_errors() -> [ai_billing::AiAdmissionError; 4] {
+    use ai_billing::{AiAdmissionError, DenyReason};
+    [
+        AiAdmissionError::Denied(DenyReason::AllowanceExhausted),
+        AiAdmissionError::Denied(DenyReason::OverageLimitReached),
+        AiAdmissionError::Denied(DenyReason::OveragePaymentFailed),
+        AiAdmissionError::Unavailable,
+    ]
+}
+
+pub fn authorized_request(path: &str, body: serde_json::Value) -> axum::extract::Request {
+    axum::http::Request::builder()
+        .method("POST")
+        .uri(path)
+        .header("content-type", "application/json")
+        .header("x-internal-auth-key", "testing")
+        .header("x-internal-macro-user-id", ADMISSION_TEST_USER)
+        .body(axum::body::Body::from(body.to_string()))
+        .unwrap()
+}
+
+pub async fn test_model_access(ctx: &ApiContext) -> DcsChatModelAccess {
+    use axum::extract::FromRequestParts;
+    let (mut parts, _) = authorized_request("/", serde_json::json!({})).into_parts();
+    DcsChatModelAccess::from_request_parts(&mut parts, ctx)
+        .await
+        .unwrap_or_else(|_| panic!("test model access should resolve"))
+}
+
 pub struct MockConnectionRepo;
 
 impl MockConnectionRepo {
@@ -108,6 +164,14 @@ impl StreamRepo for MockStreamRepo {
 }
 
 pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Arc<ApiContext> {
+    let config = Config::new_empty_for_test();
+    let enforcement = config.enable_ai_usage_enforcement;
+    let admission = ai_billing::composition::pg_admission_service(
+        pool.clone(),
+        config.environment,
+        enforcement,
+    );
+    let recorder = ai_usage::pg_recorder_with_enforcement(pool.clone(), enforcement);
     use aws_sdk_sqs;
     use channels::{
         domain::list_service::ChannelListServiceImpl, outbound::pg_channels_repo::PgChannelsRepo,
@@ -254,20 +318,22 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             entity_access::outbound::PgAccessRepository::new(pool.clone()),
         ),
     );
-    let properties_service =
-        ai_tools::build_properties_service(pool.clone(), entity_access_service.clone());
-    let task_properties_service = ai_tools::build_task_properties_adapter(
-        pool.clone(),
-        properties_service.clone(),
-        entity_access_service.clone(),
-    );
-
     // Producer creation is lazy: nothing connects to Kafka unless an event
     // is published, so a dummy broker address is safe for tests.
     let macro_event_broker = macro_event_broker::MacroEventBrokerService::new(
         macro_event_broker::KafkaEventPublisher::new("localhost:9092")
             .expect("kafka producer config is valid"),
         TaskTracker::new(),
+    );
+    let properties_service = ai_tools::build_properties_service_with_broker(
+        pool.clone(),
+        entity_access_service.clone(),
+        macro_event_broker.clone(),
+    );
+    let task_properties_service = ai_tools::build_task_properties_adapter(
+        pool.clone(),
+        properties_service.clone(),
+        entity_access_service.clone(),
     );
 
     let document_service = documents::domain::service::DocumentServiceImpl::new(
@@ -425,7 +491,8 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         ),
         schedule_tool_context: ai_tools::no_op_schedule_context(),
         anthropic_tool_context: ai_tools::build_anthropic_tool_context_test(),
-        recorder: ai_usage::pg_recorder(pool.clone()),
+        admission: admission.clone(),
+        recorder: recorder.clone(),
         usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
     };
     let all_tools = ai_tools::tools_for(ai_tools::AiHost::Chat);
@@ -463,12 +530,15 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
                 ),
                 Arc::new(None),
             ));
-        let import_service = Arc::new(import::domain::service::ImportServiceImpl::new(
-            import::outbound::pg_import_repo::PgImportRepo::new(pool.clone()),
-            mcp_selector.clone(),
-            Arc::new(creator),
-            ai_usage::pg_recorder(pool.clone()),
-        ));
+        let import_service = Arc::new(
+            import::domain::service::ImportServiceImpl::new(
+                import::outbound::pg_import_repo::PgImportRepo::new(pool.clone()),
+                mcp_selector.clone(),
+                Arc::new(creator),
+                recorder.clone(),
+            )
+            .with_admission(admission.clone()),
+        );
         let onboarding_service = Arc::new(onboarding::domain::service::OnboardingServiceImpl::new(
             onboarding::outbound::pg_onboarding_repo::PgOnboardingRepo::new(pool.clone()),
             Arc::new(mcp_repo),
@@ -485,9 +555,12 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         all_tools,
     ));
 
-    let usage_service = Arc::new(ai_usage::domain::service::UsageServiceImpl::new(
-        ai_usage::outbound::PgUsageRepo::new(pool.clone()),
-    ));
+    let usage_service = Arc::new(
+        ai_usage::domain::service::UsageServiceImpl::new(ai_usage::outbound::PgUsageRepo::new(
+            pool.clone(),
+        ))
+        .with_enforcement(enforcement),
+    );
 
     let projection_generator =
         ai_projections::outbound::agent_generator::AgentProjectionGenerator::new(
@@ -541,19 +614,23 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         search_service_client,
         email_service_client_external,
         authorization_state: authorization_state.clone(),
-        ai_billing: Arc::new(ai_billing::domain::BillingServiceImpl::new(
-            ai_billing::outbound::RolesTeamsEntitlementSource::new(
-                (*user_permissions_service).clone(),
-                teams::outbound::team_repo::TeamRepositoryImpl::new(pool.clone()),
-            ),
-            ai_billing::outbound::PgUsageReader::new(pool.clone()),
-            ai_billing::outbound::PgBillingRepo::new(pool.clone()),
-            ai_billing::outbound::NoOpPaymentGateway,
-            macro_env::Environment::Local,
-        )),
+        ai_admission: admission,
+        ai_billing: Arc::new(
+            ai_billing::domain::BillingServiceImpl::new(
+                ai_billing::outbound::RolesTeamsEntitlementSource::new(
+                    (*user_permissions_service).clone(),
+                    teams::outbound::team_repo::TeamRepositoryImpl::new(pool.clone()),
+                ),
+                ai_billing::outbound::PgUsageReader::new(pool.clone()),
+                ai_billing::outbound::PgBillingRepo::new(pool.clone()),
+                ai_billing::outbound::NoOpPaymentGateway,
+                config.environment,
+            )
+            .with_enforcement(enforcement),
+        ),
         user_permissions_service,
         non_user_owners: NonUserOwners::Disabled,
-        config: Arc::new(Config::new_empty_for_test()),
+        config: Arc::new(config),
         internal_api_key: InternalApiKey::Comptime("testing"),
         notification_ingress_service,
         connection_repo: MockConnectionRepo::new(),

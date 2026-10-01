@@ -273,3 +273,250 @@ fn resumed_reads_retain_argument_qualified_viewer_fields() {
     );
     assert_eq!(deps.records, [root, viewer, item].into());
 }
+
+use crate::entity_resolver::EntityResolver;
+use crate::identity::{DELETED_FIELD, alias_record};
+use crate::normalize::normalize;
+use serde_json::json;
+
+const QUERY: &str = r#"query {
+    user {
+        id
+        emailThread(input: {threadId: "deleted"}) { id }
+        soup(input: {limit: 10}) { items { __typename id } }
+    }
+}"#;
+
+fn fixture() -> (
+    Document,
+    std::collections::BTreeMap<EntityKey<'static>, Record>,
+) {
+    let doc = Document::parse(QUERY).unwrap();
+    let records = normalize(
+        doc.operation(None).unwrap(),
+        &Default::default(),
+        &json!({"user": {
+            "id": "user",
+            "emailThread": {"id": "deleted"},
+            "soup": {"items": [
+                {"__typename": "GraphqlSoupEmailThread", "id": "deleted"},
+                {"__typename": "GraphqlSoupEmailThread", "id": "kept"}
+            ]}
+        }}),
+    )
+    .unwrap();
+    (doc, records)
+}
+
+#[test]
+fn deleted_links_are_absent_without_hiding_the_page_including_through_aliases() {
+    for aliased in [false, true] {
+        let (doc, mut records) = fixture();
+        let local = EntityKey::entity("GraphqlSoupEmailThread", &["deleted"]);
+        let target = if aliased {
+            let target = EntityKey::entity("GraphqlSoupEmailThread", &["server"]);
+            records.insert(local.clone(), alias_record(&target));
+            target
+        } else {
+            local.clone()
+        };
+        records
+            .entry(target.clone())
+            .or_default()
+            .fields
+            .insert(DELETED_FIELD.into(), CacheValue::Bool(true));
+        let mut deps = BTreeSet::new();
+        let outcome = denormalize(
+            doc.operation(None).unwrap(),
+            &Default::default(),
+            &records,
+            &mut deps,
+        )
+        .unwrap();
+        let ReadOutcome::Complete(data) = outcome else {
+            panic!("expected complete read: {outcome:?}")
+        };
+        assert_eq!(data["user"]["emailThread"], Json::Null);
+        assert_eq!(
+            data["user"]["soup"]["items"],
+            json!([
+                {"__typename": "GraphqlSoupEmailThread", "id": "kept"}
+            ])
+        );
+        assert!(deps.contains(&local));
+        assert!(deps.contains(&target));
+
+        let resolvers = EntityResolverLookup::compile(&[EntityResolver {
+            parent_type: "GraphqlUser".into(),
+            field_name: "emailThread".into(),
+            target_type: "GraphqlSoupEmailThread".into(),
+            argument_path: vec!["input".into(), "threadId".into()],
+        }])
+        .unwrap();
+        let resolved = denormalize_with_entity_resolvers(
+            doc.operation(None).unwrap(),
+            &Default::default(),
+            &records,
+            &mut BTreeSet::new(),
+            &resolvers,
+        )
+        .unwrap();
+        assert!(matches!(resolved, ReadOutcome::Complete(resolved) if resolved == data));
+
+        // Explicit record reads still report the deleted entity as unavailable.
+        let fragment = Document::parse("query { id }").unwrap();
+        assert!(matches!(denormalize_record(
+            &local, "GraphqlSoupEmailThread", &fragment.operation(None).unwrap().selection_set,
+            &Default::default(), &records, &mut BTreeSet::new(),
+        ).unwrap(), ReadOutcome::Miss { field, .. } if field == "deleted cache identity"));
+    }
+}
+
+#[test]
+fn unknown_records_and_alias_cycles_still_make_the_read_incomplete() {
+    let (doc, mut records) = fixture();
+    let local = EntityKey::entity("GraphqlSoupEmailThread", &["deleted"]);
+    let target = EntityKey::entity("GraphqlSoupEmailThread", &["server"]);
+    records.insert(local.clone(), alias_record(&target));
+    let outcome = denormalize(
+        doc.operation(None).unwrap(),
+        &Default::default(),
+        &records,
+        &mut BTreeSet::new(),
+    )
+    .unwrap();
+    assert!(matches!(outcome, ReadOutcome::NeedRecords(keys) if keys.contains(&target)));
+    records.insert(target, alias_record(&local));
+    let outcome = denormalize(
+        doc.operation(None).unwrap(),
+        &Default::default(),
+        &records,
+        &mut BTreeSet::new(),
+    )
+    .unwrap();
+    assert!(matches!(outcome, ReadOutcome::Miss { field, .. } if field == "cyclic cache identity"));
+}
+
+#[test]
+fn required_singular_links_cannot_return_null_for_a_deleted_record() {
+    let (doc, mut records) = fixture();
+    records
+        .get_mut(&EntityKey::entity("GraphqlUser", &["user"]))
+        .unwrap()
+        .fields
+        .insert(DELETED_FIELD.into(), CacheValue::Bool(true));
+    let outcome = denormalize(
+        doc.operation(None).unwrap(),
+        &Default::default(),
+        &records,
+        &mut BTreeSet::new(),
+    )
+    .unwrap();
+    assert!(
+        matches!(outcome, ReadOutcome::Miss { field, .. } if field == "deleted cache identity")
+    );
+}
+
+#[test]
+fn resumed_aliases_and_tombstones_preserve_list_positions_and_completed_work() {
+    for deleted_id in ["hot", "server"] {
+        let selection = RecordSelection::parse(
+            "fragment Thread on GraphqlSoupEmailThread { messages { id subject } }",
+            "Thread",
+        )
+        .unwrap();
+        let (thread_key, thread) = thread();
+        let mut source = CountingSource::default();
+        source.records.insert(thread_key.clone(), thread);
+        source.records.insert(key("hot"), message("hot"));
+        if deleted_id == "hot" {
+            source
+                .records
+                .get_mut(&key("hot"))
+                .unwrap()
+                .fields
+                .insert(DELETED_FIELD.into(), CacheValue::Bool(true));
+        }
+        let mut session = ReadSession::new(
+            &thread_key,
+            "GraphqlSoupEmailThread",
+            selection.selection_set(),
+        );
+        let mut deps = BTreeSet::new();
+        let variables = serde_json::Map::new();
+        let resolvers = EntityResolverLookup::default();
+        let mut plans = ReadPlans::default();
+        assert!(matches!(
+            session.resume(&variables, &source, &mut deps, &resolvers, &mut plans).unwrap(),
+            ReadOutcome::NeedRecords(keys) if keys == [key("cold")].into()
+        ));
+        let hot_reads = source.reads.borrow()[&key("hot")];
+        source
+            .records
+            .insert(key("cold"), alias_record(&key("server")));
+        assert!(matches!(
+            session.resume(&variables, &source, &mut deps, &resolvers, &mut plans).unwrap(),
+            ReadOutcome::NeedRecords(keys) if keys == [key("server")].into()
+        ));
+        let mut server = message("server");
+        if deleted_id == "server" {
+            server
+                .fields
+                .insert(DELETED_FIELD.into(), CacheValue::Bool(true));
+        }
+        source.records.insert(key("server"), server);
+        let ReadOutcome::Complete(data) = session
+            .resume(&variables, &source, &mut deps, &resolvers, &mut plans)
+            .unwrap()
+        else {
+            panic!("hydrated aliases and tombstones complete the read");
+        };
+        let expected = if deleted_id == "hot" {
+            json!([null, {"id": "server", "subject": "Subject server"}])
+        } else {
+            json!([
+                {"id": "hot", "subject": "Subject hot"}, null,
+                {"id": "hot", "subject": "Subject hot"}
+            ])
+        };
+        assert_eq!(data["messages"], expected);
+        assert_eq!(source.reads.borrow()[&key("hot")], hot_reads);
+        assert_eq!(
+            deps,
+            [thread_key, key("hot"), key("cold"), key("server")].into()
+        );
+    }
+}
+
+#[test]
+fn alias_cycle_detection_survives_storage_hydration() {
+    let selection = RecordSelection::parse(
+        "fragment Message on GraphqlSoupEmailMessage { id }",
+        "Message",
+    )
+    .unwrap();
+    let mut session = ReadSession::new(
+        &key("local"),
+        "GraphqlSoupEmailMessage",
+        selection.selection_set(),
+    );
+    let mut source = CountingSource::default();
+    source
+        .records
+        .insert(key("local"), alias_record(&key("server")));
+    let mut deps = BTreeSet::new();
+    let variables = serde_json::Map::new();
+    let resolvers = EntityResolverLookup::default();
+    let mut plans = ReadPlans::default();
+    assert!(matches!(
+        session.resume(&variables, &source, &mut deps, &resolvers, &mut plans).unwrap(),
+        ReadOutcome::NeedRecords(keys) if keys == [key("server")].into()
+    ));
+    source
+        .records
+        .insert(key("server"), alias_record(&key("local")));
+    assert!(matches!(
+        session.resume(&variables, &source, &mut deps, &resolvers, &mut plans).unwrap(),
+        ReadOutcome::Miss { field, .. } if field == "cyclic cache identity"
+    ));
+}

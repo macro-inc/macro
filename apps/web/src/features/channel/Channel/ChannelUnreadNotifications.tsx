@@ -2,8 +2,9 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { enableGraphqlSoup } from '@core/constant/featureFlags';
 import { isTransientRequestError } from '@core/util/request-error';
-import { MessageNotificationSourceContext } from '@notifications/components/MarkMessageNotifications';
+import { MessageNotificationIndexContext } from '@notifications/components/MarkMessageNotifications';
 import { compositeEntity } from '@notifications/types';
+import { indexUnreadMessageNotifications } from '@notifications/unread-message-notifications';
 import { createChannelNotificationsQuery } from '@queries/channel/notifications';
 import { queryReadyGate } from '@queries/gate';
 import { useMessageTimelineByIdsQuery } from '@queries/messages/timeline';
@@ -51,6 +52,9 @@ export function ChannelUnreadNotifications(props: {
       ? records.map(notificationSource.withLocalOverrides)
       : records;
   });
+  const unreadByMessage = createMemo(() =>
+    indexUnreadMessageNotifications(notifications())
+  );
   const unread = createMemo(() => unreadThreads(notifications()));
   // A reply's timestamp says nothing about where its parent sits in history.
   // Resolve only the target parent without loading the timeline around it.
@@ -101,8 +105,8 @@ export function ChannelUnreadNotifications(props: {
   });
 
   return (
-    <MessageNotificationSourceContext.Provider value={notifications}>
+    <MessageNotificationIndexContext.Provider value={unreadByMessage}>
       {props.children(unreadChip)}
-    </MessageNotificationSourceContext.Provider>
+    </MessageNotificationIndexContext.Provider>
   );
 }

@@ -100,6 +100,7 @@ import {
 import { isTopLevelChannelNotification } from '@notifications/top-level-channel-notification';
 import { hydrateChannelNotificationSelection } from '@queries/channel/notification-selection';
 import { queryClient } from '@queries/client';
+import { updateEmailThreadLabel } from '@queries/email/cache-cleanup';
 import {
   archiveEmailThread,
   type EmailArchiveDisposition,
@@ -129,6 +130,10 @@ import {
   removeSoupEntitiesFromDoneFilteredQueries,
 } from '@queries/soup/cache';
 import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
+import {
+  type GraphqlSoupDoneOverlay,
+  hideGraphqlSoupEntitiesAsDone,
+} from '@queries/soup/graphql/optimistic-done';
 import { emailClient } from '@service-email/client';
 import { isAfter } from 'date-fns';
 import { match } from 'ts-pattern';
@@ -1213,7 +1218,7 @@ export function trashEmails(targets: TrashEmailTarget[]): TrashEmailsHandle {
       const outcomes = await Promise.allSettled(
         ids.map((id, i) =>
           throwOnErr(() =>
-            emailClient.updateThreadLabel({
+            updateEmailThreadLabel({
               thread_id: id,
               label_id: labelIds[i]!,
               value: true,
@@ -1231,7 +1236,7 @@ export function trashEmails(targets: TrashEmailTarget[]): TrashEmailsHandle {
             outcomes[i]?.status === 'fulfilled'
               ? [
                   throwOnErr(() =>
-                    emailClient.updateThreadLabel({
+                    updateEmailThreadLabel({
                       thread_id: id,
                       label_id: labelIds[i]!,
                       value: false,
@@ -1280,7 +1285,7 @@ export function trashEmails(targets: TrashEmailTarget[]): TrashEmailsHandle {
             const labelId = threadTrashLabelIds.get(id);
             if (!labelId) return Promise.resolve();
             return throwOnErr(() =>
-              emailClient.updateThreadLabel({
+              updateEmailThreadLabel({
                 thread_id: id,
                 label_id: labelId,
                 value: false,
@@ -1467,6 +1472,7 @@ export function applyEntitiesDoneOptimistic(args: {
   };
 
   let soupTxn: ReturnType<typeof removeSoupEntities> | null = null;
+  let graphqlDone: GraphqlSoupDoneOverlay | null = null;
   let emailRowTxns: { rollback: () => void }[] = [];
   let reminderRowTxns: { rollback: () => void }[] = [];
   const completedStamp = new Date().toISOString();
@@ -1478,6 +1484,15 @@ export function applyEntitiesDoneOptimistic(args: {
     soupTxn =
       entityIds.length > 0
         ? removeSoupEntitiesFromDoneFilteredQueries(entityIdSet)
+        : null;
+    // GraphQL lists never read the REST caches patched here. The entity
+    // notification mutation waits for the server, and even the optimistic
+    // archive only drops a row after its durable enqueue and a list
+    // re-evaluation, so hide the rows locally until the cache catches up.
+    graphqlDone?.release();
+    graphqlDone =
+      entityIds.length > 0
+        ? hideGraphqlSoupEntitiesAsDone({ entityIds, notificationIds })
         : null;
     // Rows that remain visible flip to the done state.
     emailRowTxns = emailIds.map((id) =>
@@ -1512,6 +1527,8 @@ export function applyEntitiesDoneOptimistic(args: {
     emailRowTxns = [];
     soupTxn?.rollback();
     soupTxn = null;
+    graphqlDone?.release();
+    graphqlDone = null;
   };
 
   const rollback = () => {

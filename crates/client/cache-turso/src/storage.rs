@@ -1008,14 +1008,19 @@ impl Storage for TursoStorage {
                 }
                 let collision = driver::query(
                     &connection,
-                    "SELECT id, lease_expires_at_ms FROM mutation_queue WHERE uuid = ?1 AND superseded = 0",
+                    "SELECT m.id, m.lease_expires_at_ms, m.attempt_count, o.optimistic_data_json FROM mutation_queue m JOIN optimistic_layers o ON o.mutation_id = m.id WHERE m.uuid = ?1 AND m.superseded = 0",
                     vec![text(&entry.uuid.to_string())],
                 )?;
                 let kind = match collision.as_slice() {
                     [] => MutationUpsertKind::Inserted,
-                    [row] if row.len() == 2 => {
+                    [row] if row.len() == 4 => {
                         let existing = mutation_id_from_row(required_i64(row, 0)?)?;
-                        if nullable_i64(row, 1)?.is_some_and(|expiry| expiry > now_ms) {
+                        if cache_core::queue::collision_stays_active(
+                            nullable_i64(row, 1)?,
+                            now_ms,
+                            required_i64(row, 2)? > 0,
+                            &required_text(row, 3)?,
+                        ) {
                             require_changed(
                                 driver::execute(
                                     &connection,

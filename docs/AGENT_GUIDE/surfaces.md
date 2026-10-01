@@ -99,6 +99,17 @@ update filter membership on the authoritative reply, not from a guessed optimist
 state. Rollback restores only the failed operation's contribution. `DONE` predicates,
 other entity partitions, and notified-at sorting still use the network path.
 
+The Mark done action (`e`, row menu) hides its rows at once from GraphQL lists that
+exclude done items, such as Email Important/Noise and Home Signal, without waiting
+for the server. Lists that show done items, such as Email All, keep the row. Undo
+or a failed write brings the row back, and so does a new active notification on the
+entity. To verify, mark a row done and watch it for a few seconds. It must not
+reappear once the server reply lands, and it must stay gone after a reload.
+In Tasks, Email, Home and Drive, rows keep their DOM when the list updates. A
+property edit or a rename updates the edited row in place instead of rebuilding
+every visible row. To verify, watch the row nodes with a `MutationObserver` while
+editing: only moved or removed rows should be added or removed.
+
 Channels use the same general Soup reconciliation path, not a separate local page
 chain. Channel ID, type, team, organization, importance, and participant-scoped
 filters operate over synchronized channel metadata. The default channel scope
@@ -408,6 +419,14 @@ while selected tag sets are pending. Background refreshes retain the current lis
 rapidly alternate Signal, Noise, and Sent, then change inboxes; a delayed cache or
 network read must not leave the old rows visible or expose their Load more action.
 
+Opening an email shows loading while its local draft identity and thread data
+resolve. Verify a cold open and switching directly between threads with delayed
+cache reads: neither should flash "Sorry, an unexpected error has occurred" or
+show the previous email. A failed load must still show its error and Retry action;
+reconciling an already-open offline draft must preserve its composer and text.
+If local cache initialization fails, ordinary server threads must still load
+through the session's uncached GraphQL client, including the thread being opened.
+
 If a saved inbox selection references an unlinked account, successfully loading
 linked accounts resets the filter to All inboxes while preserving an open or
 restored thread. Check this with a stale saved scope and a thread route, including
@@ -618,6 +637,107 @@ send reports failure and restores its original reply editor if it is still mount
 A failure from an older, unmounted editor must not overwrite a newer edited reply.
 A presentation or refresh error after successful delivery is not a reason to send
 again.
+
+Send and schedule are refused with a notice while the device is offline, while a
+draft is still syncing (its save was accepted locally but not yet confirmed by the
+server; retry after a moment), or while an attachment has no completed upload. The
+composer keeps its content in each case. Attachments cannot be added while
+offline: a blocking notice explains and nothing is attached.
+For a new standalone email, a failed REST draft save is best-effort: Send can
+still proceed without a draft ID when no save was queued and no attachment is
+waiting to upload. A server rejection blocks sending even an existing draft.
+An internal draft-save failure, including a failed response read after the save
+commits, stays queued and retries with backoff. It must not permanently disable
+autosave; Send stays blocked until a save is confirmed. Invalid or unauthorized
+writes still stop retrying.
+A successful save response with an invalid cache identity binding still commits
+its normalizable server data and reports a cache diagnostic without replaying
+the mutation or asking the user to save again. If that response also cannot be
+normalized, the attempt stops retrying and reports a permanent cache failure.
+If an offline save is permanently rejected after reconnect, a persistent
+**Draft could not be saved** notice offers **Save as new draft**. The editor keeps
+the latest text and stops autosaving until that action is chosen. Recovery saves
+the current content under a new draft identity; a reply stays in its conversation.
+Previously saved attachments that cannot be copied require reattachment, with a
+separate notice. Verify that further typing alone does not retry the rejected
+write, recovery uses the newest text, and closing or resetting the composer
+removes its recovery notice. Other transient notices must not hide that action.
+An already-sent rejection after reconnect follows the same path as an immediate
+already-sent response: announce that the email or reply was sent, clear the local
+composer, and cancel pending autosave. It must never offer **Save as new draft**.
+Verify this in standalone and reply composers, including a queued edit awaiting
+its debounce and a failure racing the first identity read. A settlement for a
+previous or different draft must not clear the current editor.
+Repeat with the composer closed before reconnect: terminal queue failures must
+refresh the saved thread and list queries without requiring an open editor, so
+an already-sent draft does not remain in Drafts solely because nobody observed it.
+With cached inbox metadata available before viewer information loads, saving a
+new offline draft must still create its Mail thread. The selected inbox supplies
+the owner, including delegated inboxes. If that account metadata is unavailable,
+the save must fail before queueing; retain the editor content for a later retry.
+Test this with a previously saved draft as well as a new one: a queued edit must
+block Send and scheduling until a save commits. Reopening a cached draft while
+offline must retain its uploaded attachments and confirmed scheduled time.
+Open a reply draft while its durable identity read is still pending: REST lifecycle
+reads and attachment actions must wait for confirmation. Editing keeps the seed ID
+as a handle; a committed cache read or save unlocks server-only actions. A failed
+identity read must not mark a queued draft committed. Verify an autosave failure
+shows one notice in both standalone and reply composers. If the live mail transport
+switches to GraphQL while the editor is open, queued saves must still adopt their server
+identity after settlement without replacing the editor's current text.
+
+
+With the persistent GraphQL Email cache enabled, a new standalone draft saved
+offline appears immediately in Drafts and the other matching Mail tabs, including
+date-grouped lists. A draft changes a conversation's preview, read state, and sort
+time according to that tab; discarding it restores the remaining conversation's
+metadata. `Showing cached mail` still means only synchronized and locally created
+items are available.
+
+Verify the durable lifecycle: create a standalone draft offline, enter recipients,
+subject and body, close the composer, then restart while still offline. Open it
+from Drafts and confirm its content and sending inbox; edit it again. Reconnect
+and check that exactly one draft remains and the open editor keeps any new text.
+On a cold app start, reopen a local draft thread before another GraphQL query has
+initialized the cache. Its subscription must observe settlement and adopt the
+server ID. If its identity read fails, it must remain cache-only until a later
+cache event resolves it; never send the unresolved handle to the server.
+Keep a reopened offline draft open while reconnecting: the composer must remain
+mounted when the local thread handle resolves to its server ID. After syncing,
+reopen the original local thread URL and confirm the composer still loads; then
+open a different thread and confirm the previous draft is not shown there.
+Reply from a different sending inbox, save, and reopen the original conversation:
+its original messages must remain there even if the reply belongs to a new thread.
+Repeat after changing the sender on a saved reply; neither conversation may become
+an alias for the other.
+Throttle the next email's response while navigating within the inline detail:
+the previous subject and composer must disappear during loading, and the new
+thread must not be marked read using the previous thread's sending inbox.
+Make multiple edits while offline, reconnect, wait for syncing to finish, then
+send. Repeat after refreshing with queued edits: the first attempted save must
+recover its server identity and let newer saves complete, rather than leaving
+Send permanently blocked by "Draft still syncing".
+After restarting offline, reconnect and visit Signal and Drafts. The queued draft
+must stay visible when the first server list arrives, including in date-grouped
+views, until its save settles; it must not briefly appear and then disappear.
+Repeat with discard before reconnect, including a save that was already attempted
+before connectivity dropped. The discarded draft must stay absent after restart
+and reconnect. Opening through an older local thread link must reach the same
+server thread after synchronization. Repeat with an existing reply and confirm
+that other messages, attachments, and the Sent preview remain intact.
+
+With GraphQL Mail enabled, discarding the last draft in a thread must remove the
+thread from every local Mail view, including after queued replay. Discarding a
+standalone draft from its composer returns to the previous list after deletion
+is accepted, including offline; a failed deletion keeps the composer open.
+Check both the toolbar trash button and the mobile Delete Draft action.
+In Email's inline detail, deletion closes the detail and preserves the current
+mail tab and filters; it must not navigate split history to an older composer.
+Discarding a reply draft must preserve the remaining conversation. A previously
+cached thread that the server no longer has must leave the lists after opening it or receiving
+a 404 while changing its labels; a cached record must not override the server's
+not-found response. Check the same behavior after REST discard. Offline/network
+errors alone must never evict a cached thread.
 
 Choosing or clearing a send time is local preparation only. The composer remains
 editable and autosaves normally, shows **Scheduled send: ...** (the time and the
@@ -1202,7 +1322,20 @@ press `Join call`. Setup requests microphone permission and waits until that
 prompt finishes before requesting the camera, then previews video locally;
 sharing starts only after joining.
 Permission denial leaves the affected device off and still allows joining.
+Shared-link setup shows the people currently connected, with avatars, names, and
+an attendee count. It refreshes every 15 seconds while setup is open; guests see
+this only for standalone links. Empty calls show `No one else is here yet`; a
+failed roster request leaves joining available. Transcription agents and past
+attendees are excluded.
+
 The preview and full-width join button retain their size while joining.
+The call runtime preloads while setup is open. New-call setup also reserves an
+empty room, without starting a meeting, recording, or invitations. Leaving setup
+cancels that reservation; abandoned rooms expire after five minutes. Starting
+still works if preparation fails or expires.
+Entry waits for the room connection;
+teammate invitations continue afterward. For a newly started call, transcription
+and recording start in the background instead of delaying join credentials.
 Copying the meeting URL is available after joining, in the in-call header.
 
 The creator presses `Start call`; invitees press `Join call`. Loading the page or
@@ -1217,6 +1350,8 @@ for audio, video, device selection, screen sharing, and effects. `Leave call` re
 to Macro. `Copy Meeting Url` is available during the call.
 Rejoining from a new page waits for the prior page's pending leave cleanup before
 requesting another connection, so a slow leave cannot disconnect the replacement.
+Leaving the last participant archives the session first and tears down its media
+in the background, so the next call does not wait for that room to be deleted.
 It keeps its label and shows a checkmark for a few seconds after copying, then
 restores the copy icon.
 
@@ -1463,6 +1598,9 @@ to **Edit signature**. Unsaved edits remain when reopened; closing does not save
 or remove the signature.
 The inbox row's trash icon removes the inbox through the existing confirmation;
 it is separate from the signature editor's close control.
+With a composer open, save a changed signature or reply-signature preference and
+verify its preview updates. Once the account refresh completes, reopen a composer
+offline and confirm it uses the saved settings.
 
 ### Notification snoozes
 

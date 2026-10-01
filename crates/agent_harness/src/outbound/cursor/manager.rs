@@ -161,6 +161,7 @@ pub struct CursorContainerManager<Sessions, Keys, Repositories, Store> {
     sessions: Sessions,
     repositories: Arc<Repositories>,
     usage: Arc<dyn ai_usage::UsageRecorder>,
+    admission: Arc<dyn ai_billing::AiAdmissionService>,
     pull_requests: Option<Arc<dyn agent_session::domain::pull_request::SessionPullRequests>>,
     working_branches:
         Option<Arc<dyn agent_session::domain::working_branch::SessionWorkingBranches>>,
@@ -234,6 +235,7 @@ where
             sessions,
             repositories,
             usage,
+            admission: Arc::new(ai_billing::DisabledAiAdmissionService),
             pull_requests: None,
             working_branches: None,
             journal_storage: JournalStorage::Postgres {
@@ -261,6 +263,7 @@ where
             sessions: self.sessions,
             repositories: self.repositories,
             usage: self.usage,
+            admission: self.admission,
             pull_requests: self.pull_requests,
             working_branches: self.working_branches,
             journal_storage: self.journal_storage,
@@ -292,11 +295,18 @@ where
             sessions,
             repositories,
             usage: Arc::new(ai_usage::NoOpUsageRecorder),
+            admission: Arc::new(ai_billing::DisabledAiAdmissionService),
             pull_requests: None,
             working_branches: None,
             journal_storage: JournalStorage::Memory,
             pending: PendingCommands::new(),
         }
+    }
+
+    /// Configure admission for Macro-funded helpers, not the owner's Cursor runtime.
+    pub fn with_admission(mut self, admission: Arc<dyn ai_billing::AiAdmissionService>) -> Self {
+        self.admission = admission;
+        self
     }
 
     /// Persist Cursor's returned PR using the shared session operation.
@@ -444,10 +454,11 @@ where
                 },
             ));
         }
-        let chooser = HaikuRepositoryChooser::new(
+        let chooser = crate::domain::repository_choice::RepositoryChoiceService::new(
             Arc::clone(&self.repositories),
             self.sessions.clone(),
-            Arc::clone(&self.usage),
+            HaikuRepositoryChooser::new(Arc::clone(&self.usage)),
+            Arc::clone(&self.admission),
             owner,
             session_id,
         );

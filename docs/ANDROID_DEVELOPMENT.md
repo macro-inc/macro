@@ -118,7 +118,9 @@ The GitHub Actions `ANDROID_RELEASE_DOPPLER_TOKEN` secret must have read access 
 `android-release/prd`, including both the signing JSON and pinned Firebase secret.
 CI passes this dedicated read-only service token as `DOPPLER_TOKEN` only during
 configuration retrieval. Signing files live in the runner's temporary directory
-and are removed even when the build fails; only APK/checksum files are uploaded.
+and are removed even when the build fails. Only APK/checksum files are attached
+to the release; the separate `android-build-log` Actions artifact is retained for
+seven days, including on failed builds.
 
 Release tags must follow `vYYYY.M.D.N`, with a valid date, years 2000–2099, and a
 daily revision from 0–99. Android's `versionCode` is `YYYYMMDDNN` (for example,
@@ -131,6 +133,22 @@ non-debuggable manifest, and 16 KiB ZIP alignment. Publishing waits for the web,
 cloud-storage, sync-service, and AI editing worker deployments. Android failures
 fail their job without blocking web/backend rollout. CI verification does not
 replace the device qualification described above.
+
+To recover an Android artifact without redeploying production, manually run
+`release-production.yml` with `release_tag` set to an existing published
+production release. The source is checked out from that tag; web/backend jobs
+are skipped. `publish_android` defaults to false so the first run can validate
+the build and leave the APK in the `android-release` Actions artifact. Set it to
+true to attach the verified APK and checksum to the selected release:
+
+```sh
+gh workflow run release-production.yml --ref main -f release_tag=v2026.9.30.0 -f publish_android=true
+```
+
+The Android job uses an ephemeral GitHub-hosted runner without a separate Nix
+cache mount. Do not invoke the shared `teardown-nix` cache-volume action there:
+its `fuser -km /nix` can kill the runner when `/nix` is on the root filesystem,
+preventing GitHub from receiving the build logs. Let the hosted VM be discarded.
 
 The public GitHub release receives `macro-<tag>-android-arm64.apk` and
 `macro-<tag>-android-arm64.apk.sha256`. Share the APK's release download link;

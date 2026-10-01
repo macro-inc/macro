@@ -1,7 +1,8 @@
+import { MarkMessageNotifications } from '@notifications/components/MarkMessageNotifications';
 import type { UnifiedNotification } from '@notifications/types';
 import type { MessageListItem } from '@service-storage/messages';
-import { render } from '@solidjs/testing-library';
-import { createSignal, Show } from 'solid-js';
+import { render, waitFor } from '@solidjs/testing-library';
+import { createSignal, For, Show } from 'solid-js';
 import { expect, it, vi } from 'vitest';
 import { ChannelUnreadNotifications } from '../ChannelUnreadNotifications';
 import { UnreadNotificationsOverlay } from '../UnreadNotificationsOverlay';
@@ -47,6 +48,79 @@ function notification(threadId: string, time: number): UnifiedNotification {
     },
   };
 }
+
+it('shares unread lookups across mounted messages without rescanning history per row', async () => {
+  const reply = notification('root-1', 12);
+  const metadata = reply.notification_metadata;
+  const readMetadata = vi.fn(() => metadata);
+  Object.defineProperty(reply, 'notification_metadata', { get: readMetadata });
+  const history = Array.from({ length: 200 }, (_, index) => ({
+    ...notification('root-1', 12),
+    id: `done-${index}`,
+    state: 'done' as const,
+    get notification_metadata(): UnifiedNotification['notification_metadata'] {
+      throw new Error('Read historical notification metadata');
+    },
+  }));
+  const [records, setRecords] = createSignal<UnifiedNotification[]>([
+    ...history,
+    reply,
+  ]);
+  const [messageIds, setMessageIds] = createSignal(['root-1']);
+  const globalRead = vi.fn(() => {
+    throw new Error('Read global notifications');
+  });
+  const bulkMarkAsRead = vi.fn(async () => {
+    setRecords([...history, { ...reply, state: 'seen' }]);
+  });
+  mocks.source.mockReturnValue({
+    notificationsByEntity: globalRead,
+    withLocalOverrides: (n: UnifiedNotification) => n,
+    bulkMarkAsRead,
+  });
+  mocks.query.mockReturnValue({
+    isEnabled: true,
+    isPending: false,
+    get data() {
+      return records();
+    },
+  });
+  const view = render(() => (
+    <ChannelUnreadNotifications
+      channelId="channel"
+      messages={() => []}
+      scrollState={() => undefined}
+      container={() => undefined}
+      insets={() => ({ start: 0, end: 0 })}
+    >
+      {() => (
+        <For each={messageIds()}>
+          {(messageId) => (
+            <MarkMessageNotifications
+              messageId={messageId}
+              parent={{ type: 'channel', id: 'channel' }}
+            >
+              <span>{messageId}</span>
+            </MarkMessageNotifications>
+          )}
+        </For>
+      )}
+    </ChannelUnreadNotifications>
+  ));
+  const initialReads = readMetadata.mock.calls.length;
+  expect(initialReads).toBeGreaterThan(0);
+  expect(bulkMarkAsRead).not.toHaveBeenCalled();
+
+  setMessageIds(Array.from({ length: 50 }, (_, index) => `other-${index}`));
+  expect(view.container.querySelectorAll('span')).toHaveLength(50);
+  expect(readMetadata).toHaveBeenCalledTimes(initialReads);
+  expect(bulkMarkAsRead).not.toHaveBeenCalled();
+
+  setMessageIds([...messageIds(), 'reply-12']);
+  await waitFor(() => expect(bulkMarkAsRead).toHaveBeenCalledOnce());
+  expect(bulkMarkAsRead).toHaveBeenCalledWith([reply]);
+  expect(globalRead).not.toHaveBeenCalled();
+});
 
 it('updates one chip live without suspending the channel or loading the global feed', () => {
   const [pending, setPending] = createSignal(true);

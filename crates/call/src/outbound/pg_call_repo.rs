@@ -3,6 +3,7 @@
 mod edit;
 mod lifecycle;
 mod meetings;
+mod preparations;
 mod team_share;
 
 #[cfg(test)]
@@ -25,7 +26,9 @@ use models_permissions::share_permission::team_share::TeamShareFacts;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::domain::meetings::{GuestId, Meeting, MeetingToken, UpdateMeetingRequest};
+use crate::domain::meetings::{
+    GuestId, Meeting, MeetingPreparation, MeetingToken, UpdateMeetingRequest,
+};
 use crate::domain::models::{
     ActiveCallSummary, AddParticipantError, ArchivedCall, Call, CallError, CallParticipant,
     CallRecord, CallRecordGuest, CallRecordParticipant, CallRecordPreview, CallRecordPreviewData,
@@ -303,6 +306,31 @@ impl PgCallRepo {
 
 impl CallRepository for PgCallRepo {
     type Err = sqlx::Error;
+
+    async fn insert_meeting_preparation(
+        &self,
+        actor: &str,
+        preparation: &MeetingPreparation,
+    ) -> Result<(), CallError> {
+        self.persist_preparation(actor, preparation).await
+    }
+    async fn claim_meeting_preparation(
+        &self,
+        id: &Uuid,
+        actor: &str,
+        meeting_id: &Uuid,
+    ) -> Result<(), CallError> {
+        self.claim_preparation(id, actor, meeting_id).await
+    }
+    async fn cancel_meeting_preparation(&self, id: &Uuid, actor: &str) -> Result<bool, CallError> {
+        self.discard_preparation(id, actor).await
+    }
+    async fn get_meeting_preparation(
+        &self,
+        meeting_id: &Uuid,
+    ) -> Result<Option<MeetingPreparation>, CallError> {
+        self.fetch_preparation(meeting_id).await
+    }
 
     async fn create_meeting(&self, meeting: Meeting) -> Result<Meeting, CallError> {
         self.persist_meeting(meeting).await
@@ -875,6 +903,37 @@ impl CallRepository for PgCallRepo {
         .execute(&self.pool)
         .await?;
         Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn attach_meeting_recording(
+        &self,
+        call_id: &Uuid,
+        egress_id: &str,
+    ) -> Result<bool, Self::Err> {
+        // This UPDATE takes the same row lock as archival. If it wins, archival
+        // copies the egress ID. If archival wins, the second statement sees the
+        // committed archived record under READ COMMITTED.
+        let active = sqlx::query!(
+            r#"
+            UPDATE calls SET egress_id = $2 WHERE id = $1
+            "#,
+            call_id,
+            egress_id,
+        )
+        .execute(&self.pool)
+        .await?;
+        if active.rows_affected() > 0 {
+            return Ok(true);
+        }
+        sqlx::query!(
+            "UPDATE call_records SET egress_id = $2 WHERE id = $1",
+            call_id,
+            egress_id,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(false)
     }
 
     #[tracing::instrument(err, skip(self))]

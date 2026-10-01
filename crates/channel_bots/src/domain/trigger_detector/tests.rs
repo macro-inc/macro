@@ -25,6 +25,28 @@ fn classifier(answer: Result<bool, &'static str>) -> Arc<Classifier> {
     })
 }
 #[tokio::test]
+async fn admission_failure_suppresses_inference_without_fallback() {
+    for failure in admission_failures() {
+        let mut root = message(1, None, "previous answer");
+        root.sender_id = channel_sender::ChannelSender::new_from_bot(bot_id::MACRO_AI_BOT_ID);
+        let trigger = message(2, Some(root.id), "continue");
+        let mut api = MockMessageServiceApi::new();
+        configure_reads(&mut api, &trigger, thread(root, vec![trigger.clone()]));
+        let classifier = classifier(Ok(true));
+        let admission = Admission::new(Err(failure));
+        let detector = MentionOrInferredDetector::new(
+            Arc::new(api),
+            Arc::new(Access::default()),
+            classifier.clone(),
+        )
+        .with_admission(admission.clone());
+        assert!(detector.detect(&event(&trigger)).await.is_empty());
+        assert!(classifier.calls.lock().unwrap().is_empty());
+        assert_eq!(admission.calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
+}
+
+#[tokio::test]
 async fn document_mention_triggers_each_canonical_bot_once_without_classification() {
     let mut trigger = message(1, None, "@macro help");
     let mention = SimpleMention {
@@ -33,11 +55,13 @@ async fn document_mention_triggers_each_canonical_bot_once_without_classificatio
     };
     trigger.mentions = vec![mention.clone(), mention];
     let classifier = classifier(Ok(false));
+    let admission = Admission::new(Err(ai_billing::AiAdmissionError::Unavailable));
     let detector = MentionOrInferredDetector::new(
         Arc::new(MockMessageServiceApi::new()),
         Arc::new(Access::default()),
         classifier.clone(),
-    );
+    )
+    .with_admission(admission.clone());
     assert_eq!(
         detector.detect(&event(&trigger)).await,
         vec![BotInvocation {
@@ -46,6 +70,7 @@ async fn document_mention_triggers_each_canonical_bot_once_without_classificatio
         }]
     );
     assert!(classifier.calls.lock().unwrap().is_empty());
+    assert_eq!(admission.calls.load(std::sync::atomic::Ordering::SeqCst), 0);
 }
 #[tokio::test]
 async fn bot_authored_messages_never_trigger_another_response() {

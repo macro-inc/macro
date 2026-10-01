@@ -133,6 +133,7 @@ async fn try_begin_with_projection_uuid(
                 link_patches: &[],
                 revalidations: &[],
                 created_at_ms: 1,
+                identity_bindings: &[],
             },
             projection_mutations,
         )

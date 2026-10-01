@@ -4,6 +4,10 @@ name = "ai_billing"
 publish = false
 version = "0.1.0"
 
+[features]
+# Host composition only; admission consumers can keep depending on domain ports.
+pg-admission = ["roles_and_permissions/outbound", "teams/outbound"]
+
 [dependencies]
 ai_usage = { path = "../ai_usage" }
 anyhow = { workspace = true }

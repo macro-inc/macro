@@ -372,6 +372,7 @@ impl EmailUserService for CountingEmailService {
             .expect("user catalog identities lock")
             .push(macro_id);
         Ok(vec![UserEmailLink {
+            draft_is_signal: true,
             id: Uuid::from_u128(502),
             macro_id: MacroUserIdStr::try_from_email("owner@example.com").unwrap(),
             email_address: EmailStr::try_from("inbox@example.com".to_owned()).unwrap(),
@@ -647,6 +648,7 @@ impl graphql_email::SoupEmailThreadMailProjectionEdgeReader for RecordingEmailCo
                                 has_calendar_attachment: false,
                                 has_thread_share: false,
                             },
+                            draft_state: None,
                             previews: EmailThreadMailPreviews {
                                 all: None,
                                 draft: None,

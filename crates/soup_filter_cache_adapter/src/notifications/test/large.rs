@@ -44,6 +44,7 @@ async fn large_set_lifecycle<S: PredicateIndexStorage>(storage: S) {
                 link_patches: &[],
                 revalidations: &[],
                 created_at_ms: 1,
+                identity_bindings: &[],
             },
             optimistic_notification_updates(edits).unwrap(),
         )

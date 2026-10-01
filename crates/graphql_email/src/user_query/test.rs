@@ -67,6 +67,7 @@ fn label() -> LinkLabel {
 
 fn link() -> UserEmailLink {
     UserEmailLink {
+        draft_is_signal: true,
         id: Uuid::from_u128(2),
         macro_id: MacroUserIdStr::try_from_email("owner@example.com").unwrap(),
         email_address: EmailStr::try_from("inbox@example.com".to_owned()).unwrap(),

@@ -1,15 +1,14 @@
-//! Reads recorded AI usage from `ai_usage` at Macro's list rate.
+//! Reads prospectively counted AI usage from `ai_usage` at Macro's list rate.
 
 #[cfg(test)]
 mod test;
 
-use crate::domain::models::NON_BILLABLE_AI_FEATURES;
 use crate::domain::{BillingError, BillingPeriod, Result, SeatUsage, UsageReader, list_rate_cents};
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 
-/// Rows recorded before a model had pricing carry a NULL total. Bill them at
-/// the Opus 5 rate rather than for free; `set_pricing` backfills them later.
+/// Counted rows recorded before a model had pricing carry a NULL total. Price
+/// them at the Opus 5 rate rather than for free; `set_pricing` backfills them later.
 ///
 /// These mirror the `claude-opus-5` row seeded into `ai_pricing` by
 /// `20260724182218_seed_claude_opus_5_pricing.sql` ($5 in / $25 out per
@@ -41,7 +40,6 @@ impl UsageReader for PgUsageReader {
             return Ok(Vec::new());
         }
         let ids: Vec<String> = users.iter().map(|u| u.as_ref().to_string()).collect();
-        let non_billable_features = NON_BILLABLE_AI_FEATURES.map(|feature| feature.to_string());
         let rows = sqlx::query!(
             r#"
             SELECT user_id, COALESCE(SUM(
@@ -55,7 +53,7 @@ impl UsageReader for PgUsageReader {
             WHERE user_id = ANY($1)
               AND created_at >= $2
               AND created_at < $3
-              AND feature <> ALL($6)
+              AND count_usage = TRUE
             GROUP BY user_id
             "#,
             &ids,
@@ -63,7 +61,6 @@ impl UsageReader for PgUsageReader {
             period.end,
             FALLBACK_PRICE_PER_MILLION_IN,
             FALLBACK_PRICE_PER_MILLION_OUT,
-            &non_billable_features,
         )
         .fetch_all(&self.pool)
         .await
