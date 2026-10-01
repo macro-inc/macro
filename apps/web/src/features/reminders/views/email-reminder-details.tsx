@@ -6,6 +6,7 @@ import {
 } from '@queries/reminders/email-followup';
 import type { EmailFollowupCommand } from '@service-storage/generated/schemas/emailFollowupCommand';
 import type { Reminder } from '@service-storage/generated/schemas/reminder';
+import { Button } from '@ui';
 import { createSignal, type JSX, Show } from 'solid-js';
 import { EmailReminderForm } from '../components/email-reminder-form';
 
@@ -62,57 +63,74 @@ export function EmailReminderDetails(props: {
       fallback={<p role="status">Loading reminder…</p>}
     >
       <Show
-        when={followup()}
+        when={!query.isError}
         fallback={
-          props.isEmailFollowup ? (
-            <p>
-              This email reminder is no longer available. Open the email to set
-              a new reminder.
-            </p>
-          ) : (
-            props.children
-          )
+          <div class="space-y-3">
+            <p role="alert">Couldn’t load the email reminder. Try again.</p>
+            <Button
+              disabled={query.isFetching}
+              onClick={() => void query.refetch()}
+            >
+              Try again
+            </Button>
+          </div>
         }
       >
-        {(current) => (
-          <>
-            <div class="mb-4">
-              <ItemPreview id={props.threadId} type="email" />
-            </div>
-            <EmailReminderForm
-              subject={props.reminder.description}
-              initialTime={
-                current().state === 'pending' || current().state === 'archiving'
-                  ? current().remindAt
-                  : undefined
-              }
-              initialCondition={current().condition}
-              pending={pending()}
-              error={error()}
-              onCancel={props.onClose}
-              onSave={(at, condition) =>
-                void save({
-                  type: 'set',
-                  operationId: crypto.randomUUID(),
-                  expectedRevision: current().revision,
-                  remindAt: at.toISOString(),
-                  condition,
-                })
-              }
-              onRemove={
-                current().state === 'pending' || current().state === 'archiving'
-                  ? () =>
-                      void save({
-                        type: 'remove',
-                        operationId: crypto.randomUUID(),
-                        expectedRevision: current().revision,
-                        undo: false,
-                      })
-                  : undefined
-              }
-            />
-          </>
-        )}
+        <Show
+          when={followup()}
+          fallback={
+            props.isEmailFollowup ? (
+              <p>
+                This email reminder is no longer available. Open the email to
+                set a new reminder.
+              </p>
+            ) : (
+              props.children
+            )
+          }
+        >
+          {(current) => (
+            <>
+              <div class="mb-4">
+                <ItemPreview id={props.threadId} type="email" />
+              </div>
+              <EmailReminderForm
+                subject={props.reminder.description}
+                initialTime={
+                  current().state === 'pending' ||
+                  current().state === 'archiving'
+                    ? current().remindAt
+                    : undefined
+                }
+                initialCondition={current().condition}
+                pending={pending()}
+                error={error()}
+                onCancel={props.onClose}
+                onSave={(at, condition) =>
+                  void save({
+                    type: 'set',
+                    operationId: crypto.randomUUID(),
+                    expectedRevision: current().revision,
+                    remindAt: at.toISOString(),
+                    condition,
+                  })
+                }
+                onRemove={
+                  current().state === 'pending' ||
+                  current().state === 'archiving'
+                    ? () =>
+                        void save({
+                          type: 'remove',
+                          operationId: crypto.randomUUID(),
+                          expectedRevision: current().revision,
+                          undo: false,
+                        })
+                    : undefined
+                }
+              />
+            </>
+          )}
+        </Show>
       </Show>
     </Show>
   );

@@ -170,6 +170,40 @@ describe('makeMarkDoneAction', () => {
     dispose();
   });
 
+  it('keeps ordinary reminders undoable when selected with a workflow mirror', async () => {
+    const mirror = {
+      type: 'reminder',
+      id: 'mirror',
+      emailFollowup: { threadId: 'thread' },
+    } as EntityData;
+    const ordinary = { type: 'reminder', id: 'ordinary' } as EntityData;
+    const { action, dispose } = createAction();
+    const onUndoHandle = vi.fn();
+    await action.execute([mirror, ordinary], undefined, { onUndoHandle });
+    expect(mocks.mutateAsync).toHaveBeenCalledTimes(2);
+    const mirrorVariables = mocks.mutateAsync.mock.calls[0][0];
+    const ordinaryVariables = mocks.mutateAsync.mock.calls[1][0];
+    expect(mirrorVariables).toMatchObject({ entities: [mirror] });
+    expect(ordinaryVariables).toMatchObject({
+      entities: [ordinary],
+      onUndoHandle,
+    });
+    const options = mocks.undoableOptionsFactory() as {
+      onPushed: (
+        handle: { dispose: () => void },
+        variables: unknown
+      ) => unknown;
+    };
+    const mirrorHandle = { dispose: vi.fn() };
+    const ordinaryHandle = { dispose: vi.fn() };
+    options.onPushed(mirrorHandle, mirrorVariables);
+    options.onPushed(ordinaryHandle, ordinaryVariables);
+    expect(mirrorHandle.dispose).toHaveBeenCalledOnce();
+    expect(ordinaryHandle.dispose).not.toHaveBeenCalled();
+    expect(onUndoHandle).toHaveBeenCalledWith(ordinaryHandle);
+    dispose();
+  });
+
   it('uses the agent-session entity target while GraphQL Soup is enabled', async () => {
     mocks.graphqlSoupEnabled.mockReturnValue(true);
     mocks.resolveMarkEntitiesDoneVariables.mockReturnValue({

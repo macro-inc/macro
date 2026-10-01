@@ -46,7 +46,16 @@ export function ReminderRowSchedule(props: {
     }
   };
   return (
-    <>
+    <span
+      class="contents"
+      onClick={(event) => event.stopPropagation()}
+      onPointerDown={(event) => event.stopPropagation()}
+      onPointerUp={(event) => event.stopPropagation()}
+      onMouseDown={(event) => event.stopPropagation()}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') event.stopPropagation();
+      }}
+    >
       <Show when={props.onToggleDone || done()}>
         <span
           class="inline-flex shrink-0"
@@ -95,7 +104,7 @@ export function ReminderRowSchedule(props: {
         class="w-[calc(100vw-2rem)] max-w-110"
       >
         <ActionDialogShell>
-          <ActionDialogShell.Header>
+          <ActionDialogShell.Header class="px-6 pt-5">
             <ActionDialogShell.Title>Reminder</ActionDialogShell.Title>
           </ActionDialogShell.Header>
           <Show when={open()}>
@@ -109,6 +118,6 @@ export function ReminderRowSchedule(props: {
           </Show>
         </ActionDialogShell>
       </Dialog>
-    </>
+    </span>
   );
 }

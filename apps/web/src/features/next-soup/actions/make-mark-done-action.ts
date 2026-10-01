@@ -270,11 +270,26 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     entities: EntityData[],
     restoreFocus?: () => void,
     opts?: MarkDoneExecuteOpts
-  ) => {
+  ): Promise<void> => {
     // Skip already-done emails so a mixed selection (e.g. done + not-done rows
     // in mail "All") doesn't re-archive the done ones or overcount the toast.
     const targets = entities.filter(isMarkDoneTarget);
     if (targets.length === 0) return;
+
+    // Only workflow mirrors lack generic undo. Keep reversible selections in
+    // their own transaction so a mixed selection retains its normal Undo.
+    const mirrors = targets.filter(
+      (entity) => entity.type === 'reminder' && entity.emailFollowup
+    );
+    if (mirrors.length > 0 && mirrors.length < targets.length) {
+      await execute(mirrors, undefined, { silent: opts?.silent });
+      await execute(
+        targets.filter((entity) => !mirrors.includes(entity)),
+        restoreFocus,
+        opts
+      );
+      return;
+    }
 
     const source = notificationSource();
     const scopeChannelNotifications = scopeChannelNotificationsToEntity();
