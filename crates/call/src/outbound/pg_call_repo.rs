@@ -898,16 +898,31 @@ impl CallRepository for PgCallRepo {
                   OR STRPOS(e.conference_url, m.share_token) > 0
               )
               -- Meeting links are reused, so only the event the call took
-              -- place in counts: it, or one of its occurrences, overlaps the call.
+              -- place in counts: it, or one of its occurrences, overlaps the
+              -- call. All-day dates are local to the event, so they match
+              -- calls within a day either side.
               AND (
                   (e.starts_at IS NOT NULL
                       AND tstzrange(e.starts_at, e.ends_at) && tstzrange(cr.started_at, cr.ended_at))
+                  OR (e.start_date IS NOT NULL
+                      AND daterange(e.start_date, e.end_date) && daterange(
+                          (cr.started_at - interval '1 day')::date,
+                          (cr.ended_at + interval '1 day')::date,
+                          '[]'
+                      ))
                   OR EXISTS (
                       SELECT 1 FROM calendar_event_occurrences o
                       WHERE o.event_id = e.id
                         AND o.owner_id = e.owner_id
                         AND NOT o.is_cancelled
-                        AND o.timed_span && tstzrange(cr.started_at, cr.ended_at)
+                        AND (
+                            o.timed_span && tstzrange(cr.started_at, cr.ended_at)
+                            OR o.day_span && daterange(
+                                (cr.started_at - interval '1 day')::date,
+                                (cr.ended_at + interval '1 day')::date,
+                                '[]'
+                            )
+                        )
                   )
               )
             "#,

@@ -2850,6 +2850,41 @@ async fn get_call_record_people_includes_meeting_owner_and_calendar_invitees(
     .bind(USER_C.deref().as_ref())
     .execute(&pool)
     .await?;
+    // An all-day event on the call's day counts; one days later does not.
+    for (date, attendee) in [
+        ("2024-01-01", "allday@hooli.com"),
+        ("2024-01-05", "friday@hooli.com"),
+    ] {
+        let link_id = Uuid::now_v7();
+        sqlx::query(
+            r#"INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider)
+               VALUES ($1, $2, $2, $1::text || '@example.com', 'GMAIL')"#,
+        )
+        .bind(link_id)
+        .bind(USER_C.deref().as_ref())
+        .execute(&pool)
+        .await?;
+        let event_id = Uuid::now_v7();
+        sqlx::query(
+            r#"INSERT INTO calendar_events (
+                   id, owner_id, source_link_id, ical_uid, title, location,
+                   canonical_source_kind, start_date, end_date
+               )
+               VALUES ($1, $2, $3, $1::text, 'Offsite', $4, 'google', $5::date, $5::date + 1)"#,
+        )
+        .bind(event_id)
+        .bind(USER_C.deref().as_ref())
+        .bind(link_id)
+        .bind(LINK)
+        .bind(date)
+        .execute(&pool)
+        .await?;
+        sqlx::query("INSERT INTO calendar_event_attendees (event_id, email) VALUES ($1, $2)")
+            .bind(event_id)
+            .bind(attendee)
+            .execute(&pool)
+            .await?;
+    }
     // The same reused link at another time, the owner's events without the
     // link, and other owners' copies are ignored.
     insert_calendar_event_with_attendees(
@@ -2893,7 +2928,12 @@ async fn get_call_record_people_includes_meeting_owner_and_calendar_invitees(
     invitee_emails.sort();
     assert_eq!(
         invitee_emails,
-        vec!["ext@acme.com", "user-c@test.com", "weekly@initech.com"]
+        vec![
+            "allday@hooli.com",
+            "ext@acme.com",
+            "user-c@test.com",
+            "weekly@initech.com"
+        ]
     );
     Ok(())
 }
