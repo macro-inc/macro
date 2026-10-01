@@ -51,7 +51,11 @@ it('keeps H on entities available for reminders and consumes it on headers', () 
       const collapseCommands = vi
         .mocked(registerHotkey)
         .mock.calls.map(([options]) => options)
-        .filter((options) => options.description?.startsWith('Collapse'));
+        .filter(
+          (options) =>
+            typeof options.description === 'string' &&
+            options.description.startsWith('Collapse')
+        );
       expect(
         new Set(collapseCommands.map((command) => command.hotkeyToken)).size
       ).toBe(2);
