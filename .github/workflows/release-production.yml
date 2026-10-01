@@ -2,9 +2,19 @@ name: Deploy Production Release
 on:
   release:
     types: [released]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing published production release to rebuild Android for (vYYYY.M.D.N)
+        required: true
+        type: string
+      publish_android:
+        description: Attach the verified APK to the existing release
+        default: false
+        type: boolean
 
 concurrency:
-  group: ${{ github.workflow }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || 'production' }}
   cancel-in-progress: false
 
 env:
@@ -19,12 +29,22 @@ jobs:
     timeout-minutes: 90
     env:
       CI: "true"
-      RELEASE_TAG: ${{ github.event.release.tag_name }}
+      RELEASE_TAG: ${{ inputs.release_tag || github.event.release.tag_name }}
     steps:
+      - name: Validate recovery release
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v20[0-9]{2}\.[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}$ ]]
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease \
+            | jq -e '.isDraft == false and .isPrerelease == false'
       - name: Checkout release
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ inputs.release_tag || github.sha }}
           persist-credentials: false
       - name: Install Android SDK components
         shell: bash
@@ -60,8 +80,18 @@ jobs:
           VITE_OTEL_EXPORTER_URL: https://macro-prox-prod.macroverse.workers.dev/i/otlp/v1/traces
           VITE_OTEL_ENV: prod
         run: |
+          set -euo pipefail
           just android-build --firebase-config "$RUNNER_TEMP/android-google-services.json" \
-            --apk true --aab false --ci --config "$RUNNER_TEMP/android-release.json"
+            --apk true --aab false --ci --config "$RUNNER_TEMP/android-release.json" \
+            2>&1 | tee "$RUNNER_TEMP/android-build.log"
+      - name: Preserve Android build log
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: android-build-log
+          path: ${{ runner.temp }}/android-build.log
+          if-no-files-found: warn
+          retention-days: 7
       - name: Verify and collect APK
         working-directory: apps/web
         env:
@@ -93,13 +123,17 @@ jobs:
             apps/web/tauri/src-tauri/gen/android/app/google-services.json \
             "$RUNNER_TEMP/android-google-services.json"
           rm -rf "$RUNNER_TEMP/android-signing"
-      - name: Teardown Nix
-        if: always()
-        uses: ./.github/actions/teardown-nix
+      # This hosted runner has no separate /nix cache mount to detach. The cache
+      # teardown action's fuser -km /nix can kill the runner on its root filesystem.
 
   upload-android:
     name: Publish Android release artifact
     needs: [build-android, deploy, deploy-sync-service, deploy-ai-editing-worker]
+    if: >-
+      ${{ !cancelled() && needs.build-android.result == 'success' &&
+          ((github.event_name == 'workflow_dispatch' && inputs.publish_android) ||
+           (github.event_name == 'release' && needs.deploy.result == 'success' &&
+            needs.deploy-sync-service.result == 'success' && needs.deploy-ai-editing-worker.result == 'success')) }}
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -112,11 +146,12 @@ jobs:
       - name: Attach APK and checksum to release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
         with:
-          tag_name: ${{ github.event.release.tag_name }}
+          tag_name: ${{ inputs.release_tag || github.event.release.tag_name }}
           files: android-artifacts/*
           fail_on_unmatched_files: true
 
   deploy-cloud-storage:
+    if: github.event_name == 'release'
     name: Deploy Cloud Storage Services
     uses: ./.github/workflows/deploy_all_services.yml
     with:
@@ -150,6 +185,7 @@ jobs:
     secrets: inherit
 
   build:
+    if: github.event_name == 'release'
     name: Build Web App
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
     env:
