@@ -149,9 +149,9 @@ fn verify_lfs_videos() -> Step<Run> {
 
 fn build() -> Step<Run> {
     Step::new("Build")
-        // The dev shell's Linux LD_LIBRARY_PATH (re-applied via BASH_ENV) makes Playwright's
-        // glibc-linked Chromium load Nix libs built against a newer glibc, so it fails to launch.
-        .run("env -u LD_LIBRARY_PATH bun run build")
+        // The dev shell's Linux LD_LIBRARY_PATH makes Playwright's glibc-linked Chromium load Nix
+        // libs built against a newer glibc. Drop BASH_ENV too: bun runs scripts via bash, which re-sources it.
+        .run("env -u LD_LIBRARY_PATH -u BASH_ENV bun run build")
         .working_directory(xtask_paths::repo_dir!("apps/marketing"))
         // Canonical URLs, sitemap and robots are baked in at build time.
         .add_env(Env::new(
