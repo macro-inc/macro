@@ -1,3 +1,4 @@
+import { $getRoot } from 'lexical';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { message } from '../../email-message/tests/messages';
 import type {
@@ -1051,5 +1052,60 @@ it.each(['standalone', 'reply'] as const)(
     } finally {
       root.dispose();
     }
+  }
+);
+
+it.each(['standalone', 'reply'] as const)(
+  'drops an already-sent background %s draft and cancels pending autosave',
+  async (surface) => {
+    const context = createComposeContext();
+    let changed!: Parameters<NonNullable<EmailDraftStorage['watchDrafts']>>[0];
+    context.drafts.watchDrafts = (callback) => {
+      changed = callback;
+      return () => {};
+    };
+    context.drafts.readDraft = vi.fn(async () => undefined);
+    vi.mocked(context.drafts.saveDraft).mockImplementation(
+      async ({ clientHandles }) => ({
+        draftId: clientHandles?.draftId,
+        threadId: clientHandles?.threadId,
+        inboxId: 'inbox',
+        persistence: 'queued',
+      })
+    );
+    const root =
+      surface === 'standalone'
+        ? mountEmailComposer(context)
+        : mountReplyComposer(context);
+    try {
+      root.edit('Already delivered');
+      await vi.advanceTimersByTimeAsync(600);
+      const original = vi.mocked(context.drafts.saveDraft).mock.calls[0][0];
+      root.edit('Edit awaiting autosave');
+      changed({
+        mutationUuid: original.clientHandles?.draftId,
+        failed: true,
+        code: 'DRAFT_ALREADY_SENT',
+      });
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(context.notices.feedback.alert).toHaveBeenCalledExactlyOnceWith(
+        surface === 'standalone'
+          ? 'This email was already sent'
+          : 'This reply was already sent'
+      );
+      expect(context.notices.feedback.failure).not.toHaveBeenCalled();
+      expect(context.drafts.saveDraft).toHaveBeenCalledOnce();
+      expect(context.delivery.sendMessage).not.toHaveBeenCalled();
+      expect(context.delivery.schedule).not.toHaveBeenCalled();
+      expect(root.editor.read(() => $getRoot().getTextContent())).toBe('');
+      if ('state' in root) {
+        expect(root.state.context.subject()).toBe('');
+        expect(root.state.context.recipients().to).toEqual([]);
+      }
+    } finally {
+      root.dispose();
+    }
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(context.drafts.saveDraft).toHaveBeenCalledOnce();
   }
 );

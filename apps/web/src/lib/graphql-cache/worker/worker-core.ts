@@ -697,6 +697,9 @@ export class CacheWorkerCore {
                   mutationUuid: result.mutationUuid,
                   status: 'permanently-failed',
                   error: request.error,
+                  ...(request.errorCode === undefined
+                    ? {}
+                    : { errorCode: request.errorCode }),
                 },
         });
         return result;

@@ -398,9 +398,11 @@ function makeFakeHost(): FakeHost {
     },
     async rollbackOptimisticWrite(transactionId, _claim) {
       host.rollbacks.push(transactionId);
+      const revalidations = queue[0]?.args.revalidations;
       if (queue[0]?.transactionId === transactionId) queue.shift();
       return {
         kind: 'rolled-back' as const,
+        revalidations,
         revision: INITIAL_CACHE_REVISION,
         revisionAdvanced: true,
         changed: [],
@@ -2555,6 +2557,86 @@ describe('normalizedCacheExchange', () => {
       expect(host.commits[0]?.transactionId).toBe('restored-1');
     });
 
+    it.each([
+      'terminal',
+      'superseded',
+      'retryable',
+      'unhandled replay',
+    ] as const)(
+      'revalidates persisted recovery queries only after a terminal failure (%s)',
+      async (outcome) => {
+        vi.useFakeTimers();
+        try {
+          host.seedQueued({
+            uuid: '00000000-0000-4000-8000-000000000001',
+            query: stringifyDocument(SaveEmailDraftDocument),
+            operationName: 'SaveEmailDraft',
+            variables: { input: { draftId: 'draft-handle', subject: 'Reply' } },
+            data: optimistic,
+            revalidations: [
+              {
+                query: stringifyDocument(QUERY),
+                operationName: 'Soup',
+                variablesJson: '{"input":{"limit":2}}',
+              },
+            ],
+          });
+          if (outcome === 'superseded') {
+            const rollback = host.rollbackOptimisticWrite.bind(host);
+            host.rollbackOptimisticWrite = async (...args) => ({
+              ...(await rollback(...args)),
+              kind: 'discarded-superseded',
+              replacementTransactionId: 'newer-intent',
+            });
+          }
+          const error = new CombinedError({
+            graphQLErrors: [
+              {
+                message: 'Draft rejected',
+                extensions:
+                  outcome === 'retryable'
+                    ? { code: 'INTERNAL', retryable: true }
+                    : { code: 'DRAFT_ALREADY_SENT' },
+              },
+            ],
+          });
+          const { client, forwarded } = harness(
+            host,
+            () => ({ error, data: undefined }),
+            {
+              shouldRetryMutation: shouldRetryGraphqlMutation,
+            }
+          );
+          if (outcome === 'unhandled replay') {
+            vi.mocked(client.mutation).mockReturnValue({
+              toPromise: async () => ({ error }),
+            } as never);
+          }
+          await vi.advanceTimersByTimeAsync(0);
+          expect(host.begins).toHaveLength(0);
+          expect(host.claims).toEqual(['restored-1']);
+          expect(host.rollbacks).toHaveLength(outcome === 'retryable' ? 0 : 1);
+          expect(host.defers).toHaveLength(outcome === 'retryable' ? 1 : 0);
+          const repairs =
+            outcome === 'terminal' || outcome === 'unhandled replay';
+          expect(vi.mocked(client.query)).toHaveBeenCalledTimes(
+            repairs ? 1 : 0
+          );
+          if (repairs) {
+            expect(vi.mocked(client.query)).toHaveBeenCalledWith(
+              expect.anything(),
+              { input: { limit: 2 } },
+              { requestPolicy: 'network-only' }
+            );
+          }
+          if (outcome !== 'unhandled replay')
+            expect(optimisticContextOf(forwarded[0])).toBeUndefined();
+        } finally {
+          vi.useRealTimers();
+        }
+      }
+    );
+
     it.each([true, undefined])(
       'settles a restored superseded identity write before its replacement (confirmation=%s)',
       async (requiresConfirmation) => {
@@ -2822,6 +2904,65 @@ describe('normalizedCacheExchange', () => {
 
       expect(host.rollbacks).toEqual(['restored-1']);
     });
+
+    it.each(['foreground', 'restored', 'unhandled replay'] as const)(
+      'preserves an already-sent rejection across the %s boundary',
+      async (path) => {
+        const variables = {
+          input: { draftId: 'draft-handle', subject: 'Reply' },
+        };
+        const rejection = new CombinedError({
+          graphQLErrors: [
+            {
+              message: 'Draft was sent elsewhere',
+              extensions: { code: 'DRAFT_ALREADY_SENT' },
+            },
+          ],
+        });
+        const rollback = vi.spyOn(host, 'rollbackOptimisticWrite');
+        if (path !== 'foreground') {
+          host.seedQueued({
+            uuid: '00000000-0000-4000-8000-000000000002',
+            query: stringifyDocument(SaveEmailDraftDocument),
+            operationName: 'SaveEmailDraft',
+            variables,
+            data: optimistic,
+          });
+        }
+        const { ops, client, forwarded } = harness(host, () => ({
+          error: rejection,
+          data: undefined,
+        }));
+        if (path === 'foreground') {
+          ops.next(
+            makeOperation(
+              'mutation',
+              createRequest(SaveEmailDraftDocument, variables),
+              makeMutationOp(1, optimistic).context
+            )
+          );
+        } else if (path === 'unhandled replay') {
+          // A reconstructed client may return an error without traversing
+          // writeThrough; the queue drain's fallback also preserves its code.
+          vi.mocked(client.mutation).mockReturnValue({
+            toPromise: async () => ({ error: rejection }),
+          } as never);
+        }
+        await tick();
+        expect(rollback).toHaveBeenCalledExactlyOnceWith(
+          path === 'foreground' ? 'txn-1' : 'restored-1',
+          expect.any(Object),
+          rejection.message,
+          'DRAFT_ALREADY_SENT'
+        );
+        expect(host.begins).toHaveLength(path === 'foreground' ? 1 : 0);
+        if (path === 'restored') {
+          expect(host.claims).toEqual(['restored-1']);
+          expect(forwarded[0]?.variables).toEqual(variables);
+          expect(optimisticContextOf(forwarded[0])).toBeUndefined();
+        }
+      }
+    );
 
     it('forwards optimistic mutations without cache work when the host is disabled', async () => {
       const disabledHost: CacheHost = { ...host, disabled: true };
@@ -3522,6 +3663,13 @@ describe('normalizedCacheExchange', () => {
           kind: 'failed',
           error: 'missing identity response id',
           replacementTransactionId,
+          revalidations: [
+            {
+              query: stringifyDocument(QUERY),
+              operationName: 'Soup',
+              variablesJson: '{"input":{"limit":2}}',
+            },
+          ],
         });
         const onCacheError = vi.fn(() => {
           if (callbackThrows) throw new Error('diagnostic failed');
@@ -3540,7 +3688,9 @@ describe('normalizedCacheExchange', () => {
         expect(host.commits).toHaveLength(1);
         expect(host.defers).toHaveLength(0);
         expect(forwarded).toHaveLength(1);
-        expect(vi.mocked(client.query)).not.toHaveBeenCalled();
+        expect(vi.mocked(client.query)).toHaveBeenCalledTimes(
+          replacementTransactionId ? 0 : 1
+        );
         expect(results[0]?.data).toBeUndefined();
         if (replacementTransactionId) {
           expect(optimisticMutationDispositionOf(results[0])).toEqual({
@@ -3654,6 +3804,59 @@ describe('normalizedCacheExchange', () => {
         error,
       });
     });
+
+    it.each([
+      {
+        code: 'DRAFT_ALREADY_SENT',
+        network: false,
+        expected: 'DRAFT_ALREADY_SENT',
+      },
+      { code: 'INTERNAL', network: false, expected: 'INTERNAL' },
+      { code: 42, network: false, expected: undefined },
+      { code: 'DRAFT_ALREADY_SENT', network: true, expected: undefined },
+    ])(
+      'retains authoritative string error codes on background replay: %j',
+      async ({ code, network, expected }) => {
+        vi.useFakeTimers();
+        try {
+          const rejection = new CombinedError({
+            graphQLErrors: [
+              { message: 'server rejection', extensions: { code } },
+            ],
+            ...(network ? { networkError: new Error('transport failed') } : {}),
+          });
+          const rollback = vi.spyOn(host, 'rollbackOptimisticWrite');
+          let attempts = 0;
+          const { ops } = harness(
+            host,
+            () => {
+              attempts += 1;
+              return {
+                error:
+                  attempts === 1
+                    ? new CombinedError({ networkError: new Error('offline') })
+                    : rejection,
+                data: undefined,
+              };
+            },
+            { shouldRetryMutation: () => attempts === 1 }
+          );
+          ops.next(makeMutationOp(1, optimistic));
+          await vi.advanceTimersByTimeAsync(0);
+          expect(rollback).not.toHaveBeenCalled();
+          await vi.advanceTimersByTimeAsync(1_000);
+          expect(attempts).toBe(2);
+          expect(rollback).toHaveBeenCalledExactlyOnceWith(
+            'txn-1',
+            expect.any(Object),
+            rejection.message,
+            expected
+          );
+        } finally {
+          vi.useRealTimers();
+        }
+      }
+    );
 
     it('keeps the disposition queued when permanent settlement is uncertain', async () => {
       const error = new CombinedError({ graphQLErrors: ['nope'] });

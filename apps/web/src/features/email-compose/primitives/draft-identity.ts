@@ -10,14 +10,22 @@ export function observeDraftIdentity(
   storage: EmailDraftStorage,
   session: DraftSession,
   notices: Pick<EmailComposeFeedback, 'feedback' | 'reportError'>,
-  recover: () => void
+  recover: () => void,
+  onAlreadySent: () => void
 ) {
   createEffect(
     on(
       () => [storage.readDraft, storage.watchDrafts] as const,
       ([read, watch]) => {
         if (read && watch)
-          observeAvailableDraftIdentity(read, watch, session, notices, recover);
+          observeAvailableDraftIdentity(
+            read,
+            watch,
+            session,
+            notices,
+            recover,
+            onAlreadySent
+          );
       }
     )
   );
@@ -28,7 +36,8 @@ function observeAvailableDraftIdentity(
   watch: NonNullable<EmailDraftStorage['watchDrafts']>,
   session: DraftSession,
   notices: Pick<EmailComposeFeedback, 'feedback' | 'reportError'>,
-  recover: () => void
+  recover: () => void,
+  onAlreadySent: () => void
 ) {
   let generation = 0;
   let mutationUuid: string | undefined;
@@ -57,6 +66,7 @@ function observeAvailableDraftIdentity(
       )
         return;
       mutationUuid = result.mutationUuid ?? mutationUuid;
+      if (!result.draft) return;
       const current = session.identity();
       if (
         current.kind !== 'none' &&
@@ -84,8 +94,16 @@ function observeAvailableDraftIdentity(
   const rejected = async (settlement: { mutationUuid?: string }) => {
     // An adopted draft coalesces under its original handle, which only the
     // first read reveals; a failure racing that read must wait for it.
-    if (mutationUuid === undefined) await lastRefresh;
-    if (disposed) return false;
+    const epoch = session.epoch();
+    while (mutationUuid === undefined) {
+      const pending = lastRefresh;
+      await pending;
+      if (disposed || session.isStale(epoch)) return false;
+      // A cache notification can replace an in-flight read. Its discarded
+      // result cannot identify this draft, so wait for the replacement too.
+      if (pending === lastRefresh) break;
+    }
+    if (disposed || session.isStale(epoch)) return false;
     return settlement.mutationUuid === (mutationUuid ?? session.draftId());
   };
   const unsubscribe = watch((settlement) => {
@@ -96,13 +114,15 @@ function observeAvailableDraftIdentity(
         settlement.mutationUuid &&
         (await rejected(settlement))
       ) {
-        if (disposed || session.isStale(epoch) || !session.autosaveAllowed())
+        if (disposed || session.isStale(epoch) || !session.draftId()) return;
+        const code = settlement.code ?? 'INTERNAL';
+        if (code !== 'DRAFT_ALREADY_SENT' && !session.autosaveAllowed()) return;
+        session.dispatch({ type: 'rejected', epoch, code });
+        if (code === 'DRAFT_ALREADY_SENT') {
+          dismissRejectionNotice();
+          onAlreadySent();
           return;
-        session.dispatch({
-          type: 'rejected',
-          epoch,
-          code: 'INTERNAL',
-        });
+        }
         notices.reportError(
           new Error('The server rejected the queued draft save')
         );

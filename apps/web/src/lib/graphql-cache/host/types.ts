@@ -165,7 +165,8 @@ export interface CacheHost {
   rollbackOptimisticWrite(
     transactionId: string,
     claim: MutationClaim,
-    error: string
+    error: string,
+    errorCode?: string
   ): Promise<RollbackOptimisticWriteResult>;
   /** Evict records by entity key (external/push updates); returns affected local op ids. */
   invalidate(keys: string[]): Promise<AffectedOperationsResult>;

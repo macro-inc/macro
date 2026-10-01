@@ -160,7 +160,7 @@ pub struct WriteResult {
     /// before this response was written. Hosts must broadcast this to other
     /// engine instances sharing the same storage.
     pub reset: bool,
-    /// Queries that should be revalidated after a successful settlement.
+    /// Queries that should be revalidated after terminal settlement.
     pub revalidations: Vec<QueryRevalidation>,
     /// Stable caller identity of a settled mutation.
     pub mutation_uuid: Option<String>,
@@ -2429,15 +2429,15 @@ impl<S: Storage> Engine<S> {
     ) -> Result<WriteResult, EngineError<S::Error>> {
         self.ensure_revision_can_advance()?;
         self.hydrate_optimistic().await?;
-        self.optimistic
-            .iter()
-            .position(|layer| layer.id == transaction)
-            .ok_or(EngineError::UnknownTransaction(transaction))?;
-        let mutation_uuid = self
+        let layer = self
             .optimistic
             .iter()
             .find(|layer| layer.id == transaction)
-            .map(|layer| layer.uuid.to_string());
+            .ok_or(EngineError::UnknownTransaction(transaction))?;
+        let mutation_uuid = Some(layer.uuid.to_string());
+        // Failure can mean the server changed elsewhere (for example a draft
+        // was sent). Hydration already rebased these durable query variables.
+        let revalidations = layer.revalidations.clone();
         let mut candidates = layer_keys(&self.optimistic);
         let bases = self.load_bases(&candidates).await?;
         let before = effective_records(&bases, &self.optimistic, &candidates);
@@ -2476,7 +2476,7 @@ impl<S: Storage> Engine<S> {
             changed: BTreeSet::new(),
             affected_ops,
             reset: false,
-            revalidations: Vec::new(),
+            revalidations,
             mutation_uuid,
         })
     }

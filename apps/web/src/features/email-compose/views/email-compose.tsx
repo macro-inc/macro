@@ -41,7 +41,7 @@ export function EmailComposeView(props: EmailComposeViewProps) {
     () => readInitialDraft && initialDraftId,
     async (id) => {
       const result = await readInitialDraft!(id);
-      if (!result && !props.draft && !hasComposeUndo(id)) {
+      if (!result?.draft && !props.draft && !hasComposeUndo(id)) {
         throw new Error('This draft is not available on this device.');
       }
       return result;

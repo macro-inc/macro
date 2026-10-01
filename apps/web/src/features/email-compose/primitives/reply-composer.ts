@@ -265,10 +265,16 @@ export function createReplyComposer(
   );
   const savedDraftId = session.draftId;
   const savedDraftThreadId = session.threadId;
-  observeDraftIdentity(props.drafts, session, props.notices, () => {
-    if (scheduleBlocked() || schedule.state().type === 'scheduled') return;
-    detachFromObsoleteDraft('Saving your edits as a new draft.');
-  });
+  observeDraftIdentity(
+    props.drafts,
+    session,
+    props.notices,
+    () => {
+      if (scheduleBlocked() || schedule.state().type === 'scheduled') return;
+      detachFromObsoleteDraft('Saving your edits as a new draft.');
+    },
+    handleAlreadySent
+  );
   const persistedInboxId = session.inboxId;
   const [movingInbox, setMovingInbox] = createSignal(false);
   let identityVersion = 0;
@@ -547,19 +553,21 @@ export function createReplyComposer(
       }, 0);
     }
   };
+  function handleAlreadySent() {
+    identityVersion += 1;
+    props.notices.feedback.alert('This reply was already sent');
+    void withDeletionGuard(() => {
+      resetState();
+      clearDraftState();
+    });
+  }
+
   const persistence = createDraftPersistence({
     session,
     drafts: props.drafts,
     attachments: attachmentPersistence,
     mintThreadHandle: false,
-    onAlreadySent: () => {
-      identityVersion += 1;
-      props.notices.feedback.alert('This reply was already sent');
-      void withDeletionGuard(() => {
-        resetState();
-        clearDraftState();
-      });
-    },
+    onAlreadySent: handleAlreadySent,
   });
 
   async function persistDraft({

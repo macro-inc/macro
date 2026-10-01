@@ -1346,7 +1346,8 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     async rollbackOptimisticWrite(
       transactionId: string,
       claim: MutationClaim,
-      error: string
+      error: string,
+      errorCode?: string
     ): Promise<RollbackOptimisticWriteResult> {
       return (await initializedRequest({
         kind: 'rollback-optimistic-write',
@@ -1354,6 +1355,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         leaseOwner: claim.owner,
         leaseGeneration: claim.generation,
         error,
+        ...(errorCode === undefined ? {} : { errorCode }),
       })) as RollbackOptimisticWriteResult;
     },
 

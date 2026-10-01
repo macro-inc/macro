@@ -99,7 +99,8 @@ export interface EmailDraftStorage {
   /** Resolve durable local drafts before mounting an editor. */
   readDraft?(draftId: string): Promise<
     | {
-        draft: EmailMessage;
+        /** Sent records retain mutation identity but never editable content. */
+        draft?: EmailMessage;
         persistence: 'committed' | 'queued';
         mutationUuid?: string;
       }
@@ -107,7 +108,11 @@ export interface EmailDraftStorage {
   >;
   /** Notify mounted composers to refresh identity, without reseeding their content. */
   watchDrafts?(
-    changed: (settlement?: { mutationUuid?: string; failed: boolean }) => void
+    changed: (settlement?: {
+      mutationUuid?: string;
+      failed: boolean;
+      code?: DraftPersistFailureCode;
+    }) => void
   ): () => void;
   saveDraft(input: SaveEmailDraft): Promise<DraftSaveResult>;
   deleteDraft(input: DeleteEmailDraft): Promise<void>;

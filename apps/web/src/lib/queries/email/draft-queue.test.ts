@@ -1,4 +1,5 @@
 import { optimisticContextOf } from '@graphql-cache/exchange/optimistic';
+import type { MutationSettlement } from '@graphql-cache/protocol';
 import type {
   DeleteEmailDraftMutation,
   SaveEmailDraftMutation,
@@ -9,6 +10,8 @@ import { map, pipe } from 'wonka';
 
 const mocks = vi.hoisted(() => ({
   readRecordsByKeys: vi.fn(),
+  onCacheChanged: vi.fn(),
+  onMutationSettled: vi.fn(),
   client: undefined as Client | undefined,
 }));
 vi.mock('@core/component/Toast/Toast', () => ({ toast: { failure: vi.fn() } }));
@@ -20,7 +23,11 @@ vi.mock('@macro-inc/observability', () => ({
   Telemetry: { error: vi.fn() },
 }));
 vi.mock('@service-storage/graphql-soup', () => ({
-  getGraphqlCacheHost: () => ({ readRecordsByKeys: mocks.readRecordsByKeys }),
+  getGraphqlCacheHost: () => ({
+    readRecordsByKeys: mocks.readRecordsByKeys,
+    onCacheChanged: mocks.onCacheChanged,
+    onMutationSettled: mocks.onMutationSettled,
+  }),
   getGraphqlSoupClient: () => mocks.client,
   graphqlCacheEnabled: () => true,
 }));
@@ -33,11 +40,17 @@ vi.mock('../soup/cache', () => ({
 vi.mock('./draft-cache', () => ({ markThreadDraftSaved: vi.fn() }));
 vi.mock('./thread', () => ({ fetchAndCacheThread: vi.fn() }));
 
-import { deleteEmailDraftQueued, saveEmailDraftQueued } from './draft-queue';
+import {
+  deleteEmailDraftQueued,
+  readEmailDraft,
+  saveEmailDraftQueued,
+  watchEmailDrafts,
+} from './draft-queue';
 import {
   executeGraphqlSaveEmailDraft,
   type GraphqlSaveEmailDraftArgs,
 } from './graphql/draft';
+import { fetchAndCacheThread } from './thread';
 
 const handle = '01991e2a-3111-7000-8000-000000000001';
 const serverId = '01991e2a-3111-7000-8000-000000000002';
@@ -193,4 +206,85 @@ it('rejects a continually changing snapshot instead of enqueuing mixed identitie
   );
   expect(mocks.readRecordsByKeys).toHaveBeenCalledTimes(6);
   expect(operations).toEqual([]);
+});
+
+it.each([
+  ['DRAFT_ALREADY_SENT', 'DRAFT_ALREADY_SENT'],
+  ['NOT_FOUND', 'NOT_FOUND'],
+  ['INBOX_NOT_FOUND', 'INBOX_NOT_FOUND'],
+  ['UNAUTHORIZED', 'UNAUTHORIZED'],
+  ['INVALID', 'INVALID'],
+  ['INTERNAL', 'INTERNAL'],
+  ['UNRECOGNIZED', 'INTERNAL'],
+  [undefined, 'INTERNAL'],
+] as const)(
+  'preserves background failure %s as %s',
+  async (errorCode, expected) => {
+    let settled!: (result: MutationSettlement) => void;
+    const removeCache = vi.fn();
+    const removeSettlements = vi.fn();
+    mocks.onCacheChanged.mockReturnValue(removeCache);
+    mocks.onMutationSettled.mockImplementation((callback) => {
+      settled = callback;
+      return removeSettlements;
+    });
+    const changed = vi.fn();
+    const stop = watchEmailDrafts(changed);
+    settled({
+      transactionId: 'tx',
+      mutationUuid: handle,
+      status: 'permanently-failed',
+      error: 'server response',
+      errorCode,
+    });
+    expect(changed).toHaveBeenCalledExactlyOnceWith({
+      mutationUuid: handle,
+      failed: true,
+      code: expected,
+    });
+    expect(mocks.readRecordsByKeys).not.toHaveBeenCalled();
+    expect(fetchAndCacheThread).not.toHaveBeenCalled();
+    stop();
+    expect(removeCache).toHaveBeenCalledOnce();
+    expect(removeSettlements).toHaveBeenCalledOnce();
+  }
+);
+
+it.each(['committed', 'superseded'] as const)(
+  'refreshes %s settlements without reporting a draft rejection',
+  (status) => {
+    let settled!: (result: MutationSettlement) => void;
+    mocks.onMutationSettled.mockImplementation((callback) => {
+      settled = callback;
+      return () => {};
+    });
+    mocks.onCacheChanged.mockReturnValue(() => {});
+    const changed = vi.fn();
+    const stop = watchEmailDrafts(changed);
+    settled({
+      transactionId: 'tx',
+      mutationUuid: handle,
+      status,
+      replacementTransactionId: 'replacement',
+    });
+    expect(changed).toHaveBeenCalledExactlyOnceWith({
+      mutationUuid: handle,
+      failed: false,
+      code: undefined,
+    });
+    expect(fetchAndCacheThread).not.toHaveBeenCalled();
+    stop();
+  }
+);
+
+it('retains a sent record mutation handle without returning editable content', async () => {
+  const { draftResult } = await setup();
+  const selected = draftResult();
+  selected.records[0].record.isDraft = false;
+  mocks.readRecordsByKeys.mockResolvedValue(selected);
+  expect(await readEmailDraft(serverId)).toEqual({
+    draft: undefined,
+    persistence: 'committed',
+    mutationUuid: handle,
+  });
 });

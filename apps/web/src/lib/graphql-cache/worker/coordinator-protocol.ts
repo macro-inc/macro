@@ -660,11 +660,13 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
           'leaseOwner',
           'leaseGeneration',
           'error',
+          'errorCode',
         ]) &&
         isString(value.transactionId) &&
         isString(value.leaseOwner) &&
         isString(value.leaseGeneration) &&
-        isString(value.error)
+        isString(value.error) &&
+        isOptionalString(value.errorCode)
       );
     case 'read-records-by-keys':
       return (

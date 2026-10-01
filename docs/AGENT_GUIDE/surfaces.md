@@ -662,6 +662,15 @@ Previously saved attachments that cannot be copied require reattachment, with a
 separate notice. Verify that further typing alone does not retry the rejected
 write, recovery uses the newest text, and closing or resetting the composer
 removes its recovery notice. Other transient notices must not hide that action.
+An already-sent rejection after reconnect follows the same path as an immediate
+already-sent response: announce that the email or reply was sent, clear the local
+composer, and cancel pending autosave. It must never offer **Save as new draft**.
+Verify this in standalone and reply composers, including a queued edit awaiting
+its debounce and a failure racing the first identity read. A settlement for a
+previous or different draft must not clear the current editor.
+Repeat with the composer closed before reconnect: terminal queue failures must
+refresh the saved thread and list queries without requiring an open editor, so
+an already-sent draft does not remain in Drafts solely because nobody observed it.
 Test this with a previously saved draft as well as a new one: a queued edit must
 block Send and scheduling until a save commits. Reopening a cached draft while
 offline must retain its uploaded attachments and confirmed scheduled time.

@@ -611,3 +611,83 @@ fn cross_inbox_draft_settlement_preserves_source_thread_and_rebases_queued_edits
         );
     });
 }
+
+#[test]
+fn rollback_after_restart_returns_persisted_revalidations_with_resolved_ids() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let mut transactions = Vec::new();
+        let mut first_claim = None;
+        for name in ["First edit", "Newer edit"] {
+            let transaction = engine
+                .begin_optimistic_write(
+                    None,
+                    BeginOptimisticWrite {
+                        uuid: UUID,
+                        query: MUTATION,
+                        operation_name: None,
+                        variables: &Default::default(),
+                        data: &json!({"setEntityProperty": {"id": "local", "displayName": name}}),
+                        link_patches: &[],
+                        revalidations: &[QueryRevalidation {
+                            query: PROPERTIES.into(),
+                            operation_name: Some("Properties".into()),
+                            variables_json: r#"{"id":"local"}"#.into(),
+                        }],
+                        identity_bindings: &[IdentityBinding {
+                            local_key: EntityKey("GraphqlProperty:local".into()),
+                            response_path: vec!["setEntityProperty".into()],
+                            delete_record: false,
+                            reference_fields: vec![],
+                            revalidation_variables: vec!["id".into()],
+                        }],
+                        created_at_ms: 0,
+                    },
+                )
+                .await
+                .unwrap()
+                .0;
+            transactions.push(transaction);
+            if first_claim.is_none() {
+                first_claim = Some(claim(&mut engine).await);
+            }
+        }
+        engine
+            .commit_optimistic_write_with_outcome(
+                transactions[0],
+                first_claim.unwrap(),
+                MUTATION,
+                None,
+                &Default::default(),
+                &json!({"setEntityProperty": {"id": "server", "displayName": "First edit"}}),
+            )
+            .await
+            .unwrap();
+        let mut restarted = Engine::new(engine.into_storage());
+        let token = claim(&mut restarted).await;
+        let outcome = restarted
+            .rollback_optimistic_write_with_outcome(transactions[1], token)
+            .await
+            .unwrap();
+        let cache_core::engine::RollbackOptimisticWriteResult::RolledBack(result) = outcome else {
+            panic!("the current intent must fail permanently");
+        };
+        assert_eq!(
+            result.revalidations,
+            vec![QueryRevalidation {
+                query: PROPERTIES.into(),
+                operation_name: Some("Properties".into()),
+                variables_json: r#"{"id":"server"}"#.into(),
+            }]
+        );
+        assert_eq!(result.mutation_uuid.as_deref(), Some(UUID));
+        assert!(
+            restarted
+                .storage()
+                .load_mutation_queue()
+                .await
+                .unwrap()
+                .is_empty()
+        );
+    });
+}

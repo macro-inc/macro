@@ -59,6 +59,7 @@ export function mountReplyComposer(
     state.onContentChange('Ready to send');
     return {
       ...state,
+      editor,
       sendActionDisabled: createMemo(state.sendActionDisabled),
       dispose,
       edit(text: string) {

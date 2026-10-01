@@ -106,9 +106,10 @@ export type SaveEmailDraftOutcome =
   | { kind: 'queued'; transactionId: string }
   | { kind: 'failed'; code: SaveEmailDraftFailureCode; error: CombinedError };
 
-function failureCode(error: CombinedError): SaveEmailDraftFailureCode {
-  if (error.networkError) return 'NETWORK';
-  const code = error.graphQLErrors[0]?.extensions?.code;
+/** Interpret a server code consistently for foreground and replayed writes. */
+export function draftFailureCode(
+  code: unknown
+): Exclude<SaveEmailDraftFailureCode, 'NETWORK'> {
   switch (code) {
     case 'DRAFT_ALREADY_SENT':
     case 'NOT_FOUND':
@@ -140,7 +141,9 @@ function settleDraftMutation<TData, TVariables extends AnyVariables, Payload>(
   if (result.error) {
     return {
       kind: 'failed',
-      code: failureCode(result.error),
+      code: result.error.networkError
+        ? 'NETWORK'
+        : draftFailureCode(result.error.graphQLErrors[0]?.extensions?.code),
       error: result.error,
     };
   }

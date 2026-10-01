@@ -427,6 +427,15 @@ function queuedMutationResult(
   );
 }
 
+/** Only an authoritative GraphQL rejection carries a domain failure code. */
+function mutationErrorCode(
+  error: CombinedError | undefined
+): string | undefined {
+  if (error?.networkError) return;
+  const code = error?.graphQLErrors[0]?.extensions.code;
+  return typeof code === 'string' ? code : undefined;
+}
+
 export interface NormalizedCacheExchangeOptions {
   /** Domain-specific deletions inferred from a successful server response. */
   deletedRecordKeys?: (result: OperationResult) => string[];
@@ -868,6 +877,7 @@ export function normalizedCacheExchange(
             )
           );
         } else {
+          let replayOperation: Operation | undefined;
           try {
             const replay = client.mutation(
               replayDocument(claimed.query, claimed.operationName),
@@ -878,6 +888,7 @@ export function normalizedCacheExchange(
               }
             );
             await replay.toPromise().then((result) => {
+              replayOperation = result.operation;
               // Normal exchange results settle the attempt in writeThrough
               // before resolving. Reject only an otherwise-unhandled error.
               if (result.error && attemptInFlight) {
@@ -886,14 +897,23 @@ export function normalizedCacheExchange(
             });
           } catch (error) {
             try {
-              await host.rollbackOptimisticWrite(
+              const rolledBack = await host.rollbackOptimisticWrite(
                 claimed.transactionId,
                 {
                   owner: queueOwner,
                   generation: claimed.leaseGeneration,
                 },
-                error instanceof Error ? error.message : String(error)
+                error instanceof Error ? error.message : String(error),
+                error instanceof CombinedError
+                  ? mutationErrorCode(error)
+                  : undefined
               );
+              if (rolledBack.kind === 'rolled-back') {
+                revalidateAfterSettlement(
+                  rolledBack.revalidations ?? [],
+                  replayOperation
+                );
+              }
             } finally {
               attemptInFlight = false;
               scheduleDrain();
@@ -954,10 +974,19 @@ export function normalizedCacheExchange(
         }
       }
 
-      function revalidateAfterCommit(
+      function revalidateAfterSettlement(
         revalidations: QueryRevalidationWire[],
-        mutation: Operation
+        mutation?: Operation
       ): void {
+        const reportError = (error: unknown, operation = mutation) => {
+          // Diagnostics cannot turn a durably settled attempt back into a retry.
+          if (!operation) return;
+          try {
+            options.onCacheError?.(error, operation);
+          } catch {
+            // The settlement is already final.
+          }
+        };
         for (const revalidation of revalidations) {
           try {
             const variables: unknown = JSON.parse(revalidation.variablesJson);
@@ -985,11 +1014,12 @@ export function normalizedCacheExchange(
               })
               .toPromise()
               .then((result) => {
-                if (result.error) throw result.error;
+                if (result.error)
+                  reportError(result.error, mutation ?? result.operation);
               })
-              .catch((error) => options.onCacheError?.(error, mutation));
+              .catch(reportError);
           } catch (error) {
-            options.onCacheError?.(error, mutation);
+            reportError(error);
           }
         }
       }
@@ -1472,7 +1502,8 @@ export function normalizedCacheExchange(
                   const rolledBack = await host.rollbackOptimisticWrite(
                     attempt.transactionId,
                     claim,
-                    result.error?.message ?? 'mutation returned no data'
+                    result.error?.message ?? 'mutation returned no data',
+                    mutationErrorCode(result.error)
                   );
                   if (rolledBack.kind === 'discarded-superseded') {
                     replacementTransactionId =
@@ -1480,6 +1511,10 @@ export function normalizedCacheExchange(
                     disposition = 'superseded';
                   } else {
                     disposition = 'permanently-failed';
+                    revalidateAfterSettlement(
+                      rolledBack.revalidations ?? [],
+                      op
+                    );
                   }
                 }
               } else {
@@ -1518,6 +1553,12 @@ export function normalizedCacheExchange(
                   disposition = replacementTransactionId
                     ? 'superseded'
                     : 'permanently-failed';
+                  if (!replacementTransactionId) {
+                    revalidateAfterSettlement(
+                      committed.revalidations ?? [],
+                      op
+                    );
+                  }
                 } else if (committed.kind === 'committed-superseded') {
                   await deleteReportedRecords(result);
                   replacementTransactionId = committed.replacementTransactionId;
@@ -1531,7 +1572,7 @@ export function normalizedCacheExchange(
                     // identical to a non-optimistic operation.
                     await applyOperationCacheEffects(op, effects);
                   }
-                  revalidateAfterCommit(committed.revalidations ?? [], op);
+                  revalidateAfterSettlement(committed.revalidations ?? [], op);
                   disposition = 'committed';
                 }
               }

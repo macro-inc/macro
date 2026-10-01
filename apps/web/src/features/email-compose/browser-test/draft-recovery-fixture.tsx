@@ -119,6 +119,17 @@ function RecoveryEditor() {
       >
         Reject background save
       </button>
+      <button
+        onClick={() =>
+          changed({
+            mutationUuid: saved().at(-1)?.clientHandles?.draftId,
+            failed: true,
+            code: 'DRAFT_ALREADY_SENT',
+          })
+        }
+      >
+        Report already sent
+      </button>
       <button onClick={() => toast.success('Copied')}>
         Show transient notice
       </button>

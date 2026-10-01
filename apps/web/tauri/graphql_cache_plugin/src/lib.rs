@@ -77,8 +77,13 @@ struct MutationSettledEvent {
     #[serde(skip_serializing_if = "Option::is_none")]
     error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    error_code: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     replacement_transaction_id: Option<String>,
 }
+
+#[cfg(test)]
+mod test;
 
 struct InitializedCache {
     scope: String,
@@ -149,6 +154,7 @@ fn emit_mutation_settled<R: Runtime>(
     mutation_uuid: Option<String>,
     status: &'static str,
     error: Option<String>,
+    error_code: Option<String>,
     replacement_transaction_id: Option<String>,
 ) {
     app.emit(
@@ -158,6 +164,7 @@ fn emit_mutation_settled<R: Runtime>(
             mutation_uuid,
             status,
             error,
+            error_code,
             replacement_transaction_id,
         },
     )

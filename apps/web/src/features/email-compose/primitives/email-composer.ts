@@ -185,10 +185,16 @@ export function createEmailComposer(props: EmailComposerOptions) {
   );
   const currentDraftId = session.draftId;
   const currentThreadId = session.threadId;
-  observeDraftIdentity(props.drafts, session, props.notices, () => {
-    if (persistencePaused()) return;
-    detachFromObsoleteDraft('Saving your edits as a new draft.');
-  });
+  observeDraftIdentity(
+    props.drafts,
+    session,
+    props.notices,
+    () => {
+      if (persistencePaused()) return;
+      detachFromObsoleteDraft('Saving your edits as a new draft.');
+    },
+    handleAlreadySent
+  );
   const persistedInboxId = session.inboxId;
   const [movingInbox, setMovingInbox] = createSignal(false);
   let identityVersion = 0;
@@ -314,17 +320,19 @@ export function createEmailComposer(props: EmailComposerOptions) {
     props.notices.feedback.failure(`Failed to ${operation} draft`);
   }
 
+  function handleAlreadySent() {
+    identityVersion += 1;
+    autosave.cancel();
+    props.notices.feedback.alert('This email was already sent');
+    resetState();
+  }
+
   const persistence = createDraftPersistence({
     session,
     drafts: props.drafts,
     attachments: attachmentPersistence,
     mintThreadHandle: true,
-    onAlreadySent: () => {
-      identityVersion += 1;
-      autosave.cancel();
-      props.notices.feedback.alert('This email was already sent');
-      resetState();
-    },
+    onAlreadySent: handleAlreadySent,
   });
 
   async function persistDraft({

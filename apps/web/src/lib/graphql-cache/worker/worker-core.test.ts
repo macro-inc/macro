@@ -9,6 +9,61 @@ import { cacheDatabaseIdentity } from './coordinator-protocol';
 import { CacheWorkerCore } from './worker-core';
 
 describe('CacheWorkerCore', () => {
+  it.each([
+    { errorCode: undefined, superseded: false },
+    { errorCode: 'DRAFT_ALREADY_SENT', superseded: false },
+    { errorCode: 'INTERNAL', superseded: false },
+    { errorCode: 'DRAFT_ALREADY_SENT', superseded: true },
+  ])(
+    'preserves rollback codes only for permanent settlement: %j',
+    async ({ errorCode, superseded }) => {
+      const rollbackOptimisticWrite = vi.fn().mockResolvedValue({
+        kind: superseded ? 'discarded-superseded' : 'rolled-back',
+        ...(superseded ? { replacementTransactionId: '2' } : {}),
+        mutationUuid: 'draft-handle',
+        revision: INITIAL_CACHE_REVISION,
+        changed: [],
+        affectedOps: [],
+        reset: false,
+        revalidations: [],
+      });
+      loadCacheWasmMock.mockResolvedValue({
+        openCache: vi.fn().mockResolvedValue({ rollbackOptimisticWrite }),
+      });
+      const messages: unknown[] = [];
+      const port = {
+        postMessage: (message: unknown) => messages.push(message),
+      };
+      const core = new CacheWorkerCore();
+      core.addPort(port);
+      await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+      await core.handleRequest(port, {
+        id: 2,
+        kind: 'rollback-optimistic-write',
+        transactionId: '1',
+        leaseOwner: 'runner',
+        leaseGeneration: '1',
+        error: 'rejected',
+        errorCode,
+      });
+      expect(rollbackOptimisticWrite).toHaveBeenCalledWith('1', 'runner', '1');
+      expect(messages).toContainEqual({
+        kind: 'mutation-settled',
+        settlement: {
+          transactionId: '1',
+          mutationUuid: 'draft-handle',
+          ...(superseded
+            ? { status: 'superseded', replacementTransactionId: '2' }
+            : {
+                status: 'permanently-failed',
+                error: 'rejected',
+                ...(errorCode === undefined ? {} : { errorCode }),
+              }),
+        },
+      });
+    }
+  );
+
   beforeEach(() => {
     vi.clearAllMocks();
   });

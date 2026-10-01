@@ -25,6 +25,7 @@ import {
 } from '../soup/cache';
 import { markThreadDraftSaved } from './draft-cache';
 import {
+  draftFailureCode,
   executeGraphqlDeleteEmailDraft,
   executeGraphqlSaveEmailDraft,
   type GraphqlSaveEmailDraftArgs,
@@ -44,9 +45,13 @@ export async function readEmailDraft(draftId: string) {
     [`GraphqlSoupEmailMessage:${draftId}`]
   );
   const selected = result.records[0];
-  if (!selected?.record.isDraft) return;
+  if (!selected) return;
   return {
-    draft: mapGraphqlEmailMessage(selected.record),
+    // Rollback can expose a sent base before its settlement arrives. Keep
+    // its mutation handle for correlation, without exposing editable content.
+    draft: selected.record.isDraft
+      ? mapGraphqlEmailMessage(selected.record)
+      : undefined,
     persistence: selected.identity?.pending
       ? ('queued' as const)
       : ('committed' as const),
@@ -56,19 +61,28 @@ export async function readEmailDraft(draftId: string) {
 
 /** Subscribers read durable state; missing a notification is harmless on remount. */
 export function watchEmailDrafts(
-  changed: (settlement?: { mutationUuid?: string; failed: boolean }) => void
+  changed: (settlement?: {
+    mutationUuid?: string;
+    failed: boolean;
+    code?: DraftWriteRejection;
+  }) => void
 ): () => void {
   // A surface can enable the queue after mounting, before its first write
   // initializes the client. Subscribe to that host before any save settles.
   getGraphqlSoupClient();
   const host = getGraphqlCacheHost();
   const cache = host?.onCacheChanged(() => changed());
-  const settlement = host?.onMutationSettled((result) =>
+  const settlement = host?.onMutationSettled((result) => {
+    const code =
+      result.status === 'permanently-failed'
+        ? draftFailureCode(result.errorCode)
+        : undefined;
     changed({
       mutationUuid: result.mutationUuid,
       failed: result.status === 'permanently-failed',
-    })
-  );
+      code,
+    });
+  });
   return () => {
     cache?.();
     settlement?.();

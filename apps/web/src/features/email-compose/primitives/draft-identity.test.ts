@@ -25,6 +25,7 @@ function mount(
   const unsubscribe = vi.fn();
   const report = vi.fn();
   const recover = vi.fn();
+  const alreadySent = vi.fn();
   const notices = { ...createComposeContext().notices, reportError: report };
   const root = createRoot((dispose) => {
     const session = createDraftSession(seed);
@@ -39,7 +40,8 @@ function mount(
       },
       session,
       notices,
-      recover
+      recover,
+      alreadySent
     );
     return { dispose, session };
   });
@@ -49,6 +51,7 @@ function mount(
     unsubscribe,
     report,
     recover,
+    alreadySent,
     notices,
   };
 }
@@ -87,6 +90,7 @@ describe('durable draft identity', () => {
         },
         session,
         createComposeContext().notices,
+        vi.fn(),
         vi.fn()
       );
       return { dispose, session };
@@ -292,3 +296,158 @@ it.each(['reset', 'dispose'] as const)(
     }
   }
 );
+
+it('clears an already-sent draft without offering recovery, even after another rejection', async () => {
+  const root = mount(async () => ({
+    draft: message('server', { is_draft: true }),
+    persistence: 'queued',
+    mutationUuid: 'local',
+  }));
+  vi.mocked(root.notices.feedback.failure).mockReturnValue(42);
+  try {
+    await vi.waitFor(() => expect(root.session.draftId()).toBe('server'));
+    root.changed({ mutationUuid: 'local', failed: true, code: 'INVALID' });
+    await vi.waitFor(() => expect(root.session.autosaveAllowed()).toBe(false));
+    const recovery = vi.mocked(root.notices.feedback.failure).mock.calls[0][1]
+      ?.actions?.[0];
+    root.changed({
+      mutationUuid: 'local',
+      failed: true,
+      code: 'DRAFT_ALREADY_SENT',
+    });
+    await vi.waitFor(() => expect(root.alreadySent).toHaveBeenCalledOnce());
+    expect(root.session.draftId()).toBeUndefined();
+    expect(root.session.autosaveAllowed()).toBe(true);
+    expect(root.notices.feedback.dismiss).toHaveBeenCalledWith(42);
+    recovery?.onClick();
+    expect(root.recover).not.toHaveBeenCalled();
+    root.changed({
+      mutationUuid: 'local',
+      failed: true,
+      code: 'DRAFT_ALREADY_SENT',
+    });
+    await Promise.resolve();
+    expect(root.alreadySent).toHaveBeenCalledOnce();
+  } finally {
+    root.dispose();
+  }
+});
+
+it.each([
+  'INVALID',
+  'NOT_FOUND',
+  'INBOX_NOT_FOUND',
+  'UNAUTHORIZED',
+  'INTERNAL',
+] as const)(
+  'preserves the %s rejection code for background saves',
+  async (code) => {
+    const root = mount(async () => undefined);
+    try {
+      root.changed({ mutationUuid: 'local', failed: true, code });
+      await vi.waitFor(() =>
+        expect(root.session.state().policy).toEqual({ kind: 'latched', code })
+      );
+      expect(root.alreadySent).not.toHaveBeenCalled();
+      expect(root.notices.feedback.failure).toHaveBeenCalledOnce();
+    } finally {
+      root.dispose();
+    }
+  }
+);
+
+it.each(['draft', 'sent'] as const)(
+  'handles an already-sent original handle when the first read exposes a %s record',
+  async (record) => {
+    const pending = Promise.withResolvers<ReadResult>();
+    const root = mount(() => pending.promise, {
+      draftId: 'server',
+      persistence: 'committed',
+    });
+    try {
+      root.changed({
+        mutationUuid: 'local',
+        failed: true,
+        code: 'DRAFT_ALREADY_SENT',
+      });
+      expect(root.alreadySent).not.toHaveBeenCalled();
+      pending.resolve({
+        draft:
+          record === 'draft'
+            ? message('server', { is_draft: true })
+            : undefined,
+        persistence: record === 'draft' ? 'queued' : 'committed',
+        mutationUuid: 'local',
+      });
+      await vi.waitFor(() => expect(root.alreadySent).toHaveBeenCalledOnce());
+      expect(root.session.draftId()).toBeUndefined();
+      expect(root.notices.feedback.failure).not.toHaveBeenCalled();
+    } finally {
+      root.dispose();
+    }
+  }
+);
+
+it.each(['reset', 'dispose'] as const)(
+  'ignores already-sent failure racing identity lookup after %s',
+  async (action) => {
+    const pending = Promise.withResolvers<ReadResult>();
+    const root = mount(async (draftId) =>
+      draftId === 'local' ? pending.promise : undefined
+    );
+    root.changed({
+      mutationUuid: 'local',
+      failed: true,
+      code: 'DRAFT_ALREADY_SENT',
+    });
+    if (action === 'dispose') root.dispose();
+    else {
+      root.session.dispatch({ type: 'reset' });
+      root.session.dispatch({ type: 'minted', draftId: 'new-draft' });
+    }
+    pending.resolve({
+      draft: message('local'),
+      persistence: 'queued',
+      mutationUuid: 'local',
+    });
+    await pending.promise;
+    await Promise.resolve();
+    expect(root.alreadySent).not.toHaveBeenCalled();
+    expect(root.notices.feedback.failure).not.toHaveBeenCalled();
+    if (action === 'reset') {
+      expect(root.session.draftId()).toBe('new-draft');
+      root.dispose();
+    }
+  }
+);
+
+it('waits for a replacement identity read before correlating an already-sent failure', async () => {
+  const first = Promise.withResolvers<ReadResult>();
+  const second = Promise.withResolvers<ReadResult>();
+  const read = vi
+    .fn()
+    .mockReturnValueOnce(first.promise)
+    .mockReturnValue(second.promise);
+  const root = mount(read, { draftId: 'server', persistence: 'committed' });
+  const sent: ReadResult = { persistence: 'committed', mutationUuid: 'local' };
+  try {
+    await vi.waitFor(() => expect(read).toHaveBeenCalledOnce());
+    root.changed({
+      mutationUuid: 'local',
+      failed: true,
+      code: 'DRAFT_ALREADY_SENT',
+    });
+    root.changed();
+    await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(2));
+    first.resolve(sent);
+    await first.promise;
+    await Promise.resolve();
+    expect(root.alreadySent).not.toHaveBeenCalled();
+    second.resolve(sent);
+    await vi.waitFor(() => expect(root.alreadySent).toHaveBeenCalledOnce());
+    expect(root.session.draftId()).toBeUndefined();
+    expect(root.notices.feedback.failure).not.toHaveBeenCalled();
+  } finally {
+    root.dispose();
+  }
+});

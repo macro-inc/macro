@@ -55,3 +55,27 @@ test.describe('mobile recovery', () => {
     await exerciseRecovery(page);
   });
 });
+
+test('an already-sent background save clears the draft without offering recovery', async ({
+  page,
+}) => {
+  await page.goto('/?recovery');
+  await page
+    .getByRole('textbox', { name: 'Message' })
+    .fill('Already delivered');
+  await expect(page.getByTestId('save-count')).toHaveText('1');
+  await page.getByRole('button', { name: 'Report already sent' }).click();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'This email was already sent' })
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Save as new draft' })
+  ).toHaveCount(0);
+  await page.getByRole('button', { name: 'Close composer' }).click();
+  await expect(
+    page.getByRole('region', { name: 'Draft recovery' })
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Save as new draft' })
+  ).toHaveCount(0);
+});

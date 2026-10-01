@@ -383,7 +383,7 @@ export type WriteResult = HydrationSearchChanges & {
    * then contains every registered operation except the origin.
    */
   reset: boolean;
-  /** Present on successful optimistic settlement; empty otherwise. */
+  /** Recovery queries for terminal settlement; skip superseded outcomes. */
   revalidations?: QueryRevalidationWire[];
 };
 
@@ -478,6 +478,7 @@ export type MutationSettlement = { mutationUuid?: string } & (
       transactionId: string;
       status: 'permanently-failed';
       error: string;
+      errorCode?: string;
     }
 );
 
@@ -572,6 +573,7 @@ export type CacheRequest = { id: number } & (
       leaseOwner: string;
       leaseGeneration: string;
       error: string;
+      errorCode?: string;
     }
   | {
       kind: 'read-records-by-keys';
@@ -800,8 +802,11 @@ export function isCachePush(value: unknown): value is CachePush {
           'mutationUuid',
           'status',
           'error',
+          'errorCode',
         ]) &&
-        typeof settlement.error === 'string'
+        typeof settlement.error === 'string' &&
+        (settlement.errorCode === undefined ||
+          typeof settlement.errorCode === 'string')
       );
     }
     default:

@@ -335,6 +335,7 @@ pub async fn graphql_cache_enqueue_optimistic_mutation<R: Runtime>(
             Some(uuid.clone()),
             "superseded",
             None,
+            None,
             Some(result.transaction_id.clone()),
         );
     }
@@ -433,6 +434,7 @@ pub async fn graphql_cache_defer_optimistic_write<R: Runtime>(
             write_result.mutation_uuid.clone(),
             "superseded",
             None,
+            None,
             Some(replacement_transaction_id.clone()),
         );
     }
@@ -496,6 +498,7 @@ pub async fn graphql_cache_commit_optimistic_write<R: Runtime>(
             "committed"
         },
         error,
+        None,
         replacement_transaction_id,
     );
     Ok(result)
@@ -510,6 +513,7 @@ pub async fn graphql_cache_rollback_optimistic_write<R: Runtime>(
     lease_owner: String,
     lease_generation: String,
     error: String,
+    error_code: Option<String>,
 ) -> Result<RollbackOptimisticWriteResultWire, String> {
     let settlement_transaction_id = transaction_id.clone();
     let result = engine_handle(&state)?
@@ -529,6 +533,7 @@ pub async fn graphql_cache_rollback_optimistic_write<R: Runtime>(
                 write_result.mutation_uuid.clone(),
                 "permanently-failed",
                 Some(error),
+                error_code,
                 None,
             );
         }
@@ -545,6 +550,7 @@ pub async fn graphql_cache_rollback_optimistic_write<R: Runtime>(
                 settlement_transaction_id,
                 write_result.mutation_uuid.clone(),
                 "superseded",
+                None,
                 None,
                 Some(replacement_transaction_id.clone()),
             );
