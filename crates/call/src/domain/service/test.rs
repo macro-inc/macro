@@ -94,6 +94,9 @@ impl MockRtcClient {
 }
 
 impl CallRtcClient for MockRtcClient {
+    async fn prepare_room(&self, room_name: &str) -> anyhow::Result<()> {
+        self.create_room(room_name).await
+    }
     async fn generate_guest_token(
         &self,
         room: &str,
@@ -3914,9 +3917,7 @@ async fn last_guest_leaving_archives_call_and_stops_recording() {
                 room: Some(ARCHIVED_EVENT_ROOM_NAME.to_string()),
             })
         });
-    rtc.expect_remove_guest()
-        .times(1)
-        .returning(|_, _| Box::pin(async { Ok(()) }));
+    rtc.expect_remove_guest().never();
     rtc.expect_stop_egress().times(1).returning(|id| {
         assert_eq!(id, "recording");
         Box::pin(async { Ok(()) })

@@ -332,6 +332,9 @@ export const storageExcluded = [
   'leaveOrEndCall',
   // Live meeting admission and participant previews are app session flows.
   'meetingGuestJoin',
+  // Browser setup reserves an empty RTC room before creating a meeting.
+  'meetingPrepare',
+  'meetingCancelPreparation',
   'meetingGuestParticipants',
   'meetingJoin',
   'meetingLeave',

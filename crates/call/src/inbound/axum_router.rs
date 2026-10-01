@@ -116,6 +116,11 @@ where
     T: Send + Sync,
 {
     Router::new()
+        .route("/meetings/prepare", post(meetings::prepare::<S, Svc, Auth>))
+        .route(
+            "/meetings/prepare/{preparation_id}",
+            axum::routing::delete(meetings::cancel_preparation::<S, Svc, Auth>),
+        )
         .route(
             "/meetings",
             get(meetings::list::<S, Svc, Auth>).post(meetings::create::<S, Svc, Auth>),

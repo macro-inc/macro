@@ -74,6 +74,14 @@ export function useCreateMeetingMutation() {
   }));
 }
 
+export function prepareMeeting() {
+  return throwOnErr(() => callServiceClient.prepareMeeting());
+}
+
+export function cancelMeetingPreparation(id: string) {
+  return throwOnErr(() => callServiceClient.cancelMeetingPreparation(id));
+}
+
 export function useActiveMeetingsQuery(userId: Accessor<string | undefined>) {
   return useQuery(() => ({
     queryKey: [...callKeys.activeMeetings.queryKey, userId() ?? ''],

@@ -125,6 +125,19 @@ fn build_room_composite_egress_request(
 
 impl CallRtcClient for LivekitRtcClient {
     #[tracing::instrument(err, skip(self))]
+    async fn prepare_room(&self, room_name: &str) -> anyhow::Result<()> {
+        self.room_client
+            .create_room(
+                room_name,
+                CreateRoomOptions {
+                    empty_timeout: 300,
+                    ..Default::default()
+                },
+            )
+            .await?;
+        Ok(())
+    }
+    #[tracing::instrument(err, skip(self))]
     async fn create_room(&self, room_name: &str) -> anyhow::Result<()> {
         self.room_client
             .create_room(

@@ -307,6 +307,8 @@ use utoipa::OpenApi;
 
         // calls
         call::inbound::axum_router::meetings::create,
+        call::inbound::axum_router::meetings::prepare,
+        call::inbound::axum_router::meetings::cancel_preparation,
         call::inbound::axum_router::meetings::update,
         call::inbound::axum_router::meetings::list,
         call::inbound::axum_router::meetings::list_active,

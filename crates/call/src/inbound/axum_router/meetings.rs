@@ -143,6 +143,42 @@ pub async fn invite_users<
     Ok(StatusCode::NO_CONTENT)
 }
 
+/// Reserve a room while the authenticated caller configures a new call.
+#[utoipa::path(post, operation_id = "meeting_prepare", path = "/call/meetings/prepare",
+    responses((status = 200, body = crate::domain::meetings::MeetingPreparation), (status = 401, body = ErrorResponse)))]
+#[tracing::instrument(err, skip_all)]
+pub async fn prepare<S: CallService, Svc: EntityAccessService, Auth: MacroAuthorizationService>(
+    State(state): State<CallRouterState<S, Svc, Auth>>,
+    actor: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+) -> Result<Json<crate::domain::meetings::MeetingPreparation>, CallError> {
+    Ok(Json(
+        state
+            .service
+            .prepare_meeting(actor.authorization.user.macro_user_id.clone())
+            .await?,
+    ))
+}
+
+/// Cancel an unused room; the domain owns ownership and activation checks.
+#[utoipa::path(delete, operation_id = "meeting_cancel_preparation", path = "/call/meetings/prepare/{preparation_id}",
+    params(("preparation_id" = Uuid, Path)), responses((status = 204), (status = 401, body = ErrorResponse)))]
+#[tracing::instrument(err, skip_all)]
+pub async fn cancel_preparation<
+    S: CallService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<CallRouterState<S, Svc, Auth>>,
+    Path(id): Path<Uuid>,
+    actor: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+) -> Result<StatusCode, CallError> {
+    state
+        .service
+        .cancel_meeting_preparation(actor.authorization.user.macro_user_id.clone(), id)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 /// Handle `POST /call/meetings` through the call domain service.
 #[utoipa::path(post, operation_id = "meeting_create", path = "/call/meetings",
     request_body = CreateMeetingRequest,

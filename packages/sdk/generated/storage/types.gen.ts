@@ -3752,6 +3752,10 @@ export type CreateMarkdownDocumentResponse = {
  */
 export type CreateMeetingRequest = {
     /**
+     * Optional unused room reserved by this actor on the setup screen.
+     */
+    preparationId?: string | null;
+    /**
      * Optional scheduled end.
      */
     scheduledEnd?: string | null;
@@ -7053,6 +7057,20 @@ export type MeetingParticipants = {
      * Human attendees only; transcription agents are excluded.
      */
     participants: Array<MeetingParticipant>;
+};
+
+/**
+ * An empty room reservation, not a started call or an invitation.
+ */
+export type MeetingPreparation = {
+    /**
+     * After this deadline Start falls back to ordinary room creation.
+     */
+    expiresAt: string;
+    /**
+     * Also the reserved RTC room's UUID and prospective call ID.
+     */
+    id: string;
 };
 
 /**
@@ -12052,6 +12070,46 @@ export type MeetingParticipantsResponses = {
 };
 
 export type MeetingParticipantsResponse = MeetingParticipantsResponses[keyof MeetingParticipantsResponses];
+
+export type MeetingPrepareData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/call/meetings/prepare';
+};
+
+export type MeetingPrepareErrors = {
+    401: ErrorResponse;
+};
+
+export type MeetingPrepareError = MeetingPrepareErrors[keyof MeetingPrepareErrors];
+
+export type MeetingPrepareResponses = {
+    200: MeetingPreparation;
+};
+
+export type MeetingPrepareResponse = MeetingPrepareResponses[keyof MeetingPrepareResponses];
+
+export type MeetingCancelPreparationData = {
+    body?: never;
+    path: {
+        preparation_id: string;
+    };
+    query?: never;
+    url: '/call/meetings/prepare/{preparation_id}';
+};
+
+export type MeetingCancelPreparationErrors = {
+    401: ErrorResponse;
+};
+
+export type MeetingCancelPreparationError = MeetingCancelPreparationErrors[keyof MeetingCancelPreparationErrors];
+
+export type MeetingCancelPreparationResponses = {
+    204: void;
+};
+
+export type MeetingCancelPreparationResponse = MeetingCancelPreparationResponses[keyof MeetingCancelPreparationResponses];
 
 export type MeetingCancelData = {
     body?: never;

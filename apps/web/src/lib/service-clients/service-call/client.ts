@@ -12,6 +12,7 @@ import type { EditCallRecordRequest } from '@service-storage/generated/schemas/e
 import type { InviteMeetingUsersRequest } from '@service-storage/generated/schemas/inviteMeetingUsersRequest';
 import type { LeaveCallResponse } from '@service-storage/generated/schemas/leaveCallResponse';
 import type { Meeting as ApiMeeting } from '@service-storage/generated/schemas/meeting';
+import type { MeetingPreparation } from '@service-storage/generated/schemas/meetingPreparation';
 import type { UpdateMeetingRequest } from '@service-storage/generated/schemas/updateMeetingRequest';
 import type { UpdateSharePermissionRequestV2 } from '@service-storage/generated/schemas/updateSharePermissionRequestV2';
 
@@ -30,6 +31,17 @@ export type MeetingParticipants = {
 const host: string = SERVER_HOSTS['document-storage-service'];
 
 export const callServiceClient = {
+  prepareMeeting() {
+    return fetchWithToken<MeetingPreparation>(`${host}/call/meetings/prepare`, {
+      method: 'POST',
+    });
+  },
+  cancelMeetingPreparation(id: string) {
+    return fetchWithToken<Record<string, never>>(
+      `${host}/call/meetings/prepare/${encodeURIComponent(id)}`,
+      { method: 'DELETE', keepalive: true }
+    );
+  },
   inviteMeetingUsers(shareToken: string, userIds: string[]) {
     const body: InviteMeetingUsersRequest = { userIds };
     return fetchWithToken<Record<string, never>>(
@@ -148,6 +160,7 @@ export const callServiceClient = {
       `${host}/call/join/${encodeURIComponent(shareToken)}/leave`,
       {
         method: 'POST',
+        keepalive: true,
         credentials: 'omit',
         headers: { Authorization: `Bearer ${token}` },
       }

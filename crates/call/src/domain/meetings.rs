@@ -82,6 +82,8 @@ pub struct Meeting {
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct CreateMeetingRequest {
+    /// Optional unused room reserved by this actor on the setup screen.
+    pub preparation_id: Option<Uuid>,
     /// Optional display title.
     pub title: Option<String>,
     /// Optional scheduled start.
@@ -293,6 +295,7 @@ impl UpdateMeetingRequest {
         }
         let has_title = self.title.is_some();
         let validated = CreateMeetingRequest {
+            preparation_id: None,
             title: self.title,
             scheduled_start: self.scheduled_start,
             scheduled_end: self.scheduled_end,
@@ -305,6 +308,17 @@ impl UpdateMeetingRequest {
             scheduled_end: validated.scheduled_end,
         })
     }
+}
+
+/// An empty room reservation, not a started call or an invitation.
+#[derive(Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct MeetingPreparation {
+    /// Also the reserved RTC room's UUID and prospective call ID.
+    pub id: Uuid,
+    /// After this deadline Start falls back to ordinary room creation.
+    pub expires_at: DateTime<Utc>,
 }
 
 /// Connected RTC participant facts; never expose identities in public previews.

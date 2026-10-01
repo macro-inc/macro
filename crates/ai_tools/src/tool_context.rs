@@ -645,6 +645,9 @@ impl ConnectionService for NoOpConnectionService {
 pub struct NoOpCallRtcClient;
 
 impl CallRtcClient for NoOpCallRtcClient {
+    async fn prepare_room(&self, room_name: &str) -> anyhow::Result<()> {
+        self.create_room(room_name).await
+    }
     async fn generate_guest_token(
         &self,
         _room_name: &str,

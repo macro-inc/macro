@@ -106,7 +106,8 @@ impl<
         request: CreateMeetingRequest,
     ) -> Result<Meeting, CallError> {
         let request = request.validate()?;
-        self.repo
+        let meeting = self
+            .repo
             .create_meeting(Meeting {
                 id: Uuid::now_v7(),
                 share_token: MeetingToken::generate(),
@@ -118,7 +119,62 @@ impl<
                 call_id: None,
                 user_id: actor.to_string(),
             })
+            .await?;
+        if let Some(id) = request.preparation_id {
+            self.repo
+                .claim_meeting_preparation(&id, actor.as_ref(), &meeting.id)
+                .await?;
+        }
+        Ok(meeting)
+    }
+
+    #[tracing::instrument(err, skip_all)]
+    pub(super) async fn prepare_invitation_room(
+        &self,
+        actor: MacroUserIdStr<'_>,
+    ) -> Result<MeetingPreparation, CallError> {
+        let preparation = MeetingPreparation {
+            id: Uuid::now_v7(),
+            // Starts before the RTC request, so the server never advertises a
+            // longer lifetime than the provider's five-minute empty timeout.
+            expires_at: chrono::Utc::now() + chrono::Duration::minutes(5),
+        };
+        self.repo
+            .insert_meeting_preparation(actor.as_ref(), &preparation)
+            .await?;
+        if let Err(error) = self
+            .rtc_client
+            .prepare_room(&preparation.id.to_string())
             .await
+        {
+            self.repo
+                .cancel_meeting_preparation(&preparation.id, actor.as_ref())
+                .await?;
+            return Err(CallError::Internal(error));
+        }
+        Ok(preparation)
+    }
+
+    #[tracing::instrument(err, skip_all)]
+    pub(super) async fn cancel_invitation_room(
+        &self,
+        actor: MacroUserIdStr<'_>,
+        id: Uuid,
+    ) -> Result<(), CallError> {
+        if self
+            .repo
+            .cancel_meeting_preparation(&id, actor.as_ref())
+            .await?
+        {
+            self.rtc_client
+                .delete_room(&id.to_string())
+                .await
+                .inspect_err(
+                    |error| tracing::warn!(error=?error, "failed to delete unused meeting room"),
+                )
+                .ok();
+        }
+        Ok(())
     }
 
     #[tracing::instrument(err, skip_all)]
@@ -252,17 +308,22 @@ impl<
         {
             return Ok(call);
         }
-        let candidate_id = Uuid::now_v7();
+        let preparation = self.repo.get_meeting_preparation(&meeting.id).await?;
+        let candidate_id = preparation
+            .as_ref()
+            .map_or_else(Uuid::now_v7, |room| room.id);
         let candidate_room = candidate_id.to_string();
-        self.rtc_client
-            .create_room(&candidate_room)
-            .await
-            .map_err(CallError::Internal)?;
+        if preparation.is_none() {
+            self.rtc_client
+                .create_room(&candidate_room)
+                .await
+                .map_err(CallError::Internal)?;
+        }
         let allocated = self
             .repo
             .get_or_create_meeting_call(&meeting.id, &candidate_id)
             .await;
-        if !matches!(&allocated, Ok((_, true))) {
+        if !matches!(&allocated, Ok((_, true))) && preparation.is_none() {
             self.rtc_client
                 .delete_room(&candidate_room)
                 .await
@@ -414,6 +475,11 @@ impl<
             .remove_participant(&other.id, user_id.copied())
             .await
             .map_err(|e| CallError::Internal(e.into()))?;
+        // Archiving closes this room to future joins. Its whole-room teardown
+        // can then run independently without kicking a later rejoin.
+        if self.finish_empty_call(&other).await? {
+            return Ok(());
+        }
         // Best-effort: a stale participation has no RTC session to end.
         self.rtc_client
             .remove_participant(&other.room_name, user_id)
@@ -422,7 +488,6 @@ impl<
                 tracing::warn!(error=?error, "failed to remove participant from previous call room")
             })
             .ok();
-        self.finish_empty_call(&other).await?;
         Ok(())
     }
 
@@ -445,18 +510,24 @@ impl<
         self.publish_archived_call_event(&archived, CallArchiveReason::LastParticipantLeft);
         self.spawn_summarize_call(archived.call_id);
         self.spawn_process_voices_for_call(archived.call_id);
-        if let Some(egress_id) = &call.egress_id {
-            self.rtc_client
-                .stop_egress(egress_id)
-                .await
-                .inspect_err(|error| tracing::error!(error=?error, "failed to stop egress"))
-                .ok();
-        }
-        self.rtc_client
-            .delete_room(&call.room_name)
-            .await
-            .inspect_err(|error| tracing::error!(error=?error, "failed to delete RTC room"))
-            .ok();
+        let rtc = self.rtc_client.clone();
+        let room_name = call.room_name.clone();
+        let egress_id = call.egress_id.clone();
+        tokio::spawn(
+            async move {
+                if let Some(egress_id) = egress_id {
+                    rtc.stop_egress(&egress_id)
+                        .await
+                        .inspect_err(|error| tracing::error!(error=?error, "failed to stop egress"))
+                        .ok();
+                }
+                rtc.delete_room(&room_name)
+                    .await
+                    .inspect_err(|error| tracing::error!(error=?error, "failed to delete RTC room"))
+                    .ok();
+            }
+            .instrument(tracing::info_span!("finish_meeting_media", call_id = %call.id)),
+        );
         self.send_call_event(
             &archived.channel_id,
             "call_ended",
@@ -502,26 +573,32 @@ impl<
             return Err(CallError::Auth);
         }
         if let Some(guest_id) = GuestId::parse_rtc_identity(&verified.identity) {
+            self.repo.reconcile_guest(&call.id, guest_id, false).await?;
+            if self.finish_empty_call(&call).await? {
+                return Ok(LeaveCallResponse { call_ended: true });
+            }
             self.rtc_client
                 .remove_guest(&room, guest_id)
                 .await
                 .map_err(CallError::Internal)?;
-            self.repo.reconcile_guest(&call.id, guest_id, false).await?;
         } else {
             let identity =
                 MacroUserIdStr::parse_from_str(&verified.identity).map_err(|_| CallError::Auth)?;
-            self.rtc_client
-                .remove_participant(&room, identity.copied())
-                .await
-                .map_err(CallError::Internal)?;
             self.repo
-                .remove_participant(&call.id, identity)
+                .remove_participant(&call.id, identity.copied())
                 .await
                 .map_err(|e| CallError::Internal(e.into()))?;
+            if self.finish_empty_call(&call).await? {
+                return Ok(LeaveCallResponse { call_ended: true });
+            }
+            // Keep nonempty-room removal ordered with a later rejoin using
+            // this same identity; a detached remove could kick the new session.
+            self.rtc_client
+                .remove_participant(&room, identity)
+                .await
+                .map_err(CallError::Internal)?;
         }
-        Ok(LeaveCallResponse {
-            call_ended: self.finish_empty_call(&call).await?,
-        })
+        Ok(LeaveCallResponse { call_ended: false })
     }
 }
 

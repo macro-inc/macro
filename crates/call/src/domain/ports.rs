@@ -24,8 +24,8 @@ use crate::domain::models::{
 
 use super::meetings::{
     ActiveMeeting, CreateMeetingRequest, GuestId, GuestJoinRequest, InviteMeetingUsersRequest,
-    Meeting, MeetingInvitePermissions, MeetingParticipants, MeetingRtcParticipant, MeetingToken,
-    UpdateMeetingRequest,
+    Meeting, MeetingInvitePermissions, MeetingParticipants, MeetingPreparation,
+    MeetingRtcParticipant, MeetingToken, UpdateMeetingRequest,
 };
 
 use super::models::{
@@ -42,6 +42,31 @@ use super::models::{
 pub trait CallRepository: Send + Sync + 'static {
     /// The error type returned by repository operations.
     type Err: Into<anyhow::Error> + Send + Debug;
+
+    /// Persist an owner-bound room reservation and discard expired reservation metadata.
+    fn insert_meeting_preparation(
+        &self,
+        actor: &str,
+        preparation: &MeetingPreparation,
+    ) -> impl Future<Output = Result<(), CallError>> + Send;
+    /// Atomically bind a live, unused reservation owned by actor to their new meeting.
+    fn claim_meeting_preparation(
+        &self,
+        id: &Uuid,
+        actor: &str,
+        meeting_id: &Uuid,
+    ) -> impl Future<Output = Result<(), CallError>> + Send;
+    /// Delete only unused reservations owned by actor; a claimed room cannot be cancelled.
+    fn cancel_meeting_preparation(
+        &self,
+        id: &Uuid,
+        actor: &str,
+    ) -> impl Future<Output = Result<bool, CallError>> + Send;
+    /// Find a claimed, unexpired room that has never been activated as a call.
+    fn get_meeting_preparation(
+        &self,
+        meeting_id: &Uuid,
+    ) -> impl Future<Output = Result<Option<MeetingPreparation>, CallError>> + Send;
 
     /// Persist a standalone invitation or reuse an invitation pinned to a channel call.
     fn create_meeting(
@@ -638,6 +663,9 @@ pub trait CallRtcClient: Send + Sync + 'static {
     /// Create a new RTC room with the given name.
     fn create_room(&self, room_name: &str) -> impl Future<Output = anyhow::Result<()>> + Send;
 
+    /// Reserve an empty room for setup, expiring automatically without participants.
+    fn prepare_room(&self, room_name: &str) -> impl Future<Output = anyhow::Result<()>> + Send;
+
     /// Delete an RTC room.
     fn delete_room(&self, room_name: &str) -> impl Future<Output = anyhow::Result<()>> + Send;
 
@@ -719,6 +747,17 @@ pub trait CallRtcClient: Send + Sync + 'static {
 /// Service interface for call operations.
 #[cfg_attr(test, mockall::automock)]
 pub trait CallService: Send + Sync + 'static {
+    /// Reserve an empty room without creating a call, recording, or inviting anyone.
+    fn prepare_meeting<'a>(
+        &self,
+        actor: MacroUserIdStr<'a>,
+    ) -> impl Future<Output = Result<MeetingPreparation, CallError>> + Send;
+    /// Cancel only the actor's unused preparation; safe against concurrent activation.
+    fn cancel_meeting_preparation<'a>(
+        &self,
+        actor: MacroUserIdStr<'a>,
+        id: Uuid,
+    ) -> impl Future<Output = Result<(), CallError>> + Send;
     /// Create an invitation without starting media.
     fn create_meeting<'a>(
         &self,

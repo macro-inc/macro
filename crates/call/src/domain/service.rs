@@ -48,7 +48,7 @@ use crate::domain::models::{
 
 use super::meetings::{
     ActiveMeeting, CreateMeetingRequest, GuestJoinRequest, InviteMeetingUsersRequest, Meeting,
-    MeetingInvitePermissions, MeetingToken, UpdateMeetingRequest,
+    MeetingInvitePermissions, MeetingPreparation, MeetingToken, UpdateMeetingRequest,
 };
 use super::models::{
     ActiveCallsResponse, AddParticipantError, ArchivedCall, Call, CallActiveResponse, CallError,
@@ -574,6 +574,19 @@ impl<
     B: MacroEventBroker + Clone,
 > CallService for CallServiceImpl<R, C, Cn, E, N, S, Sm, V, Vr, B>
 {
+    async fn prepare_meeting(
+        &self,
+        actor: MacroUserIdStr<'_>,
+    ) -> Result<MeetingPreparation, CallError> {
+        self.prepare_invitation_room(actor).await
+    }
+    async fn cancel_meeting_preparation(
+        &self,
+        actor: MacroUserIdStr<'_>,
+        id: Uuid,
+    ) -> Result<(), CallError> {
+        self.cancel_invitation_room(actor, id).await
+    }
     async fn create_meeting(
         &self,
         actor: MacroUserIdStr<'_>,
