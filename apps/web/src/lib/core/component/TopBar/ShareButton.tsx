@@ -31,7 +31,6 @@ import { idToEmail } from '@core/user';
 import type { ResultError } from '@core/util/result';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { useCopyLink } from '@core/util/useCopyLink';
-import IconShared from '@icon/share.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import ChevronDownIcon from '@phosphor/caret-down.svg';
 import IconComment from '@phosphor/chat-teardrop.svg';
@@ -1668,7 +1667,6 @@ export function ShareTrigger(props: {
             }
           }}
         >
-          <IconShared />
           Share
         </Button>
       </Tooltip>
