@@ -1,7 +1,7 @@
 /// Apollo.io-backed implementation of the company metadata resolver
 #[cfg(feature = "outbound")]
 pub mod apollo_resolver;
-/// Links archived call records to CRM records for the call crate
+/// Postgres store linking archived call records to CRM records
 #[cfg(feature = "call_link")]
 pub mod call_link;
 /// Postgres implementation of the companies repository

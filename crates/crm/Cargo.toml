@@ -27,12 +27,17 @@ axum = [
   "entity_access/ports",
   "ports",
 ]
-# Links archived call records to CRM records for the call crate.
+# Links archived call records to CRM records from the call topic.
 call_link = [
   "dep:call",
+  "dep:kafka_util",
+  "dep:macro_event_broker",
   "dep:models_properties",
+  "dep:rdkafka",
   "dep:rootcause",
   "dep:sqlx",
+  "dep:tokio",
+  "macro_event_broker/outbound",
   "ports",
 ]
 default = ["ai_tools", "call_link", "inbound", "lookup", "outbound", "ports"]
@@ -64,8 +69,12 @@ uuid = { workspace = true }
 
 call = { path = "../call", default-features = false, features = ["ports"], optional = true }
 entity_access = { path = "../entity_access", default-features = false }
+kafka_util = { path = "../kafka_util", optional = true }
+macro_event_broker = { path = "../macro_event_broker", default-features = false, optional = true }
 messages = { path = "../messages", default-features = false, features = ["ports"], optional = true }
+rdkafka = { workspace = true, optional = true }
 rootcause = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
 
 # AI toolset dependencies
 ai_toolset = { path = "../ai_toolset", optional = true }

@@ -30,13 +30,12 @@ mod meeting_startup;
 use crate::domain::meetings::GuestId;
 use crate::domain::models::{
     ActiveCallSummary, AddParticipantError, ArchivedCall, Call, CallError, CallParticipant,
-    CallPeople, CallRecord, CallRecordTranscriptSegment, CallWebhookEvent,
-    DeletedCallRecordStorageKeys, EditCallRecordRequest, EgressS3Config, RingStatus,
-    VerifiedRingToken, VoipPushPayloadRequest,
+    CallRecord, CallRecordTranscriptSegment, CallWebhookEvent, DeletedCallRecordStorageKeys,
+    EditCallRecordRequest, EgressS3Config, RingStatus, VerifiedRingToken, VoipPushPayloadRequest,
 };
 use crate::domain::ports::{
-    CallCrmLinker, CallRtcClient, CallService, CallSummarizer, MockCallRepository,
-    MockCallRtcClient, NoOpVoiceRepository,
+    CallRtcClient, CallService, CallSummarizer, MockCallRepository, MockCallRtcClient,
+    NoOpVoiceRepository,
 };
 
 use super::{
@@ -2925,64 +2924,6 @@ async fn spawned_summarization_publishes_record_summarized_event() {
     assert!(failing_broker.events().is_empty());
 }
 
-/// Records each CRM link request.
-#[derive(Default)]
-struct RecordingCrmLinker {
-    links: Mutex<Vec<(Uuid, CallPeople)>>,
-}
-
-impl CallCrmLinker for RecordingCrmLinker {
-    fn link_call_record<'a>(
-        &'a self,
-        call_record_id: Uuid,
-        people: &'a CallPeople,
-    ) -> std::pin::Pin<
-        Box<dyn std::future::Future<Output = Result<(), rootcause::Report>> + Send + 'a>,
-    > {
-        self.links
-            .lock()
-            .unwrap()
-            .push((call_record_id, people.clone()));
-        Box::pin(async { Ok(()) })
-    }
-}
-
-#[tokio::test]
-async fn spawned_crm_linking_passes_the_call_people_to_the_linker() {
-    let linker = Arc::new(RecordingCrmLinker::default());
-    let service: CallServiceImpl<_, _, _, _, _, _, NoopCallSummarizer> = CallServiceImpl::new(
-        MockCallRepository::new(),
-        MockRtcClient::new(),
-        StubConnectionService,
-        NoOpEntityAccessService,
-        StubNotificationIngress,
-        StubRecordingStorage,
-        "wss://livekit.example.com",
-    )
-    .with_crm_linker(linker.clone());
-    let people = CallPeople {
-        user_ids: vec![user("rep@ours.com")],
-        invitee_emails: vec!["buyer@acme.com".to_string()],
-    };
-    let mut repo = MockCallRepository::new();
-    let stored = people.clone();
-    repo.expect_get_call_record_people()
-        .withf(|call_record_id| *call_record_id == SUMMARIZED_EVENT_CALL_ID)
-        .returning(move |_| {
-            let stored = stored.clone();
-            Box::pin(async move { Ok(stored) })
-        });
-    configure_repository_clone(&service.repo, repo);
-
-    service.spawn_link_crm_records(SUMMARIZED_EVENT_CALL_ID);
-    wait_for_spawned_work(|| !linker.links.lock().unwrap().is_empty()).await;
-
-    assert_eq!(
-        *linker.links.lock().unwrap(),
-        vec![(SUMMARIZED_EVENT_CALL_ID, people)]
-    );
-}
-
 #[tokio::test]
 async fn summarized_event_reports_ai_name_persistence() {
     let cases = [
@@ -4076,4 +4017,33 @@ async fn sharing_a_cancelled_standalone_meeting_rejects_the_revoked_link() {
         service.share_call(receipt).await,
         Err(CallError::NotFound(_))
     ));
+}
+
+#[tokio::test]
+async fn call_record_query_service_reads_the_people_on_a_call() {
+    use crate::domain::models::CallPeople;
+    use crate::domain::ports::CallRecordQueryService;
+
+    let people = CallPeople {
+        user_ids: vec![user("rep@ours.com")],
+        invitee_emails: vec!["buyer@acme.com".to_string()],
+    };
+    let mut repo = MockCallRepository::new();
+    let stored = people.clone();
+    repo.expect_get_call_record_people()
+        .withf(|call_record_id| *call_record_id == SUMMARIZED_EVENT_CALL_ID)
+        .returning(move |_| {
+            let stored = stored.clone();
+            Box::pin(async move { Ok(stored) })
+        });
+
+    let service = super::CallRecordQueryServiceImpl::new(repo);
+
+    assert_eq!(
+        service
+            .get_call_record_people(SUMMARIZED_EVENT_CALL_ID)
+            .await
+            .unwrap(),
+        people
+    );
 }

@@ -689,11 +689,7 @@ async fn run() -> anyhow::Result<()> {
     )
     .with_summarizer(AiCallSummarizer::new(
         ai_usage::pg_recorder_with_enforcement(db.clone(), config.enable_ai_usage_enforcement),
-    ))
-    .with_crm_linker(Arc::new(crm::outbound::call_link::PgCallCrmLinker::new(
-        db.clone(),
-        (*system_properties_service).clone(),
-    )));
+    ));
     if let Some(secret) = internal_call_secret {
         call_service_builder = call_service_builder.with_internal_call_secret(secret);
     }
@@ -960,6 +956,52 @@ async fn run() -> anyhow::Result<()> {
                     Ok(()) => tracing::error!("activity consumer exited unexpectedly"),
                     Err(error) => {
                         tracing::error!(error = ?error, "activity consumer exited unexpectedly");
+                    }
+                }
+
+                tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    _ = tokio::time::sleep(Duration::from_secs(5)) => {}
+                }
+            }
+        }
+    });
+
+    // Links archived calls to the CRM records of the people on them.
+    let crm_call_link_brokers = config.kafka_brokers.as_ref().to_string();
+    consumer_tracker.spawn({
+        let cancellation_token = consumer_cancellation_token.clone();
+        let consumer = crm::inbound::call_archived::CallArchivedConsumer::new(
+            crm::domain::call_links::CallRecordLinker::new(
+                call::domain::service::CallRecordQueryServiceImpl::new(PgCallRepo::new(
+                    db.clone(),
+                )),
+                crm::outbound::call_link::PgCallCrmLinker::new(
+                    db.clone(),
+                    (*system_properties_service).clone(),
+                ),
+            ),
+        );
+        async move {
+            loop {
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                tracing::info!("starting CRM call-link consumer");
+                let result = consumer
+                    .run(&crm_call_link_brokers, cancellation_token.cancelled())
+                    .await;
+
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                match result {
+                    Ok(()) => tracing::error!("CRM call-link consumer exited unexpectedly"),
+                    Err(error) => {
+                        tracing::error!(error = ?error, "CRM call-link consumer exited unexpectedly");
                     }
                 }
 

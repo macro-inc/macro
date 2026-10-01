@@ -5,7 +5,6 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::future::Future;
-use std::pin::Pin;
 
 use chrono::{DateTime, Utc};
 
@@ -666,18 +665,6 @@ pub trait CallSummarizer: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<CallTranscriptCustomSpeakerResult>, Self::Err>> + Send;
 }
 
-/// Links archived call records to the CRM companies and contacts of the
-/// people on them. Implemented by the CRM crate, so this crate does not
-/// depend on it.
-pub trait CallCrmLinker: Send + Sync + 'static {
-    /// Associate `call_record_id` with the CRM records matching `people`.
-    fn link_call_record<'a>(
-        &'a self,
-        call_record_id: Uuid,
-        people: &'a CallPeople,
-    ) -> Pin<Box<dyn Future<Output = Result<(), rootcause::Report>> + Send + 'a>>;
-}
-
 /// RTC client port for interacting with the real-time communication service (e.g., LiveKit).
 #[cfg_attr(test, mockall::automock)]
 pub trait CallRtcClient: Send + Sync + 'static {
@@ -1035,6 +1022,14 @@ pub trait CallRecordQueryService: Send + Sync + 'static {
         &self,
         req: GetCallRecordsRequest,
     ) -> impl Future<Output = Result<Vec<CallRecord>, CallError>> + Send;
+
+    /// The people on an archived call record: its Macro participants, the
+    /// owner of its meeting link, and the invitees of the calendar event
+    /// carrying that link. Empty when the record does not exist.
+    fn get_call_record_people(
+        &self,
+        call_record_id: Uuid,
+    ) -> impl Future<Output = Result<CallPeople, CallError>> + Send;
 }
 
 /// No-op implementation of [`CallRecordQueryService`] for services
@@ -1048,6 +1043,11 @@ impl CallRecordQueryService for NoOpCallRecordQueryService {
         _req: GetCallRecordsRequest,
     ) -> Result<Vec<CallRecord>, CallError> {
         Ok(Vec::new())
+    }
+
+    /// Always returns no people.
+    async fn get_call_record_people(&self, _call_record_id: Uuid) -> Result<CallPeople, CallError> {
+        Ok(CallPeople::default())
     }
 }
 

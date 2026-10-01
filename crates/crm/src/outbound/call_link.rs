@@ -1,13 +1,15 @@
-//! Links archived call records to CRM records, implementing the call crate's
-//! [`CallCrmLinker`].
+//! Postgres implementation of [`CallRecordLinkStore`]: matches the people on a
+//! call against the CRMs of the teams on it.
 
-use std::{collections::BTreeSet, future::Future, pin::Pin};
+use std::collections::BTreeSet;
 
-use call::domain::{models::CallPeople, ports::CallCrmLinker};
+use call::domain::models::CallPeople;
 use models_properties::EntityType;
 use sqlx::PgPool;
 use system_properties::{CrmRecordLink, SystemPropertiesService};
 use uuid::Uuid;
+
+use crate::domain::call_links::CallRecordLinkStore;
 
 #[cfg(test)]
 mod test;
@@ -89,23 +91,21 @@ impl<S: SystemPropertiesService> PgCallCrmLinker<S> {
     }
 }
 
-impl<S: SystemPropertiesService> CallCrmLinker for PgCallCrmLinker<S> {
-    fn link_call_record<'a>(
-        &'a self,
+impl<S: SystemPropertiesService> CallRecordLinkStore for PgCallCrmLinker<S> {
+    async fn link_call_record(
+        &self,
         call_record_id: Uuid,
-        people: &'a CallPeople,
-    ) -> Pin<Box<dyn Future<Output = Result<(), rootcause::Report>> + Send + 'a>> {
-        Box::pin(async move {
-            let (company_ids, contact_ids) = self.matching_records(people).await?;
-            self.system_properties
-                .link_crm_records(CrmRecordLink {
-                    entity_id: call_record_id.to_string(),
-                    entity_type: EntityType::CallRecord,
-                    company_ids,
-                    contact_ids,
-                })
-                .await?;
-            Ok(())
-        })
+        people: &CallPeople,
+    ) -> Result<(), rootcause::Report> {
+        let (company_ids, contact_ids) = self.matching_records(people).await?;
+        self.system_properties
+            .link_crm_records(CrmRecordLink {
+                entity_id: call_record_id.to_string(),
+                entity_type: EntityType::CallRecord,
+                company_ids,
+                contact_ids,
+            })
+            .await?;
+        Ok(())
     }
 }

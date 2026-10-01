@@ -510,7 +510,6 @@ impl<
         self.publish_archived_call_event(&archived, CallArchiveReason::LastParticipantLeft);
         self.spawn_summarize_call(archived.call_id);
         self.spawn_process_voices_for_call(archived.call_id);
-        self.spawn_link_crm_records(archived.call_id);
         let rtc = self.rtc_client.clone();
         let room_name = call.room_name.clone();
         let egress_id = call.egress_id.clone();
