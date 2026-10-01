@@ -28,6 +28,7 @@ inbound = [
   "agent_session/schema",
   "channels/schema",
   "documents/schema",
+  "messages/schema",
   "ports",
   "rate_limit/axum",
 ]

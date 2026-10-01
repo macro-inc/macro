@@ -19,7 +19,7 @@ export function SectionCta() {
           'max-width': '730px',
           'line-height': 1.25,
           'font-family': 'display',
-          'font-weight': '450',
+          'font-weight': '315',
         }}
       >
         Designed by engineers obsessed with performance for the kind of people
@@ -56,7 +56,7 @@ export function SectionCta() {
           'letter-spacing': '0.045em',
           'text-transform': 'uppercase',
           padding: '0 20px',
-          'font-size': '18px',
+          'font-size': '15px',
           'font-weight': '700',
           'line-height': '1',
           'align-items': 'center',

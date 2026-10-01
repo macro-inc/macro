@@ -70,7 +70,7 @@ function ConnectGoogleButton(props: { buttonName: string; large?: boolean }) {
         cursor: 'default',
         display: 'inline-flex',
         'font-family': 'body',
-        'font-size': props.large ? (mobile() ? '16px' : '17px') : '14px',
+        'font-size': props.large ? (mobile() ? '16px' : '14px') : '14px',
         'font-weight': '700',
         gap: props.large ? '8px' : '7px',
         height: props.large ? (mobile() ? '46px' : '48px') : '30px',
@@ -735,9 +735,9 @@ function ChannelsHero(props: { onWatchDemo: () => void }) {
           <p
             style={{
               color: 'var(--c4)',
-              'font-family': 'cyberreader, body',
-              'font-size': mobile() ? '16.5px' : '19px',
-              'font-weight': '300',
+              'font-family': 'Inter, body',
+              'font-size': mobile() ? '14px' : '16px',
+              'font-weight': '400',
               'line-height': 1.6,
               margin: '0',
               'max-width': mobile() ? '100%' : '64ch',
@@ -809,17 +809,17 @@ function ChannelsFounderLetter() {
           Great teams need great comms.
         </h2>
         <div style={{ display: 'grid', gap: mobile() ? '18px' : '22px' }}>
-          {/* Cyberreader rather than the site's Rajdhani `body`: this is a
-              longer read than anything else on the page, and cyberreader — a
-              blend of Rajdhani's edge and Inter's readability — is what the
+          {/* Inter rather than the site's Inter `body`: this is a
+              longer read than anything else on the page, and Inter — a
+              blend of Inter's edge and Inter's readability — is what the
               home page reaches for at length. It ships as discrete faces
               rather than a variable axis, so 300 is the real Light file. */}
           <p
             style={{
               color: 'var(--c4)',
-              'font-family': 'cyberreader, body',
-              'font-size': mobile() ? '16.5px' : '18px',
-              'font-weight': '300',
+              'font-family': 'Inter, body',
+              'font-size': mobile() ? '14px' : '15px',
+              'font-weight': '400',
               'line-height': 1.6,
               margin: '0',
               'text-align': 'left',
@@ -843,9 +843,9 @@ function ChannelsFounderLetter() {
           <p
             style={{
               color: 'var(--c2)',
-              'font-family': 'cyberreader, body',
-              'font-size': mobile() ? '16.5px' : '18px',
-              'font-weight': '300',
+              'font-family': 'Inter, body',
+              'font-size': mobile() ? '14px' : '15px',
+              'font-weight': '400',
               'line-height': 1.6,
               margin: '0',
               'text-align': 'left',
@@ -931,9 +931,9 @@ function ChannelsIntegrationHero() {
         <p
           style={{
             color: 'var(--c4)',
-            'font-family': 'cyberreader, body',
-            'font-size': mobile() ? '17px' : '19px',
-            'font-weight': '300',
+            'font-family': 'Inter, body',
+            'font-size': mobile() ? '14px' : '16px',
+            'font-weight': '400',
             'line-height': 1.6,
             margin: '0',
             'max-width': '44ch',
@@ -1428,7 +1428,7 @@ function ChannelsFeatureCards() {
                     <span
                       style={{
                         color: 'color-mix(in srgb, var(--a0) 78%, transparent)',
-                        'font-family': 'rajdhani, body',
+                        'font-family': 'Inter, body',
                         'font-size': mobile() ? '11px' : '12.5px',
                         'font-weight': '700',
                         'letter-spacing': '0.18em',
@@ -1442,7 +1442,7 @@ function ChannelsFeatureCards() {
                     style={{
                       color: 'var(--c2)',
                       'font-family': 'body',
-                      'font-size': mobile() ? '16px' : '16.5px',
+                      'font-size': mobile() ? '16px' : '14px',
                       'font-weight': '700',
                       'letter-spacing': '0.07em',
                       'line-height': 1.2,
@@ -1501,7 +1501,7 @@ const slabTitle = (opts?: {
   'font-size':
     opts?.size ??
     (mobile() ? 'clamp(32px, 9vw, 40px)' : 'clamp(40px, 4.2vw, 52px)'),
-  'font-weight': opts?.weight ?? '315',
+  'font-weight': '315',
   'letter-spacing': '-0.015em',
   'line-height': 1.12,
   margin: '0',
@@ -1585,9 +1585,9 @@ function FeatureSplit(props: {
             <p
               style={{
                 color: 'var(--c4)',
-                'font-family': 'cyberreader, body',
-                'font-size': mobile() ? '15.5px' : '17px',
-                'font-weight': '300',
+                'font-family': 'Inter, body',
+                'font-size': mobile() ? '15.5px' : '14px',
+                'font-weight': '400',
                 'line-height': 1.55,
                 margin: '0',
                 'max-width': '34em',
@@ -1739,9 +1739,9 @@ function ChannelsClosingHero() {
         <p
           style={{
             color: 'var(--c4)',
-            'font-family': 'cyberreader, body',
-            'font-size': mobile() ? '16.5px' : '18px',
-            'font-weight': '300',
+            'font-family': 'Inter, body',
+            'font-size': mobile() ? '14px' : '15px',
+            'font-weight': '400',
             /* Double-leaded, and the break is the one in the markup: two
                deliberate lines under the title read as a pair of statements
                rather than as a wrapped paragraph. */
@@ -1965,9 +1965,9 @@ function ComparisonSection() {
         <p
           style={{
             color: 'var(--c4)',
-            'font-family': 'cyberreader, body',
-            'font-size': mobile() ? '15px' : '17px',
-            'font-weight': '300',
+            'font-family': 'Inter, body',
+            'font-size': mobile() ? '15px' : '14px',
+            'font-weight': '400',
             'line-height': 1.55,
             margin: '16px auto 0',
             'max-width': '620px',
@@ -2023,9 +2023,9 @@ function ChannelsFinalCta() {
         <p
           style={{
             color: 'var(--c4)',
-            'font-family': 'cyberreader, body',
-            'font-size': mobile() ? '17px' : '19px',
-            'font-weight': '300',
+            'font-family': 'Inter, body',
+            'font-size': mobile() ? '14px' : '16px',
+            'font-weight': '400',
             'line-height': 1.6,
             margin: '0',
           }}
@@ -2242,7 +2242,7 @@ export const RouteChannels: Component = () => {
                 color: 'var(--c1)',
                 cursor: 'pointer',
                 'font-family': 'body',
-                'font-size': '18px',
+                'font-size': '15px',
                 height: '34px',
                 'line-height': 1,
                 position: 'absolute',

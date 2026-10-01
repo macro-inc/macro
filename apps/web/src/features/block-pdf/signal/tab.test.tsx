@@ -16,7 +16,6 @@ import { useCreateTab, useNavigateToTab } from './tab';
 
 vi.mock('../queries/annotations', () => ({
   getPdfAnchors: vi.fn(async () => []),
-  getPdfComments: vi.fn(async () => []),
 }));
 
 vi.mock('@queries/messages/document-messages', () => ({

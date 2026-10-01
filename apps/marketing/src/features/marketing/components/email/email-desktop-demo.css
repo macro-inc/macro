@@ -1,0 +1,54 @@
+.email-desktop-demo {
+  --desktop-stage-width: min(1440px, 88vw);
+  width: var(--desktop-stage-width);
+  margin: 0 calc((100% - var(--desktop-stage-width)) / 2) 88px;
+}
+.email-desktop-wallpaper {
+  padding: clamp(28px, 4.8vw, 76px) clamp(24px, 5.4vw, 88px);
+  background-color: #b7bdb1;
+  background-image: url('../../../../assets/desktop/coastal-dawn.svg');
+  background-position: center;
+  background-size: cover;
+  border: 1px solid #ffffff20;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.email-desktop-window {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid #ffffff25;
+  border-radius: 12px;
+  background: #101010;
+  box-shadow: 0 40px 100px -30px #172222b3, 0 12px 32px #17222250, inset 0 1px 0 #ffffff18;
+}
+.email-desktop-titlebar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  border-bottom: 1px solid #ffffff0d;
+  color: #a1a1a1;
+  background: #151515;
+  font: 400 12px/1 -apple-system, BlinkMacSystemFont, sans-serif;
+}
+.email-desktop-traffic-lights { position: absolute; left: 14px; display: flex; gap: 7px; }
+.email-desktop-traffic-lights span { width: 10px; height: 10px; border-radius: 50%; background: #ff6058; box-shadow: inset 0 0 0 1px #00000015; }
+.email-desktop-traffic-lights span:nth-child(2) { background: #ffbd2e; }
+.email-desktop-traffic-lights span:nth-child(3) { background: #28c840; }
+.email-desktop-titlebar a { position: absolute; right: 14px; color: #888; font-size: 17px; text-decoration: none; }
+.email-desktop-titlebar a:hover { color: #fff; }
+.email-desktop-content { height: clamp(520px, 43vw, 690px); }
+.email-desktop-content > [data-deferred-demo] { height: 100%; }
+.email-desktop-content .dummy-workspace[data-embedded=true] { height: 100%; border: 0; border-radius: 0; box-shadow: none; }
+.email-desktop-content .dummy-banner { display: none; }
+.email-desktop-loading { display: grid; place-items: center; height: 100%; color: #888; font-size: 14px; }
+.email-desktop-demo .email-desktop-caption { margin-top: 20px; color: #777; font-size: 13px; line-height: 1.5; text-align: center; }
+@media (max-width: 699px) {
+  .email-desktop-demo { --desktop-stage-width: calc(100vw - 24px); margin-bottom: 52px; }
+  .email-desktop-wallpaper { padding: 28px 12px; border-radius: 8px; }
+  .email-desktop-window { border-radius: 9px; }
+  .email-desktop-content { height: 510px; }
+  .email-desktop-content .dummy-sidebar { top: 42px; }
+  .email-desktop-demo .email-desktop-caption { max-width: 290px; margin: 16px auto 0; font-size: 12px; }
+}

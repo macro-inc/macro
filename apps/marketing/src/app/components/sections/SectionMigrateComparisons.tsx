@@ -225,7 +225,7 @@ export function SectionMigrateComparisons(props: {
         style={{
           'font-family': 'display',
           'font-size': mobile() ? '28px' : '36px',
-          'font-weight': '420',
+          'font-weight': '315',
           'letter-spacing': '-0.015em',
           'line-height': 1.1,
         }}

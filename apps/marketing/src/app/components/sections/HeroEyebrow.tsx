@@ -2,7 +2,7 @@ import type { Accessor } from 'solid-js';
 import { MacroMarkIcon } from '../graphics/MacroMarkIcon';
 
 // The small brand tag that sits above each hero headline — the Macro mark
-// followed by the product name in a spaced, uppercase Rajdhani cap. Shared by
+// followed by the product name in a spaced, uppercase Inter cap. Shared by
 // the home hero and every feature page so the label reads identically across
 // the site (only the `label` text changes per page).
 export function HeroEyebrow(props: {
@@ -15,10 +15,11 @@ export function HeroEyebrow(props: {
         'align-items': 'center',
         color: 'var(--a0)',
         display: 'inline-flex',
-        'font-family': 'rajdhani, body',
-        'font-size': props.mobile() ? '12px' : '15px',
+        'font-family': 'Inter, body',
+        'font-size': props.mobile() ? '11px' : '12px',
         gap: props.mobile() ? '7px' : '9px',
-        'letter-spacing': '0.14em',
+        'font-weight': '500',
+        'letter-spacing': '0.1em',
         'text-transform': 'uppercase',
       }}
     >

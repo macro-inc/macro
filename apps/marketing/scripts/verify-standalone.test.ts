@@ -38,6 +38,24 @@ afterEach(() => {
 });
 
 describe('standalone website boundary', () => {
+  it('allows the owned demo iframe route without exempting image assets or missing routes', () => {
+    const { write, inspect } = fixture();
+    write('src/main.tsx', 'export const demo = <iframe src="/demo" />;');
+    expect(inspect().violations).toHaveLength(1);
+    write(
+      'src/app/routes/RouteDemo.tsx',
+      'export const RouteDemo = () => null;'
+    );
+    expect(inspect().violations).toEqual([]);
+    write(
+      'src/main.tsx',
+      'export const demo = <iframe src="/demo?embedded=true" />;'
+    );
+    expect(inspect().violations).toEqual([]);
+    write('src/main.tsx', 'export const image = <img src="/demo" />;');
+    expect(inspect().violations).toHaveLength(1);
+  });
+
   it('accepts website-owned imports, assets, CSS scans, and declared third-party packages', () => {
     const { write, inspect } = fixture();
     write('package.json', '{"dependencies":{"third-party":"1.0.0"}}');

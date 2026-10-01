@@ -1,9 +1,6 @@
 /// Domain models for CRM records
 pub mod model;
 
-/// Domain and wire models for CRM comment threads
-pub mod comment;
-
 /// Static list of generic/personal email-provider domains to exclude
 /// from CRM populate
 #[cfg(feature = "ports")]

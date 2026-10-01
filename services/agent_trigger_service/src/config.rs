@@ -1,6 +1,5 @@
 //! Environment-backed service configuration.
 
-use agent_trigger::domain::sources::TriggerEventSource;
 use anyhow::Context as _;
 use database_env_vars::DatabaseUrl;
 use macro_env_var::env_vars;
@@ -25,12 +24,6 @@ pub struct Config {
     pub internal_api_key: String,
     /// Key required by document storage's internal endpoints.
     pub document_storage_service_auth_key: String,
-    /// Which committed-post topic feeds the trigger: `messages` (the default,
-    /// channel and document posts) or `channels` (the pre-parent channel
-    /// event, kept until its producer retires it). Never both: every channel
-    /// post is on both topics, so both would evaluate each mention twice.
-    #[macro_config_default(TriggerEventSource::default())]
-    pub agent_trigger_event_source: TriggerEventSource,
 }
 
 impl Config {

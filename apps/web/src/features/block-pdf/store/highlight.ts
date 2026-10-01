@@ -59,10 +59,9 @@ export function useRemoveHighlight() {
     pdf.closeSelectionMenu();
     // The annotation endpoint deletes only a legacy thread with its highlight,
     // so a message discussion goes first; the server then detaches the highlight.
-    const rootId = pdf.annotations.unified
-      ? pdf.annotations.anchors()?.find((anchor) => anchor.uuid === uuid)
-          ?.rootId
-      : null;
+    const rootId = pdf.annotations
+      .anchors()
+      ?.find((anchor) => anchor.uuid === uuid)?.rootId;
     try {
       if (rootId) await deleteMessageThread(rootId);
       await deleteHighlight(uuid);

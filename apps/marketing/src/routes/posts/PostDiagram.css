@@ -26,7 +26,7 @@
   background: color-mix(in srgb, var(--b1) 72%, var(--b0));
   border: 1px solid color-mix(in srgb, var(--b4) 22%, transparent);
   border-radius: 14px;
-  font-family: 'rajdhani', body, system-ui, sans-serif;
+  font-family: 'Inter', body, system-ui, sans-serif;
   padding: 20px clamp(14px, 3vw, 26px) 24px;
 }
 

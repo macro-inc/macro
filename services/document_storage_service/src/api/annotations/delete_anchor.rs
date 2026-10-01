@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::api::context::AuthorizationService;
+use crate::api::context::DssAnnotationService;
 use crate::service::conn_gateway::update_live_comment_state;
 use axum::{
     Json,
@@ -10,7 +11,6 @@ use axum::{
 };
 use connection_gateway_client::ConnectionGatewayClient;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use macro_db_client::annotations::delete_anchor::delete_document_anchor;
 use model::{
     annotations::{
         AnnotationIncrementalUpdate,
@@ -18,12 +18,8 @@ use model::{
     },
     response::ErrorResponse,
 };
-use sqlx::PgPool;
 
-use super::comment_error_response;
-
-/// Deletes a single unthreaded anchor for a document
-/// If you need to delete a threaded anchor, see the delete comment handler
+/// Deletes a highlight and any attached discussion under the annotation policy.
 #[utoipa::path(
         delete,
         path = "/annotations/anchors",
@@ -37,13 +33,24 @@ use super::comment_error_response;
     )]
 #[axum::debug_handler(state = crate::api::context::ApiContext)]
 pub async fn delete_anchor_handler(
-    State(db): State<PgPool>,
+    State(service): State<Arc<DssAnnotationService>>,
     State(conn_gateway_client): State<Arc<ConnectionGatewayClient>>,
     user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     Json(req): Json<DeleteUnthreadedAnchorRequest>,
 ) -> Result<Response, Response> {
     let user_id = user.authorization.user.macro_user_id.as_ref();
-    match delete_document_anchor(&db, user_id, req).await {
+    match service
+        .delete(
+            &user.authorization.user.macro_user_id,
+            user.authorization
+                .user
+                .user_context
+                .organization_id
+                .map(i64::from),
+            req,
+        )
+        .await
+    {
         Ok(res) => {
             let response: DeleteUnthreadedAnchorResponse = res;
             let document_id = response.document_id.as_str();
@@ -59,6 +66,6 @@ pub async fn delete_anchor_handler(
             .await;
             Ok((StatusCode::OK, Json(response)).into_response())
         }
-        Err(e) => comment_error_response(e, "Error deleting anchor"),
+        Err(e) => Err(messages::inbound::axum_router::MessageHttpError::from(e).into_response()),
     }
 }

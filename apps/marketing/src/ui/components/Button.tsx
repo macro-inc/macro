@@ -85,6 +85,7 @@ export type ButtonProps = ButtonRootProps<'button'> &
   ComponentProps<'button'> & {
     depth?: 0 | 1 | 2 | 3 | 4;
     tooltipPlacement?: Placement;
+    tooltipMount?: HTMLElement;
     /**
      * Stretch the button (and, when a tooltip wraps it, the tooltip's trigger
      * wrapper) to fill the available width. Without this the tooltip wrapper is
@@ -159,6 +160,7 @@ function isIconSize(size: ButtonSize): boolean {
 export const Button = (props: ButtonProps) => {
   const [local, others] = splitProps(props, [
     'tooltipPlacement',
+    'tooltipMount',
     'children',
     'tooltip',
     'variant',
@@ -231,6 +233,7 @@ export const Button = (props: ButtonProps) => {
           hotkey={local.hotkey}
           shortcut={local.shortcut}
           placement={placement()}
+          mount={local.tooltipMount}
           label={label()}
           disabled={local.tooltipDisabled}
         >

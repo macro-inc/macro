@@ -1,4 +1,5 @@
 import { For, Match, Switch } from 'solid-js';
+import { DemoMentionText } from './DemoMention';
 import './demo-markdown.css';
 
 /** The sample transcripts only need emphasis, code, headings, and lists.
@@ -8,7 +9,7 @@ function Inline(props: { text: string }) {
   return (
     <For each={props.text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g)}>
       {(part) => (
-        <Switch fallback={part}>
+        <Switch fallback={<DemoMentionText text={part} />}>
           <Match when={part.startsWith('**') && part.endsWith('**')}>
             <strong class="font-bold">{part.slice(2, -2)}</strong>
           </Match>
