@@ -17,6 +17,7 @@ import {
   EmailScheduleSummary,
 } from '../components/email-schedule-summary';
 import type { EmailScheduleState } from '../primitives/email-send-schedule';
+import { DraftOwnerFixture } from './draft-owner-fixture';
 import { DraftRecoveryFixture } from './draft-recovery-fixture';
 
 type ScheduledItem = {
@@ -333,7 +334,9 @@ const root = document.getElementById('root');
 if (!root) throw new Error('Fixture root missing');
 render(
   () =>
-    new URLSearchParams(location.search).has('recovery') ? (
+    new URLSearchParams(location.search).has('draft-owner') ? (
+      <DraftOwnerFixture />
+    ) : new URLSearchParams(location.search).has('recovery') ? (
       <DraftRecoveryFixture />
     ) : (
       <Fixture />

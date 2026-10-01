@@ -671,6 +671,10 @@ previous or different draft must not clear the current editor.
 Repeat with the composer closed before reconnect: terminal queue failures must
 refresh the saved thread and list queries without requiring an open editor, so
 an already-sent draft does not remain in Drafts solely because nobody observed it.
+With cached inbox metadata available before viewer information loads, saving a
+new offline draft must still create its Mail thread. The selected inbox supplies
+the owner, including delegated inboxes. If that account metadata is unavailable,
+the save must fail before queueing; retain the editor content for a later retry.
 Test this with a previously saved draft as well as a new one: a queued edit must
 block Send and scheduling until a save commits. Reopening a cached draft while
 offline must retain its uploaded attachments and confirmed scheduled time.

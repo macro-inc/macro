@@ -45,10 +45,6 @@ import {
   watchEmailDrafts,
 } from '@queries/email/draft-queue';
 import {
-  draftContactInput,
-  type GraphqlSaveEmailDraftArgs,
-} from '@queries/email/graphql/draft';
-import {
   archiveEmailThread,
   scheduleEmailMessage,
 } from '@queries/email/integration';
@@ -77,8 +73,6 @@ import {
   type EmailComposeContext,
   type SaveEmailDraft,
 } from './context/compose-capabilities';
-import { decodeBase64Utf8 } from './core/decode-base64';
-import type { EmailDraft } from './core/email-draft';
 import { readDroppedEmailFiles, withVideoAttachments } from './editor-adapter';
 import { makeAttachmentPublic } from './make-attachment-public';
 import {
@@ -86,6 +80,7 @@ import {
   publishDraftLifecycleChange,
 } from './queries/draft-lifecycle';
 import { createEmailInboxSource } from './queries/inbox-source';
+import { queuedDraftSaveArgs } from './queries/queued-draft';
 import { restoreDraftBodyAfterUndo, runUndoSend } from './undo-send';
 
 export type EmailComposeContextOptions = {
@@ -179,49 +174,6 @@ export function createEmailComposeContext(
     return draft.db_id && draft.thread_db_id
       ? { draftId: draft.db_id, threadId: draft.thread_db_id }
       : undefined;
-  };
-  const queuedSaveArgs = (
-    draft: EmailDraft,
-    handles: DraftClientHandles & { threadId: string },
-    senderLinkId: string
-  ): GraphqlSaveEmailDraftArgs => {
-    const senderAccount = accounts.isSuccess
-      ? accounts.data?.links.find((link) => link.id === senderLinkId)
-      : undefined;
-    const senderIsSignal =
-      senderAccount && 'draft_is_signal' in senderAccount
-        ? senderAccount.draft_is_signal
-        : undefined;
-    const isNewThread = !draft.thread_db_id && !draft.replying_to_id;
-
-    return {
-      senderIsSignal,
-      newThreadOwnerId: isNewThread ? viewerId() : undefined,
-      draftId: handles.draftId,
-      threadDbId: handles.threadId,
-      // Persist the selected inbox itself: the primary inbox can change before replay.
-      linkId: senderLinkId || undefined,
-      replyingToId: draft.replying_to_id ?? undefined,
-      providerId: draft.provider_id ?? undefined,
-      providerThreadId: draft.provider_thread_id ?? undefined,
-      subject: draft.subject,
-      to: (draft.to ?? []).map(draftContactInput),
-      cc: (draft.cc ?? []).map(draftContactInput),
-      bcc: (draft.bcc ?? []).map(draftContactInput),
-      bodyHtml: draft.body_html ?? undefined,
-      bodyText: draft.body_text ?? undefined,
-      bodyMacro: draft.body_macro ?? undefined,
-      // Client-only, for the optimistic entity: responses carry the body unencoded.
-      senderLinkId,
-      senderEmail:
-        inboxSource.inboxes().find((inbox) => inbox.id === senderLinkId)
-          ?.email_address ??
-        viewerEmail() ??
-        '',
-      optimisticBodyHtml: draft.body_html
-        ? decodeBase64Utf8(draft.body_html)
-        : null,
-    };
   };
 
   return {
@@ -318,7 +270,19 @@ export function createEmailComposeContext(
         if (handles) {
           const senderLinkId = inboxId ?? primaryId() ?? '';
           const outcome = await saveEmailDraftQueued({
-            args: queuedSaveArgs(input.draft, handles, senderLinkId),
+            args: queuedDraftSaveArgs({
+              draft: input.draft,
+              handles,
+              senderLinkId,
+              senderAccount: accounts.isSuccess
+                ? accounts.data?.links.find((link) => link.id === senderLinkId)
+                : undefined,
+              senderEmail:
+                inboxSource.inboxes().find((inbox) => inbox.id === senderLinkId)
+                  ?.email_address ??
+                viewerEmail() ??
+                '',
+            }),
             completingThread,
             previousThreadId,
           });
