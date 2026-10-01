@@ -3,7 +3,7 @@
  */
 
 import { staticFileIdEndpoint } from '@core/constant/servers';
-import { createStaticUploadFile } from '@core/util/uploadFile';
+import { uploadFile } from '@core/util/upload';
 import { storageServiceClient } from '@service-storage/client';
 import type { Agent } from '@service-storage/generated/schemas/agent';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
@@ -31,9 +31,8 @@ vi.mock('@service-storage/client', () => ({
   },
 }));
 
-vi.mock('@core/util/uploadFile', () => ({
-  createUploadFile: (file: File) => ({ kind: 'browser', file }),
-  createStaticUploadFile: vi.fn(),
+vi.mock('@core/util/upload', () => ({
+  uploadFile: vi.fn(),
 }));
 
 import {
@@ -244,21 +243,27 @@ describe('agent channel-bot cache invalidation', () => {
 });
 
 describe('agent avatar uploads', () => {
-  it('uploads image bytes and returns the durable URL for the agent save', async () => {
-    vi.mocked(createStaticUploadFile).mockResolvedValue('file-id');
-    const mutation = renderHook(() => useUploadAgentAvatarMutation());
-    // This exceeds the JSON endpoint body limit when encoded as a data URL.
-    const file = new File([new Uint8Array(3 * 1024 * 1024)], 'avatar.png', {
-      type: 'image/png',
-    });
-    await expect(mutation.mutateAsync(file)).resolves.toBe(
-      staticFileIdEndpoint('file-id')
-    );
-    expect(createStaticUploadFile).toHaveBeenCalledWith({
-      kind: 'browser',
-      file,
-    });
-  });
+  it.each(['image/png', 'image/heic'])(
+    'uses the shared image conversion and upload pipeline for %s',
+    async (type) => {
+      vi.mocked(uploadFile).mockResolvedValue({
+        failed: false,
+        pending: false,
+        destination: 'static',
+        id: 'file-id',
+        name: 'avatar.png',
+      });
+      const mutation = renderHook(() => useUploadAgentAvatarMutation());
+      // This exceeds the JSON endpoint body limit when encoded as a data URL.
+      const file = new File([new Uint8Array(3 * 1024 * 1024)], 'avatar.png', {
+        type,
+      });
+      await expect(mutation.mutateAsync(file)).resolves.toBe(
+        staticFileIdEndpoint('file-id')
+      );
+      expect(uploadFile).toHaveBeenCalledWith(file, 'static');
+    }
+  );
 
   it('rejects oversized images before starting an upload', async () => {
     const mutation = renderHook(() => useUploadAgentAvatarMutation());
@@ -268,13 +273,15 @@ describe('agent avatar uploads', () => {
       { type: 'image/png' }
     );
     await expect(mutation.mutateAsync(file)).rejects.toThrow('maximum 16 MB');
-    expect(createStaticUploadFile).not.toHaveBeenCalled();
+    expect(uploadFile).not.toHaveBeenCalled();
   });
 
   it('propagates upload errors without returning an avatar URL', async () => {
-    vi.mocked(createStaticUploadFile).mockRejectedValue(
-      new Error('Failed to upload file')
-    );
+    vi.mocked(uploadFile).mockResolvedValue({
+      failed: true,
+      error: new Error('Failed to upload file'),
+      name: 'avatar.png',
+    });
     const mutation = renderHook(() => useUploadAgentAvatarMutation());
     await expect(
       mutation.mutateAsync(new File(['avatar'], 'avatar.png'))

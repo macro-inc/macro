@@ -1,8 +1,5 @@
 import { staticFileIdEndpoint } from '@core/constant/servers';
-import {
-  createStaticUploadFile,
-  createUploadFile,
-} from '@core/util/uploadFile';
+import { uploadFile } from '@core/util/upload';
 import { useMutation } from '@tanstack/solid-query';
 
 const MAX_AVATAR_SIZE = 16 * 1000 * 1000;
@@ -15,8 +12,11 @@ export function useUploadAgentAvatarMutation() {
       if (file.size > MAX_AVATAR_SIZE) {
         throw new Error('Image size too large (maximum 16 MB)');
       }
-      const id = await createStaticUploadFile(createUploadFile(file));
-      return staticFileIdEndpoint(id);
+      // The shared pipeline converts HEIC photos and holds automatic reloads
+      // while the image is being uploaded.
+      const result = await uploadFile(file, 'static');
+      if (result.failed) throw result.error;
+      return staticFileIdEndpoint(result.id);
     },
   }));
 }
