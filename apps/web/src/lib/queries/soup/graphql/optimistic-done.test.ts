@@ -343,16 +343,32 @@ describe('hideGraphqlSoupEntitiesAsDone', () => {
   });
 
   it('does not replace the authenticated viewer query fetcher', async () => {
-    const fetchViewer = vi.fn(async () => ({ userId: 'bob', authenticated: true }));
+    const fetchViewer = vi.fn(async () => ({
+      userId: 'bob',
+      authenticated: true,
+    }));
     let read!: ReturnType<typeof usePendingGraphqlSoupDone>;
     dispose = createRoot((disposeRoot) => {
-      useQuery(() => ({ queryKey: authKeys.userInfo.queryKey, queryFn: fetchViewer, staleTime: Infinity }), () => client);
+      useQuery(
+        () => ({
+          queryKey: authKeys.userInfo.queryKey,
+          queryFn: fetchViewer,
+          staleTime: Infinity,
+        }),
+        () => client
+      );
       read = usePendingGraphqlSoupDone();
       return disposeRoot;
     });
-    const overlay = hideGraphqlSoupEntitiesAsDone({ entityIds: ['a'], notificationIds: [] });
+    const overlay = hideGraphqlSoupEntitiesAsDone({
+      entityIds: ['a'],
+      notificationIds: [],
+    });
     await vi.waitFor(() => expect(read()).toHaveLength(1));
-    await client.invalidateQueries({ queryKey: authKeys.userInfo.queryKey }, { throwOnError: true });
+    await client.invalidateQueries(
+      { queryKey: authKeys.userInfo.queryKey },
+      { throwOnError: true }
+    );
     expect(fetchViewer).toHaveBeenCalledOnce();
     await vi.waitFor(() => expect(read()).toEqual([]));
     overlay.release();

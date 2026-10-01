@@ -201,7 +201,10 @@ export const makeMarkNotDoneAction = (options: MakeMarkNotDoneOptions) => {
           : 'Marked as not done';
     const feedback = { duration: 3_000, stack: true, hideOnMobile: true };
     if (warnings.length > 0)
-      toast.alert(`${message}. ${warnings.join(' ')}`, feedback);
+      toast.alert(`${message}. ${warnings.join(' ')}`, {
+        ...feedback,
+        hideOnMobile: false,
+      });
     else toast.success(message, feedback);
     return disposition;
   };

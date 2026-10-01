@@ -182,7 +182,7 @@ describe('makeMarkNotDoneAction', () => {
       });
       expect(mocks.alert).toHaveBeenCalledWith(
         'Marked 1 of 2 items as not done. 1 could not be restored.',
-        expect.any(Object)
+        expect.objectContaining({ hideOnMobile: false })
       );
       expect(mocks.failure).not.toHaveBeenCalled();
       expect(mocks.refetchSoupEntity).not.toHaveBeenCalledWith(
