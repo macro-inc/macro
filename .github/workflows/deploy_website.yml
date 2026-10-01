@@ -73,7 +73,7 @@ jobs:
       with:
         playwright: 'true'
     - name: Build
-      run: bun run build
+      run: env -u LD_LIBRARY_PATH bun run build
       env:
         VITE_APP_BASE_URL: ${{ matrix.environment == 'prod' && 'https://macro.com' || 'https://dev.macro.com' }}
         VITE_GOOGLE_SSO_URL: ${{ matrix.environment == 'prod' && 'https://gateway.macro.com/auth/login/sso?idp_name=google_gmail' || 'https://dev-gateway.macro.com/auth/login/sso?idp_name=google_gmail' }}

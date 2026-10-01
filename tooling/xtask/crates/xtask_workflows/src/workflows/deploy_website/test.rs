@@ -7,7 +7,7 @@ fn deploy_publishes_the_marketing_build_through_the_website_stack() {
     [
         "lfs: 'true'",
         "working-directory: apps/marketing",
-        "run: bun run build",
+        "run: env -u LD_LIBRARY_PATH bun run build",
         "'https://macro.com'",
         "work-dir: ./infra/stacks/website",
         "stack-name: macro-inc/${{ matrix.environment }}",
@@ -20,7 +20,7 @@ fn deploy_publishes_the_marketing_build_through_the_website_stack() {
     .into_iter()
     .for_each(check);
 
-    let build = yaml.find("run: bun run build").expect("build step");
+    let build = yaml.find("bun run build").expect("build step");
     let deploy = yaml.find("command: up").expect("pulumi up");
     assert!(
         build < deploy,
