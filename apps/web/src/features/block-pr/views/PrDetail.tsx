@@ -11,6 +11,7 @@ import { DebouncedNotificationReadMarker } from '@notifications';
 import type { GithubPullRequestWithDetails } from '@queries/storage/github-pull-requests';
 import { Button, cn, Layer, Scroll } from '@ui';
 import { type Accessor, createMemo, Show, Suspense } from 'solid-js';
+import { MergePullRequestButton } from '../component/MergePullRequestButton';
 import {
   PrDescriptionSkeleton,
   PrMetadataSkeleton,
@@ -26,6 +27,7 @@ import { PrTimeline } from '../component/PrTimeline';
 import { PrSidePanelSections } from '../component/sidepanel/PrSidePanelSections';
 import { createPrDiscussionSource } from '../data/prDiscussionSource';
 import {
+  invalidatePrForeignEntity,
   type PrForeignEntityData,
   usePrForeignEntityQuery,
 } from '../data/queries';
@@ -145,10 +147,24 @@ export function PrDetailContent(props: PrDetailBodyProps) {
   );
 }
 
-export function PrDetailActions(props: { url?: string }) {
+/** Header actions for a PR host: merge while open, open on GitHub, side panel. */
+export function PrDetailActions(props: { detail?: PrForeignEntityData }) {
+  const githubUrl = () => {
+    const data = props.detail;
+    return data ? (data.pullRequest.url ?? prHtmlUrl(data.prRef)) : undefined;
+  };
   return (
     <div class="ml-auto flex shrink-0 items-center gap-2">
-      <Show when={props.url}>
+      <Show when={props.detail}>
+        {(detail) => (
+          <MergePullRequestButton
+            target={{ ...detail().prRef, title: detail().pullRequest.name }}
+            status={detail().pullRequest.status}
+            onMerged={() => invalidatePrForeignEntity(detail().id)}
+          />
+        )}
+      </Show>
+      <Show when={githubUrl()}>
         {(url) => (
           <Button
             variant="outline"
@@ -173,10 +189,6 @@ export function StandalonePrDetail(props: { foreignEntityId: string }) {
       (data ? prDisplayName(data.prRef) : 'Pull request')
     );
   };
-  const githubUrl = () => {
-    const data = detail.data();
-    return data ? (data.pullRequest.url ?? prHtmlUrl(data.prRef)) : undefined;
-  };
   return (
     <SidePanel.Root persistKey={`pr:${props.foreignEntityId}`}>
       <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden @container">
@@ -186,7 +198,7 @@ export function StandalonePrDetail(props: { foreignEntityId: string }) {
             {(status) => <PrStatusIcon status={status()} />}
           </Show>
           <span class="min-w-0 truncate text-sm font-semibold">{name()}</span>
-          <PrDetailActions url={githubUrl()} />
+          <PrDetailActions detail={detail.data()} />
         </ViewShell.TopBar>
         <PrDetailContent
           foreignEntityId={props.foreignEntityId}
