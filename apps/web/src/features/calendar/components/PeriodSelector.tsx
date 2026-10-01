@@ -48,12 +48,7 @@ function createCalendarPeriodControls(onSelect?: () => void) {
     () => calendarPager.activeDateInfo()?.view.calendar.getDate() ?? initialDate
   );
 
-  const activeView = createMemo<CalendarPeriodView>(
-    () =>
-      (calendarPager.activeDateInfo()?.view.type as
-        | CalendarPeriodView
-        | undefined) ?? calendarView.displaySettings.periodView
-  );
+  const activeView = calendarPager.periodView;
 
   const highlightedRange = createMemo(() => {
     const dateInfo = calendarPager.activeDateInfo();
@@ -75,7 +70,7 @@ function createCalendarPeriodControls(onSelect?: () => void) {
   const changeView = (view: CalendarPeriodView) => {
     setPickerState('open', false);
     onSelect?.();
-    if (calendarPager.activeDateInfo()?.view.type === view) return;
+    if (calendarPager.periodView() === view) return;
 
     calendarPager.changeView(view);
   };
@@ -145,14 +140,14 @@ export function PeriodSelector(props: { isNarrow?: boolean }) {
       placement="bottom-end"
     >
       <Dropdown.Trigger
-        depth={2}
         aria-label="Choose calendar view"
-        size="sm"
-        class="shrink-0 gap-1 rounded-lg border-edge-muted text-xs font-medium text-ink"
+        variant="ghost"
+        size="lg"
+        class="shrink-0 border-transparent bg-transparent text-sm"
       >
         {CALENDAR_VIEWS.find((view) => view.value === controls.activeView())
           ?.label ?? 'Week'}
-        <CaretDownIcon class="size-3 text-ink-muted" />
+        <CaretDownIcon class="size-4 text-ink-muted" />
       </Dropdown.Trigger>
       <Dropdown.Content class="min-w-36">
         <Dropdown.Group>

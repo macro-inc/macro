@@ -1,4 +1,5 @@
 import { type Vector2, vec2 } from '@block-canvas/util/vector2';
+import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { DecoratorRenderer } from '@core/component/LexicalMarkdown/component/core/DecoratorRenderer';
 import { NodeAccessoryRenderer } from '@core/component/LexicalMarkdown/component/core/NodeAccessoryRenderer';
@@ -71,6 +72,7 @@ function TextBoxEditor(props: {
   const toolManager = useToolManager();
 
   const config = buildConfig('markdown')
+    .withAppLinkResolver(useMacroMentionLinkResolver())
     .namespace('canvas-text-box')
     .withHistory({ timeGap: 400 })
     .withEmojis()

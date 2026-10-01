@@ -13,6 +13,7 @@ import { MARKDOWN_LORO_SCHEMA } from '@macro-inc/lexical-core/markdown-loro-sche
 import { Telemetry } from '@macro-inc/observability';
 import type { LanguageModel } from 'ai';
 import { fastEditor, supervisor } from './ai-editing/agents';
+import { PeerPool } from './ai-editing/awareness';
 import type { DocumentOp } from './ai-editing/editor';
 import type { CodeRunner } from './ai-editing/runtime';
 import type { UsageEntry } from './ai-editing/token-tracker';
@@ -60,6 +61,12 @@ export type ResolvedModels = {
   fast?: LanguageModel;
 };
 
+/** Who readers see editing: the agent or persona the edit runs as. */
+export type Editor = {
+  /** Display name, e.g. `Macro`; every cursor this edit draws carries it. */
+  name: string;
+};
+
 export type RunEditArgs = {
   /** Live sync source, already constructed by the caller (ws in prod). */
   source: SyncServiceSource;
@@ -67,6 +74,8 @@ export type RunEditArgs = {
   prompt: string;
   models: ResolvedModels;
   mode?: EditMode;
+  /** Names the cursors; absent, writers draw pooled names instead. */
+  editor?: Editor;
   /** Snippet runner — QuickJS sandbox in prod, `new Function` in local dev. */
   runner?: CodeRunner;
   typingAnimations?: boolean;
@@ -149,7 +158,9 @@ export async function runEditSession(
   const { workspace, initialDocument } = await Telemetry.span(
     'edit.hydrate',
     async (span) => {
-      const workspace = new EditingWorkspace(manager, liveSource, wal);
+      const workspace = new EditingWorkspace(manager, liveSource, wal, {
+        pool: args.editor ? PeerPool.forEditor(args.editor.name) : undefined,
+      });
       const initialDocument = serializeWithXml(workspace.session);
       span.setAttr('document.chars', initialDocument.length);
       return { workspace, initialDocument };

@@ -1,3 +1,5 @@
+import { developmentProxyUrl } from './developmentProxy';
+
 const serverHostLocal: Servers = {
   'auth-service': 'http://localhost:8080',
   'auth-logout': 'http://localhost:3000', // TODO: make work with local fusionauth later
@@ -18,6 +20,7 @@ const serverHostLocal: Servers = {
   'image-proxy-service': 'http://localhost:8097',
   'scheduled-action': 'http://localhost:8099',
   'agent-harness': 'http://localhost:8101',
+  preview: 'http://localhost:8110',
 } as const;
 
 const devServerSuffix = import.meta.env.MODE === 'development' ? '-dev' : '';
@@ -32,7 +35,7 @@ const authLogoutUrl =
     ? 'https://fusionauth-dev.macro.com/oauth2/logout?client_id=eb75fe7a-0ef1-4186-96d9-cc62cfb1d10c&tenantId=5e13f524-8d32-0454-81f8-061936256aa4'
     : 'https://auth.macro.com/oauth2/logout?client_id=75409999-7dc4-4241-b73b-a51818c3a71c&tenantId=a3e53c3d-8d6a-3e92-d64c-fa3bf30a60be';
 
-const serverHostRemote = {
+const directServerHostRemote = {
   'auth-service': `${gatewayHost}/auth`,
   'auth-logout': authLogoutUrl,
   'pdf-service': `https://pdf-service${devServerSuffix}.macro.com`,
@@ -49,9 +52,17 @@ const serverHostRemote = {
   'image-proxy-service': `${gatewayHost}/image-proxy`,
   'scheduled-action': `${gatewayHost}/scheduled-action`,
   'agent-harness': `${gatewayHost}/agent-harness`,
+  preview: `${gatewayHost}/preview`,
 } as const;
 
-type Servers = Record<keyof typeof serverHostRemote, string>;
+type Servers = Record<keyof typeof directServerHostRemote, string>;
+
+const serverHostRemote = Object.fromEntries(
+  Object.entries(directServerHostRemote).map(([name, url]) => [
+    name,
+    developmentProxyUrl(url),
+  ])
+) as Servers;
 
 // Single-origin local backend: when the xtask orchestrator's reverse proxy is
 // in use it sets VITE_LOCAL_BACKEND_ORIGIN to the proxy origin, and the whole
@@ -107,6 +118,7 @@ function proxyServers(): Servers | undefined {
     'static-file': `${proxyOrigin}/static-file`,
     'unfurl-service': `${proxyOrigin}/unfurl`,
     'agent-harness': `${proxyOrigin}/agent-harness`,
+    preview: `${proxyOrigin}/preview`,
     contacts: `${proxyOrigin}/contacts`,
     'email-service': `${proxyOrigin}/email`,
     // calendar_service is in the local inventory, so the proxy has a /calendar
@@ -166,8 +178,12 @@ const syncServiceHostLocal = {
 } as const;
 
 const syncServiceHostRemote = {
-  worker: `https://sync-service${syncServiceSuffix}.macroverse.workers.dev`,
-  ws: `wss://sync-service${syncServiceSuffix}.macroverse.workers.dev`,
+  worker: developmentProxyUrl(
+    `https://sync-service${syncServiceSuffix}.macroverse.workers.dev`
+  ),
+  ws: developmentProxyUrl(
+    `wss://sync-service${syncServiceSuffix}.macroverse.workers.dev`
+  ),
 } as const;
 
 function selectSyncServiceHost():

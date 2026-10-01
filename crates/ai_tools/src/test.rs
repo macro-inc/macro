@@ -28,7 +28,51 @@ fn every_host_toolset_passes_schema_validation() {
         AiHost::ChannelBot,
         AiHost::Mcp,
     ] {
-        let _ = tools_for(host);
+        let tools = tools_for(host);
+        assert!(
+            tools.toolset.tools.contains_key("GenerateImage"),
+            "{host:?} must expose image generation"
+        );
+    }
+}
+
+#[test]
+fn project_workflows_are_available_in_every_host_alongside_folder_and_property_tools() {
+    let names = [
+        "ListInitiatives",
+        "ReadInitiative",
+        "CreateInitiative",
+        "UpdateInitiative",
+        "DeleteInitiative",
+        "UpdateInitiativeSharing",
+        "SetTaskInitiative",
+        "ReadTaskInitiatives",
+        "ReadInitiativeActivity",
+        "SetEntityProperty",
+        "CommentOnDocument",
+        "ResolveDocumentComment",
+        "CreateProject",
+        "ReadProject",
+    ];
+    for host in [
+        AiHost::Chat,
+        AiHost::AgentSession,
+        AiHost::ChannelBot,
+        AiHost::Mcp,
+    ] {
+        let json = frontend_schemas_builder()
+            .merge(&tools_for(host))
+            .build()
+            .to_json_pretty()
+            .expect("schemas serialize");
+        let schema: serde_json::Value = serde_json::from_str(&json).unwrap();
+        let tools = schema["tools"].as_array().unwrap();
+        for name in names {
+            assert!(
+                tools.iter().any(|tool| tool["name"] == name),
+                "{host:?} must expose {name}"
+            );
+        }
     }
 }
 
@@ -127,4 +171,46 @@ fn frontend_schemas_distinguish_user_tool_response_types() {
         output_for("SendEmail"),
         "UserToolResponseForSendEmailResponse"
     );
+}
+
+/// The configure-agent system skill walks an agent through `ListAgents` and
+/// `ConfigureAgent`; a host that reads the skill must be able to follow it.
+#[test]
+fn every_host_exposes_agent_configuration() {
+    for host in [
+        AiHost::Chat,
+        AiHost::AgentSession,
+        AiHost::ChannelBot,
+        AiHost::Mcp,
+    ] {
+        let tools = tools_for(host);
+        for name in ["ListAgents", "ConfigureAgent", "ConfigureBot"] {
+            assert!(
+                tools.toolset.tools.contains_key(name),
+                "{host:?} missing {name}"
+            );
+        }
+    }
+}
+
+#[test]
+fn every_host_exposes_skill_discovery_and_reading() {
+    for host in [
+        AiHost::Chat,
+        AiHost::AgentSession,
+        AiHost::ChannelBot,
+        AiHost::Mcp,
+    ] {
+        let tools = tools_for(host);
+        for name in ["ListSkills", "SearchSkills", "ReadSkill"] {
+            assert!(
+                tools.toolset.tools.contains_key(name),
+                "{host:?} missing {name}"
+            );
+        }
+        assert!(
+            tools.prompt.to_string().contains("ReadSkill"),
+            "{host:?} missing skill reading instructions"
+        );
+    }
 }

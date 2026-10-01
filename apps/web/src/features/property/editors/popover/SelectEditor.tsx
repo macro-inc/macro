@@ -1,4 +1,5 @@
 import { usePropertyEditor } from '@property/hooks/usePropertyEditor';
+import { selectablePropertyOptions } from '@property/utils/select-options';
 import {
   useAddPropertyOptionMutation,
   usePropertyOptionsQuery,
@@ -35,7 +36,11 @@ function SelectEditorBody() {
   );
   const addOptionMutation = useAddPropertyOptionMutation({});
 
-  const options = () => usablePropertyOptions(optionsQuery);
+  const options = () =>
+    selectablePropertyOptions(
+      property,
+      usablePropertyOptions(optionsQuery, property.options)
+    );
 
   const isLoading = () => optionsQuery.isLoading || addOptionMutation.isPending;
 

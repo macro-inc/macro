@@ -31,6 +31,7 @@ export const agentHarnessExcluded = [
   'start',
   'status',
   'loadAgentModelsHandler',
+  'discoverAgentCapabilitiesHandler',
   'previewAgentSessions',
 ] as const satisfies readonly (keyof AgentHarnessSdk)[];
 
@@ -221,6 +222,7 @@ export const emailBacklog = [
   'deleteEmailFilter',
   'deleteScheduledDraft',
   'getScheduledMessages',
+  'getThreadCalendarInvitations',
   'listContacts',
   'listEmailFilters',
   'removeDraftAttachment',
@@ -263,6 +265,7 @@ export const scheduledActionBacklog = [
   'executeScheduledActionNow',
   'listScheduledActionHistory',
   'listScheduledActions',
+  'setScheduledActionEnabled',
   'updateScheduledAction',
 ] as const satisfies readonly (keyof ScheduledActionSdk)[];
 
@@ -303,6 +306,7 @@ export const storageExcluded = [
   'getBatchPreviewHandler',
   'getActiveCalls',
   'getBatchProjectPreview',
+  'getBotOwnerProfiles',
   'getCollabSurface',
   'getDocumentListHandler',
   'getDocumentLocationV3',
@@ -326,6 +330,15 @@ export const storageExcluded = [
   'jobProcessingResultHandler',
   'joinChannelByCode',
   'leaveOrEndCall',
+  // Live meeting admission and participant previews are app session flows.
+  'meetingGuestJoin',
+  // Browser setup reserves an empty RTC room before creating a meeting.
+  'meetingPrepare',
+  'meetingCancelPreparation',
+  'meetingGuestParticipants',
+  'meetingJoin',
+  'meetingLeave',
+  'meetingParticipants',
   'mentionPreviews',
   'patchViewHandler',
   'postChannelMessages',
@@ -343,6 +356,9 @@ export const storageExcluded = [
 ] as const satisfies readonly (keyof StorageSdk)[];
 
 export const storageBacklog = [
+  // Email follow-ups are available through the generated client, like reminders.
+  'getEmailFollowup',
+  'setEmailFollowup',
   'approveHarnessPairing',
   'assignInitiativeTasks',
   'claimHarnessPairing',
@@ -397,6 +413,17 @@ export const storageBacklog = [
   'listTeamOutOfOffice',
   'listUserApiKeys',
   'messageTimeline',
+  // Meeting management uses the generated client.
+  'meetingCancel',
+  'meetingCreate',
+  'meetingInvite',
+  'meetingInvitePermissions',
+  'meetingInviteUsers',
+  'meetingList',
+  'meetingListActive',
+  'meetingLookup',
+  'meetingShare',
+  'meetingUpdate',
   'postActivity',
   'presaveDocumentHandler',
   'saveDocumentHandler',

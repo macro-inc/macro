@@ -17,3 +17,6 @@ gh-workflow = "0.8"
 indoc = { workspace = true }
 serde_yaml = { workspace = true }
 xtask_paths = { path = "../xtask_paths" }
+
+[dev-dependencies]
+tempfile = { workspace = true }

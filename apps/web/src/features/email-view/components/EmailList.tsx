@@ -1,5 +1,6 @@
 import '@entity/composed/ListEntity.css';
 import { type ListActivation, useListInteractions } from '@app/components/list';
+import { CommandState } from '@app/features/command/state';
 import {
   resolveEntityActionViewContext,
   toEntityActionListState,
@@ -29,6 +30,7 @@ import CheckIcon from '@phosphor/check.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, cn } from '@ui';
+import { tourTarget } from '@ui/components/Tour';
 import {
   createEffect,
   createMemo,
@@ -54,10 +56,13 @@ import {
   DEFAULT_EMAIL_LIST_STATE,
   type EmailListStateSnapshot,
 } from '../persistence';
+import { createEmailRowActionState } from '../primitives/row-action-state';
 import type { EmailDataSourceItem } from '../queries/use-email-query';
+import { EMAIL_TOUR } from '../tour';
 import { useEmailListHotkeys } from '../use-email-list-hotkeys';
 import { EmailDateGroupHeader } from './EmailDateGroupHeader';
 import { EmailEmptyState } from './EmailEmptyState';
+import { EmailRowActions, EmailStarAction } from './EmailRowActions';
 
 type EmailActionRow = {
   entity: WithNotification<EntityData>;
@@ -129,7 +134,7 @@ export function EmailList(props: EmailListProps) {
 
   registerListActivationHandler(onActivate);
 
-  const { buildActionGroups } = createSoupEntityActions();
+  const { buildActionGroups, isFavorited } = createSoupEntityActions();
   const entityActionViewContext = () =>
     resolveEntityActionViewContext({
       activeListView: panel.handle.content().id,
@@ -286,6 +291,53 @@ export function EmailList(props: EmailListProps) {
     list.selection.setAnchor(row.rowId);
   }
 
+  const rowActionState = createEmailRowActionState();
+
+  async function runRowAction(
+    row: EmailActionRow,
+    actionId: 'favorite' | 'mark-done' | 'mark-not-done'
+  ) {
+    const action = actionGroupsFor(row)
+      .flatMap((group) => group.items)
+      .find((item) => item.id === actionId);
+    if (!action || action.disabled) return;
+
+    await rowActionState.run(row.rowId, async () => {
+      focusActionRow(row);
+      try {
+        await action.onClick();
+      } catch {
+        // Entity actions own their rollback and failure notification.
+      } finally {
+        grid()?.focus();
+      }
+    });
+  }
+
+  function RowActions(props: { row: EmailActionRow }) {
+    const archived = () =>
+      props.row.entity.type === 'email' && props.row.entity.done;
+
+    return (
+      <EmailRowActions
+        archived={archived()}
+        canArchive={entityActionViewContext().supportsMarkDone}
+        pending={rowActionState.isPending(props.row.rowId)}
+        onFocus={() => focusActionRow(props.row)}
+        onArchive={() =>
+          void runRowAction(
+            props.row,
+            archived() ? 'mark-not-done' : 'mark-done'
+          )
+        }
+        onCommands={() => {
+          focusActionRow(props.row);
+          CommandState.openForEntityAction([props.row.entity]);
+        }}
+      />
+    );
+  }
+
   let restoredScroll = false;
   function registerVirtualizer(handle?: VirtualizerHandle) {
     setVirtualizer(handle);
@@ -363,11 +415,13 @@ export function EmailList(props: EmailListProps) {
     }
   }
 
+  const listTarget = tourTarget(EMAIL_TOUR.list);
   return (
     <MaybeSoupEntityActionDrawerManager>
       <div
         ref={(element: HTMLDivElement) => {
           setGrid(element);
+          listTarget(element);
           props.ref?.(element);
         }}
         role="grid"
@@ -426,7 +480,6 @@ export function EmailList(props: EmailListProps) {
                   <Button
                     variant="outline"
                     size="sm"
-                    class="rounded-lg"
                     onClick={() => void source.refresh()}
                   >
                     Try again
@@ -512,6 +565,43 @@ export function EmailList(props: EmailListProps) {
                                   <div role="gridcell">
                                     <ListEntity
                                       entity={entityRow().entity}
+                                      leadingAction={
+                                        <Show when={!isTouchDevice()}>
+                                          <EmailStarAction
+                                            starred={isFavorited(
+                                              entityRow().entity
+                                            )}
+                                            pending={rowActionState.isPending(
+                                              entityRow().id
+                                            )}
+                                            onFocus={() =>
+                                              focusActionRow({
+                                                entity: entityRow().entity,
+                                                rowId: entityRow().id,
+                                              })
+                                            }
+                                            onStar={() =>
+                                              void runRowAction(
+                                                {
+                                                  entity: entityRow().entity,
+                                                  rowId: entityRow().id,
+                                                },
+                                                'favorite'
+                                              )
+                                            }
+                                          />
+                                        </Show>
+                                      }
+                                      actions={
+                                        <Show when={!isTouchDevice()}>
+                                          <RowActions
+                                            row={{
+                                              entity: entityRow().entity,
+                                              rowId: entityRow().id,
+                                            }}
+                                          />
+                                        </Show>
+                                      }
                                       checked={list.selection.isSelected(
                                         entityRow().id
                                       )}

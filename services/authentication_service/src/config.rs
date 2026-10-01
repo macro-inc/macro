@@ -87,6 +87,14 @@ maybe_env_vars! {
 // #[macro_config::from_ref_all]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Config {
+    /// Default-off quota admission and prospective usage counting.
+    #[macro_config_default(ai_billing::AiUsageEnforcement::Disabled)]
+    pub enable_ai_usage_enforcement: ai_billing::AiUsageEnforcement,
+    /// Default-off settlement of usage past allowances: prepaid credit
+    /// consumption and Stripe overage collection. This service owns Stripe, so
+    /// its policy decides every settlement, however it was requested.
+    #[macro_config_default(ai_billing::AiUsageBilling::Disabled)]
+    pub enable_ai_usage_billing: ai_billing::AiUsageBilling,
     #[allow(dead_code)]
     pub base_url: BaseUrl,
     /// The connection URL for the Postgres database this application should use.
@@ -195,8 +203,15 @@ pub(crate) struct MicrosoftCredentials {
 
 impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
-        macro_config::ConfigLoader::load::<Config>()
-            .context("failed to load authentication service config")
+        let enforcement = ai_usage::config::load_ai_usage_enforcement()
+            .map_err(|error| anyhow::anyhow!("{error}"))?;
+        let billing = ai_billing::config::load_ai_usage_billing()
+            .map_err(|error| anyhow::anyhow!("{error}"))?;
+        let mut config = macro_config::ConfigLoader::load::<Config>()
+            .context("failed to load authentication service config")?;
+        config.enable_ai_usage_enforcement = enforcement;
+        config.enable_ai_usage_billing = billing;
+        Ok(config)
     }
 
     /// The KMS key that encrypts Cursor API keys.

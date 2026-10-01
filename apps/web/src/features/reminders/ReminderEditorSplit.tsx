@@ -1,8 +1,14 @@
-import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
+import { openCalendarEventSplit } from '@app/features/calendar-view/open-calendar-event';
+import {
+  useSplitDisplayName,
+  useSplitPanelOrThrow,
+} from '@components/app/split-layout/layoutUtils';
 import { ItemPreview } from '@core/component/ItemPreview';
 import { toast } from '@core/component/Toast/Toast';
 import type { ReminderEntity } from '@entity';
 import BellIcon from '@phosphor/bell-simple.svg';
+import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import {
   reminderSoupPatch,
@@ -14,12 +20,23 @@ import {
   optimisticUpdateSoupEntity,
 } from '@queries/soup/cache';
 import type { Reminder } from '@service-storage/generated/schemas/reminder';
-import { createMemo, Match, onMount, Show, Switch } from 'solid-js';
+import { Button } from '@ui';
+import {
+  createMemo,
+  createSignal,
+  type JSX,
+  Match,
+  onCleanup,
+  Show,
+  Switch,
+} from 'solid-js';
 import { ReminderForm, type ReminderFormValues } from './ReminderForm';
 import {
+  describeReminderConfirmation,
   reminderEditPatch,
   resolveEditedDescription,
 } from './reminder-schedule';
+import { EmailReminderDetails } from './views/email-reminder-details';
 
 /** The display type an inline mention takes for the referenced entity. */
 type MentionType = NonNullable<ReminderEntity['referencedEntity']>['type'];
@@ -56,19 +73,60 @@ function referenceMention(
 }
 
 /**
- * The reminder editor, hosted in a split so it previews into the Viewer like any
- * other entity rather than a modal over the list.
+ * Props shared by split and inline-preview reminder detail adapters.
  *
- * It fetches the reminder by id (the id is encoded in the split content, so it
+ * The host owns close/navigation behavior so the editor content does not need
+ * to know whether it is mounted as a restorable split or Home's detail pane.
+ */
+export type ReminderDetailsProps = {
+  reminderId: string | undefined;
+  onClose: VoidFunction;
+};
+
+function ReminderUnavailable() {
+  return (
+    <div class="flex flex-col items-center justify-center gap-2 py-16 text-ink-muted">
+      <BellIcon class="size-6 text-ink-extra-muted" />
+      <span class="text-center text-sm">
+        This reminder is unavailable or you no longer have access.
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Reminder detail content shared by the restorable component split and Home's
+ * inline preview.
+ *
+ * It fetches the reminder by id (the id comes from the typed route, so it
  * survives a reload), seeds the shared {@link ReminderForm}, and shows the
  * entity the reminder is about as a preview card. Saving writes through the same
- * mutation the create modal uses and closes the split.
+ * mutation the create modal uses and asks its host to close.
  */
-export function ReminderEditorSplit(props: { reminderId: string }) {
-  const panel = useSplitPanelOrThrow();
-  onMount(() => panel.handle.setDisplayName('Reminder'));
+export function ReminderDetails(props: ReminderDetailsProps) {
+  return (
+    <Show when={props.reminderId} keyed fallback={<ReminderUnavailable />}>
+      {(reminderId) => (
+        <ReminderDetailsForId reminderId={reminderId} onClose={props.onClose} />
+      )}
+    </Show>
+  );
+}
 
+/** One keyed editor lifecycle, recreated whenever the selected reminder changes. */
+function ReminderDetailsForId(props: {
+  reminderId: string;
+  onClose: VoidFunction;
+}) {
+  let active = true;
+  onCleanup(() => {
+    active = false;
+  });
+
+  const calendarUiEnabled = useCalendarUiFlag();
   const query = useReminderQuery(() => props.reminderId);
+  const [updateError, setUpdateError] = createSignal<string>();
+  let focusBeforeSave: HTMLElement | undefined;
 
   // Soup rows come from the normalized soup cache, not the reminders queries, so
   // the mutation's own invalidation leaves the row reading its old description
@@ -85,11 +143,25 @@ export function ReminderEditorSplit(props: { reminderId: string }) {
   });
 
   const reference = createMemo(() => {
-    const reminder = query.data;
-    return reminder ? referenceMention(reminder) : undefined;
+    if (!query.isSuccess) return undefined;
+    return referenceMention(query.data);
   });
+  const calendarEventId = createMemo(() => {
+    if (!query.isSuccess || query.data.entityType !== 'calendar_event') {
+      return undefined;
+    }
+    return query.data.entityId;
+  });
+  const reminderUnavailable = () =>
+    query.isError || (query.isSuccess && query.data === undefined);
 
   const save = async (values: ReminderFormValues, reminder: Reminder) => {
+    if (updateReminder.isPending) return;
+    focusBeforeSave =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : undefined;
+    setUpdateError(undefined);
     const patch = reminderEditPatch(
       {
         description: reminder.description,
@@ -112,15 +184,34 @@ export function ReminderEditorSplit(props: { reminderId: string }) {
     );
     // Neither answer moved — nothing to send, and an empty patch is rejected.
     if (!patch) {
-      panel.handle.close();
+      props.onClose();
       return;
     }
+    const submittedReminderId = reminder.id;
     try {
-      await updateReminder.mutateAsync({ id: reminder.id, patch });
-      toast.success('Reminder updated');
-      panel.handle.close();
+      const updated = await updateReminder.mutateAsync({
+        id: reminder.id,
+        patch,
+      });
+      if (!active || props.reminderId !== submittedReminderId) return;
+      toast.success(
+        `Reminder updated · ${describeReminderConfirmation(updated.schedule)}`
+      );
+      props.onClose();
     } catch {
-      toast.failure('Failed to update reminder');
+      if (!active || props.reminderId !== submittedReminderId) return;
+      setUpdateError(
+        'We couldn’t save these changes. Your edits are still here—try again.'
+      );
+      queueMicrotask(() => {
+        if (
+          active &&
+          props.reminderId === submittedReminderId &&
+          focusBeforeSave?.isConnected
+        ) {
+          focusBeforeSave.focus();
+        }
+      });
     }
   };
 
@@ -128,47 +219,122 @@ export function ReminderEditorSplit(props: { reminderId: string }) {
     <div class="h-full min-h-0 overflow-y-auto bg-panel font-sans">
       <div class="mx-auto w-full max-w-xl p-6">
         <Switch>
-          <Match when={query.data}>
+          <Match when={query.isSuccess ? query.data : undefined}>
             {(reminder) => (
-              <ReminderForm
-                initialDescription={reminder().description}
-                initialSchedule={reminder().schedule}
-                initialRemindAt={reminder().nextRunAt}
-                placeholder="Reminder description"
-                submitLabel="Save"
-                pending={updateReminder.isPending}
-                reference={
-                  <Show when={reference()}>
-                    {(ref) => (
-                      <div class="flex">
-                        <ItemPreview id={ref().id} type={ref().type} />
-                      </div>
-                    )}
-                  </Show>
-                }
-                revertOnCancel
-                onCancel={(wasDirty) => {
-                  // Reverting an edit keeps the panel open; a clean cancel
-                  // dismisses the preview.
-                  if (!wasDirty) panel.handle.close();
-                }}
-                onSubmit={(values) => void save(values, reminder())}
-              />
+              <EmailDetailsGate reminder={reminder()} onClose={props.onClose}>
+                <ReminderForm
+                  initialDescription={reminder().description}
+                  initialSchedule={reminder().schedule}
+                  initialRemindAt={reminder().nextRunAt}
+                  placeholder="Reminder description"
+                  submitLabel="Save"
+                  pending={updateReminder.isPending}
+                  error={updateError()}
+                  reference={
+                    <>
+                      <Show when={reference()}>
+                        {(ref) => (
+                          <div class="flex flex-col gap-1">
+                            <span class="text-xs font-medium text-ink-muted">
+                              Original item
+                            </span>
+                            <div class="flex">
+                              <ItemPreview id={ref().id} type={ref().type} />
+                            </div>
+                          </div>
+                        )}
+                      </Show>
+                      <Show
+                        when={
+                          calendarUiEnabled() ? calendarEventId() : undefined
+                        }
+                      >
+                        {(eventId) => (
+                          <div class="flex flex-col gap-1">
+                            <span class="text-xs font-medium text-ink-muted">
+                              Original item
+                            </span>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              class="self-start"
+                              onClick={() =>
+                                void openCalendarEventSplit({
+                                  eventId: eventId(),
+                                })
+                              }
+                            >
+                              <CalendarBlankIcon class="size-4" />
+                              Open calendar event
+                            </Button>
+                          </div>
+                        )}
+                      </Show>
+                    </>
+                  }
+                  revertOnCancel
+                  onCancel={(wasDirty) => {
+                    setUpdateError(undefined);
+                    // Reverting an edit keeps the panel open; a clean cancel
+                    // dismisses the preview.
+                    if (!wasDirty) props.onClose();
+                  }}
+                  onSubmit={(values) => void save(values, reminder())}
+                />
+              </EmailDetailsGate>
             )}
           </Match>
-          <Match when={query.isLoading}>
+          <Match when={query.isPending}>
             <div class="flex items-center justify-center py-16 text-ink-muted">
               <SpinnerIcon class="size-5 animate-spin" />
             </div>
           </Match>
-          <Match when={query.isError || !query.data}>
-            <div class="flex flex-col items-center justify-center gap-2 py-16 text-ink-muted">
-              <BellIcon class="size-6 text-ink-extra-muted" />
-              <span class="text-sm">This reminder is no longer available.</span>
-            </div>
+          <Match when={reminderUnavailable()}>
+            <ReminderUnavailable />
           </Match>
         </Switch>
       </div>
     </div>
+  );
+}
+
+/** Restorable split adapter for {@link ReminderDetails}. */
+export function ReminderEditorSplit(props: { reminderId: string | undefined }) {
+  const panel = useSplitPanelOrThrow();
+  useSplitDisplayName(() => 'Reminder');
+
+  return (
+    <ReminderDetails
+      reminderId={props.reminderId}
+      onClose={() => panel.handle.close()}
+    />
+  );
+}
+
+function EmailDetailsGate(props: {
+  reminder: Reminder;
+  onClose: () => void;
+  children: JSX.Element;
+}) {
+  return (
+    <Show
+      when={
+        props.reminder.entityType === 'email_thread'
+          ? props.reminder.entityId
+          : undefined
+      }
+      fallback={props.children}
+    >
+      {(threadId) => (
+        <EmailReminderDetails
+          reminder={props.reminder}
+          threadId={threadId()}
+          onClose={props.onClose}
+        >
+          {props.children}
+        </EmailReminderDetails>
+      )}
+    </Show>
   );
 }

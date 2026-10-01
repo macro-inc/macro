@@ -81,6 +81,22 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         initiative_id: &str,
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
+
+    /// Highest grant the caller's sources hold on one scheduled action.
+    ///
+    /// A non-uuid id is not a routine, so the lookup returns `None`.
+    fn get_scheduled_action_access(
+        &self,
+        scheduled_action_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
+
+    /// Live scheduled action ids the caller's sources can manage.
+    fn accessible_scheduled_action_ids(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> impl Future<Output = Result<Vec<Uuid>, AccessError>> + Send;
+
     /// Document owning an agent session's still-live originating message thread.
     /// This is a persisted relationship, not a caller-supplied grant.
     fn get_agent_session_document(
@@ -219,6 +235,13 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         entity_type: EntityType,
     ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
 
+    /// Get direct user grants only, excluding inherited channel, team, and project access.
+    fn get_direct_entity_users(
+        &self,
+        entity_id: &Uuid,
+        entity_type: EntityType,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
+
     /// Get all active participant user IDs in a channel.
     fn get_channel_users(
         &self,
@@ -252,6 +275,16 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         &self,
         user_id: &MacroUserId<Lowercase<'_>>,
     ) -> impl Future<Output = Result<Option<UserTeamInfo>, AccessError>> + Send;
+}
+
+/// Scheduled actions the user can reach through any of their sources
+/// (user id, active channels, teams). Source resolution stays inside entity_access.
+pub trait ScheduledActionGrants: Send + Sync + 'static {
+    /// Ids of live scheduled actions `user_id` can manage.
+    fn accessible_scheduled_action_ids(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> impl Future<Output = Result<Vec<Uuid>, AccessError>> + Send;
 }
 
 /// Repository that returns labeled grant paths instead of a collapsed level.

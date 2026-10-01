@@ -33,7 +33,7 @@ import { CALENDAR_VIEW_ID, type CalendarViewTarget } from './types';
 function CalendarDisabledRedirect() {
   const panel = useSplitPanelOrThrow();
   onMount(() => {
-    panel.handle.replace({ next: { type: 'component', id: 'inbox' } });
+    panel.handle.replace({ next: { type: 'component', id: 'home' } });
   });
   return null;
 }
@@ -178,7 +178,7 @@ export function CalendarView(props: CalendarViewProps) {
     const request = targetRequest();
     if (
       !request ||
-      occurrencesQuery.isLoading ||
+      !occurrencesQuery.isSuccess ||
       occurrencesQuery.isPlaceholderData
     ) {
       return undefined;

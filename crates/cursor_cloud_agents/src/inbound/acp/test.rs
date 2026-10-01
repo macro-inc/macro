@@ -26,6 +26,19 @@ type Service = CursorSessionService<
     crate::domain::ports::NoArtifactStore,
 >;
 
+#[cfg(feature = "postgres")]
+#[test]
+fn admission_error_has_sanitized_retryable_protocol_details() {
+    use agent_session::domain::error::AiAdmissionError;
+    let error = prompt_error(&SessionError::Admission(AiAdmissionError::Unavailable));
+    let value = serde_json::to_value(error).unwrap();
+    assert_eq!(value["message"], AiAdmissionError::Unavailable.to_string());
+    assert_eq!(
+        value["data"],
+        serde_json::json!({"code": "ai_billing_unavailable", "retryable": true})
+    );
+}
+
 /// The client's end of a served connection.
 struct TestClient {
     to_agent: mpsc::UnboundedSender<TransportFrame>,
@@ -761,17 +774,29 @@ fn offered_models() -> Vec<CursorModel> {
             display_name: "GPT-5.5".to_owned(),
             variants: vec![
                 ModelVariant {
-                    params: vec![ModelParam {
-                        id: "reasoning".to_owned(),
-                        value: "low".to_owned(),
-                    }],
+                    params: vec![
+                        ModelParam {
+                            id: "reasoning".to_owned(),
+                            value: "low".to_owned(),
+                        },
+                        ModelParam {
+                            id: "fast".to_owned(),
+                            value: "true".to_owned(),
+                        },
+                    ],
                     is_default: false,
                 },
                 ModelVariant {
-                    params: vec![ModelParam {
-                        id: "reasoning".to_owned(),
-                        value: "medium".to_owned(),
-                    }],
+                    params: vec![
+                        ModelParam {
+                            id: "reasoning".to_owned(),
+                            value: "medium".to_owned(),
+                        },
+                        ModelParam {
+                            id: "fast".to_owned(),
+                            value: "true".to_owned(),
+                        },
+                    ],
                     is_default: true,
                 },
             ],
@@ -946,7 +971,7 @@ async fn a_listing_with_families_is_advertised_as_headed_groups() {
 /// run carries it — the point being that Cursor honours `model` on a follow-up
 /// run, so a change does not have to wait for a new agent.
 #[tokio::test]
-async fn setting_the_model_changes_what_the_next_run_asks_for() {
+async fn setting_the_model_and_effort_changes_what_the_next_run_asks_for() {
     let cursor = FakeCursor::new();
     cursor.script_models(offered_models());
     let (_service, mut client) =
@@ -980,6 +1005,22 @@ async fn setting_the_model_changes_what_the_next_run_asks_for() {
     // Answered with the whole option set, so a client folds config from one
     // shape whichever response carried it.
     assert_eq!(result["configOptions"][0]["currentValue"], "gpt-5.5");
+    assert_eq!(result["configOptions"][1]["id"], "reasoning_effort");
+    assert_eq!(result["configOptions"][1]["currentValue"], "medium");
+
+    let response = client
+        .call(
+            3,
+            "session/set_config_option",
+            serde_json::json!({
+                "sessionId": session,
+                "configId": "reasoning_effort",
+                "value": "low",
+            }),
+        )
+        .await;
+    let result = expect_result(&response);
+    assert_eq!(result["configOptions"][1]["currentValue"], "low");
 
     // And the run actually asks for it. This is the behaviour the whole feature
     // rests on: Cursor honours `model` on a follow-up run, so the choice does
@@ -998,7 +1039,7 @@ async fn setting_the_model_changes_what_the_next_run_asks_for() {
     events.send(CursorEvent::Done).expect("stream open");
     client
         .call(
-            3,
+            4,
             "session/prompt",
             serde_json::json!({
                 "sessionId": session,
@@ -1019,11 +1060,17 @@ async fn setting_the_model_changes_what_the_next_run_asks_for() {
     assert_eq!(asked.id, "gpt-5.5");
     assert_eq!(
         asked.params,
-        vec![ModelParam {
-            id: "reasoning".to_owned(),
-            value: "medium".to_owned(),
-        }],
-        "the default variant's params travel with the id"
+        vec![
+            ModelParam {
+                id: "reasoning".to_owned(),
+                value: "low".to_owned(),
+            },
+            ModelParam {
+                id: "fast".to_owned(),
+                value: "true".to_owned(),
+            }
+        ],
+        "the selected effort travels as Cursor's accepted model variant"
     );
 }
 
@@ -1174,10 +1221,16 @@ async fn a_restored_session_keeps_its_model() {
     assert_eq!(asked.id, "gpt-5.5");
     assert_eq!(
         asked.params,
-        vec![ModelParam {
-            id: "reasoning".to_owned(),
-            value: "medium".to_owned(),
-        }],
+        vec![
+            ModelParam {
+                id: "reasoning".to_owned(),
+                value: "medium".to_owned(),
+            },
+            ModelParam {
+                id: "fast".to_owned(),
+                value: "true".to_owned(),
+            }
+        ],
         "params come from the live table's default variant, not from persistence"
     );
 }

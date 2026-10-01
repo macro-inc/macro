@@ -8,6 +8,7 @@ use crate::domain::models::{
     MemberParticipantRole, MemberTeamRole, OwnerParticipantRole, ParticipantRole, UserTeamInfo,
     ViewAccessLevel, ViewOnly,
 };
+use crate::domain::ports::ScheduledActionGrants;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_permissions::share_permission::access_level::OwnerAccessLevel;
 use std::sync::{
@@ -29,6 +30,8 @@ struct MockRepo {
     call_access: Arc<Mutex<Option<AccessLevel>>>,
     agent_session_access: Arc<Mutex<Option<AccessLevel>>>,
     initiative_access: Arc<Mutex<Option<AccessLevel>>>,
+    scheduled_action_access: Arc<Mutex<Option<AccessLevel>>>,
+    accessible_scheduled_action_ids: Arc<Mutex<Vec<Uuid>>>,
     agent_session_document: Arc<Mutex<Option<String>>>,
     reminder_access: Arc<Mutex<Option<AccessLevel>>>,
     team_entity_access: Arc<Mutex<Option<AccessLevel>>>,
@@ -51,6 +54,7 @@ struct MockRepo {
     agent_session_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
     channel_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
     call_channel: Arc<Mutex<Option<CallChannelInfo>>>,
+    call_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
     user_team: Arc<Mutex<Option<UserTeamInfo>>>,
 }
 
@@ -67,6 +71,8 @@ impl MockRepo {
             call_access: Arc::new(Mutex::new(None)),
             agent_session_access: Arc::new(Mutex::new(None)),
             initiative_access: Arc::new(Mutex::new(None)),
+            scheduled_action_access: Arc::new(Mutex::new(None)),
+            accessible_scheduled_action_ids: Arc::new(Mutex::new(Vec::new())),
             agent_session_document: Arc::default(),
             reminder_access: Arc::new(Mutex::new(None)),
             team_entity_access: Arc::new(Mutex::new(None)),
@@ -89,6 +95,7 @@ impl MockRepo {
             agent_session_users: Arc::new(Mutex::new(Vec::new())),
             channel_users: Arc::new(Mutex::new(vec![])),
             call_channel: Arc::new(Mutex::new(None)),
+            call_users: Arc::default(),
             user_team: Arc::new(Mutex::new(None)),
         }
     }
@@ -131,6 +138,16 @@ impl MockRepo {
 
     fn with_agent_session_access(mut self, level: AccessLevel) -> Self {
         self.agent_session_access = Arc::new(Mutex::new(Some(level)));
+        self
+    }
+
+    fn with_scheduled_action_access(mut self, level: AccessLevel) -> Self {
+        self.scheduled_action_access = Arc::new(Mutex::new(Some(level)));
+        self
+    }
+
+    fn with_accessible_scheduled_action_ids(mut self, ids: Vec<Uuid>) -> Self {
+        self.accessible_scheduled_action_ids = Arc::new(Mutex::new(ids));
         self
     }
 
@@ -326,6 +343,21 @@ impl AccessRepository for MockRepo {
         Ok(*self.initiative_access.lock().await)
     }
 
+    async fn get_scheduled_action_access(
+        &self,
+        _scheduled_action_id: &str,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        Ok(*self.scheduled_action_access.lock().await)
+    }
+
+    async fn accessible_scheduled_action_ids(
+        &self,
+        _user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<Vec<Uuid>, AccessError> {
+        Ok(self.accessible_scheduled_action_ids.lock().await.clone())
+    }
+
     async fn get_reminder_access(
         &self,
         _reminder_id: &str,
@@ -429,9 +461,19 @@ impl AccessRepository for MockRepo {
             EntityType::Project => Ok(self.project_users.lock().await.clone()),
             EntityType::EmailThread => Ok(self.thread_users.lock().await.clone()),
             EntityType::AgentSession => Ok(self.agent_session_users.lock().await.clone()),
+            EntityType::Call => panic!("standalone calls must use direct grants"),
             EntityType::Initiative => Ok(vec![]),
             _ => Err(AccessError::BadRequest("unsupported entity type")),
         }
+    }
+
+    async fn get_direct_entity_users(
+        &self,
+        _entity_id: &Uuid,
+        entity_type: EntityType,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        assert_eq!(entity_type, EntityType::Call);
+        Ok(self.call_users.lock().await.clone())
     }
 
     async fn get_channel_users(
@@ -765,6 +807,79 @@ async fn test_get_entity_permission_agent_session_no_access_returns_unauthorized
         .await;
 
     assert!(matches!(result, Err(AccessError::Unauthorized)));
+}
+
+#[tokio::test]
+async fn test_get_access_level_scheduled_action_returns_scripted_level() {
+    let repo = MockRepo::new().with_scheduled_action_access(AccessLevel::Edit);
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let result = service
+        .get_access_level(
+            Some(&user_id),
+            "11111111-1111-1111-1111-111111111111",
+            EntityType::ScheduledAction,
+        )
+        .await;
+
+    assert_eq!(result.unwrap(), Some(AccessLevel::Edit));
+}
+
+#[tokio::test]
+async fn test_get_entity_permission_scheduled_action_returns_scripted_level() {
+    let repo = MockRepo::new().with_scheduled_action_access(AccessLevel::Edit);
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let result = service
+        .get_entity_permission(
+            Some(&user_id),
+            "11111111-1111-1111-1111-111111111111",
+            EntityType::ScheduledAction,
+            None,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        result,
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Edit
+        }
+    );
+}
+
+#[tokio::test]
+async fn test_get_entity_permission_scheduled_action_without_grant_is_unauthorized() {
+    let service = EntityAccessServiceImpl::new(MockRepo::new());
+    let user_id = test_user_id();
+
+    let result = service
+        .get_entity_permission(
+            Some(&user_id),
+            "11111111-1111-1111-1111-111111111111",
+            EntityType::ScheduledAction,
+            None,
+        )
+        .await;
+
+    assert!(matches!(result, Err(AccessError::Unauthorized)));
+}
+
+#[tokio::test]
+async fn test_accessible_scheduled_action_ids_passes_through() {
+    let id = Uuid::from_u128(0x0000_0000_0000_0000_0000_0000_0000_5a01);
+    let repo = MockRepo::new().with_accessible_scheduled_action_ids(vec![id]);
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let ids = service
+        .accessible_scheduled_action_ids(&user_id)
+        .await
+        .unwrap();
+
+    assert_eq!(ids, vec![id]);
 }
 
 #[tokio::test]
@@ -2186,4 +2301,47 @@ async fn document_session_access_tracks_current_document_permission() {
             .unwrap(),
         Some(AccessLevel::Owner)
     );
+}
+
+#[tokio::test]
+async fn standalone_call_recipients_use_explicit_entity_grants() {
+    let repo = MockRepo::new();
+    let granted = MacroUserIdStr::parse_from_str("macro|participant@example.com")
+        .unwrap()
+        .into_owned();
+    *repo.call_channel.lock().await = Some(CallChannelInfo {
+        channel_id: None,
+        share_permission_id: "share".into(),
+    });
+    *repo.call_users.lock().await = vec![granted.clone()];
+    *repo.channel_users.lock().await = vec![
+        MacroUserIdStr::parse_from_str("macro|unrelated@example.com")
+            .unwrap()
+            .into_owned(),
+    ];
+    let service = EntityAccessServiceImpl::new(repo);
+    let users = service
+        .get_users_by_entity(&Uuid::now_v7().to_string(), EntityType::Call)
+        .await
+        .unwrap();
+    assert_eq!(users, vec![granted]);
+}
+
+#[tokio::test]
+async fn channel_call_recipients_still_use_channel_membership() {
+    let repo = MockRepo::new();
+    let member = MacroUserIdStr::parse_from_str("macro|member@example.com")
+        .unwrap()
+        .into_owned();
+    *repo.call_channel.lock().await = Some(CallChannelInfo {
+        channel_id: Some(Uuid::now_v7()),
+        share_permission_id: "share".into(),
+    });
+    *repo.channel_users.lock().await = vec![member.clone()];
+    let service = EntityAccessServiceImpl::new(repo);
+    let users = service
+        .get_users_by_entity(&Uuid::now_v7().to_string(), EntityType::Call)
+        .await
+        .unwrap();
+    assert_eq!(users, vec![member]);
 }

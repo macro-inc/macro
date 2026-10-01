@@ -4,7 +4,7 @@ How an automated agent (driving a real browser via the chrome-devtools MCP serve
 observing via the Grafana MCP server) should operate the Macro web app. Everything here was
 verified live against a local stack (`just run_local`).
 
-The public website also has an isolated [sample workspace](../../apps/web/marketing/README.md#interactive-sample-workspace) at `/demo`; it does not operate on authenticated app data. The homepage embeds that workspace at `/#interactive-demo` over a grainy gradient that expands from the feature bubbles on scroll, followed by the full open-source section with GitHub stars, a16z backing, and security badges. A continuous gradient funnels into the GitHub mark on scroll, then drains away; reduced motion shows the finished state. Its `/demo?embedded=true` frame hides the sample banner; the standalone `/demo` route retains it. A benefit carousel fades the preview into headlines for One inbox, Chat, Docs, Tasks, CRM, and Agents. Use its arrows, dots, keyboard arrows, or drag/swipe the caption horizontally to select a highlight. Vertical gestures keep scrolling the page; the caption captures horizontal drags even when released outside it. The demo is always interactive: clicking or typing keeps the fade and carousel in place. Direct sidebar navigation follows the matching highlight. Below 800px, the homepage instead uses the original feature bubbles → open source → curved connector → sidebar diagram sequence, without mounting the demo or carousel. On desktop, the older sidebar graphic remains behind the disabled `SHOW_SIDEBAR_BREAKDOWN` flag in `HomepageSections.tsx`. When enabled, that button opens the demo in a large modal; the close button, red traffic light, or Escape returns to the homepage. In that sample, Home items open inside Home, channel threads expand inline, and email replies use the last message card. Email supports local tag editing in its details panel, tag filters, and Favorites. Its New button and `C` open a centered create palette with search and keyboard selection. Search and `⌘K` / `Ctrl+K` open the same floating search palette without replacing the current view. Type to filter sample items; use category tabs (or Tab), arrow keys and Enter to select, and Escape to close. Embedded demos handle shortcuts only while focus is inside the demo. Rail tooltips appear to the right inside the demo’s style scope. See its linked README for local-only verification steps.
+The public website also has an isolated [sample workspace](../../apps/marketing/README.md#interactive-sample-workspace) at `/demo`; it does not operate on authenticated app data. The homepage embeds that workspace at `/#interactive-demo` over a grainy gradient that expands from the feature bubbles on scroll, followed by the full open-source section with GitHub stars, a16z backing, and security badges. A continuous gradient funnels into the GitHub mark on scroll, then drains away; reduced motion shows the finished state. Its `/demo?embedded=true` frame hides the sample banner; the standalone `/demo` route retains it. A benefit carousel fades the preview into headlines for One inbox, Chat, Docs, Tasks, CRM, and Agents. Use its arrows, dots, keyboard arrows, or drag/swipe the caption horizontally to select a highlight. Vertical gestures keep scrolling the page; the caption captures horizontal drags even when released outside it. The demo is always interactive: clicking or typing keeps the fade and carousel in place. Direct sidebar navigation follows the matching highlight. Below 800px, the homepage instead uses the original feature bubbles → open source → curved connector → sidebar diagram sequence, without mounting the demo or carousel. On desktop, the older sidebar graphic remains behind the disabled `SHOW_SIDEBAR_BREAKDOWN` flag in `HomepageSections.tsx`. When enabled, that button opens the demo in a large modal; the close button, red traffic light, or Escape returns to the homepage. In that sample, Home items open inside Home, channel threads expand inline, and email replies use the last message card. Email supports local tag editing in its details panel, tag filters, and Favorites. Its New button and `C` open a centered create palette with search and keyboard selection. Search and `⌘K` / `Ctrl+K` open the same floating search palette without replacing the current view. Type to filter sample items; use category tabs (or Tab), arrow keys and Enter to select, and Escape to close. Embedded demos handle shortcuts only while focus is inside the demo. Rail tooltips appear to the right inside the demo’s style scope. See its linked README for local-only verification steps.
 
 The sample's document and task tags use a plus-button picker. Select or deselect
 tags there, then reopen the item to verify the session-only changes persist.
@@ -37,13 +37,31 @@ and participant chips use website-owned sample portraits.
 | [../CLAUDE_CLOUD_DEMO.md](../CLAUDE_CLOUD_DEMO.md) | Claude in Harness settings, encrypted saved connection, Open in Claude, and cloud-side transcript polling |
 | [channels.md](channels.md) | Channels: create, invite, message, participants, bots |
 | [tasks.md](tasks.md) | Task list and creation dialog |
+| [view-tours.md](view-tours.md) | Desktop feature flyovers, dismissal, targeting, and embedded videos |
+| [reminders.md](reminders.md) | Creating and editing reminders, scheduling controls, and safe failure verification |
 | [surfaces.md](surfaces.md) | Every other surface: inbox, email, search, files, calendar, calls, customers, activity, settings |
 | [browser-technique.md](browser-technique.md) | Generic chrome-devtools MCP lessons learned on this app |
 | [observability.md](observability.md) | Correlating a UI action to backend traces/logs with the Grafana MCP |
 
 Local stack conventions used in examples: frontend `http://localhost:<fe>/app`, backend proxy
-`http://localhost:<be>`, Mailpit `http://localhost:<mp>` (ports come from the `--instance`;
+`https://localhost:<be>` (checked-in self-signed cert; trust `infra/local/certs/ca.pem`), Mailpit `http://localhost:<mp>` (ports come from the `--instance`;
 e.g. the `lgtm` instance uses 27910 / 27909 / 27908).
+
+For remote browser testing, trust `infra/local/certs/ca.pem` and open the
+printed `https://<hostname>:<proxy-port>/app/` URL. The launcher calls `hostname`
+and includes it in both the generated certificate and Vite's allowed hosts.
+Caddy forwards frontend assets and HMR to Vite while routing API and backend
+WebSockets directly. No Tailscale setup is required; the browser needs network
+access to that hostname and port. Plain HTTP on a remote hostname cannot retain
+secure login cookies.
+
+Standalone `bun run dev` uses the same CA and serves HTTPS directly through
+Vite. Hosted dev API and WebSocket requests use `/__macro_dev/` on the page
+origin, with auth cookies scoped to that hostname. Use email-code sign-in; the
+hosted Google/SSO redirect allowlist does not include arbitrary hostnames.
+Email magic links retain the page's HTTP or HTTPS scheme and port.
+On allowed OAuth origins such as `https://localhost`, standalone Vite uses the
+session-code handoff to establish cookies on the local hostname after SSO.
 
 ### Demo mentions
 

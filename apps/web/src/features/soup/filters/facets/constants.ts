@@ -130,6 +130,7 @@ export const FILTER_TARGETS = {
       notification: 'done',
       domain: [true, false],
     },
+    channelThreadHasReplies: { backend: 'HasReplies', domain: [true, false] },
   },
 
   // cf — chats / agents
@@ -263,6 +264,7 @@ type FilterTargetsMeta = {
     channelThreadParticipantId: string[];
     channelThreadSeen: boolean;
     channelThreadDone: boolean;
+    channelThreadHasReplies: boolean;
   };
 
   // cf — chats / agents

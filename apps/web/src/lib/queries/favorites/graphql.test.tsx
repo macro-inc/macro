@@ -469,7 +469,19 @@ describe('GraphQL favorites queries', () => {
           optimisticResponse: {
             setFavorite: expect.objectContaining({
               __typename: 'SetFavoritePayload',
-              result: { __typename: 'GraphqlMutationSuccess' },
+              result: {
+                __typename: 'GraphqlMutationSuccess',
+                effects: [
+                  {
+                    __typename: 'SoupUpdated',
+                    item: {
+                      __typename: 'GraphqlSoupDocument',
+                      id: 'document-1',
+                      isFavorited: true,
+                    },
+                  },
+                ],
+              },
               favorite: expect.objectContaining({
                 id: 'document:document-1',
                 sortOrder: 2,

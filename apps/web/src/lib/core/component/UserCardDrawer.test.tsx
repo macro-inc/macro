@@ -49,7 +49,7 @@ vi.mock('@queries/channel/get-or-create-dm', () => ({
   }),
 }));
 
-vi.mock('@queries/crm/contacts', () => ({
+vi.mock('@app/features/crm/record-adapter', () => ({
   useCrmContactByEmailQuery: () => ({ isSuccess: false, data: undefined }),
 }));
 

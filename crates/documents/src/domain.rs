@@ -2,6 +2,8 @@
 
 /// Event-to-activity mappings for this domain.
 pub mod activity;
+#[cfg(feature = "ai_tools")]
+pub mod ai_editing;
 pub mod branch_name;
 /// A document's comment threads, read through the shared message service.
 #[cfg(feature = "ai_tools")]
@@ -37,3 +39,6 @@ pub mod ports;
 
 #[cfg(feature = "service")]
 pub mod service;
+
+#[cfg(feature = "ports")]
+pub mod purge;

@@ -8,6 +8,7 @@ query EmailThreadPage($threadId: ID!, $offset: Int!, $limit: Int!) {
 }
 
 fragment EmailThreadPageFields on GraphqlSoupEmailThread {
+	...SoupItemFields
 	__typename
 	id
 	providerId
@@ -84,6 +85,7 @@ fragment EmailThreadMessageFields on GraphqlSoupEmailMessage {
 	bodyText
 	bodyHtmlSanitized
 	bodyMacro
+	calendarInvitations
 	bodyReplyless
 	attachments {
 		__typename
@@ -117,4 +119,10 @@ fragment EmailThreadMessageFields on GraphqlSoupEmailMessage {
 	}
 	createdAt
 	updatedAt
+}
+
+# Explicit identity read follows durable redirects without requiring a cached page.
+fragment EmailThreadIdentityFields on GraphqlSoupEmailThread {
+    id
+    cacheProjection @cacheOnly
 }

@@ -22,6 +22,7 @@ import {
   type LexicalEditor,
 } from 'lexical';
 import type { MenuOperations } from '../../shared/inlineMenu';
+import { registerInlineMenuTrigger } from '../../shared/registerInlineMenuTrigger';
 
 const TYPE_EMOJI_SYMBOL_COMMAND: LexicalCommand<void> = createCommand(
   'EMOJI_SYMBOL_COMMAND'
@@ -41,23 +42,6 @@ type EmojiPluginProps = {
 };
 
 function registerEmojisPlugin(editor: LexicalEditor, props: EmojiPluginProps) {
-  function registerSymbolListener() {
-    const listener = (e: KeyboardEvent) => {
-      if (e.key === ':') {
-        editor.dispatchCommand(TYPE_EMOJI_SYMBOL_COMMAND, undefined);
-      }
-    };
-
-    return editor.registerRootListener((root, prev) => {
-      if (root) {
-        root.addEventListener('keydown', listener);
-      }
-      if (prev) {
-        prev.removeEventListener('keydown', listener);
-      }
-    });
-  }
-
   const { menu } = props;
 
   function typeSymbolCommand() {
@@ -72,7 +56,9 @@ function registerEmojisPlugin(editor: LexicalEditor, props: EmojiPluginProps) {
   }
 
   return mergeRegister(
-    registerSymbolListener(),
+    registerInlineMenuTrigger(editor, ':', () => {
+      editor.dispatchCommand(TYPE_EMOJI_SYMBOL_COMMAND, undefined);
+    }),
     // When you type :
     editor.registerCommand(
       TYPE_EMOJI_SYMBOL_COMMAND,

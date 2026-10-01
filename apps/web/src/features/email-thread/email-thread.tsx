@@ -7,13 +7,19 @@ import { createEffectOnEntityTypeNotification } from '@notifications';
 import { clearSavedDraftThreadCache } from '@queries/email/draft-cache';
 import type { ThreadQueryTransport } from '@queries/email/thread';
 import { type Accessor, createEffect, createMemo, onCleanup } from 'solid-js';
+import { useCalendarPreferences } from '../calendar/utils/preferences';
 import { createEmailComposeContext } from '../email-compose/compose-adapter';
 import { createEmailComposeHost } from '../email-compose/compose-host-adapter';
 import { convertContactInfoToEmailRecipient } from '../email-compose/core/recipient-conversion';
 import { createEmailAttachmentOpener } from '../email-message/attachment-action-adapter';
+import type { CalendarInvitation } from '../email-message/core/calendar-invitation';
 import type { EmailMessage } from '../email-message/core/email-message';
 import { createEmailRenderingContext } from '../email-message/rendering-adapter';
 import { EmailSenderIcon } from '../email-message/sender-icon-adapter';
+import {
+  type CalendarInvitationOpenTarget,
+  EmailCalendarInvitation,
+} from './calendar-invitation';
 import type {
   EmailThreadContext,
   EmailThreadSource,
@@ -30,6 +36,7 @@ export type EmailThreadProps = Omit<
 > & {
   source: EmailThreadSource;
   threadTransport: Accessor<ThreadQueryTransport>;
+  openCalendar?: (target: CalendarInvitationOpenTarget) => void;
 };
 
 /** App-facing composition. Import the surface or primitives for isolated tests. */
@@ -37,6 +44,7 @@ export function EmailThread(props: EmailThreadProps) {
   // The host's load gate already owns the live query. Reuse its source so
   // mounting the body does not start a second disk read/network request.
   const source = props.source;
+  const [calendarPreferences] = useCalendarPreferences();
   const contacts = useContacts();
   const viewerEmail = useEmail();
   const user = useUserContext();
@@ -53,7 +61,7 @@ export function EmailThread(props: EmailThreadProps) {
       contacts().map((contact) => convertContactInfoToEmailRecipient(contact))
     ),
     createCommands: (snapshot) =>
-      createThreadActionAdapter(props.threadId, snapshot),
+      createThreadActionAdapter(source.id, snapshot),
   };
   const viewContext = {
     copySubject: (subject: string) => {
@@ -68,6 +76,18 @@ export function EmailThread(props: EmailThreadProps) {
     compose,
     composeHost: createEmailComposeHost(),
     rendering: {
+      renderInvitation: (
+        message: EmailMessage,
+        invitation: CalendarInvitation
+      ) => (
+        <EmailCalendarInvitation
+          threadId={props.threadId()}
+          messageId={message.db_id}
+          invitation={invitation}
+          hour12={calendarPreferences.timeFormat !== '24-hour'}
+          openCalendar={props.openCalendar}
+        />
+      ),
       openAttachment: createEmailAttachmentOpener(),
       renderAvatar: (message: EmailMessage) => (
         <EmailSenderIcon message={message} />

@@ -194,3 +194,37 @@ async fn grouped_query_explain_local(pool: PgPool) -> anyhow::Result<()> {
     }
     Ok(())
 }
+
+#[test]
+fn initiatives_are_opt_in_and_share_the_existing_sql_pagination() {
+    let mut filter = EntityFilterAst::default();
+    assert!(
+        !build_query(&filter, false, SimpleSortMethod::UpdatedAt)
+            .sql()
+            .contains("FROM initiative")
+    );
+    filter.initiative_filter = Some(Arc::new(Expr::is_not(Expr::val(
+        InitiativeLiteral::Include,
+    ))));
+    assert!(
+        !build_query(&filter, false, SimpleSortMethod::UpdatedAt)
+            .sql()
+            .contains("FROM initiative")
+    );
+    filter.initiative_filter = Some(Arc::new(Expr::val(InitiativeLiteral::Include)));
+    let query = build_query(&filter, false, SimpleSortMethod::UpdatedAt);
+    let (candidates, details) = query.sql().split_once("Combined AS").unwrap();
+    assert!(candidates.contains("FROM initiative i"));
+    assert!(candidates.contains("LIMIT $3"));
+    assert!(candidates.contains("ea.entity_type = 'initiative'"));
+    assert!(candidates.contains("sp.\"linkShare\" = 'TEAM'"));
+    assert!(details.contains("INNER JOIN initiative i ON i.id::text = t.id"));
+}
+
+#[test]
+fn initiative_name_literals_are_escaped_and_not_like_patterns() {
+    let expr = Expr::val(InitiativeLiteral::NameContains("O'Reilly_%".into()));
+    let sql = build_initiative_filter(Some(&expr));
+    assert!(sql.contains("'O''Reilly_%'"));
+    assert!(sql.contains("strpos("));
+}

@@ -9,6 +9,7 @@ import { AgentComposer } from './AgentComposer';
 const mocks = vi.hoisted(() => ({
   session: () => ({ canEdit: false as boolean | undefined }),
   issue: vi.fn(),
+  selectModel: vi.fn(),
   sendNext: vi.fn(),
   editQueued: vi.fn(),
   removeQueued: vi.fn(),
@@ -39,10 +40,12 @@ vi.mock('../context/AgentSessionContext', () => ({
     userId: () => 'viewer',
     interactions: { pending: () => [], canAnswer: () => false },
     issue: mocks.issue,
+    selectModel: mocks.selectModel,
     loadFailed: () => false,
     messages: () => [],
     metadata: () => undefined,
     pending: () => false,
+    initialInput: 'Document context',
     queue: {
       entries: () => [
         { actionId: 'queued-1', kind: 'prompt', prompt: 'Queued request' },
@@ -79,6 +82,12 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+it('passes opening context to the composer without issuing it', () => {
+  render(() => <AgentComposer />);
+  expect(mocks.input?.initialInput).toBe('Document context');
+  expect(mocks.issue).not.toHaveBeenCalled();
+});
+
 describe('view-only session controls', () => {
   it('disables and guards prompt, model, stop, queue, and attachment actions', () => {
     render(() => <AgentComposer />);
@@ -100,6 +109,7 @@ describe('view-only session controls', () => {
     mocks.queued?.onRemove('queued-1');
 
     expect(mocks.issue).not.toHaveBeenCalled();
+    expect(mocks.selectModel).not.toHaveBeenCalled();
     expect(mocks.sendNext).not.toHaveBeenCalled();
     expect(mocks.upload).not.toHaveBeenCalled();
     expect(mocks.consumeNotes).not.toHaveBeenCalled();
@@ -121,6 +131,7 @@ describe('view-only session controls', () => {
     expect(mocks.queued?.disabled).toBe(true);
     mocks.input?.onSend('Cannot send now', []);
     expect(mocks.issue).not.toHaveBeenCalled();
+    expect(mocks.selectModel).not.toHaveBeenCalled();
   });
 
   it.each([true, undefined])(

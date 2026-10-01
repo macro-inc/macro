@@ -7,7 +7,7 @@ import type {
 } from '@service-storage/messages';
 import { createSignal, type ParentProps } from 'solid-js';
 import { createFocusRequest } from '../Thread/focus-request';
-import { DEFAULT_VISIBLE_REPLY_COUNT } from '../Thread/utils/thread-reply-indicator-helpers';
+import { getVisibleReplyCount } from '../Thread/utils/thread-reply-indicator-helpers';
 import { StandaloneThreadContext } from './context';
 
 type RootProps = ParentProps<{
@@ -51,7 +51,7 @@ function RootInner(props: RootProps) {
   const displayReplies = (): EntityMessage[] => {
     const all = replies();
     if (isExpanded()) return all;
-    return all.slice(0, DEFAULT_VISIBLE_REPLY_COUNT);
+    return all.slice(0, getVisibleReplyCount(all));
   };
 
   return (

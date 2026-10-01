@@ -7,11 +7,13 @@
  */
 import type {
   ActionExecutionRecord,
+  AiAdmissionErrorBody,
   CreateScheduledAction,
   EmptyResponse,
   InProgressExecution,
   ListScheduledActionsParams,
   ScheduledActionResponse,
+  SetScheduledActionEnabled,
   UpdateScheduledAction,
 } from './schemas';
 
@@ -142,6 +144,11 @@ export type createScheduledActionResponse401 = {
   status: 401;
 };
 
+export type createScheduledActionResponse403 = {
+  data: string;
+  status: 403;
+};
+
 export type createScheduledActionResponse500 = {
   data: string;
   status: 500;
@@ -154,6 +161,7 @@ export type createScheduledActionResponseSuccess =
 export type createScheduledActionResponseError = (
   | createScheduledActionResponse400
   | createScheduledActionResponse401
+  | createScheduledActionResponse403
   | createScheduledActionResponse500
 ) & {
   headers: Headers;
@@ -327,6 +335,82 @@ export const deleteScheduledAction = async (
   } as deleteScheduledActionResponse;
 };
 
+export type setScheduledActionEnabledResponse200 = {
+  data: ScheduledActionResponse;
+  status: 200;
+};
+
+export type setScheduledActionEnabledResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type setScheduledActionEnabledResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type setScheduledActionEnabledResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type setScheduledActionEnabledResponse409 = {
+  data: string;
+  status: 409;
+};
+
+export type setScheduledActionEnabledResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type setScheduledActionEnabledResponseSuccess =
+  setScheduledActionEnabledResponse200 & {
+    headers: Headers;
+  };
+export type setScheduledActionEnabledResponseError = (
+  | setScheduledActionEnabledResponse400
+  | setScheduledActionEnabledResponse401
+  | setScheduledActionEnabledResponse404
+  | setScheduledActionEnabledResponse409
+  | setScheduledActionEnabledResponse500
+) & {
+  headers: Headers;
+};
+
+export type setScheduledActionEnabledResponse =
+  | setScheduledActionEnabledResponseSuccess
+  | setScheduledActionEnabledResponseError;
+
+export const getSetScheduledActionEnabledUrl = (id: string) => {
+  return `/scheduled-actions/${id}/enabled`;
+};
+
+export const setScheduledActionEnabled = async (
+  id: string,
+  setScheduledActionEnabled: SetScheduledActionEnabled,
+  options?: RequestInit
+): Promise<setScheduledActionEnabledResponse> => {
+  const res = await fetch(getSetScheduledActionEnabledUrl(id), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(setScheduledActionEnabled),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: setScheduledActionEnabledResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as setScheduledActionEnabledResponse;
+};
+
 export type executeScheduledActionNowResponse200 = {
   data: InProgressExecution;
   status: 200;
@@ -340,6 +424,11 @@ export type executeScheduledActionNowResponse400 = {
 export type executeScheduledActionNowResponse401 = {
   data: string;
   status: 401;
+};
+
+export type executeScheduledActionNowResponse402 = {
+  data: AiAdmissionErrorBody;
+  status: 402;
 };
 
 export type executeScheduledActionNowResponse404 = {
@@ -357,6 +446,11 @@ export type executeScheduledActionNowResponse500 = {
   status: 500;
 };
 
+export type executeScheduledActionNowResponse503 = {
+  data: AiAdmissionErrorBody;
+  status: 503;
+};
+
 export type executeScheduledActionNowResponseSuccess =
   executeScheduledActionNowResponse200 & {
     headers: Headers;
@@ -364,9 +458,11 @@ export type executeScheduledActionNowResponseSuccess =
 export type executeScheduledActionNowResponseError = (
   | executeScheduledActionNowResponse400
   | executeScheduledActionNowResponse401
+  | executeScheduledActionNowResponse402
   | executeScheduledActionNowResponse404
   | executeScheduledActionNowResponse409
   | executeScheduledActionNowResponse500
+  | executeScheduledActionNowResponse503
 ) & {
   headers: Headers;
 };

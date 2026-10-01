@@ -8,6 +8,7 @@ import {
 } from '@block-pdf/component/PdfSplitToolbar';
 import { Tabs } from '@block-pdf/component/Tabs';
 import { usePdfDocument } from '@block-pdf/context/pdf-document-context';
+import { createPdfRouteTarget } from '@block-pdf/primitives/create-pdf-route-target';
 import {
   type LocationSearchParams,
   URL_PARAMS,
@@ -32,11 +33,7 @@ import Printer from '@phosphor/printer.svg';
 import { useSearchParams } from '@solidjs/router';
 import type { JSX } from 'solid-js';
 import { Show } from 'solid-js';
-import {
-  FileDetailLayout,
-  FileDetailLoadGate,
-  type FileDetailShareProps,
-} from '../components/FileDetail';
+import { FileDetailLayout, FileDetailLoadGate } from '../components/FileDetail';
 import { loadPdfDocument, type PdfDocumentData } from '../queries/pdf-document';
 import type { FileDetailContext } from '../util/file-detail-context';
 
@@ -130,14 +127,13 @@ function PdfDetailContent(props: {
   );
 }
 
-export function PdfDetailDocument(
-  props: FileDetailShareProps & {
-    documentId: string;
-    data: PdfDocumentData;
-    children?: (context: PdfDetailContext) => JSX.Element;
-  }
-) {
+export function PdfDetailDocument(props: {
+  documentId: string;
+  data: PdfDocumentData;
+  children?: (context: PdfDetailContext) => JSX.Element;
+}) {
   const [searchParams] = useSearchParams();
+  const target = createPdfRouteTarget(() => props.documentId);
   const permissions = () => getPermissions(props.data.userAccessLevel);
 
   return (
@@ -145,9 +141,6 @@ export function PdfDetailDocument(
       documentId={props.documentId}
       documentMetadata={props.data.documentMetadata}
       userAccessLevel={props.data.userAccessLevel}
-      blockType="pdf"
-      shareOpen={props.shareOpen}
-      onShareOpenChange={props.onShareOpenChange}
     >
       <PdfDocument
         documentId={props.documentId}
@@ -165,6 +158,7 @@ export function PdfDetailDocument(
           isOwner: props.data.userAccessLevel === 'owner',
         }}
         locationParams={getLocationParams(searchParams)}
+        navigationTarget={target()}
       >
         <PdfDetailContent data={props.data} children={props.children} />
       </PdfDocument>
@@ -172,12 +166,10 @@ export function PdfDetailDocument(
   );
 }
 
-export function PdfDetail(
-  props: FileDetailShareProps & {
-    documentId: string;
-    children?: (context: PdfDetailContext) => JSX.Element;
-  }
-) {
+export function PdfDetail(props: {
+  documentId: string;
+  children?: (context: PdfDetailContext) => JSX.Element;
+}) {
   return (
     <FileDetailLoadGate
       documentId={props.documentId}
@@ -188,8 +180,6 @@ export function PdfDetail(
         <PdfDetailDocument
           documentId={props.documentId}
           data={data}
-          shareOpen={props.shareOpen}
-          onShareOpenChange={props.onShareOpenChange}
           children={props.children}
         />
       )}

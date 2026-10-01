@@ -28,6 +28,7 @@ const debugComponentIds = [
         'agent-ui',
         'agent-replay',
         'agent-changes-ui',
+        'diff-view-ui',
       ]
     : []),
   ...(import.meta.env.DEV ? ['spreadsheet-demo'] : []),

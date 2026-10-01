@@ -8,6 +8,7 @@ import { createComposerDictation } from '@app/features/dictation/composer-dictat
 import { InputProvider } from '@channel/Input/context';
 import { Input } from '@channel/Input/Input';
 import type { InputAttachmentData, InputCommands } from '@channel/Input/types';
+import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { createComposerLayout } from '@core/component/LexicalMarkdown/utils/create-composer-layout';
@@ -69,6 +70,9 @@ export function ChatComposer(props: {
   const [layout, setLayout] = createSignal<HTMLDivElement>();
   const [height, setHeight] = createSignal<number>();
   createResizeObserver(content, (_, element) => {
+    // Content held offscreen by a pending Suspense reports 0; pinning that
+    // would animate the surface up from nothing once it attaches.
+    if (!element.isConnected) return;
     setHeight(element.getBoundingClientRect().height);
   });
   let container: HTMLDivElement | undefined;
@@ -81,6 +85,7 @@ export function ChatComposer(props: {
     props.session.onStop &&
     !disabled();
   const editor = buildConfig('chat')
+    .withAppLinkResolver(useMacroMentionLinkResolver())
     .namespace('agents-chat-composer')
     .withMentions({ showOpenTabs: true, block: 'agent' })
     .withEmojis()
@@ -96,6 +101,9 @@ export function ChatComposer(props: {
       },
     })
     .onEnter((_event, markdown) => {
+      // On a virtual keyboard Enter is a newline, as in channels; the send
+      // button is the only way to submit.
+      if (isTouchDevice()) return false;
       if (markdown.trim() || attachments().length > 0) send(markdown);
       else if (canSendNext()) sendNext();
       return true;
@@ -341,7 +349,7 @@ export function ChatComposer(props: {
 
 /** Adapt the session's controls to the same input used for a new Chat. */
 export function ChatSessionInput(props: AgentInputProps) {
-  const [draft, setDraft] = createSignal('');
+  const [draft, setDraft] = createSignal(props.initialInput ?? '');
   return (
     <ChatComposer
       draft={draft()}

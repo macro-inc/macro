@@ -70,6 +70,11 @@ pub struct LinkEmailSettings {
 /// The port returns persisted facts only. Accessible-inbox aggregation and
 /// synchronization-status policy remain in the email domain service.
 pub trait EmailUserRepo: Send + Sync + 'static {
+    /// Sender rules for an inbox already authorized by the user service.
+    fn user_sender_filters(
+        &self,
+        link_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<EmailFilter>, EmailErr>> + Send;
     /// Resolve every owned or delegated inbox accessible to `macro_id`.
     fn user_accessible_inboxes(
         &self,
@@ -199,6 +204,17 @@ pub trait EmailRepo: Send + Sync + 'static {
         &self,
         message_ids: &[Uuid],
     ) -> impl Future<Output = Result<HashMap<Uuid, Vec<MessageLabel>>, Self::Err>> + Send;
+
+    /// Fetch saved calendar invitation components, keyed by message ID.
+    fn calendar_invitations_by_message_ids(
+        &self,
+        message_ids: &[Uuid],
+    ) -> impl Future<
+        Output = Result<
+            HashMap<Uuid, Vec<crate::domain::models::calendar_invitation::CalendarInvitation>>,
+            Self::Err,
+        >,
+    > + Send;
 
     /// Fetch persisted message timestamps, scoped to the sending inbox.
     fn message_timestamps(

@@ -1,3 +1,4 @@
+import type { IdentityBindingWire } from '../protocol';
 /**
  * Typed surface of the generated wasm package (`cache-wasm`), loaded
  * dynamically so the repo type-checks without the generated artifacts.
@@ -21,6 +22,7 @@ import type {
   EnqueueOptimisticMutationResult,
   EntityFilterCacheArgs,
   EntityFilterCacheResult,
+  HydrationSearchChanges,
   OptimisticLinkPatchWire,
   QueryRevalidationWire,
   ReadRecordsByKeysResult,
@@ -31,6 +33,7 @@ import type {
   WriteResult,
 } from '../protocol';
 import { workerCacheTelemetry } from '../telemetry-relay';
+import type { StaleDatabaseRemovalOutcome } from './stale-databases';
 
 /** Stable, payload-free marker latched on reset-required WASM errors. */
 export interface CacheStorageResetRequiredError extends Error {
@@ -63,12 +66,14 @@ export interface CacheOpenResult {
   outcome: CacheOpenOutcome;
 }
 
-export type CacheEngineHydrationResult = WriteResult & {
-  data: unknown | null;
-};
+export type CacheEngineHydrationResult = WriteResult &
+  HydrationSearchChanges & {
+    data: unknown | null;
+  };
 
 export interface CacheEngine {
   currentRevision(): Promise<CacheRevision>;
+  currentStorageGeneration(): Promise<string>;
   boundIdentity(): Promise<string | null>;
   /** Optional for compatibility engines; absence means unavailable. */
   queueDiagnostics?(): Promise<CacheQueueDiagnostics>;
@@ -120,6 +125,7 @@ export interface CacheEngine {
     data: unknown,
     linkPatches: OptimisticLinkPatchWire[] | undefined,
     revalidations: QueryRevalidationWire[] | undefined,
+    identityBindings: IdentityBindingWire[] | undefined,
     createdAtMs: number,
     leaseOwner: string,
     nowMs: number,
@@ -175,22 +181,45 @@ export interface CacheEngine {
 export interface CacheWasmModule {
   default: (input?: { module_or_path?: unknown }) => Promise<unknown>;
   openCache(scope: string, hotCapacity?: number): Promise<CacheEngine>;
-  /** Additive open API with a coarse, payload-free recovery outcome. */
+  /**
+   * Additive open API with a coarse, payload-free recovery outcome. When
+   * given, `onOwnerLockAcquired` runs after the owner lock is held and before
+   * any OPFS access; opening continues once its promise resolves. With
+   * `ifAvailable`, a held owner lock rejects at once, touching nothing, with an
+   * error whose `cacheOwnerLockUnavailable` property is `true`. Files another
+   * context keeps open through a bounded wait reject with an error whose
+   * `cacheStorageBusy` property is `true`; a plain open has then changed
+   * neither file.
+   */
   openCacheWithOutcome?(
     scope: string,
-    hotCapacity?: number
+    hotCapacity?: number,
+    onOwnerLockAcquired?: () => Promise<void>,
+    ifAvailable?: boolean
   ): Promise<CacheOpenResult>;
   /** Atomically wipes before Turso open while retaining one OPFS owner lock. */
   openCacheForRecovery(
     scope: string,
     hotCapacity?: number
   ): Promise<CacheEngine>;
-  /** Additive recovery-open API with its coarse wipe outcome. */
+  /** Additive recovery-open API with its coarse wipe outcome; see above for
+   * `onOwnerLockAcquired` and `ifAvailable`, which precede the recovery wipe. */
   openCacheForRecoveryWithOutcome?(
     scope: string,
-    hotCapacity?: number
+    hotCapacity?: number,
+    onOwnerLockAcquired?: () => Promise<void>,
+    ifAvailable?: boolean
   ): Promise<CacheOpenResult>;
   destroyCache(scope: string): Promise<void>;
+  /** Physical database this build opens for `scope`; absent before databases
+   * were named by storage version. */
+  cacheDatabaseIdentity?(scope: string): string;
+  /** Deletes one stale database of `scope` if unused and without queued
+   * mutations; see `staleCacheDatabaseIdentities`. */
+  removeStaleCacheDatabase?(
+    scope: string,
+    identity: string
+  ): Promise<StaleDatabaseRemovalOutcome>;
   /** Optional while older cached WASM artifacts are still in circulation. */
   setSlowQueryCallback?(
     callback: (

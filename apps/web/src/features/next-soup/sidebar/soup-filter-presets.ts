@@ -17,6 +17,7 @@ import {
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { Params } from '@service-storage/generated/schemas/params';
 import { startOfDay, subWeeks } from 'date-fns';
+import { CRM_TAB_PRESETS } from '../../crm/collection-presets';
 
 type SoupFiltersPreset = {
   /** Filter data for server query */
@@ -57,7 +58,7 @@ type TabPresetResolver = (ctx: PresetContext) => SoupFiltersPreset | undefined;
 
 type TabConfig = Record<string, TabPresetResolver>;
 
-type ViewTabConfig = {
+export type ViewTabConfig = {
   default: string;
   tabs: TabConfig;
 };
@@ -187,7 +188,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       }),
     },
   },
-  inbox: {
+  home: {
     default: 'signal',
     tabs: {
       // Signal and Noise order by when the viewer was last notified about
@@ -529,33 +530,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       }),
     },
   },
-  companies: {
-    default: 'active',
-    tabs: {
-      active: () => ({
-        filters: defineQueryFilters(
-          { include: { crmCompanyHidden: false } },
-          { skipTargets: ['ccf'] }
-        ),
-        clientFilters: { and: ['crm-company-active'] },
-        groupBy: `property:${SYSTEM_PROPERTY_IDS.STAGE}`,
-      }),
-      // Admin/owner only — the BE rejects `hidden: true` requests from
-      // non-admins with 403. Returning `undefined` hides the tab for
-      // non-admins via the same pattern context-required views use.
-      hidden: (ctx) => {
-        if (!ctx.isTeamAdmin) return undefined;
-        return {
-          filters: defineQueryFilters(
-            { include: { crmCompanyHidden: true } },
-            { skipTargets: ['ccf'] }
-          ),
-          clientFilters: { and: ['crm-company-hidden'] },
-          groupBy: `property:${SYSTEM_PROPERTY_IDS.STAGE}`,
-        };
-      },
-    },
-  },
+  companies: CRM_TAB_PRESETS,
   folders: {
     default: 'owned',
     tabs: {

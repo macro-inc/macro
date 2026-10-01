@@ -8,7 +8,6 @@ import { publishLoginSuccess } from '@core/auth/login-events';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { toast } from '@core/component/Toast/Toast';
 import { restoreSettingsReturnTo } from '@core/constant/SettingsState';
-import { appendSettingsSplitToUrl } from '@core/constant/settingsSplitUrl';
 import { settingsTabToSlug } from '@core/constant/settingsTabsConfig';
 import { useEmailLinks } from '@core/email-link';
 import { consumeInboxLinkReturn } from '@core/email-link/return-layout';
@@ -107,10 +106,7 @@ function EmailSignupCallback(props: Pick<EmailAuthParams, 'successPath'>) {
  * granted access still sees the result. Only reachable when the stash is
  * missing — storage blocked, or a callback URL opened outside its own flow.
  */
-const POST_LINK_FALLBACK_ROUTE = appendSettingsSplitToUrl(
-  DEFAULT_ROUTE,
-  settingsTabToSlug('Connected')
-);
+const POST_LINK_FALLBACK_ROUTE = `${DEFAULT_ROUTE}/~/settings/${settingsTabToSlug('Connected')}`;
 
 /**
  * Handles the OAuth callback after an already-authenticated user adds another Gmail

@@ -1,5 +1,6 @@
 //! Unit tests for the notification services.
 
+mod android;
 mod status_updates;
 
 use crate::domain::models::apple::APNSPushNotification;
@@ -315,9 +316,14 @@ impl NotificationRepository for MockRepository {
 
     async fn get_device_endpoints<'a>(
         &self,
-        _user_ids: &[MacroUserIdStr<'a>],
+        user_ids: &[MacroUserIdStr<'a>],
     ) -> Result<HashMap<MacroUserIdStr<'static>, Vec<DeviceEndpoint>>, Report> {
-        Ok(self.device_endpoints.clone())
+        Ok(self
+            .device_endpoints
+            .iter()
+            .filter(|(user, _)| user_ids.contains(user))
+            .map(|(user, endpoints)| (user.clone(), endpoints.clone()))
+            .collect())
     }
 
     async fn mark_notifications_seen(
@@ -2258,6 +2264,7 @@ async fn test_egress_ios_attempts_all_endpoints_even_if_some_fail() {
                 (
                     user1,
                     UserApnsEndpoints {
+                        android_endpoints: Vec::new(),
                         endpoints: vec![endpoint1.to_string(), endpoint2.to_string()],
                         digest_state: None,
                     },
@@ -2265,6 +2272,7 @@ async fn test_egress_ios_attempts_all_endpoints_even_if_some_fail() {
                 (
                     user2,
                     UserApnsEndpoints {
+                        android_endpoints: Vec::new(),
                         endpoints: vec![endpoint3.to_string(), endpoint4.to_string()],
                         digest_state: None,
                     },
@@ -2714,6 +2722,7 @@ async fn test_poll_and_deliver_deletes_message_when_all_ios_failures() {
             ios_device_endpoints: HashMap::from([(
                 user,
                 UserApnsEndpoints {
+                    android_endpoints: Vec::new(),
                     endpoints: vec![
                         "arn:endpoint/device1".to_string(),
                         "arn:endpoint/device2".to_string(),

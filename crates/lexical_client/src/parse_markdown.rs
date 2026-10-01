@@ -171,7 +171,8 @@ pub struct AgentAnnouncementReplyTarget {
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct AgentAnnouncementRequest<'a> {
-    reply_target: &'a AgentAnnouncementReplyTarget,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reply_target: Option<&'a AgentAnnouncementReplyTarget>,
     chip: &'a AgentAnnouncementChip,
 }
 
@@ -240,13 +241,82 @@ struct AgentChatReplyRequest<'a> {
     chat_reply: &'a AgentChatReply,
 }
 
-/// A channel message included as context for an agent prompt.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+/// A message included as context for an agent prompt.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AgentContextMessage<'a> {
-    /// Display name of the message sender.
-    pub sender: &'a str,
+    /// Message id.
+    pub id: String,
+    /// Sender identifier as the message service represents it.
+    pub sender_id: &'a str,
+    /// Readable name of the sender.
+    pub author: &'a str,
     /// Markdown content of the message.
     pub content: &'a str,
+    /// RFC 3339 time the message was posted.
+    pub posted_at: String,
+}
+
+/// Messages of one discussion included as context, oldest first.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentContextThread<'a> {
+    /// Root message of the discussion.
+    pub root_id: String,
+    /// Live messages, the root first when it is included.
+    pub messages: Vec<AgentContextMessage<'a>>,
+    /// Whether some messages of the discussion were left out.
+    pub messages_omitted: bool,
+}
+
+/// What an agent prompt answers.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum AgentContextReplyTarget<'a> {
+    /// The author quote-replied to one message.
+    Quote {
+        /// The quoted message.
+        message_id: String,
+        /// The discussion holding the quoted message.
+        thread_id: String,
+        /// The one-line preview the quote renders.
+        preview: &'a str,
+        /// The quoted message in full, when it could be read.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        message: Option<AgentContextMessage<'a>>,
+    },
+    /// The prompt was posted as a reply in a discussion.
+    Thread {
+        /// Root of that discussion.
+        thread_id: String,
+    },
+    /// The prompt was posted at the top level of a channel.
+    None,
+}
+
+/// The conversation an agent prompt was posted in.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentContext<'a> {
+    /// The document location of the comment thread, when it has one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub anchor: Option<AgentContextAnchor<'a>>,
+    /// What the prompt answers.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reply_target: Option<AgentContextReplyTarget<'a>>,
+    /// The prompting message, marked where it appears in the context.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prompt_message_id: Option<String>,
+    /// The discussion the prompt was posted in, through the prompt.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thread: Option<AgentContextThread<'a>>,
+    /// Other channel activity, grouped by discussion, oldest first.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub channel: Vec<AgentContextThread<'a>>,
 }
 
 /// The document location of the comment thread an agent prompt was posted in.
@@ -257,6 +327,16 @@ pub struct AgentContextMessage<'a> {
     rename_all_fields = "camelCase"
 )]
 pub enum AgentContextAnchor<'a> {
+    /// A cell or rectangular range in a native spreadsheet.
+    Spreadsheet {
+        /// Stable sheet identity within the workbook.
+        sheet_id: &'a str,
+        /// Sheet name when the discussion was created.
+        sheet_name: &'a str,
+        /// A1 cell or range, such as B4 or B4:C9.
+        range: &'a str,
+    },
+
     /// A comment mark in a markdown document.
     Markdown {
         /// Lexical mark the comment is attached to.
@@ -291,11 +371,11 @@ pub enum AgentContextAnchor<'a> {
 struct AgentContextRequest<'a> {
     prompt_markdown: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
+    instructions: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     parent: Option<&'a MessageParent>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    anchor: Option<&'a AgentContextAnchor<'a>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    messages: Option<&'a [AgentContextMessage<'a>]>,
+    #[serde(flatten, skip_serializing_if = "Option::is_none")]
+    context: Option<&'a AgentContext<'a>>,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -542,7 +622,7 @@ impl LexicalClient {
     #[tracing::instrument(skip(self, reply_target, chip), err)]
     pub async fn compose_agent_announcement(
         &self,
-        reply_target: &AgentAnnouncementReplyTarget,
+        reply_target: Option<&AgentAnnouncementReplyTarget>,
         chip: &AgentAnnouncementChip,
     ) -> Result<String> {
         let url = format!("{}/agent-announcement", self.url);
@@ -599,16 +679,16 @@ impl LexicalClient {
         Ok(data.markdown)
     }
 
-    /// Sanitizes an agent prompt and optionally composes it with the comment
-    /// anchor and prior-message context via the lexical service, so internal
+    /// Sanitizes an agent prompt and optionally composes it with the
+    /// conversation it was posted in via the lexical service, so internal
     /// nodes and escaping are handled by Lexical rather than by the caller.
-    #[tracing::instrument(skip(self, prompt_markdown, anchor, messages), err)]
+    #[tracing::instrument(skip(self, prompt_markdown, context), err)]
     pub async fn compose_agent_context(
         &self,
         prompt_markdown: &str,
+        instructions: Option<&str>,
         parent: Option<&MessageParent>,
-        anchor: Option<&AgentContextAnchor<'_>>,
-        messages: Option<&[AgentContextMessage<'_>]>,
+        context: Option<&AgentContext<'_>>,
     ) -> Result<String> {
         let url = format!("{}/agent-context", self.url);
         let response = check_response(
@@ -616,9 +696,9 @@ impl LexicalClient {
                 .post(&url)
                 .json(&AgentContextRequest {
                     prompt_markdown,
+                    instructions,
                     parent,
-                    anchor,
-                    messages,
+                    context,
                 })
                 .send()
                 .await?,

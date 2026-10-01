@@ -4,6 +4,7 @@ import {
   buildGroupedSoupRows,
   createSearchState,
   createSoupLoadMoreRow,
+  createSoupRowStore,
   createTagFacetContext,
   type SoupRow,
   soupSearchMatchType,
@@ -20,6 +21,7 @@ import {
   isEmailEntity,
   type WithNotification,
 } from '@entity';
+import { useFavoritesQuery } from '@queries/favorites/favorites';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { useSearchSoupQuery } from '@queries/soup/search';
 import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
@@ -67,6 +69,7 @@ function emailMatchesTab(
     .with(
       'important',
       'noise',
+      'favorites',
       'sent',
       'scheduled',
       'calendar',
@@ -94,6 +97,20 @@ export function useEmailDataSource(
   const userId = useUserId();
   const scheduled = useScheduledEmailSource(state);
   const showsScheduled = () => state.tab === 'scheduled';
+  const showsFavorites = () => state.tab === 'favorites';
+  // Uses GraphQL favorites with enable-graphql-soup, REST otherwise. Guard
+  // the data read so a pending favorites request cannot suspend the view.
+  const favorites = useFavoritesQuery({ entityType: ['email_thread'] });
+  const favoriteThreadIds = createMemo(() =>
+    favorites.isSuccess
+      ? [
+          ...new Set(
+            favorites.data?.favorites.map((favorite) => favorite.entityId) ?? []
+          ),
+        ].sort()
+      : undefined
+  );
+  const favoriteIds = createMemo(() => new Set(favoriteThreadIds()));
 
   const facetContext = createMemo(
     (): EmailFacetContext => createTagFacetContext(options.tagSets())
@@ -111,15 +128,22 @@ export function useEmailDataSource(
   // Discovery must apply read status before pagination, not scan through
   // pages of read mail to find an unread thread.
   const queryArgs = createMemo(() => buildEmailQuery(queryContext()));
-  // A restored tag selection waits for the tag sets rather than listing the
-  // whole mailbox and then narrowing.
-  const facetsReady = () => tagFacetReady(state.facets, options.tagSetsReady());
-  const sourceEnabled = () => facetsReady() && state.tab !== 'scheduled';
+  const tagsReady = () => tagFacetReady(state.facets, options.tagSetsReady());
+  // Soup owns favorite filtering; only the separate search service needs IDs.
+  const searchFavoritesReady = () =>
+    !showsFavorites() || favoriteThreadIds() !== undefined;
+  const filtersReady = () =>
+    tagsReady() && (!state.search.trim() || searchFavoritesReady());
+  const sourceEnabled = () => tagsReady() && state.tab !== 'scheduled';
+  const searchContext = (): EmailQueryContext => ({
+    ...queryContext(),
+    ...(showsFavorites() ? { favoriteThreadIds: favoriteThreadIds() } : {}),
+  });
   const query = useSoupAstItemsQuery(queryArgs, () => ({
     enabled: sourceEnabled(),
   }));
   const isListPending = () =>
-    !facetsReady() || query.isLoading || query.isPlaceholderData;
+    !filtersReady() || query.isLoading || query.isPlaceholderData;
 
   const selectEmails = (entities: EntityData[]): EmailEntity[] => {
     const context = queryContext();
@@ -127,6 +151,11 @@ export function useEmailDataSource(
     for (const entity of entities) {
       if (!isEmailEntity(entity)) continue;
       if (!emailMatchesTab(entity, context.tab, userId())) continue;
+      if (showsFavorites()) {
+        if (entity.isFavorited === false) continue;
+        // Search results have no Soup favorite field and use search's ID scope.
+        if (search.isSearching() && !favoriteIds().has(entity.id)) continue;
+      }
 
       selected.push(entity);
     }
@@ -137,16 +166,15 @@ export function useEmailDataSource(
   // every search result comes from the search service.
   const search = createSearchState({
     text: () => state.search,
-    // Held back with the list query so a tag selection is not stripped from
-    // the request before the sets that resolve it have loaded.
-    enabled: sourceEnabled,
+    enabled: () => sourceEnabled() && searchFavoritesReady(),
     disableLocalSearch: () => true,
-    buildRequest: (request) => buildEmailSearchRequest(queryContext(), request),
+    buildRequest: (request) =>
+      buildEmailSearchRequest(searchContext(), request),
   });
 
   const rawEntities = createMemo<EntityData[]>(() => {
     // Disabled searches can retain placeholder data for the previous facets.
-    if (!facetsReady()) return [];
+    if (!filtersReady()) return [];
 
     if (!search.isSearching()) {
       // Previous-tab/inbox rows are not valid results for the new query.
@@ -209,7 +237,7 @@ export function useEmailDataSource(
   );
 
   const admissionBatches = createMemo(
-    () => (facetsReady() ? emailAdmissionBatches(admitted().items) : []),
+    () => (filtersReady() ? emailAdmissionBatches(admitted().items) : []),
     [],
     {
       equals: (left, right) =>
@@ -220,19 +248,19 @@ export function useEmailDataSource(
   const retainedQueries = indexArray(admissionBatches, (ids) => {
     const list = useSoupAstItemsQuery(
       () => buildEmailQuery(queryContext(), ids()),
-      () => ({ enabled: facetsReady() && !search.isSearching() })
+      () => ({ enabled: filtersReady() && !search.isSearching() })
     );
     const searchQuery = useSearchSoupQuery(
       () =>
         buildEmailSearchRequest(
-          queryContext(),
+          searchContext(),
           {
             query: state.search.trim(),
             matchType: soupSearchMatchType(state.search),
           },
           ids()
         ),
-      () => ({ enabled: facetsReady() && search.usesServiceSearch() })
+      () => ({ enabled: filtersReady() && search.usesServiceSearch() })
     );
     return {
       ids,
@@ -255,7 +283,7 @@ export function useEmailDataSource(
   const publication = createMemo<RetainedEmailPublication>(
     (previous) => {
       const currentScope = scope();
-      if (!facetsReady() || (!search.isSearching() && isListPending())) {
+      if (!filtersReady() || (!search.isSearching() && isListPending())) {
         return { scope: currentScope, items: [], resolved: new Map() };
       }
       if (!hasReadFilter()) {
@@ -288,7 +316,11 @@ export function useEmailDataSource(
           const email = current.has(snapshot.id)
             ? current.get(snapshot.id)
             : snapshot;
-          return email && matchesOtherFacets(email) ? [email] : [];
+          return email &&
+            selectEmails([email]).length > 0 &&
+            matchesOtherFacets(email)
+            ? [email]
+            : [];
         }),
       };
     },
@@ -305,6 +337,7 @@ export function useEmailDataSource(
   const usesServiceSearch = search.usesServiceSearch;
 
   const hasMore = () => {
+    if (!filtersReady()) return false;
     if (usesServiceSearch()) return search.hasNextPage();
     return !isListPending() && query.hasNextPage;
   };
@@ -314,7 +347,7 @@ export function useEmailDataSource(
     return query.isFetchingNextPage;
   };
 
-  const items = createMemo<EmailDataSourceItem[]>(() => {
+  const builtItems = createMemo<EmailDataSourceItem[]>(() => {
     // Search results keep their relevance order, so only the list page is
     // bucketed by date.
     const result: EmailDataSourceItem[] = search.isSearching()
@@ -332,9 +365,12 @@ export function useEmailDataSource(
 
     return result;
   });
+  const items = createSoupRowStore(builtItems);
 
   const isLoading = () => {
-    if (!facetsReady()) return true;
+    if (search.isSearching() && showsFavorites() && favorites.isError)
+      return false;
+    if (!filtersReady()) return true;
     if (!search.isSearching()) {
       // A query held back for the tag sets is loading, not empty.
       return isListPending();
@@ -355,6 +391,9 @@ export function useEmailDataSource(
     error: () => {
       if (showsScheduled()) return scheduled.error();
       return (
+        (search.isSearching() && showsFavorites()
+          ? favorites.error
+          : undefined) ??
         (usesServiceSearch() ? search.error() : query.error) ??
         retainedQueries()
           .map((lookup) => lookup.error())
@@ -377,6 +416,7 @@ export function useEmailDataSource(
         await scheduled.refresh();
         return;
       }
+      if (showsFavorites() && search.isSearching()) await favorites.refetch();
       await Promise.all([
         usesServiceSearch() ? search.refetch() : query.refresh(),
         ...retainedQueries().map((lookup) => lookup.refresh()),

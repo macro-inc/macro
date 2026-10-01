@@ -24,15 +24,16 @@ import { BlockItemSplitLabel } from '@components/app/split-layout/components/Spl
 import { useIsAuthenticated } from '@core/auth';
 import { useBlockId, useBlockName } from '@core/block';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
-import { toast } from '@core/component/Toast/Toast';
 import { openLoginModal } from '@core/component/TopBar/LoginButton';
 import {
   getShareDrawerRecipientInput,
   ShareTrigger,
-  useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
+import { useShareModal } from '@core/component/TopBar/shareModal';
 import { blockMetadataSignal } from '@core/signal/load';
+import { useGetPermissions } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
+import { useCopyLink } from '@core/util/useCopyLink';
 import IconShared from '@icon/share.svg';
 import DownloadIcon from '@phosphor/download-simple.svg';
 import Printer from '@phosphor/printer.svg';
@@ -52,19 +53,25 @@ export function TopBar() {
   const hasComments = useHasComments();
   const fileName = useBlockDocumentName('Unknown Filename');
 
-  const shareCtx = useShareDialogContext();
+  const permissions = useGetPermissions();
+  const openShare = useShareModal(() => ({
+    id: documentId,
+    blockAlias: 'pdf',
+    itemType: 'document',
+    name: fileName() ?? '',
+    userPermissions: permissions(),
+    owner: blockMetadataSignal()?.owner,
+  }));
 
   const createShareUrl = useCreateShareUrl();
+  const copyEntityLink = useCopyLink();
 
   const itemType = blockNameToItemType(blockName);
   if (!itemType) return null;
 
   const fileType = blockMetadataSignal()?.fileType;
 
-  const copyLink = () => {
-    createShareUrl(LocationType.General);
-    toast.success('Link copied to clipboard');
-  };
+  const copyLink = () => copyEntityLink(createShareUrl(LocationType.General));
 
   const fileActionAuth = () => ({
     isAuthenticated: !!isAuth(),
@@ -151,8 +158,10 @@ export function TopBar() {
       group: 'sharing',
       label: 'Share',
       icon: IconShared,
-      action: () => shareCtx.open(),
-      buttonComponent: () => <ShareTrigger copyLink={copyLink} />,
+      action: openShare,
+      buttonComponent: () => (
+        <ShareTrigger onClick={openShare} copyLink={copyLink} />
+      ),
       focusTarget: getShareDrawerRecipientInput,
     },
   ];

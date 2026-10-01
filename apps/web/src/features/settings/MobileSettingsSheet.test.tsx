@@ -42,7 +42,9 @@ afterEach(() => {
 const groups: SettingsTabGroup[] = [
   {
     label: 'Account',
-    items: [{ tab: 'Account', label: 'Account', icon: () => <svg /> }],
+    items: [
+      { tab: 'Account', label: 'Account', icon: () => <svg />, keywords: [] },
+    ],
   },
 ];
 
@@ -91,6 +93,19 @@ describe('unavailable mobile settings sections', () => {
       });
     }
   );
+
+  it('survives the tap that dismisses a menu portaled over it', () => {
+    const { settings, onClose } = setup('Account');
+    // A modal Kobalte menu takes pointer events off the body, so the tap that
+    // dismisses it reaches `<html>` rather than anything on the page.
+    fireEvent.pointerDown(document.documentElement);
+    expect(onClose).not.toHaveBeenCalled();
+    expect(settings.open()).toBe(true);
+
+    fireEvent.pointerDown(document.body);
+    expect(onClose).toHaveBeenCalled();
+    expect(settings.open()).toBe(false);
+  });
 
   it('renders available sections and reacts when availability changes', () => {
     const { setAvailableGroups } = setup('Account');

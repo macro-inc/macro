@@ -1,13 +1,33 @@
-export const DEFAULT_VISIBLE_REPLY_COUNT = 3;
+import {
+  type GroupableMessage,
+  shouldGroupWithPreviousMessage,
+} from '../../Channel/message-grouping-meta';
+
+export const DEFAULT_VISIBLE_REPLY_GROUP_COUNT = 3;
 
 type ThreadReplyMeta = {
   sender_id: string;
   created_at: string;
 };
 
+/** Keep complete avatar groups visible, including every reply in the last group. */
+export function getVisibleReplyCount(
+  replies: ReadonlyArray<GroupableMessage>,
+  maxGroups: number = DEFAULT_VISIBLE_REPLY_GROUP_COUNT
+): number {
+  let groupCount = 0;
+  for (let index = 0; index < replies.length; index += 1) {
+    if (!shouldGroupWithPreviousMessage(replies[index], replies[index - 1])) {
+      groupCount += 1;
+      if (groupCount > maxGroups) return index;
+    }
+  }
+  return replies.length;
+}
+
 export function getCollapsedRepliesCount(
   totalReplies: number,
-  visibleReplies: number = DEFAULT_VISIBLE_REPLY_COUNT
+  visibleReplies: number
 ): number {
   return Math.max(totalReplies - visibleReplies, 0);
 }

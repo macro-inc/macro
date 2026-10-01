@@ -240,6 +240,7 @@ export type ItemLike = {
   type:
     | ItemType
     | 'agent'
+    | 'initiative'
     | 'call'
     | 'crm_company'
     | 'reminder'

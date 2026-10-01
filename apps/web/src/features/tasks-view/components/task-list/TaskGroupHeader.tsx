@@ -1,5 +1,6 @@
 import type { SoupGroupHeaderRow } from '@app/features/soup';
 import { UserIcon } from '@core/component/UserIcon';
+import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { getPropertyOptionLabel } from '@entity';
 import CaretRightIcon from '@phosphor/caret-right.svg';
@@ -7,6 +8,7 @@ import CircleDashedIcon from '@phosphor/circle-dashed.svg';
 import FolderIcon from '@phosphor/folder-simple.svg';
 import { PROPERTY_OPTION_IDS } from '@property';
 import { PropertyValueIcon } from '@property/component/propertyValue';
+import { usePropertyUserDisplay } from '@property/hooks/usePropertyUserDisplay';
 import { cn, Layer, Surface } from '@ui';
 import { createMemo, Match, Show, Switch } from 'solid-js';
 import type { TaskGroupBy } from '../../types';
@@ -29,9 +31,16 @@ export function TaskGroupHeader(props: {
   groupBy: TaskGroupBy;
   expanded: boolean;
   focused: boolean;
+  /** Grid columns the header row spans. */
+  columnCount: number;
   onToggle: () => void;
   onFocus: () => void;
 }) {
+  const agent = usePropertyUserDisplay(() =>
+    props.groupBy === 'assignee' && isBotPrincipalId(props.row.groupId)
+      ? props.row.groupId
+      : ''
+  );
   const label = createMemo(() => {
     if (!props.row.groupId) return props.row.label || 'Not set';
 
@@ -40,6 +49,7 @@ export function TaskGroupHeader(props: {
     }
 
     if (props.groupBy === 'assignee') {
+      if (isBotPrincipalId(props.row.groupId)) return agent.name();
       const assigneeId = tryMacroId(props.row.groupId);
       if (!assigneeId) return props.row.label;
       return (
@@ -58,7 +68,7 @@ export function TaskGroupHeader(props: {
 
   return (
     <div id={props.row.id} role="row">
-      <div role="gridcell" aria-colspan={7}>
+      <div role="gridcell" aria-colspan={props.columnCount}>
         <Surface
           depth={3}
           hideBorder

@@ -11,14 +11,18 @@ import {
   calendarTargetSearch,
 } from '@app/features/calendar-view/calendar-url';
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
-import type { DriveLocation } from '@app/features/drive-view/core/types';
-import type { DriveDocumentRoute } from '@app/features/drive-view/primitives/drive-route';
+import { channelsSearch } from '@app/features/channels-view/channels-route';
 import { URL_PARAMS as EMAIL_URL_PARAMS } from '@app/features/email-thread/core/location';
+import {
+  REMINDER_DETAIL_COMPONENT_ID,
+  REMINDER_DETAIL_ROUTE_ID,
+  reminderDetailContent,
+  reminderIdFromDetailContent,
+} from '@app/features/reminders/reminder-navigation';
 import {
   defineRoute,
   routeParams,
   type SplitLocation,
-  type SplitRouteMatch,
   type SplitRouterEntry,
   type UnmatchedSplitPathHandler,
 } from '@app/lib/split-router';
@@ -34,7 +38,13 @@ import { isRecord } from '@app/lib/split-router/utils';
 import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
 import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import type { BlockAlias, BlockName } from '@core/block';
-import { isBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
+import {
+  blocks,
+  fileTypeToBlockName,
+  isBlockAlias,
+  resolveBlockAlias,
+} from '@core/constant/allBlocks';
+import { COMMENT_LINK_PARAM } from '@core/messages/comment-link';
 import { z } from 'zod';
 import type { SplitContent } from '../layoutManager';
 
@@ -56,14 +66,20 @@ export function decodeLegacyPair(
   }
 
   if (type === 'component') {
-    // Retired Preview Pair placeholders must never reach the view registry.
+    // Reminder list/detail surfaces are native routes only.
+    if (id === 'reminders' || id === REMINDER_DETAIL_COMPONENT_ID) return;
+    // Preview Pair placeholders must never reach the view registry.
     return {
       type: 'component',
-      id: id === 'preview-empty' || id === 'non-member-channel' ? 'inbox' : id,
+      id: id === 'preview-empty' || id === 'non-member-channel' ? 'home' : id,
     };
   }
 
-  const resolvedType = resolveBlockAlias(type as BlockName | BlockAlias);
+  const resolvedType =
+    type === 'write'
+      ? resolveBlockAlias(fileTypeToBlockName(type))
+      : resolveBlockAlias(type as BlockName | BlockAlias);
+  if (!Object.hasOwn(blocks, resolvedType)) return;
 
   if (isBlockAlias(type)) {
     return {
@@ -173,43 +189,22 @@ export function encodeLegacyContent(content: SplitContent): string[] {
   ];
 }
 
-export function driveSplitContent(
-  location: DriveLocation,
-  document?: DriveDocumentRoute
-): SplitContent {
-  const matches: [SplitRouteMatch, ...SplitRouteMatch[]] = [
-    { id: 'drive', params: {} },
-  ];
-  if (location.kind === 'folder') {
-    matches.push({
-      id: 'drive-folder',
-      params: { view: 'folder', folderId: location.id ?? undefined },
-    });
-  } else if (location.tab !== 'owned') {
-    matches.push({ id: 'drive-tab', params: { tab: location.tab } });
-  }
-  if (document) {
-    matches.push({
-      id:
-        location.kind === 'folder'
-          ? 'drive-folder-document'
-          : location.tab === 'owned'
-            ? 'drive-document'
-            : 'drive-tab-document',
-      params: { documentId: document.id, documentType: document.type },
-    });
-  }
-  return {
-    type: 'component',
-    id: 'documents',
-    entryMetadata: { route: { matches } },
-  };
-}
-
 export function splitLocationFromContent(
   routes: SplitRoutesManifest,
   content: SplitContent
 ): SplitLocation {
+  const reminderId =
+    content.type === 'component' && content.id === REMINDER_DETAIL_COMPONENT_ID
+      ? reminderIdFromDetailContent(content)
+      : undefined;
+  if (reminderId) {
+    return {
+      route: {
+        matches: [{ id: REMINDER_DETAIL_ROUTE_ID, params: { reminderId } }],
+      },
+    };
+  }
+
   if (
     (content.type === 'component' && content.id === CALENDAR_VIEW_ID) ||
     (content.type === 'calendar' && content.id === CALENDAR_BLOCK_ID)
@@ -240,6 +235,22 @@ export function splitLocationFromContent(
         ],
       },
       ...(search ? { search: { [CALENDAR_SEARCH_NAMESPACE]: search } } : {}),
+    };
+  }
+
+  if (content.type === 'pr') {
+    return {
+      route: {
+        matches: [{ id: 'pr-detail', params: { foreignEntityId: content.id } }],
+      },
+    };
+  }
+
+  if (content.type === 'call') {
+    return {
+      route: {
+        matches: [{ id: 'call-detail', params: { callId: content.id } }],
+      },
     };
   }
 
@@ -312,11 +323,31 @@ export function resolveContentLocation(
     }
   }
   route ??= resolve(splitLocationFromContent(routes, content).route);
-  const search = filterRouteSearch(
-    routes,
-    route,
-    parseSearchState(metadataLocation?.search)
-  );
+  const savedSearch = parseSearchState(metadataLocation?.search);
+  // In-app message opens carry block params, not external URL query keys.
+  // Preserve the target before middleware upgrades the block to Chat, where
+  // the legacy block (and its imperative navigation handle) is replaced.
+  const channelParams: Record<string, unknown> | undefined =
+    content.type === 'channel' && isRecord(content.params)
+      ? content.params
+      : undefined;
+  const messageId = channelParams?.[CHANNEL_URL_PARAMS.message];
+  const threadId = channelParams?.[CHANNEL_URL_PARAMS.thread];
+  let contentSearch = savedSearch;
+  if (typeof messageId === 'string') {
+    const channelSearch = { ...savedSearch?.[channelsSearch.namespace] };
+    // Message and thread identify one target; never combine two saved opens.
+    if (!Object.hasOwn(channelSearch, 'messageId')) {
+      channelSearch.messageId = [messageId];
+      if (typeof threadId === 'string') channelSearch.threadId = [threadId];
+      else delete channelSearch.threadId;
+    }
+    contentSearch = {
+      ...savedSearch,
+      [channelsSearch.namespace]: channelSearch,
+    };
+  }
+  const search = filterRouteSearch(routes, route, contentSearch);
   const location: SplitLocation = { route };
   if (search) location.search = search;
   return location;
@@ -327,10 +358,32 @@ export function splitContentFromLocation(
 ): SplitContent {
   const root = location.route.matches[0];
 
+  if (root.id === REMINDER_DETAIL_ROUTE_ID) {
+    const { reminderId } = routeParams(location.route);
+    if (typeof reminderId === 'string' && reminderId.length > 0) {
+      return reminderDetailContent(reminderId);
+    }
+    throw new Error('Invalid reminder detail split route');
+  }
+
   if (root.id.startsWith('view-'))
     return { type: 'component', id: root.id.slice('view-'.length) };
   if (root.id === 'drive') return { type: 'component', id: 'documents' };
   if (root.id === 'settings') return { type: 'component', id: 'settings' };
+  if (root.id === 'pr-detail') {
+    const { foreignEntityId } = routeParams(location.route);
+    if (typeof foreignEntityId === 'string' && foreignEntityId.length > 0) {
+      return { type: 'pr', id: foreignEntityId };
+    }
+    throw new Error('Invalid PR detail split route');
+  }
+  if (root.id === 'call-detail') {
+    const { callId } = routeParams(location.route);
+    if (typeof callId === 'string' && callId.length > 0) {
+      return { type: 'call', id: callId };
+    }
+    throw new Error('Invalid call detail split route');
+  }
 
   const params = routeParams(location.route);
   if (
@@ -358,16 +411,21 @@ export const legacySplitRoute = defineRoute({
   id: 'legacy-content',
   path: ':type/:id',
   search: '*',
-  params: z.object({ type: z.string().min(1), id: z.string().min(1) }),
+  params: z
+    .object({ type: z.string().min(1), id: z.string().min(1) })
+    .refine(({ type, id }) => decodeLegacyPair(type, id) !== undefined),
   externalSearch: (entry) => {
     const { type } = routeParams(entry.location.route);
     if (type === 'email') return Object.values(EMAIL_URL_PARAMS);
     if (type === 'channel') return Object.values(CHANNEL_URL_PARAMS);
+    if (type === 'company' || type === 'contact') return [COMMENT_LINK_PARAM];
     return [];
   },
   claim: ({ type, id }) => {
     const content = decodeLegacyPair(type, id);
     if (!content) return;
+
+    if (content.type === 'agent') return { namespace: 'agent', id };
 
     if (content.type === 'component') {
       const [section, conversationId] = agentsRouteSegments(content.id) ?? [];

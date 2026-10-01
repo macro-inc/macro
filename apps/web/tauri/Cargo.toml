@@ -1,5 +1,8 @@
 [workspace]
 members = [
+  "android_auth_plugin",
+  "android_mobile_plugin",
+  "android_push_plugin",
   "callkit_plugin",
   "edit_menu_plugin",
   "graphql_cache_plugin",

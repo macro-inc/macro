@@ -52,7 +52,8 @@ pub async fn process_macro_id(
         }
 
         // Mirrors sync_thread_signal_flag (email_db_client/threads/update.rs)
-        // and the Importance(true) predicate in the dynamic query builder.
+        // and the Importance(true) predicate in the dynamic query builder,
+        // including the exclusion of Macro's own notification sender ($2).
         let flagged = sqlx::query!(
             r#"
             UPDATE email_threads t
@@ -65,6 +66,11 @@ pub async fn process_macro_id(
                       SELECT 1 FROM email_message_labels ml
                       JOIN email_labels l ON ml.label_id = l.id
                       WHERE ml.message_id = m.id AND l.name = 'TRASH'
+                  )
+                  AND NOT EXISTS (
+                      SELECT 1 FROM email_contacts sender_c
+                      WHERE sender_c.id = m.from_contact_id
+                        AND LOWER(SPLIT_PART(sender_c.email_address, '@', 2)) = $2
                   )
                   AND (
                       (
@@ -147,7 +153,8 @@ pub async fn process_macro_id(
             WHERE t.id = sig.thread_id
               AND NOT t.is_signal
             "#,
-            link_id
+            link_id,
+            email_utils::MACRO_NOTIFICATION_SENDER_DOMAIN,
         )
         .execute(&mut *tx)
         .await?
@@ -186,6 +193,11 @@ async fn verify_link(pool: &sqlx::PgPool, link_id: Uuid) -> anyhow::Result<u64> 
                     SELECT 1 FROM email_message_labels ml
                     JOIN email_labels l ON ml.label_id = l.id
                     WHERE ml.message_id = m.id AND l.name = 'TRASH'
+                )
+                AND NOT EXISTS (
+                    SELECT 1 FROM email_contacts sender_c
+                    WHERE sender_c.id = m.from_contact_id
+                      AND LOWER(SPLIT_PART(sender_c.email_address, '@', 2)) = $2
                 )
                 AND (
                     (
@@ -266,7 +278,8 @@ async fn verify_link(pool: &sqlx::PgPool, link_id: Uuid) -> anyhow::Result<u64> 
                 )
           )
         "#,
-        link_id
+        link_id,
+        email_utils::MACRO_NOTIFICATION_SENDER_DOMAIN,
     )
     .fetch_one(pool)
     .await?;

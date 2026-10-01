@@ -1,12 +1,11 @@
 //! Toolset inbound adapter for Documents.
 
-mod comment_on_document_text;
+mod comment_on_document;
 mod create_document;
 mod edit_document;
 mod read_content;
 mod read_metadata;
 mod rename_document;
-mod reply_to_document_comment;
 mod resolve_document_comment;
 mod spreadsheet;
 mod upload_file;
@@ -21,16 +20,15 @@ use crate::{
     domain::create::DocumentCreator,
     domain::ports::DocumentService,
     domain::ports::create::DocumentCreationService,
-    domain::ports::editing::EditingWorkerService,
+    domain::ports::editing::{EditingWorkerService, EditorName},
     domain::ports::mentions::NoOpDocumentMentionTracker,
     inbound::toolset::{
-        comment_on_document_text::CommentOnDocumentText,
+        comment_on_document::CommentOnDocument,
         create_document::CreateDocument,
         edit_document::EditDocument,
         read_content::ReadContent,
         read_metadata::ReadMetadata,
         rename_document::RenameDocument,
-        reply_to_document_comment::ReplyToDocumentComment,
         resolve_document_comment::ResolveDocumentComment,
         spreadsheet::{CalculateSpreadsheet, EditSpreadsheet, ReadSpreadsheet},
         upload_file::UploadFile,
@@ -40,7 +38,6 @@ use crate::{
         lexical_comment_marks::LexicalCommentMarks, markdown_init::LexicalSyncMarkdownInitializer,
     },
 };
-use activity::{Actor, Attribution};
 use ai_toolset::{AsyncToolCollection, RequestContext, ToolCallError};
 use bot_id::BotId;
 use entity_access::domain::{
@@ -50,6 +47,7 @@ use entity_access::domain::{
 use lexical_client::LexicalClient;
 use macro_user_id::user_id::MacroUserIdStr;
 use messages::domain::{api::MessageServiceApi, ports::MessageError, service::MessageWrite};
+use model_owner::CreationPrincipal;
 use std::sync::Arc;
 use sync_service_client::SyncServiceClient;
 use uuid::Uuid;
@@ -97,6 +95,9 @@ pub struct DocumentToolContext<
     /// JWT secret used to mint document permission tokens for the editing worker.
     pub document_permission_jwt_secret: String,
 
+    /// Shared admission used by the domain AI-editing use case.
+    pub admission: Arc<dyn ai_billing::domain::admission::AiAdmissionService>,
+
     /// Records the token usage the editing worker reports. Defaults to a no-op;
     /// the chat path injects the real (Postgres-backed) recorder per request.
     pub recorder: Arc<dyn ai_usage::UsageRecorder>,
@@ -104,6 +105,13 @@ pub struct DocumentToolContext<
     /// The bot these tools act as, on behalf of the requesting user. Defaults
     /// to Macro AI; hosts running a specific agent set it with [`Self::with_actor`].
     pub actor: BotId,
+
+    /// The display name of [`Self::actor`] as the host knows it, set with
+    /// [`Self::with_actor_name`]. First-party bots need none: their names are
+    /// compile-time constants. A user- or team-owned bot is a row the host has
+    /// already read, so it hands the name over rather than have every tool
+    /// look it up again.
+    actor_name: Option<EditorName>,
 }
 
 impl<
@@ -124,8 +132,10 @@ impl<
             messages: self.messages.clone(),
             spreadsheet: self.spreadsheet.clone(),
             document_permission_jwt_secret: self.document_permission_jwt_secret.clone(),
+            admission: self.admission.clone(),
             recorder: self.recorder.clone(),
             actor: self.actor,
+            actor_name: self.actor_name.clone(),
         }
     }
 }
@@ -180,9 +190,29 @@ impl<
             messages,
             spreadsheet,
             document_permission_jwt_secret,
+            admission: Arc::new(ai_billing::domain::admission::DisabledAiAdmissionService),
             recorder: Arc::new(ai_usage::NoOpUsageRecorder),
             actor: bot_id::MACRO_AI_BOT_ID,
+            actor_name: None,
         }
+    }
+
+    /// Configure admission for AI edits; deterministic operations do not use it.
+    pub fn with_admission(
+        mut self,
+        admission: Arc<dyn ai_billing::domain::admission::AiAdmissionService>,
+    ) -> Self {
+        self.admission = admission;
+        self
+    }
+
+    /// The AI-editing use case using the currently injected services.
+    pub fn ai_editing(&self) -> crate::domain::ai_editing::AiEditingService<EDSvc> {
+        crate::domain::ai_editing::AiEditingService::new(
+            self.editing.clone(),
+            self.admission.clone(),
+            self.recorder.clone(),
+        )
     }
 
     /// Set the usage recorder the EditDocument tool logs worker token usage to.
@@ -195,6 +225,23 @@ impl<
     pub fn with_actor(mut self, actor: BotId) -> Self {
         self.actor = actor;
         self
+    }
+
+    /// Set the display name of the bot these tools act as. A blank name is
+    /// no name: the actor's own is used, when it has one.
+    pub fn with_actor_name(mut self, name: &str) -> Self {
+        self.actor_name = EditorName::new(name);
+        self
+    }
+
+    /// The name readers see on what these tools write as it happens - the
+    /// label on the cursor the editing worker draws: the host-supplied name,
+    /// else the first-party bot's own. `None` for a user- or team-owned bot
+    /// the host did not name.
+    pub fn actor_editor_name(&self) -> Option<EditorName> {
+        self.actor_name
+            .clone()
+            .or_else(|| bot_id::system_bot(self.actor).and_then(|bot| EditorName::new(bot.name)))
     }
 
     /// Mint the bot's comment capability on the document on behalf of the
@@ -215,9 +262,12 @@ impl<
             .map_err(comment_access_error)
     }
 
-    /// Attribution for a write these tools make for `user`.
-    pub fn attribution(&self, user: MacroUserIdStr<'static>) -> Attribution {
-        Attribution::delegated(Actor::new_from_bot(self.actor), user)
+    /// Who these tools create entities as when acting for `user`.
+    pub fn creation_principal(&self, user: MacroUserIdStr<'static>) -> CreationPrincipal {
+        CreationPrincipal::BotForUser {
+            bot: self.actor,
+            user,
+        }
     }
 }
 
@@ -236,8 +286,7 @@ where
         .add_tool::<UploadFile, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<RenameDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<EditDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
-        .add_tool::<ReplyToDocumentComment, DocumentToolContext<DSvc, ESvc, EDSvc>>()
-        .add_tool::<CommentOnDocumentText, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<CommentOnDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<ResolveDocumentComment, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<ReadSpreadsheet, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<CalculateSpreadsheet, DocumentToolContext<DSvc, ESvc, EDSvc>>()

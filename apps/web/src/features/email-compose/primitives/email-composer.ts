@@ -53,6 +53,7 @@ import {
   refuseAttachmentsOffline,
 } from './attachment-persistence';
 import { createDraftAutosave } from './draft-autosave';
+import { observeDraftIdentity } from './draft-identity';
 import {
   createDraftPersistence,
   deleteDraftForDiscard,
@@ -79,6 +80,11 @@ type UndoComposeSnapshot = {
 
 const composeUndo = createEmailUndoStore<UndoComposeSnapshot>();
 
+/** Undo content is the only valid in-memory fallback for reopening by ID. */
+export function hasComposeUndo(draftId: string): boolean {
+  return composeUndo.peek(draftId) !== undefined;
+}
+
 export type EmailComposerOptions = {
   drafts: EmailDraftStorage;
   attachmentStorage: EmailAttachmentStorage;
@@ -95,10 +101,13 @@ export type EmailComposerOptions = {
   draft?: EmailMessage;
   /** Identity for a composer reopened from a local undo snapshot. */
   draftId?: string;
+  draftPersistence?: 'committed' | 'queued';
   recipientOptions?: Accessor<EmailRecipient[]>;
   onRecipientsChange?: (recipients: EmailRecipient[]) => void;
   /** Prefill for the To field (e.g. from an intercepted mailto: link). Ignored when editing an existing draft. */
   initialTo?: string[];
+  /** Initial sending inbox for new messages. Existing drafts retain their sender. */
+  initialInboxId?: string;
 };
 
 export function createEmailComposer(props: EmailComposerOptions) {
@@ -127,14 +136,20 @@ export function createEmailComposer(props: EmailComposerOptions) {
     }
   );
 
+  if (!initialDraftId && props.initialInboxId) {
+    form.setSelectedInbox(props.initialInboxId);
+  }
+
   const primaryInboxId = props.accounts.primaryId;
   const link = createMemo(() => {
     const inboxes = props.accounts.inboxes();
     if (inboxes.length === 0) return undefined;
-    // Send from the inbox the user picked, else the inbox that owns the draft
-    // being edited, else the primary inbox — not whichever inbox sorts first.
-    const targetId =
-      form.selectedInboxId() ?? props.draft?.link_id ?? primaryInboxId();
+    // An explicit sender must resolve before sending from that account.
+    const selectedInboxId = form.selectedInboxId();
+    if (selectedInboxId !== undefined) {
+      return inboxes.find((inbox) => inbox.id === selectedInboxId);
+    }
+    const targetId = props.draft?.link_id ?? primaryInboxId();
     return inboxes.find((inbox) => inbox.id === targetId) ?? inboxes[0];
   });
 
@@ -163,12 +178,23 @@ export function createEmailComposer(props: EmailComposerOptions) {
       ? {
           draftId: initialDraftId,
           threadId: restoredSnapshot?.threadId ?? props.draft?.thread_db_id,
+          persistence: props.draftPersistence,
           inboxId: restoredSnapshot?.inboxId ?? props.draft?.link_id,
         }
       : undefined
   );
   const currentDraftId = session.draftId;
   const currentThreadId = session.threadId;
+  observeDraftIdentity(
+    props.drafts,
+    session,
+    props.notices,
+    () => {
+      if (persistencePaused()) return;
+      detachFromObsoleteDraft('Saving your edits as a new draft.');
+    },
+    handleAlreadySent
+  );
   const persistedInboxId = session.inboxId;
   const [movingInbox, setMovingInbox] = createSignal(false);
   let identityVersion = 0;
@@ -260,7 +286,9 @@ export function createEmailComposer(props: EmailComposerOptions) {
   ) {
     props.notices.reportError(error);
     if (!session.serverConfirmed()) {
-      if (schedule?.pending()) {
+      // A best-effort pre-send save may fail while delivery still succeeds.
+      // Background saves and explicit draft actions report their own failure.
+      if (schedule?.pending() || !submitting()) {
         props.notices.feedback.failure(`Failed to ${operation} draft`);
       }
       return;
@@ -292,17 +320,19 @@ export function createEmailComposer(props: EmailComposerOptions) {
     props.notices.feedback.failure(`Failed to ${operation} draft`);
   }
 
+  function handleAlreadySent() {
+    identityVersion += 1;
+    autosave.cancel();
+    props.notices.feedback.alert('This email was already sent');
+    resetState();
+  }
+
   const persistence = createDraftPersistence({
     session,
     drafts: props.drafts,
     attachments: attachmentPersistence,
     mintThreadHandle: true,
-    onAlreadySent: () => {
-      identityVersion += 1;
-      autosave.cancel();
-      props.notices.feedback.alert('This email was already sent');
-      resetState();
-    },
+    onAlreadySent: handleAlreadySent,
   });
 
   async function persistDraft({
@@ -602,7 +632,7 @@ export function createEmailComposer(props: EmailComposerOptions) {
     if (!currentLink) {
       setValidationError({
         type: 'no_link',
-        message: 'Unable to find linked email account',
+        message: 'Unable to find linked email account. Select a sending inbox.',
       });
       return;
     }
@@ -778,6 +808,10 @@ export function createEmailComposer(props: EmailComposerOptions) {
       }
       identityVersion += 1;
       resetState();
+      // A standalone draft owns its thread; after discard there is no
+      // conversation left to display. Reset before leaving so disposal cannot
+      // flush the deleted draft back into the save queue.
+      props.host?.goBack?.();
       return true;
     } finally {
       setDiscarding(false);
@@ -1053,6 +1087,7 @@ export function createEmailComposer(props: EmailComposerOptions) {
 
     // Validation
     validationError: (type) => {
+      if (type === 'no_link' && link()) return undefined;
       const error = validationError();
       if (error?.type === type) return error;
       return undefined;

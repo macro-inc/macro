@@ -65,8 +65,34 @@ trace context — timestamps + service are the only join for those.
   inter-service client spans), so a trace tells you the route and latency but not why.
 - Log lines from events outside spans (startup, pollers) have no trace_id; in-span events do
   (structured metadata), so prefer erroring *handlers* as log entry points.
-- Frontend spans stop at the fetch: no spans for user interactions or the websocket-delivered
-  results, so async flows (AI edits applying, message fan-out) have no trace at all.
+- Most frontend spans stop at the fetch: websocket-delivered results such as AI edits
+  applying and message fan-out remain untraced. Call joining now has a user-action
+  trace; see below.
+
+## Call joining
+
+Click **Start call** on `/app/meet/new` or **Join call** on a shared meeting's
+setup screen. Search Tempo for `{ name="meeting.join" }`. One browser trace
+covers an accepted button press through connection or failure:
+
+| Span | What it measures |
+| --- | --- |
+| `meeting.join.previous_session` | Waiting for previous session cleanup. |
+| `meeting.join.create` | Preparing the meeting link for a new call; absent for shared-link joins. |
+| `meeting.join.credentials` | Requesting join credentials, including backend room allocation. |
+| `meeting.join.connect` | Connecting the browser call session after receiving credentials. |
+
+The root records `meeting.join.kind` (`create` or `join`), guest status,
+microphone/camera preferences, `call.id` once credentials arrive, and
+`meeting.join.outcome` (`connected`, `failed`, `cancelled`, or `already_in_call`).
+It does not measure setup-page loading or completion of background media setup.
+Never add share tokens or RTC credentials to trace attributes or errors.
+
+The HTTP requests can have separate trace IDs across asynchronous mutation
+boundaries. Capture each request's `traceparent` as described above and inspect
+the backend trace as well. For the join request, compare `create_room`,
+`prepare_meeting_call`, and `join_invitation`; `start_meeting_media` runs in the
+background and must not be added to the time spent waiting for credentials.
 
 ## Agent sessions
 
@@ -77,7 +103,8 @@ identifier spaces and must not be confused.
 
 | Span | Answers |
 | --- | --- |
-| `agent.turn` | Did a Cursor turn run, and how did it end? `agent.turn.stop_reason` / `agent.turn.outcome`, plus `cursor.agent.id` / `cursor.run.id`. |
+| `agent.turn` | Did a Cursor turn run, and how did it end? `agent.turn.stop_reason` / `agent.turn.outcome`, plus `cursor.agent.id` / `cursor.run.id`. `agent.turn.gate_wait_ms` is time spent waiting behind a mirror of a run started from cursor.com before the turn could begin. |
+| `agent.session.background` | The per-session task that mirrors cursor.com and reaps idle pipes. Every `cursor.run.ingest` a mirror runs sits under it, which is what makes a mirrored run searchable by Macro session id. |
 | `cursor.run.poll` | Is a turn still alive? One per poll, at DEBUG. |
 | `agent.session.turn_ended` | The connection's live fold closed the turn on a logged frame; carries `agent.turn.id`, `agent.turn.stop_reason`, and `agent.action.id` when a local prompt opened it. |
 | `agent.session.disconnect` | The session's actor wrote a `disconnected` event, and `agent.session.close_reason` says why. |
@@ -95,4 +122,18 @@ Two things worth knowing when reading these:
   return.
 - **The idle-check DEBUG line fires every tick, not just the reaping one.** `agent.pipe.reaped`,
   `agent.pipe.active_turn` and `agent.pipe.idle_ms` on the ticks that did *nothing* are what
-  show a deadline sitting long expired while a live turn held the pipe open.
+  show a deadline sitting long expired while a live turn held the pipe open. Production does
+  not ship DEBUG, so the same condition is also said at WARN — `cursor pipe idle past its
+  deadline but held open by a turn or an admitted command`, with the in-flight turn's id and
+  age — once the pipe has been held open for half an hour, and once per half hour after.
+
+Log lines to search for when a session's queue is not draining, in the order a stuck
+prompt passes them:
+
+| Line | Where | Means |
+| --- | --- | --- |
+| `forwarding an agent session command` | the replica that took the request | The command left for the managing replica; this replica reports `Sent` regardless of what happens next. |
+| `executed a forwarded command` / `forwarded command failed` | the managing replica | The command arrived, and what it returned (`Completed` or `Queued`). Absent means the Redis hop lost it. |
+| `action queued behind the turn in flight` | the managing replica | Why the prompt is waiting: the in-flight turn, its action id, and `in_flight_age_secs`. |
+| `recovering a run started elsewhere` | the Cursor service | A mirror or a pre-prompt backfill is about to follow a cursor.com run; `cursor.run.still_running=true` means it will hold the turn gate until that run ends. `finished recovering …` closes it with `elapsed_ms`. |
+| `waiting for the turn gate behind a mirror …` / `acquired the turn gate` / `stopped while waiting …` / `gave up waiting for the turn gate` | the Cursor service, inside `agent.turn` | The prompt is parked behind that mirror, and how the wait ended. |

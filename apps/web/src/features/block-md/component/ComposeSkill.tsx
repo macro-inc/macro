@@ -1,5 +1,6 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { createLexicalWrapper } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
@@ -344,6 +345,7 @@ export function ComposeSkill(props: ComposeSkillProps) {
   });
 
   const editorConfig = buildConfig('markdown')
+    .withAppLinkResolver(useMacroMentionLinkResolver())
     .withMentions()
     .withEmojis()
     .withActions()
@@ -434,9 +436,9 @@ export function ComposeSkill(props: ComposeSkillProps) {
         <Button
           onClick={handleCreateSkill}
           disabled={title().trim().length === 0 || isCreating()}
-          variant={title().trim().length === 0 ? 'ghost' : 'accent'}
+          variant="strong"
           depth={3}
-          class="gap-3 rounded-lg border-0"
+          class="gap-3"
         >
           Create Skill
           <Hotkey shortcut="cmd+enter" theme="current" />

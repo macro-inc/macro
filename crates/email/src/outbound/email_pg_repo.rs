@@ -21,6 +21,7 @@ mod db_types;
 mod draft;
 mod dynamic;
 mod email_filter;
+mod followup;
 mod label;
 mod link;
 mod message;
@@ -61,6 +62,11 @@ impl EmailPgRepo {
 }
 
 impl EmailUserRepo for EmailPgRepo {
+    async fn user_sender_filters(&self, link_id: Uuid) -> Result<Vec<EmailFilter>, EmailErr> {
+        email_filter::list_email_filters(&self.pool, link_id)
+            .await
+            .map_err(|error| EmailErr::RepoErr(error.into()))
+    }
     async fn user_accessible_inboxes(
         &self,
         macro_id: MacroUserIdStr<'static>,
@@ -214,6 +220,16 @@ impl EmailRepo for EmailPgRepo {
         message_ids: &[Uuid],
     ) -> Result<HashMap<Uuid, Vec<MessageLabel>>, Self::Err> {
         message::labels_by_message_ids(&self.pool, message_ids).await
+    }
+
+    async fn calendar_invitations_by_message_ids(
+        &self,
+        message_ids: &[Uuid],
+    ) -> Result<
+        HashMap<Uuid, Vec<crate::domain::models::calendar_invitation::CalendarInvitation>>,
+        Self::Err,
+    > {
+        crate::outbound::invitation_pg::load(&self.pool, message_ids).await
     }
 
     async fn attachments_by_message_ids(

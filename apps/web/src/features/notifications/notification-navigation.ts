@@ -1,10 +1,12 @@
 import { openCalendarView } from '@app/features/calendar-view/calendar-navigation';
 import { createCalendarRange } from '@app/features/calendar-view/calendar-range';
+import { openReminderDetail } from '@app/features/reminders/reminder-navigation';
 import {
   getChannelParams,
   navigateToChannelMessage,
 } from '@block-channel/utils/link';
 import type {
+  OpenSplitResult,
   SplitHandle,
   SplitManager,
 } from '@components/app/split-layout/layoutManager';
@@ -12,23 +14,23 @@ import type { BlockAlias, BlockName } from '@core/block';
 import { resolveBlockAlias } from '@core/constant/allBlocks';
 import {
   enableCalendarUi,
-  enableReminders,
+  enableProjects,
   isFeatureEnabled,
   USE_MACRO_PR_SUMMARY_BLOCK,
 } from '@core/constant/featureFlags';
-import type { EntityType, NotificationType } from '@core/types';
+import { COMMENT_LINK_PARAM } from '@core/messages/comment-link';
+import type { NotificationType } from '@core/types';
 import { openExternalUrl } from '@core/util/url';
 import { getNotificationById } from '@queries/notification/user-notifications';
-import { getReminderById } from '@queries/reminders/reminders';
 import { errAsync, ResultAsync } from 'neverthrow';
 import { match, P } from 'ts-pattern';
+import { projectRouteId } from '../projects/core/route';
 import {
   getDocumentCommentLocation,
   type NotificationEntityOverride,
 } from './document-comment-location';
 import { GITHUB_EVENT_TYPES } from './github-event-types';
 import { isChannelNotification } from './notification-helpers';
-import { DefaultNotificationBlockNameResolver } from './notification-resolvers';
 import type { NotificationSource } from './notification-source';
 import { CHANNEL_EVENT_TYPES } from './notification-source';
 import {
@@ -61,21 +63,37 @@ function openSplitIfNotOpen(
     newSplit?: boolean;
     params?: Record<string, unknown>;
     sourceHandle?: SplitHandle;
+    onApplied?: VoidFunction;
   } = {}
 ) {
+  let onApplied = options.onApplied;
+  const reportApplied = () => {
+    const callback = onApplied;
+    onApplied = undefined;
+    callback?.();
+  };
+  const reportImmediateResult = (result: OpenSplitResult | undefined) => {
+    if (!result) return;
+    if (result.status === 'opened' || result.status === 'reused') {
+      reportApplied();
+    }
+  };
   const existing = layoutManager.getSplitByContent(type, id);
   if (existing) {
     existing.activate();
+    reportApplied();
   } else {
-    layoutManager.openWithSplit(
+    const result = layoutManager.openWithSplit(
       { type, id },
       {
         activate: true,
         referredFrom: null,
         preferNewSplit: options.newSplit,
         handle: options.sourceHandle,
+        ...(options.onApplied ? { onApplied: reportApplied } : {}),
       }
     );
+    reportImmediateResult(result);
   }
   if (options.params && type !== 'component') {
     goToLocationInSplit(layoutManager, type, id, options.params);
@@ -96,6 +114,10 @@ export function getChannelNotificationParams(
     .with({ tag: 'channel_message_send' }, (m) => ({
       messageId: m.content.messageId,
       threadId: undefined,
+    }))
+    .with({ tag: 'channel_message_reaction' }, (m) => ({
+      messageId: m.content.messageId,
+      threadId: m.content.threadId ?? undefined,
     }))
     .with({ tag: 'channel_message_reply' }, (m) => ({
       messageId: m.content.messageId,
@@ -118,7 +140,8 @@ async function openChannelNotification(
   notification: UnifiedNotification,
   layoutManager: SplitManager,
   newSplit: boolean = false,
-  sourceHandle?: SplitHandle
+  sourceHandle?: SplitHandle,
+  onApplied?: VoidFunction
 ) {
   const channelId = notification.entity_id;
   const { messageId, threadId } = getChannelNotificationParams(notification);
@@ -127,6 +150,7 @@ async function openChannelNotification(
     openSplitIfNotOpen(layoutManager, 'channel', channelId, {
       newSplit,
       sourceHandle,
+      onApplied,
     });
     return;
   }
@@ -136,6 +160,7 @@ async function openChannelNotification(
     splitManager: layoutManager,
     preferNewSplit: newSplit,
     sourceHandle,
+    ...(onApplied ? { onApplied } : {}),
   });
 }
 
@@ -149,12 +174,21 @@ type NotFoundError = {
   notificationId: string;
 };
 
-type OpenNotificationFromIdError = NotSupportedError | NotFoundError;
+type NavigationDeferredError = {
+  tag: 'NavigationDeferredError';
+  notificationId: string;
+};
+
+type OpenNotificationFromIdError =
+  | NotSupportedError
+  | NotFoundError
+  | NavigationDeferredError;
 
 function getSupportedHandler(
   notification: UnifiedNotification,
   entity?: NotificationEntityOverride,
-  sourceHandle?: SplitHandle
+  sourceHandle?: SplitHandle,
+  onApplied?: VoidFunction
 ): ((layoutManager: SplitManager, newSplit?: boolean) => Promise<void>) | null {
   const tag = notification.notification_metadata.tag as NotificationType;
 
@@ -164,7 +198,13 @@ function getSupportedHandler(
         P.union(...CHANNEL_EVENT_TYPES),
         () =>
           (lm: SplitManager, newSplit: boolean = false) =>
-            openChannelNotification(notification, lm, newSplit, sourceHandle)
+            openChannelNotification(
+              notification,
+              lm,
+              newSplit,
+              sourceHandle,
+              onApplied
+            )
       )
       .with(
         'ai_response',
@@ -173,6 +213,7 @@ function getSupportedHandler(
             openSplitIfNotOpen(lm, 'chat', notification.entity_id, {
               newSplit,
               sourceHandle,
+              onApplied,
             })
       )
       .with('new_email', () => {
@@ -182,6 +223,7 @@ function getSupportedHandler(
           openSplitIfNotOpen(lm, 'email', meta.content.threadId, {
             newSplit,
             sourceHandle,
+            onApplied,
           });
         };
       })
@@ -192,6 +234,7 @@ function getSupportedHandler(
             openSplitIfNotOpen(lm, 'channel', notification.entity_id, {
               newSplit,
               sourceHandle,
+              onApplied,
             })
       )
       .with('invite_to_team', () => null)
@@ -202,6 +245,7 @@ function getSupportedHandler(
             openSplitIfNotOpen(lm, 'channel', notification.entity_id, {
               newSplit,
               sourceHandle,
+              onApplied,
             })
       )
       // Every agent-session kind opens the session itself: the chip in the
@@ -226,6 +270,7 @@ function getSupportedHandler(
             openSplitIfNotOpen(lm, 'agent', meta.content.sessionId, {
               newSplit,
               sourceHandle,
+              onApplied,
             });
           };
         }
@@ -237,6 +282,7 @@ function getSupportedHandler(
           openSplitIfNotOpen(lm, 'task', meta.content.taskId, {
             newSplit,
             sourceHandle,
+            onApplied,
           });
         };
       })
@@ -257,6 +303,7 @@ function getSupportedHandler(
             openSplitIfNotOpen(lm, 'pr', notification.entity_id, {
               newSplit,
               sourceHandle,
+              onApplied,
             });
             return;
           }
@@ -267,6 +314,28 @@ function getSupportedHandler(
           }
 
           openExternalUrl(url);
+          onApplied?.();
+        };
+      })
+      .with('initiative_discussion', () => {
+        if (!isFeatureEnabled(enableProjects)) return null;
+        const meta = notification.notification_metadata;
+        if (
+          meta.tag !== 'initiative_discussion' ||
+          notification.entity_type !== 'initiative'
+        )
+          return null;
+        return async (lm: SplitManager, newSplit = false) => {
+          openSplitIfNotOpen(
+            lm,
+            'component',
+            projectRouteId({
+              id: notification.entity_id,
+              section: 'overview',
+              discussionId: meta.content.messageId,
+            }),
+            { newSplit, sourceHandle, onApplied }
+          );
         };
       })
       .with(
@@ -284,32 +353,17 @@ function getSupportedHandler(
               newSplit,
               params: location.params,
               sourceHandle,
+              onApplied,
             });
         }
       )
       .with('reminder', () => {
-        // The notification points at the reminder itself, so there is nothing to
-        // open until the reminder is fetched and its referenced entity read. A
-        // standalone reminder references nothing and opens nothing.
         return async (lm: SplitManager, newSplit: boolean = false) => {
-          // A reminder created before the flag closed still has a live
-          // notification; opening it would reach reminder surfaces the user is
-          // no longer meant to have.
-          if (!isFeatureEnabled(enableReminders)) return;
-          const reminder = await getReminderById(notification.entity_id);
-          const entityType = reminder?.entityType;
-          const entityId = reminder?.entityId;
-          if (!entityType || !entityId) return;
-
-          const blockName = await DefaultNotificationBlockNameResolver(
-            entityId,
-            entityType as EntityType
-          );
-          if (!blockName) return;
-
-          openSplitIfNotOpen(lm, blockName, entityId, {
-            newSplit,
-            sourceHandle,
+          openReminderDetail(notification.entity_id, {
+            manager: lm,
+            handle: sourceHandle,
+            openInNewSplit: newSplit,
+            ...(onApplied ? { onApplied } : {}),
           });
         };
       })
@@ -321,7 +375,10 @@ function getSupportedHandler(
           // A reminder delivered before the flag closed still has a live
           // notification; opening it must not reach a surface the user is no
           // longer meant to have.
-          if (!isFeatureEnabled(enableCalendarUi)) return;
+          if (!isFeatureEnabled(enableCalendarUi)) {
+            onApplied?.();
+            return;
+          }
           const content = meta.content;
           const time = content.startsAt
             ? {
@@ -343,9 +400,23 @@ function getSupportedHandler(
               manager: lm,
               handle: sourceHandle,
               openInNewSplit: newSplit,
+              ...(onApplied ? { onApplied } : {}),
             }
           );
         };
+      })
+      .with('crm_discussion', () => {
+        const meta = notification.notification_metadata;
+        if (meta.tag !== 'crm_discussion') return null;
+        const blockName =
+          notification.entity_type === 'crm_contact' ? 'contact' : 'company';
+        return async (lm: SplitManager, newSplit: boolean = false) =>
+          openSplitIfNotOpen(lm, blockName, notification.entity_id, {
+            newSplit,
+            params: { [COMMENT_LINK_PARAM]: meta.content.messageId },
+            sourceHandle,
+            onApplied,
+          });
       })
       .with('inbox_reauth_required', () => null)
       .exhaustive()
@@ -365,9 +436,15 @@ export function openNotification(
    * The split this navigation originates from (e.g. the list whose row was
    * clicked).
    */
-  sourceHandle?: SplitHandle
+  sourceHandle?: SplitHandle,
+  options: { onApplied?: VoidFunction } = {}
 ): ResultAsync<void, NotSupportedError> {
-  const handler = getSupportedHandler(notification, entity, sourceHandle);
+  const handler = getSupportedHandler(
+    notification,
+    entity,
+    sourceHandle,
+    options.onApplied
+  );
   if (!handler) {
     return errAsync({
       tag: 'NotSupportedError',
@@ -399,14 +476,32 @@ export function openSingleStackNotification(
 export function openNotificationFromId(
   notificationId: string,
   layoutManager: SplitManager,
-  notificationSource: NotificationSource
+  notificationSource: NotificationSource,
+  options: { canOpen?: () => boolean; onApplied?: VoidFunction } = {}
 ): ResultAsync<void, OpenNotificationFromIdError> {
+  const openIfReady = (notification: UnifiedNotification) => {
+    if (options.canOpen && !options.canOpen()) {
+      return errAsync({
+        tag: 'NavigationDeferredError' as const,
+        notificationId,
+      });
+    }
+    return openNotification(
+      notification,
+      layoutManager,
+      false,
+      undefined,
+      undefined,
+      { onApplied: options.onApplied }
+    );
+  };
+
   // Check notification source first
   const cached = notificationSource
     .notifications()
     .find((n) => n.id === notificationId);
   if (cached) {
-    return openNotification(cached, layoutManager);
+    return openIfReady(cached);
   }
 
   // Fetch if not in notification source
@@ -417,6 +512,6 @@ export function openNotificationFromId(
       const err: NotFoundError = { tag: 'NotFoundError', notificationId };
       return errAsync(err);
     }
-    return openNotification(unified, layoutManager);
+    return openIfReady(unified);
   });
 }

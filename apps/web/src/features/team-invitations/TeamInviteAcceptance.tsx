@@ -152,7 +152,7 @@ function NoInviteId() {
       <Button
         variant="outline"
         size="md"
-        class="w-full rounded-xs"
+        class="w-full"
         onClick={() => navigate('/')}
       >
         Go to Home
@@ -174,7 +174,7 @@ function UnauthenticatedView(props: { onLogin: () => void }) {
       <Button
         variant="outline"
         size="md"
-        class="w-full rounded-xs"
+        class="w-full"
         onClick={props.onLogin}
       >
         Sign In to Continue
@@ -199,7 +199,7 @@ function AlreadyOnTeam(props: { teamName: string }) {
       <Button
         variant="outline"
         size="md"
-        class="w-full rounded-xs"
+        class="w-full"
         onClick={() => navigate('/')}
       >
         Go to Home
@@ -220,7 +220,7 @@ function InviteNotFound() {
       <Button
         variant="outline"
         size="md"
-        class="w-full rounded-xs"
+        class="w-full"
         onClick={() => navigate('/')}
       >
         Go to Home
@@ -264,7 +264,7 @@ function InviteDetails(props: {
         <Button
           variant="outline"
           size="md"
-          class="w-full rounded-xs"
+          class="w-full"
           onClick={props.onAccept}
           disabled={isDisabled()}
         >
@@ -275,7 +275,7 @@ function InviteDetails(props: {
         <Button
           variant="ghost"
           size="md"
-          class="w-full rounded-xs"
+          class="w-full"
           onClick={props.onDecline}
           disabled={isDisabled()}
         >

@@ -113,6 +113,7 @@ export function signalFilter(entity: EntityData): boolean {
     case 'email':
       if (!ENABLE_CLIENT_EMAIL_SIGNAL_FILTER) return true;
       return isSignalEmail(entity) || entity.isDraft;
+    case 'initiative':
     case 'project':
       return true;
     case 'channel_message':

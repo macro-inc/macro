@@ -4,6 +4,7 @@ use std::collections::HashSet;
 use std::fmt::Write as _;
 use std::sync::Arc;
 
+use ai_billing::{AiAdmissionService, AiFeature, DisabledAiAdmissionService};
 use entity_access::domain::models::EntityAccessReceipt;
 use messages::domain::{
     api::MessageServiceApi,
@@ -72,6 +73,11 @@ struct ThreadContext {
 
 /// What an inline document discussion is attached to.
 enum DiscussionAnchor {
+    Spreadsheet {
+        sheet_id: String,
+        sheet_name: String,
+        range: String,
+    },
     Mark(MarkAnchor),
     /// A PDF highlight and the text it covers, read from the highlight.
     PdfHighlight {
@@ -151,12 +157,27 @@ fn append_anchor(prompt: &mut String, anchor: &MarkAnchor, current: Option<&Mark
     }
 }
 
-/// Write the block naming what a PDF discussion is attached to. A highlight
+/// Write the block naming what a non-Markdown discussion is attached to. A highlight
 /// carries its own text; a pin or a highlight without text says so, so the
 /// agent is not left to infer the words from the page.
-fn append_pdf_anchor(prompt: &mut String, anchor: &DiscussionAnchor) {
+fn append_document_anchor(prompt: &mut String, anchor: &DiscussionAnchor) {
     let _ = match anchor {
         DiscussionAnchor::Mark(_) => return,
+        DiscussionAnchor::Spreadsheet {
+            sheet_id,
+            sheet_name,
+            range,
+        } => {
+            let location =
+                serde_json::json!({ "sheetId": sheet_id, "sheetName": sheet_name, "range": range })
+                    .to_string()
+                    .replace('<', "\\u003c")
+                    .replace('>', "\\u003e");
+            write!(
+                prompt,
+                "\n<anchor type=\"spreadsheet\">\nUse ReadSpreadsheet to read the live cells in this range.\n{location}\n</anchor>\n"
+            )
+        }
         DiscussionAnchor::PdfHighlight {
             anchor_id,
             marked_text: Some(text),
@@ -249,6 +270,7 @@ pub struct MacroAiHandler<R, Z> {
     responder: Arc<R>,
     time_zones: Arc<Z>,
     marks: Arc<dyn CommentMarks>,
+    admission: Arc<dyn AiAdmissionService>,
 }
 
 impl<R, Z> MacroAiHandler<R, Z>
@@ -270,7 +292,14 @@ where
             responder,
             time_zones,
             marks,
+            admission: Arc::new(DisabledAiAdmissionService),
         }
+    }
+
+    /// Configure admission for response generation on behalf of the invoking user.
+    pub fn with_admission(mut self, admission: Arc<dyn AiAdmissionService>) -> Self {
+        self.admission = admission;
+        self
     }
 
     /// What a mark covers in the document now. Called only after the thread
@@ -302,6 +331,15 @@ where
     ) -> anyhow::Result<ThreadContext> {
         let thread = self.messages.get_thread(access, root_id).await?;
         let anchor = thread.state.anchor.map(|anchor| match anchor {
+            ThreadAnchor::Spreadsheet {
+                sheet_id,
+                sheet_name,
+                range,
+            } => DiscussionAnchor::Spreadsheet {
+                sheet_id,
+                sheet_name,
+                range,
+            },
             ThreadAnchor::Markdown {
                 mark_id,
                 marked_text,
@@ -397,10 +435,12 @@ where
             .thread_id
             .or_else(|| parent.is_discussion().then_some(trigger_id));
         if let Some(root_id) = thread_root {
-            let place = if parent.is_discussion() {
-                "a document discussion"
-            } else {
-                "a channel thread"
+            let place = match parent {
+                MessageParent::Channel(_) => "a channel thread",
+                MessageParent::Document(_) => "a document discussion",
+                MessageParent::Initiative(_) => "a project discussion",
+                MessageParent::CrmCompany(_) => "a CRM company discussion",
+                MessageParent::CrmContact(_) => "a CRM contact discussion",
             };
             let (intro, thread_instruction, marker) = match event.trigger {
                 BotTrigger::Mention => (
@@ -428,7 +468,7 @@ where
                     let current = self.current_mark(parent, mark.mark_id).await;
                     append_anchor(&mut prompt, mark, current.as_ref());
                 }
-                Some(pdf) => append_pdf_anchor(&mut prompt, pdf),
+                Some(anchor) => append_document_anchor(&mut prompt, anchor),
                 None => {}
             }
             append_block(&mut prompt, "thread", thread_instruction, marker, &thread);
@@ -499,8 +539,31 @@ where
         //    conversation stops here: nothing is prompted from the event alone.
         let prompt = self.build_prompt(event).await?;
 
-        // 2. Post the immediate "thinking" message in the thread. The capability
-        //    carries the requesting user, so the message records who triggered it.
+        let admission = self
+            .admission
+            .admit(&event.requesting_user, AiFeature::ChannelBot)
+            .await;
+        if let Err(error) = admission {
+            tracing::info!(code = error.code(), "bot response admission rejected");
+            if event.trigger == BotTrigger::Inferred {
+                return Ok(());
+            }
+        }
+
+        // Explicit requests get a visible rejection, not a thinking placeholder
+        // or an error that could cause queued callers to redeliver the request.
+        let (content, notification_policy) = match admission {
+            Ok(()) => (
+                THINKING_MESSAGE.to_string(),
+                PostMessageNotificationPolicy::Silent,
+            ),
+            Err(error) => (
+                format!("{} ({})", error, error.code()),
+                PostMessageNotificationPolicy::Default,
+            ),
+        };
+
+        // 2. Post under the requesting user's current capability.
         let access = self
             .access
             .bot_write(&event.requesting_user, parent)
@@ -513,8 +576,8 @@ where
                 PostMessage {
                     id: None,
                     attribution: MessageAttribution::ActingUser,
-                    notification_policy: PostMessageNotificationPolicy::Silent,
-                    content: THINKING_MESSAGE.to_string(),
+                    notification_policy,
+                    content,
                     thread_id: Some(event.reply_thread_id),
                     anchor: None,
                     mentions: Vec::new(),
@@ -523,6 +586,9 @@ where
                 },
             )
             .await?;
+        if admission.is_err() {
+            return Ok(());
+        }
         let message_id = thinking.id;
 
         // 3. Run the agent loop to produce the reply.

@@ -63,6 +63,12 @@ vi.mock('@channel/Thread/ChannelThread', () => ({
         <p>
           thread of {props.parent().type} {props.parent().id}
         </p>
+        <Show when={props.isReplying()}>
+          <textarea aria-label="Reply composer" />
+        </Show>
+        <Show when={props.messageEditor}>
+          <p>Editor enabled</p>
+        </Show>
         <button
           onClick={() =>
             drawer?.open(props.data(), props.getMessageActions?.(props.data()))
@@ -173,6 +179,36 @@ describe('document message touch actions', () => {
   });
 });
 
+describe('document owner deletion', () => {
+  const someoneElses = {
+    ...message,
+    sender_id: 'someone-else',
+    state: { ...message.state, user_id: 'someone-else' },
+  };
+
+  it('offers delete, not edit, on a comment the owner did not write', () => {
+    const view = render(() => (
+      <MessageThread data={someoneElses} canWrite canModerate />
+    ));
+    openActions(view);
+    expect(view.getByRole('button', { name: 'Delete' })).toBeTruthy();
+    expect(view.queryByRole('button', { name: 'Edit' })).toBeNull();
+    fireEvent.click(view.getByRole('button', { name: 'Delete' }));
+    expect(mocks.remove).toHaveBeenCalledWith({
+      parent: someoneElses.parent,
+      messageID: 'root',
+      threadID: undefined,
+    });
+  });
+
+  it('hides delete on a comment the caller did not write', () => {
+    const view = render(() => <MessageThread data={someoneElses} canWrite />);
+    openActions(view);
+    expect(view.queryByRole('button', { name: 'Delete' })).toBeNull();
+    expect(view.queryByRole('button', { name: 'Edit' })).toBeNull();
+  });
+});
+
 describe('document discussion controls', () => {
   // A document thread carries no thread-level controls of its own: resolve was
   // dead, and deleting a discussion is moving onto the root message's delete.
@@ -236,4 +272,23 @@ describe('threadListItem', () => {
     expect(item.thread.preview.map((r) => r.id)).toEqual(['r3', 'r4', 'r5']);
     expect(item.thread.latest_reply_at).toBe('2026-01-05T00:00:00Z');
   });
+});
+
+it('closes an active project reply composer and editor when comment access is lost', () => {
+  const [canWrite, setCanWrite] = createSignal(true);
+  const view = render(() => (
+    <MessageThread
+      data={{ ...message, parent: { type: 'initiative', id: 'project' } }}
+      canWrite={canWrite()}
+    />
+  ));
+  openActions(view);
+  fireEvent.click(view.getByRole('button', { name: 'Reply' }));
+  expect(view.getByRole('textbox', { name: 'Reply composer' })).toBeTruthy();
+  expect(view.getByText('Editor enabled')).toBeTruthy();
+
+  setCanWrite(false);
+
+  expect(view.queryByRole('textbox', { name: 'Reply composer' })).toBeNull();
+  expect(view.queryByText('Editor enabled')).toBeNull();
 });

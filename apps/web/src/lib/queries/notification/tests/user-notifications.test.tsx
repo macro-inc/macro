@@ -1075,6 +1075,43 @@ describe('optimisticInsertNotification', () => {
     ).not.toHaveBeenCalledWith('channel-1');
   });
 
+  it.each([undefined, 'thread-1'])(
+    'restores the correct inbox row for a reaction (threadId: %s)',
+    (threadId) => {
+      mockHasSoupEntity.mockImplementation((id) => id === 'channel-1');
+      seedQueryCache([createMockNotificationPage([])]);
+      const reaction = createMockNotification({
+        entity_type: 'channel',
+        entity_id: 'channel-1',
+        notification_event_type: 'channel_message_reaction',
+        notification_metadata: {
+          tag: 'channel_message_reaction',
+          content: {
+            messageId: 'message-1',
+            threadId,
+            messageContent: 'A message',
+            emoji: '👍',
+            channelType: 'public',
+          },
+        },
+      });
+
+      optimisticInsertNotification(reaction);
+
+      const rootId = threadId ?? 'message-1';
+      expect(
+        vi.mocked(bumpSoupEntityNotifiedAt)
+      ).toHaveBeenCalledExactlyOnceWith(rootId, reaction.created_at);
+      expect(mockRefetchSoupEntity).toHaveBeenCalledExactlyOnceWith(
+        rootId,
+        'channelThread'
+      );
+      expect(
+        vi.mocked(restoreSoupEntityToDoneFilteredQueries)
+      ).toHaveBeenCalledExactlyOnceWith(rootId, 'unseen');
+    }
+  );
+
   it('should bump the updatedAt of an already-cached email thread', () => {
     mockHasSoupEntity.mockReturnValue(true);
     seedQueryCache([createMockNotificationPage([])]);

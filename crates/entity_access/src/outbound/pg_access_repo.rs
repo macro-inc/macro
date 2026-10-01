@@ -15,6 +15,7 @@ use crate::domain::{
     },
     ports::AccessRepository,
 };
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr};
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -287,6 +288,43 @@ impl AccessRepository for PgAccessRepository {
             &source_ids,
         )
         .await?)
+    }
+
+    async fn get_scheduled_action_access(
+        &self,
+        scheduled_action_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        let Ok(scheduled_action_uuid) = scheduled_action_id.parse::<Uuid>() else {
+            return Ok(None);
+        };
+        let source_ids = queries::get_user_source_ids(&self.pool, user_id)
+            .await
+            .map_err(anyhow_access_error)?;
+        Ok(
+            queries::scheduled_action_access::get_scheduled_action_access(
+                &self.pool,
+                &scheduled_action_uuid,
+                &source_ids,
+            )
+            .await?,
+        )
+    }
+
+    async fn accessible_scheduled_action_ids(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<Vec<Uuid>, AccessError> {
+        let source_ids = queries::get_user_source_ids(&self.pool, Some(user_id))
+            .await
+            .map_err(anyhow_access_error)?;
+        Ok(
+            queries::scheduled_action_access::accessible_scheduled_action_ids(
+                &self.pool,
+                &source_ids,
+            )
+            .await?,
+        )
     }
 
     // A macro user id embeds the user's email, so it stays out of the span; the
@@ -586,9 +624,41 @@ impl AccessRepository for PgAccessRepository {
         entity_id: &uuid::Uuid,
         entity_type: EntityType,
     ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        if matches!(entity_type, EntityType::CrmCompany | EntityType::CrmContact) {
+            return queries::crm_entity_users::get_crm_entity_users(
+                &self.pool,
+                entity_id,
+                entity_type,
+            )
+            .await
+            .map_err(AccessError::from);
+        }
         queries::get_entity_users(&self.pool, entity_id, entity_type)
             .await
             .map_err(anyhow_access_error)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_direct_entity_users(
+        &self,
+        entity_id: &Uuid,
+        entity_type: EntityType,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        let users = sqlx::query_scalar!(
+            "SELECT source_id FROM entity_access WHERE entity_id = $1 AND entity_type = $2 AND source_type = 'user' AND granted_from_project_id IS NULL",
+            entity_id,
+            entity_type.as_ref(),
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        users
+            .into_iter()
+            .map(|user| {
+                MacroUserIdStr::parse_from_str(&user)
+                    .map(|user| user.into_owned())
+                    .map_err(|error| anyhow_access_error(anyhow::anyhow!(error)))
+            })
+            .collect()
     }
 
     #[tracing::instrument(err, skip(self))]

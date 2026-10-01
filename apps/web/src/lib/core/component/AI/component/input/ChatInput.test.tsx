@@ -7,6 +7,7 @@ import { ChatInput } from './ChatInput';
 const mocks = vi.hoisted(() => ({
   touch: true,
   emitChange: undefined as ((value: string) => void) | undefined,
+  enter: undefined as ((event?: KeyboardEvent) => boolean) | undefined,
   root: undefined as HTMLDivElement | undefined,
   upload: vi.fn(),
   mount: vi.fn(),
@@ -49,7 +50,7 @@ vi.mock('@core/component/LexicalMarkdown/utils/create-composer-layout', () => ({
 vi.mock('@core/auth/license', () => ({ useHasPaidAccess: () => () => false }));
 vi.mock('@core/component/AI/constant', () => ({
   SUPPORTED_ATTACHMENT_EXTENSIONS: ['pdf', 'png'],
-  Model: { test: 'test' },
+  PAID_MODELS: ['test'],
   modelsForPlan: () => ['test'],
   defaultModelForPlan: () => 'test',
 }));
@@ -135,6 +136,7 @@ afterEach(() => {
   mocks.touch = true;
   mocks.root = undefined;
   mocks.emitChange = undefined;
+  mocks.enter = undefined;
   vi.clearAllMocks();
 });
 
@@ -144,7 +146,10 @@ function setup(collapseOnBlur = true) {
   const editor = {
     buildHandle: () => ({ lexical: {} }),
     withFilePaste: () => editor,
-    onEnter: () => editor,
+    onEnter: (callback: (event?: KeyboardEvent) => boolean) => {
+      mocks.enter = callback;
+      return editor;
+    },
     onEscape: () => editor,
     onChange: (callback: (value: string) => void) => {
       mocks.emitChange = callback;
@@ -248,6 +253,28 @@ describe('compact mobile chat drafts', () => {
     mocks.touch = false;
     const { wrapper } = setup();
     expect(wrapper.classList.contains('max-h-5')).toBe(false);
+  });
+});
+
+describe('Enter', () => {
+  it('is left to the virtual keyboard on touch devices, so only the button sends', () => {
+    const { draft, onSend } = setup();
+    // Not captured, so the editor inserts a newline instead of sending.
+    expect(mocks.enter?.()).toBe(false);
+    expect(onSend).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(onSend).toHaveBeenCalledWith(
+      expect.objectContaining({ content: draft })
+    );
+  });
+
+  it('sends on desktop', () => {
+    mocks.touch = false;
+    const { draft, onSend } = setup();
+    expect(mocks.enter?.()).toBe(true);
+    expect(onSend).toHaveBeenCalledWith(
+      expect.objectContaining({ content: draft })
+    );
   });
 });
 

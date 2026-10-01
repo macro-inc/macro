@@ -58,6 +58,7 @@ export type DraftSessionEvent =
       type: 'seeded';
       draftId?: string | null;
       threadId?: string | null;
+      persistence?: 'committed' | 'queued';
       inboxId?: string;
     }
   /** Client handles minted before the first dispatch of a new draft. */
@@ -88,6 +89,7 @@ const FRESH: Omit<DraftSessionState, 'epoch'> = {
 export function initialDraftSession(seed?: {
   draftId?: string | null;
   threadId?: string | null;
+  persistence?: 'committed' | 'queued';
   inboxId?: string;
 }): DraftSessionState {
   return reduceDraftSession(
@@ -108,8 +110,8 @@ export function reduceDraftSession(
         ...state,
         identity: event.draftId
           ? {
-              kind: 'server',
-              queued: false,
+              kind: event.persistence === 'queued' ? 'handle' : 'server',
+              queued: event.persistence === 'queued',
               draftId: event.draftId,
               threadId: event.threadId ?? undefined,
               inboxId: event.inboxId,
@@ -199,6 +201,7 @@ export type DraftSession = ReturnType<typeof createDraftSession>;
 export function createDraftSession(seed?: {
   draftId?: string | null;
   threadId?: string | null;
+  persistence?: 'committed' | 'queued';
   inboxId?: string;
 }) {
   const [state, setState] = createSignal(initialDraftSession(seed));

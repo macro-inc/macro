@@ -60,8 +60,8 @@ use super::model::{
     AgentSession, AgentSessionId, AgentSessionLog, AgentSessionPreview, AgentSessionRenamed,
     AuthorKind, ClaimOutcome, CreateAgentSessionParams, LogAppended, MAX_AGENT_SESSION_NAME_CHARS,
     MAX_PREVIEW_SESSION_IDS, Message, MessageId, ReplicaId, SandboxSize, SessionClaim, SessionLog,
-    SessionManagement, SessionPreviewCandidate, StoredAgentSessionLog, ThreadSession,
-    cursor_run_checkpoint,
+    SessionManagement, SessionPreviewCandidate, StoredAgentSessionLog, StoredQueuedAction,
+    ThreadSession, cursor_run_checkpoint,
 };
 use super::ports::{
     AgentConnector, AgentSessionLifecyclePublisher, AgentSessionLogRepo, AgentSessionLogWriter,
@@ -176,6 +176,13 @@ pub trait AgentSessionService: Send + Sync + 'static {
         name: &str,
     ) -> impl Future<Output = Result<()>> + Send;
 
+    /// Archive or unarchive a session after owner access has been verified.
+    fn set_archived(
+        &self,
+        access: &EntityAccessReceipt<OwnerAccessLevel>,
+        is_archived: bool,
+    ) -> impl Future<Output = Result<()>> + Send;
+
     /// A bounded batch of sessions owned by this user, including inactive sessions.
     /// Used by account cleanup, not access-based discovery.
     fn sessions_for_user_cleanup(
@@ -198,12 +205,22 @@ pub trait AgentSessionService: Send + Sync + 'static {
     fn mark_disconnected(&self, id: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
 
     /// Where the session's live actor runs, from this instance's viewpoint:
-    /// unmanaged (claimable here), ours, or a live peer's - in which case
-    /// commands belong at the peer's address rather than in this process.
+    /// unmanaged (claimable here), ours, a live peer's - in which case
+    /// commands belong at the peer's address rather than in this process -
+    /// or nowhere worth sending work, because this instance is draining.
     fn management(
         &self,
         id: AgentSessionId,
     ) -> impl Future<Output = Result<SessionManagement>> + Send;
+
+    /// Publish that this instance's replica is shutting down.
+    ///
+    /// Called the moment the process is told to stop, long before it
+    /// actually does: from here on peers route around this replica and it
+    /// routes work away from itself, so nothing new is started on a process
+    /// that will not live to finish it. Sessions already running here keep
+    /// running - they hold their claims until their actors wind down.
+    fn begin_draining(&self) -> impl Future<Output = Result<()>> + Send;
 
     /// Attach a new transport to an existing persisted session.
     ///
@@ -269,6 +286,19 @@ pub trait AgentSessionService: Send + Sync + 'static {
     fn publish_queue_changed(
         &self,
         event: AgentSessionQueueChanged,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// The session's waiting actions, oldest first. Missing row is empty.
+    fn list_queued_actions(
+        &self,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<Vec<StoredQueuedAction>>> + Send;
+
+    /// Replace the session's waiting actions. An empty slice deletes the row.
+    fn replace_queued_actions(
+        &self,
+        id: AgentSessionId,
+        entries: &[StoredQueuedAction],
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// Persist the sandbox size this session is running at.
@@ -663,15 +693,10 @@ where
         name: &str,
     ) -> Result<()> {
         let name = validate_agent_session_name(name)?;
-        if access.entity().entity_type != EntityType::AgentSession {
-            return Err(AgentSessionError::Unknown(anyhow::anyhow!(
-                "agent session rename received access for another entity type"
-            )));
+        let id = owner_access_session_id(access, "rename")?;
+        if self.repo.get(id).await?.is_archived {
+            return Err(AgentSessionError::Archived(id));
         }
-        let id =
-            AgentSessionId::new_from_uuid(Uuid::parse_str(&access.entity().entity_id).map_err(
-                |error| anyhow::anyhow!("invalid agent session access receipt: {error}"),
-            )?);
         self.repo.set_name(id, name).await?;
         self.realtime
             .publish_renamed(AgentSessionRenamed {
@@ -684,6 +709,23 @@ where
             })
             .ok();
         publish_renamed_lifecycle(&self.repo, &self.lifecycle_publisher, id).await;
+        Ok(())
+    }
+
+    async fn set_archived(
+        &self,
+        access: &EntityAccessReceipt<OwnerAccessLevel>,
+        is_archived: bool,
+    ) -> Result<()> {
+        let id = owner_access_session_id(access, "archive")?;
+        self.repo.set_archived(id, is_archived).await?;
+        self.realtime
+            .publish_updated(id)
+            .await
+            .inspect_err(|error| {
+                tracing::warn!(error = ?error, %id, "failed to publish agent session archive update");
+            })
+            .ok();
         Ok(())
     }
 
@@ -726,7 +768,7 @@ where
                 previews.push(AgentSessionPreview::DoesNotExist(id));
                 continue;
             };
-            // Links and originating documents can grant access without a
+            // Links and originating discussions can grant access without a
             // materialized row. Resolve those through the same view port as
             // the session's read routes.
             let visible = candidate.has_grant || self.view_access.can_view(viewer, id).await?;
@@ -791,11 +833,24 @@ where
     }
 
     async fn management(&self, id: AgentSessionId) -> Result<SessionManagement> {
-        Ok(match self.repo.manager_of(id).await? {
+        let view = self.repo.lease_view(id, self.replica).await?;
+        if view.asking_replica_draining {
+            return Ok(SessionManagement::Draining);
+        }
+        Ok(match view.holder {
             None => SessionManagement::Unmanaged,
+            // A draining holder is still heartbeating and may still be mid
+            // turn, but it is leaving: treated as claimable so the next
+            // command lands on a replica that is staying, and the fence the
+            // takeover bumps is what stops the two writing over each other.
+            Some(manager) if manager.draining => SessionManagement::Unmanaged,
             Some(manager) if manager.replica == self.replica => SessionManagement::Ours,
             Some(manager) => SessionManagement::Peer(manager),
         })
+    }
+
+    async fn begin_draining(&self) -> Result<()> {
+        self.repo.begin_draining(self.replica).await
     }
 
     /// The out-of-band disconnect: a session marked dead by its opener rather
@@ -879,6 +934,9 @@ where
         action: AgentAction,
         action_id: AgentActionId,
     ) -> Result<()> {
+        if self.repo.get(id).await?.is_archived {
+            return Err(AgentSessionError::Archived(id));
+        }
         let initial_prompt = initial_prompt_for_rename(&self.folds, id, &action).await;
 
         self.deliver_action(id, user_id, action, action_id).await?;
@@ -925,6 +983,18 @@ where
 
     async fn publish_queue_changed(&self, event: AgentSessionQueueChanged) -> Result<()> {
         Ok(self.realtime.publish_queue_changed(event).await?)
+    }
+
+    async fn list_queued_actions(&self, id: AgentSessionId) -> Result<Vec<StoredQueuedAction>> {
+        self.repo.list_queued_actions(id).await
+    }
+
+    async fn replace_queued_actions(
+        &self,
+        id: AgentSessionId,
+        entries: &[StoredQueuedAction],
+    ) -> Result<()> {
+        self.repo.replace_queued_actions(id, entries).await
     }
 
     async fn set_sandbox_size(&self, id: AgentSessionId, size: SandboxSize) -> Result<()> {
@@ -1117,6 +1187,21 @@ fn validate_agent_session_name(raw: &str) -> Result<&str> {
         ));
     }
     Ok(name)
+}
+
+fn owner_access_session_id(
+    access: &EntityAccessReceipt<OwnerAccessLevel>,
+    operation: &str,
+) -> Result<AgentSessionId> {
+    if access.entity().entity_type != EntityType::AgentSession {
+        return Err(AgentSessionError::Unknown(anyhow::anyhow!(
+            "agent session {operation} received access for another entity type"
+        )));
+    }
+    Ok(AgentSessionId::new_from_uuid(
+        Uuid::parse_str(&access.entity().entity_id)
+            .map_err(|error| anyhow::anyhow!("invalid agent session access receipt: {error}"))?,
+    ))
 }
 
 /// How long a streamed frame may sit buffered before it must be written and
@@ -1575,6 +1660,10 @@ where
         self.repo.set_name(id, name).await
     }
 
+    async fn set_archived(&self, id: AgentSessionId, is_archived: bool) -> Result<()> {
+        self.repo.set_archived(id, is_archived).await
+    }
+
     async fn set_name_if_default(&self, id: AgentSessionId, name: &str) -> Result<bool> {
         self.repo.set_name_if_default(id, name).await
     }
@@ -1597,6 +1686,18 @@ where
 
     async fn delete(&self, id: AgentSessionId) -> Result<()> {
         self.repo.delete(id).await
+    }
+
+    async fn list_queued_actions(&self, id: AgentSessionId) -> Result<Vec<StoredQueuedAction>> {
+        self.repo.list_queued_actions(id).await
+    }
+
+    async fn replace_queued_actions(
+        &self,
+        id: AgentSessionId,
+        entries: &[StoredQueuedAction],
+    ) -> Result<()> {
+        self.repo.replace_queued_actions(id, entries).await
     }
 }
 

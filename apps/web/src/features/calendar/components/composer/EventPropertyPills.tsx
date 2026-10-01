@@ -371,6 +371,10 @@ const GOOGLE_MEET_OPTION: EventComposerConferenceOption = {
   value: 'google_meet',
   label: 'Google Meet',
 };
+const MACRO_CALL_OPTION: EventComposerConferenceOption = {
+  value: 'macro',
+  label: 'Macro call',
+};
 const NO_CONFERENCING_OPTION: EventComposerConferenceOption = {
   value: 'none',
   label: 'No meeting link',
@@ -383,6 +387,7 @@ const EXISTING_CONFERENCING_OPTION: EventComposerConferenceOption = {
 export interface EventComposerConferencePillProps {
   value: EventEditorConferenceChoice;
   canKeepExisting: boolean;
+  macroCallsEnabled: boolean;
   onChange: (value: EventEditorConferenceChoice) => void;
   disabled?: boolean;
 }
@@ -391,10 +396,14 @@ export interface EventComposerConferencePillProps {
 export function EventComposerConferencePill(
   props: EventComposerConferencePillProps
 ) {
+  const includesMacroCall = createMemo(
+    () => props.macroCallsEnabled || props.value === 'macro'
+  );
   const options = createMemo(() => [
-    NO_CONFERENCING_OPTION,
-    ...(props.canKeepExisting ? [EXISTING_CONFERENCING_OPTION] : []),
+    ...(includesMacroCall() ? [MACRO_CALL_OPTION] : []),
     GOOGLE_MEET_OPTION,
+    ...(props.canKeepExisting ? [EXISTING_CONFERENCING_OPTION] : []),
+    NO_CONFERENCING_OPTION,
   ]);
   const selectedOption = () =>
     options().find((option) => option.value === props.value) ?? options()[0];

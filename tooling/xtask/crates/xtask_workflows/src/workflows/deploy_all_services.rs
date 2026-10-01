@@ -15,6 +15,9 @@ use gh_workflow::{
 
 use crate::workflows::{runners, steps, vars};
 
+#[cfg(test)]
+mod test;
+
 /// The in-VPC self-hosted runner with network access to the databases. Stays
 /// off Namespace deliberately — migrations need to reach RDS.
 const DB_MIGRATOR_RUNNER: &str = "db-migrator";
@@ -130,10 +133,10 @@ fn set_matrix() -> Step<Run> {
             cfg=.github/services-config.json
             # Enabled services drive deploy-services; the filtered lists keep each
             # build matrix to only enabled services that produce that artifact, so
-            # disabled services and empty artifact jobs consume no runners.
-            services=$(jq -c '[.services | to_entries[] | select(.value.deploy_enabled != false) | .key]' "$cfg")
-            binaries=$(jq -c '[.services | to_entries[] | select(.value.deploy_enabled != false) | select((.value.deploy_binaries // []) | length > 0) | .key]' "$cfg")
-            lambdas=$(jq -c '[.services | to_entries[] | select(.value.deploy_enabled != false) | select((.value.deploy_lambdas // []) | length > 0) | .key]' "$cfg")
+            # disabled/unbootstrapped services and empty artifact jobs consume no runners.
+            services=$(jq -c '[.services | to_entries[] | select(.value.deploy_enabled != false and .value.bootstrap_pending == null) | .key]' "$cfg")
+            binaries=$(jq -c '[.services | to_entries[] | select(.value.deploy_enabled != false and .value.bootstrap_pending == null) | select((.value.deploy_binaries // []) | length > 0) | .key]' "$cfg")
+            lambdas=$(jq -c '[.services | to_entries[] | select(.value.deploy_enabled != false and .value.bootstrap_pending == null) | select((.value.deploy_lambdas // []) | length > 0) | .key]' "$cfg")
             echo "matrix=${services}" >> "$GITHUB_OUTPUT"
             echo "binaries=${binaries}" >> "$GITHUB_OUTPUT"
             echo "lambdas=${lambdas}" >> "$GITHUB_OUTPUT"

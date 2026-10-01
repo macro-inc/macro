@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT c.team_id, c.id AS company_id,\n                   COALESCE(c.custom_name, dd.name, primary_domain.domain) AS name\n            FROM crm_companies c\n            LEFT JOIN LATERAL (\n                SELECT d.domain FROM crm_domains d\n                WHERE d.company_id = c.id\n                ORDER BY d.created_at ASC\n                LIMIT 1\n            ) primary_domain ON TRUE\n            LEFT JOIN LATERAL (\n                SELECT dd.name FROM crm_domain_directory dd\n                WHERE LOWER(dd.domain) = LOWER(primary_domain.domain)\n                LIMIT 1\n            ) dd ON TRUE\n            WHERE c.id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "company_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "8eaf897b25ec258af64cf110947eb626b805f7cc3a36cf4d61b343f29580801f"
+}

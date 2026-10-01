@@ -37,6 +37,8 @@ use email::{
 };
 use entity_access::domain::models::EditAccessLevel;
 use entity_access::domain::ports::EntityAccessService as _;
+use entity_registry::OwnerGrantPolicy;
+use entity_registry_db_utils::OwnedEntityRegistrar;
 use foreign_entity::{
     domain::service::ForeignEntityServiceImpl,
     outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
@@ -63,6 +65,13 @@ use teams::{inbound::toolset::TeamToolContext, outbound::team_repo::TeamReposito
 use tokio_util::task::TaskTracker;
 
 mod activity_metadata;
+mod images;
+#[cfg(any(test, feature = "test-support"))]
+pub use images::build_image_generation_tool_context_test;
+pub use images::{ToolImageGenerationToolContext, build_image_generation_tool_context};
+
+mod initiatives;
+pub use initiatives::{ToolInitiativeToolContext, build_initiative_tool_context};
 
 use activity_metadata::ToolActivityMetadataResolver;
 pub use ai_toolset::RequestContext;
@@ -102,11 +111,11 @@ pub type ToolEmailService = EmailServiceImpl<
 /// graceful shutdown by the hosting process.
 pub type ToolEventBroker = MacroEventBrokerService<KafkaEventPublisher, TaskTracker>;
 
-/// Event broker used by bot tools across hosts that either do or do not have
+/// Event broker used by bot and property tools across hosts that either do or do not have
 /// Kafka lifecycle publishing configured.
 #[derive(Clone)]
 pub enum ToolBotEventBroker {
-    /// Publish bot lifecycle events through the shared Kafka broker.
+    /// Publish lifecycle events through the shared Kafka broker.
     Real(ToolEventBroker),
     /// Drop lifecycle events in hosts that do not configure Kafka.
     NoOp(NoopMacroEventBroker),
@@ -125,7 +134,8 @@ impl MacroEventBroker for ToolBotEventBroker {
 }
 
 /// Concrete bot domain service used by AI tools.
-pub type ToolBotService = BotServiceImpl<PgBotsRepo, ToolBotEventBroker>;
+pub type ToolBotService =
+    BotServiceImpl<PgBotsRepo, ToolBotEventBroker, crate::mcp_app_catalog::PipedreamMcpAppCatalog>;
 
 /// Bot-management AI tool context.
 pub type ToolBotToolContext = BotToolContext<ToolBotService, ToolEntityAccessService>;
@@ -137,9 +147,14 @@ pub fn build_bot_tool_context(
     event_broker: ToolBotEventBroker,
     entity_access_service: Arc<ToolEntityAccessService>,
     document_storage_service_url: String,
+    pipedream: Option<Arc<pipedream_mcp::outbound::api::PipedreamClient>>,
 ) -> ToolBotToolContext {
     BotToolContext {
-        service: Arc::new(BotServiceImpl::new(PgBotsRepo::new(pool), event_broker)),
+        service: Arc::new(
+            BotServiceImpl::new(PgBotsRepo::new(pool), event_broker).with_mcp_apps(
+                crate::mcp_app_catalog::PipedreamMcpAppCatalog::new(pipedream),
+            ),
+        ),
         entity_access_service,
         document_storage_service_url: document_storage_service_url
             .trim_end_matches('/')
@@ -234,7 +249,11 @@ pub fn shared_message_service<E: messages::domain::ports::MessageEventPublisher>
     E,
 > {
     messages::domain::service::MessageService::new(
-        messages::outbound::pg_message_repo::PgMessageRepository::new(pool.clone()),
+        messages::outbound::pg_message_repo::PgMessageRepository::new(pool.clone())
+            .with_initiatives(initiative::domain::lookup::InitiativeLookup::new(
+                initiative::outbound::PgInitiativeRepo::new(pool.clone()),
+            ))
+            .with_crm(crm::outbound::lookup::PgCrmParentReader::new(pool.clone())),
         effects,
     )
     .with_group_recipients(channels::domain::group_mentions::ChannelGroupRecipients(
@@ -355,7 +374,14 @@ fn message_service_with_side_effects(
                 realtime.clone(),
             ),
             messages::domain::delivery::DiscussionDelivery::new(
-                messages::outbound::pg_discussion_context::PgDiscussionContext(pool.clone()),
+                messages::outbound::pg_discussion_context::PgDiscussionContext(pool.clone())
+                    .with_initiatives(
+                        initiative::domain::lookup::InitiativeLookup::new(
+                            initiative::outbound::PgInitiativeRepo::new(pool.clone()),
+                        ),
+                        build_properties_service(pool.clone(), Arc::new(access.clone())),
+                    )
+                    .with_crm(crm::outbound::lookup::PgCrmParentReader::new(pool.clone())),
                 messages::outbound::entity_access_audience::EntityAccessMessageAudience(access),
                 realtime,
                 messages::outbound::notification_sender::MessageNotificationSender(
@@ -442,6 +468,8 @@ pub fn build_crm_tool_context(pool: sqlx::PgPool) -> ToolCrmToolContext {
             entity_access::outbound::PgAccessRepository::new(pool.clone()),
         ),
     );
+    // This CRM-only context does not assign tasks. Task writes use the host's
+    // shared properties context, which carries its lifecycle event broker.
     let properties = build_properties_service(pool.clone(), entity_access_service.clone());
     CrmToolContext {
         service: Arc::new(crm::domain::service::CrmServiceImpl::new(
@@ -457,22 +485,32 @@ pub fn build_crm_tool_context(pool: sqlx::PgPool) -> ToolCrmToolContext {
 pub type ToolSkillService = skills::domain::service::SkillServiceImpl<
     skills::outbound::search_service_searcher::SearchServiceSkillSearcher,
     skills::outbound::soup_skill_lister::SoupSkillLister<ToolSoupService>,
+    skills::outbound::document_skill_reader::DocumentSkillReader<
+        ToolDocumentService,
+        ToolEntityAccessService,
+    >,
 >;
 
 /// Type alias for the skill AI tool context.
 pub type ToolSkillToolContext = SkillToolContext<ToolSkillService>;
 
 /// Build the skill AI tool context from a search service client (skill
-/// search) and the soup service (skill listing).
+/// search), soup service (listing), and document services (reading).
 pub fn build_skill_tool_context(
     search_service_client: Arc<search_service_client::SearchServiceClient>,
     soup_service: Arc<ToolSoupService>,
+    documents: &ToolDocumentToolContext,
 ) -> ToolSkillToolContext {
     SkillToolContext::new(skills::domain::service::SkillServiceImpl::new(
         skills::outbound::search_service_searcher::SearchServiceSkillSearcher::new(
             search_service_client,
         ),
         skills::outbound::soup_skill_lister::SoupSkillLister::new(soup_service),
+        skills::outbound::document_skill_reader::DocumentSkillReader::new(
+            documents.service.clone(),
+            documents.entity_access_service.clone(),
+            documents.lexical_client.clone(),
+        ),
     ))
 }
 
@@ -511,11 +549,10 @@ impl TaskPropertiesPort for NoOpTaskProperties {
     }
     async fn set_entity_property(
         &self,
-        _user_id: &str,
+        _principal: &model_owner::CreationPrincipal,
         _entity_id: &str,
         _property_definition_id: uuid::Uuid,
         _value: Option<models_properties::api::requests::SetPropertyValue>,
-        _attribution: &activity::Attribution,
     ) -> anyhow::Result<()> {
         Ok(())
     }
@@ -559,22 +596,16 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
 
     async fn set_entity_property(
         &self,
-        user_id: &str,
+        principal: &model_owner::CreationPrincipal,
         entity_id: &str,
         property_definition_id: uuid::Uuid,
         value: Option<models_properties::api::requests::SetPropertyValue>,
-        attribution: &activity::Attribution,
     ) -> anyhow::Result<()> {
         use properties::PropertiesService as _;
 
-        let user_id = macro_user_id::user_id::MacroUserIdStr::parse_from_str(user_id)?;
-        let entity_access_receipt = task_property_edit_receipt(
-            self.entity_access_service.as_ref(),
-            &user_id,
-            attribution,
-            entity_id,
-        )
-        .await?;
+        let entity_access_receipt =
+            task_property_edit_receipt(self.entity_access_service.as_ref(), principal, entity_id)
+                .await?;
         self.properties
             .set_entity_property(&entity_access_receipt, property_definition_id, value)
             .await
@@ -622,6 +653,26 @@ impl ConnectionService for NoOpConnectionService {
 pub struct NoOpCallRtcClient;
 
 impl CallRtcClient for NoOpCallRtcClient {
+    async fn prepare_room(&self, room_name: &str) -> anyhow::Result<()> {
+        self.create_room(room_name).await
+    }
+    async fn generate_guest_token(
+        &self,
+        _room_name: &str,
+        _guest_id: call::domain::meetings::GuestId,
+        _display_name: &str,
+    ) -> anyhow::Result<String> {
+        anyhow::bail!("call RTC client not configured")
+    }
+
+    async fn remove_guest(
+        &self,
+        _room_name: &str,
+        _guest_id: call::domain::meetings::GuestId,
+    ) -> anyhow::Result<()> {
+        anyhow::bail!("call RTC client not configured")
+    }
+
     async fn create_room(&self, _room_name: &str) -> anyhow::Result<()> {
         Ok(())
     }
@@ -654,6 +705,20 @@ impl CallRtcClient for NoOpCallRtcClient {
         _participant_identity: MacroUserIdStr<'a>,
     ) -> anyhow::Result<()> {
         Ok(())
+    }
+
+    async fn list_meeting_participants(
+        &self,
+        _room_name: &str,
+    ) -> anyhow::Result<Option<Vec<call::domain::meetings::MeetingRtcParticipant>>> {
+        Ok(None)
+    }
+
+    async fn list_participant_identities(
+        &self,
+        _room_name: &str,
+    ) -> anyhow::Result<Option<Vec<String>>> {
+        Ok(Some(Vec::new()))
     }
 
     async fn start_room_composite_egress(
@@ -808,7 +873,7 @@ pub type ToolEntityAccessManagementService =
 
 /// Type alias for the document service implementation used by AI tools
 pub type ToolDocumentService = documents::domain::service::DocumentServiceImpl<
-    documents::outbound::pg_document_repo::PgDocumentRepo,
+    documents::outbound::pg_document_repo::PgDocumentRepo<PgBotsRepo>,
     documents::outbound::s3_upload_url::S3UploadUrlAdapter,
     TaskPropertiesAdapter,
     NoOpConnectionService,
@@ -868,6 +933,7 @@ pub type ToolPropertiesService = properties::PropertiesServiceImpl<
     properties::PropertiesPgRepo,
     properties::PermissionServiceImpl<ToolEntityAccessService>,
     NoOpNotificationService,
+    ToolBotEventBroker,
 >;
 
 /// Imported-document property enrichment backed by the AI tool host's Properties service.
@@ -883,14 +949,47 @@ pub fn build_properties_service(
     pool: sqlx::PgPool,
     entity_access_service: Arc<ToolEntityAccessService>,
 ) -> Arc<ToolPropertiesService> {
-    Arc::new(properties::PropertiesServiceImpl::new(
-        properties::PropertiesPgRepo::new(pool.clone()),
-        Some(properties::PermissionServiceImpl::new(
-            pool,
-            entity_access_service,
-        )),
-        Some(NoOpNotificationService),
-    ))
+    properties_service_with_events(
+        pool,
+        entity_access_service,
+        ToolBotEventBroker::NoOp(Default::default()),
+    )
+}
+
+/// Build canonical property tools with committed changes published to activity.
+pub fn build_properties_service_with_broker(
+    pool: sqlx::PgPool,
+    entity_access_service: Arc<ToolEntityAccessService>,
+    broker: ToolEventBroker,
+) -> Arc<ToolPropertiesService> {
+    properties_service_with_events(
+        pool,
+        entity_access_service,
+        ToolBotEventBroker::Real(broker),
+    )
+}
+
+fn properties_service_with_events(
+    pool: sqlx::PgPool,
+    entity_access_service: Arc<ToolEntityAccessService>,
+    broker: ToolBotEventBroker,
+) -> Arc<ToolPropertiesService> {
+    Arc::new(
+        properties::PropertiesServiceImpl::new(
+            properties::PropertiesPgRepo::new(pool.clone()),
+            Some(properties::PermissionServiceImpl::new(
+                pool.clone(),
+                entity_access_service,
+            )),
+            Some(NoOpNotificationService),
+        )
+        .with_initiative_assignees(Arc::new(
+            initiative::domain::assignees::InitiativeAssignees::new(
+                initiative::outbound::PgInitiativeRepo::new(pool),
+            ),
+        ))
+        .with_event_broker(broker),
+    )
 }
 
 /// Build the real task properties adapter used by document creation tools.
@@ -953,25 +1052,37 @@ pub type ToolNotificationService = notification::domain::service::NotificationRe
 pub type ToolNotificationToolContext = NotificationToolContext<ToolNotificationService>;
 
 /// Type alias for the reminders service implementation used by AI tools.
-pub type ToolRemindersService = reminders::domain::service::RemindersServiceImpl<
-    reminders::outbound::pg_reminders_repo::PgRemindersRepo,
->;
+pub type ToolRemindersService =
+    reminders::domain::email_followup::reminder_service::EmailRemindersService<
+        reminders::domain::service::RemindersServiceImpl<
+            reminders::outbound::pg_reminders_repo::PgRemindersRepo,
+        >,
+        reminders::outbound::pg_reminders_repo::PgRemindersRepo,
+        ToolUserEmailService,
+        reminders::domain::ports::SystemClock,
+    >;
 
 /// Type alias for the reminders tool context.
 pub type ToolRemindersToolContext =
     RemindersToolContext<ToolRemindersService, ToolEntityAccessService>;
 
-/// Build the reminders tool context from a database pool.
+/// Build the reminders tool context with the same email lifecycle as HTTP.
 ///
 /// The reminder tools go through the same access receipts the HTTP API does,
 /// so this needs the entity access service as well as the repository.
 pub fn build_reminders_tool_context(
     pool: sqlx::PgPool,
+    email_service: Arc<ToolUserEmailService>,
     entity_access_service: Arc<ToolEntityAccessService>,
 ) -> ToolRemindersToolContext {
+    let repo = reminders::outbound::pg_reminders_repo::PgRemindersRepo::new(pool);
     RemindersToolContext::new(
-        reminders::domain::service::RemindersServiceImpl::new(
-            reminders::outbound::pg_reminders_repo::PgRemindersRepo::new(pool),
+        reminders::domain::email_followup::reminder_service::EmailRemindersService::new(
+            reminders::domain::service::RemindersServiceImpl::new(repo.clone()),
+            reminders::domain::email_followup::service::EmailFollowupService::new(
+                repo,
+                (*email_service).clone(),
+            ),
         ),
         entity_access_service,
     )
@@ -979,14 +1090,15 @@ pub fn build_reminders_tool_context(
 
 /// Type alias for the chat service implementation used by AI tools.
 /// Uses an empty toolset — the read-only tool never invokes tool execution.
-pub type ToolChatService = ChatServiceImpl<PgChatRepo, (), ToolEntityAccessManagementService>;
+pub type ToolChatService =
+    ChatServiceImpl<PgChatRepo<PgBotsRepo>, (), ToolEntityAccessManagementService>;
 
 /// Type alias for the project service implementation used by AI tools.
 /// Upload, content-hash, and search-cleanup ports are unwired — project
 /// tools only create, read, and move projects, never run upload or purge
 /// flows.
 pub type ToolProjectService = projects::domain::service::ProjectServiceImpl<
-    projects::outbound::PgProjectRepo,
+    projects::outbound::PgProjectRepo<PgBotsRepo>,
     projects::domain::ports::UnavailableProjectUploadUrlPort,
     projects::domain::ports::UnavailableBulkUploadRequestPort,
     projects::domain::ports::UnavailableShaCounterPort,
@@ -1018,7 +1130,10 @@ pub fn build_project_tool_context(
     email_service: Arc<ToolUserEmailService>,
 ) -> ToolProjectToolContext {
     let project_service = projects::domain::service::ProjectServiceImpl::new(
-        projects::outbound::PgProjectRepo::new(pool.clone()),
+        projects::outbound::PgProjectRepo::new(
+            pool.clone(),
+            OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(pool.clone()))),
+        ),
         projects::domain::ports::UnavailableProjectUploadUrlPort,
         projects::domain::ports::UnavailableBulkUploadRequestPort,
         projects::domain::ports::UnavailableShaCounterPort,
@@ -1065,6 +1180,13 @@ pub struct ToolEntityCreator {
 }
 
 impl ToolEntityCreator {
+    fn creation_principal(user: &MacroUserIdStr<'static>) -> model_owner::CreationPrincipal {
+        model_owner::CreationPrincipal::BotForUser {
+            bot: bot_id::MACRO_AI_BOT_ID,
+            user: user.clone(),
+        }
+    }
+
     async fn create_doc(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -1075,20 +1197,16 @@ impl ToolEntityCreator {
     ) -> anyhow::Result<String> {
         use std::str::FromStr as _;
         let document = documents::domain::create::NewPlainTextDocument::builder(
-            documents::domain::create::NewDocumentMetadata::builder(name.to_string())
-                .attribution(activity::Attribution::delegated(
-                    activity::Actor::new_from_bot(bot_id::MACRO_AI_BOT_ID),
-                    user.clone(),
-                ))
-                .build(),
+            documents::domain::create::NewDocumentMetadata::new(name.to_string()),
         )
         .file_type(model::document::FileType::from_str("md").expect("md is a valid file type"))
         .text(markdown.to_string())
         .task_flag(is_task, team_id)
         .build()?;
+        let ai_for_user = Self::creation_principal(user);
         let created = self
             .document_creator
-            .create_plain_text(user.clone(), document)
+            .create_plain_text(&ai_for_user, document)
             .await?;
         Ok(created
             .into_response()
@@ -1143,8 +1261,7 @@ impl ToolEntityCreator {
         use models_properties::api::requests::SetPropertyValue;
         use system_properties::SystemPropertyKey;
 
-        let attribution =
-            activity::Attribution::direct(activity::Actor::new_from_user(user.clone()));
+        let principal = Self::creation_principal(user);
 
         if let Some(status) = properties.status.as_deref()
             && let Err(e) = self
@@ -1168,13 +1285,12 @@ impl ToolEntityCreator {
                     if let Err(e) = self
                         .task_properties
                         .set_entity_property(
-                            user.as_ref(),
+                            &principal,
                             task_id,
                             SystemPropertyKey::Priority.uuid(),
                             Some(SetPropertyValue::SelectOption {
                                 option_id: option.uuid(),
                             }),
-                            &attribution,
                         )
                         .await
                     {
@@ -1192,11 +1308,10 @@ impl ToolEntityCreator {
                     if let Err(e) = self
                         .task_properties
                         .set_entity_property(
-                            user.as_ref(),
+                            &principal,
                             task_id,
                             SystemPropertyKey::DueDate.uuid(),
                             Some(SetPropertyValue::Date { value }),
-                            &attribution,
                         )
                         .await
                     {
@@ -1225,13 +1340,12 @@ impl ToolEntityCreator {
             if let Err(e) = self
                 .task_properties
                 .set_entity_property(
-                    user.as_ref(),
+                    &principal,
                     task_id,
                     SystemPropertyKey::Assignees.uuid(),
                     Some(SetPropertyValue::MultiEntityReference {
                         references: vec![reference],
                     }),
-                    &attribution,
                 )
                 .await
             {
@@ -1370,7 +1484,10 @@ pub type ToolImportService = import::domain::service::ImportServiceImpl<
 pub type ToolImportToolContext = import::inbound::toolset::ImportToolContext<ToolImportService>;
 
 pub type ToolActivityToolContext = activity::inbound::toolset::ActivityToolContext<
-    activity::outbound::pg_activity_repo::PgActivityRepo,
+    initiative::domain::personal_activity::ProjectVisibleActivityReads<
+        activity::outbound::pg_activity_repo::PgActivityRepo,
+        ToolEntityAccessService,
+    >,
 >;
 
 pub fn build_activity_tool_context(
@@ -1379,7 +1496,10 @@ pub fn build_activity_tool_context(
     entity_access_service: Arc<ToolEntityAccessService>,
 ) -> ToolActivityToolContext {
     activity::inbound::toolset::ActivityToolContext::new(
-        activity::outbound::pg_activity_repo::PgActivityRepo::new(pool),
+        initiative::domain::personal_activity::ProjectVisibleActivityReads::new(
+            activity::outbound::pg_activity_repo::PgActivityRepo::new(pool),
+            entity_access_service.clone(),
+        ),
     )
     .with_metadata_resolver(ToolActivityMetadataResolver::new(
         properties,
@@ -1404,7 +1524,9 @@ pub struct ToolServiceContext {
     pub soup_service: Arc<ToolSoupService>,
     pub email_service: Arc<ToolEmailService>,
     pub activity_tool_context: ToolActivityToolContext,
+    #[from_ref(skip)]
     pub document_tool_context: ToolDocumentToolContext,
+    pub image_generation_tool_context: ToolImageGenerationToolContext,
     pub properties_tool_context: ToolPropertiesToolContext,
     pub email_tool_context: ToolEmailToolContext,
     pub call_tool_context: ToolCallToolContext,
@@ -1422,11 +1544,17 @@ pub struct ToolServiceContext {
     pub channel_tool_context: ToolChannelToolContext,
     pub bot_tool_context: ToolBotToolContext,
     pub project_tool_context: ToolProjectToolContext,
+    /// Native task project lifecycle, properties, sharing and history.
+    pub initiative_tool_context: ToolInitiativeToolContext,
     pub team_tool_context: ToolTeamToolContext,
     pub crm_tool_context: ToolCrmToolContext,
     pub skill_tool_context: ToolSkillToolContext,
     pub schedule_tool_context: NoOpScheduleContext,
+    #[from_ref(skip)]
     pub anthropic_tool_context: AnthropicToolContext,
+    /// Shared admission for independently initiated AI work. Hosts must inject
+    /// their configured service; request identity always comes from RequestContext.
+    pub admission: Arc<dyn ai_billing::domain::admission::AiAdmissionService>,
     /// Records token usage / cost for AI calls made with this context.
     pub recorder: std::sync::Arc<dyn ai_usage::UsageRecorder>,
     /// The usage context (feature/user/entity) of the request currently using
@@ -1435,15 +1563,47 @@ pub struct ToolServiceContext {
     pub usage_context: ai_usage::UsageContext,
 }
 
+impl FromRef<ToolServiceContext> for AnthropicToolContext {
+    fn from_ref(context: &ToolServiceContext) -> Self {
+        let mut tools = context.anthropic_tool_context.clone();
+        tools.admission = context.admission.clone();
+        tools.recorder = context.recorder.clone();
+        tools.usage_context = context.usage_context.clone();
+        tools
+    }
+}
+
+impl FromRef<ToolServiceContext> for ToolDocumentToolContext {
+    fn from_ref(context: &ToolServiceContext) -> Self {
+        context
+            .document_tool_context
+            .clone()
+            .with_admission(context.admission.clone())
+            .with_recorder(context.recorder.clone())
+    }
+}
+
 impl ToolServiceContext {
     /// Run the mutating tools as `actor`, delegated for the requesting user,
     /// instead of the default Macro AI bot. Hosts running a specific agent
     /// call this once when they build the context for that agent's session.
     pub fn with_actor(mut self, actor: bot_id::BotId) -> Self {
         self.document_tool_context = self.document_tool_context.with_actor(actor);
+        self.image_generation_tool_context = self.image_generation_tool_context.with_actor(actor);
         self.properties_tool_context = self.properties_tool_context.with_actor(actor);
         self.project_tool_context = self.project_tool_context.with_actor(actor);
+        self.initiative_tool_context = self.initiative_tool_context.with_actor(actor);
         self.channel_tool_context = self.channel_tool_context.with_actor(actor);
+        self
+    }
+
+    /// Name the actor set with [`Self::with_actor`], so what the tools write
+    /// is presented under the agent's own name where a reader sees it live -
+    /// the cursor the editing worker draws while it types. First-party bots
+    /// present under their constant names without this; a user- or
+    /// team-owned bot has no name the tools can find on their own.
+    pub fn with_actor_name(mut self, name: &str) -> Self {
+        self.document_tool_context = self.document_tool_context.with_actor_name(name);
         self
     }
 }

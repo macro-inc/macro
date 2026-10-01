@@ -180,6 +180,8 @@ pub struct DraftDeletion {
 /// so a queued offline delete lands cleanly no matter how late it arrives.
 #[derive(Debug, Clone, Copy)]
 pub struct DeletedUserDraft {
+    /// Authorized thread identity, retained when the draft is removed.
+    pub thread_id: Option<Uuid>,
     /// Whether a draft row was actually deleted.
     pub deleted: bool,
     /// Whether the delete emptied the draft's thread and removed it too.

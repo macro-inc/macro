@@ -14,13 +14,23 @@ const action = <K extends CoordinatorAction['kind']>(
   return found as Extract<CoordinatorAction, { kind: K }>;
 };
 
+/** Assets loaded, owner lock acquired, storage granted. */
+const grantStorage = (
+  core: CoordinatorCore,
+  tabId: string,
+  ownerEpoch: number
+): void => {
+  core.beginOwnerLockWait(tabId, ownerEpoch);
+  core.beginEngineOpen(tabId, ownerEpoch);
+};
+
 const ready = (
   core: CoordinatorCore,
   tabId: string,
   ownerEpoch: number,
   databaseActionProof: DatabaseActionProof
 ): CoordinatorAction[] => {
-  core.beginEngineOpen(tabId, ownerEpoch);
+  grantStorage(core, tabId, ownerEpoch);
   return core.engineReady({
     tabId,
     ownerEpoch,
@@ -40,6 +50,226 @@ const init = (id: number) => ({ id, kind: 'init', scope: 'scope' }) as const;
 const clear = (id: number) => ({ id, kind: 'clear' }) as const;
 
 describe('CoordinatorCore', () => {
+  it('preserves storage when the engine is lost while trying the owner lock', () => {
+    const core = new CoordinatorCore('scope');
+    core.registerTab('tab-a');
+    expect(core.beginOwnerLockWait('tab-a', 1)).toBe(true);
+
+    core.ownerLost('tab-a', 1, 'owner tab closed while the lock was busy');
+
+    // Trying to take the lock cannot have changed OPFS.
+    expect(action(core.resumeAfterLoss(), 'elect-owner').databaseAction).toBe(
+      'open-existing'
+    );
+  });
+
+  it('fails closed when another context keeps the owner lock', () => {
+    const core = new CoordinatorCore('scope');
+    core.registerTab('tab-a');
+    core.registerTab('tab-b');
+    expect(core.request('tab-a', init(1))).toEqual([]);
+    expect(core.request('tab-b', clear(2))).toEqual([]);
+    core.beginOwnerLockWait('tab-a', 1);
+
+    const actions = core.ownerLockUnavailable('tab-a', 1);
+
+    const unavailable = {
+      kind: 'reject-request',
+      error: expect.stringContaining('owner lock is held'),
+      errorCode: 'owner-lock-unavailable',
+    };
+    expect(actions).toEqual([
+      { ...unavailable, tabId: 'tab-a', requestId: 1 },
+      { ...unavailable, tabId: 'tab-b', requestId: 2 },
+      { kind: 'close-engine-route', tabId: 'tab-a', ownerEpoch: 1 },
+      {
+        kind: 'broadcast-cache-unavailable',
+        reason: expect.stringContaining('another app version'),
+      },
+    ]);
+    expect(core.state).toEqual({
+      kind: 'waiting-for-tab',
+      nextDatabaseAction: 'open-existing',
+    });
+    // Tabs told to stay uncached are refused and never elected again.
+    expect(core.request('tab-b', init(3))).toEqual([
+      { ...unavailable, tabId: 'tab-b', requestId: 3 },
+    ]);
+    expect(core.ownerLockUnavailable('tab-a', 1)).toEqual([]);
+    expect(action(core.registerTab('tab-c'), 'elect-owner')).toEqual({
+      kind: 'elect-owner',
+      tabId: 'tab-c',
+      ownerEpoch: 2,
+      databaseAction: 'open-existing',
+    });
+    expect(core.request('tab-c', init(4))).toEqual([]);
+  });
+
+  it('never fails closed once storage may have been touched', () => {
+    const core = new CoordinatorCore('scope');
+    core.registerTab('tab-a');
+    grantStorage(core, 'tab-a', 1);
+
+    expect(core.ownerLockUnavailable('tab-a', 1)).toEqual([]);
+    expect(core.state).toMatchObject({
+      kind: 'activating',
+      phase: 'opening-database',
+    });
+  });
+
+  it('keeps a pending recovery wipe for the attempt after failing closed', () => {
+    const core = new CoordinatorCore('scope');
+    core.registerTab('tab-a');
+    core.registerTab('tab-b');
+    ready(core, 'tab-a', 1, 'opened-existing');
+    core.tabLost('tab-a');
+    expect(action(core.resumeAfterLoss(), 'elect-owner')).toMatchObject({
+      tabId: 'tab-b',
+      databaseAction: 'wipe-before-open',
+    });
+    core.beginOwnerLockWait('tab-b', 2);
+
+    core.ownerLockUnavailable('tab-b', 2);
+
+    expect(action(core.registerTab('tab-c'), 'elect-owner')).toMatchObject({
+      tabId: 'tab-c',
+      databaseAction: 'wipe-before-open',
+    });
+  });
+
+  it('fails closed without a wipe when the database files stay busy', () => {
+    const core = new CoordinatorCore('scope');
+    core.registerTab('tab-a');
+    core.registerTab('tab-b');
+    expect(core.request('tab-b', init(1))).toEqual([]);
+    // Only an engine granted storage can find the files busy.
+    expect(core.storageBusy('tab-a', 1)).toEqual([]);
+    grantStorage(core, 'tab-a', 1);
+
+    const actions = core.storageBusy('tab-a', 1);
+
+    const unavailable = {
+      kind: 'reject-request',
+      error: expect.stringContaining('files are still open'),
+      errorCode: 'owner-lock-unavailable',
+    };
+    expect(actions).toEqual([
+      { ...unavailable, tabId: 'tab-b', requestId: 1 },
+      { kind: 'close-engine-route', tabId: 'tab-a', ownerEpoch: 1 },
+      {
+        kind: 'broadcast-cache-unavailable',
+        reason: expect.stringContaining('files are still open'),
+      },
+    ]);
+    // The open changed nothing, so no attempt is scheduled to repair it.
+    expect(core.state).toEqual({
+      kind: 'waiting-for-tab',
+      nextDatabaseAction: 'open-existing',
+    });
+    expect(core.request('tab-a', init(2))).toEqual([
+      { ...unavailable, tabId: 'tab-a', requestId: 2 },
+    ]);
+    expect(core.storageBusy('tab-a', 1)).toEqual([]);
+    expect(action(core.registerTab('tab-c'), 'elect-owner')).toEqual({
+      kind: 'elect-owner',
+      tabId: 'tab-c',
+      ownerEpoch: 2,
+      databaseAction: 'open-existing',
+    });
+  });
+
+  it('hands the database to a newer build and never elects again', () => {
+    const core = new CoordinatorCore('scope');
+    core.registerTab('tab-a');
+    core.registerTab('tab-b');
+    ready(core, 'tab-a', 1, 'opened-existing');
+    expect(core.request('tab-b', init(1))).toMatchObject([
+      { kind: 'route-request', ownerEpoch: 1 },
+    ]);
+
+    expect(core.supersede()).toEqual([
+      {
+        kind: 'broadcast-cache-superseded',
+        reason: expect.stringContaining('newer version of the app'),
+      },
+    ]);
+    expect(core.superseded).toBe(true);
+    expect(core.supersede()).toEqual([]);
+    // Routed work still gets its answer; new work is refused quietly.
+    expect(core.state).toMatchObject({ kind: 'active', tabId: 'tab-a' });
+    expect(core.request('tab-b', clear(2))).toEqual([
+      expect.objectContaining({
+        kind: 'reject-request',
+        requestId: 2,
+        errorCode: 'owner-lock-unavailable',
+      }),
+    ]);
+
+    // The owner's page then leaves like a navigation, freeing the database.
+    const departure = core.departForNavigation(
+      'tab-a',
+      1,
+      'a newer build took over'
+    );
+    expect(departure).toContainEqual({
+      kind: 'close-engine-route',
+      tabId: 'tab-a',
+      ownerEpoch: 1,
+    });
+    expect(departure.some((action) => action.kind === 'elect-owner')).toBe(
+      false
+    );
+    expect(core.state.kind).toBe('waiting-for-tab');
+    // A page of this build that loads afterwards could reload into this
+    // build again, so it runs uncached instead of reloading.
+    expect(core.registerTab('tab-c')).toEqual([
+      {
+        kind: 'notify-cache-unavailable',
+        tabId: 'tab-c',
+        reason: expect.stringContaining('newer version of the app'),
+      },
+    ]);
+  });
+
+  it('hands over only while no engine is changing the files', () => {
+    const activating = new CoordinatorCore('scope');
+    activating.registerTab('tab-a');
+    grantStorage(activating, 'tab-a', 1);
+    expect(activating.supersede()).toEqual([]);
+
+    // An idle coordinator's tabs, already uncached, move on too.
+    const idle = new CoordinatorCore('scope');
+    idle.registerTab('tab-a');
+    idle.beginOwnerLockWait('tab-a', 1);
+    idle.ownerLockUnavailable('tab-a', 1);
+    expect(idle.supersede()).toEqual([
+      {
+        kind: 'broadcast-cache-superseded',
+        reason: expect.stringContaining('newer version of the app'),
+      },
+    ]);
+  });
+
+  it('keeps a pending recovery wipe when its files stay busy', () => {
+    const core = new CoordinatorCore('scope');
+    core.registerTab('tab-a');
+    core.registerTab('tab-b');
+    ready(core, 'tab-a', 1, 'opened-existing');
+    core.tabLost('tab-a');
+    expect(action(core.resumeAfterLoss(), 'elect-owner')).toMatchObject({
+      tabId: 'tab-b',
+      databaseAction: 'wipe-before-open',
+    });
+    grantStorage(core, 'tab-b', 2);
+
+    core.storageBusy('tab-b', 2);
+
+    expect(action(core.registerTab('tab-c'), 'elect-owner')).toMatchObject({
+      tabId: 'tab-c',
+      databaseAction: 'wipe-before-open',
+    });
+  });
+
   it('preserves storage after bootstrap loss but requires recovery once opening was granted', () => {
     const core = new CoordinatorCore('scope');
     core.registerTab('tab-a');
@@ -47,7 +277,10 @@ describe('CoordinatorCore', () => {
     expect(action(core.resumeAfterLoss(), 'elect-owner').databaseAction).toBe(
       'open-existing'
     );
-    expect(core.beginEngineOpen('tab-a', 1)).toBe(false);
+    expect(core.beginOwnerLockWait('tab-a', 1)).toBe(false);
+    // Storage is granted only once the engine holds the owner lock.
+    expect(core.beginEngineOpen('tab-a', 2)).toBe(false);
+    expect(core.beginOwnerLockWait('tab-a', 2)).toBe(true);
     expect(core.beginEngineOpen('tab-a', 2)).toBe(true);
     expect(core.beginEngineOpen('tab-a', 2)).toBe(false);
     core.ownerLost('tab-a', 2, 'database open timeout');
@@ -150,7 +383,7 @@ describe('CoordinatorCore', () => {
       expect(action(handoff, 'elect-owner').databaseAction).toBe(
         'open-existing'
       );
-      core.beginEngineOpen('tab-b', 2);
+      grantStorage(core, 'tab-b', 2);
       const actions = core.engineReady({
         tabId: 'tab-b',
         ownerEpoch: 2,
@@ -455,7 +688,7 @@ describe('CoordinatorCore', () => {
     core.registerTab('tab-a');
     core.registerTab('tab-b');
 
-    core.beginEngineOpen('tab-a', 1);
+    grantStorage(core, 'tab-a', 1);
     const wrongLock = core.engineReady({
       tabId: 'tab-a',
       ownerEpoch: 1,
@@ -469,7 +702,7 @@ describe('CoordinatorCore', () => {
       'wrong physical owner lock'
     );
     core.resumeAfterLoss();
-    core.beginEngineOpen('tab-b', 2);
+    grantStorage(core, 'tab-b', 2);
     const wrongProof = core.engineReady({
       tabId: 'tab-b',
       ownerEpoch: 2,

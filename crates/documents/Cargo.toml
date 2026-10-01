@@ -10,7 +10,9 @@ path = "src/bin/backfill_markdown_content_location.rs"
 required-features = ["backfill_binary"]
 
 [features]
+purge = ["ports", "outbound", "dep:macro_db_client", "dep:sqs_client", "dep:comms_db_client"]
 ai_tools = [
+  "dep:ai_billing",
   "dep:ai_toolset",
   "dep:ai_usage",
   "dep:async-trait",
@@ -35,6 +37,7 @@ axum = [
   "dep:axum",
   "dep:axum-extra",
   "dep:base64",
+  "dep:entity_registry",
   "dep:jsonwebtoken",
   "dep:lexical_client",
   "dep:macro_authorization",
@@ -43,6 +46,7 @@ axum = [
   "dep:task_dedup",
   "dep:utoipa",
   "entity_access/axum",
+  "entity_registry/axum",
   "schema",
 ]
 backfill_binary = [
@@ -68,6 +72,7 @@ outbound = [
   "dep:aws-sdk-s3",
   "dep:base64",
   "dep:entity_access_db_utils",
+  "dep:entity_registry",
   "dep:entity_registry_db_utils",
   "dep:hex",
   "dep:redis",
@@ -80,6 +85,8 @@ schema = ["dep:utoipa", "macro_user_id/schema"]
 service = ["dep:entity_access_management", "dep:foreign_entity", "ports"]
 
 [dependencies]
+macro_db_client = { path = "../macro_db_client", optional = true }
+sqs_client = { path = "../sqs_client", optional = true }
 activity = { path = "../activity", default-features = false }
 bot_id = { path = "../bot_id" }
 # Core
@@ -145,6 +152,7 @@ base64 = { workspace = true, optional = true }
 cloudfront_sign = { workspace = true }
 comms_db_client = { path = "../comms_db_client", optional = true }
 entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
+entity_registry = { path = "../entity_registry/entity_registry", optional = true }
 entity_registry_db_utils = { path = "../entity_registry/entity_registry_db_utils", optional = true }
 model_owner = { path = "../model_owner" }
 futures = { workspace = true }
@@ -156,6 +164,7 @@ sync_service_client = { path = "../sync_service_client" }
 task_dedup = { path = "../task_dedup", optional = true }
 
 # AI Tool dependencies
+ai_billing = { path = "../ai_billing", optional = true }
 ai_toolset = { path = "../ai_toolset", optional = true }
 ai_usage = { path = "../ai_usage", optional = true }
 async-trait = { workspace = true, optional = true }

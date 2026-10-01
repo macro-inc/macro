@@ -41,6 +41,7 @@ vi.mock('@queries/soup/transform-utils', () => ({
 }));
 
 vi.mock('@service-storage/graphql-soup', () => ({
+  getGraphqlSoupCacheHost: () => undefined,
   getGraphqlSoupClient: getGraphqlSoupClientMock,
   mapGraphqlGroupedSoupPage: mapGraphqlGroupedSoupPageMock,
 }));

@@ -1,4 +1,5 @@
 import { throwOnErr } from '@core/util/result';
+import { Telemetry } from '@macro-inc/observability';
 import { queryClient } from '@queries/client';
 import { emailClient } from '@service-email/client';
 import type {
@@ -10,6 +11,7 @@ import { useMutation } from '@tanstack/solid-query';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 import { emailKeys } from './keys';
 import { useNonPrimaryEmailLinkIdHeader } from './link';
+import { refreshMailAccounts } from './mail-accounts';
 
 type UpdateSettingsVars = { linkId: string; settings: Settings };
 
@@ -38,7 +40,7 @@ export function useUpdateEmailSettingsMutation(
 
     ...withCallbacks<PatchSettingsResponse, Error, UpdateSettingsVars>(
       {
-        onSuccess: (result, { linkId, settings }) => {
+        onSuccess: async (result, { linkId, settings }) => {
           queryClient.setQueryData<ListLinksResponse>(
             emailKeys.links.queryKey,
             (old) =>
@@ -65,6 +67,15 @@ export function useUpdateEmailSettingsMutation(
                   }
                 : old
           );
+          // The REST write has committed. A failed catalog refresh must not
+          // turn it into a failed settings mutation or prompt another save.
+          try {
+            await refreshMailAccounts();
+          } catch (error) {
+            Telemetry.error(
+              error instanceof Error ? error : new Error(String(error))
+            );
+          }
         },
       },
       callbacks

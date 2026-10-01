@@ -16,6 +16,7 @@
 #[cfg(test)]
 mod test;
 
+mod admission;
 mod deliver;
 mod lifecycle;
 mod lifecycle_events;
@@ -39,6 +40,7 @@ use agent_session::domain::service::AgentSessionService;
 use agent_session::domain::session::PermissionPolicy;
 use bot_id::BotId;
 use dashmap::DashMap;
+use dashmap::DashSet;
 use dashmap::mapref::entry::Entry;
 use macro_user_id::user_id::MacroUserIdStr;
 use tokio::sync::{mpsc, oneshot};
@@ -123,6 +125,7 @@ struct AgentHarnessInner<
     Notifier,
 > {
     sessions: Sessions,
+    admission: Arc<dyn ai_billing::AiAdmissionService>,
     containers: Containers,
     announcer: Announcer,
     runtimes: Runtimes,
@@ -134,8 +137,12 @@ struct AgentHarnessInner<
     coding_agents: Box<dyn ErasedCodingAgentSource>,
     defaults: HarnessDefaults,
     /// Turn-occupying actions waiting for their session's running turn to
-    /// end. In-memory beside the live actors this replica manages.
+    /// end. In-memory working copy; the session store is the durable source.
     queues: SessionQueues,
+    /// Sessions whose durable queue has been loaded into [`Self::queues`]
+    /// in this process. A restart starts empty; resume and the first local
+    /// command restore from the session store.
+    hydrated: DashSet<AgentSessionId>,
     /// The sessions with a command admitted and not yet resolved, and which
     /// turn it opened once dispatch names one. Marked the moment a
     /// turn-occupying action is admitted (queue.rs's `enqueue_then_dispatch`),
@@ -313,6 +320,7 @@ where
         Self {
             inner: Arc::new(AgentHarnessInner {
                 sessions,
+                admission: Arc::new(ai_billing::DisabledAiAdmissionService),
                 containers,
                 announcer,
                 runtimes,
@@ -324,6 +332,7 @@ where
                 coding_agents: Box::new(coding_agents),
                 defaults: defaults.into(),
                 queues: SessionQueues::new(),
+                hydrated: DashSet::new(),
                 busy: pending,
                 lifecycle_publisher,
                 mentions,
@@ -332,6 +341,14 @@ where
             workers: Arc::new(DashMap::new()),
             repositories: None,
         }
+    }
+
+    /// Configure shared admission before cloning the harness or starting workers.
+    pub fn with_admission(mut self, admission: Arc<dyn ai_billing::AiAdmissionService>) -> Self {
+        Arc::get_mut(&mut self.inner)
+            .expect("configure admission before sharing the harness")
+            .admission = admission;
+        self
     }
 
     /// Enable explicit repository choices, authorized against the owner's reachable repositories.
@@ -407,6 +424,7 @@ where
         self.inner
             .announcer
             .announce(SessionAnnouncement {
+                reuse_origin_message: false,
                 session_id,
                 bot_id: session.bot_id,
                 is_coding: persona.is_coding,
@@ -491,6 +509,7 @@ where
 fn into_session_error(error: HarnessError) -> AgentSessionError {
     match error {
         HarnessError::Session(error) => error,
+        HarnessError::Admission(error) => AgentSessionError::Admission(error),
         HarnessError::Disconnected(session) => AgentSessionError::Disconnected(session),
         other => AgentSessionError::Unknown(anyhow::anyhow!(other)),
     }

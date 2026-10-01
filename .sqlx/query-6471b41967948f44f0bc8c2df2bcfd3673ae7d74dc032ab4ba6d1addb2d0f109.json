@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT admission AS \"admission: Json<AdmissionData>\" FROM ai_funding_reservation WHERE invocation_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "admission: Json<AdmissionData>",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "6471b41967948f44f0bc8c2df2bcfd3673ae7d74dc032ab4ba6d1addb2d0f109"
+}

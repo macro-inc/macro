@@ -13,7 +13,7 @@ import { createEmailEditor, setEmailEditorText } from './editor';
 export function mountEmailComposer(
   context: EmailComposeContext,
   host?: EmailComposeHost,
-  seed?: Pick<EmailComposerOptions, 'draft' | 'draftId'>
+  seed?: Pick<EmailComposerOptions, 'draft' | 'draftId' | 'initialInboxId'>
 ) {
   const root = createRoot((dispose) => ({
     dispose,
@@ -29,6 +29,7 @@ export function mountEmailComposer(
   root.state.context.onContentChange('');
   return {
     ...root,
+    editor,
     edit(text: string, subject = 'Review') {
       setEmailEditorText(editor, text);
       root.state.context.setSubject(subject);

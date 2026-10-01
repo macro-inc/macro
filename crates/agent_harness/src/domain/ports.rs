@@ -170,8 +170,9 @@ pub trait MessagePromptContext: Send + Sync + 'static {
         origin: &super::model::AnnounceOrigin,
     ) -> impl Future<Output = Result<()>> + Send;
 
-    /// Read up to ten preceding live messages, and the comment anchor the
-    /// prompt sits on, with a fresh access check.
+    /// Read the prompt's discussion, the channel activity around it, what the
+    /// prompt replies to, and the comment anchor it sits on, with a fresh
+    /// access check.
     fn conversation_context(
         &self,
         actor: &MacroUserIdStr<'static>,
@@ -179,13 +180,14 @@ pub trait MessagePromptContext: Send + Sync + 'static {
     ) -> impl Future<Output = Result<ConversationContext>> + Send;
 }
 
-/// Composes an agent prompt from raw markdown and optional conversation context.
+/// Composes an agent prompt from raw markdown and trusted session context.
 pub trait AgentPromptComposer: Send + Sync + 'static {
     /// Return the markdown that should be delivered to the agent runtime.
-    /// `None` sanitizes a prompt without adding a conversation-context node.
+    /// Empty context sanitizes a prompt without adding a private context node.
     fn compose(
         &self,
         prompt_markdown: &str,
+        instructions: Option<&str>,
         parent: Option<&messages::domain::models::MessageParent>,
         context: Option<&ConversationContext>,
     ) -> impl Future<Output = Result<String>> + Send;
@@ -342,6 +344,14 @@ pub trait RuntimeConnections: Send + Sync + 'static {
 /// the owner's MCP servers needs their rows. What the domain keeps is *when* -
 /// once, at spawn, for the session's own owner.
 pub trait SandboxEgressProvisioner: Send + Sync + 'static {
+    /// Internal session tools at an address reachable by an external runtime.
+    fn external_mcp_servers(
+        &self,
+        egress: &SandboxEgress,
+    ) -> Vec<agent_client_protocol::schema::v1::McpServer> {
+        vec![egress.internal_mcp_server(), egress.preview_mcp_server()]
+    }
+
     /// The egress environment for one session, on behalf of `owner`, and the
     /// hash its session row must carry for that environment to mean anything.
     ///

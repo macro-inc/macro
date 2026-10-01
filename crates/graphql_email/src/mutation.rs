@@ -1,6 +1,6 @@
 use std::{future::Future, marker::PhantomData, pin::Pin, sync::Arc};
 
-use async_graphql::{Context, ErrorExtensions, ID, InputObject, Object, OutputType, SimpleObject};
+use async_graphql::{Context, ErrorExtensions, ID, InputObject, Object, OutputType};
 use chrono::Utc;
 use email::domain::{
     models::{
@@ -278,17 +278,38 @@ pub struct DeleteEmailDraftInput {
     pub draft_id: ID,
 }
 
-/// Result of deleting an email draft.
-#[derive(SimpleObject)]
-pub struct DeleteEmailDraftPayload {
-    /// The requested draft ID, echoed for client cache bookkeeping.
-    pub draft_id: ID,
-    /// Whether a draft row was actually deleted. `false` means the ID was
-    /// already gone and the delete was an idempotent no-op.
-    pub deleted: bool,
-    /// Whether deleting the draft emptied its thread and removed the thread
-    /// too (a discarded compose draft that never gained other messages).
-    pub thread_deleted: bool,
+/// Result of deleting an email draft, including its surviving conversation.
+pub struct DeleteEmailDraftPayload<O: EmailThreadMutationOutput> {
+    draft_id: ID,
+    deleted: bool,
+    thread_deleted: bool,
+    thread_id: Option<ID>,
+    thread: Option<O::Thread>,
+}
+
+/// Result of deleting an email draft, including its surviving conversation.
+#[Object(name = "DeleteEmailDraftPayload")]
+impl<O: EmailThreadMutationOutput> DeleteEmailDraftPayload<O> {
+    /// Requested draft identity.
+    async fn draft_id(&self) -> &ID {
+        &self.draft_id
+    }
+    /// Whether a row was removed; an absent row is an idempotent success.
+    async fn deleted(&self) -> bool {
+        self.deleted
+    }
+    /// Whether the thread was also removed.
+    async fn thread_deleted(&self) -> bool {
+        self.thread_deleted
+    }
+    /// Authorized thread identity, including a thread removed by this delete.
+    async fn thread_id(&self) -> Option<&ID> {
+        self.thread_id.as_ref()
+    }
+    /// Canonical surviving thread, when this delete found a draft.
+    async fn thread(&self) -> Option<&O::Thread> {
+        self.thread.as_ref()
+    }
 }
 
 /// Result of creating or updating an email draft.
@@ -382,6 +403,7 @@ fn saved_draft_message(saved: SavedUserDraft) -> Message {
         body_html_sanitized: draft.body_html,
         body_macro: draft.body_macro,
         body_replyless,
+        calendar_invitations: Default::default(),
         attachments,
         attachments_draft,
         attachments_forwarded,
@@ -621,7 +643,7 @@ where
         &self,
         ctx: &Context<'_>,
         input: DeleteEmailDraftInput,
-    ) -> async_graphql::Result<DeleteEmailDraftPayload> {
+    ) -> async_graphql::Result<DeleteEmailDraftPayload<O>> {
         let user_id = require_authenticated_user(ctx)?;
         let draft_id = parse_id(input.draft_id, "draftId")?;
         let service = ctx.data::<Arc<S>>()?;
@@ -639,7 +661,15 @@ where
                 draft_mutation_error(&error)
             })?;
 
+        let thread = match deleted.thread_id.filter(|_| !deleted.thread_deleted) {
+            Some(id) => O::load_email_thread(ctx, user_id, id)
+                .await
+                .map_err(retryable_email_error)?,
+            None => None,
+        };
         Ok(DeleteEmailDraftPayload {
+            thread_id: deleted.thread_id.map(|id| ID(id.to_string())),
+            thread,
             draft_id: ID(draft_id.to_string()),
             deleted: deleted.deleted,
             thread_deleted: deleted.thread_deleted,

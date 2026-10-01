@@ -86,7 +86,7 @@ function StartScreen(props: { onStart: () => void; onSkip: () => void }) {
                 </p>
               </div>
               <div class="w-full max-w-xs flex flex-col gap-2 pt-2">
-                <Button variant="cta" size="xl" onClick={props.onSkip}>
+                <Button variant="strong" size="xl" onClick={props.onSkip}>
                   Continue
                   <ArrowRightIcon />
                 </Button>
@@ -101,7 +101,7 @@ function StartScreen(props: { onStart: () => void; onSkip: () => void }) {
             </p>
           </div>
           <div class="w-full max-w-xs flex flex-col gap-2 pt-2">
-            <Button variant="cta" size="xl" onClick={props.onStart}>
+            <Button variant="strong" size="xl" onClick={props.onStart}>
               Play tutorial
               <ArrowRightIcon />
             </Button>
@@ -127,7 +127,7 @@ function EndScreen(props: { onFinish: () => void; onReplay: () => void }) {
           </p>
         </div>
         <div class="w-full max-w-xs flex flex-col gap-2 pt-2">
-          <Button variant="cta" size="xl" onClick={props.onFinish}>
+          <Button variant="strong" size="xl" onClick={props.onFinish}>
             Let’s go
             <ArrowRightIcon />
           </Button>
@@ -167,7 +167,7 @@ function ModalFooter(props: { lesson: LessonState }) {
           </Button>
           <Button
             ref={onboarding.setContinueButtonRef}
-            variant="cta"
+            variant="strong"
             size="xl"
             onClick={onboarding.handleContinue}
             disabled={!onboarding.readyToContinue()}

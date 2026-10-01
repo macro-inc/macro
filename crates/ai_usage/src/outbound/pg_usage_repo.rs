@@ -24,7 +24,7 @@ impl PgUsageRepo {
 }
 
 impl UsageRepo for PgUsageRepo {
-    async fn insert_usage(&self, usage: &CompletionUsage) -> Result<()> {
+    async fn insert_usage(&self, usage: &CompletionUsage, count_usage: bool) -> Result<()> {
         let id = macro_uuid::generate_uuid_v7();
         let (input_tokens, output_tokens, audio_seconds) = match usage.cost.amount {
             UsageAmount::Tokens { input, output } => (
@@ -51,9 +51,10 @@ impl UsageRepo for PgUsageRepo {
             INSERT INTO ai_usage (
                 id, feature, user_id, entity, model,
                 input_tokens, output_tokens, audio_seconds,
-                price_per_million_in, price_per_million_out, price_per_audio_minute, total
+                price_per_million_in, price_per_million_out, price_per_audio_minute, total,
+                count_usage
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
             "#,
             id,
             usage.feature.to_string(),
@@ -67,6 +68,7 @@ impl UsageRepo for PgUsageRepo {
             per_out,
             per_audio_minute,
             total,
+            count_usage,
         )
         .execute(&self.inner)
         .await?;

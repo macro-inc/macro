@@ -1,6 +1,7 @@
 import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
 import { FloatRegions } from '@components/app/mobile/float-regions/float-region-state';
 import { setVirtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
+import type { MessageListItem } from '@service-storage/messages';
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import {
   batch,
@@ -19,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   commentId: (): string | null => null,
   navigationCount: (): number => 0,
   renderedMessageIds: (): string[] => [],
+  anchor: null as MessageListItem['state']['anchor'],
 }));
 
 vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
@@ -39,13 +41,14 @@ vi.mock('../context/markdown-document-context', () => ({
     },
   }),
 }));
-vi.mock('@core/messages/DocumentConversation', () => ({
-  DocumentConversation: (props: {
+vi.mock('@core/messages/EntityConversation', () => ({
+  EntityConversation: (props: {
     parent: { type: string; id: string };
     canWrite: boolean;
     buildLink: (message: { id: string }) => string;
     hideComposer?: boolean;
     hideWhenEmpty?: boolean;
+    targetId?: string | null;
     targetCleared?: boolean;
     onClearTarget?: () => void;
   }) => {
@@ -56,7 +59,7 @@ vi.mock('@core/messages/DocumentConversation', () => ({
       </For>
     );
   },
-  DocumentConversationComposer: () => {
+  EntityConversationComposer: () => {
     mocks.mount();
     onCleanup(mocks.unmount);
     return <textarea aria-label="Comment draft" />;
@@ -65,6 +68,16 @@ vi.mock('@core/messages/DocumentConversation', () => ({
 vi.mock('@core/component/ParamsProvider', () => ({
   useUrlParams: () => ({ commentId: () => mocks.commentId() }),
   useParamNavigationCount: () => () => mocks.navigationCount(),
+}));
+vi.mock('@queries/messages/document-messages', () => ({
+  useMessageLink: (_parent: unknown, target: () => string | null) => ({
+    messageId: target,
+    rootId: () => (target() ? 'root' : null),
+  }),
+  useMessageRootsQuery: () => ({
+    isSuccess: true,
+    data: [{ id: 'root', state: { anchor: mocks.anchor } }],
+  }),
 }));
 vi.mock('@channel/Input/ChannelInputContainer', () => ({
   ChannelInputContainer: (props: ParentProps) => props.children,
@@ -91,6 +104,7 @@ afterEach(() => {
   cleanup();
   setVirtualKeyboardVisible(false);
   vi.clearAllMocks();
+  mocks.anchor = null;
 });
 
 function setup() {
@@ -116,6 +130,7 @@ describe('mobile document discussion accessory behind the flag', () => {
       expect.objectContaining({
         parent: { type: 'document', id: 'document' },
         canWrite: true,
+        canModerate: false,
         hideComposer: true,
         hideWhenEmpty: true,
       })
@@ -192,6 +207,27 @@ describe('scrolling to a linked Discussion message', () => {
     await flushMutations();
 
     expect(scrolledIds()).toEqual(['m2']);
+  });
+
+  it('leaves margin comment links to the margin without targeting Discussion', async () => {
+    mocks.anchor = { type: 'markdown', mark_id: 'mark' };
+    setCommentId('margin-reply');
+    setRenderedMessageIds(['margin-reply']);
+    setup();
+    await flushMutations();
+    expect(mocks.conversation).toHaveBeenCalledWith(
+      expect.objectContaining({ targetId: null })
+    );
+    expect(scrolledIds()).toEqual([]);
+    expect(commentId()).toBe('margin-reply');
+  });
+
+  it('passes unanchored links to Discussion after resolving their root', () => {
+    setCommentId('discussion-reply');
+    setup();
+    expect(mocks.conversation).toHaveBeenCalledWith(
+      expect.objectContaining({ targetId: 'discussion-reply' })
+    );
   });
 
   it('scrolls again when a later navigation targets another message', async () => {

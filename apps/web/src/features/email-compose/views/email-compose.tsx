@@ -9,7 +9,7 @@ import { WrapUnlessMobile } from '@core/mobile/WrapUnlessMobile';
 
 import { ComposerSurface } from '@ui';
 
-import { createSignal, Show } from 'solid-js';
+import { createResource, createSignal, Show } from 'solid-js';
 import { EmailScheduleBar } from '../components/email-schedule-summary';
 import { SignaturePreview } from '../components/signature-preview';
 import type { EmailComposeContext } from '../context/compose-capabilities';
@@ -18,6 +18,7 @@ import type { ComposeContextValue } from '../primitives/compose-view-state';
 import {
   createEmailComposer,
   type EmailComposerOptions,
+  hasComposeUndo,
 } from '../primitives/email-composer';
 import { ComposeLayout } from '../views/compose-layout';
 import { EmailComposeToolbar } from '../views/compose-toolbar';
@@ -29,8 +30,50 @@ export type EmailComposeViewProps = Pick<
   | 'recipientOptions'
   | 'onRecipientsChange'
   | 'initialTo'
+  | 'initialInboxId'
 > & { context: EmailComposeContext };
 export function EmailComposeView(props: EmailComposeViewProps) {
+  // The split mounts one composer per initial draft. Keep this content load
+  // fixed to that mount; live queue changes refresh identity, not editor text.
+  const initialDraftId = props.draft?.db_id ?? props.draftId;
+  const readInitialDraft = props.context.drafts.readDraft;
+  const [saved, { refetch }] = createResource(
+    () => readInitialDraft && initialDraftId,
+    async (id) => {
+      const result = await readInitialDraft!(id);
+      if (!result?.draft && !props.draft && !hasComposeUndo(id)) {
+        throw new Error('This draft is not available on this device.');
+      }
+      return result;
+    }
+  );
+  return (
+    <Show
+      when={!saved.loading}
+      fallback={<div role="status">Loading draft…</div>}
+    >
+      <Show
+        when={!saved.error}
+        fallback={
+          <div role="alert">
+            Unable to load this draft.{' '}
+            <button onClick={() => void refetch()}>Retry</button>
+          </div>
+        }
+      >
+        <LoadedEmailComposeView
+          {...props}
+          draft={saved()?.draft ?? props.draft}
+          draftPersistence={saved()?.persistence}
+        />
+      </Show>
+    </Show>
+  );
+}
+
+function LoadedEmailComposeView(
+  props: EmailComposeViewProps & { draftPersistence?: 'committed' | 'queued' }
+) {
   const composeContext = props.context;
   const state = createEmailComposer({
     drafts: composeContext.drafts,
@@ -47,9 +90,11 @@ export function EmailComposeView(props: EmailComposeViewProps) {
     host: props.host,
     draft: props.draft,
     draftId: props.draftId,
+    draftPersistence: props.draftPersistence,
     recipientOptions: props.recipientOptions,
     onRecipientsChange: props.onRecipientsChange,
     initialTo: props.initialTo,
+    initialInboxId: props.initialInboxId,
   });
   const {
     editor,
@@ -205,7 +250,7 @@ export function EmailComposeView(props: EmailComposeViewProps) {
                       setDraftBackMenuOpen(false);
                       return;
                     }
-                    leaveCompose();
+                    setDraftBackMenuOpen(false);
                   }}
                 >
                   Delete Draft

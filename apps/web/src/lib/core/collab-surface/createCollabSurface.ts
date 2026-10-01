@@ -63,7 +63,7 @@ export type CollabSurfaceSession = {
  * block's local ingest (`Block.tsx`), including folding replayed WAL entries
  * into a fresh snapshot so a reload during recovery doesn't show stale state.
  */
-async function ingestLocalSnapshot(
+export async function ingestLocalSnapshot(
   loroManager: CollabSurfaceLoroManager,
   snapshotStore: IDBSnapshotStore<RawUpdate>,
   walStore: BrowserWALStore<RawUpdate>

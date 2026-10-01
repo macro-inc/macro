@@ -20,7 +20,7 @@ impl RequiredPermission for MessageView {
     }
 }
 
-/// Minimum posting permission: channel member or document commenter.
+/// Minimum posting permission: channel member or entity commenter.
 #[derive(Debug, Clone, Copy)]
 pub struct MessageWrite;
 
@@ -182,6 +182,49 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
     pub async fn post(
         &self,
         access: EntityAccessReceipt<MessageWrite>,
+        input: PostMessage,
+    ) -> Result<Message, MessageError> {
+        if let Some(id) = input.id {
+            validate_client_id(id, chrono::Utc::now())?;
+        }
+        self.post_validated(access, input).await
+    }
+
+    /// Post a trusted server event once, including after long broker delays.
+    /// Replays return the stored message even if its discussion was deleted;
+    /// they never restore deleted content or publish another message event.
+    #[tracing::instrument(err, skip(self, access, input))]
+    pub async fn post_from_event(
+        &self,
+        access: EntityAccessReceipt<MessageWrite>,
+        event_id: Uuid,
+        mut input: PostMessage,
+    ) -> Result<Message, MessageError> {
+        validate_uuid_v7(event_id)?;
+        let parent = parent_from_receipt(&access)?;
+        let actor = actor_from_receipt(&access, &parent)?;
+        self.ensure_parent(&parent).await?;
+        let thread_id = input.thread_id;
+        if let Some(message) = self.repo.get(&parent, event_id).await? {
+            return validate_event_message(message, &parent, &actor, thread_id);
+        }
+        input.id = Some(event_id);
+        match self.post_validated(access, input).await {
+            Err(MessageError::Conflict) => {
+                let message = self
+                    .repo
+                    .get(&parent, event_id)
+                    .await?
+                    .ok_or(MessageError::Conflict)?;
+                validate_event_message(message, &parent, &actor, thread_id)
+            }
+            result => result,
+        }
+    }
+
+    async fn post_validated(
+        &self,
+        access: EntityAccessReceipt<MessageWrite>,
         mut input: PostMessage,
     ) -> Result<Message, MessageError> {
         let parent = parent_from_receipt(&access)?;
@@ -191,6 +234,18 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             input.mentions = self.mentions.extract(&input.content).await?;
         }
         validate_post(&parent, &input)?;
+        if matches!(input.anchor, Some(NewThreadAnchor::Spreadsheet { .. }))
+            && self
+                .repo
+                .document_file_type(&parent.entity_id())
+                .await?
+                .as_deref()
+                != Some("spreadsheet")
+        {
+            return Err(MessageError::Invalid(
+                "spreadsheet anchors require a native spreadsheet",
+            ));
+        }
         self.validate_references(&access, &input.mentions, &input.attachments)
             .await?;
         if let Some(root) = input.thread_id {
@@ -376,16 +431,23 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         if emoji.is_empty() || emoji.chars().count() > 32 || emoji.chars().any(char::is_control) {
             return Err(MessageError::Invalid("invalid reaction"));
         }
-        let message = self
+        let ReactionResult { message, changed } = self
             .repo
             .react(&parent, id, actor.as_ref(), &emoji, add)
             .await?;
+        // Idempotent retries still return the current message to the caller,
+        // but must not publish another change or notify the author again.
+        if !changed {
+            return Ok(message);
+        }
         self.publish_message(
             actor,
             nonce,
             &message,
             MessageChange::ReactionChanged {
                 message: message.clone(),
+                emoji,
+                added: add,
             },
         )
         .await;
@@ -413,6 +475,11 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             return Err(MessageError::Invalid("thread update must change a field"));
         }
         if patch.detach_anchor {
+            if !matches!(parent, MessageParent::Document(_)) {
+                return Err(MessageError::Invalid(
+                    "only document discussions have anchors",
+                ));
+            }
             if !access.entity_permission().satisfies::<EditAccessLevel>() {
                 return Err(MessageError::Forbidden);
             }
@@ -482,6 +549,13 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         })
         .await;
         Ok(state)
+    }
+
+    /// The parent a live message belongs to, so an adapter addressed only by
+    /// message id can mint that parent's receipt. Grants nothing on its own.
+    #[tracing::instrument(err, skip(self))]
+    pub async fn parent_of(&self, id: Uuid) -> Result<Option<MessageParent>, MessageError> {
+        self.repo.parent_of(id).await
     }
 
     /// Resolve an old link through the sole message store under current parent access.
@@ -692,6 +766,11 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
     }
 }
 
+/// Parent moderation beyond authorship.
+///
+/// A document owner may delete any comment on that document, including a
+/// discussion they did not start. Channel admins and owners may moderate
+/// channel messages the same way. Edit and comment access do not.
 fn can_moderate(permission: &EntityPermission) -> bool {
     permission.satisfies::<OwnerAccessLevel>() || permission.satisfies::<AdminParticipantRole>()
 }
@@ -703,6 +782,9 @@ fn parent_from_receipt<P: RequiredPermission>(
     let kind = match entity.entity_type {
         EntityType::Channel => "channel",
         EntityType::Document => "document",
+        EntityType::Initiative => "initiative",
+        EntityType::CrmCompany => "crm_company",
+        EntityType::CrmContact => "crm_contact",
         _ => return Err(MessageError::Forbidden),
     };
     MessageParent::parse(kind, &entity.entity_id)
@@ -734,6 +816,13 @@ fn validate_post(parent: &MessageParent, input: &PostMessage) -> Result<(), Mess
             "only root document messages may have anchors",
         ));
     }
+    if let Some(NewThreadAnchor::Spreadsheet {
+        sheet_id, range, ..
+    }) = &input.anchor
+        && (sheet_id.trim().is_empty() || !valid_spreadsheet_range(range))
+    {
+        return Err(MessageError::Invalid("invalid spreadsheet comment range"));
+    }
     if let Some(NewThreadAnchor::PdfPlaceable {
         page,
         x_pct,
@@ -751,10 +840,50 @@ fn validate_post(parent: &MessageParent, input: &PostMessage) -> Result<(), Mess
     {
         return Err(MessageError::Invalid("invalid PDF comment geometry"));
     }
-    if let Some(id) = input.id {
-        validate_client_id(id, chrono::Utc::now())?;
-    }
     Ok(())
+}
+
+fn valid_spreadsheet_range(range: &str) -> bool {
+    let cells: Vec<_> = range.split(':').collect();
+    (1..=2).contains(&cells.len())
+        && cells.iter().all(|cell| {
+            let column_len = cell.bytes().take_while(u8::is_ascii_uppercase).count();
+            let (column, row) = cell.split_at(column_len);
+            !column.is_empty()
+                && !row.starts_with('0')
+                && row.bytes().all(|byte| byte.is_ascii_digit())
+                && row.parse::<u32>().is_ok_and(|value| value > 0)
+                && column
+                    .bytes()
+                    .try_fold(0_u32, |value, byte| {
+                        value
+                            .checked_mul(26)?
+                            .checked_add(u32::from(byte - b'A') + 1)
+                    })
+                    .is_some()
+        })
+}
+
+fn validate_event_message(
+    message: Message,
+    parent: &MessageParent,
+    actor: &ChannelSender<'static>,
+    thread_id: Option<Uuid>,
+) -> Result<Message, MessageError> {
+    if message.parent != *parent || message.sender_id != *actor || message.thread_id != thread_id {
+        return Err(MessageError::Conflict);
+    }
+    Ok(message)
+}
+
+fn validate_uuid_v7(id: Uuid) -> Result<chrono::DateTime<chrono::Utc>, MessageError> {
+    id.get_timestamp()
+        .filter(|_| id.get_version_num() == 7)
+        .and_then(|timestamp| {
+            let (seconds, nanos) = timestamp.to_unix();
+            chrono::DateTime::from_timestamp(i64::try_from(seconds).ok()?, nanos)
+        })
+        .ok_or(MessageError::Invalid("message id must be a UUIDv7"))
 }
 
 /// How far a client-minted id's timestamp may drift from the server clock.
@@ -765,14 +894,7 @@ const CLIENT_ID_MAX_SKEW: chrono::TimeDelta = chrono::TimeDelta::days(1);
 /// A client-minted id must be a UUIDv7 stamped near now, so its embedded time
 /// stays roughly the message's creation time.
 fn validate_client_id(id: Uuid, now: chrono::DateTime<chrono::Utc>) -> Result<(), MessageError> {
-    let minted_at = id
-        .get_timestamp()
-        .filter(|_| id.get_version_num() == 7)
-        .and_then(|timestamp| {
-            let (seconds, nanos) = timestamp.to_unix();
-            chrono::DateTime::from_timestamp(i64::try_from(seconds).ok()?, nanos)
-        })
-        .ok_or(MessageError::Invalid("message id must be a UUIDv7"))?;
+    let minted_at = validate_uuid_v7(id)?;
     if (now - minted_at).abs() > CLIENT_ID_MAX_SKEW {
         return Err(MessageError::Invalid(
             "message id timestamp is too far from the server clock",

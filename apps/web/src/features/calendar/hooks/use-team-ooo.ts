@@ -104,10 +104,14 @@ export function useTeamOooEvents(
     })
   );
   const events = createMemo(() => {
-    // Read data only on success: a failed overlay fetch degrades to no events
-    // since the grid's own state is driven by the occurrences query, and gating
-    // on success keeps this off the pending/errored resource read that suspends.
-    if (!teamOooEnabled() || !isRangeSupported() || !query.isSuccess) {
+    // Pending reads suspend, and placeholder data belongs to the previous
+    // range. Neither can supply events for the current viewport.
+    if (
+      !teamOooEnabled() ||
+      !isRangeSupported() ||
+      !query.isSuccess ||
+      query.isPlaceholderData
+    ) {
       return [];
     }
     return query.data.map(mapTeamOooItem);
@@ -124,6 +128,8 @@ export function useTeamOooEvents(
 export interface TeamOooWindow {
   ownerId: string;
   eventId: string;
+  /** Read-only event model used to open the shared event details surface. */
+  event: CalendarEvent;
   occurrenceKey: string;
   /** Teammate display name, resolved reactively from the shared cache. */
   name: string;
@@ -171,6 +177,7 @@ export function useUpcomingTeamOoo(): UpcomingTeamOoo {
         eventId: item.eventId,
         occurrenceKey: item.occurrenceKey,
         name: getDisplayName(tryMacroId(item.ownerId)),
+        event: mapTeamOooItem(item),
         title: item.title ?? undefined,
         start,
         end,

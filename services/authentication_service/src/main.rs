@@ -415,7 +415,11 @@ async fn main() -> anyhow::Result<()> {
     // same persistence and delivery as every other channel message.
     let channel_messages: Arc<dyn messages::domain::api::MessageCommands> = Arc::new(
         messages::domain::service::MessageService::new(
-            messages::outbound::pg_message_repo::PgMessageRepository::new(db.clone()),
+            messages::outbound::pg_message_repo::PgMessageRepository::new(db.clone())
+                .with_initiatives(initiative::domain::lookup::InitiativeLookup::new(
+                    initiative::outbound::PgInitiativeRepo::new(db.clone()),
+                ))
+                .with_crm(crm::outbound::lookup::PgCrmParentReader::new(db.clone())),
             messages::domain::effects::MessageEffects::new(
                 messages::outbound::broker::BrokerMessagePublisher::new(macro_event_broker.clone()),
                 messages::domain::ports::NoMessageEventPublisher,
@@ -495,15 +499,19 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let stripe_client = Arc::new(stripe_client);
-    let ai_billing_service = Arc::new(ai_billing::domain::BillingServiceImpl::new(
-        ai_billing::outbound::RolesTeamsEntitlementSource::new(
-            user_roles_and_permissions_service.clone(),
-            teams_repo_impl.clone(),
-        ),
-        ai_billing::outbound::PgUsageReader::new(db.clone()),
-        ai_billing::outbound::PgBillingRepo::new(db.clone()),
-        ai_billing::outbound::StripePaymentGateway::new(stripe_client.clone()),
-    ));
+    let ai_billing_service = Arc::new(
+        ai_billing::domain::BillingServiceImpl::new(
+            ai_billing::outbound::RolesTeamsEntitlementSource::new(
+                user_roles_and_permissions_service.clone(),
+                teams_repo_impl.clone(),
+            ),
+            ai_billing::outbound::PgUsageReader::new(db.clone()),
+            ai_billing::outbound::PgBillingRepo::new(db.clone()),
+            ai_billing::outbound::StripePaymentGateway::new(stripe_client.clone()),
+        )
+        .with_enforcement(config.enable_ai_usage_enforcement)
+        .with_billing(config.enable_ai_usage_billing),
+    );
     let teams_service_impl = TeamServiceImpl::new_with_analytics(
         teams_repo_impl.clone(),
         customer_repo_impl,

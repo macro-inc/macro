@@ -8,7 +8,7 @@ use crate::domain::{
         CrmEntityAccess, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission,
         EntityType, RequiredPermission, TeamRole, UserTeamInfo, ViewAccessLevel,
     },
-    ports::{AccessRepository, EntityAccessService},
+    ports::{AccessRepository, EntityAccessService, ScheduledActionGrants},
 };
 use futures::{StreamExt, stream};
 use macro_user_id::{
@@ -68,6 +68,11 @@ where
                 Ok(direct.max(inherited))
             }
             EntityType::Initiative => self.repo.get_initiative_access(entity_id, user_id).await,
+            EntityType::ScheduledAction => {
+                self.repo
+                    .get_scheduled_action_access(entity_id, user_id)
+                    .await
+            }
             EntityType::CalendarEvent => {
                 self.repo
                     .get_calendar_event_access(entity_id, user_id)
@@ -145,7 +150,7 @@ where
     /// Looks up both the active `calls` table and the archived `call_records`
     /// table. Returns `NotFound` if neither has a matching row, or
     /// `BadRequest` if the id is not a valid UUID.
-    async fn resolve_call_channel_id(&self, call_id: &str) -> Result<Uuid, AccessError> {
+    async fn resolve_call_channel_id(&self, call_id: &str) -> Result<Option<Uuid>, AccessError> {
         let call_uuid = Uuid::from_str(call_id)
             .map_err(|_| AccessError::BadRequest("Invalid call ID format"))?;
         let info = self
@@ -440,7 +445,8 @@ where
             | EntityType::Call
             | EntityType::CalendarEvent
             | EntityType::AgentSession
-            | EntityType::Initiative => {
+            | EntityType::Initiative
+            | EntityType::ScheduledAction => {
                 self.get_optimized_access(entity_id, user_id, entity_type)
                     .await
             }
@@ -462,8 +468,7 @@ where
             EntityType::Team
             | EntityType::User
             | EntityType::ChannelMessage
-            | EntityType::Skill
-            | EntityType::ScheduledAction => Ok(None),
+            | EntityType::Skill => Ok(None),
         }
     }
 
@@ -517,7 +522,8 @@ where
             | EntityType::Call
             | EntityType::CalendarEvent
             | EntityType::AgentSession
-            | EntityType::Initiative => {
+            | EntityType::Initiative
+            | EntityType::ScheduledAction => {
                 let access = self
                     .get_optimized_access(entity_id, user_id, entity_type)
                     .await?;
@@ -625,7 +631,9 @@ where
             | EntityType::Project
             | EntityType::EmailThread
             | EntityType::AgentSession
-            | EntityType::Initiative => {
+            | EntityType::Initiative
+            | EntityType::CrmCompany
+            | EntityType::CrmContact => {
                 let entity_id = Uuid::parse_str(entity_id).map_err(|_| {
                     AccessError::BadRequest("invalid entity_id for get_users_by_entity")
                 })?;
@@ -638,11 +646,17 @@ where
                 })?;
                 self.repo.get_channel_users(&channel_id).await
             }
-            EntityType::Call => {
-                // Participants of a call are the members of its channel.
-                let channel_id = self.resolve_call_channel_id(entity_id).await?;
-                self.repo.get_channel_users(&channel_id).await
-            }
+            EntityType::Call => match self.resolve_call_channel_id(entity_id).await? {
+                Some(channel_id) => self.repo.get_channel_users(&channel_id).await,
+                None => {
+                    let call_id = Uuid::parse_str(entity_id).map_err(|_| {
+                        AccessError::BadRequest("invalid call_id for get_users_by_entity")
+                    })?;
+                    self.repo
+                        .get_direct_entity_users(&call_id, EntityType::Call)
+                        .await
+                }
+            },
             _ => Err(AccessError::BadRequest(
                 "get_users_by_entity does not support this entity type",
             )),
@@ -671,6 +685,15 @@ where
         user_id: &MacroUserId<Lowercase<'_>>,
     ) -> Result<Option<UserTeamInfo>, AccessError> {
         self.repo.get_user_team(user_id).await
+    }
+}
+
+impl<R: AccessRepository> ScheduledActionGrants for EntityAccessServiceImpl<R> {
+    async fn accessible_scheduled_action_ids(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<Vec<Uuid>, AccessError> {
+        self.repo.accessible_scheduled_action_ids(user_id).await
     }
 }
 

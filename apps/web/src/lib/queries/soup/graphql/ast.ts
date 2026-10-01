@@ -66,6 +66,7 @@ type TargetAstKey =
   | 'propf';
 
 type AstBody = Partial<Record<TargetAstKey, RestAst>> & {
+  favorites_only?: SoupAstBody['favorites_only'];
   /** CRM-address and CRM-domain filters are REST-only today. */
   eca?: string[];
   ecd?: string[];
@@ -415,7 +416,8 @@ type ChannelThreadLiteralField =
   | 'RootSender'
   | 'Sender'
   | 'Participant'
-  | 'NotificationState';
+  | 'NotificationState'
+  | 'HasReplies';
 
 const CHANNEL_THREAD_LITERAL_FIELDS = [
   'ThreadId',
@@ -424,6 +426,7 @@ const CHANNEL_THREAD_LITERAL_FIELDS = [
   'Sender',
   'Participant',
   'NotificationState',
+  'HasReplies',
 ] as const satisfies readonly ChannelThreadLiteralField[];
 
 function isChannelThreadLiteralField(
@@ -450,6 +453,9 @@ function mapChannelThreadLiteral(
     }))
     .with('Participant', () => ({
       participant: mapString(value, 'participant'),
+    }))
+    .with('HasReplies', () => ({
+      hasReplies: mapBoolean(value, 'hasReplies'),
     }))
     .with('NotificationState', () => ({
       notificationState: mapNotificationState(value),
@@ -617,6 +623,8 @@ function assertGraphqlCompatibleBody(body: AstBody): void {
 function makeGraphqlFilters(body: AstBody): GraphqlEntityFilterAstInput {
   assertGraphqlCompatibleBody(body);
   const filters: GraphqlEntityFilterAstInput = {};
+  if (body.favorites_only !== undefined)
+    filters.favoritesOnly = body.favorites_only;
 
   if (body.calf) {
     filters.calendarEventFilter = compileExpr(

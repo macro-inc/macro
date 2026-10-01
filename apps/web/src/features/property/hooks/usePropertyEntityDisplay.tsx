@@ -1,14 +1,19 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { EntityIcon as CoreEntityIcon } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { enableProjects } from '@core/constant/featureFlags';
 import { useChannelName } from '@core/context/channels';
-import { getDisplayName, tryMacroId } from '@core/user';
+import { useUserId } from '@core/context/user';
+import ProjectIcon from '@phosphor/stack.svg';
 import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { type Accessor, createMemo, type JSX, untrack } from 'solid-js';
 import { match } from 'ts-pattern';
+import { useProjectIdentityQuery } from '../../projects/queries/project-identity';
 import { entityTypeToItemType } from '../utils';
+import { usePropertyUserDisplay } from './usePropertyUserDisplay';
 
 const PREVIEWABLE_ENTITY_TYPES: EntityType[] = [
   'DOCUMENT',
@@ -31,6 +36,8 @@ const isPreviewable = (
 type PropertyEntityDisplayResult = {
   /** Resolved display name for the entity */
   name: Accessor<string>;
+  /** Native project identity, available only after an authorized read. */
+  nativeProjectId: Accessor<string | undefined>;
   /** Icon JSX element for the entity */
   icon: Accessor<JSX.Element>;
   /** Whether preview data is still loading */
@@ -60,6 +67,21 @@ export function usePropertyEntityDisplay(
     specificMessageId?: Accessor<string | null | undefined>;
   }
 ): PropertyEntityDisplayResult {
+  const projectsFlag = useFeatureFlag(enableProjects);
+  // Until Projects is enabled, a project stays the generic "Project" label.
+  const projectSource = createMemo(() => {
+    if (entityType() !== 'INITIATIVE' || !projectsFlag().enabled) return;
+    return untrack(() => {
+      const userId = useUserId();
+      return useProjectIdentityQuery(entityId, userId);
+    });
+  });
+  const nativeProjectId = () => {
+    const source = projectSource();
+    return source && !source.isError && !source.isPending
+      ? source.data?.id
+      : undefined;
+  };
   const previewType = () => entityTypeToItemType(entityType());
 
   const previewSource = createMemo(() => {
@@ -87,15 +109,13 @@ export function usePropertyEntityDisplay(
   });
   const channelName = () => channelNameSource()?.();
 
-  const userNameWrapper = () => {
-    const eType = entityType();
-    if (eType === 'USER') {
-      return () => getDisplayName(tryMacroId(entityId()));
-    }
-  };
-  const userName = createMemo(() => userNameWrapper()?.() ?? '');
+  const user = usePropertyUserDisplay(() =>
+    entityType() === 'USER' ? entityId() : ''
+  );
 
   const isLoading = createMemo(() => {
+    if (entityType() === 'INITIATIVE')
+      return projectSource()?.isPending ?? false;
     if (!isPreviewable(entityType())) return false;
     const previewItem = preview();
     return !previewItem || previewItem.loading;
@@ -103,7 +123,13 @@ export function usePropertyEntityDisplay(
 
   const name = createMemo(() =>
     match(entityType())
-      .with('USER', () => userName())
+      .with('INITIATIVE', () => {
+        const source = projectSource();
+        if (!source) return 'Project';
+        if (source.isPending) return 'Loading...';
+        return (!source.isError && source.data?.name) || 'Project unavailable';
+      })
+      .with('USER', () => user.name())
       .with('CHANNEL', () => channelName() || 'Channel')
       .with('COMPANY', () => entityId())
       .otherwise(() => {
@@ -118,7 +144,13 @@ export function usePropertyEntityDisplay(
 
   const icon = createMemo(() =>
     match(entityType())
-      .with('USER', () => <UserIcon id={entityId()} size="sm" />)
+      .when(
+        (type) => type === 'INITIATIVE' && projectSource(),
+        () => <ProjectIcon class="size-4" />
+      )
+      .with('USER', () => (
+        <UserIcon id={entityId()} size="sm" photoUrl={user.photoUrl()} />
+      ))
       .with('CHANNEL', () => <CoreEntityIcon targetType="channel" size="xs" />)
       .with('TASK', () => <CoreEntityIcon targetType="task" size="xs" />)
       .with('DOCUMENT', () => {
@@ -180,6 +212,7 @@ export function usePropertyEntityDisplay(
     icon,
     isLoading,
     blockOrFileType,
+    nativeProjectId,
     linkParams,
   };
 }

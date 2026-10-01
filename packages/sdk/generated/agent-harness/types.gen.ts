@@ -16,6 +16,8 @@ export type AgentAction = (AgentPromptAction & {
     type: 'prompt';
 }) | (AgentSetModelAction & {
     type: 'setModel';
+}) | (AgentSetConfigOptionAction & {
+    type: 'setConfigOption';
 }) | {
     type: 'compact';
 } | {
@@ -40,6 +42,71 @@ export type AgentAction = (AgentPromptAction & {
  * not uuids and stay `None`.
  */
 export type AgentActionId = string;
+
+/**
+ * Type-specific state for one agent session setting.
+ */
+export type AgentConfigKindDto = {
+    /**
+     * Current opaque value.
+     */
+    currentValue: string;
+    /**
+     * Ordered values supplied by the agent.
+     */
+    options: Array<AgentConfigSelectOptionDto>;
+    type: 'select';
+} | {
+    /**
+     * Current value.
+     */
+    currentValue: boolean;
+    type: 'boolean';
+};
+
+/**
+ * One agent-advertised ACP session setting.
+ */
+export type AgentConfigOptionDto = AgentConfigKindDto & {
+    /**
+     * ACP semantic category, such as `model` or `thought_level`.
+     */
+    category?: string | null;
+    /**
+     * Optional explanatory copy.
+     */
+    description?: string | null;
+    /**
+     * Opaque id used to change this setting.
+     */
+    id: string;
+    /**
+     * Display label supplied by the agent.
+     */
+    name: string;
+};
+
+/**
+ * One value in an agent-advertised select.
+ */
+export type AgentConfigSelectOptionDto = {
+    /**
+     * Optional provider description of this value.
+     */
+    description?: string | null;
+    /**
+     * Optional group heading supplied by the provider.
+     */
+    group?: string | null;
+    /**
+     * Display label.
+     */
+    name: string;
+    /**
+     * Opaque value returned to the agent when selected.
+     */
+    value: string;
+};
 
 /**
  * One model picker option.
@@ -350,6 +417,10 @@ export type AgentSessionResponse = {
      */
     instructions?: string | null;
     /**
+     * Whether the session is archived and read-only.
+     */
+    isArchived: boolean;
+    /**
      * Model slug.
      */
     model: string;
@@ -402,6 +473,20 @@ export type AgentSessionResponse = {
 };
 
 /**
+ * Ask the agent to change one advertised select-style session setting.
+ */
+export type AgentSetConfigOptionAction = {
+    /**
+     * Opaque ACP config id advertised by the agent.
+     */
+    configId: string;
+    /**
+     * Opaque select value advertised for that config option.
+     */
+    value: string;
+};
+
+/**
  * Ask the agent to run on a different model from here on.
  */
 export type AgentSetModelAction = {
@@ -411,7 +496,27 @@ export type AgentSetModelAction = {
     model: string;
 };
 
+/**
+ * Public admission error payload. Handlers with additional fields can reuse the
+ * domain error's code and message and [`admission_status`].
+ */
+export type AiAdmissionErrorBody = {
+    /**
+     * Stable denial or unavailability code.
+     */
+    code: string;
+    /**
+     * Human-readable explanation, without internal billing diagnostics.
+     */
+    error: string;
+};
+
 export type BotId = string;
+
+/**
+ * Harness names accepted by the capability-discovery endpoint.
+ */
+export type CapabilityHarnessDto = 'in-memory' | 'cursor' | 'macrod';
 
 /**
  * The latest capture attempt.
@@ -652,13 +757,12 @@ export type CreateAgentSessionRequest = {
     model?: string | null;
     /**
      * The user who owns the session. Ignored for user callers, who always
-     * own their own sessions, and for harness callers, whose verified acting
-     * user (owner or confirmed team member) owns the session instead;
-     * required for bot callers without verified acting-user claims.
-     *
-     * For bot callers this is a claim, not a verified fact: it is scoped to
-     * the bot's own sessions, but the named user owns the session on the
-     * bot's say-so.
+     * own their own sessions, for harness callers, whose verified acting
+     * user owns the session, and for bots that already act for a verified
+     * user. A bot without one may name a user here. That claim is trusted
+     * for the bot's own sessions. With no claim, a team bot owns the session
+     * itself only while non-user owners are enabled. Every other bot still
+     * needs an owner.
      */
     owner?: string | null;
     /**
@@ -721,10 +825,42 @@ export type CreateSessionThread = {
     messageId: string;
     parent?: null | MessageParent;
     /**
+     * Update the existing bot response reserved by a task assignment.
+     */
+    reuseOriginMessage?: boolean;
+    /**
      * Thread the session belongs to; defaults to the message itself, which
      * is how a top-level mention roots its own thread.
      */
     threadId?: string | null;
+};
+
+/**
+ * HTTP request selecting one provider to probe.
+ */
+export type DiscoverAgentCapabilitiesRequest = {
+    /**
+     * Provider to probe.
+     */
+    harness: CapabilityHarnessDto;
+    /**
+     * Required for macrod and forbidden for other targets.
+     */
+    harnessId?: string | null;
+    /**
+     * Model whose session settings should be inspected.
+     */
+    model?: string | null;
+};
+
+/**
+ * Successful capability-discovery response.
+ */
+export type DiscoverAgentCapabilitiesResponse = {
+    /**
+     * Complete ordered ACP session configuration advertised by the agent.
+     */
+    configOptions: Array<AgentConfigOptionDto>;
 };
 
 /**
@@ -908,6 +1044,24 @@ export type MessageParent = {
      */
     id: DocumentId;
     type: 'document';
+} | {
+    /**
+     * An initiative, presented as a project in the application.
+     */
+    id: string;
+    type: 'initiative';
+} | {
+    /**
+     * A CRM company.
+     */
+    id: string;
+    type: 'crm_company';
+} | {
+    /**
+     * A CRM contact.
+     */
+    id: string;
+    type: 'crm_contact';
 };
 
 /**
@@ -1085,6 +1239,16 @@ export type SessionStatusDto = {
     kind: 'disconnected';
 };
 
+/**
+ * Request body for archiving or unarchiving an agent session.
+ */
+export type SetAgentSessionArchivedRequest = {
+    /**
+     * The requested archive state.
+     */
+    isArchived: boolean;
+};
+
 export type SharePermissionV2 = {
     /**
      * The channel share permissions for the item
@@ -1175,6 +1339,49 @@ export type WithAgentSessionId = {
      */
     id: string;
 };
+
+export type DiscoverAgentCapabilitiesHandlerData = {
+    body: DiscoverAgentCapabilitiesRequest;
+    path?: never;
+    query?: never;
+    url: '/agent-capabilities/discover';
+};
+
+export type DiscoverAgentCapabilitiesHandlerErrors = {
+    /**
+     * Invalid target
+     */
+    400: unknown;
+    /**
+     * Unauthenticated
+     */
+    401: unknown;
+    /**
+     * Harness is not visible to caller
+     */
+    403: unknown;
+    /**
+     * Macrod runtime is disconnected
+     */
+    409: unknown;
+    /**
+     * Provider probe failed
+     */
+    502: unknown;
+    /**
+     * Macrod probe timed out
+     */
+    504: unknown;
+};
+
+export type DiscoverAgentCapabilitiesHandlerResponses = {
+    /**
+     * Fresh provider session capabilities
+     */
+    200: DiscoverAgentCapabilitiesResponse;
+};
+
+export type DiscoverAgentCapabilitiesHandlerResponse = DiscoverAgentCapabilitiesHandlerResponses[keyof DiscoverAgentCapabilitiesHandlerResponses];
 
 export type LoadAgentModelsHandlerData = {
     body: LoadAgentModelsRequest;
@@ -1335,10 +1542,18 @@ export type CreateAgentSessionData = {
 
 export type CreateAgentSessionErrors = {
     401: string;
+    /**
+     * AI allowance exhausted
+     */
+    402: AiAdmissionErrorBody;
     403: string;
     404: string;
     422: string;
     500: string;
+    /**
+     * AI usage validation unavailable; retry later
+     */
+    503: AiAdmissionErrorBody;
 };
 
 export type CreateAgentSessionError = CreateAgentSessionErrors[keyof CreateAgentSessionErrors];
@@ -1422,6 +1637,32 @@ export type GetAgentSessionResponses = {
 };
 
 export type GetAgentSessionResponse = GetAgentSessionResponses[keyof GetAgentSessionResponses];
+
+export type SetAgentSessionArchivedData = {
+    body: SetAgentSessionArchivedRequest;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/archived';
+};
+
+export type SetAgentSessionArchivedErrors = {
+    401: string;
+    403: string;
+    500: string;
+};
+
+export type SetAgentSessionArchivedError = SetAgentSessionArchivedErrors[keyof SetAgentSessionArchivedErrors];
+
+export type SetAgentSessionArchivedResponses = {
+    204: void;
+};
+
+export type SetAgentSessionArchivedResponse = SetAgentSessionArchivedResponses[keyof SetAgentSessionArchivedResponses];
 
 export type GetAgentSessionChangesData = {
     body?: never;
@@ -1516,9 +1757,17 @@ export type ControlAgentSessionData = {
 
 export type ControlAgentSessionErrors = {
     401: string;
+    /**
+     * AI allowance exhausted
+     */
+    402: AiAdmissionErrorBody;
     403: string;
     422: string;
     500: string;
+    /**
+     * AI usage validation unavailable, or replica draining; retry later
+     */
+    503: AiAdmissionErrorBody;
 };
 
 export type ControlAgentSessionError = ControlAgentSessionErrors[keyof ControlAgentSessionErrors];
@@ -1574,6 +1823,10 @@ export type RenameAgentSessionErrors = {
     400: string;
     401: string;
     403: string;
+    /**
+     * The session is archived
+     */
+    409: string;
     500: string;
 };
 

@@ -8,6 +8,7 @@ use crate::domain::{
 };
 use anyhow::Context;
 use entity_access_db_utils::update_entity_access_channel_share_permissions;
+use entity_registry::BotFacts;
 use model_entity::EntityType;
 use models_permissions::share_permission::{
     LinkShare, SharePermissionV2, UpdateSharePermissionRequestV2,
@@ -29,7 +30,7 @@ fn team_error(error: rootcause::Report<TeamShareError>) -> AgentSessionError {
     }
 }
 
-impl SessionSharingRepo for PgAgentSessionRepo {
+impl<B: BotFacts + 'static> SessionSharingRepo for PgAgentSessionRepo<B> {
     #[tracing::instrument(skip(self), err)]
     async fn permissions(&self, id: AgentSessionId) -> Result<SharePermissionV2> {
         let row = sqlx::query!(

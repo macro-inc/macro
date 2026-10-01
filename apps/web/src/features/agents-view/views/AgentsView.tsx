@@ -4,6 +4,7 @@ import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filter
 import { AgentSettings } from '@app/features/settings/AgentSettings';
 import { McpConnections } from '@app/features/settings/McpConnections';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
+import { ViewTour } from '@app/features/tours/ViewTour';
 import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
@@ -43,12 +44,13 @@ import {
   type AgentConversationEntity,
   type AgentConversationTarget,
   conversationMode,
-  groupConversations,
+  partitionArchived,
   selectRecentAgentConversations,
 } from '../core/recent-conversations';
 import { kindForBot } from '../core/roster';
 import { type AgentsRoute, agentsRouteId } from '../core/route';
 import { createAgentRosterSource } from '../queries/agent-roster-source';
+import { agentsTour } from '../tour';
 import { NewChatPage, type StartConversation } from './NewChatPage';
 
 type SelectedConversation = {
@@ -116,7 +118,7 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
       search()
     )
   );
-  const groups = createMemo(() => groupConversations(conversations()));
+  const partitioned = createMemo(() => partitionArchived(conversations()));
   const modeForConversation = (conversation: AgentConversationEntity) =>
     conversationMode(conversation, (botId) =>
       kindForBot(botId, rosterSource.roster())
@@ -124,9 +126,16 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
 
   onMount(() => panel.handle.setDisplayName('Agents'));
 
+  let composerFocus: (() => void) | undefined;
   const showComposer = () => {
     if (panel.handle.content().id !== 'agents') {
       panel.handle.replace({ next: { type: 'component', id: 'agents' } });
+      return;
+    }
+    // Already showing the composer: nothing remounts to retrigger autofocus,
+    // so focus it imperatively instead.
+    if (!selected() && page() === 'new') {
+      composerFocus?.();
       return;
     }
     setSelected(undefined);
@@ -195,13 +204,8 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
   };
   const startConversation = (start: StartConversation) => {
     const id = startPendingSession({
-      botId: start.botId,
+      ...start,
       userId: userId(),
-      prompt: start.prompt,
-      attachments: start.attachments,
-      modelOverride: start.modelOverride,
-      repoUrl: start.repoUrl,
-      repoBranch: start.repoBranch,
     });
     openConversation(
       { id, type: 'agent_session' },
@@ -258,8 +262,6 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
                 max: 380,
                 preserveDuringResize: false,
               }}
-              breakpoints={{ collapsed: 0 }}
-              layoutBreakpoint="collapsed"
               main={{ min: 280, preferredWidth: 640 }}
             >
               <ViewShell.Aside>
@@ -271,7 +273,8 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
                   modeForConversation={modeForConversation}
                   activeConversationId={selected()?.activeConversationId}
                   search={search()}
-                  groups={groups()}
+                  conversations={partitioned().conversations}
+                  archived={partitioned().archived}
                   loading={query.isPending}
                   error={query.isLoadingError}
                   hasNextPage={Boolean(query.hasNextPage)}
@@ -291,6 +294,7 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
               </ViewShell.Aside>
 
               <ViewShell.Main class="overflow-hidden">
+                <ViewTour tour={agentsTour} />
                 <main class="main">
                   <Show
                     when={selected()?.conversation}
@@ -311,6 +315,10 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
                                 <NewChatPage
                                   roster={rosterSource.roster()}
                                   rosterLoading={rosterSource.loading()}
+                                  availabilityLoading={rosterSource.availabilityLoading()}
+                                  registerFocus={(focus) => {
+                                    composerFocus = focus;
+                                  }}
                                   onStart={startConversation}
                                   onOpenRoster={openRoster}
                                 />

@@ -91,7 +91,7 @@ export function SplitPanel(props: SplitPanelProps) {
       );
       if (wentBack) return;
       props.handle.replace({
-        next: { type: 'component', id: LIST_VIEW_ID.inbox },
+        next: { type: 'component', id: LIST_VIEW_ID.home },
         referredFrom: 'hotkey',
       });
     },
@@ -190,12 +190,27 @@ export function SplitPanel(props: SplitPanelProps) {
       }}
     >
       <Suspense fallback={<ContentLoading />}>
-        <SoupViewContextProvider soup={nextSoup}>
+        <Show
+          when={
+            props.split.mount.kind === 'component' &&
+            props.split.mount.meta.ownsCollectionState
+          }
+          fallback={
+            <SoupViewContextProvider soup={nextSoup}>
+              <SplitRouter.Outlet
+                splitId={props.handle.id}
+                fallback={() => (
+                  <Dynamic component={props.split.mount.element} />
+                )}
+              />
+            </SoupViewContextProvider>
+          }
+        >
           <SplitRouter.Outlet
             splitId={props.handle.id}
             fallback={() => <Dynamic component={props.split.mount.element} />}
           />
-        </SoupViewContextProvider>
+        </Show>
       </Suspense>
     </SplitPanelControllerProvider>
   );

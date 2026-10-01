@@ -5,7 +5,7 @@ import {
   runCreateAction,
   useCreatableEnabled,
 } from '@app/features/command/Launcher';
-import { openCreateCompanyModal } from '@app/features/companies/CreateCompanyModal';
+import { openCreateCompanyModal } from '@app/features/crm/crm-create';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
 import { CollapsibleHeaderItem } from '@components/app/split-layout/components/CollapsibleItem';
@@ -145,7 +145,7 @@ export const SoupViewCreateButton = () => {
   // one thing you make from that list rather than triage into it.
   const createView = createMemo(() => {
     const view = currentView();
-    if (view === 'inbox' && soupView?.activeTab() === 'reminders') {
+    if (view === 'home' && soupView?.activeTab() === 'reminders') {
       return 'reminders';
     }
     return view;
@@ -192,7 +192,7 @@ export const SoupViewCreateButton = () => {
     <Button
       variant="accent"
       class={cn(
-        'border-0 rounded-full px-3 py-2 pl-1 font-semibold',
+        'border-0 px-3 py-2 pl-1 font-semibold',
         props.hideLabel && 'pr-1'
       )}
       size="sm"
@@ -210,7 +210,7 @@ export const SoupViewCreateButton = () => {
       <Dropdown.Trigger
         variant="accent"
         class={cn(
-          'border-0 rounded-full px-3 py-2 pl-1 font-semibold',
+          'border-0 px-3 py-2 pl-1 font-semibold',
           props.hideLabel && 'pr-1'
         )}
       >

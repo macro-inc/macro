@@ -1,5 +1,8 @@
 use async_lock::Mutex;
-use cache_core::codec::cache_database_name;
+use cache_core::codec::{
+    CACHE_FORMAT_VERSION, CACHE_SCHEMA_COMPATIBILITY_EPOCH, UNVERSIONED_STORAGE_VERSIONS,
+    cache_database_name, legacy_cache_database_name,
+};
 use cache_core::deps::OpId;
 use cache_core::engine::{
     BeginOptimisticWrite, CommitOptimisticWriteResult, DeferOptimisticWriteResult, Engine,
@@ -13,13 +16,13 @@ use cache_core::query_inspection::QueryInspection;
 use cache_core::queue::{
     ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationUpsertKind,
 };
-use cache_core::record_selection::RecordSelection;
+use cache_core::record_selection::cache::RecordSelectionCache;
 use cache_core::search::SearchRequest;
 use cache_core::store::QueueDiagnosticsAvailability;
 use cache_core::value::EntityKey;
 use cache_turso::{
-    PhysicalResetReason, TursoStorage, TursoStorageCloseOutcome, TursoStorageError,
-    TursoStorageOpenOutcome,
+    PhysicalResetReason, QueuedMutationCount, TursoStorage, TursoStorageCloseOutcome,
+    TursoStorageError, TursoStorageOpenOutcome, count_queued_mutations,
 };
 use predicate_index::RecordKey;
 use serde::{Deserialize, Serialize};
@@ -33,9 +36,9 @@ use soup_filter_cache_adapter::{
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
-use turso_opfs::{OpenResult, OpfsOwner};
+use turso_opfs::{OpenResult, OpfsError, OpfsErrorKind, OpfsOwner};
 use wasm_bindgen::prelude::*;
-use wasm_bindgen_futures::future_to_promise;
+use wasm_bindgen_futures::{JsFuture, future_to_promise};
 
 #[cfg(test)]
 mod test;
@@ -146,23 +149,32 @@ struct JsQueryRegistration {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct JsWriteResult {
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    identity_errors: Vec<String>,
     revision: String,
     revision_advanced: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    search_changed_buckets: Option<std::collections::BTreeSet<String>>,
     changed: Vec<String>,
     affected_ops: Vec<String>,
     reset: bool,
     revalidations: Vec<QueryRevalidation>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    mutation_uuid: Option<String>,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct JsHydrationWriteResult {
+    search_changed_buckets: std::collections::BTreeSet<String>,
     revision: String,
     revision_advanced: bool,
     changed: Vec<String>,
     affected_ops: Vec<String>,
     reset: bool,
     revalidations: Vec<QueryRevalidation>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    mutation_uuid: Option<String>,
     data: Option<serde_json::Value>,
 }
 
@@ -182,6 +194,8 @@ struct JsEnqueueOptimisticMutationResult {
     affected_ops: Vec<String>,
     reset: bool,
     revalidations: Vec<QueryRevalidation>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    mutation_uuid: Option<String>,
     initial_claim: JsInitialMutationClaim,
 }
 
@@ -225,6 +239,7 @@ struct JsClaimedMutation {
     transaction_id: String,
     uuid: String,
     superseded: bool,
+    requires_confirmation: bool,
     lease_generation: String,
     query: String,
     operation_name: Option<String>,
@@ -237,11 +252,13 @@ impl TryFrom<ClaimedMutation> for JsClaimedMutation {
     type Error = JsValue;
 
     fn try_from(claimed: ClaimedMutation) -> Result<Self, Self::Error> {
+        let requires_confirmation = claimed.queued.requires_confirmation();
         let request = claimed.queued.mutation.request;
         Ok(Self {
             transaction_id: claimed.queued.id.to_string(),
             uuid: claimed.queued.uuid.to_string(),
             superseded: claimed.queued.superseded,
+            requires_confirmation,
             lease_generation: claimed.lease_generation.to_string(),
             query: request.query,
             operation_name: request.operation_name,
@@ -379,6 +396,13 @@ enum JsDeferOptimisticWriteResult {
     rename_all_fields = "camelCase"
 )]
 enum JsCommitOptimisticWriteResult {
+    Failed {
+        error: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        replacement_transaction_id: Option<String>,
+        #[serde(flatten)]
+        result: JsWriteResult,
+    },
     Committed {
         #[serde(flatten)]
         result: JsWriteResult,
@@ -410,8 +434,10 @@ enum JsRollbackOptimisticWriteResult {
 
 fn js_write_result(result: WriteResult, ops: &OpInterner) -> JsWriteResult {
     JsWriteResult {
+        identity_errors: result.identity_errors,
         revision: result.revision.to_string(),
         revision_advanced: result.revision_advanced,
+        search_changed_buckets: result.search_changed_buckets,
         changed: result
             .changed
             .into_iter()
@@ -420,10 +446,12 @@ fn js_write_result(result: WriteResult, ops: &OpInterner) -> JsWriteResult {
         affected_ops: ops.names(result.affected_ops),
         reset: result.reset,
         revalidations: result.revalidations,
+        mutation_uuid: result.mutation_uuid,
     }
 }
 
 struct CacheState {
+    selections: RecordSelectionCache,
     engine: Option<BrowserEngine>,
     mail_generation: String,
     scope: String,
@@ -492,7 +520,45 @@ pub struct CacheEngine {
 }
 
 fn database_identity(scope: &str) -> String {
-    cache_database_name(scope)
+    cache_database_name(scope, cache_turso::STORAGE_SCHEMA_VERSION)
+}
+
+/// Whether `identity` names one of this scope's databases that this build does
+/// not open and that no newer build could want: the unversioned name once this
+/// build's versions have moved past it, or another name for versions no newer
+/// than this build's. A newer version belongs to a build that may come back,
+/// for example after a rollback, so it is never stale.
+fn is_stale_identity(scope: &str, identity: &str) -> bool {
+    let unversioned = legacy_cache_database_name(scope);
+    let version = if identity == unversioned {
+        Some(UNVERSIONED_STORAGE_VERSIONS)
+    } else {
+        storage_version(&unversioned, identity)
+    };
+    let own = (
+        CACHE_SCHEMA_COMPATIBILITY_EPOCH,
+        CACHE_FORMAT_VERSION,
+        cache_turso::STORAGE_SCHEMA_VERSION,
+    );
+    identity != database_identity(scope) && version.is_some_and(|version| version <= own)
+}
+
+/// The `(epoch, format, storage)` versions embedded in a scope's database name.
+fn storage_version(unversioned: &str, identity: &str) -> Option<(u32, u32, u32)> {
+    let mut parts = identity
+        .strip_prefix(unversioned)?
+        .strip_prefix(":s")?
+        .split('.');
+    let number = |part: &str| -> Option<u32> {
+        if part.is_empty() || !part.bytes().all(|byte| byte.is_ascii_digit()) {
+            return None;
+        }
+        part.parse().ok()
+    };
+    let epoch = number(parts.next()?)?;
+    let format = number(parts.next()?.strip_prefix('v')?)?;
+    let storage = number(parts.next()?.strip_prefix('t')?)?;
+    parts.next().is_none().then_some((epoch, format, storage))
 }
 
 fn build_engine(storage: TursoStorage, hot_capacity: Option<u32>) -> BrowserEngine {
@@ -515,7 +581,7 @@ async fn open_owner(owner: OpfsOwner) -> Result<OpenResult, JsValue> {
     match owner.open().await {
         Ok(opened) => Ok(opened),
         Err(failure) => {
-            let error = err_js(&failure);
+            let error = storage_err_js(failure.error());
             if let Some(owner) = failure.into_owner() {
                 owner.release().await.map_err(err_js)?;
             }
@@ -552,12 +618,21 @@ async fn open_storage(scope: &str, owner: OpfsOwner) -> Result<OpenedStorage, Js
                             .physical_reset_reason()
                             .expect("reset-required error has a reset reason"),
                     );
-                    (failure.reset().await.map_err(err_js)?, outcome)
+                    (
+                        failure
+                            .reset()
+                            .await
+                            .map_err(|failure| storage_err_js(failure.error()))?,
+                        outcome,
+                    )
                 }
             }
         }
         OpenResult::ResetRequired(session) => (
-            session.reset().await.map_err(err_js)?,
+            session
+                .reset()
+                .await
+                .map_err(|failure| storage_err_js(failure.error()))?,
             CacheOpenOutcome::ResetStorageUncertain,
         ),
     };
@@ -572,7 +647,10 @@ async fn open_storage(scope: &str, owner: OpfsOwner) -> Result<OpenedStorage, Js
                 }),
                 Err(failure) => {
                     let reset_required = failure.error().requires_physical_reset();
-                    let owner = failure.reset().await.map_err(err_js)?;
+                    let owner = failure
+                        .reset()
+                        .await
+                        .map_err(|failure| storage_err_js(failure.error()))?;
                     owner.release().await.map_err(err_js)?;
                     Err(if reset_required {
                         reset_required_js_error()
@@ -583,19 +661,60 @@ async fn open_storage(scope: &str, owner: OpfsOwner) -> Result<OpenedStorage, Js
             }
         }
         OpenResult::ResetRequired(session) => {
-            let owner = session.reset().await.map_err(err_js)?;
+            let owner = session
+                .reset()
+                .await
+                .map_err(|failure| storage_err_js(failure.error()))?;
             owner.release().await.map_err(err_js)?;
             Err(reset_required_js_error())
         }
     }
 }
 
-async fn acquire_storage(scope: &str, recovery_wipe: bool) -> Result<OpenedStorage, JsValue> {
-    let owner = OpfsOwner::acquire(&database_identity(scope))
-        .await
-        .map_err(err_js)?;
+/// Waits until the caller may touch storage while this owner holds the lock.
+/// Holding the lock only proves no other engine uses the files; the browser
+/// coordinator must also record that this engine's epoch may change them.
+async fn await_storage_grant(
+    owner: OpfsOwner,
+    grant: &js_sys::Function,
+) -> Result<OpfsOwner, JsValue> {
+    let granted = match grant.call0(&JsValue::UNDEFINED) {
+        Ok(value) => JsFuture::from(js_sys::Promise::resolve(&value)).await,
+        Err(error) => Err(error),
+    };
+    match granted {
+        Ok(_) => Ok(owner),
+        Err(error) => {
+            owner.release().await.map_err(err_js)?;
+            Err(error)
+        }
+    }
+}
+
+async fn acquire_storage(
+    scope: &str,
+    recovery_wipe: bool,
+    storage_grant: Option<&js_sys::Function>,
+    if_available: bool,
+) -> Result<OpenedStorage, JsValue> {
+    let identity = database_identity(scope);
+    let owner = if if_available {
+        OpfsOwner::try_acquire(&identity)
+            .await
+            .map_err(err_js)?
+            .ok_or_else(owner_lock_unavailable_js_error)?
+    } else {
+        OpfsOwner::acquire(&identity).await.map_err(err_js)?
+    };
+    let owner = match storage_grant {
+        Some(grant) => await_storage_grant(owner, grant).await?,
+        None => owner,
+    };
     let owner = if recovery_wipe {
-        owner.recovery_wipe().await.map_err(err_js)?
+        owner
+            .recovery_wipe()
+            .await
+            .map_err(|failure| storage_err_js(failure.error()))?
     } else {
         owner
     };
@@ -610,12 +729,16 @@ async fn open_cache_inner(
     scope: String,
     hot_capacity: Option<u32>,
     recovery_wipe: bool,
+    storage_grant: Option<js_sys::Function>,
+    if_available: bool,
 ) -> Result<(CacheEngine, CacheOpenOutcome), JsValue> {
     validate_hot_capacity(hot_capacity)?;
-    let OpenedStorage { storage, outcome } = acquire_storage(&scope, recovery_wipe).await?;
+    let OpenedStorage { storage, outcome } =
+        acquire_storage(&scope, recovery_wipe, storage_grant.as_ref(), if_available).await?;
     Ok((
         CacheEngine {
             state: Rc::new(Mutex::new(CacheState {
+                selections: RecordSelectionCache::default(),
                 engine: Some(build_engine(storage, hot_capacity)),
                 mail_generation: soup_filter_cache_adapter::mail::new_generation(),
                 scope,
@@ -648,18 +771,40 @@ fn cache_open_result(engine: CacheEngine, outcome: CacheOpenOutcome) -> Result<J
 /// incomplete or incompatible files are reset and reopened before returning.
 #[wasm_bindgen(js_name = openCache)]
 pub async fn open_cache(scope: String, hot_capacity: Option<u32>) -> Result<CacheEngine, JsValue> {
-    open_cache_inner(scope, hot_capacity, false)
+    open_cache_inner(scope, hot_capacity, false, None, false)
         .await
         .map(|(engine, _)| engine)
 }
 
 /// Additive open API returning the engine and payload-free recovery outcome.
+///
+/// When given, `on_owner_lock_acquired` is called once the owner lock is held
+/// and before any OPFS access; opening continues after its promise resolves.
+/// A rejection releases the lock without touching storage.
+///
+/// With `if_available`, opening never waits behind another holder of the
+/// owner lock: it rejects at once, touching nothing, with an error whose
+/// `cacheOwnerLockUnavailable` property is `true`.
+///
+/// When another context keeps the database files open through the adapter's
+/// bounded wait, opening rejects with an error whose `cacheStorageBusy`
+/// property is `true`. A plain open has then changed neither file; a recovery
+/// wipe may have removed one of them.
 #[wasm_bindgen(js_name = openCacheWithOutcome)]
 pub async fn open_cache_with_outcome(
     scope: String,
     hot_capacity: Option<u32>,
+    on_owner_lock_acquired: Option<js_sys::Function>,
+    if_available: Option<bool>,
 ) -> Result<JsValue, JsValue> {
-    let (engine, outcome) = open_cache_inner(scope, hot_capacity, false).await?;
+    let (engine, outcome) = open_cache_inner(
+        scope,
+        hot_capacity,
+        false,
+        on_owner_lock_acquired,
+        if_available.unwrap_or(false),
+    )
+    .await?;
     cache_open_result(engine, outcome)
 }
 
@@ -670,19 +815,103 @@ pub async fn open_cache_for_recovery(
     scope: String,
     hot_capacity: Option<u32>,
 ) -> Result<CacheEngine, JsValue> {
-    open_cache_inner(scope, hot_capacity, true)
+    open_cache_inner(scope, hot_capacity, true, None, false)
         .await
         .map(|(engine, _)| engine)
 }
 
 /// Additive recovery-open API returning the engine and coarse wipe outcome.
+/// `on_owner_lock_acquired` and `if_available` behave as in
+/// [`openCacheWithOutcome`](open_cache_with_outcome); both precede the wipe.
 #[wasm_bindgen(js_name = openCacheForRecoveryWithOutcome)]
 pub async fn open_cache_for_recovery_with_outcome(
     scope: String,
     hot_capacity: Option<u32>,
+    on_owner_lock_acquired: Option<js_sys::Function>,
+    if_available: Option<bool>,
 ) -> Result<JsValue, JsValue> {
-    let (engine, outcome) = open_cache_inner(scope, hot_capacity, true).await?;
+    let (engine, outcome) = open_cache_inner(
+        scope,
+        hot_capacity,
+        true,
+        on_owner_lock_acquired,
+        if_available.unwrap_or(false),
+    )
+    .await?;
     cache_open_result(engine, outcome)
+}
+
+/// Physical database identity this build opens for `scope`; it also names the
+/// OPFS files and derives the owner Web Lock name.
+#[wasm_bindgen(js_name = cacheDatabaseIdentity)]
+pub fn cache_database_identity(scope: String) -> String {
+    database_identity(&scope)
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct StaleDatabaseCleanup {
+    outcome: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    queued_mutations: Option<u64>,
+}
+
+/// Deletes one of this scope's databases that an older build left behind (see
+/// [`cacheDatabaseIdentity`](cache_database_identity)), unless another context
+/// holds its owner lock (`in-use`) or it still queues mutations
+/// (`queued-mutations`). Never waits for the lock. A file Turso cannot read,
+/// or whose queue cannot be counted, is kept and rejects; the caller should
+/// use a disposable worker, because such a failure can poison the
+/// worker-local OPFS registry.
+#[wasm_bindgen(js_name = removeStaleCacheDatabase)]
+pub async fn remove_stale_cache_database(
+    scope: String,
+    identity: String,
+) -> Result<JsValue, JsValue> {
+    if !is_stale_identity(&scope, &identity) {
+        return Err(err_js("not a stale cache database for this scope"));
+    }
+    let Some(owner) = OpfsOwner::try_acquire(&identity).await.map_err(err_js)? else {
+        return to_js(&StaleDatabaseCleanup {
+            outcome: "in-use",
+            queued_mutations: None,
+        });
+    };
+    let owner = match open_owner(owner).await? {
+        OpenResult::Ready(session) => {
+            let connected = session.connect().map_err(err_js)?;
+            let counted = count_queued_mutations(&connected);
+            let owner = connected
+                .try_close()
+                .map_err(err_js)?
+                .preserve()
+                .map_err(err_js)?;
+            match counted {
+                Ok(QueuedMutationCount::Queued(queued)) if queued > 0 => {
+                    owner.release().await.map_err(err_js)?;
+                    return to_js(&StaleDatabaseCleanup {
+                        outcome: "queued-mutations",
+                        queued_mutations: Some(queued),
+                    });
+                }
+                // A queue that cannot be counted may still hold work, so the
+                // file is kept and the cleanup rejects as for an unreadable file.
+                Err(error) => {
+                    owner.release().await.map_err(err_js)?;
+                    return Err(err_js(error));
+                }
+                // An empty queue or no queue holds no work any build could send.
+                Ok(_) => owner,
+            }
+        }
+        // Only one of the pair exists, so it never held a complete database.
+        OpenResult::ResetRequired(session) => session.reset().await.map_err(err_js)?,
+    };
+    owner.remove_and_release().await.map_err(err_js)?;
+    to_js(&StaleDatabaseCleanup {
+        outcome: "removed",
+        queued_mutations: None,
+    })
 }
 
 /// Recovery-wipes and recreates the cache database for `scope` while holding
@@ -805,8 +1034,42 @@ fn to_js<T: Serialize>(value: &T) -> Result<JsValue, JsValue> {
         .map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
+/// Read envelopes contain strings and JSON values. Converting the JSON in one
+/// call avoids a Wasm/JS crossing for every nested field and array element.
+fn read_response_to_js<'a, T: Serialize>(
+    response: &T,
+    values: impl IntoIterator<Item = &'a serde_json::Value>,
+) -> Result<JsValue, JsValue> {
+    // Preserve the existing rejection of integer values outside JS's safe
+    // range. JSON.parse would otherwise silently round them. Floating-point
+    // values already have JS Number semantics and are allowed at any magnitude.
+    if values.into_iter().any(has_unsafe_json_integer) {
+        return to_js(response);
+    }
+    let json = serde_json::to_string(response).map_err(err_js)?;
+    js_sys::JSON::parse(&json)
+}
+
+fn has_unsafe_json_integer(value: &serde_json::Value) -> bool {
+    const MAX_SAFE_INTEGER: i64 = 9_007_199_254_740_991;
+    match value {
+        serde_json::Value::Number(number) => {
+            !number.is_f64()
+                && number
+                    .as_i64()
+                    .is_none_or(|n| !(-MAX_SAFE_INTEGER..=MAX_SAFE_INTEGER).contains(&n))
+        }
+        serde_json::Value::Array(values) => values.iter().any(has_unsafe_json_integer),
+        serde_json::Value::Object(values) => values.values().any(has_unsafe_json_integer),
+        _ => false,
+    }
+}
+
 const RESET_REQUIRED_MARKER: &str = "cacheStorageResetRequired";
 const RESET_REQUIRED_MESSAGE: &str = "cache storage reset required";
+const OWNER_LOCK_UNAVAILABLE_MARKER: &str = "cacheOwnerLockUnavailable";
+const STORAGE_BUSY_MARKER: &str = "cacheStorageBusy";
+const OWNER_LOCK_UNAVAILABLE_MESSAGE: &str = "cache database owner lock is held by another context";
 
 /// All rejections surface as real `Error` objects with consistent
 /// `instanceof Error` and `.message` behavior.
@@ -826,6 +1089,32 @@ fn reset_required_js_error() -> JsValue {
         &JsValue::TRUE,
     )
     .expect("new JavaScript Error accepts the reset marker");
+    error.into()
+}
+
+/// Converts an OPFS adapter error, marking a path another context kept open
+/// for the whole busy wait with a `cacheStorageBusy` property of `true`.
+fn storage_err_js(error: &OpfsError) -> JsValue {
+    let value = err_js(error);
+    if error.kind() == OpfsErrorKind::Busy {
+        js_sys::Reflect::set(
+            &value,
+            &JsValue::from_str(STORAGE_BUSY_MARKER),
+            &JsValue::TRUE,
+        )
+        .expect("new JavaScript Error accepts the busy marker");
+    }
+    value
+}
+
+fn owner_lock_unavailable_js_error() -> JsValue {
+    let error = js_sys::Error::new(OWNER_LOCK_UNAVAILABLE_MESSAGE);
+    js_sys::Reflect::set(
+        error.as_ref(),
+        &JsValue::from_str(OWNER_LOCK_UNAVAILABLE_MARKER),
+        &JsValue::TRUE,
+    )
+    .expect("new JavaScript Error accepts the unavailable marker");
     error.into()
 }
 
@@ -941,6 +1230,18 @@ impl CacheEngine {
         })
     }
 
+    /// Returns the durable cache generation, initializing it when absent.
+    #[wasm_bindgen(js_name = currentStorageGeneration)]
+    pub fn current_storage_generation(&self) -> js_sys::Promise {
+        let state = self.state.clone();
+        future_to_promise(async move {
+            let mut state = state.lock().await;
+            let result = state.engine_mut()?.current_storage_generation().await;
+            let generation = state.engine_result(result)?;
+            Ok(JsValue::from_str(&generation.to_string()))
+        })
+    }
+
     /// Returns the opaque identity bound to this cache, or `null` when no
     /// identity-bearing response has been stored yet.
     #[wasm_bindgen(js_name = boundIdentity)]
@@ -985,10 +1286,15 @@ impl CacheEngine {
                 )
                 .await;
             let result = state.engine_result(result)?;
-            to_js(&match result {
+            let response = match result {
                 ReadResult::Hit { data } => JsReadResult::Hit { data },
                 ReadResult::Miss => JsReadResult::Miss,
-            })
+            };
+            let data = match &response {
+                JsReadResult::Hit { data } => Some(data),
+                JsReadResult::Miss => None,
+            };
+            read_response_to_js(&response, data)
         })
     }
 
@@ -1005,7 +1311,10 @@ impl CacheEngine {
         future_to_promise(async move {
             let mut state = state.lock().await;
             state.ensure_callable()?;
-            let selection = RecordSelection::parse(&document, &fragment_name).map_err(err_js)?;
+            let selection = state
+                .selections
+                .get(document, fragment_name)
+                .map_err(err_js)?;
             let keys: Vec<String> = parse_vec(keys)?;
             let keys: Vec<_> = keys.into_iter().map(|key| EntityKey(key.into())).collect();
             let result = state
@@ -1013,10 +1322,14 @@ impl CacheEngine {
                 .read_records_by_keys(&selection, &keys)
                 .await;
             let records = state.engine_result(result)?;
-            to_js(&JsRecordSelectionResult {
+            let response = JsRecordSelectionResult {
                 revision: records.revision.to_string(),
                 records: records.value,
-            })
+            };
+            read_response_to_js(
+                &response,
+                response.records.iter().map(|record| &record.record),
+            )
         })
     }
 
@@ -1313,6 +1626,7 @@ impl CacheEngine {
                 .await;
             let result = state.engine_result(result)?;
             to_js(&JsHydrationWriteResult {
+                search_changed_buckets: result.search_changed_buckets,
                 revision: result.write_result.revision.to_string(),
                 revision_advanced: result.write_result.revision_advanced,
                 changed: result
@@ -1324,6 +1638,7 @@ impl CacheEngine {
                 affected_ops: ops.borrow().names(result.write_result.affected_ops),
                 reset: result.write_result.reset,
                 revalidations: result.write_result.revalidations,
+                mutation_uuid: result.write_result.mutation_uuid,
                 data: result.data,
             })
         })
@@ -1344,6 +1659,7 @@ impl CacheEngine {
         data: JsValue,
         link_patches: JsValue,
         revalidations: JsValue,
+        identity_bindings: JsValue,
         created_at_ms: f64,
         lease_owner: String,
         now_ms: f64,
@@ -1358,6 +1674,8 @@ impl CacheEngine {
             let data: serde_json::Value = serde_wasm_bindgen::from_value(data).map_err(err_js)?;
             let link_patches: Vec<OptimisticLinkPatch> = parse_vec(link_patches)?;
             let revalidations: Vec<QueryRevalidation> = parse_vec(revalidations)?;
+            let identity_bindings: Vec<cache_core::identity::IdentityBinding> =
+                parse_vec(identity_bindings)?;
             let created_at_ms = parse_timestamp(created_at_ms, "enqueue timestamp")?;
             let mut projection_mutations = optimistic_projection_mutations(&data, created_at_ms);
             projection_mutations.extend(
@@ -1385,6 +1703,17 @@ impl CacheEngine {
                 .await
                 .map_err(|error| state.mail_projection_error(error))?,
             ));
+            projection_mutations.extend(
+                soup_filter_cache_adapter::mail::draft_optimistic_updates(
+                    state.engine_mut()?.storage(),
+                    &query,
+                    operation_name.as_deref(),
+                    &vars,
+                    &data,
+                )
+                .await
+                .map_err(|error| state.mail_projection_error(error))?,
+            );
             let projection_mutations = soup_filter_cache_adapter::properties::augment_optimistic(
                 state.engine_mut()?.storage(),
                 &query,
@@ -1417,6 +1746,7 @@ impl CacheEngine {
                         link_patches: &link_patches,
                         revalidations: &revalidations,
                         created_at_ms,
+                        identity_bindings: &identity_bindings,
                     },
                     claim,
                     projection_mutations,
@@ -1449,6 +1779,7 @@ impl CacheEngine {
                 affected_ops: ops.borrow().names(result.write_result.affected_ops),
                 reset: result.write_result.reset,
                 revalidations: result.write_result.revalidations,
+                mutation_uuid: result.write_result.mutation_uuid,
                 initial_claim,
             })
         })
@@ -1637,6 +1968,15 @@ impl CacheEngine {
                 )
                 .await;
             let result = match state.engine_result(result)? {
+                CommitOptimisticWriteResult::Failed(result) => {
+                    JsCommitOptimisticWriteResult::Failed {
+                        error: result.error,
+                        replacement_transaction_id: result
+                            .replacement_transaction_id
+                            .map(|id| id.to_string()),
+                        result: js_write_result(result.write_result, &ops.borrow()),
+                    }
+                }
                 CommitOptimisticWriteResult::Committed(result) => {
                     JsCommitOptimisticWriteResult::Committed {
                         result: js_write_result(result, &ops.borrow()),

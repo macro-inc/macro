@@ -36,6 +36,7 @@ use cursor_cloud_agents::domain::ports::{
 use cursor_cloud_agents::domain::service::CursorSessionService;
 use cursor_cloud_agents::inbound::acp::{AcpNotifier, serve};
 use futures::Stream;
+use tracing::Instrument as _;
 
 use super::keys::CursorApiKeys;
 use super::pipe::PipeTransport;
@@ -94,6 +95,38 @@ fn should_reap_cursor_pipe(idle: std::time::Duration, active_turn: bool, pending
     idle >= CURSOR_IDLE_TIMEOUT && !active_turn && !pending
 }
 
+/// How long a pipe may sit idle past its deadline, kept open only by a turn
+/// or an admitted command, before the idle check says so at `warn`.
+///
+/// The idle check logs its inputs every tick at `debug`, which production
+/// does not ship. A long Cursor run legitimately holds a pipe open for an
+/// hour with nothing moving through it, so the first half hour is nobody's
+/// business - but a pipe held open this long, and again every interval
+/// after, is either a very long run or a gate nobody will ever release, and
+/// the second was found only by noticing which sessions were *not* reaped.
+const HELD_OPEN_WARNING_INTERVAL: std::time::Duration = std::time::Duration::from_secs(30 * 60);
+
+/// Whether this tick should warn that the pipe is held open, and the
+/// threshold the next warning waits for.
+///
+/// `next` is the idle duration the next warning fires at; a pipe that saw
+/// activity again resets it, so a session that is simply busy every day
+/// warns once per long stretch rather than once per process.
+fn held_open_warning(
+    idle: std::time::Duration,
+    held: bool,
+    next: std::time::Duration,
+) -> (bool, std::time::Duration) {
+    if !held || idle < CURSOR_IDLE_TIMEOUT {
+        return (false, HELD_OPEN_WARNING_INTERVAL);
+    }
+    if idle >= next {
+        (true, next + HELD_OPEN_WARNING_INTERVAL)
+    } else {
+        (false, next)
+    }
+}
+
 /// The ref new agents start their work from.
 const DEFAULT_STARTING_REF: &str = "main";
 
@@ -128,6 +161,7 @@ pub struct CursorContainerManager<Sessions, Keys, Repositories, Store> {
     sessions: Sessions,
     repositories: Arc<Repositories>,
     usage: Arc<dyn ai_usage::UsageRecorder>,
+    admission: Arc<dyn ai_billing::AiAdmissionService>,
     pull_requests: Option<Arc<dyn agent_session::domain::pull_request::SessionPullRequests>>,
     working_branches:
         Option<Arc<dyn agent_session::domain::working_branch::SessionWorkingBranches>>,
@@ -201,6 +235,7 @@ where
             sessions,
             repositories,
             usage,
+            admission: Arc::new(ai_billing::DisabledAiAdmissionService),
             pull_requests: None,
             working_branches: None,
             journal_storage: JournalStorage::Postgres {
@@ -228,6 +263,7 @@ where
             sessions: self.sessions,
             repositories: self.repositories,
             usage: self.usage,
+            admission: self.admission,
             pull_requests: self.pull_requests,
             working_branches: self.working_branches,
             journal_storage: self.journal_storage,
@@ -259,11 +295,18 @@ where
             sessions,
             repositories,
             usage: Arc::new(ai_usage::NoOpUsageRecorder),
+            admission: Arc::new(ai_billing::DisabledAiAdmissionService),
             pull_requests: None,
             working_branches: None,
             journal_storage: JournalStorage::Memory,
             pending: PendingCommands::new(),
         }
+    }
+
+    /// Configure admission for Macro-funded helpers, not the owner's Cursor runtime.
+    pub fn with_admission(mut self, admission: Arc<dyn ai_billing::AiAdmissionService>) -> Self {
+        self.admission = admission;
+        self
     }
 
     /// Persist Cursor's returned PR using the shared session operation.
@@ -411,10 +454,11 @@ where
                 },
             ));
         }
-        let chooser = HaikuRepositoryChooser::new(
+        let chooser = crate::domain::repository_choice::RepositoryChoiceService::new(
             Arc::clone(&self.repositories),
             self.sessions.clone(),
-            Arc::clone(&self.usage),
+            HaikuRepositoryChooser::new(Arc::clone(&self.usage)),
+            Arc::clone(&self.admission),
             owner,
             session_id,
         );
@@ -471,9 +515,18 @@ where
         let observed = Arc::clone(&last_activity);
         let reaper_shutdown = shutdown.clone();
         let pending = self.pending.clone();
+        // The Macro session id on everything this task does. The mirror's
+        // own spans know only the ACP session id (`cursor-acp-1` for every
+        // hosted session), so without this a run it follows for an hour is
+        // unsearchable by the session it belongs to.
+        let background = tracing::info_span!(
+            "agent.session.background",
+            agent.session.id = %session_id,
+        );
         tokio::spawn(async move {
             let mut mirror = interval_from_now(FOREIGN_SYNC_INTERVAL);
             let mut reaper = interval_from_now(CURSOR_IDLE_CHECK_INTERVAL);
+            let mut next_held_open_warning = HELD_OPEN_WARNING_INTERVAL;
             loop {
                 tokio::select! {
                     () = pipe_closed.cancelled() => break,
@@ -530,11 +583,30 @@ where
                             reaper_shutdown.cancel();
                             break;
                         }
+                        let (warn, next) = held_open_warning(
+                            activity.elapsed(),
+                            active_turn || pending_command,
+                            next_held_open_warning,
+                        );
+                        next_held_open_warning = next;
+                        if warn {
+                            let in_flight = pending.turn(session_id);
+                            tracing::warn!(
+                                %session_id,
+                                agent.pipe.idle_ms = idle_ms as u64,
+                                agent.pipe.active_turn = active_turn,
+                                agent.pipe.pending_command = pending_command,
+                                in_flight_turn = in_flight.as_ref().map(|turn| turn.turn.0),
+                                in_flight_action_id = in_flight.as_ref().map(|turn| tracing::field::display(turn.action_id)),
+                                in_flight_age_secs = in_flight.as_ref().map(|turn| turn.age().num_seconds()),
+                                "cursor pipe idle past its deadline but held open by a turn or an admitted command"
+                            );
+                        }
                     }
                     _ = mirror.tick() => sync_service.sync_foreign_runs().await,
                 }
             }
-        });
+        }.instrument(background));
         let transport = PipeTransport::connect_recoverable(
             ours,
             move || {

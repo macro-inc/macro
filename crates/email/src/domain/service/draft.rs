@@ -216,6 +216,7 @@ where
             // offline lands cleanly even when it replays after the draft is
             // already gone.
             return Ok(DeletedUserDraft {
+                thread_id: None,
                 deleted: false,
                 thread_deleted: false,
             });
@@ -256,12 +257,14 @@ where
                 return Err(EmailErr::MessageDeliveryConflict(draft_id));
             }
             return Ok(DeletedUserDraft {
+                thread_id: None,
                 deleted: false,
                 thread_deleted: false,
             });
         };
 
         Ok(DeletedUserDraft {
+            thread_id: Some(msg.thread_db_id),
             deleted: true,
             thread_deleted: deletion.thread_deleted,
         })

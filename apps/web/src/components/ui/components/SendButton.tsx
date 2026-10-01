@@ -31,12 +31,13 @@ export function SendButton(props: SendButtonProps) {
     <Button
       depth={4}
       variant="strong"
+      glass={false}
       size={local.appearance === 'composer' ? 'icon-composer' : 'icon-sm'}
       draggable={false}
       aria-label={local['aria-label'] ?? 'Send'}
       tooltip={local.tooltip ?? 'Send'}
       class={cn(
-        'rounded-full border-0 bg-ink text-surface-4 touch:size-7.5',
+        'border-0 bg-ink text-surface-4 touch:size-7.5',
         local.appearance === 'composer'
           ? cn(
               'not-touch:not-disabled:bg-composer-action not-touch:not-disabled:text-composer-action-ink not-touch:light-mode:shadow-none not-touch:light-mode:backdrop-filter-none not-touch:light-mode:after:hidden',

@@ -1,5 +1,6 @@
 use anyhow::Context;
 pub use dictation::outbound::OpenaiApiKey;
+use entity_registry::NonUserOwners;
 use macro_auth::InternalApiKey;
 pub use macro_env::Environment;
 use macro_env_var::{env_vars, maybe_env_vars};
@@ -57,6 +58,8 @@ env_vars! {
 }
 
 maybe_env_vars! {
+    /// Rollout gate for entities owned by bots or teams.
+    pub struct EnableNonUserOwners;
     /// Optional name of the LiveKit agent to dispatch for call transcription.
     pub struct LivekitTranscriptionAgentName;
     /// Shared secret for internal call endpoints (e.g. transcript ingestion from the agent).
@@ -82,6 +85,9 @@ maybe_env_vars! {
 #[derive(macro_config::MacroConfig)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Config {
+    /// Default-off quota admission and prospective usage counting.
+    #[macro_config_default(ai_usage::AiUsageEnforcement::Disabled)]
+    pub enable_ai_usage_enforcement: ai_usage::AiUsageEnforcement,
     pub database_url: DatabaseUrl,
     pub database_url_readonly: DatabaseUrlReadonly,
     pub document_storage_bucket: DocumentStorageBucket,
@@ -165,6 +171,9 @@ pub struct Config {
     #[macro_config_default(true)]
     pub legacy_comment_writes_enabled: bool,
 
+    /// Lets a team-scoped bot with no acting user own the documents it creates.
+    pub enable_non_user_owners: EnableNonUserOwners,
+
     /// The number of seconds a signed document or call recording URL is valid for.
     #[macro_config_default(DEFAULT_PRESIGNED_URL_EXPIRY_SECONDS)]
     pub document_storage_service_presigned_url_expiry_seconds: u64,
@@ -190,6 +199,16 @@ pub struct Config {
 
 impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
-        macro_config::ConfigLoader::load::<Config>().context("failed to load config")
+        let enforcement = ai_usage::config::load_ai_usage_enforcement()
+            .map_err(|error| anyhow::anyhow!("{error}"))?;
+        let mut config =
+            macro_config::ConfigLoader::load::<Config>().context("failed to load config")?;
+        config.enable_ai_usage_enforcement = enforcement;
+        Ok(config)
+    }
+
+    pub fn non_user_owners(&self) -> anyhow::Result<NonUserOwners> {
+        NonUserOwners::from_config_value(self.enable_non_user_owners.value())
+            .context("ENABLE_NON_USER_OWNERS must be `true` or `false`")
     }
 }

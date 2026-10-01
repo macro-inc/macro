@@ -158,14 +158,8 @@
       "@channel/*": [
         "./src/features/channel/*"
       ],
-      "@companies/*": [
-        "./src/features/companies/*"
-      ],
       "@block-company/*": [
         "./src/features/block-company/*"
-      ],
-      "@contacts/*": [
-        "./src/features/contacts/*"
       ],
       "@block-contact/*": [
         "./src/features/block-contact/*"

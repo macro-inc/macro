@@ -32,6 +32,16 @@ impl EntityKey<'static> {
 }
 
 impl<'a> EntityKey<'a> {
+    /// The `Typename` half of an entity key; `None` for the root record.
+    pub fn typename(&self) -> Option<&str> {
+        self.0.split_once(':').map(|(typename, _)| typename)
+    }
+
+    /// The key-value half of an entity key; `None` for the root record.
+    pub fn id(&self) -> Option<&str> {
+        self.0.split_once(':').map(|(_, id)| id)
+    }
+
     pub fn is_root(&self) -> bool {
         self.0 == ROOT_QUERY
     }
@@ -139,8 +149,13 @@ impl Record {
     /// lists and embedded objects are replaced wholesale, graphcache
     /// semantics). Returns true when anything changed.
     pub fn merge(&mut self, other: Record) -> bool {
+        let recent_pages = crate::page_retention::updated_pages(self, &other);
         let mut changed = false;
         for (k, v) in other.fields {
+            // Incoming snapshots must not replace the base's recency history.
+            if k == crate::page_retention::PAGE_ORDER_FIELD {
+                continue;
+            }
             match self.fields.get(&k) {
                 Some(existing) if *existing == v => {}
                 _ => {
@@ -149,7 +164,7 @@ impl Record {
                 }
             }
         }
-        changed
+        crate::page_retention::retain_soup_pages(self, &recent_pages) || changed
     }
 
     pub fn typename(&self) -> Option<&str> {

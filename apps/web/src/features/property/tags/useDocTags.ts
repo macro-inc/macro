@@ -61,7 +61,8 @@ type SetTagOptionIdsForDefinition = (
 
 function usePersistTagSelection(
   entityId: string,
-  entityType: EntityType
+  entityType: EntityType,
+  assignmentIdForDefinition: (definitionId: string) => string | undefined
 ): PersistTagSelection {
   const mutation = useBulkUpdateEntityPropertyOptionsMutation(entityId);
 
@@ -71,6 +72,7 @@ function usePersistTagSelection(
       entityType,
       properties: updates.map((update) => ({
         property: definitionDomain(update.definition),
+        assignmentId: assignmentIdForDefinition(update.definition.id),
         currentOptionIds: update.currentOptionIds,
         nextOptionIds: update.nextOptionIds,
       })),
@@ -275,11 +277,17 @@ export function useDocTags(entityId: string, entityType: EntityType) {
       ? property.value
       : [];
   };
-  const persistTagSelection = usePersistTagSelection(entityId, entityType);
+  const persistTagSelection = usePersistTagSelection(
+    entityId,
+    entityType,
+    (definitionId) =>
+      properties().find((prop) => prop.propertyDefinitionId === definitionId)
+        ?.propertyId
+  );
   const tagsQuery = useTagsQuery();
   const tagSets = (): TagSetResponse[] => tagsQuery.data ?? [];
-  // The properties query isn't optimistically written, so surface in-flight
-  // bulk updates as the optimistic value until the refetch lands.
+  // Cover new assignments (and the REST query) until persistence reconciles
+  // the source. Existing GraphQL assignments also update in the normalized cache.
   const inFlightOptionIdsForDefinition =
     useInFlightEntityPropertyOptions(entityId);
 
@@ -313,7 +321,12 @@ export function useSoupDocTags(
     const value = property?.value;
     return value?.type === 'SelectOption' ? value.value : [];
   };
-  const persistTagSelection = usePersistTagSelection(entityId, entityType);
+  const persistTagSelection = usePersistTagSelection(
+    entityId,
+    entityType,
+    (definitionId) =>
+      properties()?.find((prop) => prop.definition.id === definitionId)?.id
+  );
   const tagSets = useTagSets();
   const inFlightOptionIdsForDefinition =
     useInFlightEntityPropertyOptions(entityId);

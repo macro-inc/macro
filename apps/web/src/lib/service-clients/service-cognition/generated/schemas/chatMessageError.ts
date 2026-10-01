@@ -11,7 +11,7 @@ import type { ChatMessageErrorStreamId } from './chatMessageErrorStreamId';
  * Error response for chat message endpoints
  */
 export interface ChatMessageError {
-  /** Stable machine-readable code for payment-required errors. */
+  /** Stable machine-readable code for admission errors (402 or 503). */
   code?: ChatMessageErrorCode;
   error: string;
   stream_id?: ChatMessageErrorStreamId;

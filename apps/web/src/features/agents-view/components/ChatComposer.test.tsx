@@ -1,4 +1,5 @@
 import type { InputAttachmentData } from '@channel/Input/types';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { $createQuoteNode, QuoteNode } from '@lexical/rich-text';
 import { fireEvent, render, screen } from '@solidjs/testing-library';
 import {
@@ -11,6 +12,10 @@ import {
 import { createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatComposer, ChatSessionInput } from './ChatComposer';
+
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: vi.fn(() => false),
+}));
 
 const editor = vi.hoisted(() => ({
   lexical: undefined as LexicalEditor | undefined,
@@ -34,6 +39,7 @@ vi.mock(
       const builder = {
         buildHandle: () => ({ lexical: editor.lexical }),
         namespace: () => builder,
+        withAppLinkResolver: () => builder,
         withMentions: () => builder,
         withEmojis: () => builder,
         withLinks: () => builder,
@@ -94,16 +100,33 @@ vi.mock('@core/util/upload', () => ({
   ) => callback(files.map((file) => ({ file }))),
 }));
 
+const resizeCallbacks: ResizeObserverCallback[] = [];
+
+/** Report a content resize the way the browser would for `target`. */
+function resize(target: HTMLElement, height: number) {
+  vi.spyOn(target, 'getBoundingClientRect').mockReturnValue(
+    new DOMRect(0, 0, 400, height)
+  );
+  const entry = { target, contentRect: new DOMRect(0, 0, 400, height) };
+  for (const callback of resizeCallbacks)
+    callback([entry as unknown as ResizeObserverEntry], {} as ResizeObserver);
+}
+
 beforeEach(() => {
+  resizeCallbacks.length = 0;
   vi.stubGlobal(
     'ResizeObserver',
     class {
+      constructor(callback: ResizeObserverCallback) {
+        resizeCallbacks.push(callback);
+      }
       observe() {}
       unobserve() {}
       disconnect() {}
     }
   );
   vi.clearAllMocks();
+  vi.mocked(isTouchDevice).mockReturnValue(false);
   editor.text = '';
   editor.enter = undefined;
   editor.change = undefined;
@@ -115,6 +138,15 @@ function type(text: string) {
 }
 
 describe('Chat session input', () => {
+  it('seeds the supplied context without sending it', () => {
+    const send = vi.fn();
+    render(() => (
+      <ChatSessionInput initialInput="Document context" onSend={send} />
+    ));
+    expect(editor.setMarkdown).toHaveBeenCalledWith('Document context');
+    expect(send).not.toHaveBeenCalled();
+  });
+
   it('shows only the model control and submits a trimmed follow-up', () => {
     const send = vi.fn();
     render(() => (
@@ -164,6 +196,56 @@ describe('Chat session input', () => {
     editor.enter?.(undefined, editor.text);
     expect(send).toHaveBeenCalledWith('Another request', []);
     expect(stop).toHaveBeenCalledOnce();
+  });
+
+  describe('on a touch device', () => {
+    beforeEach(() => {
+      vi.mocked(isTouchDevice).mockReturnValue(true);
+    });
+
+    it('leaves Enter to the virtual keyboard and sends only from the button', () => {
+      const send = vi.fn();
+      render(() => <ChatSessionInput onSend={send} />);
+      type('first line');
+      // Not captured, so the editor inserts a newline instead of sending.
+      expect(editor.enter?.(undefined, editor.text)).toBe(false);
+      expect(send).not.toHaveBeenCalled();
+      expect(editor.clear).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+      expect(send).toHaveBeenCalledWith('first line', []);
+    });
+
+    it('does not advance the queue from Enter either', () => {
+      const stop = vi.fn();
+      render(() => (
+        <ChatSessionInput
+          busy
+          hasQueuedMessages
+          onSend={vi.fn()}
+          onStop={stop}
+        />
+      ));
+      expect(editor.enter?.(undefined, '')).toBe(false);
+      expect(stop).not.toHaveBeenCalled();
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Send next queued message' })
+      );
+      expect(stop).toHaveBeenCalledOnce();
+    });
+
+    it('applies to a new conversation as well', () => {
+      const send = vi.fn();
+      render(() => (
+        <ChatComposer
+          draft="Describe this"
+          onDraftChange={vi.fn()}
+          selector={null}
+          onSend={send}
+        />
+      ));
+      expect(editor.enter?.(undefined, 'Describe this')).toBe(false);
+      expect(send).not.toHaveBeenCalled();
+    });
   });
 
   it('registers and cleans up session focus and quote handlers', () => {
@@ -230,6 +312,32 @@ describe('Chat session input', () => {
     const settings = screen.getByRole('group', { name: 'Composer settings' });
     expect(settings.textContent).toBe('Agent');
   });
+  it('does not grow the surface from zero after mounting offscreen', () => {
+    render(() => (
+      <ChatComposer
+        draft=""
+        onDraftChange={vi.fn()}
+        onSend={vi.fn()}
+        selector={<button>Agent</button>}
+      />
+    ));
+    const surface = document.querySelector<HTMLElement>(
+      '[data-agent-composer="chat"]'
+    );
+    const content = document.querySelector<HTMLElement>(
+      '[data-composer-content]'
+    );
+    if (!surface || !content) throw new Error('composer did not render');
+    const parent = content.parentElement;
+    content.remove();
+    resize(content, 0);
+    expect(surface.style.height).toBe('');
+
+    parent?.append(content);
+    resize(content, 49);
+    expect(surface.style.height).toBe('49px');
+  });
+
   it('lets controls inside the composer receive pointer focus', () => {
     render(() => (
       <ChatComposer

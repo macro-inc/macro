@@ -1,7 +1,7 @@
 /**
  * A summary-only row for calls without a registered result renderer.
- * The MCP server stays beside the tool name; raw arguments and results are
- * never exposed as a fallback disclosure.
+ * The row shows only the tool name; raw arguments and results are never
+ * exposed as a fallback disclosure.
  */
 
 import type { ToolDetail } from '@service-agent-fold/generated/types';
@@ -18,7 +18,6 @@ export function ExchangeToolCall(props: {
   return (
     <ToolCard
       title={props.common.label}
-      subtitle={props.common.server}
       status={props.common.status}
       muted={props.common.muted || props.detail.error != null}
       trailing={

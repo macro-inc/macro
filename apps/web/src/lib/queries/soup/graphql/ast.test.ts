@@ -402,6 +402,23 @@ describe('makeGraphqlSoupInput', () => {
     ).toThrow('unknown file association');
   });
 
+  it('preserves the stable favorites constraint without expanding entity IDs', () => {
+    const body = { ...compileToAst(queryStateFrom({})), favorites_only: true };
+    expect(
+      makeGraphqlSoupInput({
+        params: { limit: 100, sort_method: 'updated_at' },
+        body,
+      })
+    ).toMatchObject({ initial: { filters: { favoritesOnly: true } } });
+    expect(
+      makeGraphqlGroupedSoupInput({
+        params: { limit: 100, sort_method: 'updated_at' },
+        body,
+        groupBy: { type: 'entity_type' },
+      })
+    ).toMatchObject({ initial: { filters: { favoritesOnly: true } } });
+  });
+
   it('throws for REST-only top-level filters instead of silently widening the query', () => {
     for (const body of [
       { eca: ['person@example.com'] },

@@ -9,6 +9,7 @@ use agent_session::domain::lifecycle::session_identity;
 use crate::domain::model::{ReplyPersona, is_coding_agent};
 use crate::domain::notifications::plan;
 use macro_user_id::user_id::MacroUserIdStr;
+use macro_uuid::Uuid;
 
 use super::*;
 
@@ -134,12 +135,18 @@ where
     /// every lifecycle publish, a failure to resolve the mentions is logged
     /// and the prompt goes on regardless - the mention is a courtesy to
     /// whoever was named, not part of delivering the prompt.
+    ///
+    /// `origin_message_id` names the channel or document message the prompt
+    /// was posted as, when there is one. The fact carries it so the
+    /// notification plan can tell a prompt whose mentions the message service
+    /// already announced from one typed into the session view.
     pub(super) async fn publish_mentions(
         &self,
         session_id: AgentSessionId,
         action_id: AgentActionId,
         actor: Option<MacroUserIdStr<'static>>,
         prompt_markdown: &str,
+        origin_message_id: Option<Uuid>,
     ) {
         let mentioned = match self
             .mentions
@@ -169,6 +176,7 @@ where
                 action_id,
                 mentioned_by: actor,
                 mentioned,
+                origin_message_id,
             })
         })
         .await;

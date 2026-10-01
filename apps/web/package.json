@@ -39,12 +39,7 @@
     "format": "bunx --bun biome format --write",
     "fix": "bunx --bun biome lint --write",
     "clean": "bun scripts/clean-env.js",
-    "knip": "bunx --bun knip",
-    "build:site": "bun run --cwd marketing build",
-    "check:seo:live": "bun marketing/scripts/verify-seo-live.ts",
-    "check:seo": "bun marketing/scripts/verify-seo.ts",
-    "build:all": "bun run build && bun run build:site",
-    "dev:site": "bun run --cwd marketing dev"
+    "knip": "bunx --bun knip"
   },
   "dependencies": {
     "@aws-crypto/sha256-js": "^5.2.0",
@@ -166,7 +161,6 @@
     "tabbable": "^6.2.0",
     "tailwind-merge": "^3.4.0",
     "tailwindcss": "^4.2.4",
-    "tauri-plugin-safe-area-insets": "^0.1.0",
     "ts-pattern": "^5.9.0",
     "unicode-emoji-json": "^0.8.0",
     "uuid": "^10.0.0",

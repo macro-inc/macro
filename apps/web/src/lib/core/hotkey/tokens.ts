@@ -29,6 +29,7 @@ export const TOKENS = {
   unifiedList: {
     navigation: {
       parent: 'unifiedList.navigation.parent',
+      collapseGroup: 'unifiedList.navigation.collapseGroup',
       child: 'unifiedList.navigation.child',
     },
   },
@@ -118,7 +119,6 @@ export const TOKENS = {
     goTo: {
       home: 'sidebar.goTo.home',
       gettingStarted: 'sidebar.goTo.gettingStarted',
-      inbox: 'sidebar.goTo.inbox',
       recent: 'sidebar.goTo.recent',
       activity: 'sidebar.goTo.activity',
       calendar: 'sidebar.goTo.calendar',
@@ -128,6 +128,7 @@ export const TOKENS = {
       documents: 'sidebar.goTo.documents',
       markdownDocuments: 'sidebar.goTo.markdownDocuments',
       tasks: 'sidebar.goTo.tasks',
+      reminders: 'sidebar.goTo.reminders',
       channels: 'sidebar.goTo.channels',
       calls: 'sidebar.goTo.calls',
       companies: 'sidebar.goTo.companies',
@@ -148,6 +149,7 @@ export const TOKENS = {
     previousMessage: 'email.previousMessage',
     nextMessage: 'email.nextMessage',
     cancelReply: 'email.cancelReply',
+    trash: 'email.trash',
     blockSender: 'email.blockSender',
     markSenderSignal: 'email.markSenderSignal',
     markSenderNoise: 'email.markSenderNoise',
@@ -265,6 +267,7 @@ export const TOKENS = {
 
   // create menu
   create: {
+    call: 'create.call',
     note: 'create.note',
     noteNewSplit: 'create.noteNewSplit',
     email: 'create.email',
@@ -284,6 +287,7 @@ export const TOKENS = {
     codeNewSplit: 'create.codeNewSplit',
     task: 'create.task',
     taskNewSplit: 'create.taskNewSplit',
+    initiative: 'create.initiative',
     snippet: 'create.snippet',
     snippetNewSplit: 'create.snippetNewSplit',
     automation: 'create.automation',

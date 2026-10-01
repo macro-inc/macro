@@ -2,12 +2,13 @@ import {
   ViewSidebar,
   CollapsibleSection as WorkspaceSection,
 } from '@app/components/view-shell';
-import { CollapseTransition } from '@app/components/view-shell/CollapseTransition';
+import { DebugSuspense } from '@channel/DebugSuspense';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { Button, cn, Scroll, Tooltip } from '@ui';
+import { CollapseTransition } from '@ui/components/CollapseTransition';
 import {
   createContext,
   createSignal,
@@ -15,7 +16,6 @@ import {
   type JSX,
   Match,
   Show,
-  Suspense,
   Switch,
   useContext,
 } from 'solid-js';
@@ -48,7 +48,11 @@ function SectionScrollArea(props: {
         }}
       >
         <div role="group" class={props.class}>
-          <Suspense>{props.children}</Suspense>
+          <DebugSuspense
+            name={`ChannelsView.rail-section.${props.activityLabel ?? props.activityTargetId ?? 'unknown'}`}
+          >
+            {props.children}
+          </DebugSuspense>
         </div>
       </Scroll>
       <Show when={activity.direction()}>

@@ -11,6 +11,9 @@ import { InviteWelcome } from '@app/features/gtm-invite/InviteWelcome';
 import { usePendingInviteRedemption } from '@app/features/gtm-invite/usePendingInviteRedemption';
 import { HomePreferencesProvider } from '@app/features/home/home-prefs';
 import { GlobalShareInboxConflictDialog } from '@app/features/inbox/ShareInboxConflictDialog';
+import { IncomingMeetingInvitationsProvider } from '@app/features/meetings/incoming-meeting-invitations';
+import { MeetingRouter } from '@app/features/meetings/meeting-router';
+import { MeetingSessionProvider } from '@app/features/meetings/meeting-session-provider';
 import { usePendingNotificationNavigationEffect } from '@app/features/notifications/PendingNotificationNavigationEffect';
 import { InteractiveOnboardingModal } from '@app/features/onboarding/InteractiveOnboardingModal';
 import MobileWebSignup from '@app/features/onboarding/MobileWebSignup';
@@ -31,6 +34,7 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { IncomingCallEvents } from '@block-call/sidebar/incoming-calls';
 import { CallProvider } from '@channel/Call/CallContext';
 import { CallStartedNotifier } from '@channel/Call/CallStartedNotifier';
+import { isMeetingPath } from '@channel/Call/call-link';
 import { CallKitSync } from '@channel/Call/use-callkit';
 import { GlobalAppStateProvider } from '@components/app/GlobalAppState';
 import { Layout } from '@components/app/Layout';
@@ -86,7 +90,10 @@ import {
 import { useChatRenameWebsocketSync } from '@queries/chat';
 import { QuerySyncProvider } from '@queries/sync/SyncProvider';
 import { MutationUndoProvider } from '@queries/undo';
-import { useReopenTrackedEntitiesOnReconnect } from '@service-connection/client';
+import {
+  useRefreshTrackedEntitiesOnFocus,
+  useReopenTrackedEntitiesOnReconnect,
+} from '@service-connection/client';
 import { ws as connectionGatewayWebsocket } from '@service-connection/websocket';
 import { MetaProvider, Title } from '@solidjs/meta';
 import {
@@ -96,6 +103,7 @@ import {
   type RoutePreloadFunc,
   Router,
   type RouterProps,
+  type RouteSectionProps,
   useLocation,
 } from '@solidjs/router';
 import {
@@ -116,6 +124,7 @@ import {
   type ParentProps,
   Show,
 } from 'solid-js';
+import { useReminderAlerts } from '../features/reminders/reminder-alerts';
 import { BasePathComponent } from './BasePath';
 import { TaskRoute } from './TaskRoute';
 
@@ -227,6 +236,7 @@ function OnboardingRoute() {
 }
 
 const ROUTES: RouteDefinition[] = [
+  { path: '/meet/*path', component: MeetingRouter },
   {
     path: '/task-slug/:taskSlug',
     component: TaskRoute,
@@ -338,6 +348,7 @@ function ConfiguredGlobalAppStateProvider(props: ParentProps) {
   const notifInterface = usePlatformNotificationState();
   useChatRenameWebsocketSync();
   useReopenTrackedEntitiesOnReconnect();
+  useRefreshTrackedEntitiesOnFocus();
 
   if (isNativeMobilePlatform()) {
     useInvalidateQueriesOnReconnect();
@@ -358,6 +369,7 @@ function ConfiguredGlobalAppStateProvider(props: ParentProps) {
     onNotification
   );
   useNotificationUpdates(notificationSource);
+  useReminderAlerts(notificationSource);
 
   const blockOrchestrator = createBlockOrchestrator();
   usePendingNotificationNavigationEffect(notificationSource);
@@ -518,6 +530,19 @@ function InitialInteractiveOnboardingModal() {
   );
 }
 
+/** Meeting links have a focused shell and never enter app onboarding. */
+function AppRouteLayout(props: RouteSectionProps) {
+  const location = useLocation();
+  return (
+    <IncomingMeetingInvitationsProvider>
+      <Show when={!isMeetingPath(location.pathname)} fallback={props.children}>
+        <Layout {...props} />
+        <InitialInteractiveOnboardingModal />
+      </Show>
+    </IncomingMeetingInvitationsProvider>
+  );
+}
+
 export function Root() {
   setHotkeyRoot(useHotKeyRoot());
 
@@ -566,21 +591,22 @@ export function Root() {
                                 <ChatAttachmentsInit />
                                 <ReactiveFavicon />
                                 <Title>{tabTitle()}</Title>
-                                {/* Loading boundaries belong inside Layout so
+                                <MeetingSessionProvider>
+                                  {/* Loading boundaries belong inside Layout so
                                     a pending resource cannot detach the app shell. */}
-                                <IsomorphicRouter
-                                  transformUrl={transformShortIdInUrlPathname}
-                                  root={Layout}
-                                  rootPreload={rootPreload}
-                                  base={ROUTER_BASE}
-                                >
-                                  {{
-                                    path: '/',
-                                    component: TauriRouteListener,
-                                    children: ROUTES,
-                                  }}
-                                </IsomorphicRouter>
-                                <InitialInteractiveOnboardingModal />
+                                  <IsomorphicRouter
+                                    transformUrl={transformShortIdInUrlPathname}
+                                    root={AppRouteLayout}
+                                    rootPreload={rootPreload}
+                                    base={ROUTER_BASE}
+                                  >
+                                    {{
+                                      path: '/',
+                                      component: TauriRouteListener,
+                                      children: ROUTES,
+                                    }}
+                                  </IsomorphicRouter>
+                                </MeetingSessionProvider>
                                 <ToastRegion />
                               </SearchProvider>
                             </QuickAccessProvider>

@@ -39,6 +39,7 @@ import type { ApiChannelAttachmentsPage } from './generated/schemas/apiChannelAt
 import type { ApiChannelParticipant } from './generated/schemas/apiChannelParticipant';
 import type { Bot } from './generated/schemas/bot';
 import type { BotChannel } from './generated/schemas/botChannel';
+import type { BotOwnerProfile } from './generated/schemas/botOwnerProfile';
 import type { BotToken } from './generated/schemas/botToken';
 import type { CalendarMentionPreviewRequest } from './generated/schemas/calendarMentionPreviewRequest';
 import type { CalendarMentionPreviewResponse } from './generated/schemas/calendarMentionPreviewResponse';
@@ -60,7 +61,6 @@ import type { CreateChannelResponse } from './generated/schemas/createChannelRes
 import type { CreateChannelScopedBotRequest } from './generated/schemas/createChannelScopedBotRequest';
 import type { CreateChannelScopedBotResponse } from './generated/schemas/createChannelScopedBotResponse';
 import type { CreateCommentResponse } from './generated/schemas/createCommentResponse';
-import type { CreateCrmCommentRequest } from './generated/schemas/createCrmCommentRequest';
 import type { CreateCrmCompanyRequest } from './generated/schemas/createCrmCompanyRequest';
 import type { CreateCrmContactRequest } from './generated/schemas/createCrmContactRequest';
 import type { CreateDocument200 as CreateDocumentResponse } from './generated/schemas/createDocument200';
@@ -80,15 +80,11 @@ import type { CreateSnippetRequest } from './generated/schemas/createSnippetRequ
 import type { CreateTaskHandler200 } from './generated/schemas/createTaskHandler200';
 import type { CreateTaskRequest } from './generated/schemas/createTaskRequest';
 import type { CreateUnthreadedAnchorResponse } from './generated/schemas/createUnthreadedAnchorResponse';
-import type { CrmComment } from './generated/schemas/crmComment';
-import type { CrmCommentEntityType } from './generated/schemas/crmCommentEntityType';
-import type { CrmCommentThread } from './generated/schemas/crmCommentThread';
 import type { CrmCompanyResponse } from './generated/schemas/crmCompanyResponse';
 import type { CrmContactResponse } from './generated/schemas/crmContactResponse';
 import type { CrmStagesResponse } from './generated/schemas/crmStagesResponse';
 import type { CrmTeamSettingsResponse } from './generated/schemas/crmTeamSettingsResponse';
 import type { DeleteCommentResponse } from './generated/schemas/deleteCommentResponse';
-import type { DeleteCrmCommentResult } from './generated/schemas/deleteCrmCommentResult';
 import type { DeleteEntityMentionResponse } from './generated/schemas/deleteEntityMentionResponse';
 import type { DeleteUnthreadedAnchorResponse } from './generated/schemas/deleteUnthreadedAnchorResponse';
 import type { DocumentMetadata } from './generated/schemas/documentMetadata';
@@ -97,7 +93,8 @@ import type { DocumentResponseMetadataWithContent } from './generated/schemas/do
 import type { DocumentTeamShareResponse } from './generated/schemas/documentTeamShareResponse';
 import type { EditAnchorResponse } from './generated/schemas/editAnchorResponse';
 import type { EditCommentResponse } from './generated/schemas/editCommentResponse';
-import type { EditCrmCommentRequest } from './generated/schemas/editCrmCommentRequest';
+import type { EmailFollowup } from './generated/schemas/emailFollowup';
+import type { EmailFollowupCommand } from './generated/schemas/emailFollowupCommand';
 import type { ExportDocumentResponse } from './generated/schemas/exportDocumentResponse';
 import type { Favorite } from './generated/schemas/favorite';
 import type { FavoritesList } from './generated/schemas/favoritesList';
@@ -664,6 +661,18 @@ export const storageServiceClient = {
     return (
       await dssFetch<Bot>(`/bots/${args.bot_id}`, {
         method: 'GET',
+      })
+    ).map((result) => result);
+  },
+
+  async getBotOwnerProfiles(args: { ids: string[]; signal?: AbortSignal }) {
+    const query = new URLSearchParams();
+    args.ids.forEach((id) => query.append('ids', id));
+    const qs = query.toString();
+    return (
+      await dssFetch<BotOwnerProfile[]>(`/bots/profiles${qs ? `?${qs}` : ''}`, {
+        method: 'GET',
+        signal: args.signal,
       })
     ).map((result) => result);
   },
@@ -2443,6 +2452,20 @@ export const storageServiceClient = {
     },
   },
   reminders: {
+    async getEmailFollowup(threadId: string) {
+      return (
+        await dssFetch<{ followup: EmailFollowup | null }>(
+          `/reminders/email/${threadId}`,
+          { method: 'GET' }
+        )
+      ).map((response) => response.followup);
+    },
+    async setEmailFollowup(threadId: string, command: EmailFollowupCommand) {
+      return await dssFetch<EmailFollowup>(`/reminders/email/${threadId}`, {
+        method: 'PUT',
+        body: JSON.stringify(command),
+      });
+    },
     async createReminder(params: CreateReminderRequest) {
       return await dssFetch<Reminder>('/reminders', {
         method: 'POST',
@@ -2607,52 +2630,6 @@ export const storageServiceClient = {
   },
   async resetCrmTeamStages() {
     return await dssFetch('/crm/stages', { method: 'DELETE' });
-  },
-  crmComments: {
-    async list({
-      entityType,
-      entityId,
-    }: {
-      entityType: CrmCommentEntityType;
-      entityId: string;
-    }) {
-      return await dssFetch<CrmCommentThread[]>(
-        `/crm/comments/${entityType}/${entityId}`,
-        { method: 'GET' }
-      );
-    },
-    async create({
-      entityType,
-      entityId,
-      body,
-    }: {
-      entityType: CrmCommentEntityType;
-      entityId: string;
-      body: CreateCrmCommentRequest;
-    }) {
-      return await dssFetch<CrmCommentThread>(
-        `/crm/comments/${entityType}/${entityId}`,
-        { method: 'POST', body: JSON.stringify(body) }
-      );
-    },
-    async edit({
-      commentId,
-      body,
-    }: {
-      commentId: string;
-      body: EditCrmCommentRequest;
-    }) {
-      return await dssFetch<CrmComment>(`/crm/comment/${commentId}`, {
-        method: 'PATCH',
-        body: JSON.stringify(body),
-      });
-    },
-    async delete({ commentId }: { commentId: string }) {
-      return await dssFetch<DeleteCrmCommentResult>(
-        `/crm/comment/${commentId}`,
-        { method: 'DELETE' }
-      );
-    },
   },
 } satisfies StorageServiceClient &
   typeof enhancements &
