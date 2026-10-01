@@ -477,7 +477,10 @@ skip REST/TanStack email invalidations as well, including Done/Undo batches and
 thread archive replay. Committed writes and failed non-queued batches still
 reconcile. Permanent failures roll back the failed intent.
 Check Signal/Noise removal and All's done indicator, then Undo/Redo, including an
-offline action followed by reconnect. Sent-only threads cannot be unarchived.
+offline action followed by reconnect. Also wait for provider/metadata synchronization
+before Undo, and repeat after reloading: an archived received thread can lose its
+inbox-sorting timestamp but must still be unarchivable. Sent-only threads and
+unsent drafts cannot be unarchived; sent mail addressed back to its sender can.
 
 The service retains both replica-backed Soup reads and a primary-backed email
 writer. Email mutations and their uncached reply reloads use the primary; ordinary
