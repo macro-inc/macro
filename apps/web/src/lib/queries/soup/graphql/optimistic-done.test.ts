@@ -1,5 +1,5 @@
 import type { EntityData } from '@entity/types/entity';
-import { QueryClient } from '@tanstack/solid-query';
+import { QueryClient, useQuery } from '@tanstack/solid-query';
 import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -14,6 +14,9 @@ vi.mock('./active-queries', () => ({
   refreshActiveGraphqlSoupQueries: refresh,
 }));
 
+import { authKeys } from '../../auth/keys';
+import { resetGraphqlSoupDoneSession } from './done-session';
+import { graphqlSoupKeys } from './keys';
 import {
   GRAPHQL_SOUP_DONE_RETENTION_MS,
   hideGraphqlSoupEntitiesAsDone,
@@ -28,6 +31,10 @@ beforeEach(() => {
   refresh.mockReset();
   refresh.mockResolvedValue();
   client = new QueryClient();
+  client.setQueryData(authKeys.userInfo.queryKey, {
+    userId: 'viewer',
+    authenticated: true,
+  });
 });
 afterEach(() => {
   dispose?.();
@@ -57,6 +64,8 @@ const pending = (
   notificationIds: string[] = []
 ): PendingGraphqlSoupDone => ({
   operation: {},
+  viewerId: 'viewer',
+  session: 'test-session',
   done: true,
   observe: vi.fn(),
   unobserve: vi.fn(),
@@ -331,6 +340,153 @@ describe('hideGraphqlSoupEntitiesAsDone', () => {
       false
     );
     overlay.release();
+  });
+
+  it('does not replace the authenticated viewer query fetcher', async () => {
+    const fetchViewer = vi.fn(async () => ({ userId: 'bob', authenticated: true }));
+    let read!: ReturnType<typeof usePendingGraphqlSoupDone>;
+    dispose = createRoot((disposeRoot) => {
+      useQuery(() => ({ queryKey: authKeys.userInfo.queryKey, queryFn: fetchViewer, staleTime: Infinity }), () => client);
+      read = usePendingGraphqlSoupDone();
+      return disposeRoot;
+    });
+    const overlay = hideGraphqlSoupEntitiesAsDone({ entityIds: ['a'], notificationIds: [] });
+    await vi.waitFor(() => expect(read()).toHaveLength(1));
+    await client.invalidateQueries({ queryKey: authKeys.userInfo.queryKey }, { throwOnError: true });
+    expect(fetchViewer).toHaveBeenCalledOnce();
+    await vi.waitFor(() => expect(read()).toEqual([]));
+    overlay.release();
+  });
+
+  it('isolates a shared entity id when the authenticated viewer changes', async () => {
+    const read = observePending();
+    const alice = hideGraphqlSoupEntitiesAsDone({
+      entityIds: ['shared'],
+      notificationIds: [],
+    });
+    await vi.waitFor(() => expect(read()).toHaveLength(1));
+    const previous = read()[0];
+    client.setQueryData(authKeys.userInfo.queryKey, {
+      userId: 'bob',
+      authenticated: true,
+    });
+    const bob = hideGraphqlSoupEntitiesAsDone({
+      entityIds: ['shared'],
+      notificationIds: [],
+    });
+    await vi.waitFor(() =>
+      expect(read().map((e) => e.viewerId)).toEqual(['bob'])
+    );
+    const current = read()[0];
+    alice.setDone(false);
+    alice.settle();
+    alice.release();
+    await Promise.resolve();
+    expect(read()[0].operation).toBe(current.operation);
+    expect(read()[0].operation).not.toBe(previous.operation);
+    expect(read()[0].done).toBe(true);
+    bob.release();
+  });
+
+  it('rebinds mounted readers and fences old handles on same-account login', async () => {
+    const read = observePending();
+    const previous = hideGraphqlSoupEntitiesAsDone({
+      entityIds: ['a'],
+      notificationIds: [],
+    });
+    await vi.waitFor(() => expect(read()).toHaveLength(1));
+    const session = read()[0].session;
+    resetGraphqlSoupDoneSession();
+    const current = hideGraphqlSoupEntitiesAsDone({
+      entityIds: ['a'],
+      notificationIds: [],
+      done: false,
+    });
+    await vi.waitFor(() => expect(read()[0]?.done).toBe(false));
+    expect(read()[0].session).not.toBe(session);
+    previous.setDone(true);
+    previous.settle();
+    previous.release();
+    expect(
+      client.getQueryData(
+        graphqlSoupKeys.pendingDone('viewer', session).queryKey
+      )
+    ).toBeUndefined();
+    expect(read()[0].done).toBe(false);
+    current.release();
+  });
+
+  it('does not publish display intent without an authenticated viewer', async () => {
+    client.setQueryData(authKeys.userInfo.queryKey, {
+      userId: '',
+      authenticated: false,
+    });
+    const read = observePending();
+    const overlay = hideGraphqlSoupEntitiesAsDone({
+      entityIds: ['a'],
+      notificationIds: [],
+    });
+    overlay.setDone(false);
+    overlay.settle();
+    await Promise.resolve();
+    expect(read()).toEqual([]);
+    overlay.release();
+  });
+
+  it('preserves the cached viewer through an offline auth refresh error', async () => {
+    const read = observePending();
+    client
+      .getQueryCache()
+      .find({ queryKey: authKeys.userInfo.queryKey })!
+      .setState({
+        status: 'error',
+        error: new Error('offline'),
+      });
+    const overlay = hideGraphqlSoupEntitiesAsDone({
+      entityIds: ['a'],
+      notificationIds: [],
+    });
+    await vi.waitFor(() =>
+      expect(read().map((e) => e.viewerId)).toEqual(['viewer'])
+    );
+    overlay.release();
+  });
+
+  it('ignores a late refresh and Undo from a retired session', async () => {
+    vi.useFakeTimers();
+    let finish!: () => void;
+    refresh.mockReturnValue(
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      })
+    );
+    const read = observePending();
+    const previous = hideGraphqlSoupEntitiesAsDone({
+      entityIds: ['a'],
+      notificationIds: [],
+    });
+    await vi.advanceTimersByTimeAsync(1);
+    read()[0].observe({}, false);
+    previous.settle();
+    await vi.advanceTimersByTimeAsync(GRAPHQL_SOUP_DONE_RETENTION_MS);
+    expect(refresh).toHaveBeenCalledOnce();
+    client.setQueryData(authKeys.userInfo.queryKey, {
+      userId: 'bob',
+      authenticated: true,
+    });
+    resetGraphqlSoupDoneSession();
+    const current = hideGraphqlSoupEntitiesAsDone({
+      entityIds: ['a'],
+      notificationIds: [],
+    });
+    await vi.advanceTimersByTimeAsync(1);
+    finish();
+    previous.setDone(false);
+    previous.settle();
+    await vi.advanceTimersByTimeAsync(GRAPHQL_SOUP_DONE_RETENTION_MS);
+    expect(refresh).toHaveBeenCalledOnce();
+    expect(read().map((e) => [e.viewerId, e.done])).toEqual([['bob', true]]);
+    current.release();
   });
 
   it('retains operation identity across Undo and ignores acknowledgements of older intent', async () => {

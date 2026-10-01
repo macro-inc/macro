@@ -34,12 +34,17 @@ vi.mock('../grouped/mail-date-groups', () => ({
 }));
 vi.mock('../transform-utils', () => ({ mapSoupPageToEntityList: vi.fn() }));
 
+import { authKeys } from '@queries/auth/keys';
 import { queryClient } from '@queries/client';
 import { createGraphqlGroupedSoupAstItemsQuery } from './grouped-items';
 import { hideGraphqlSoupEntitiesAsDone } from './optimistic-done';
 
 beforeEach(() => {
   queryClient.clear();
+  queryClient.setQueryData(authKeys.userInfo.queryKey, {
+    userId: 'viewer',
+    authenticated: true,
+  });
 });
 
 function fixture(emailView: 'inbox' | 'drafts' | 'all' = 'drafts') {

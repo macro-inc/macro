@@ -113,6 +113,10 @@ notification IDs, not notifications received since the original action. A newer
 Done must win over an older retained overlay. Delay reconciliation past a minute:
 pending/stale state must not simply expire and resurrect the row. Once committed,
 mounted cache readers must acknowledge the intent before its overlay is released.
+GraphQL display intents are scoped to the authenticated viewer and login session.
+Login/logout retires old buckets; even same-account native reauthentication must
+not let old overlay Undo/Redo handles or a late refresh republish old intent.
+Verify account changes with overlapping entity IDs and a pending/failed refresh.
 After a successful Done, verify that the row stays gone after a reload.
 In Tasks, Email, Home and Drive, rows keep their DOM when the list updates. A
 property edit or a rename updates the edited row in place instead of rebuilding

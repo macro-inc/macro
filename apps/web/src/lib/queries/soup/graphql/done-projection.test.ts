@@ -32,6 +32,8 @@ const page = (entities: EntityData[]): SoupAstItemsData => ({
 });
 const intent = (done = true): PendingGraphqlSoupDone => ({
   operation: {},
+  viewerId: 'viewer',
+  session: 'test-session',
   entityIds: new Set(['a']),
   notificationIds: new Set(),
   done,
