@@ -9,6 +9,7 @@ import { RectangleView } from './shapes/rectangle';
 import { TextView } from './shapes/text';
 
 export type ShapeViewProps<K extends ShapeKind = ShapeKind> = {
+  /** Live view: read fields in reactive scopes, as with Solid props. */
   item: ShapeItem<K>;
   scale: number;
   preview?: boolean;

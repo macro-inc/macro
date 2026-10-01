@@ -76,7 +76,7 @@ it.each(['rectangle', 'ellipse'] as const)(
       );
       editor.commitTransform();
       editor.undo();
-      expect(editor.document).toBe(before);
+      expect(editor.document).toEqual(before);
     }
   }
 );
@@ -151,7 +151,7 @@ it('scales a mixed selection around its collective center in one undo step', () 
   expect(bounds.width).toBeCloseTo(360);
   expect(bounds.height).toBeCloseTo(120);
   editor.undo();
-  expect(editor.document).toBe(before);
+  expect(editor.document).toEqual(before);
 });
 
 it('updates modifiers at a stationary pointer and uses the final pointer-up modifiers', () => {

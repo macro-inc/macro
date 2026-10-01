@@ -10,6 +10,7 @@ import type { Appearance, GraphicsDocument, Point, ShapeItem } from './model';
 import { keysAt } from './ordering';
 import { children, worldMatrix } from './scene';
 import type { ConnectorEndpoint } from './shapes/connector';
+import { snapPoint, snapValue } from './snapping';
 
 export type ConnectorGesture = Readonly<{
   item: ShapeItem<'connector'>;
@@ -19,6 +20,7 @@ export type ConnectorGesture = Readonly<{
 }>;
 export function createConnectorInteraction(host: {
   getDocument(): GraphicsDocument;
+  getSnapUnit?(): number | undefined;
   commit(item: ShapeItem<'connector'>): void;
   onChange(): void;
 }) {
@@ -48,17 +50,20 @@ export function createConnectorInteraction(host: {
       world,
       resolveConnector(document, item).geometry[other].point
     );
+    const unit = host.getSnapUnit?.();
     if (shift && !port) {
       const dx = point.x - fixed.x,
         dy = point.y - fixed.y,
         distance = Math.hypot(dx, dy);
       const angle =
         (Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) * Math.PI) / 4;
-      point = {
-        x: fixed.x + Math.cos(angle) * distance,
-        y: fixed.y + Math.sin(angle) * distance,
-      };
-    }
+      const x = Math.cos(angle),
+        y = Math.sin(angle);
+      // Snap the dominant axis while retaining the exact 45-degree constraint.
+      const component = Math.max(Math.abs(x), Math.abs(y));
+      const length = snapValue(distance * component, unit) / component;
+      point = { x: fixed.x + x * length, y: fixed.y + y * length };
+    } else if (!port) point = snapPoint(point, unit);
     const end: ConnectorEndpoint = {
       point: transformPoint(inverse(world), port?.point ?? point),
       ...(port
@@ -102,7 +107,7 @@ export function createConnectorInteraction(host: {
       target = connectorTargetAt(doc, point, tolerance);
       const port = target?.active;
       const start: ConnectorEndpoint = {
-        point: port?.point ?? point,
+        point: port?.point ?? snapPoint(point, host.getSnapUnit?.()),
         ...(port
           ? { binding: { targetId: port.targetId, anchor: port.anchor } }
           : {}),

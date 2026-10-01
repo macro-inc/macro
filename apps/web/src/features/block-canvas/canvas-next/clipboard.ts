@@ -4,6 +4,7 @@ import {
   parseFragment,
   pasteCommand,
 } from '@macro-inc/graphics';
+import { validCanvasTextDocument } from './core/text-codec';
 
 const mime = 'application/x-macro-graphics';
 const editingText = (target: EventTarget | null) =>
@@ -37,6 +38,10 @@ export function createCanvasClipboard(
         return true;
       }
       notify('Clipboard has no Canvas Next shapes');
+      return false;
+    }
+    if (!validCanvasTextDocument(fragment.scene)) {
+      notify('Clipboard has invalid Canvas Next text');
       return false;
     }
     pasteCount = text === pastedText ? pasteCount + 1 : 1;

@@ -9,7 +9,6 @@ import {
   multiply,
   parseFragment,
   pasteCommand,
-  plainRichText,
   rectangleDefinition,
   rotation,
   type ShapeLabel,
@@ -26,7 +25,7 @@ import { createGraphicsPeerLab } from '../src/loro';
 const cleanups: (() => void)[] = [];
 afterEach(() => cleanups.splice(0).forEach((fn) => fn()));
 const label = (text = 'Shape label'): ShapeLabel => ({
-  content: plainRichText(text),
+  content: text,
   fontSize: 20,
   fontFamily: 'sans',
   height: 27,
@@ -42,7 +41,7 @@ const shape = (type: LabelShape['type'] = 'rectangle'): LabelShape => ({
 it('commits a frozen shape-owned label, copies it, and clears just the label with undo', () => {
   const editor = createGraphicsEditor([shape()]);
   cleanups.push(editor.dispose);
-  editor.execute(setShapeLabelCommand, { id: 'shape', label: label(' ') });
+  editor.execute(setShapeLabelCommand, { id: 'shape' });
   expect(editor.getSession().canUndo).toBe(false);
   editor.execute(setShapeLabelCommand, { id: 'shape', label: label() });
   const item = editor.document.items.shape;
@@ -55,7 +54,7 @@ it('commits a frozen shape-owned label, copies it, and clears just the label wit
   expect(editor.document.items.copy).toMatchObject({
     geometry: { label: label() },
   });
-  editor.execute(setShapeLabelCommand, { id: 'shape', label: label('') });
+  editor.execute(setShapeLabelCommand, { id: 'shape' });
   expect(editor.document.items.shape).toEqual(shape());
   expect(editor.getSession().selectedId).toBe('shape');
   editor.undo();
@@ -86,42 +85,58 @@ it('reflows labels on side resize while retaining typography and shape dimension
   editor.undo();
   expect(editor.document.items.shape).toEqual(item);
 });
-it.each(['rectangle', 'ellipse'] as const)(
-  'centers and uniformly fits %s labels through nested transforms',
-  (type) => {
-    const item = {
-      ...shape(type),
-      placement: { parentId: 'group', sortKey: 'a0' },
-      transform: rotation(0.4),
-      geometry: { width: 80, height: 40, label: label() },
-    };
-    const scene = createScene([
-      {
-        id: 'group',
-        type: 'group',
-        placement: { parentId: 'scene-root', sortKey: 'a0' },
-        transform: multiply(translation(300, 150), rotation(-0.8)),
-      },
-      item,
-    ]);
-    const layout = shapeLabelLayout(item)!,
-      projected = shapeLabelText(item)!;
-    expect(layout.transform[0]).toBe(layout.transform[3]);
-    expect(layout.transform[0]).toBeLessThan(1);
-    const center = {
-      x: layout.geometry.width / 2,
-      y: layout.geometry.height / 2,
-    };
-    const projectedWorld = multiply(
-      worldMatrix(scene, 'group'),
-      projected.transform
-    );
-    const actual = transformPoint(projectedWorld, center),
-      expected = transformPoint(worldMatrix(scene, 'shape'), { x: 40, y: 20 });
-    expect(actual.x).toBeCloseTo(expected.x);
-    expect(actual.y).toBeCloseTo(expected.y);
+
+it('preserves empty and host-defined label payloads until explicitly cleared', () => {
+  const editor = createGraphicsEditor([shape()]);
+  cleanups.push(editor.dispose);
+  for (const content of ['', ' ', '<host-text>Label</host-text>']) {
+    editor.execute(setShapeLabelCommand, {
+      id: 'shape',
+      label: label(content),
+    });
+    expect(editor.document.items.shape).toMatchObject({
+      geometry: { label: { content } },
+    });
   }
-);
+  editor.execute(setShapeLabelCommand, { id: 'shape' });
+  expect(editor.document.items.shape).toEqual(shape());
+});
+it.each([
+  'rectangle',
+  'ellipse',
+] as const)('centers and uniformly fits %s labels through nested transforms', (type) => {
+  const item = {
+    ...shape(type),
+    placement: { parentId: 'group', sortKey: 'a0' },
+    transform: rotation(0.4),
+    geometry: { width: 80, height: 40, label: label() },
+  };
+  const scene = createScene([
+    {
+      id: 'group',
+      type: 'group',
+      placement: { parentId: 'scene-root', sortKey: 'a0' },
+      transform: multiply(translation(300, 150), rotation(-0.8)),
+    },
+    item,
+  ]);
+  const layout = shapeLabelLayout(item)!,
+    projected = shapeLabelText(item)!;
+  expect(layout.transform[0]).toBe(layout.transform[3]);
+  expect(layout.transform[0]).toBeLessThan(1);
+  const center = {
+    x: layout.geometry.width / 2,
+    y: layout.geometry.height / 2,
+  };
+  const projectedWorld = multiply(
+    worldMatrix(scene, 'group'),
+    projected.transform
+  );
+  const actual = transformPoint(projectedWorld, center),
+    expected = transformPoint(worldMatrix(scene, 'shape'), { x: 40, y: 20 });
+  expect(actual.x).toBeCloseTo(expected.x);
+  expect(actual.y).toBeCloseTo(expected.y);
+});
 it('keeps ordinary click-through while text gestures enter unfilled shapes and painted labels select their owner', () => {
   const editor = createGraphicsEditor([shape()]);
   cleanups.push(editor.dispose);
@@ -140,7 +155,7 @@ it('rejects invalid and unsafe label data at the document boundary', () => {
   for (const invalid of [
     { ...label(), height: NaN },
     { ...label(), fontSize: -1 },
-    { ...label(), content: plainRichText('x'.repeat(100001)) },
+    { ...label(), content: 'x'.repeat(2_000_001) },
   ]) {
     expect(
       rectangleDefinition.validateGeometry({ ...item.geometry, label: invalid })

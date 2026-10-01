@@ -1,20 +1,32 @@
-# Graphics editor architecture — discussion draft
+# Graphics editor architecture — original design and current decisions
 
-Current feature gaps and proposed next checkpoints: [Graphics and Canvas parity plan](GRAPHICS_PARITY.md)
-(source audit 2026-09-24).
+Status updated 2026-09-28. The primary progress index and proposed next checkpoints
+are in [Graphics and Canvas parity](GRAPHICS_PARITY.md). This document retains the
+2026-09-23 design/research rationale; its initial phases and rectangle-only scope
+are historical, not the current backlog. Current contracts live in the
+[graphics README](../packages/graphics/README.md), [scene foundation](GRAPHICS_SCENE_FOUNDATION.md)
+and [Loro adapter notes](../packages/graphics/src/loro/README.md).
 
-Current implementation: [Graphics scene foundation](GRAPHICS_SCENE_FOUNDATION.md).
-The local tree and affine-transform core, nested-scene tester and demo adaptation
-are implemented. This supersedes the initial flat rectangle scope below. An experimental
-two-peer Loro adapter and visual playground now exercise ordered trees and local
-undo; see [adapter notes](../packages/graphics/src/loro/README.md). Durable persistence
-and SyncService integration remain unimplemented. The
-playgrounds use one unversioned model with disposable seed scripts. Versioning and
-migration proposals below apply to future durable documents, not playground data.
+Implemented: `@macro-inc/graphics` pure TS tree/affine/command/selection/history
+core; browser and keyed Solid adapters; stable sibling ordering; local Canvas Next
+with pencil, rich text/shape labels/mentions, bound connectors, media, interactive
+document cards and full document/legacy-canvas embeds. Shared controls, transform
+interactions, pencil cache reuse and viewport-based Fit Scene are in place.
 
-Status: proposal, not an approved implementation specification. Based on a source
-review on 2026-09-23; no runtime verification was performed. Package names are
-provisional. Open product decisions are listed at the end.
+Decisions now made: TS is the type source; feature registration is explicit and
+centrally compiled; Canvas Next owns Lexical and stores its serialized tree as one
+whole-string LWW value. Graphics treats that content as opaque; Canvas Next
+owns the Lexical codec, validation and empty-content decisions. There is no
+character-level collaboration. The optional LoroTree backend has native local
+undo and isolated ephemeral awareness. Its visual peer demo is still smaller than
+Canvas Next and does not yet validate the full mixed-content editor.
+
+Canvas Next now has gated version 2 JSON persistence, frontend legacy migration
+and document-level read-only enforcement. SyncService wiring and collaboration
+remain follow-up work. The standalone playgrounds use an unversioned model and disposable
+seed scripts. The Canvas Next demo has local debug storage; real Canvas Next
+documents have versioned JSON at the durable boundary. Embedded documents keep
+their existing sync independently of the outer canvas.
 
 ## Goals
 
@@ -25,7 +37,7 @@ room for slides and DOM-oriented design tools. Make features documented, typed
 plugins. TypeScript declarations own public types; runtime codecs validate external
 data. Design collaboration semantics now, with an explicit Loro/SyncService path.
 
-## What exists today
+## Legacy source audit (2026-09-23)
 
 | Area | Current implementation | Implication |
 | --- | --- | --- |
@@ -76,7 +88,8 @@ per tool. Keep product composition in the web feature architecture described in
 
 **Document:** durable records, stable IDs, containment and sibling ordering,
 geometry, styles, connector bindings, asset references and plugin-owned content.
-Use explicit document format and record versions. Export from document state,
+Introduce format versions only at durable/exchange boundaries; current playground
+documents remain unversioned. Export from document state,
 never visibility, mounted components or selection.
 
 **Editing session:** selection, camera, active tool, gesture state, snapping,
@@ -130,10 +143,11 @@ Tools are state machines consuming normalized pointer/key inputs, independent
 of `PointerEvent`. Browser adapters own pointer capture, focus, IME, clipboard,
 drag/drop and coordinate measurement. Tools create commands and preview overlays.
 
-Default gesture policy: pointer movement updates a session overlay; pointer-up
-commits one semantic transaction; Escape drops the overlay. During a remote edit,
-rebase a translation intent against the latest record; cancel if its target was
-deleted. Specify separate resize, reparent and text policies rather than applying
+Current gesture policy: pointer movement updates a session overlay; pointer-up
+commits one semantic transaction; Escape drops the overlay. The experimental Loro
+adapter cancels active drawing/transforms on incoming commits. Rebasing translation
+intent against the latest record is a possible future policy, not implemented.
+Specify separate resize, reparent and text policies rather than applying
 one generic rebase. Optional live drag previews travel through awareness. If
 durable intermediate commits are required later, add explicit history grouping
 and cancellation semantics instead of broadcasting inverse snapshots.
@@ -150,6 +164,12 @@ affected paths in a Solid store inside `batch`. Render stable IDs through keyed
 components; look up current records reactively. Unchanged entities must not remount
 when another entity moves. A renderer registry maps kinds to Solid components.
 
+Current adapter: document notifications still publish whole snapshots. A reconciled
+store serves fine-grained UI reads, while an immutable snapshot signal serves
+geometry queries/rendering so brush caches retain their identities. Move/rotation
+previews retain unchanged geometry; per-item memos suppress unchanged render work.
+Affected-ID commit batches and general incremental scene queries remain future work.
+
 Keep semantic order independent of the renderer's visible-ID list. Spatial culling
 must not remove records from persistence. Pin focused editors during culling and
 test selection portals, rich text focus, nested canvases and image resource cleanup.
@@ -162,6 +182,11 @@ an editor. A runtime third-party marketplace would require a separate isolation,
 permissions and compatibility design.
 
 Each plugin declares an ID, version, dependencies and contributions:
+
+This is the fuller proposed contract. The implemented extension API is narrower:
+typed `ShapeDefinition`, a separate mapped Solid renderer registry, typed commands
+and explicit gesture modules. Per-editor core registry composition, dependency
+resolution, unknown-kind preservation and migrations are not implemented yet.
 
 | Pure core contribution | Separate browser/Solid contribution |
 | --- | --- |
@@ -213,10 +238,17 @@ Candidate mapping to validate:
   maps/lists/movable lists/text, but no tree schema; direct bindings or a focused
   Mirror extension may be required. Avoid inventing a parent-map scheme that can
   create cycles under concurrent reparenting.
-- Text needs a dedicated decision. Current canvas text is Markdown passed through
-  Lexical. Whole-string replacement is insufficient for collaborative typing.
-  Reuse an appropriate Lexical/Loro binding or design a text adapter; do not assume
-  putting serialized rich text in LoroText solves editor state and cursor mapping.
+- Text decision (supersedes the original character-collaboration proposal): keep
+  the exact stringified Lexical tree in one LWW content register, separate from
+  pose. Canvas Next uses the shared Markdown builder without a Markdown round trip.
+  Concurrent completed edits choose one whole tree; local drafts and typing undo
+  belong to Lexical. No character CRDT or remote text carets are planned now.
+  Lexical is application-owned: serialization, format validation, content/empty
+  detection, editing, rendering and DOM measurement stay there. Graphics owns
+  opaque string content, text/label geometry and layout through an injected
+  measurer. The collaboration adapter stores the string without interpreting it.
+  Canvas Next owns this codec in `core/text-codec.ts`; graphics fallbacks display
+  literal strings and hosts with encoded content supply rendering and measurement.
 - History in collaboration uses local-operation undo with explicit gesture and
   text-edit boundaries. Remote changes never enter local undo as snapshots.
 - Presence, selections, cursors and live previews are ephemeral awareness.
@@ -252,7 +284,15 @@ legacy storage; after new edits, rollback requires an explicit current-state exp
 or compatible reader, not reopening a stale backup. Incompatible CRDT schema
 migrations need version-gated coordination, not per-client load-time rewrites.
 
-## Implementation sequence and exit criteria
+## Original implementation sequence and exit criteria
+
+Current phase assessment: pure model/commands and the Solid slice are built, but
+the persistence portions of phases 1–3 are not. Phase 4 has the main local content
+and editing flows, with imports/exports and document-host integration outstanding.
+Phase 5 has the centered-image rectangle prototype only. Phase 6 has the optional
+Loro backend and local peer harness, not production rollout. Phase 7 is unstarted.
+Use the [current checkpoint table](GRAPHICS_PARITY.md#5-recommended-checkpoint-sequence)
+and [next-step choices](GRAPHICS_PARITY.md#6-next-checkpoints-to-choose-from) for planning.
 
 | Phase | Deliverable | Exit criterion |
 | --- | --- | --- |
@@ -286,17 +326,20 @@ estimating a schedule; this draft supplies sequencing rather than invented dates
 ## Decisions to resolve together
 
 1. Must live collaboration ship with the first replacement canvas, or follow parity?
-2. Are plugins internal compile-time modules initially, or externally loaded code?
+2. Initial extension model is settled: internal compile-time modules. Per-product
+   core registry composition can follow demonstrated needs; external loading is deferred.
 3. Is image markup a standalone document, an attachment-associated surface, or both?
    Default proposal: reusable embedded surface with an optional standalone host.
 4. Should comments reuse Macro threads? Default: yes, via anchored references.
-5. What text feature set is shared across annotation, whiteboard and slides?
+5. Rich text/mentions and shape labels exist; whole-string LWW is settled. Which
+   subset belongs in the annotation and future slides presets remains open.
 6. Does the first whiteboard release target current parity or an agreed expanded
    feature set? Which large-document and touch workflows are release requirements?
 
-Recommended first implementation unit: characterization fixtures plus a small
-framework-free document/transaction slice, rendered by the existing Solid shape
-component, alongside the Loro semantics spike. Do not begin by relocating hooks.
+The first implementation slice and Loro spike are complete. Current user priority:
+[bidirectional legacy bridge and canvas colors](CANVAS_LEGACY_BRIDGE.md). Full peer
+UI expansion is deferred. Existing JSON storage is a possible integration path;
+production Loro migration is not a prerequisite for testing the new editor on old data.
 
 ## Follow-up: multiplayer, undo and schema research
 
@@ -358,7 +401,7 @@ turning every nested property into its own mergeable field.
 | Geometry | One coherent value initially: position, size, rotation | Concurrent resize/move selects coherent geometry; trades away merging independent geometric edits. Prototype before fixing this boundary. |
 | Placement | Ordered tree operation, or atomic parent/order value | A plain parent/order map still needs cycle resolution. |
 | Connector endpoint | One discriminated value per end | Target, anchor and fallback cannot merge into an invalid combination. |
-| Text | Dedicated text/editor representation | Character editing and rich-text structure have their own binding and undo needs. |
+| Text | One exact serialized Lexical string, separate from pose | Chosen whole-content LWW policy; local editor owns typing undo, backend owns completed-edit undo. |
 | Freehand path | Atomic completed path initially | Collaborative point-level editing is unnecessary unless explicitly required. |
 | Asset reference | Stable ID; shared metadata separately | Loading state and bytes do not belong in the editable item record. |
 | Plugin properties | Declared merge units | Extensibility must include collaboration semantics, not only TS types and renderers. |
@@ -400,7 +443,10 @@ Check both convergence and meaningful geometry/reference invariants. Specify the
 expected visible outcome for every test first. Treat the CRDT mapping as a decision
 produced by this experiment; the kernel and plugin API should not freeze it earlier.
 
-## First increment: rectangle playground
+## Historical first increment: rectangle playground (completed and superseded)
+
+The following records the original deliberately small scope. It is not a list of
+current limitations: hierarchy, transforms, content types and Loro have since landed.
 
 Requested scope: a new workspace package, exercised inside the existing web app
 through the split component registry. Infinite surface, selection and rectangle

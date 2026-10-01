@@ -17,6 +17,7 @@ export {
   createConnectorInteraction,
 } from './connector-interaction';
 export * from './connectors';
+export { dotGridLevels } from './dot-grid';
 export type { DrawingKind, DrawingModifiers, DrawingSample } from './drawing';
 export {
   createGraphicsEditor,
@@ -28,6 +29,7 @@ export {
 export * from './fragments';
 export * from './insert';
 export { type LayerOperation, reorderNodes } from './layering';
+export { fullyConnected, layoutBounds, layoutRoots } from './layout';
 export type {
   Appearance,
   Bounds,
@@ -52,6 +54,7 @@ export {
   type SortKey,
   sortKeysBetween,
 } from './ordering';
+export * from './radius';
 export * from './rich-text';
 export * from './scene';
 export type { TransformHandle, TransformModifiers } from './selection';
@@ -113,6 +116,7 @@ export {
   type TextMeasurer,
   textDefinition,
 } from './shapes/text';
+export { snapPoint, snapTranslation, snapValue } from './snapping';
 export { selectedShapeIds } from './style-selection';
 export * from './text-commands';
 export { textTargetAt } from './text-target';

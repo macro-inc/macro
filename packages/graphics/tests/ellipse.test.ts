@@ -1,18 +1,25 @@
 import { expect, it } from 'vitest';
 import {
+  around,
   boxHits,
+  corners,
   createGraphicsEditor,
   createScene,
   type EllipseItem,
+  enclosing,
   IDENTITY,
+  layoutBounds,
   type Matrix,
   multiply,
+  nodeCorners,
+  nudgeCommand,
   type Point,
   rotation,
   scaling,
   selectionFrame,
   transformPoint,
   translation,
+  worldBounds,
   worldMatrix,
 } from '../src/core';
 
@@ -26,6 +33,118 @@ const ellipse = (
   transform,
   geometry: { width: 200, height: 100 },
   appearance: { fill, stroke: 'black', strokeWidth: 0.1 },
+});
+
+it('keeps rotated circles tight in group bounds and preserves the local resize frame', () => {
+  const shape = {
+    ...ellipse('red', around({ x: 32, y: 32 }, rotation(Math.PI / 6))),
+    geometry: { width: 64, height: 64 },
+    placement: { parentId: 'group', sortKey: 'a0' },
+  };
+  const doc = createScene([
+    {
+      id: 'group',
+      type: 'group',
+      placement: { parentId: 'scene-root', sortKey: 'a0' },
+      transform: translation(200, 100),
+    },
+    shape,
+    {
+      ...shape,
+      id: 'second',
+      placement: { parentId: 'group', sortKey: 'a1' },
+      transform: translation(96, 0),
+    },
+  ]);
+  const expected = { x: 200, y: 100, width: 160, height: 64 };
+  for (const bounds of [
+    worldBounds(doc, 'group'),
+    layoutBounds(doc, 'group'),
+    selectionFrame(doc, ['group'])!.bounds,
+    selectionFrame(doc, ['ellipse', 'second'])!.bounds,
+  ]) {
+    for (const key of ['x', 'y', 'width', 'height'] as const)
+      expect(bounds[key]).toBeCloseTo(expected[key]);
+  }
+  const single = selectionFrame(doc, ['ellipse'])!;
+  expect(single.bounds).toEqual({ x: 0, y: 0, width: 64, height: 64 });
+  expect(single.corners).toEqual(nodeCorners(doc, 'ellipse'));
+});
+
+it('encloses affine ellipse extrema through nested transforms and preview overrides', () => {
+  const shape = {
+    ...ellipse('red', multiply(rotation(0.6), scaling(-1, 2))),
+    placement: { parentId: 'group', sortKey: 'a0' },
+  };
+  const doc = createScene([
+    {
+      id: 'group',
+      type: 'group',
+      placement: { parentId: 'scene-root', sortKey: 'a0' },
+      transform: [2, 0.3, 0.8, 0.5, 400, 200],
+    },
+    shape,
+  ]);
+  const editor = createGraphicsEditor(doc);
+  const frame = selectionFrame(doc, ['group'])!;
+  editor.beginTransform('group', frame.corners[2]!, 'se');
+  editor.updateTransform({
+    x: frame.bounds.x + frame.bounds.width * 1.5,
+    y: frame.bounds.y + frame.bounds.height * 1.5,
+  });
+  const overrides = editor.getSession().transform!.nodes;
+  for (const nodes of [{}, overrides]) {
+    const projected = nodes.ellipse ?? shape;
+    if (projected.type !== 'ellipse') throw new Error('Expected ellipse');
+    const { width, height } = projected.geometry;
+    const matrix = worldMatrix(doc, 'ellipse', nodes);
+    const sampled = enclosing(
+      Array.from({ length: 8192 }, (_, i) => {
+        const t = (i * Math.PI * 2) / 8192;
+        return transformPoint(matrix, {
+          x: (width / 2) * (1 + Math.cos(t)),
+          y: (height / 2) * (1 + Math.sin(t)),
+        });
+      })
+    );
+    const bounds = worldBounds(doc, 'group', nodes);
+    for (const key of ['x', 'y', 'width', 'height'] as const)
+      expect(bounds[key]).toBeCloseTo(sampled[key], 3);
+    expect(selectionFrame(doc, ['group'], nodes)!.corners).toEqual(
+      corners(bounds)
+    );
+  }
+  const resized = worldBounds(doc, 'group', overrides);
+  expect(resized.x).toBeCloseTo(frame.bounds.x);
+  expect(resized.y).toBeCloseTo(frame.bounds.y);
+  expect(resized.width).toBeCloseTo(frame.bounds.width * 1.5);
+  expect(resized.height).toBeCloseTo(frame.bounds.height * 1.5);
+  editor.commitTransform();
+  editor.undo();
+  expect(editor.document).toEqual(doc);
+  editor.dispose();
+});
+
+it('snaps ellipse moves and keyboard nudges to the same visible bounds', () => {
+  const shape = {
+    ...ellipse('red', multiply(translation(3, 5), rotation(0.6))),
+  };
+  const editor = createGraphicsEditor([shape], { snapUnit: 8 });
+  const before = editor.document;
+  editor.select(shape.id);
+  editor.beginTransform(shape.id, { x: 100, y: 100 });
+  editor.updateTransform({ x: 108, y: 108 });
+  const preview = worldBounds(
+    before,
+    shape.id,
+    editor.getSession().transform!.nodes
+  );
+  expect(preview.x / 8).toBeCloseTo(Math.round(preview.x / 8));
+  expect(preview.y / 8).toBeCloseTo(Math.round(preview.y / 8));
+  editor.cancelTransform();
+  editor.execute(nudgeCommand, { x: 8, y: 8 });
+  expect(worldBounds(editor.document, shape.id)).toEqual(preview);
+  editor.dispose();
 });
 
 it('picks the ellipse curve, lets its empty center through, and rejects bounding-box corners', () => {
@@ -182,7 +301,7 @@ it('groups, rotates, scales and reparents mixed shapes without losing ellipse id
     placement: { parentId: 'group' },
   });
   editor.undo();
-  expect(editor.document).toBe(beforeResize);
+  expect(editor.document).toEqual(beforeResize);
   worldMatrix(editor.document, 'ellipse').forEach((v, i) =>
     expect(v).toBeCloseTo(rotated[i]!)
   );

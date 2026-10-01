@@ -90,11 +90,11 @@ it('moves contiguous selections one sibling and leaves boundary no-ops out of un
   const reordered = editor.document;
   expect(children(reordered)).toEqual(['a', 'd', 'e', 'b', 'c']);
   editor.undo();
-  expect(editor.document).toBe(original);
+  expect(editor.document).toEqual(original);
   expect(editor.getSession().selectedIds).toEqual(['b', 'c']);
   expect(editor.getSession().canUndo).toBe(false);
   editor.redo();
-  expect(editor.document).toBe(reordered);
+  expect(editor.document).toEqual(reordered);
 });
 
 it('keeps groups contiguous and preserves unrelated keys across group, reparent and ungroup', () => {

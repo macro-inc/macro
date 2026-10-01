@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  alignCommand,
   type ConnectorAnchor,
   connectorDefinition,
   connectorDropTarget,
@@ -11,22 +12,30 @@ import {
   createGraphicsEditor,
   createScene,
   deleteSubtrees,
+  distributeCommand,
   duplicateNodes,
   freezeDocument,
   type GraphicsDocument,
+  groupNodes,
   hitTest,
   IDENTITY,
+  layoutBounds,
   multiply,
+  paintOrder,
   pasteFragment,
+  reorderNodes,
   resolveConnector,
   rotation,
   type ShapeItem,
   scaling,
+  selectionFrame,
   setConnectorCommand,
   transformPoint,
   translation,
+  worldBounds,
   worldMatrix,
 } from '../src/core';
+import { connectorWorldView } from '../src/core/connectors';
 import {
   connectorHead,
   connectorPath,
@@ -64,6 +73,21 @@ const link = (
   },
 });
 const scene = () => createScene([rect(), rect('b', 300), link()]);
+const pencil = (): ShapeItem<'pencil'> => ({
+  id: 'ink',
+  type: 'pencil',
+  placement: { parentId: 'scene-root', sortKey: 'a3' },
+  transform: IDENTITY,
+  geometry: {
+    points: [
+      [0, 0, 0.5],
+      [50, 40, 0.5],
+      [100, 80, 0.5],
+    ],
+    simulatePressure: false,
+  },
+  appearance: { fill: 'transparent', stroke: 'black', strokeWidth: 4 },
+});
 const resolved = (doc: GraphicsDocument) =>
   resolveConnector(doc, doc.items.link as ShapeItem<'connector'>).geometry;
 const close = (
@@ -75,6 +99,44 @@ const close = (
 };
 
 describe('connector anchors', () => {
+  it('skips pencil ink and its bounds, including ink above an eligible shape', () => {
+    const doc = createScene([pencil()]);
+    expect(connectorPorts(doc)).toEqual([]);
+    for (const point of [
+      { x: 50, y: 40 },
+      { x: 25, y: 50 },
+    ]) {
+      expect(connectorTargetAt(doc, point, 14)).toBeUndefined();
+      expect(connectorDropTarget(doc, point, 14)).toBeUndefined();
+    }
+    expect(
+      connectorTargetAt(createScene([rect(), pencil()]), { x: 50, y: 40 }, 14)
+        ?.targetId
+    ).toBe('a');
+  });
+  it('loads old pencil bindings using stored endpoints without following the ink', () => {
+    const connector = link();
+    const doc = createScene([
+      pencil(),
+      {
+        ...connector,
+        geometry: {
+          ...connector.geometry,
+          start: {
+            point: { x: 50, y: 40 },
+            binding: { targetId: 'ink', anchor: 'center' },
+          },
+          end: { point: { x: 300, y: 40 } },
+        },
+      },
+    ]);
+    expect(resolved(doc).start.point).toEqual({ x: 50, y: 40 });
+    expect(
+      resolveConnector(doc, doc.items.link as ShapeItem<'connector'>, {
+        ink: { ...pencil(), transform: translation(200, 100) },
+      }).geometry.start.point
+    ).toEqual({ x: 50, y: 40 });
+  });
   it('offers five ports per shape with screen-independent world positions and frontmost ties', () => {
     const doc = scene(),
       ports = connectorPorts(doc);
@@ -264,7 +326,7 @@ describe('document reference lifecycle', () => {
     });
     expect(resolved(editor.document).start.binding).toBeUndefined();
     editor.undo();
-    expect(editor.document).toBe(before);
+    expect(editor.document).toEqual(before);
   });
   it('moving a connector body leaves bound ends fixed and moves free ends', () => {
     const item = link(),
@@ -364,6 +426,39 @@ describe('document reference lifecycle', () => {
 });
 
 describe('endpoint interaction', () => {
+  it('never binds either end to pencil strokes when creating or reconnecting', () => {
+    const editor = createGraphicsEditor([pencil()]);
+    cleanups.push(editor.dispose);
+    const op = createConnectorInteraction({
+      getDocument: () => editor.document,
+      commit: (item) => editor.execute(setConnectorCommand, item),
+      onChange: () => {},
+    });
+    op.hover({ x: 50, y: 40 }, 14);
+    expect(op.getTarget()).toBeUndefined();
+    op.begin(
+      'link',
+      { x: 25, y: 20 },
+      rect().appearance,
+      { route: 'straight', startHead: 'none', endHead: 'arrow' },
+      14
+    );
+    op.update({ x: 75, y: 60 }, 14);
+    expect(op.getState()?.dropTarget).toBeUndefined();
+    expect(op.commit()).toBe(true);
+    const geometry = resolved(editor.document);
+    expect(geometry.start).toEqual({ point: { x: 25, y: 20 } });
+    expect(geometry.end).toEqual({ point: { x: 75, y: 60 } });
+    for (const endpoint of ['start', 'end'] as const) {
+      op.edit('link', endpoint);
+      op.update({ x: 50, y: 40 }, 14);
+      expect(op.getTarget()).toBeUndefined();
+      op.commit();
+      expect(resolved(editor.document)[endpoint]).toEqual({
+        point: { x: 50, y: 40 },
+      });
+    }
+  });
   it('keeps previews outside history, supports both handles, cancels, and commits once', () => {
     const editor = createGraphicsEditor([rect(), rect('b', 300)]);
     cleanups.push(editor.dispose);
@@ -388,7 +483,7 @@ describe('endpoint interaction', () => {
     expect(op.commit()).toBe(true);
     expect(resolved(editor.document).end.binding?.targetId).toBe('b');
     editor.undo();
-    expect(editor.document).toBe(before);
+    expect(editor.document).toEqual(before);
     editor.redo();
     const committed = editor.document;
     op.edit('link', 'start');
@@ -400,7 +495,7 @@ describe('endpoint interaction', () => {
     op.commit();
     expect(resolved(editor.document).start.binding?.anchor).toBe('bottom');
     editor.undo();
-    expect(editor.document).toBe(committed);
+    expect(editor.document).toEqual(committed);
     op.edit('link', 'end');
     op.update({ x: 500, y: 60 }, 14, true);
     op.commit();
@@ -589,4 +684,114 @@ it('uses the same core target before pointerdown, at the starting endpoint, and 
     });
     op.cancel();
   }
+});
+
+it('paints a bound connector above both endpoints after stacking or grouping changes', () => {
+  let doc = scene();
+  doc = reorderNodes(doc, ['link'], 'back');
+  expect(paintOrder(doc).indexOf('link')).toBeGreaterThan(
+    paintOrder(doc).indexOf('a')
+  );
+  expect(paintOrder(doc).indexOf('link')).toBeGreaterThan(
+    paintOrder(doc).indexOf('b')
+  );
+  doc = groupNodes(doc, ['a', 'link'], 'group');
+  doc = reorderNodes(doc, ['b'], 'front');
+  expect(paintOrder(doc).indexOf('link')).toBeGreaterThan(
+    paintOrder(doc).indexOf('b')
+  );
+});
+it('excludes bound connectors from alignment and distribution, retaining their bindings', () => {
+  const editor = createGraphicsEditor(scene());
+  editor.select('a');
+  editor.toggleSelection('b');
+  editor.toggleSelection('link');
+  const connector = editor.document.items.link;
+  editor.execute(alignCommand, 'left');
+  expect(worldMatrix(editor.document, 'a')[4]).toBe(0);
+  expect(worldMatrix(editor.document, 'b')[4]).toBe(0);
+  expect(editor.document.items.link).toEqual(connector);
+  editor.undo();
+  const before = editor.document;
+  editor.execute(distributeCommand, 'horizontal');
+  expect(editor.document).toBe(before); // two eligible objects, not three
+  editor.dispose();
+});
+it('ignores a fully bound connector extending outside a selected group in layout bounds', () => {
+  const grouped = groupNodes(scene(), ['a', 'link'], 'group');
+  expect(layoutBounds(grouped, 'group')).toEqual({
+    x: 0,
+    y: 0,
+    width: 100,
+    height: 80,
+  });
+});
+it('keeps partially attached connectors in layout calculations', () => {
+  const doc = scene();
+  const connector = link();
+  const partial = freezeDocument({
+    ...doc,
+    items: {
+      ...doc.items,
+      link: {
+        ...connector,
+        geometry: { ...connector.geometry, end: { point: { x: 600, y: 40 } } },
+      },
+    },
+  });
+  const grouped = groupNodes(partial, ['a', 'link'], 'group');
+  expect(layoutBounds(grouped, 'group').width).toBeGreaterThan(100);
+});
+
+it('renders connected strokes and heads in world units after connector or group scaling', () => {
+  const base = scene();
+  const grouped = groupNodes(base, ['a', 'b', 'link'], 'group');
+  for (const parentId of ['link', 'group']) {
+    const item = grouped.items[parentId]!;
+    if (item.type === 'surface') throw new Error('expected transformable item');
+    const document = {
+      ...grouped,
+      items: {
+        ...grouped.items,
+        [parentId]: { ...item, transform: scaling(4, 2) },
+      },
+    };
+    const resolved = resolveConnector(
+      document,
+      document.items.link as ShapeItem<'connector'>
+    );
+    const world = worldMatrix(document, 'link');
+    const view = connectorWorldView(resolved, world);
+    expect(view.transform).toEqual(IDENTITY);
+    expect(worldBounds(document, 'link')).toEqual(
+      connectorDefinition.bounds(view)
+    );
+    expect(selectionFrame(document, ['link'])!.bounds).toEqual(
+      connectorDefinition.bounds(view)
+    );
+    expect(view.appearance).toEqual(resolved.appearance);
+    close(
+      view.geometry.start.point,
+      transformPoint(world, resolved.geometry.start.point)
+    );
+    close(
+      view.geometry.end.point,
+      transformPoint(world, resolved.geometry.end.point)
+    );
+    expect(
+      Math.hypot(
+        view.geometry.start.direction!.x,
+        view.geometry.start.direction!.y
+      )
+    ).toBeCloseTo(1);
+  }
+});
+
+it('bounds smooth curves at their extrema rather than their control points', () => {
+  const route = connectorPath(
+    { point: { x: 0, y: 0 }, direction: { x: 1, y: 0 } },
+    { point: { x: 0, y: 200 }, direction: { x: 1, y: 0 } },
+    'smooth'
+  );
+  expect(route.bounds).toEqual({ x: 0, y: 0, width: 75, height: 200 });
 });

@@ -84,6 +84,7 @@ export function ShapeSelectionOutline<K extends ShapeKind>(
     transform: Matrix;
     color: string;
     hovered?: boolean;
+    ref?: (element: SVGGElement) => void;
   }
 ) {
   // The mapped registry pairs every shape kind with its typed outline.
@@ -91,6 +92,7 @@ export function ShapeSelectionOutline<K extends ShapeKind>(
     outlines[props.item.type] as Component<OutlineProps<K>>;
   return (
     <g
+      ref={props.ref}
       data-graphics-selection-outline={
         props.hovered ? undefined : props.item.id
       }

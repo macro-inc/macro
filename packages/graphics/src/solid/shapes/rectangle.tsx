@@ -1,5 +1,5 @@
 import type { Component } from 'solid-js';
-import { resolveAppearance } from '../../core/appearance';
+import { resolveAppearance, strokeDasharray } from '../../core/appearance';
 import type { ShapeViewProps } from '../shape-renderers';
 import { ShapeLabelView } from './label';
 import type { TextContentView } from './text';
@@ -22,14 +22,13 @@ export const RectangleView: Component<
             props.item.geometry.width / 2,
             props.item.geometry.height / 2
           )}
-          fill={props.preview ? 'none' : style().fill}
+          fill={style().fill}
           stroke={style().stroke}
           stroke-linejoin="round"
-          stroke-width={props.preview ? 2 / props.scale : style().strokeWidth}
+          stroke-linecap="round"
+          stroke-dasharray={strokeDasharray(props.item.appearance)}
+          stroke-width={style().strokeWidth}
           opacity={style().opacity}
-          stroke-dasharray={
-            props.preview ? `${4 / props.scale} ${4 / props.scale}` : undefined
-          }
         />
       </svg>
       <ShapeLabelView

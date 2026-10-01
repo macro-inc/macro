@@ -24,6 +24,9 @@ export type ShapeDefinition<K extends ShapeKind> = Readonly<{
   validateGeometry(value: unknown): value is ShapeGeometryMap[K];
   freezeGeometry(geometry: ShapeGeometryMap[K]): ShapeGeometryMap[K];
   bounds(item: ShapeItem<K>): Bounds;
+  /** Tight axis-aligned geometry bounds after a transform. Defaults to the
+   * transformed local box; curved shapes can provide their actual extrema. */
+  transformedBounds?(item: ShapeItem<K>, transform: Matrix): Bounds;
   hitTest(
     item: ShapeItem<K>,
     localPoint: Point,

@@ -1,5 +1,5 @@
 import { createMemo, For, Show } from 'solid-js';
-import { resolveAppearance } from '../../core/appearance';
+import { resolveAppearance, strokeDasharray } from '../../core/appearance';
 import {
   connectorHead,
   connectorPath,
@@ -35,7 +35,11 @@ export function ConnectorView(props: ShapeViewProps<'connector'>) {
         stroke-linejoin="round"
         fill="none"
       >
-        <path d={route().path} data-graphics-connector-path={props.item.id} />
+        <path
+          stroke-dasharray={strokeDasharray(props.item.appearance)}
+          d={route().path}
+          data-graphics-connector-path={props.item.id}
+        />
         <For each={['start', 'end'] as const}>
           {(end) => {
             const headStyle = () =>

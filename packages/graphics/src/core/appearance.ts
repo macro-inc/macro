@@ -3,6 +3,7 @@ import type { Appearance } from './model';
 export const resolveAppearance = (appearance: Appearance) => ({
   ...appearance,
   strokeWidth: appearance.strokeWidth ?? 2,
+  strokeStyle: appearance.strokeStyle ?? 'solid',
   opacity: appearance.opacity ?? 1,
   cornerRadius: appearance.cornerRadius ?? 0,
 });
@@ -29,5 +30,18 @@ export function validAppearance(value: unknown): value is Appearance {
     )
       return false;
   }
+  if (
+    'strokeStyle' in value &&
+    value.strokeStyle !== undefined &&
+    !['solid', 'dashed', 'dotted'].includes(value.strokeStyle as string)
+  )
+    return false;
   return true;
+}
+
+export function strokeDasharray(appearance: Appearance): string | undefined {
+  const { strokeWidth, strokeStyle } = resolveAppearance(appearance);
+  if (strokeStyle === 'dashed') return `${strokeWidth * 4} ${strokeWidth * 3}`;
+  if (strokeStyle === 'dotted') return `0 ${strokeWidth * 2.5}`;
+  return undefined;
 }

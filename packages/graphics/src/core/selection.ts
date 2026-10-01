@@ -1,5 +1,6 @@
 import {
   around,
+  corners,
   enclosing,
   inverse,
   multiply,
@@ -11,11 +12,16 @@ import {
 } from './affine';
 import { duplicateNodes, type IdFactory } from './fragments';
 import type { Bounds, GraphicsDocument, GraphicsItem, Point } from './model';
+import {
+  dragRectangleRadius,
+  isRadiusHandle,
+  type RadiusHandle,
+} from './radius';
 import { type ResizeHandle, type ResizeModifiers, resizeBox } from './resize';
 import {
   boxHits,
   deleteSubtrees,
-  nodeCorners,
+  nodeBoundsPoints,
   resolvedShape,
   roots,
   type SceneOverrides,
@@ -25,6 +31,7 @@ import {
 import { type SelectionFrame, selectionFrame } from './selection-frame';
 import { isShape, shapeDefinition, shapePayload } from './shapes/registry';
 import type { TextMeasurer } from './shapes/text';
+import { snapTranslation } from './snapping';
 import { regenerateScaledShapes, stretchShapes } from './stretch';
 
 export type {
@@ -33,7 +40,7 @@ export type {
   ResizeHandle,
   ResizeModifiers,
 } from './resize';
-export type TransformHandle = ResizeHandle | 'rotate';
+export type TransformHandle = ResizeHandle | RadiusHandle | 'rotate';
 export type TransformModifiers = ResizeModifiers &
   Readonly<{ snapRotation?: boolean; constrainAxis?: boolean }>;
 export type SelectionState = Readonly<{
@@ -42,7 +49,8 @@ export type SelectionState = Readonly<{
   box?: Bounds;
   transform?: Readonly<{
     id: string;
-    kind: 'move' | 'resize' | 'scale' | 'rotate';
+    kind: 'move' | 'resize' | 'scale' | 'rotate' | 'radius';
+    handle?: TransformHandle;
     geometry: Bounds;
     geometries: Readonly<Record<string, Bounds>>;
     nodes: SceneOverrides;
@@ -51,6 +59,7 @@ export type SelectionState = Readonly<{
 }>;
 export type SelectionHost = Readonly<{
   measureText?: TextMeasurer;
+  getSnapUnit?: () => number | undefined;
   getDocument: () => GraphicsDocument;
   commitDocument: (document: GraphicsDocument) => void;
   cancelDrawing: () => void;
@@ -94,8 +103,10 @@ export function createSelection(host: SelectionHost) {
       transform: gesture
         ? Object.freeze({
             id: gesture.id,
-            kind:
-              gesture.handle === 'rotate'
+            handle: gesture.handle,
+            kind: isRadiusHandle(gesture.handle)
+              ? 'radius'
+              : gesture.handle === 'rotate'
                 ? 'rotate'
                 : gesture.handle
                   ? gesture.targets.length > 1 ||
@@ -103,7 +114,9 @@ export function createSelection(host: SelectionHost) {
                     ? 'scale'
                     : 'resize'
                   : 'move',
-            geometry: worldBounds(gesture.base, gesture.id, gesture.nodes),
+            geometry:
+              geometries[gesture.id] ??
+              worldBounds(gesture.base, gesture.id, gesture.nodes),
             geometries: Object.freeze(geometries),
             nodes: gesture.nodes,
             document: gesture.originalSelection ? gesture.base : undefined,
@@ -139,7 +152,17 @@ export function createSelection(host: SelectionHost) {
     const { base, origin, handle, pivot, targets, id, frame } = gesture;
     const node = resolvedShape(base, id) ?? base.items[id];
     const nodes: Record<string, GraphicsItem> = Object.create(null);
-    if (
+    const unit = host.getSnapUnit?.();
+    if (isRadiusHandle(handle)) {
+      if (node?.type !== 'rectangle') return;
+      nodes[id] = dragRectangleRadius(
+        node,
+        worldMatrix(base, id),
+        handle,
+        origin,
+        point
+      );
+    } else if (
       handle &&
       handle !== 'rotate' &&
       (targets.length > 1 || node?.type === 'group')
@@ -159,7 +182,11 @@ export function createSelection(host: SelectionHost) {
           x: end.x - start.x,
           y: end.y - start.y,
         },
-        { ...modifiers, proportional }
+        {
+          ...modifiers,
+          proportional,
+          snap: unit === undefined ? undefined : { x: unit, y: unit },
+        }
       );
       const delta = multiply(
         frame.transform,
@@ -198,14 +225,33 @@ export function createSelection(host: SelectionHost) {
         : point;
       const end = transformPoint(inverse(world), endWorld),
         start = transformPoint(inverse(world), origin);
-      const resized = resizeBox(
-        localBounds,
-        handle,
-        { x: end.x - start.x, y: end.y - start.y },
-        node.type === 'text' && handle !== 'e' && handle !== 'w'
-          ? { ...modifiers, proportional: true, proportionalFit: 'project' }
-          : modifiers
-      );
+      const delta = { x: end.x - start.x, y: end.y - start.y };
+      const resizeModifiers = {
+        ...modifiers,
+        ...(node.type === 'text' && handle !== 'e' && handle !== 'w'
+          ? { proportional: true, proportionalFit: 'project' as const }
+          : {}),
+      };
+      let resized = resizeBox(localBounds, handle, delta, {
+        ...resizeModifiers,
+        snap:
+          unit === undefined
+            ? undefined
+            : {
+                x: unit / Math.hypot(world[0], world[1]),
+                y: unit / Math.hypot(world[2], world[3]),
+              },
+      });
+      if (surface && unit !== undefined) {
+        const matrix = multiply(world, resized.transform);
+        const outside = corners(localBounds).some((point) => {
+          const { x, y } = transformPoint(matrix, point);
+          return x < 0 || y < 0 || x > surface.width || y > surface.height;
+        });
+        // The bounded surface takes priority over a grid step past its edge.
+        if (outside)
+          resized = resizeBox(localBounds, handle, delta, resizeModifiers);
+      }
       const { width, height } = resized.bounds;
       nodes[id] = {
         ...definition.resize(
@@ -225,9 +271,19 @@ export function createSelection(host: SelectionHost) {
       let dx = point.x - origin.x,
         dy = point.y - origin.y;
       const horizontal = Math.abs(dx) >= Math.abs(dy);
+      if (!handle && unit !== undefined) {
+        // A single shape's frame is local; moving always snaps in world space.
+        const anchor =
+          targets.length === 1 && isShape(base.items[targets[0]!])
+            ? worldBounds(base, targets[0]!)
+            : frame.bounds;
+        const snapped = snapTranslation(anchor, { x: dx, y: dy }, unit);
+        dx = snapped.x;
+        dy = snapped.y;
+      }
       if (!handle && base.surface) {
         const bounds = enclosing(
-          targets.flatMap((key) => nodeCorners(base, key))
+          targets.flatMap((key) => nodeBoundsPoints(base, key))
         );
         dx = Math.max(
           -bounds.x,
@@ -375,6 +431,12 @@ export function createSelection(host: SelectionHost) {
         ![point.x, point.y].every(Number.isFinite)
       )
         return false;
+      if (
+        isRadiusHandle(handle) &&
+        (node.type !== 'rectangle' ||
+          (selectedIds.includes(id) && selectedIds.length !== 1))
+      )
+        return false;
       if (!selectedIds.includes(id)) select(id);
       else {
         cancelTransform();
@@ -420,7 +482,9 @@ export function createSelection(host: SelectionHost) {
           !sameMatrix(old.transform, node.transform) ||
           (isShape(old) &&
             isShape(node) &&
-            !shapeDefinition(node.type).sameGeometry(old, node))
+            (!shapeDefinition(node.type).sameGeometry(old, node) ||
+              (old.appearance.cornerRadius ?? 0) !==
+                (node.appearance.cornerRadius ?? 0)))
         );
       });
       if (!changed) {

@@ -36,30 +36,50 @@ export function sortKeysBetween(
   return generateNKeysBetween(lower, upper, count);
 }
 
+const childIndexes = new WeakMap<
+  GraphicsDocument['items'],
+  ReadonlyMap<string, readonly string[]>
+>();
+const noChildren: readonly string[] = Object.freeze([]);
+
 export function children(
   doc: GraphicsDocument,
   parentId = doc.rootId
 ): readonly string[] {
-  return Object.values(doc.items)
-    .filter(
-      (node) => node.type !== 'surface' && node.placement.parentId === parentId
-    )
-    .sort((a, b) => {
-      if (a.type === 'surface' || b.type === 'surface') return 0;
-      const left = a.placement.sortKey,
-        right = b.placement.sortKey;
-      // Deliberately use code-unit comparison, never localeCompare.
-      return left < right
-        ? -1
-        : left > right
-          ? 1
-          : a.id < b.id
-            ? -1
-            : a.id > b.id
-              ? 1
-              : 0;
-    })
-    .map((node) => node.id);
+  // Only immutable snapshots can be indexed. Mutable editor/host projections
+  // must continue reading their nodes so changes and reactive dependencies survive.
+  let index = childIndexes.get(doc.items);
+  if (!index) {
+    const groups = new Map<string, string[]>();
+    for (const node of Object.values(doc.items)) {
+      if (node.type === 'surface') continue;
+      let siblings = groups.get(node.placement.parentId);
+      if (!siblings) {
+        siblings = [];
+        groups.set(node.placement.parentId, siblings);
+      }
+      siblings.push(node.id);
+    }
+    for (const siblings of groups.values()) {
+      siblings.sort((a, b) => {
+        const left = nodeSortKey(doc, a)!,
+          right = nodeSortKey(doc, b)!;
+        return left < right
+          ? -1
+          : left > right
+            ? 1
+            : a < b
+              ? -1
+              : a > b
+                ? 1
+                : 0;
+      });
+      Object.freeze(siblings);
+    }
+    index = groups;
+    if (Object.isFrozen(doc.items)) childIndexes.set(doc.items, index);
+  }
+  return index.get(parentId) ?? noChildren;
 }
 
 export function nodeSortKey(

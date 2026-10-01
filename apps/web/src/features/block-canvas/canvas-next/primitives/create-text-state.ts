@@ -2,16 +2,18 @@ import {
   type Appearance,
   canLabel,
   children,
+  type GraphicsCommand,
   type GraphicsEditor,
   type LabelShape,
   measureShapeLabel,
   type Point,
-  plainRichText,
   type RichText,
   type ShapeItem,
   setShapeLabelCommand,
   setTextCommand,
   shapeLabelText,
+  snapPoint,
+  snapValue,
   sortKeysBetween,
   type TextGeometry,
   type TextMeasurer,
@@ -19,6 +21,12 @@ import {
   translation,
 } from '@macro-inc/graphics';
 import { createSignal } from 'solid-js';
+import {
+  plainRichText,
+  richTextPlainText,
+  validCanvasText,
+} from '../core/text-codec';
+import type { CanvasInspectorPreview } from './create-inspector-preview';
 export function createTextState(
   editor: GraphicsEditor,
   measure: TextMeasurer,
@@ -42,6 +50,8 @@ export function createTextState(
   const resize = (geometry: TextGeometry) =>
     textDefinition.freezeGeometry({ ...geometry, ...measure(geometry) });
   function update(patch: Partial<TextGeometry>) {
+    if (patch.content !== undefined && !validCanvasText(patch.content))
+      throw new Error('Invalid canvas text');
     setEditing((current) => {
       if (!current) return;
       if (current.kind === 'text')
@@ -75,18 +85,29 @@ export function createTextState(
     const current = editing();
     setEditing(undefined);
     flush = undefined;
-    if (current?.kind === 'text') editor.execute(setTextCommand, current.item);
-    else if (current)
+    if (current?.kind === 'text') {
+      if (richTextPlainText(current.item.geometry.content).trim())
+        editor.execute(setTextCommand, current.item);
+      else if (editor.document.items[current.item.id]?.type === 'text') {
+        editor.select(current.item.id);
+        editor.deleteSelection();
+      }
+    } else if (current) {
+      const label = current.item.geometry.label;
       editor.execute(setShapeLabelCommand, {
         id: current.item.id,
-        label: current.item.geometry.label,
+        label:
+          label && richTextPlainText(label.content).trim() ? label : undefined,
       });
+    }
   }
   function createItem(
     point: Point,
     width: number | undefined,
     content: RichText
   ): ShapeItem<'text'> {
+    point = snapPoint(point, editor.getSnapUnit());
+    if (width !== undefined) width = snapValue(width, editor.getSnapUnit());
     const document = editor.document,
       ids = children(document),
       last = document.items[ids[ids.length - 1]!];
@@ -121,7 +142,9 @@ export function createTextState(
     });
   }
   function insert(content: RichText, point: Point, width = 400) {
+    if (!validCanvasText(content)) throw new Error('Invalid canvas text');
     finish();
+    if (!richTextPlainText(content).trim()) return;
     editor.execute(setTextCommand, createItem(point, width, content));
   }
   function edit(id: string) {
@@ -129,6 +152,11 @@ export function createTextState(
     finish();
     const item = editor.document.items[id];
     if (item?.type !== 'text' && !canLabel(item)) return;
+    const content =
+      item.type === 'text'
+        ? item.geometry.content
+        : item.geometry.label?.content;
+    if (content !== undefined && !validCanvasText(content)) return;
     editor.select(id);
     if (item.type === 'text') setEditing({ kind: 'text', item });
     else {
@@ -151,34 +179,42 @@ export function createTextState(
       });
     }
   }
-  function typography(
-    patch: Partial<Pick<TextGeometry, 'fontSize' | 'fontFamily' | 'autoWidth'>>
-  ) {
+  type TypographyPatch = Partial<
+    Pick<TextGeometry, 'fontSize' | 'fontFamily' | 'autoWidth'>
+  >;
+  const typographyCommand: GraphicsCommand<TypographyPatch> = {
+    id: 'canvas.typography',
+    apply(context, patch) {
+      if (context.selection.length !== 1) return { document: context.document };
+      const item = context.document.items[context.selection[0]!];
+      if (item?.type === 'text')
+        return setTextCommand.apply(context, {
+          ...item,
+          geometry: resize({ ...item.geometry, ...patch }),
+        });
+      if (canLabel(item) && item.geometry.label)
+        return setShapeLabelCommand.apply(context, {
+          id: item.id,
+          label: measureShapeLabel(
+            item,
+            {
+              ...item.geometry.label,
+              fontSize: patch.fontSize ?? item.geometry.label.fontSize,
+              fontFamily: patch.fontFamily ?? item.geometry.label.fontFamily,
+            },
+            measure
+          ),
+        });
+      return { document: context.document };
+    },
+  };
+  function typography(patch: TypographyPatch) {
     setDefaults((value) => ({ ...value, ...patch }));
     if (draft()) {
       update(patch);
       return;
     }
-    const selected = editor.getSession().selectedId;
-    const item = selected ? editor.document.items[selected] : undefined;
-    if (item?.type === 'text')
-      editor.execute(setTextCommand, {
-        ...item,
-        geometry: resize({ ...item.geometry, ...patch }),
-      });
-    else if (canLabel(item) && item.geometry.label)
-      editor.execute(setShapeLabelCommand, {
-        id: item.id,
-        label: measureShapeLabel(
-          item,
-          {
-            ...item.geometry.label,
-            fontSize: patch.fontSize ?? item.geometry.label.fontSize,
-            fontFamily: patch.fontFamily ?? item.geometry.label.fontFamily,
-          },
-          measure
-        ),
-      });
+    editor.execute(typographyCommand, patch);
   }
   return {
     draft,
@@ -190,6 +226,22 @@ export function createTextState(
     update,
     finish,
     typography,
+    scrubFontSize(preview: CanvasInspectorPreview) {
+      const original = editing();
+      let last = original;
+      return preview.begin(
+        (context, fontSize) => {
+          if (!original)
+            return typographyCommand.apply(context, { fontSize }).document;
+          update({ fontSize });
+          last = editing();
+        },
+        (fontSize) => typography({ fontSize }),
+        () => {
+          if (original && editing() === last) setEditing(original);
+        }
+      );
+    },
     setFlush: (next: (() => void) | undefined) => {
       flush = next;
     },

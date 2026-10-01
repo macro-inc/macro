@@ -1,6 +1,5 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { CanvasDocument } from '@block-canvas/component/CanvasDocument';
-import { useCanvasDocument } from '@block-canvas/context/canvas-document-context';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import {
   getPermissions,
@@ -9,7 +8,7 @@ import {
 } from '@core/component/SharePermissions';
 import { downloadFile } from '@filesystem/download';
 import { useSearchParams } from '@solidjs/router';
-import type { JSX } from 'solid-js';
+import type { Accessor, JSX } from 'solid-js';
 import {
   FileDetailLayout,
   FileDetailLoadGate,
@@ -29,16 +28,16 @@ function CanvasDetailContent(props: {
   data: CanvasDocumentData;
   children?: (context: CanvasDetailContext) => JSX.Element;
   content: JSX.Element;
+  savedFile: Accessor<Blob | undefined>;
 }) {
   const analytics = useAnalytics();
-  const [savedFile] = useCanvasDocument().state.signals.currentSavedFile;
   const downloadName = documentDownloadName(
     props.data.documentMetadata,
     'Unknown Filename'
   );
   const operations = [
     downloadFileOperation(() => {
-      downloadFile(savedFile() ?? props.data.file, downloadName);
+      downloadFile(props.savedFile() ?? props.data.file, downloadName);
       analytics.track('download', { blockType: 'canvas' });
     }),
   ];
@@ -90,11 +89,12 @@ export function CanvasDetailDocument(
         portalScope="split"
         locationParams={searchParams}
       >
-        {(content) => (
+        {(content, state) => (
           <CanvasDetailContent
             data={props.data}
             children={props.children}
             content={content}
+            savedFile={state.savedFile}
           />
         )}
       </CanvasDocument>

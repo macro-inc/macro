@@ -43,6 +43,7 @@ function GhostShape(props: {
       fill: 'transparent',
       stroke: props.color,
       strokeWidth: props.shape.strokeWidth,
+      cornerRadius: props.shape.cornerRadius,
     },
   });
   return (

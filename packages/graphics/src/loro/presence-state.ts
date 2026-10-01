@@ -15,9 +15,10 @@ export type PresenceShape = {
   world: WireMatrix;
   pencil?: { points: [number, number, number][]; simulatePressure: boolean };
   strokeWidth?: number;
+  cornerRadius?: number;
 };
 export type ActionPreview = {
-  kind: 'draw' | 'move' | 'resize' | 'scale' | 'rotate' | 'marquee';
+  kind: 'draw' | 'move' | 'resize' | 'scale' | 'rotate' | 'radius' | 'marquee';
   shapes: PresenceShape[];
   box: Bounds | null;
 };
@@ -41,6 +42,9 @@ function presenceShape(node: ShapeItem, world: Matrix): PresenceShape {
     width: bounds.width,
     height: bounds.height,
     world: wireMatrix(world),
+    ...(node.type === 'rectangle'
+      ? { cornerRadius: node.appearance.cornerRadius ?? 0 }
+      : {}),
     ...(node.type === 'pencil'
       ? {
           pencil: {

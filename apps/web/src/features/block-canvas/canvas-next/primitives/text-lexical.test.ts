@@ -1,9 +1,6 @@
-import {
-  createGraphicsEditor,
-  plainRichText,
-  richTextPlainText,
-} from '@macro-inc/graphics';
+import { createGraphicsEditor } from '@macro-inc/graphics';
 import { afterEach, expect, it } from 'vitest';
+import { plainRichText, richTextPlainText } from '../core/text-codec';
 import { createTextState } from './create-text-state';
 
 const cleanups: (() => void)[] = [];
@@ -66,6 +63,66 @@ it('uses a centered Lexical state for labels and clearing it retains the shape',
     geometry: { width: 200, height: 120 },
   });
   expect(editor.getSession().selectedId).toBe('box');
+  const item = editor.document.items.box;
+  expect(item?.type === 'rectangle' && item.geometry.label).toBeUndefined();
+  editor.undo();
+  expect(editor.document.items.box).toMatchObject({
+    geometry: { label: { content } },
+  });
+});
+
+it('abandons empty creations and empty pastes, deletes cleared text, and restores it with undo', () => {
+  const editor = createGraphicsEditor();
+  cleanups.push(editor.dispose);
+  const state = createTextState(
+    editor,
+    (g) => ({ width: g.width, height: 32.4 }),
+    () => ({ fill: 'transparent', stroke: 'black' })
+  );
+  state.begin({ x: 0, y: 0 });
+  state.finish();
+  state.insert(plainRichText(' \n '), { x: 0, y: 0 });
+  expect(editor.getSession().canUndo).toBe(false);
+  state.insert(plainRichText('Keep me'), { x: 0, y: 0 });
+  const id = editor.getSession().selectedId!;
+  const before = editor.document.items[id];
+  state.edit(id);
+  state.change(plainRichText(' \n '));
+  state.finish();
+  expect(editor.document.items[id]).toBeUndefined();
+  editor.undo();
+  expect(editor.document.items[id]).toEqual(before);
+});
+
+it('commits mention-only text and rejects invalid drafts without changing saved content', () => {
+  const editor = createGraphicsEditor();
+  cleanups.push(editor.dispose);
+  const state = createTextState(
+    editor,
+    (g) => ({ width: g.width, height: 32.4 }),
+    () => ({ fill: 'transparent', stroke: 'black' })
+  );
+  const mention = JSON.parse(plainRichText());
+  mention.root.children[0].children = [
+    {
+      type: 'user-mention',
+      version: 1,
+      userId: 'user-1',
+      email: 'ada@example.com',
+      displayName: 'Ada',
+    },
+  ];
+  const content = JSON.stringify(mention);
+  state.begin({ x: 0, y: 0 });
+  const id = state.draft()!.id;
+  state.change(content);
+  expect(() => state.change('{broken')).toThrow('Invalid canvas text');
+  state.finish();
+  expect(editor.document.items[id]).toMatchObject({ geometry: { content } });
+  expect(() => state.insert('plain unencoded text', { x: 0, y: 0 })).toThrow(
+    'Invalid canvas text'
+  );
+  expect(editor.document.items[id]).toMatchObject({ geometry: { content } });
 });
 it('finishing a text draft preserves an intervening move', () => {
   const editor = createGraphicsEditor();

@@ -6,20 +6,17 @@ import {
   type IdFactory,
   pasteFragment,
 } from './fragments';
+import { layoutBounds, layoutRoots } from './layout';
 import type { Appearance, GraphicsDocument, Point } from './model';
-import {
-  children,
-  nodeCorners,
-  roots,
-  worldBounds,
-  worldMatrix,
-} from './scene';
+import { children, nodeBoundsPoints, roots, worldMatrix } from './scene';
 import { isShape } from './shapes/registry';
+import { snapTranslation } from './snapping';
 import { selectedShapeIds } from './style-selection';
 
 export type CommandContext = Readonly<{
   document: GraphicsDocument;
   selection: readonly string[];
+  snapUnit?: number;
 }>;
 export type CommandResult = Readonly<{
   document: GraphicsDocument;
@@ -59,20 +56,36 @@ export const selectAllCommand: GraphicsCommand<void> = {
 };
 export const nudgeCommand: GraphicsCommand<Point> = {
   id: 'nudge',
-  apply: ({ document, selection }, delta) => ({
-    document: move(
-      document,
-      new Map(roots(document, selection).map((id) => [id, delta]))
-    ),
-  }),
+  apply: ({ document, selection, snapUnit }, delta) => {
+    const selected = roots(document, selection);
+    const bounds = enclosing(
+      selected.flatMap((id) => nodeBoundsPoints(document, id))
+    );
+    const snapped = snapTranslation(bounds, delta, snapUnit);
+    return {
+      document: move(document, new Map(selected.map((id) => [id, snapped]))),
+    };
+  },
 };
 export const duplicateCommand: GraphicsCommand<{
   createId: IdFactory;
   offset?: Point;
 }> = {
   id: 'duplicate',
-  apply: ({ document, selection }, { createId, offset }) =>
-    duplicateNodes(document, selection, createId, offset),
+  apply: (
+    { document, selection, snapUnit },
+    { createId, offset = { x: 24, y: 24 } }
+  ) => {
+    const bounds = enclosing(
+      roots(document, selection).flatMap((id) => nodeBoundsPoints(document, id))
+    );
+    return duplicateNodes(
+      document,
+      selection,
+      createId,
+      snapTranslation(bounds, offset, snapUnit)
+    );
+  },
 };
 export const pasteCommand: GraphicsCommand<{
   fragment: GraphicsFragment;
@@ -80,8 +93,22 @@ export const pasteCommand: GraphicsCommand<{
   offset?: Point;
 }> = {
   id: 'paste',
-  apply: ({ document }, { fragment, createId, offset }) =>
-    pasteFragment(document, fragment, createId, offset),
+  apply: (
+    { document, snapUnit },
+    { fragment, createId, offset = { x: 24, y: 24 } }
+  ) => {
+    const bounds = enclosing(
+      children(fragment.scene).flatMap((id) =>
+        nodeBoundsPoints(fragment.scene, id)
+      )
+    );
+    return pasteFragment(
+      document,
+      fragment,
+      createId,
+      snapTranslation(bounds, offset, snapUnit)
+    );
+  },
 };
 export const styleCommand: GraphicsCommand<Partial<Appearance>> = {
   id: 'style',
@@ -117,12 +144,20 @@ export type Alignment =
 export const alignCommand: GraphicsCommand<Alignment> = {
   id: 'align',
   apply: ({ document, selection }, alignment) => {
-    const ids = roots(document, selection);
+    const ids = layoutRoots(document, selection);
     if (ids.length < 2) return { document };
-    const all = enclosing(ids.flatMap((id) => nodeCorners(document, id)));
+    const all = enclosing(
+      ids.flatMap((id) => {
+        const b = layoutBounds(document, id);
+        return [
+          { x: b.x, y: b.y },
+          { x: b.x + b.width, y: b.y + b.height },
+        ];
+      })
+    );
     const offsets = new Map(
       ids.map((id) => {
-        const b = worldBounds(document, id);
+        const b = layoutBounds(document, id);
         const deltas: Record<Alignment, Point> = {
           left: { x: all.x - b.x, y: 0 },
           center: { x: all.x + all.width / 2 - b.x - b.width / 2, y: 0 },
@@ -142,9 +177,9 @@ export const distributeCommand: GraphicsCommand<'horizontal' | 'vertical'> = {
   id: 'distribute',
   apply: ({ document, selection }, axis) => {
     const horizontal = axis === 'horizontal';
-    const entries = roots(document, selection).map((id) => ({
+    const entries = layoutRoots(document, selection).map((id) => ({
       id,
-      b: worldBounds(document, id),
+      b: layoutBounds(document, id),
     }));
     const start = (b: (typeof entries)[number]['b']) =>
       horizontal ? b.x : b.y;

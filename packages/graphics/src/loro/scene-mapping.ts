@@ -40,6 +40,7 @@ export type NodeData = {
   fill: string;
   stroke: string;
   strokeWidth: number;
+  strokeStyle?: 'solid' | 'dashed' | 'dotted';
   opacity: number;
   cornerRadius: number;
 };
@@ -93,6 +94,7 @@ export function readScene(tree: LoroTree<NodeData>, rootId: string) {
             fill,
             stroke,
             strokeWidth: node.data.get('strokeWidth') ?? 2,
+            strokeStyle: node.data.get('strokeStyle') ?? 'solid',
             opacity: node.data.get('opacity') ?? 1,
             cornerRadius: node.data.get('cornerRadius') ?? 0,
           },
@@ -174,7 +176,12 @@ function writeNodeData(
     const previous = isShape(old)
       ? resolveAppearance(old.appearance)
       : undefined;
-    for (const key of ['strokeWidth', 'opacity', 'cornerRadius'] as const) {
+    for (const key of [
+      'strokeWidth',
+      'strokeStyle',
+      'opacity',
+      'cornerRadius',
+    ] as const) {
       if (!previous || previous[key] !== appearance[key])
         handle.data.set(key, appearance[key]);
     }

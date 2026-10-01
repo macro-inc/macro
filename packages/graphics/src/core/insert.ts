@@ -3,6 +3,7 @@ import type { GraphicsCommand } from './commands';
 import type { Point, ShapeItem } from './model';
 import { sortKeysBetween } from './ordering';
 import { children } from './scene';
+import { snapPoint } from './snapping';
 
 type NewShape = {
   [K in ShapeItem['type']]: Pick<
@@ -15,7 +16,7 @@ export const insertShapesCommand: GraphicsCommand<
   readonly { item: NewShape; point: Point }[]
 > = {
   id: 'insert-shapes',
-  apply: ({ document }, entries) => {
+  apply: ({ document, snapUnit }, entries) => {
     if (!entries.length) return { document };
     const siblings = children(document),
       last = document.items[siblings[siblings.length - 1]!];
@@ -27,10 +28,11 @@ export const insertShapesCommand: GraphicsCommand<
     const items = { ...document.items };
     entries.forEach(({ item, point }, index) => {
       if (items[item.id]) throw new Error('Shape id already exists');
+      const position = snapPoint(point, snapUnit);
       items[item.id] = {
         ...item,
         placement: { parentId: document.rootId, sortKey: keys[index]! },
-        transform: translation(point.x, point.y),
+        transform: translation(position.x, position.y),
       };
     });
     return {

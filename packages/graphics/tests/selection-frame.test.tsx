@@ -112,7 +112,7 @@ it.each([false, true])(
         frame.angle
       );
       editor.undo();
-      expect(editor.document).toBe(before);
+      expect(editor.document).toEqual(before);
       expect(editor.getSession().canUndo).toBe(false);
       editor.dispose();
     }
@@ -182,7 +182,7 @@ it('aligns the rotator with each selection frame and keeps square handles', () =
     (points[0]!.y + points[1]!.y) / 2 - 16 * Math.cos(angle)
   );
   for (const handle of host.querySelectorAll<SVGElement>(
-    '[data-graphics-handle]:not(circle)'
+    'rect[data-graphics-handle], line[data-graphics-handle]'
   )) {
     const id = handle.getAttribute('data-graphics-handle');
     expect(handle.style.cursor).toBe(

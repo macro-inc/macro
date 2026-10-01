@@ -222,12 +222,66 @@ it('normalizes wheel units, anchors zoom and removes handlers on cleanup', () =>
     })
   );
   const after = screenToWorld(editor.getCamera(), anchor);
+  expect(editor.getCamera().scale).toBeCloseTo(1.051271, 5);
   expect(after.x).toBeCloseTo(before.x);
   expect(after.y).toBeCloseTo(before.y);
   detach();
   const camera = editor.getCamera();
   viewport.dispatchEvent(new WheelEvent('wheel', { deltaY: 100 }));
   expect(editor.getCamera()).toBe(camera);
+});
+
+it.each([
+  'ctrlKey',
+  'metaKey',
+] as const)('keeps %s wheel zoom gradual across pixel, line and page deltas', (modifier) => {
+  const anchor = { x: 150, y: 90 };
+  for (const { deltaY, deltaMode } of [
+    { deltaY: -100, deltaMode: 0 },
+    { deltaY: -6.25, deltaMode: 1 },
+    { deltaY: -1, deltaMode: 2 },
+    { deltaY: -10000, deltaMode: 0 },
+  ]) {
+    const editor = createGraphicsEditor();
+    const viewport = document.createElement('div');
+    Object.defineProperty(viewport, 'clientHeight', { value: 600 });
+    const detach = attachCameraControls(viewport, editor);
+    const event = (delta: number) =>
+      new WheelEvent('wheel', {
+        [modifier]: true,
+        deltaY: delta,
+        deltaMode,
+        clientX: anchor.x,
+        clientY: anchor.y,
+        cancelable: true,
+      });
+    const zoomIn = event(deltaY);
+    viewport.dispatchEvent(zoomIn);
+    expect(zoomIn.defaultPrevented).toBe(true);
+    expect(editor.getCamera().scale).toBeCloseTo(1.221403, 5);
+    const world = screenToWorld(editor.getCamera(), anchor);
+    expect(world.x).toBeCloseTo(anchor.x);
+    expect(world.y).toBeCloseTo(anchor.y);
+    viewport.dispatchEvent(event(-deltaY));
+    expect(editor.getCamera().scale).toBeCloseTo(1);
+    detach();
+    editor.dispose();
+  }
+});
+
+it('preserves fine trackpad movement without quantizing each event into a zoom step', () => {
+  const editor = createGraphicsEditor();
+  const viewport = document.createElement('div');
+  const detach = attachCameraControls(viewport, editor);
+  for (let i = 0; i < 100; i++) {
+    viewport.dispatchEvent(
+      new WheelEvent('wheel', { ctrlKey: true, deltaY: -1 })
+    );
+    if (i === 0) expect(editor.getCamera().scale).toBeCloseTo(1.002002, 5);
+  }
+  expect(editor.getCamera().scale).toBeCloseTo(1.221403, 5);
+  detach();
+  editor.dispose();
 });
 
 it('captures a middle-button pan and stops it on cancellation', () => {
@@ -372,13 +426,17 @@ it('renders transforms and history without remounting existing rectangle nodes',
   const node = host.querySelector<HTMLElement>('[data-graphics-item="one"]');
   editor.beginTransform('one', { x: 10, y: 20 });
   editor.updateTransform({ x: 40, y: 50 });
-  expect(node?.style.transform).toBe('matrix(1,0,0,1,40,50)');
+  expect(node?.style.transform).toBe('matrix(1,0,0,1,10,20)');
+  expect(node?.style.translate).toBe('30px 30px');
   expect(worldBounds(editor.document, 'one').x).toBe(10);
   editor.cancelTransform();
   expect(node?.style.transform).toBe('matrix(1,0,0,1,10,20)');
+  expect(node?.style.translate).toBe('');
   editor.beginTransform('one', { x: 10, y: 20 });
   editor.updateTransform({ x: 40, y: 50 });
   editor.commitTransform();
+  expect(node?.style.transform).toBe('matrix(1,0,0,1,40,50)');
+  expect(node?.style.translate).toBe('');
   editor.undo();
   expect(node?.style.transform).toBe('matrix(1,0,0,1,10,20)');
   editor.redo();

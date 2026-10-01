@@ -1,5 +1,4 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { richTextHtml } from '../src/browser/rich-text';
 import {
   copyFragment,
   createGraphicsEditor,
@@ -7,8 +6,6 @@ import {
   nodeCorners,
   parseFragment,
   pasteCommand,
-  plainRichText,
-  richTextPlainText,
   rotation,
   type ShapeItem,
   setTextCommand,
@@ -20,7 +17,7 @@ import {
 
 const cleanups: (() => void)[] = [];
 afterEach(() => cleanups.splice(0).forEach((fn) => fn()));
-const text = (content = plainRichText('Hello world')): ShapeItem<'text'> => ({
+const text = (content = 'Hello world'): ShapeItem<'text'> => ({
   id: 'text',
   type: 'text',
   placement: { parentId: 'scene-root', sortKey: 'a0' },
@@ -37,33 +34,8 @@ const text = (content = plainRichText('Hello world')): ShapeItem<'text'> => ({
 });
 it('stores frozen rich text and copies nested formatting without mutable input', () => {
   const source = JSON.stringify({
-    root: {
-      type: 'root',
-      version: 1,
-      children: [
-        {
-          type: 'heading',
-          version: 1,
-          tag: 'h2',
-          format: 'center',
-          children: [{ type: 'text', version: 1, text: 'Title', format: 1 }],
-        },
-        {
-          type: 'paragraph',
-          version: 1,
-          children: [
-            {
-              type: 'link',
-              version: 1,
-              url: 'https://example.com',
-              children: [
-                { type: 'text', version: 1, text: 'Link', format: 10 },
-              ],
-            },
-          ],
-        },
-      ],
-    },
+    format: 'host-defined',
+    blocks: [{ text: 'Title', bold: true }],
   });
   const editor = createGraphicsEditor([text(source)]);
   cleanups.push(editor.dispose);
@@ -71,7 +43,7 @@ it('stores frozen rich text and copies nested formatting without mutable input',
   if (node?.type !== 'text') throw Error();
   expect(Object.isFrozen(node.geometry)).toBe(true);
   expect(typeof node.geometry.content).toBe('string');
-  expect(richTextPlainText(node.geometry.content)).toBe('Title\nLink');
+  expect(node.geometry.content).toBe(source);
   editor.select('text');
   const fragment = copyFragment(editor.document, ['text'])!;
   editor.execute(pasteCommand, {
@@ -85,23 +57,22 @@ it('stores frozen rich text and copies nested formatting without mutable input',
   editor.undo();
   expect(editor.document.items.copy).toBeUndefined();
 });
-it('commits edits, deletes empty text, and ignores an abandoned empty creation in history', () => {
+it('stores empty and whitespace content verbatim until the host explicitly deletes it', () => {
   const editor = createGraphicsEditor();
   cleanups.push(editor.dispose);
-  editor.execute(setTextCommand, text(plainRichText('')));
-  expect(editor.getSession().canUndo).toBe(false);
-  editor.execute(setTextCommand, text());
-  editor.execute(setTextCommand, text(plainRichText('Edited')));
+  editor.execute(setTextCommand, text(''));
+  expect(editor.document.items.text).toEqual(text(''));
+  expect(editor.getSession().canUndo).toBe(true);
+  editor.execute(setTextCommand, text('Edited'));
+  editor.execute(setTextCommand, text(' '));
+  expect(editor.document.items.text).toEqual(text(' '));
   editor.undo();
-  expect(editor.document.items.text).toEqual(text());
-  editor.redo();
-  editor.execute(setTextCommand, text(plainRichText(' ')));
+  expect(editor.document.items.text).toEqual(text('Edited'));
+  editor.select('text');
+  editor.deleteSelection();
   expect(editor.document.items.text).toBeUndefined();
   editor.undo();
-  const item = editor.document.items.text;
-  expect(
-    item?.type === 'text' && richTextPlainText(item.geometry.content)
-  ).toBe('Edited');
+  expect(editor.document.items.text).toEqual(text('Edited'));
 });
 it('uses injected measurement for rotated side reflow and keeps the opposite edge fixed', () => {
   const measure = vi.fn((geometry: ShapeItem<'text'>['geometry']) => ({
@@ -148,34 +119,36 @@ it('scales font size with a corner and flips through zero', () => {
   expect(item.transform[0]).toBeLessThan(0);
 });
 
-it.each(['nw', 'ne', 'se', 'sw'] as const)(
-  'shrinks text from %s with horizontal pointer movement and keeps the opposite corner fixed',
-  (handle) => {
-    const item = text();
-    const editor = createGraphicsEditor([item]);
-    cleanups.push(editor.dispose);
-    const index = ['nw', 'ne', 'se', 'sw'].indexOf(handle);
-    const before = nodeCorners(editor.document, item.id);
-    const start = before[index]!;
-    editor.select(item.id);
-    editor.beginTransform(item.id, start, handle);
-    editor.updateTransform({
-      x: start.x + (handle.endsWith('w') ? 100 : -100),
-      y: start.y,
-    });
-    editor.commitTransform();
-    const next = editor.document.items[item.id];
-    if (next?.type !== 'text') throw Error();
-    expect(next.geometry.fontSize).toBeGreaterThan(12);
-    expect(next.geometry.fontSize).toBeLessThan(13);
-    const anchor = (index + 2) % 4;
-    const after = nodeCorners(editor.document, item.id)[anchor]!;
-    expect(after.x).toBeCloseTo(before[anchor]!.x);
-    expect(after.y).toBeCloseTo(before[anchor]!.y);
-    editor.undo();
-    expect(editor.document.items[item.id]).toEqual(item);
-  }
-);
+it.each([
+  'nw',
+  'ne',
+  'se',
+  'sw',
+] as const)('shrinks text from %s with horizontal pointer movement and keeps the opposite corner fixed', (handle) => {
+  const item = text();
+  const editor = createGraphicsEditor([item]);
+  cleanups.push(editor.dispose);
+  const index = ['nw', 'ne', 'se', 'sw'].indexOf(handle);
+  const before = nodeCorners(editor.document, item.id);
+  const start = before[index]!;
+  editor.select(item.id);
+  editor.beginTransform(item.id, start, handle);
+  editor.updateTransform({
+    x: start.x + (handle.endsWith('w') ? 100 : -100),
+    y: start.y,
+  });
+  editor.commitTransform();
+  const next = editor.document.items[item.id];
+  if (next?.type !== 'text') throw Error();
+  expect(next.geometry.fontSize).toBeGreaterThan(12);
+  expect(next.geometry.fontSize).toBeLessThan(13);
+  const anchor = (index + 2) % 4;
+  const after = nodeCorners(editor.document, item.id)[anchor]!;
+  expect(after.x).toBeCloseTo(before[anchor]!.x);
+  expect(after.y).toBeCloseTo(before[anchor]!.y);
+  editor.undo();
+  expect(editor.document.items[item.id]).toEqual(item);
+});
 
 it('does not amplify vertical jitter or reflow text during corner scaling, including scaling from center', () => {
   const measure = vi.fn(() => ({ width: 999, height: 999 }));
@@ -196,10 +169,11 @@ it('does not amplify vertical jitter or reflow text during corner scaling, inclu
   expect(bounds.y + bounds.height / 2).toBeCloseTo(46.2);
   expect(next.geometry.width / next.geometry.height).toBeCloseTo(200 / 32.4);
 });
-it('rejects malformed trees, invalid types and oversized content and escapes fallback HTML', () => {
-  const content = plainRichText('<img src=x onerror=alert(1)>');
+it('bounds opaque content without interpreting its format and rejects invalid typography', () => {
+  const content = '<img src=x onerror=alert(1)>';
   expect(validRichText(content)).toBe(true);
-  expect(richTextHtml(content)).toContain('&lt;img');
+  expect(validRichText('{not-json')).toBe(true);
+  expect(validRichText('')).toBe(true);
   const link = {
     blocks: [
       {
@@ -210,7 +184,7 @@ it('rejects malformed trees, invalid types and oversized content and escapes fal
     ],
   };
   expect(validRichText(link)).toBe(false);
-  expect(validRichText(plainRichText('a'.repeat(2000001)))).toBe(false);
+  expect(validRichText('a'.repeat(2_000_001))).toBe(false);
   expect(
     textDefinition.validateGeometry({ ...text().geometry, fontSize: NaN })
   ).toBe(false);

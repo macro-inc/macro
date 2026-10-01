@@ -19,6 +19,7 @@ export function createConnectorState(editor: GraphicsEditor) {
   });
   const interaction = createConnectorInteraction({
     getDocument: () => editor.document,
+    getSnapUnit: editor.getSnapUnit,
     commit: (item) => editor.execute(setConnectorCommand, item),
     onChange: () =>
       batch(() => {

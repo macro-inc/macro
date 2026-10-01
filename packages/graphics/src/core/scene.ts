@@ -7,9 +7,19 @@ import {
   multiply,
   transformPoint,
 } from './affine';
-import { validAppearance } from './appearance';
-import { resolveConnector, retainConnectorBindings } from './connectors';
-import type { Bounds, GraphicsDocument, GraphicsItem, Point } from './model';
+import { resolveAppearance, validAppearance } from './appearance';
+import {
+  connectorWorldView,
+  resolveConnector,
+  retainConnectorBindings,
+} from './connectors';
+import type {
+  Bounds,
+  GraphicsDocument,
+  GraphicsItem,
+  Point,
+  ShapeKind,
+} from './model';
 import {
   children,
   insertionIndex,
@@ -21,16 +31,51 @@ import { isShape, shapeDefinition } from './shapes/registry';
 
 export type SceneOverrides = Readonly<Record<string, GraphicsItem>>;
 export { children } from './ordering';
+
+const paintOrders = new WeakMap<GraphicsDocument['items'], readonly string[]>();
 export function paintOrder(doc: GraphicsDocument): readonly string[] {
+  const cached = paintOrders.get(doc.items);
+  if (cached) return cached;
   const result: string[] = [];
   const visit = (id: string) => {
     for (const child of children(doc, id)) {
       result.push(child);
-      visit(child);
+      if (!isShape(doc.items[child])) visit(child);
     }
   };
   visit(doc.rootId);
-  return result;
+  // Bound connectors cannot be obscured by either endpoint, even when those
+  // endpoints live in different groups or have just been reordered.
+  const positions = new Map(result.map((id, index) => [id, index]));
+  const above = new Map<number, string[]>();
+  const deferred = new Set<string>();
+  result.forEach((id, index) => {
+    const item = doc.items[id];
+    if (item?.type !== 'connector') return;
+    const targets = [
+      item.geometry.start.binding,
+      item.geometry.end.binding,
+    ].flatMap((binding) =>
+      binding && isShape(doc.items[binding.targetId])
+        ? [positions.get(binding.targetId)!]
+        : []
+    );
+    if (!targets.length) return;
+    const rank = Math.max(index, ...targets);
+    const bucket = above.get(rank) ?? [];
+    bucket.push(id);
+    above.set(rank, bucket);
+    deferred.add(id);
+  });
+  const ordered = deferred.size
+    ? result.flatMap((id, index) => [
+        ...(deferred.has(id) ? [] : [id]),
+        ...(above.get(index) ?? []),
+      ])
+    : result;
+  Object.freeze(ordered);
+  if (Object.isFrozen(doc.items)) paintOrders.set(doc.items, ordered);
+  return ordered;
 }
 export const drawableIds = (doc: GraphicsDocument) =>
   paintOrder(doc).filter((id) => isShape(doc.items[id]));
@@ -60,26 +105,64 @@ export function resolvedShape(
     ? resolveConnector(doc, node, overrides)
     : node;
 }
+/** Geometry and frame shared by drawing, selection bounds, and picking. */
+export function shapeProjection(
+  doc: GraphicsDocument,
+  id: string,
+  overrides: SceneOverrides = {}
+) {
+  const item = resolvedShape(doc, id, overrides);
+  const transform = worldMatrix(doc, id, overrides);
+  if (
+    item?.type === 'connector' &&
+    (item.geometry.start.binding || item.geometry.end.binding)
+  ) {
+    return { item: connectorWorldView(item, transform), transform: IDENTITY };
+  }
+  return { item, transform };
+}
 export function nodeCorners(
   doc: GraphicsDocument,
   id: string,
   overrides: SceneOverrides = {}
 ): readonly Point[] {
+  return projectedBoundsPoints(doc, id, overrides, false);
+}
+/** World-space points enclosing actual geometry. Unlike nodeCorners, these
+ * need not be the transformed corners of the shape's local resize box. */
+export function nodeBoundsPoints(
+  doc: GraphicsDocument,
+  id: string,
+  overrides: SceneOverrides = {}
+): readonly Point[] {
+  return projectedBoundsPoints(doc, id, overrides, true);
+}
+function projectedBoundsPoints(
+  doc: GraphicsDocument,
+  id: string,
+  overrides: SceneOverrides,
+  tight: boolean
+): readonly Point[] {
   const node = Object.hasOwn(overrides, id) ? overrides[id] : doc.items[id];
   if (!node) return [];
-  if (isShape(node))
-    return corners(
-      shapeDefinition(node.type).bounds(resolvedShape(doc, id, overrides)!)
-    ).map((p) => transformPoint(worldMatrix(doc, id, overrides), p));
+  if (isShape(node)) {
+    const { item, transform } = shapeProjection(doc, id, overrides);
+    const definition = shapeDefinition(node.type);
+    if (tight && definition.transformedBounds)
+      return corners(definition.transformedBounds(item!, transform));
+    return corners(definition.bounds(item!)).map((p) =>
+      transformPoint(transform, p)
+    );
+  }
   return children(doc, id).flatMap((child) =>
-    nodeCorners(doc, child, overrides)
+    projectedBoundsPoints(doc, child, overrides, tight)
   );
 }
 export const worldBounds = (
   doc: GraphicsDocument,
   id: string,
   overrides: SceneOverrides = {}
-) => enclosing(nodeCorners(doc, id, overrides));
+) => enclosing(nodeBoundsPoints(doc, id, overrides));
 export function roots(
   doc: GraphicsDocument,
   ids: readonly string[]
@@ -107,21 +190,60 @@ export function outermost(doc: GraphicsDocument, id: string): string {
   }
   return id;
 }
+const hitIndexes = new WeakMap<
+  GraphicsDocument,
+  ReturnType<typeof buildHitIndex>
+>();
+function buildHitIndex(doc: GraphicsDocument) {
+  return drawableIds(doc).map((id) => {
+    const projection = shapeProjection(doc, id);
+    const item = projection.item!;
+    const worldTransform = projection.transform;
+    const bounds = worldBounds(doc, id);
+    const stroke = resolveAppearance(item.appearance).strokeWidth / 2;
+    const padding =
+      stroke *
+      Math.max(
+        Math.hypot(worldTransform[0], worldTransform[2]),
+        Math.hypot(worldTransform[1], worldTransform[3])
+      );
+    return {
+      id,
+      item,
+      worldTransform,
+      local: inverse(worldTransform),
+      bounds,
+      padding,
+    };
+  });
+}
 export function hitTest(
   doc: GraphicsDocument,
   point: Point,
   deep = false,
   tolerance = 0
 ): string | undefined {
-  for (const id of [...drawableIds(doc)].reverse()) {
-    const node = resolvedShape(doc, id);
+  let index = hitIndexes.get(doc);
+  if (!index) {
+    index = buildHitIndex(doc);
+    if (Object.isFrozen(doc) && Object.isFrozen(doc.items))
+      hitIndexes.set(doc, index);
+  }
+  for (let i = index.length - 1; i >= 0; i--) {
+    const { id, item, worldTransform, local, bounds, padding } = index[i]!;
+    const margin = padding + tolerance;
     if (
-      isShape(node) &&
-      shapeDefinition(node.type).hitTest(
-        node,
-        transformPoint(inverse(worldMatrix(doc, id)), point),
-        { worldTransform: worldMatrix(doc, id), tolerance }
-      )
+      point.x < bounds.x - margin ||
+      point.y < bounds.y - margin ||
+      point.x > bounds.x + bounds.width + margin ||
+      point.y > bounds.y + bounds.height + margin
+    )
+      continue;
+    if (
+      shapeDefinition(item.type).hitTest(item, transformPoint(local, point), {
+        worldTransform,
+        tolerance,
+      })
     )
       return deep ? id : outermost(doc, id);
   }
@@ -131,21 +253,24 @@ export function boxHits(doc: GraphicsDocument, box: Bounds): readonly string[] {
     ...new Set(
       drawableIds(doc)
         .filter((id) => {
-          const node = resolvedShape(doc, id);
+          const { item: node, transform } = shapeProjection(doc, id);
           return (
             isShape(node) &&
-            shapeDefinition(node.type).intersectsBox(
-              node,
-              worldMatrix(doc, id),
-              box
-            )
+            shapeDefinition(node.type).intersectsBox(node, transform, box)
           );
         })
         .map((id) => outermost(doc, id))
     ),
   ];
 }
+// Only trust objects frozen here, not caller-owned shallow Object.freeze values.
+// Weak collections do not retain discarded documents or history entries.
+const frozenDocuments = new WeakSet<GraphicsDocument>();
+const frozenItems = new WeakSet<GraphicsItem>();
+const frozenGeometries = new WeakMap<object, ShapeKind>();
+
 export function freezeDocument(doc: GraphicsDocument): GraphicsDocument {
+  if (frozenDocuments.has(doc)) return doc;
   if (doc.items[doc.rootId]?.type !== 'surface')
     throw new Error('Invalid scene root');
   const items: Record<string, GraphicsItem> = Object.create(null);
@@ -160,8 +285,10 @@ export function freezeDocument(doc: GraphicsDocument): GraphicsDocument {
     if (node.type === 'surface') {
       if (id !== doc.rootId)
         throw new Error('Only one surface root per document is supported');
+      const frozen = frozenItems.has(node) ? node : Object.freeze({ ...node });
+      frozenItems.add(frozen);
       Object.defineProperty(items, id, {
-        value: Object.freeze({ ...node }),
+        value: frozen,
         enumerable: true,
       });
       continue;
@@ -194,6 +321,7 @@ export function freezeDocument(doc: GraphicsDocument): GraphicsDocument {
     if (ancestor?.id !== doc.rootId) throw new Error('Unreachable node');
     if (
       isShape(node) &&
+      frozenGeometries.get(node.geometry) !== node.type &&
       !shapeDefinition(node.type).validateGeometry(node.geometry)
     )
       throw new Error(`Invalid ${node.type} geometry`);
@@ -208,17 +336,29 @@ export function freezeDocument(doc: GraphicsDocument): GraphicsDocument {
           throw new Error('Invalid connector target');
       }
     }
-    const frozen = Object.freeze({
-      ...node,
-      placement: Object.freeze({ ...node.placement }),
-      transform: Object.freeze([...node.transform]) as Matrix,
-      ...(isShape(node)
-        ? {
-            geometry: shapeDefinition(node.type).freezeGeometry(node.geometry),
-            appearance: Object.freeze({ ...node.appearance }),
-          }
-        : {}),
-    });
+    // The registry preserves the validated node kind/geometry correlation.
+    const frozen = (
+      frozenItems.has(node)
+        ? node
+        : Object.freeze({
+            ...node,
+            placement: Object.freeze({ ...node.placement }),
+            transform: Object.freeze([...node.transform]) as Matrix,
+            ...(isShape(node)
+              ? {
+                  geometry:
+                    frozenGeometries.get(node.geometry) === node.type
+                      ? node.geometry
+                      : shapeDefinition(node.type).freezeGeometry(
+                          node.geometry
+                        ),
+                  appearance: Object.freeze({ ...node.appearance }),
+                }
+              : {}),
+          })
+    ) as typeof node;
+    frozenItems.add(frozen);
+    if (isShape(frozen)) frozenGeometries.set(frozen.geometry, frozen.type);
     Object.defineProperty(items, id, { value: frozen, enumerable: true });
   }
   if (
@@ -234,6 +374,7 @@ export function freezeDocument(doc: GraphicsDocument): GraphicsDocument {
     ...(doc.surface ? { surface: Object.freeze({ ...doc.surface }) } : {}),
   });
   for (const id of Object.keys(items)) inverse(worldMatrix(result, id));
+  frozenDocuments.add(result);
   return result;
 }
 export function createScene(

@@ -10,13 +10,18 @@ import {
   type TextMeasurer,
 } from '@macro-inc/graphics';
 import { createGraphicsProjection } from '@macro-inc/graphics/solid';
-import { createSignal } from 'solid-js';
+import { parsePickerColor } from '@ui/utils/color';
+import { createMemo, createSignal } from 'solid-js';
 import { initialAppearance } from '../core/seed-scene';
+import { createCanvasSnapping } from './create-canvas-snapping';
 import { createConnectorState } from './create-connector-state';
 import { createEmbedState } from './create-embed-state';
+import { createEraserState } from './create-eraser-state';
+import { createInspectorPreview } from './create-inspector-preview';
 import { createTextState } from './create-text-state';
 
 export type CanvasTool =
+  | 'eraser'
   | 'select'
   | 'pan'
   | 'arrow'
@@ -29,31 +34,98 @@ export function createCanvasState(
   measureText: TextMeasurer
 ) {
   const projection = createGraphicsProjection(editor);
+  const inspector = createInspectorPreview(editor);
   const [tool, setTool] = createSignal<CanvasTool>('select');
+  const eraser = createEraserState(editor, () => tool() === 'eraser');
   const [defaults, setDefaults] = createSignal(initialAppearance);
   const text = createTextState(editor, measureText, defaults);
   const connector = createConnectorState(editor);
   const [notice, setNotice] = createSignal('Ready');
-  const selection = () =>
-    roots(projection.document, projection.session().selectedIds);
-  const shapes = () =>
-    selectedShapeIds(projection.document, selection()).flatMap((id) => {
-      const item = projection.document.items[id];
+  const selection = createMemo(
+    () => roots(projection.snapshot(), projection.session().selectedIds),
+    undefined,
+    {
+      equals: (a, b) =>
+        a.length === b.length && a.every((id, i) => id === b[i]),
+    }
+  );
+  const shapes = createMemo(() =>
+    selectedShapeIds(projection.snapshot(), selection()).flatMap((id) => {
+      const item = projection.snapshot().items[id];
       return isShape(item) ? [item] : [];
-    });
-  function appearanceValue<K extends keyof Appearance>(key: K) {
-    const values = shapes().map(
-      (shape) => resolveAppearance(shape.appearance)[key]
+    })
+  );
+  const canvasColors = createMemo(() => {
+    const colors = new Set<string>();
+    for (const item of Object.values(projection.document.items)) {
+      if (!isShape(item)) continue;
+      if (item.type === 'rectangle' || item.type === 'ellipse') {
+        colors.add(item.appearance.fill);
+      }
+      if (
+        ['rectangle', 'ellipse', 'connector', 'pencil', 'text'].includes(
+          item.type
+        )
+      ) {
+        colors.add(item.appearance.stroke);
+      }
+    }
+    return [...colors].filter(
+      (color) => color && color !== 'transparent' && color !== 'none'
     );
+  });
+  const radiusPreview = createMemo(() => {
+    const gesture = projection.session().transform;
+    return gesture?.kind === 'radius' ? gesture.nodes : undefined;
+  });
+  function appearanceValue<K extends keyof Appearance>(key: K) {
+    const fallback = resolveAppearance(defaults())[key];
+    const values = shapes()
+      .filter((shape) => {
+        if (key === 'cornerRadius') return shape.type === 'rectangle';
+        if (key === 'fill')
+          return shape.type === 'rectangle' || shape.type === 'ellipse';
+        if (key === 'strokeStyle')
+          return ['rectangle', 'ellipse', 'connector'].includes(shape.type);
+        if (key === 'strokeWidth')
+          return ['rectangle', 'ellipse', 'connector', 'pencil'].includes(
+            shape.type
+          );
+        return true;
+      })
+      .map((shape) => {
+        const preview =
+          key === 'cornerRadius' ? radiusPreview()?.[shape.id] : undefined;
+        const item = isShape(preview) ? preview : shape;
+        return resolveAppearance(item.appearance)[key] ?? fallback;
+      });
     if (!values.length) return resolveAppearance(defaults())[key];
     return values.every((value) => value === values[0]) ? values[0] : undefined;
   }
   const chooseTool = (next: CanvasTool) => {
+    inspector.cancel();
+    eraser.cancel();
     embeds.exit();
     text.finish();
     connector.interaction.cancel();
     if (next === 'arrow' || next === 'line' || next === 'connector')
       connector.preset(next);
+    if (['arrow', 'line', 'connector', 'pencil'].includes(next)) {
+      // Stroke-only tools cannot inherit an invisible style from filled shapes.
+      setDefaults((value) => ({
+        ...value,
+        stroke:
+          !value.stroke.trim() || parsePickerColor(value.stroke)?.a === 0
+            ? initialAppearance.stroke
+            : value.stroke,
+        strokeWidth:
+          value.strokeWidth === 0
+            ? initialAppearance.strokeWidth
+            : value.strokeWidth,
+        opacity:
+          value.opacity === 0 ? initialAppearance.opacity : value.opacity,
+      }));
+    }
     editor.cancelShape();
     editor.cancelTransform();
     setTool(next);
@@ -75,8 +147,17 @@ export function createCanvasState(
       )
     );
   };
+  const snapping = createCanvasSnapping(editor, () => {
+    inspector.cancel();
+    connector.interaction.cancel();
+    eraser.cancel();
+  });
   return {
     editor,
+    ...snapping,
+    snapUnit: () => projection.session().snapUnit,
+    inspector,
+    eraser,
     embeds,
     text,
     connector,
@@ -90,6 +171,7 @@ export function createCanvasState(
     selection,
     shapes,
     appearanceValue,
+    canvasColors,
     canGroup,
     canUngroup: () =>
       selection().length === 1 &&

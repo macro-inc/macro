@@ -2,10 +2,20 @@
 
 Experimental graphics editor with a framework-independent scene tree.
 
+Status reviewed 2026-09-28. The [parity plan](../../docs/GRAPHICS_PARITY.md) is the
+progress/next-checkpoint index. Local Canvas Next now includes rich text/mentions,
+shape labels, connectors, media, document cards and full embeds. The two-peer Loro
+lab remains a separate, smaller composition; production persistence is not wired.
+The next product checkpoint is a
+[legacy bridge and color policy](../../docs/CANVAS_LEGACY_BRIDGE.md), kept outside
+the pure core. Expanding peer support is deferred.
+
 - `@macro-inc/graphics`: document, affine math, scene queries, selection, editing,
   validation and local history. No DOM, Solid, app or Loro imports.
 - `@macro-inc/graphics/browser`: pointer capture, keyboard, wheel and local images.
 - `@macro-inc/graphics/solid`: read-only reactive projection and keyed renderers.
+- `@macro-inc/graphics/loro`: optional Loro backend and disposable peer harness.
+- `@macro-inc/graphics/loro/solid`: optional awareness rendering and smoothing.
 
 ## Scene contract
 
@@ -20,7 +30,9 @@ Use `sortKeysBetween(lower, upper, count)` to create keys; null means an open en
 Keys must be unique among siblings; different parents may reuse keys. Comparison
 uses code-unit ordering, never locale-sensitive sorting. Rendering and reverse
 hit testing consume the same depth-first scene order.
-Flat scenes are ordinary trees with rectangles directly under the surface.
+Flat scenes are ordinary trees with shapes directly under the surface. Additional
+typed kinds are text, connector, image, video and document; their feature contracts
+are documented below. Shape labels are owned by rectangle/ellipse geometry.
 
 Matrices use column vectors: x'=a*x+c*y+e, y'=b*x+d*y+f. World transforms compose
 parent * local. Positive rotation is clockwise; angles are radians. Core queries
@@ -49,6 +61,20 @@ Creation, move, rotation, resize, grouping, ungrouping, reparenting and subtree
 deletion commit once, with bounded 100-entry local undo/redo. Navigation and
 selection never enter history. Invalid operations make no partial changes.
 
+Local history stores reversible item deltas: each entry references only the items
+added, removed or replaced, plus changed root/surface metadata. Unchanged immutable
+items and geometry are shared across commits; moving a pencil stroke retains its
+existing samples. Undo/redo applies the whole delta atomically and restores the
+original item references. No document snapshots are retained by the stacks.
+Validation still checks scene-wide containment, ordering and connector invariants.
+The optional backend owns its own history; Loro continues using its UndoManager.
+
+`fitScene(viewport)` centers the full scene's world bounds and zooms in or out
+until the first axis fills the current viewport with 100 screen pixels per side.
+It respects camera zoom limits and reduces padding in small embedded viewports.
+The host supplies its actual current dimensions; selection and current camera
+offset do not influence the fit.
+
 Group/reparent/ungroup preserve world transforms. Selected ancestors suppress
 descendants as edit targets, preventing double movement/deletion. Mixed-parent
 moves and pivoted rotation operate in world space, then convert back into each
@@ -59,6 +85,35 @@ of their rotation. Single shapes retain their local oriented solid outline.
 Click-drag anywhere inside the selected box moves its selected roots, including
 empty space and unfilled interiors. Shift and deep-select modifiers still pick
 individual shapes. This does not change hit testing for unselected shapes.
+
+Editors accept `snapUnit` in their options, with `getSnapUnit()` and
+`setSnapUnit(unit)` for local configuration. Any positive finite scene-unit
+interval is supported, including fractions; `undefined` disables snapping.
+It is independent of camera zoom, document serialization and backend choice.
+Changing the unit cancels active drawing/transform previews without adding history.
+`CommandContext.snapUnit` and the pure `snapValue`, `snapPoint`, and
+`snapTranslation` helpers let contributed commands use the same policy.
+
+Rectangle/ellipse drawing and free connector endpoints snap positions. Moves,
+nudges, duplicates and pasted fragments snap their common world-bounds anchor,
+preserving internal spacing, pointer grab offsets and untouched axes. Resizing
+snaps physical dimensions along the selection's axes, accounting for ancestor
+scale. Proportional resizing snaps its controlling dimension while preserving
+aspect ratio; center resizing keeps its center. Image boundaries, connector
+bindings and angle/axis constraints take priority over the grid. Freehand samples,
+rotation, equal distribution and exact alignment retain their own semantics.
+Snapping does not round existing documents on load or remote updates.
+
+The Solid surface's dot grid is camera-aware presentation: scene-unit intervals
+1, 4, 16, 64, 256, etc. appear progressively as zoom increases. Fine dots fade in
+from invisible at 4 screen pixels apart to full strength at 36; coarser dots stay
+steady. At 800% individual canvas pixels are marked subtly at 12.5% opacity.
+Three screen-space SVG patterns use fixed 1 px marks and crisp edges to avoid
+resampling gradient tiles at fractional zoom. Each surface has unique pattern
+IDs, and pattern count is independent of viewport size or dot count. All levels
+share the scene origin and the caller's `gridColor`. The pure `dotGridLevels(scale)`
+helper exposes those same intervals and opacities so hosts can choose a matching
+snap unit. The surface itself does not change snap policy or document data.
 
 Hold Shift during rotation to snap a single shape/group's world angle to 30° increments.
 Hold Shift during movement to constrain the world-space delta to its dominant
@@ -78,6 +133,12 @@ original aspect ratio. Hold Alt/Option to resize from the original center;
 Shift+Alt/Option combines both. Modifiers update even without pointer movement.
 
 Invisible targets along each full edge also resize single shapes, multiple selections and groups.
+Selected rectangles also have inset circular radius controls. `radius-nw/ne/se/sw`
+gestures adjust the existing uniform `appearance.cornerRadius` in local shape units,
+in whole-pixel steps independent of scene snapping, with a half-short-side clamp,
+ephemeral preview, cancellation, and one
+history commit. Geometry and pose stay unchanged. The controls follow affine parent
+transforms while their visual size stays fixed on screen.
 Each target spans 10 screen pixels across the edge at any zoom. Visible corner
 handles take priority where they overlap the edge targets.
 Handles stay square to the screen. Top/bottom edges use `ns-resize`; side edges use
@@ -162,7 +223,10 @@ a matching DOM tree.
   Group/Ungroup and rotation via the circle above the selection. Alt-click targets
   a nested rectangle; ordinary clicks select its outermost group. Single-shape
   selections expose corner handles and invisible full-edge resize targets. Space/middle-drag and wheel pan;
-  Ctrl/Meta-wheel zooms; Fit scene leaves space for rotation handles.
+  Ctrl/Meta-wheel zooms around the pointer with a gradual exponential curve:
+  100 normalized wheel pixels changes scale by about 22%, which is also the cap
+  for a single zoom-in event. Smaller trackpad deltas stay continuous. Fit scene
+  leaves space for rotation handles.
   Expand Layers for the scene tree and front/back/forward/backward controls.
 - `/app/component/nested-scene-playground`: registry-mounted tester containing a
   rotated, nonuniformly scaled outer group, a rotated inner group and root sibling.
@@ -180,12 +244,13 @@ history reset on reload. Each mounted demo owns an independent editor.
 
 ## Boundaries and verification
 
-One surface per document, static typed rectangle/ellipse/pencil/group kinds, linear scene queries,
-and local snapshot history are deliberate prototype limits. Frames/clipping,
-layout, text, multi-surface documents and runtime plugin loading are not implemented.
+One surface per document, a centrally compiled typed shape registry, linear scene
+queries are deliberate prototype limits. Text,
+connectors and embedded item contracts are implemented. Frames/clipping, layout,
+multi-surface documents, per-host core registries and runtime plugin loading are not.
 Affine reflection/shear compose correctly, but have no dedicated UI controls.
 SyncService integration remains separate work. The two-peer Loro experiment uses
-native local undo; never apply snapshot undo to a shared document.
+native local undo; never apply local item-delta undo to a shared document.
 
 The [scene foundation specification](../../docs/GRAPHICS_SCENE_FOUNDATION.md)
 describes the intended longer-term boundary and collaboration questions.
@@ -290,6 +355,16 @@ width (default 2), opacity (1), and rectangle radius (0) are optional typed fiel
 the node transform. The Loro adapter writes each style field independently so local
 undo of one property preserves a peer's edit to another.
 
+The Solid renderer calculates one world-space offset for ordinary move previews
+and applies CSS translation only to moving wrappers and outlines. Selected shapes
+(including group descendants) retain their keyed mounts, geometry, and flat paint
+order. Content and unselected shapes do not receive pointer updates. Connectors
+retain their live geometry path so bindings track moving ends.
+Resize/rotation and committed document changes use the regular projection. Shape
+renderer `item` props are live views: read their fields in reactive scopes, as with
+Solid props, rather than relying on the outer object's identity changing. Nested
+geometry and appearance retain their immutable identities for core caches.
+
 `beginTransform` optionally takes an ID factory to preview subtree duplication.
 Its session-only preview document includes new nodes; the durable document remains
 unchanged until a moved gesture commits. Cancellation discards the preview and
@@ -301,7 +376,7 @@ restores the previous selection. Solid keeps original keyed mounts intact.
 with independent selection, camera and local undo. Both use real Loro replicas via
 `@macro-inc/graphics/loro` and exchange update bytes in memory. Go offline, edit both
 sides, then Sync now or Reconnect. Delivery delay and Reset both peers are available.
-The ordinary playgrounds continue using memory snapshots; this experiment uses
+The ordinary playgrounds use local item-delta history; this experiment uses
 Loro history exclusively. See [the adapter notes](src/loro/README.md) for its ordered
 tree mapping, geometry conflict policy, limitations and validation cases.
 
@@ -313,20 +388,31 @@ fresh presence. The core and ordinary browser/Solid surfaces do not depend on it
 
 ### Rich text
 
-`text` is an explicit shape kind. `TextGeometry.content` is a stringified Lexical
-editor tree; geometry also stores measured width/height, typography and auto-width.
-Core validates a bounded JSON tree envelope without importing Lexical. It preserves
-the string verbatim. The host owns the editor's node vocabulary and rendering.
-`plainRichText` creates a seed Lexical string; `richTextPlainText` is a fallback.
-`setTextCommand` applies a completed edit as one history entry and removes empty
-text. Existing transforms, picking, ordering and clipboard work unchanged.
+`text` is an explicit shape kind. `TextGeometry.content` is a host-defined opaque
+string; geometry also stores measured width/height, typography and auto-width.
+Core checks only that content is a string of at most 2,000,000 UTF-16 code units
+and preserves it verbatim, including empty strings. The host owns format validation
+and decides whether a completed edit sets content, deletes a text item or clears a
+label. `setTextCommand` stores content as one history entry; `setShapeLabelCommand`
+clears a label only when the host omits it. Existing transforms, picking, ordering
+and clipboard work unchanged.
 
 Pass `{measureText}` to the editor for actual font metrics. The default browser
-measurer and Solid TextView provide plain-text fallbacks. A rich host supplies a
-`contentView` to TextView/RectangleView/EllipseView and a matching TextMeasurer.
-Canvas Next uses the shared Markdown builder and StaticLexical renderer for both
-visible content and measurement. Only the active item mounts an editable editor.
-Core never measures the DOM or depends on an editor framework.
+measurer and Solid TextView treat content as literal plain text. A host using an
+encoded format supplies a `contentView` to TextView/RectangleView/EllipseView and a
+matching TextMeasurer. Graphics does not parse editor JSON or infer empty content.
+
+Canvas Next owns its Lexical codec in `canvas-next/core/text-codec.ts`, including
+bounded tree validation, seed construction, serialization and empty-content
+checks. Its clipboard and debug-storage adapters validate imported text/labels.
+It uses the shared Markdown builder and StaticLexical renderer for editing,
+display and measurement, and owns the matching markup styles. Only the active item
+mounts an editable editor. The optional Loro adapter continues storing the whole
+string without parsing it; no content migration is needed.
+
+The shared host supports mentions in both text and labels. Mention decorators
+scale with typography; active editing keeps the native caret without an extra
+box outline. Backend mention tracking/notifications are disabled in the demo.
 
 Single-text side edges change wrapping width; other grips scale font and box
 proportionally. Completed content is one LWW string in the optional Loro adapter,
@@ -364,9 +450,11 @@ connectors remain ordinary keyed shape components in document paint order.
 and geometry, including uncommitted transform overrides. Side ports stay at edge
 midpoints. A center port automatically intersects the target outline toward the
 other endpoint (exact ellipse and rounded rectangle outlines; bounds for other
-shapes). Groups are not attachment targets; their shape children are. Connectors
-cannot target other connectors or themselves. Missing targets use stored fallback
-coordinates. No route cache or Solid state is persisted in geometry.
+shapes). Groups are not attachment targets; their eligible shape children are.
+Connectors cannot target pencil strokes, other connectors or themselves. Missing
+or ineligible targets use stored fallback coordinates, so older pencil bindings
+still load without following the ink. No route cache or Solid state is persisted
+in geometry.
 
 `connector-routing.ts` ports the original Canvas route math: straight segments,
 36-unit rectilinear leads with rounded 10-unit corners, cubic smooth curves and the

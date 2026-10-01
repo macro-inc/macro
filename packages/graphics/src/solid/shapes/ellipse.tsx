@@ -1,5 +1,5 @@
 import type { Component } from 'solid-js';
-import { resolveAppearance } from '../../core/appearance';
+import { resolveAppearance, strokeDasharray } from '../../core/appearance';
 import type { ShapeViewProps } from '../shape-renderers';
 import { ShapeLabelView } from './label';
 import type { TextContentView } from './text';
@@ -17,17 +17,12 @@ export const EllipseView: Component<
         cy="50%"
         rx={props.item.geometry.width / 2}
         ry={props.item.geometry.height / 2}
-        fill={props.preview ? 'none' : props.item.appearance.fill}
+        fill={props.item.appearance.fill}
         stroke={props.item.appearance.stroke}
-        stroke-width={
-          props.preview
-            ? 2 / props.scale
-            : resolveAppearance(props.item.appearance).strokeWidth
-        }
+        stroke-linecap="round"
+        stroke-dasharray={strokeDasharray(props.item.appearance)}
+        stroke-width={resolveAppearance(props.item.appearance).strokeWidth}
         opacity={resolveAppearance(props.item.appearance).opacity}
-        stroke-dasharray={
-          props.preview ? `${4 / props.scale} ${4 / props.scale}` : undefined
-        }
       />
     </svg>
     <ShapeLabelView

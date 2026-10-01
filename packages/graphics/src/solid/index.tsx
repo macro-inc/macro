@@ -1,12 +1,14 @@
 import {
   batch,
   createMemo,
+  createRenderEffect,
   createSignal,
   For,
   type JSX,
   onCleanup,
   onMount,
   Show,
+  untrack,
 } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import {
@@ -20,16 +22,21 @@ import {
   corners,
   cssMatrix,
   enclosing,
-  multiply,
+  IDENTITY,
   transformPoint,
 } from '../core/affine';
 import { screenToWorld, worldToScreen } from '../core/camera';
+import { connectorWorldView } from '../core/connectors';
 import type { GraphicsEditor } from '../core/editor';
 import type { GraphicsDocument, Point, ShapeItem } from '../core/model';
+import { isRadiusHandle } from '../core/radius';
 import { isResizeEdge, resizeHandles } from '../core/resize';
 import { selectionFrame } from '../core/selection-frame';
 import { isShape, isShapeKind, shapeDefinition } from '../core/shapes/registry';
 import { selectedShapeIds } from '../core/style-selection';
+import { createShapeView } from './create-shape-view';
+import { DotGrid } from './dot-grid-view';
+import { RadiusHandles } from './radius-handles';
 import { ShapeSelectionOutline } from './selection-outline';
 import {
   defaultRenderers,
@@ -46,7 +53,14 @@ export { EllipseView } from './shapes/ellipse';
 export { RectangleView } from './shapes/rectangle';
 export { TextView } from './shapes/text';
 
-import { drawableIds, resolvedShape, roots, worldMatrix } from '../core/scene';
+import {
+  drawableIds,
+  resolvedShape,
+  roots,
+  type SceneOverrides,
+  shapeProjection,
+  worldMatrix,
+} from '../core/scene';
 
 export function createGraphicsProjection(editor: GraphicsEditor) {
   const [camera, setCamera] = createSignal(editor.getCamera());
@@ -107,11 +121,81 @@ export function GraphicsSurface(props: {
       projection.session().transform?.document ??
       projection.snapshot()
   );
-  const overrides = () => projection.session().transform?.nodes ?? {};
-  const selected = () => roots(scene(), projection.session().selectedIds);
+  const emptyOverrides: SceneOverrides = Object.freeze({});
+  const overrides = createMemo(
+    () => projection.session().transform?.nodes ?? emptyOverrides
+  );
+  const cameraScale = createMemo(() => projection.camera().scale);
+  const selected = createMemo(
+    () => roots(scene(), projection.session().selectedIds),
+    undefined,
+    {
+      equals: (a, b) =>
+        a.length === b.length && a.every((id, i) => id === b[i]),
+    }
+  );
   const selectedShapes = createMemo(() =>
     selectedShapeIds(scene(), selected())
   );
+  const moving = createMemo(
+    () => projection.session().transform?.kind === 'move'
+  );
+  const movingShapes = createMemo(
+    () => new Set(moving() ? selectedShapes() : [])
+  );
+  const contentOverrides = createMemo(() =>
+    moving() ? emptyOverrides : overrides()
+  );
+  // Every selected root receives the same world-space translation. Keep the
+  // flat paint order, including unselected shapes between moving ones.
+  const moveOffset = createMemo(() => {
+    const id = selected()[0];
+    if (!moving() || !id) return { x: 0, y: 0 };
+    const base = worldMatrix(scene(), id);
+    const next = worldMatrix(scene(), id, overrides());
+    return { x: next[4] - base[4], y: next[5] - base[5] };
+  });
+  const moveElements = new Map<string, Set<HTMLElement | SVGElement>>();
+  let translatedElements = new Set<HTMLElement | SVGElement>();
+  const registerMoveElement = (
+    id: string,
+    element: HTMLElement | SVGElement
+  ) => {
+    const elements =
+      moveElements.get(id) ?? new Set<HTMLElement | SVGElement>();
+    elements.add(element);
+    moveElements.set(id, elements);
+    untrack(() => {
+      if (movingShapes().has(id) && scene().items[id]?.type !== 'connector') {
+        const offset = moveOffset();
+        element.style.translate = `${offset.x}px ${offset.y}px`;
+        translatedElements.add(element);
+      }
+    });
+    onCleanup(() => {
+      elements.delete(element);
+      if (!elements.size) moveElements.delete(id);
+      translatedElements.delete(element);
+    });
+  };
+  // Update only the moving wrappers and outlines. Inherited CSS variables would
+  // invalidate styles throughout the scene, including every embedded subtree.
+  createRenderEffect(() => {
+    const offset = moveOffset();
+    const translate = `${offset.x}px ${offset.y}px`;
+    const next = new Set<HTMLElement | SVGElement>();
+    for (const id of movingShapes()) {
+      if (scene().items[id]?.type === 'connector') continue;
+      for (const element of moveElements.get(id) ?? []) {
+        element.style.translate = translate;
+        next.add(element);
+      }
+    }
+    for (const element of translatedElements) {
+      if (!next.has(element)) element.style.removeProperty('translate');
+    }
+    translatedElements = next;
+  });
   const hoveredShapes = createMemo(() => {
     const pointer = hover();
     if (
@@ -140,8 +224,22 @@ export function GraphicsSurface(props: {
     return item?.type === 'connector' ? item : undefined;
   };
   const frame = createMemo(() =>
-    selectionFrame(scene(), selected(), overrides())
+    projection.session().transform
+      ? undefined
+      : selectionFrame(scene(), selected())
   );
+  const radiusRectangle = () => {
+    const gesture = projection.session().transform;
+    if (
+      selected().length !== 1 ||
+      props.input?.tool?.() !== 'select' ||
+      props.input?.suspended?.() ||
+      (gesture && gesture.kind !== 'radius')
+    )
+      return;
+    const item = overrides()[selected()[0]!] ?? scene().items[selected()[0]!];
+    return item?.type === 'rectangle' ? item : undefined;
+  };
   const screen = (p: Point) => worldToScreen(projection.camera(), p);
   const outline = (id: string) =>
     selectionFrame(scene(), [id], overrides())?.corners.map(screen) ?? [];
@@ -174,11 +272,6 @@ export function GraphicsSurface(props: {
     const bounds = enclosing(points);
     return { x: bounds.x + bounds.width / 2, y: bounds.y - 16 };
   };
-  const gridStep = () => {
-    let step = 32 * projection.camera().scale;
-    while (step < 16) step *= 2;
-    return step;
-  };
   const renderers = { ...defaultRenderers, ...props.renderers };
   const previewItem = (): ShapeItem | undefined => {
     if (!projection.preview()) return undefined;
@@ -210,11 +303,12 @@ export function GraphicsSurface(props: {
           : props.input?.tool?.() === 'pan'
             ? 'grab'
             : undefined,
-        'background-image': `radial-gradient(circle, ${props.gridColor ?? 'currentColor'} 1px, transparent 1px)`,
-        'background-size': `${gridStep()}px ${gridStep()}px`,
-        'background-position': `${projection.camera().x}px ${projection.camera().y}px`,
       }}
     >
+      <DotGrid
+        camera={projection.camera()}
+        color={props.gridColor ?? 'currentColor'}
+      />
       <div
         style={{
           position: 'absolute',
@@ -252,33 +346,62 @@ export function GraphicsSurface(props: {
           {(id) => {
             const initial = scene().items[id];
             if (!isShape(initial)) return null;
+            const isConnector = () => scene().items[id]?.type === 'connector';
+            // Connectors can change their routes when either bound end moves.
+            const shapeOverrides = () =>
+              isConnector() ? overrides() : contentOverrides();
             const item = createMemo(
-              () => resolvedShape(scene(), id, overrides()) ?? initial
+              () => resolvedShape(scene(), id, shapeOverrides()) ?? initial
             );
-            const world = () => worldMatrix(scene(), id, overrides());
+            const world = createMemo(
+              () => worldMatrix(scene(), id, shapeOverrides()),
+              undefined,
+              {
+                equals: (a, b) =>
+                  a.length === b.length &&
+                  a.every((value, i) => value === b[i]),
+              }
+            );
+            const boundConnector = () => {
+              const shape = item();
+              return (
+                shape.type === 'connector' &&
+                !!(shape.geometry.start.binding || shape.geometry.end.binding)
+              );
+            };
+            const renderedItem = createMemo(() => {
+              const shape = item();
+              return shape.type === 'connector' && boundConnector()
+                ? connectorWorldView(shape, world())
+                : shape;
+            });
+            const view = createShapeView(renderedItem, () =>
+              isConnector()
+                ? renderedItem().transform
+                : (resolvedShape(scene(), id, overrides()) ?? initial).transform
+            );
+            const scale = createMemo(
+              () =>
+                cameraScale() *
+                (boundConnector() ? 1 : Math.hypot(world()[0], world()[1]))
+            );
             return (
               <div
+                ref={(element) => registerMoveElement(id, element)}
                 data-graphics-item={id}
                 style={{
                   position: 'absolute',
                   left: '0',
                   top: '0',
-                  width: `${shapeDefinition(item().type).bounds(item()).width}px`,
-                  height: `${shapeDefinition(item().type).bounds(item()).height}px`,
+                  width: `${shapeDefinition(view.type).bounds(view).width}px`,
+                  height: `${shapeDefinition(view.type).bounds(view).height}px`,
                   'transform-origin': '0 0',
                   isolation: 'isolate',
-                  transform: cssMatrix(world()),
+                  transform: cssMatrix(boundConnector() ? IDENTITY : world()),
                   'pointer-events': 'auto',
                 }}
               >
-                <ShapeView
-                  renderers={renderers}
-                  item={item()}
-                  scale={
-                    projection.camera().scale *
-                    Math.hypot(world()[0], world()[1])
-                  }
-                />
+                <ShapeView renderers={renderers} item={view} scale={scale()} />
               </div>
             );
           }}
@@ -321,30 +444,51 @@ export function GraphicsSurface(props: {
         }}
       >
         <Show when={!props.hideSelection && props.input?.tool?.() === 'select'}>
-          <For each={indicatedShapes()}>
-            {(id) => {
-              const initial = scene().items[id];
-              if (!isShape(initial)) return null;
-              const item = createMemo(
-                () => resolvedShape(scene(), id, overrides()) ?? initial
-              );
-              const transform = () => {
-                const { x, y, scale } = projection.camera();
-                return multiply(
-                  [scale, 0, 0, scale, x, y],
-                  worldMatrix(scene(), id, overrides())
+          <g
+            transform={cssMatrix([
+              cameraScale(),
+              0,
+              0,
+              cameraScale(),
+              projection.camera().x,
+              projection.camera().y,
+            ])}
+          >
+            <For each={indicatedShapes()}>
+              {(id) => {
+                const initial = scene().items[id];
+                if (!isShape(initial)) return null;
+                const isConnector = () =>
+                  scene().items[id]?.type === 'connector';
+                const projection = createMemo(() =>
+                  shapeProjection(
+                    scene(),
+                    id,
+                    isConnector() ? overrides() : contentOverrides()
+                  )
                 );
-              };
-              return (
-                <ShapeSelectionOutline
-                  item={item()}
-                  transform={transform()}
-                  color="#5687ff"
-                  hovered={!selectedShapes().includes(id)}
-                />
-              );
-            }}
-          </For>
+                const transform = createMemo(
+                  () => projection().transform,
+                  undefined,
+                  {
+                    equals: (a, b) => a.every((value, i) => value === b[i]),
+                  }
+                );
+                const view = createShapeView(
+                  () => projection().item ?? initial
+                );
+                return (
+                  <ShapeSelectionOutline
+                    ref={(element) => registerMoveElement(id, element)}
+                    item={view}
+                    transform={transform()}
+                    color="#5687ff"
+                    hovered={!selectedShapes().includes(id)}
+                  />
+                );
+              }}
+            </For>
+          </g>
           <Show when={!projection.session().transform && singleConnector()}>
             {(item) => (
               <For each={['start', 'end'] as const}>
@@ -378,14 +522,15 @@ export function GraphicsSurface(props: {
             each={selected().filter((id) => {
               const item = overrides()[id] ?? scene().items[id];
               if (!isShape(item) || item.type === 'connector') return false;
-              if (selected().length > 1) {
-                // Curved shapes keep their geometry trace inside the shared box.
-                return (
-                  item.type !== 'ellipse' &&
-                  (item.type !== 'rectangle' || !item.appearance.cornerRadius)
-                );
-              }
-              return !!projection.session().transform;
+              // Every selected shape already has a geometry outline. Only a
+              // single curved shape needs an additional box while transforming.
+              return (
+                selected().length === 1 &&
+                !!projection.session().transform &&
+                (item.type === 'ellipse' ||
+                  item.type === 'pencil' ||
+                  (item.type === 'rectangle' && !!item.appearance.cornerRadius))
+              );
             })}
           >
             {(id) => (
@@ -487,6 +632,19 @@ export function GraphicsSurface(props: {
                 />
               )}
             </Show>
+          </Show>
+          <Show when={radiusRectangle()}>
+            {(item) => (
+              <RadiusHandles
+                item={item()}
+                transform={worldMatrix(scene(), item().id, overrides())}
+                camera={projection.camera()}
+                active={(() => {
+                  const handle = projection.session().transform?.handle;
+                  return isRadiusHandle(handle) ? handle : undefined;
+                })()}
+              />
+            )}
           </Show>
         </Show>
         <Show when={projection.session().box}>

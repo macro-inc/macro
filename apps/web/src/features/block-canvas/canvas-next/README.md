@@ -1,25 +1,70 @@
 # Canvas Next — drawing, rich text, media and document cards
 
-Open `/app/component/canvas-next` in local development. `USE_CANVAS_NEXT` is an
-env-only flag enabled by default with Vite HMR. Set `VITE_USE_CANVAS_NEXT=false`
-to hide the demo. The additional `LOCAL_ONLY` guard prevents an env override from
-enabling it in deployed bundles.
+Canvas Next opens saved documents behind the remote `enable-canvas-next` flag.
+Use `VITE_ENABLE_CANVAS_NEXT=true` to opt in locally; unset overrides defer to
+PostHog and the rollout stays off until enabled there. The flag is sampled when
+opening a document, so remote refreshes cannot switch an active editing session.
 
-This is a new composition inside `block-canvas`, using `@macro-inc/graphics`.
-It does not use legacy Canvas state, Zod, document saving, or local storage.
-`core/seed-scene.ts` supplies disposable data; reload or Reset demo starts fresh.
-The older demos remain focused regression fixtures. Actual Canvas documents still
-use the existing document host until the production gate in `docs/GRAPHICS_PARITY.md`.
+The frontend treats unversioned JSON (and explicit version 1) as legacy Canvas.
+It converts supported records on load to `{ version: 2, document, legacy? }`.
+`document` is the graphics scene; `legacy` retains the original JSON and migration
+notes for recovery. No migration is saved merely by viewing a file. The first
+committed edit writes version 2 using the existing JSON/simple-save endpoint.
+Subsequent loads validate version 2 directly; they never replay the archived data.
+Unknown versions and invalid scenes fail closed. With the flag off, version 2
+files show a Canvas Next requirement instead of opening in the legacy editor.
+
+Migration preserves IDs, groups, stacking order, positions, shape labels,
+Markdown text, connector bindings/styles, media references and flips, and document
+references. Pencil samples are retained and use the new brush. Unsupported links,
+non-document entity cards, subpath references, connector labels, invalid records,
+and interleaved group layers offer **Open in legacy editor** without writing data.
+There is no version 2-to-legacy downgrade. Document-level read-only mode mounts a
+navigation-only surface without editing, paste/drop, or embedded editing handlers.
+Saves are debounced and serialized; failures keep edits dirty and show **Retry**.
+
+SyncService integration and collaboration remain a follow-up. This change keeps
+the existing whole-file save behavior. See [Graphics and Canvas parity](../../../../../../docs/GRAPHICS_PARITY.md)
+for the remaining editor and collaboration work.
+
+The disposable demo at `/app/component/canvas-next` is separately guarded by
+`USE_CANVAS_NEXT` (local only; `VITE_USE_CANVAS_NEXT=false` hides it). Only that demo
+uses `macro.canvas-next.debug.v1` local storage and exposes **Reset demo**. Real
+documents never load its browser snapshot or show its reset action.
 
 ## Controls
 
 The floating top toolbar uses the shared `Toolbar` and Phosphor icons for drawing
 and inserting media, document cards, and embeds. Tooltips show each tool's shortcut.
 Zoom, reset-to-100%, fit, undo, and redo live at the bottom-left. Adjacent controls
-toggle floating properties and layers panels; the canvas menu contains Reset demo.
+toggle floating properties and layers panels; the demo canvas menu contains Reset demo.
+Fit Scene uses the current viewport dimensions, centers all scene geometry and
+zooms in or out to leave 100 screen pixels per side on the first axis to fill.
+Camera zoom limits still apply; padding decreases for small embedded viewports.
+Ctrl/Meta-wheel zoom is pointer-anchored, with a continuous 0.002 exponential rate
+per normalized wheel pixel and an exponent cap of 0.2 per event (about 22% zoom-in).
+Plain wheel input pans at its existing speed.
+The Design panel's zoom menu offers **No snapping** (the default for each session),
+**Snap to px** (1 canvas px at every zoom), and **Auto snapping** (the smallest
+currently visible dot-grid interval, including faint dots). Auto follows zoom;
+hiding the grid temporarily disables it. Drawing, moving, resizing, insertion, duplication, pasting, free
+connector endpoints and layout inspector values use the chosen interval; inspector
+scrubs preview the same snapped values they commit. Freehand and rotation keep
+their own precision, and connector bindings and aspect-ratio constraints stay exact.
+The preference is local editor state, not saved JSON or shared Loro data.
+The dot grid adapts to zoom, revealing 1, 4, 16, 64 px levels (and
+coarser levels at extreme zoom-out). Coarse dots remain steady while finer dots
+fade in gently; individual canvas pixels are faintly visible at 800%. Dots use
+fixed 1 screen-pixel SVG marks, including at fractional zoom. Marks closer than
+4 screen pixels disappear to avoid a dense texture. Their centers stay anchored
+to canvas coordinates through pan/zoom. Colors blend the theme's muted ink and
+panel tokens; the dot-grid visibility toggle hides every level.
 The shared context menu exposes clipboard, grouping, layer ordering, select-all,
 and delete actions, with normal keyboard navigation and focus restoration. Active
 embedded editors and text editing retain their own context menus.
+Selecting Arrow, Line, Connector, or Pencil repairs invisible drawing defaults:
+missing/transparent strokes use theme Ink, zero width uses 2 px, and zero opacity
+uses full opacity. Other style choices and existing shapes are preserved.
 
 ## Editing
 
@@ -34,7 +79,7 @@ embedded editors and text editing retain their own context menus.
 | Copy / cut / paste | Cmd/Ctrl+C / X / V |
 | Duplicate | Cmd/Ctrl+D, or Option/Alt-drag |
 | Select all | Cmd/Ctrl+A |
-| Nudge | Arrows: 1 world unit; Shift+arrows: 10 |
+| Nudge | Arrows: one snap unit; Shift+arrows: ten snap units |
 | Group / ungroup | Cmd/Ctrl+G / Shift+Cmd/Ctrl+G |
 | Undo / redo | Cmd/Ctrl+Z / Shift+Cmd/Ctrl+Z |
 | Delete | Backspace / Delete |
@@ -60,9 +105,16 @@ or pressing Escape leaves no copy or history entry. Hold Option at gesture start
 live modifier toggling during a duplicate drag is not implemented.
 
 The inspector supports mixed values, fill/stroke palettes, width, opacity and
-rectangle radius. Edits also become defaults for subsequent shapes. A group has
+rectangle radius. Color controls compose the shared `@ui` ColorPicker field, hue
+and opacity tracks, and hex input. Canvas does not import the theme editor picker
+or Color.js; custom edits produce sRGB hex, while preset theme references stay
+as references until edited. Edits also become defaults for subsequent shapes. A group has
 no inherited style: styling it edits all descendant shapes once. Ellipses ignore
-radius. Numeric changes commit on change/blur, not on every digit.
+radius. Typing numbers commits on change/blur. Dragging a numeric handle previews
+the scene continuously, then commits one undo step on release. Escape, lost pointer
+capture, or leaving the window restores the starting scene without saving a change.
+Previews always use the starting document, so rotation and resizing do not accumulate
+rounding errors between samples.
 
 Selections expose four visible corner handles and invisible targets along each full
 edge, with a 10-screen-pixel hit area and resize cursors. Corners take priority
@@ -113,6 +165,10 @@ outline tolerance; a thick stroke does not gain another 3px outside its paint.
 Core command and transform tests exercise both memory and Loro paths. The new UI
 uses memory only; it does not install awareness or production collaboration.
 
+The view/state already accept an editor. The current composition root constructs
+its own memory editor; a later peer checkpoint can inject Loro editors while
+retaining the same rich-text measurement, renderer, clipboard and input ownership.
+
 ## Pencil checkpoint
 
 P selects the pencil tool. It stays active for repeated strokes; V or Escape
@@ -126,6 +182,12 @@ not raw samples or empty bounding-box space. Existing selected-box drag behavior
 is unchanged. Resize scales points and recomputes pressure/ink with nominal pen
 width retained, including uniform scaling through nested groups. Copy/paste,
 Option-drag, styles, layering and local history use the shared shape pathways.
+
+The 2026-09-28 performance fix preserves immutable core geometries for rendering
+and hit queries and retains geometry through move/rotation previews. This reuses
+derived ink during pan, hover, selection and transforms; raw samples are unchanged.
+The 11-stroke/7,041-sample regression checks brush executions, not a browser FPS
+budget. Mixed-content performance and general spatial indexing remain later work.
 
 ## Rich text checkpoint
 
@@ -152,12 +214,20 @@ Lexical nodes through reopening, copy/paste, and undo, and render with the share
 mention decorators. This disposable demo disables backend mention tracking and
 notifications; mentions remain part of the same whole-content LWW string.
 
-Core stores `TextGeometry.content` as a stringified Lexical editor tree, including
-shape labels. Canvas Next uses the shared Markdown builder (`buildConfig` and
-`MarkdownShell`) for editing and `StaticLexical` for display and measurement.
-The tree is never converted through Markdown when loading or saving. Core only
-bounds/validates the JSON envelope and retains no Lexical, Solid, or DOM imports.
+Canvas Next stores a stringified Lexical editor tree in `TextGeometry.content`,
+including shape labels. `core/text-codec.ts` owns bounded tree validation, seed
+construction, serialization, plain-text extraction and empty-content detection.
+Clipboard and debug-storage imports validate this host format before accepting a
+scene. Graphics only checks the opaque string's size; it never interprets the tree
+or decides whether to remove empty text. The text state explicitly deletes cleared
+text items, skips empty creations and clears labels while retaining their shapes.
+Canvas Next uses the shared Markdown builder (`buildConfig` and `MarkdownShell`)
+for editing and `StaticLexical` for display and measurement, with its own markup
+styles. The tree is never converted through Markdown when loading or saving.
+Whole-string LWW and existing serialized content remain unchanged.
 Only the actively edited shape mounts an editable Lexical instance.
+The editing surface has no additional colored box outline; native text selection
+and the caret remain visible. Selection indicators return after editing finishes.
 Reordering other items therefore cannot remount the editor or replace its content.
 Draft updates do not mutate the scene. Ending the edit submits one canvas undo
 step, and undo inside the editor affects only that editing session.
@@ -186,7 +256,8 @@ express this through the `canDeform` capability used by selection-frame math.
 
 ## Arrows and connectors checkpoint
 
-A selects Arrow, C selects Connector (rounded elbow), and L selects Line. Drag from
+A selects Arrow and L selects Line; C remains available for the app's Create menu.
+Choose Elbow in the Connection inspector for a rounded connector. Drag from
 empty space or a shape. Hovering a shape reveals five small endpoint-style circles:
 its center and four edge midpoints. Only the hovered shape shows these targets.
 A center drop automatically meets the outline as the target moves; side drops stay fixed on the chosen edge. Points retain their
@@ -231,7 +302,8 @@ of the scene. Card text uses `text-base` and reflows at its actual width;
 resizing no longer scales a 320px snapshot. Titles, menus and task controls remain
 interactive; dragging the card background moves it. Select the card and use Open document. Workspace drops and pasted Macro
 links also insert document cards. Preview loading/errors stay inside the card's
-Suspense/ErrorBoundary. Signed URLs, query results, media players, preview contents,
+Suspense/ErrorBoundary. Loading shows a pulsing icon dot and two title skeleton
+lines, shared with DocumentPreview. Signed URLs, query results, media players, preview contents,
 and upload state are never stored in core. SVG-to-editable-shape conversion is not
 part of this checkpoint; SVG files can be inserted as images.
 
@@ -259,3 +331,12 @@ mapping before they can be relied on inside zoomed, rotated, or flipped outer
 scenes. Document text editing uses browser-native layout/hit testing. Browser
 verification covered editor mounting, local controls, independent canvas panning,
 preview font sizing, conversion, and input enter/exit without editing source files.
+
+## Large-scene regression coverage
+
+`packages/graphics/tests/large-scene.test.tsx` mounts 2,000 rectangles across
+three groups and checks stable shape mounts and scale computations during pan,
+selection, and group movement. Scene hierarchy, paint order, and picking bounds
+are indexed on immutable snapshots; edits and undo replace those indexes.
+Selection outlines share a camera transform so panning does not rewrite every
+outline. Mutable scene builders continue to bypass caches.

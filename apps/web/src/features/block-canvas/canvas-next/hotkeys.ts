@@ -9,7 +9,8 @@ import type { CanvasState } from './primitives/create-canvas-state';
 export function registerCanvasNextHotkeys(
   scopeId: string,
   state: CanvasState,
-  clipboard: CanvasClipboard
+  clipboard: CanvasClipboard,
+  canEdit: () => boolean = () => true
 ) {
   const group = createHotkeyGroup(),
     editor = state.editor;
@@ -28,7 +29,8 @@ export function registerCanvasNextHotkeys(
         description,
         proxiedHotkey,
         keyDownHandler: () => {
-          if (state.text.draft() || state.embeds.active()) return false;
+          if (!canEdit() || state.text.draft() || state.embeds.active())
+            return false;
           action();
           return true;
         },
@@ -48,8 +50,8 @@ export function registerCanvasNextHotkeys(
     TOKENS.canvas.shapeTool
   );
   register('a', 'Arrow tool', () => state.chooseTool('arrow'));
-  register('c', 'Connector tool', () => state.chooseTool('connector'));
   register('l', 'Line tool', () => state.chooseTool('line'));
+  register('e', 'Eraser tool', () => state.chooseTool('eraser'));
   register('t', 'Text tool', () => state.chooseTool('text'));
   register('enter', 'Edit selected text', () => {
     const id = editor.getSession().selectedId;
@@ -151,18 +153,68 @@ export function registerCanvasNextHotkeys(
     ['arrowdown', 0, 1],
   ] as const) {
     register(key, `Nudge ${key.slice(5)}`, () =>
-      editor.execute(nudgeCommand, { x, y })
+      editor.execute(nudgeCommand, {
+        x: x * (editor.getSnapUnit() ?? 1),
+        y: y * (editor.getSnapUnit() ?? 1),
+      })
     );
     register(`shift+${key}`, `Nudge ${key.slice(5)} by 10`, () =>
-      editor.execute(nudgeCommand, { x: x * 10, y: y * 10 })
+      editor.execute(nudgeCommand, {
+        x: x * 10 * (editor.getSnapUnit() ?? 1),
+        y: y * 10 * (editor.getSnapUnit() ?? 1),
+      })
     );
   }
   register(
     'escape',
-    'Selection tool / cancel',
-    () => state.chooseTool('select'),
+    'Clear selection / cancel',
+    () => {
+      state.chooseTool('select');
+      editor.select();
+    },
     TOKENS.canvas.cancel
   );
   // Surface also handles Escape and space-pan to release pointer capture.
+  onCleanup(() => group.dispose());
+}
+
+export function registerCanvasZoomHotkeys(
+  scopeId: string,
+  state: CanvasState,
+  zoom: (factor: number) => void,
+  fit: () => void
+) {
+  const group = createHotkeyGroup();
+  for (const [hotkey, description, factor, token] of [
+    ['cmd+=', 'Zoom In', 1.2, TOKENS.canvas.zoomIn],
+    ['cmd+-', 'Zoom Out', 1 / 1.2, TOKENS.canvas.zoomOut],
+  ] as const) {
+    group.add(
+      registerHotkey({
+        scopeId,
+        hotkey,
+        description,
+        hotkeyToken: token,
+        keyDownHandler: () => {
+          if (state.text.draft() || state.embeds.active()) return false;
+          zoom(factor);
+          return true;
+        },
+      })
+    );
+  }
+  group.add(
+    registerHotkey({
+      scopeId,
+      hotkey: '.',
+      description: 'Zoom to fit',
+      hotkeyToken: TOKENS.canvas.zoomFit,
+      keyDownHandler: () => {
+        if (state.text.draft() || state.embeds.active()) return false;
+        fit();
+        return true;
+      },
+    })
+  );
   onCleanup(() => group.dispose());
 }

@@ -1,16 +1,20 @@
 # Graphics scene foundation
 
-Status: the local scene foundation and demo adaptation are implemented in
-packages/graphics: normalized surface/group/rectangle tree, affine math, validated
-structural operations, transformed selection/editing, rotation handle, and
-nested-scene tester. Demos use the current unversioned model and disposable seed
-scripts; no document storage or migration is supported. Typed shape definitions and separate Solid
-renderer registration now support rectangles and ellipses; see the graphics
-package README for the extension recipe.
+Status reviewed 2026-09-28: the scene foundation is implemented in
+`packages/graphics`: normalized surface/group/shape tree, affine math, validated
+structural operations, transformed selection/editing, rotation/resize and stable
+ordering. Typed definitions and separate Solid renderers now cover rectangle,
+ellipse, pencil, text, connector, image, video and document items. Canvas Next
+composes rich text/labels/mentions, media/cards/embeds and shared controls on this
+foundation. See the [graphics README](../packages/graphics/README.md) for extension
+contracts and [parity plan](GRAPHICS_PARITY.md) for current progress/next steps.
+Demos remain unversioned and disposable; document storage/migration is not supported.
 
 The current implementation supports one surface per document, fractional string sibling
 order keys, linear queries and local snapshot undo. Multi-surface documents,
-decomposition inspectors and incremental query caches remain future work. An initial
+decomposition inspectors and general incremental scene indexes remain future work.
+Derived pencil ink is cached by immutable geometry; the Solid snapshot path and
+move/rotation previews now preserve this cache. An initial
 Loro convergence spike and two-peer visual playground are implemented separately;
 their geometry conflict policy is still experimental. The design below records the intended boundary; those future
 capabilities must not be inferred from the local prototype.
@@ -21,21 +25,23 @@ This checkpoint supersedes the flat-scene scope in the original rectangle plan.
 
 Use a normalized node map with stable IDs and an ordered containment tree. Flat
 scenes are trees whose drawable nodes are all immediate children of a surface.
-The document owns ordered surfaces; each surface is a coordinate-space root.
+The current document has one surface root. Ordered multiple surfaces are a future
+extension; each surface would be a coordinate-space root.
 Whiteboards are unbounded surfaces; image markup and slides use bounded surfaces.
 A surface references image assets through durable IDs, never object URLs.
 
 Each non-root node has exactly one authoritative placement value containing its
 parent ID and sibling order key. Derive child lists and parent/ancestor indexes;
 do not persist both a parent pointer and independent child arrays. Parent and
-order are one structural edit. Order keys require a deterministic ID tie-breaker;
-allocation and any rebalance belong to the backend, not UI code. Loro may expose
-this contract through its own ordered tree rather than literal placement fields.
+order are one structural edit. Current core sibling keys must be unique; duplicates
+are rejected rather than tied by ID. Allocation belongs to core/backend, not UI
+code. The Loro adapter projects its ordered tree into unique core keys instead of
+merging literal key fields.
 
-Initially support rectangle and group node kinds. Groups establish coordinate
-spaces and ordered children, have no intrinsic painted geometry, and do not clip.
-Their bounds are derived from descendants. Frames, clipping, layout containers,
-connectors, and comments are later node/capability types. Connector and comment
+Groups establish coordinate spaces and ordered children, have no intrinsic painted
+geometry, and do not clip. Their bounds are derived from descendants. Connectors
+now have typed endpoint references, fallback points and shared routing. Frames,
+clipping, layout containers and comments remain later capabilities. Connector and comment
 references are graph edges independent of the containment tree. Avoid using one
 parent relation for coordinate containment, temporary selection, and arbitrary
 semantic associations.
@@ -78,17 +84,21 @@ transforms; specify an inversion tolerance and permitted scale limits. Reflectio
 are representable. Keep camera zoom limits separate from document transform limits.
 
 Rectangle resizing changes its local dimensions and placement to preserve the
-opposite anchor. Group scaling changes its transform; it is not synonymous with
-resizing every child. Text/stroke/layout behavior under scaling remains a product
-policy to settle before exposing group scale handles.
+opposite anchor. Group/shared resizing stretches descendant geometry only when
+its axes align with the selection box; incompatible rotations or text force
+uniform scale. Uniform scale transforms selected roots, with pencil regenerating
+ink at its nominal brush width. Single text side edges rewrap; other grips scale
+typography proportionally. These are implemented shape capabilities; future layout
+containers need their own policy.
 
 ## Scene queries and selection
 
 One pure scene-query layer owns traversal, world transforms, local/world geometry,
 paint order, subtree bounds, and world-to-local conversion. Begin with linear
 queries and disposable derived caches; no spatial-index dependency is needed.
-Changes invalidate affected descendants' world transforms and ancestors' aggregate
-bounds. Preview queries apply session overrides before deriving descendant geometry.
+An eventual incremental index must invalidate affected descendants' world transforms
+and ancestors' aggregate bounds. Current preview queries apply session overrides
+before deriving descendant geometry; no general index/invalidation engine exists.
 
 Point hit testing converts a world point into node-local coordinates before asking
 the typed shape definition. Box selection uses actual transformed rectangle
@@ -140,11 +150,11 @@ prototype, but its interface must allow operation-aware collaborative undo later
 
 ## Collaboration and validation boundaries
 
-The logical scene tree is mandatory now; its CRDT encoding is not decided by the
-memory representation. Keep structural operations explicit. Validate an ordered
-LoroTree mapping against concurrent reparenting, deletion and ordering before
-freezing persistence. Local tree validation alone cannot prevent cycles caused by
-merging concurrent parent-map edits.
+The logical scene tree is mandatory; its CRDT encoding is separate from the memory
+representation. The experimental ordered LoroTree mapping now has concurrent
+reparenting, deletion and ordering tests. Production conflict policy still needs
+acceptance before durable integration. Local tree validation alone cannot prevent
+cycles caused by merging concurrent parent-map edits.
 
 World-pose-preserving reparenting depends on both placement and local transform.
 A local transaction does not guarantee those fields win together under CRDT merge.

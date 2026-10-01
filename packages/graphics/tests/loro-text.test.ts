@@ -2,7 +2,6 @@ import { afterEach, expect, it } from 'vitest';
 import {
   createScene,
   nudgeCommand,
-  plainRichText,
   type ShapeItem,
   setShapeLabelCommand,
   setTextCommand,
@@ -25,7 +24,7 @@ const item: ShapeItem<'text'> = {
     autoWidth: false,
     fontSize: 24,
     fontFamily: 'sans',
-    content: plainRichText('Original'),
+    content: 'Original',
   },
 };
 function setup() {
@@ -36,7 +35,7 @@ function setup() {
 }
 it('merges a whole-string edit with a concurrent move and independently undoes each', () => {
   const { lab, a, b } = setup();
-  const content = plainRichText('Edited');
+  const content = 'Edited';
   a.execute(setTextCommand, {
     ...item,
     geometry: { ...item.geometry, content },
@@ -56,10 +55,10 @@ it('merges a whole-string edit with a concurrent move and independently undoes e
     transform: translation(50, 40),
   });
 });
-it('concurrent edits choose one complete serialized tree, never combine characters', () => {
+it('concurrent edits choose one complete content string, never combine characters', () => {
   const { lab, a, b } = setup();
-  const left = plainRichText('Alice complete edit'),
-    right = plainRichText('Bob complete edit');
+  const left = 'Alice complete edit',
+    right = 'Bob complete edit';
   a.execute(setTextCommand, {
     ...item,
     geometry: { ...item.geometry, content: left },
@@ -77,7 +76,7 @@ it('concurrent edits choose one complete serialized tree, never combine characte
 });
 it('label strings merge independently of moving their owner', () => {
   const label = {
-    content: plainRichText('Label'),
+    content: 'Label',
     fontSize: 20,
     fontFamily: 'sans' as const,
     height: 27,
@@ -94,14 +93,14 @@ it('label strings merge independently of moving their owner', () => {
     b = lab.peers[1]!.editor;
   a.execute(setShapeLabelCommand, {
     id: 'text',
-    label: { ...label, content: plainRichText('Changed') },
+    label: { ...label, content: 'Changed' },
   });
   b.select('text');
   b.execute(nudgeCommand, { x: 40, y: 0 });
   lab.syncNow();
   expect(a.document).toEqual(b.document);
   expect(b.document.items.text).toMatchObject({
-    geometry: { label: { content: plainRichText('Changed') } },
+    geometry: { label: { content: 'Changed' } },
     transform: translation(40, 0),
   });
 });
@@ -120,7 +119,7 @@ it('adding a new label and moving the previously unlabeled shape both survive', 
   a.execute(setShapeLabelCommand, {
     id: 'text',
     label: {
-      content: plainRichText('New label'),
+      content: 'New label',
       fontSize: 24,
       fontFamily: 'sans',
       height: 32,
@@ -132,6 +131,6 @@ it('adding a new label and moving the previously unlabeled shape both survive', 
   expect(a.document).toEqual(b.document);
   expect(b.document.items.text).toMatchObject({
     transform: translation(60, 0),
-    geometry: { label: { content: plainRichText('New label') } },
+    geometry: { label: { content: 'New label' } },
   });
 });

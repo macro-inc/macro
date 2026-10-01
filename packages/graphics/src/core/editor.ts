@@ -13,6 +13,11 @@ import {
   type DrawingModifiers,
   type DrawingSample,
 } from './drawing';
+import {
+  applyDocumentDelta,
+  type DocumentDelta,
+  documentDelta,
+} from './history';
 import { type LayerOperation, reorderNodes } from './layering';
 import type {
   Appearance,
@@ -37,14 +42,20 @@ import {
 } from './scene';
 import { createSelection, type SelectionState } from './selection';
 import type { TextMeasurer } from './shapes/text';
+import { snapPoint, validateSnapUnit } from './snapping';
 
 export type EditingSession = SelectionState &
   Readonly<{
     canUndo: boolean;
     canRedo: boolean;
+    snapUnit?: number;
   }>;
 
-export type GraphicsEditorOptions = Readonly<{ measureText?: TextMeasurer }>;
+export type GraphicsEditorOptions = Readonly<{
+  measureText?: TextMeasurer;
+  /** Any positive finite scene-unit interval; omitted disables snapping. */
+  snapUnit?: number;
+}>;
 export type GraphicsEditor = ReturnType<typeof createGraphicsEditor>;
 
 /** One document and camera per instance. The caller owns disposal. */
@@ -68,6 +79,8 @@ function createEditor(
   backend?: GraphicsBackend,
   options: GraphicsEditorOptions = {}
 ) {
+  validateSnapUnit(options.snapUnit);
+  let snapUnit = options.snapUnit;
   let document: GraphicsDocument = Array.isArray(seed)
     ? createScene(seed)
     : freezeDocument(seed as GraphicsDocument);
@@ -76,20 +89,23 @@ function createEditor(
   const listeners = new Set<(camera: Camera) => void>();
   const documentListeners = new Set<(document: GraphicsDocument) => void>();
   const previewListeners = new Set<(preview: Bounds | undefined) => void>();
-  const undoStack: GraphicsDocument[] = [];
-  const redoStack: GraphicsDocument[] = [];
+  const undoStack: DocumentDelta[] = [];
+  const redoStack: DocumentDelta[] = [];
   const sessionListeners = new Set<(session: EditingSession) => void>();
   const getSession = (): EditingSession =>
     Object.freeze({
       ...selection.getState(),
+      snapUnit,
       canUndo: backend ? backend.getHistory().canUndo : undoStack.length > 0,
       canRedo: backend ? backend.getHistory().canRedo : redoStack.length > 0,
     });
   const emitSession = () => {
-    for (const listener of sessionListeners) listener(getSession());
+    const session = getSession();
+    for (const listener of sessionListeners) listener(session);
   };
   const selection = createSelection({
     measureText: options.measureText,
+    getSnapUnit: () => snapUnit,
     getDocument: () => document,
     commitDocument,
     cancelDrawing: cancelShape,
@@ -102,20 +118,26 @@ function createEditor(
       backend.commit(next);
       return;
     }
-    undoStack.push(document);
+    const delta = documentDelta(document, next);
+    if (!delta) return;
+    undoStack.push(delta);
     if (undoStack.length > 100) undoStack.shift();
     redoStack.length = 0;
     publishDocument(next);
     emitSession();
   }
-  function travel(from: GraphicsDocument[], to: GraphicsDocument[]) {
+  function travel(
+    from: DocumentDelta[],
+    to: DocumentDelta[],
+    direction: 'before' | 'after'
+  ) {
     if (disposed) return;
     cancelShape();
     cancelTransform();
-    const next = from.pop();
-    if (next) {
-      to.push(document);
-      publishDocument(next);
+    const delta = from.pop();
+    if (delta) {
+      to.push(delta);
+      publishDocument(applyDocumentDelta(document, delta, direction));
     }
     emitSession();
   }
@@ -172,7 +194,12 @@ function createEditor(
   ) {
     if (disposed) return;
     drawing.update(
-      samples.map((sample) => ({ ...sample, ...clampPoint(sample) })),
+      samples.map((sample) => ({
+        ...sample,
+        ...clampPoint(
+          drawing.kind() === 'pencil' ? sample : snapPoint(sample, snapUnit)
+        ),
+      })),
       modifiers
     );
     setPreview(drawing.bounds());
@@ -213,7 +240,11 @@ function createEditor(
     )
       return false;
     select();
-    drawing.begin(kind, point, document.surface);
+    drawing.begin(
+      kind,
+      kind === 'pencil' ? point : clampPoint(snapPoint(point, snapUnit)),
+      document.surface
+    );
     setPreview(drawing.bounds());
     return true;
   }
@@ -253,7 +284,7 @@ function createEditor(
     cancelShape();
     cancelTransform();
     const result = command.apply(
-      { document, selection: selection.getState().selectedIds },
+      { document, selection: selection.getState().selectedIds, snapUnit },
       payload
     );
     if (result.document !== document) commitDocument(result.document);
@@ -265,6 +296,14 @@ function createEditor(
       return document;
     },
     getSession,
+    getSnapUnit: () => snapUnit,
+    setSnapUnit(unit: number | undefined) {
+      validateSnapUnit(unit);
+      if (disposed || unit === snapUnit) return;
+      snapUnit = unit;
+      cancelShape();
+      cancelTransform();
+    },
     resetDocument,
     subscribeSession(listener: (session: EditingSession) => void) {
       if (disposed) return () => {};
@@ -316,14 +355,14 @@ function createEditor(
       execute(styleCommand, appearance),
     undo: () => {
       if (disposed) return;
-      if (!backend) return travel(undoStack, redoStack);
+      if (!backend) return travel(undoStack, redoStack, 'before');
       cancelShape();
       cancelTransform();
       backend.undo();
     },
     redo: () => {
       if (disposed) return;
-      if (!backend) return travel(redoStack, undoStack);
+      if (!backend) return travel(redoStack, undoStack, 'after');
       cancelShape();
       cancelTransform();
       backend.redo();

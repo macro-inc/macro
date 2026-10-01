@@ -949,29 +949,142 @@ default root size. Supporting `text-sm` text is 14px and `text-xs` is 12px.
 Desktop and mobile share this scale, with accessibility text scaling preserved.
 
 Desktop channel and AI composers use an `Attach files` paperclip that opens the file picker directly, without a plus menu. Comment composers open the image picker directly. Channels and DMs always open in message mode; create tasks through the task creation dialog. Shift+Enter, including an empty new line, expands channel and AI inputs so text starts above the toolbar at the left inset. Sent AI message bubbles use the ink fill with a contrasting foreground in each theme.
-# Canvas Next (local development)
+# Canvas Next
 
 Open `/app/component/canvas-next`. This local-only component is enabled by
 `USE_CANVAS_NEXT` (override with `VITE_USE_CANVAS_NEXT=false`); it lives inside
-`block-canvas/canvas-next` and uses the pure graphics core. It does not replace
-saved Canvas documents. Reset demo (in the bottom-left Canvas menu) or reload
-restores the disposable seed.
+`block-canvas/canvas-next` and uses the pure graphics core. Reset demo (in the history drawer’s Canvas menu) restores
+the disposable seed; reload restores the local debug snapshot.
 
-The top-center drawing toolbar uses icon buttons with tooltips; it also contains
-Add media, Add document, and Add embed. The bottom-left Canvas navigation toolbar
-has Zoom out, the percentage (Reset zoom to 100%), Zoom in, Fit scene, Undo, and Redo.
+Saved Canvas documents use the new editor when `enable-canvas-next` is enabled
+(local override: `VITE_ENABLE_CANVAS_NEXT=true`). Opening a legacy file migrates
+it in memory; the first edit saves version 2 JSON. Reload should preserve edits,
+text formatting, labels, groups and connectors. Unsupported legacy content shows
+**Open in legacy editor** without saving a migration. Version 2 files require
+Canvas Next and cannot be opened by the legacy editor when the flag is off.
+Read-only documents show a pan/zoom surface with **Fit canvas** and no drawing
+controls. Failed saves show **Retry**. Real documents have neither **Reset demo**
+nor the demo's local snapshot. SyncService integration is a follow-up.
+
+Smoke test the rollout with a disposable file: open legacy JSON, edit once,
+reload, and verify the edit remains. Disable the flag and reopen the saved file;
+it should require Canvas Next. Check read-only access does not save or expose
+editing controls. The flag is fixed for each open document until it is reopened.
+
+For implementation status and upcoming checkpoints, see
+[Graphics and Canvas parity](../GRAPHICS_PARITY.md). This page describes the current
+editor UI. Canvas Next has versioned JSON persistence but no production sync; the separate
+graphics peer playground is an in-memory Loro experiment, not this full editor.
+
+The disposable demo saves committed scene changes and the camera in local storage under
+`macro.canvas-next.debug.v1`, restoring them on reload. Reset demo replaces the
+saved scene; undo history and unfinished gestures are not persisted.
+Ctrl/Meta-wheel zooms around the pointer with a gentle continuous response;
+100 wheel pixels zooms from 100% to about 122%, and larger individual events are
+capped at the same factor. Plain wheel input still pans. Check small trackpad
+movements, coarse wheel ticks, and reversing direction without the anchor drifting.
+
+The bottom-center drawing toolbar uses icon buttons with tooltips and sits above
+the inspector when they overlap. It also contains Add media, Add document, and Add
+embed. Its trailing Toggle history drawer button opens/closes the attached bar above
+it, which contains Undo, Redo, and Canvas menu (Show/Hide layers and Reset demo).
+The zoom percentage in the Design panel header opens the standard dropdown and
+remains visible with or without a selection. Its sections contain Zoom In
+and Zoom Out (Cmd+= / Cmd+-, with Zoom In displayed as Cmd++), plus Zoom to fit
+(period) in the first group. The next group contains 25/50/100/200% presets, then Toggle
+dot grid, then No snapping, Snap to px, and Auto snapping. Group dividers use the
+dropdown's single theme-width gap, with no additional separator lines. The preset
+checkmark tracks the current zoom. All checked options use a plain ink-colored
+check with no checkbox background or border. The grid starts enabled and snapping defaults
+to No snapping whenever the editor reopens. Snap to px uses 1 canvas px at any zoom;
+Auto uses the smallest grid interval with visible dots, including faint dots.
+At 100% Auto uses 16 px, at 200% it uses 4 px, and at 800% it uses 1 px. Hiding the
+grid disables Auto snapping until it is shown again; Snap to px stays active.
+Choose Auto at 100% and drag a shape: its world-bounds position should land on
+multiples of 16, including the preview. Switch to No snapping and check fractional
+positions survive dragging and inspector entry. Resize should snap dimensions while retaining Shift
+aspect ratio and Alt center constraints. Mixed selections keep their internal
+spacing. The layout inspector and its number scrubs use the same unit; rotation
+and freehand samples retain their own precision. Bound connector endpoints remain
+exactly attached. Undo restores the pre-gesture geometry in one step.
+The dot grid reveals powers of four as the camera zooms (1, 4, 16, 64, and
+coarser canvas-pixel intervals). Coarse dots remain steady while fine dots fade
+in gently; at 800% the 1 px canvas grid is visible at 12.5% opacity. Dots are
+always 1 screen pixel wide, with crisp SVG edges even at fractional zoom such
+as 738%. Dots disappear once closer than 4 screen pixels apart. Verify pan/zoom
+keeps all levels aligned to the same canvas origin and Toggle dot grid hides
+all levels. Grid density updates Auto's unit, without changing existing saved geometry.
 Fit scene centers the overall scene geometry in the current canvas viewport,
 independent of selection. It zooms in or out until the width or height fills the
 available space with 100 screen pixels of padding per side, within the camera's
 zoom limits. Padding shrinks for small embedded viewports.
-Adjacent Shape properties and Layers buttons toggle floating panels. Arrange controls
-in the properties panel are icon buttons with tooltips. Right-click the canvas for
+The Design inspector is always visible on the right. Show layers in Canvas menu
+toggles the floating left Layers panel. The Design inspector is a single
+header row when nothing is selected; selecting an item reveals its properties in
+a viewport-bounded card with a fixed header and a scrolling body. Fit scene accounts
+for the expanded inspector. The top selection section offers separate horizontal and
+vertical alignment button groups, distribution,
+X/Y position, rotation, quarter-turn and flip controls. Layout provides width/height
+and horizontal/vertical spacing; differing values show Mixed. The lock beside dimensions
+shows an active background when locked and links width and height, preserving each selected item’s aspect ratio when typing or scrubbing. These fields support
+negative positions/spacing and undo. Fully connected connectors do not contribute
+to alignment, distribution, or layout bounds, even inside groups. Connectors render
+above their highest connected endpoint after layer changes and grouping. Connected
+connector strokes, dashes, and arrowheads keep their size when items or groups scale.
+Smooth connector selection bounds follow the curve extrema, with selection outlines
+and picking using the same world-space geometry as the visible connector.
+Fill appears for rectangles/ellipses, Corners for
+rectangles, Connection for connectors, and Typography/Text color for text. Rectangle and ellipse drawing previews use the current fill, stroke, opacity, and
+corner style throughout the drag. Sections
+are always expanded, with `border-edge` dividers. Color fields are compact input
+groups: click the swatch to open the shared ColorPicker with a saturation/brightness
+field, Hue and Opacity sliders, and a hex input. Keyboard focus marks the field's
+handle, not its outer edge; the opacity track and preview checkerboards use the
+active theme's surface colors. The 12 Macro palette colors plus
+None, Ink, Surface, and Accent appear below these controls. A separate On this canvas section lists unique fill and stroke
+colors from the whole scene and updates as shapes change; click one to reuse it.
+Muted and Accent wash are not offered in the preset palette. The row also accepts
+hex input (3, 4, 6, or 8 digits). Open the picker on black, white, gray, transparent,
+and mixed selections; none should blank the canvas or change the selection color
+until you edit it. Arrow keys adjust the field and sliders; invalid hex stays in
+the input with a validation error and never changes the canvas. Numeric fields and color rows use the shared neutral
+input-group focus frame; connection/font menus use the shared Select. Mixed values
+are shown only when relevant selected shapes differ (ellipse radius does not affect
+rectangle corner values in a group).
+Drag a numeric field's icon to preview position, dimensions, rotation, spacing,
+opacity, stroke width, corner radius, or font size directly on the canvas. Release
+to commit one undo step; Escape, pointer cancellation, or window blur restores the
+starting values. Check that the shape changes before release, Undo reverses the
+whole drag, and canceled drags leave no history or saved document changes.
+For large selections, drag hundreds of boxes in a 1,000-shape scene. Their
+geometry outlines should track the move without extra per-box bounding rectangles;
+unselected shapes should stay put and keep their paint order. Repeat with grouped
+shapes and connected arrows, then cancel a move and verify Undo/Redo after a
+completed move. Ordinary moves share a translation in the renderer; resizing and
+connector routing still update their geometry live.
+The drawing toolbar includes an Eraser (E); Line is available through L. C is
+reserved for Create. Drag the eraser across shapes to remove them, including
+shapes crossed between pointer events. The eraser reuses the pencil renderer for a faint ink-muted trail. Points thin
+with age and expire after 300ms. Crossed shapes preview at 20% of their original
+opacity until release commits deletion; cancellation restores their appearance.
+One drag is one undo step; Escape or pointer cancellation restores that stroke.
+Switching to Arrow, Line, Connector, or Pencil restores theme Ink for a missing or
+fully transparent default stroke, 2 px for zero width, and full opacity for zero
+opacity. Visible colors, positive widths, and partial opacity carry forward.
+This only changes new drawing defaults; a selected shape with no stroke stays unchanged.
+Numeric fields support typing and dragging their icon horizontally; Shift increases
+the step. A drag commits on release as one undo step; Escape cancels the drag.
+The icon also accepts arrow keys. Clicking numeric or color text fields selects their contents.
+Stroke style offers Solid, Dashed, and Dotted for rectangles, ellipses, and connectors.
+Group and layer actions are available from the context menu rather than a panel section. Right-click the canvas for
 the standard app context menu: cut/copy/paste/duplicate, group/ungroup, the Arrange
 submenu, select all, and delete. Arrow keys navigate this menu; Escape dismisses it
 and returns focus to the canvas. Active embeds and rich-text editing keep their own
 context-menu behavior.
 
 Tools: V select, R rectangle, O ellipse, P pencil, H hand; Space temporarily pans.
+Escape cancels the current tool and clears the selection. Open menus and active
+text/embed editors retain their own Escape behavior first.
 Hold Shift while drawing a rectangle or ellipse for a square or circle. Hold Shift
 while moving a selection to constrain movement horizontally or vertically along
 the dominant world axis, including Option-drag copies. Modifiers update live even
@@ -988,8 +1101,13 @@ selected subtrees; Escape cancels without committing the copies.
 
 Single selected shapes retain their bounding boxes and also show a 1 screen px blue trace:
 the smoothed pencil centerline, rounded rectangle perimeter, or ellipse perimeter.
-In groups or multi-selections, rounded rectangles and ellipses show just their
-perimeter traces inside the shared selection box, without individual rectangular boxes.
+In groups or multi-selections, pencil strokes, rounded rectangles, and ellipses show
+just their geometry traces inside the shared selection box, without individual rectangular boxes.
+Rotated circles and ellipses contribute their actual curve extents to the shared
+box, alignment, and movement snapping. Rotate several overlapping circles by 30°
+and select or group them: the shared box should touch the outer curves, without
+padding from the circles' rotated local squares. Check nested group scaling and
+Undo too; a single selected ellipse still retains its oriented resize box.
 These traces include children of selected groups, track transform previews, and stay
 the same thickness through zoom and nested scaling without intercepting pointer input.
 With Select active, hovering shows this trace on the shape/group a click would
@@ -998,7 +1116,7 @@ Cmd/Ctrl previews a child within a group; Shift previews the additive selection 
 Hover clears on pointer exit and hides while drawing, panning or transforming.
 
 Use Cmd/Ctrl+A/C/X/V/D for select all/copy/cut/paste/duplicate, arrows to nudge
-1 world unit (Shift: 10), Cmd/Ctrl+G to group and Shift+Cmd/Ctrl+G to ungroup.
+one snap unit (Shift: ten), Cmd/Ctrl+G to group and Shift+Cmd/Ctrl+G to ungroup.
 Undo/redo and Delete use the normal editor shortcuts. They are scoped to this
 editor and do not hijack text or number inputs. Right-click exposes editing actions.
 
@@ -1017,6 +1135,15 @@ movement is ignored. A rotated single shape follows its local axes. Groups and
 multiple selections always have dashed, world-axis-aligned boxes; single shapes
 retain their oriented solid boxes. The rotator follows a single shape's oriented
 top edge; for groups and multiple selections it is centered above the world bounds.
+With one rectangle selected, small circular handles inside the corners adjust a
+uniform corner radius. Drag any handle inward to round all four corners, or outward
+to square them. The value previews on the shape and in the inspector, always snaps
+to whole local pixels independently of scene snapping, and stops at the largest
+whole number no greater than half the shorter side. Release commits one undo step;
+Escape, pointer cancellation, or blur restores the starting radius. Test a rotated
+rectangle inside a scaled group as well. Controls stay the same screen size, merge
+when they overlap at a pill/circle radius, and hide when the shape is too small on
+screen. Radius controls are not shown for groups, multi-selections, or other shapes.
 Option/Alt anchors the center; Shift preserves
 proportions, including shrinking. Incompatible descendant rotations force uniform
 scaling for both edge and corner drags, preventing new shear. Dragging through zero
@@ -1037,9 +1164,14 @@ round-trips Canvas Next shape/group/rich-text fragments. Plain/HTML text pasted
 onto the canvas creates a text shape.
 
 Smoke test: draw each shape; select/group/copy/paste; verify originals remain and
-new items are selected; nudge by 1/10 units; Option-drag and cancel once, then commit
+new items are selected; nudge by one/ten snap units; Option-drag and cancel once, then commit
 and undo once; style a mixed group; align/distribute; reorder and check stacking.
 Input focus must retain native typing/clipboard behavior.
+
+Local history regression: move a pencil stroke, undo and redo, then delete it and
+undo again. Verify its original stroke shape returns and unrelated items stay put.
+After undo, making a new edit must disable redo; selection and camera changes must
+preserve redo. Each completed gesture remains one undo step (up to 100 steps).
 
 # Graphics playground (local development)
 
@@ -1178,7 +1310,10 @@ alignment; the left inspector controls font family/size and auto width.
 Double-click a text shape, or select it and press Enter, to reopen its editor.
 Escape, Cmd/Ctrl+Enter, Done, or clicking elsewhere commits one canvas history
 entry. Inside the editor, Cmd/Ctrl+Z undoes typing without undoing canvas shapes.
-Empty drafts leave no item. Side edges wrap text without changing font size;
+Empty drafts leave no item. Clearing existing text removes the item on Done;
+canvas Undo restores it. Canvas Next owns these empty-content decisions. Clipboard
+fragments and saved scenes with invalid editor payloads are rejected by the host.
+Side edges wrap text without changing font size;
 corners scale it proportionally. Text can be copied, duplicated, grouped, layered
 and transformed with other shapes. Only the active editor is contenteditable.
 While editing text or labels, the editing box has no outline; the caret and native
@@ -1207,7 +1342,7 @@ drag changes wrapping at a fixed font size. Corner scaling preserves line layout
 
 ### Canvas Next arrows and connectors (local)
 
-In `/app/component/canvas-next`, use A (Arrow), C (Connector), or L (Line), then drag
+In `/app/component/canvas-next`, use A (Arrow) or L (Line), then drag
 between empty points or shapes. Only the hovered shape shows attachment targets:
 small white circles with blue borders at its center and four edge midpoints.
 The active point gets a larger pale-blue halo, before the initial click as well
@@ -1216,6 +1351,10 @@ shape's core, the center is active even for unfilled shapes. Leaving the shape
 hides its points. Hovering its rim away from a point shows no active halo.
 Center attachments automatically meet the shape outline. Side attachments retain
 that edge midpoint as the target moves, rotates or resizes.
+Pencil strokes expose no attachment targets. Starting or dropping an endpoint over
+ink leaves it free; an eligible shape underneath the ink can still receive it.
+C opens the app's Create menu. For a rounded connector, choose Elbow in the
+Connection inspector.
 
 Select a connector to show its start/end circles. Drag either circle to reattach,
 or release over empty canvas to detach. Shift constrains a free end to 45-degree

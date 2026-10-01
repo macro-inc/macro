@@ -57,7 +57,7 @@ it('keeps one stroke transient until release and commits one undo step, includin
     transform: preview.transform,
   });
   editor.undo();
-  expect(editor.document).toBe(before);
+  expect(editor.document).toEqual(before);
   editor.redo();
   expect(editor.document.items.ink).toEqual(stroke);
   editor.beginShape('pencil', { x: 10, y: 20, pressure: 0.8 });
@@ -185,7 +185,7 @@ it('supports flip-through-zero and uniform resize inside nested rotated groups',
   expect(editor.commitTransform()).toBe(true);
   expect(worldMatrix(editor.document, 'ink')[0]).toBeLessThan(0);
   editor.undo();
-  expect(editor.document).toBe(initial);
+  expect(editor.document).toEqual(initial);
   editor.groupSelection('group');
   editor.groupSelection('outer');
   editor.beginTransform('outer', { x: 0, y: -100 }, 'rotate');
@@ -212,7 +212,7 @@ it('supports flip-through-zero and uniform resize inside nested rotated groups',
   ).toBeCloseTo(1);
   expect(ink.appearance.strokeWidth).toBe(12);
   editor.undo();
-  expect(editor.document).toBe(before);
+  expect(editor.document).toEqual(before);
 });
 
 it('round-trips pencil data through clipboard with deeply immutable samples', () => {

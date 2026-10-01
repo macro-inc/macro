@@ -63,7 +63,7 @@ it.each([1, -1])(
       expect(preview.y + preview.height / 2).toBeCloseTo(pivot.y);
       editor.commitTransform();
       editor.undo();
-      expect(editor.document).toBe(before);
+      expect(editor.document).toEqual(before);
       expect(editor.getSession().canUndo).toBe(false);
     }
   }

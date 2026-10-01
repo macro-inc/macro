@@ -101,7 +101,7 @@ it.each(edges)(
     );
     editor.commitTransform();
     editor.undo();
-    expect(editor.document).toBe(before);
+    expect(editor.document).toEqual(before);
   }
 );
 
@@ -140,7 +140,7 @@ it.each(edges)(
     editor.commitTransform();
     expect(changes).toHaveBeenCalledTimes(1);
     editor.undo();
-    expect(editor.document).toBe(before);
+    expect(editor.document).toEqual(before);
     expect(editor.getSession().canUndo).toBe(false);
   }
 );
@@ -259,7 +259,7 @@ it('locks a group to proportional resizing when a nested child has a different a
   expect(nodes.nested).toBeUndefined();
   editor.commitTransform();
   editor.undo();
-  expect(editor.document).toBe(before);
+  expect(editor.document).toEqual(before);
 });
 
 it('uses invisible full-edge targets in screen space and routes their pointer events to resizing', () => {
@@ -313,7 +313,11 @@ it('uses invisible full-edge targets in screen space and routes their pointer ev
     width: 140,
     height: 80,
   });
-  expect(host.querySelectorAll('[data-graphics-handle]')).toHaveLength(9);
+  expect(
+    host.querySelectorAll(
+      '[data-graphics-handle]:not([data-graphics-handle^="radius-"])'
+    )
+  ).toHaveLength(9);
   editor.undo();
   expect(editor.document).toEqual(seed());
   dispose();

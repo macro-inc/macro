@@ -1,5 +1,6 @@
 import { around, type Matrix, scaling } from './affine';
 import type { Bounds, Point } from './model';
+import { snapValue } from './snapping';
 
 export type ResizeCorner = 'nw' | 'ne' | 'sw' | 'se';
 export type ResizeEdge = 'n' | 'e' | 's' | 'w';
@@ -31,7 +32,11 @@ export function resizeBox(
   bounds: Bounds,
   handle: ResizeHandle,
   delta: Point,
-  modifiers: ResizeModifiers & { proportionalFit?: 'project' }
+  modifiers: ResizeModifiers & {
+    proportionalFit?: 'project';
+    /** Snap intervals along the frame's axes, accounting for its world scale. */
+    snap?: Point;
+  }
 ): Readonly<{
   bounds: Bounds;
   transform: Matrix;
@@ -58,7 +63,7 @@ export function resizeBox(
   let sx = horizontal ? 1 + (signX * delta.x) / extentX : 1;
   let sy = vertical ? 1 + (signY * delta.y) / extentY : 1;
   if (modifiers.proportional) {
-    const factor = !vertical
+    let factor = !vertical
       ? Math.abs(sx)
       : !horizontal
         ? Math.abs(sy)
@@ -68,8 +73,23 @@ export function resizeBox(
             (Math.abs(sx) * extentX ** 2 + Math.abs(sy) * extentY ** 2) /
             (extentX ** 2 + extentY ** 2)
           : Math.max(Math.abs(sx), Math.abs(sy));
+    if (modifiers.snap && (delta.x !== 0 || delta.y !== 0)) {
+      const useX = horizontal && (!vertical || Math.abs(sx) >= Math.abs(sy));
+      const size = useX ? bounds.width : bounds.height;
+      const unit = useX ? modifiers.snap.x : modifiers.snap.y;
+      factor = Math.max(unit, snapValue(size * factor, unit)) / size;
+    }
     sx = (sx < 0 ? -1 : 1) * factor;
     sy = (sy < 0 ? -1 : 1) * factor;
+  } else if (modifiers.snap) {
+    const snapScale = (scale: number, size: number, unit: number) =>
+      ((scale < 0 ? -1 : 1) *
+        Math.max(unit, snapValue(Math.abs(scale) * size, unit))) /
+      size;
+    if (horizontal && delta.x !== 0)
+      sx = snapScale(sx, bounds.width, modifiers.snap.x);
+    if (vertical && delta.y !== 0)
+      sy = snapScale(sy, bounds.height, modifiers.snap.y);
   }
   // Retain the sign through the opposite edge. Only exact collapse needs a tiny
   // nonzero extent so the scene's transforms stay invertible during the gesture.

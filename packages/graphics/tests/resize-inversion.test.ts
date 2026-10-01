@@ -112,10 +112,10 @@ it.each(['single', 'multi', 'group', 'nested'])(
       editor.commitTransform();
       const after = editor.document;
       editor.undo();
-      expect(editor.document).toBe(before);
+      expect(editor.document).toEqual(before);
       expect(editor.getSession().canUndo).toBe(false);
       editor.redo();
-      expect(editor.document).toBe(after);
+      expect(editor.document).toEqual(after);
       editor.dispose();
     }
   }

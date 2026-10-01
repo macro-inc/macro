@@ -37,6 +37,7 @@ export type Appearance = Readonly<{
   fill: string;
   stroke: string;
   strokeWidth?: number;
+  strokeStyle?: 'solid' | 'dashed' | 'dotted';
   opacity?: number;
   cornerRadius?: number;
 }>;

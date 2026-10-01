@@ -119,7 +119,7 @@ it('captures coalesced pen samples, paints the preview as ink, and releases outs
   editor.undo(); // resize
   editor.undo(); // style
   editor.undo(); // draw
-  expect(editor.document).toBe(before);
+  expect(editor.document).toEqual(before);
   editor.redo();
   expect(drawableIds(editor.document)).toEqual(['ink-1']);
 });

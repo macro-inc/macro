@@ -1,14 +1,31 @@
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { createLexicalWrapper } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
+import { setEditorStateFromMarkdown } from '@core/component/LexicalMarkdown/utils';
 import { $generateNodesFromDOM } from '@lexical/html';
-import { plainRichText, type RichText } from '@macro-inc/graphics';
+import type { RichText } from '@macro-inc/graphics';
 import {
   $createParagraphNode,
   $getRoot,
   $isElementNode,
   type LexicalEditor,
 } from 'lexical';
-import { serializeCanvasTextState } from './text-serialization';
+import { plainRichText, serializeCanvasTextState } from '../core/text-codec';
+
+/** Legacy files contain internal Markdown, including Macro mention tags. */
+export function importCanvasMarkdown(markdown: string): RichText {
+  if (!markdown) return plainRichText();
+  const wrapper = createLexicalWrapper({
+    type: 'markdown',
+    namespace: 'canvas-migration',
+    isInteractable: () => false,
+  });
+  try {
+    setEditorStateFromMarkdown(wrapper.editor, markdown, 'internal', true);
+    return serializeCanvasText(wrapper.editor);
+  } finally {
+    wrapper.cleanup();
+  }
+}
 
 /** The canvas persists exactly the tree produced by the shared editor. */
 export function serializeCanvasText(editor: LexicalEditor): RichText {

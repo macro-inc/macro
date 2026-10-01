@@ -3,26 +3,31 @@ import ArrowCounterClockwise from '@phosphor/arrow-counter-clockwise.svg';
 import Undo from '@phosphor/arrow-u-up-left.svg';
 import Redo from '@phosphor/arrow-u-up-right.svg';
 import ArrowUpRight from '@phosphor/arrow-up-right.svg';
-import ArrowsOut from '@phosphor/arrows-out.svg';
 import Browsers from '@phosphor/browsers.svg';
+import CaretDown from '@phosphor/caret-down.svg';
+import CaretUp from '@phosphor/caret-up.svg';
+import Check from '@phosphor/check.svg';
 import Circle from '@phosphor/circle.svg';
 import Cursor from '@phosphor/cursor.svg';
+import Eraser from '@phosphor/eraser.svg';
 import File from '@phosphor/file.svg';
 import Hand from '@phosphor/hand.svg';
 import Image from '@phosphor/image.svg';
-import LineSegment from '@phosphor/line-segment.svg';
 import List from '@phosphor/list.svg';
-import Minus from '@phosphor/minus.svg';
-import Path from '@phosphor/path.svg';
 import Pencil from '@phosphor/pencil-simple.svg';
-import Plus from '@phosphor/plus.svg';
 import Rectangle from '@phosphor/rectangle.svg';
-import Sliders from '@phosphor/sliders-horizontal.svg';
 import Stack from '@phosphor/stack.svg';
 import Text from '@phosphor/text-t.svg';
-import { Dropdown, Toolbar } from '@ui';
-import { For } from 'solid-js';
+import { Dropdown, Hotkey, Toolbar } from '@ui';
+import {
+  type ComponentProps,
+  createSignal,
+  createUniqueId,
+  For,
+  Show,
+} from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import type { CanvasSnapMode } from '../core/snapping';
 import type {
   CanvasState,
   CanvasTool,
@@ -34,9 +39,8 @@ const tools = [
   { id: 'rectangle', label: 'Rectangle', icon: Rectangle, key: 'r' },
   { id: 'ellipse', label: 'Ellipse', icon: Circle, key: 'o' },
   { id: 'arrow', label: 'Arrow', icon: ArrowUpRight, key: 'a' },
-  { id: 'connector', label: 'Connector', icon: Path, key: 'c' },
-  { id: 'line', label: 'Line', icon: LineSegment, key: 'l' },
   { id: 'pencil', label: 'Pencil', icon: Pencil, key: 'p' },
+  { id: 'eraser', label: 'Eraser', icon: Eraser, key: 'e' },
   { id: 'text', label: 'Text', icon: Text, key: 't' },
 ] as const;
 
@@ -44,93 +48,26 @@ export function CanvasDrawingToolbar(props: {
   tool: CanvasTool;
   onTool: (tool: CanvasTool) => void;
   onInsert: (kind: 'media' | 'document' | 'embed') => void;
-}) {
-  return (
-    <Toolbar
-      size="icon-md"
-      aria-label="Drawing tools"
-      class="absolute left-1/2 top-4 z-20 max-w-[calc(100%-8rem)] -translate-x-1/2 overflow-x-auto"
-    >
-      <Toolbar.Group>
-        <For each={tools}>
-          {(tool) => (
-            <Toolbar.Button
-              label={`${tool.label} tool`}
-              shortcut={tool.key}
-              aria-pressed={props.tool === tool.id}
-              variant={props.tool === tool.id ? 'accent' : 'ghost'}
-              onClick={() => props.onTool(tool.id)}
-            >
-              <Dynamic component={tool.icon} />
-            </Toolbar.Button>
-          )}
-        </For>
-      </Toolbar.Group>
-      <Toolbar.Divider />
-      <Toolbar.Group>
-        <Toolbar.Button
-          label="Add media"
-          onClick={() => props.onInsert('media')}
-        >
-          <Image />
-        </Toolbar.Button>
-        <Toolbar.Button
-          label="Add document"
-          onClick={() => props.onInsert('document')}
-        >
-          <File />
-        </Toolbar.Button>
-        <Toolbar.Button
-          label="Add embed"
-          onClick={() => props.onInsert('embed')}
-        >
-          <Browsers />
-        </Toolbar.Button>
-      </Toolbar.Group>
-    </Toolbar>
-  );
-}
-
-export function CanvasNavigationToolbar(props: {
   state: CanvasState;
-  onZoom: (factor: number) => void;
-  onFit: () => void;
-  onReset: () => void;
   onFocusCanvas: () => void;
-  inspector: boolean;
-  onInspector: () => void;
+  onReset?: () => void;
   layers: boolean;
   onLayers: () => void;
 }) {
+  const [historyOpen, setHistoryOpen] = createSignal(true);
+  const historyId = createUniqueId();
   return (
-    <div class="absolute bottom-4 left-4 z-20 flex max-w-[calc(100%-2rem)] flex-wrap items-end gap-2">
-      <Toolbar size="icon-md" aria-label="Canvas navigation">
-        <Toolbar.Group>
-          <Toolbar.Button
-            label="Zoom out"
-            onClick={() => props.onZoom(1 / 1.2)}
-          >
-            <Minus />
-          </Toolbar.Button>
-          <Toolbar.Button
-            label="Reset zoom"
-            size="sm"
-            class="min-w-14 tabular-nums"
-            onClick={() => props.onZoom(1 / props.state.camera().scale)}
-          >
-            <output aria-label="Zoom level">
-              {Math.round(props.state.camera().scale * 100)}%
-            </output>
-          </Toolbar.Button>
-          <Toolbar.Button label="Zoom in" onClick={() => props.onZoom(1.2)}>
-            <Plus />
-          </Toolbar.Button>
-          <Toolbar.Button label="Fit scene" onClick={props.onFit}>
-            <ArrowsOut />
-          </Toolbar.Button>
-        </Toolbar.Group>
-        <Toolbar.Divider />
-        <Toolbar.Group>
+    <div class="pointer-events-none absolute bottom-4 left-1/2 z-40 flex max-w-[calc(100%-2rem)] -translate-x-1/2 flex-col items-start">
+      <div
+        id={historyId}
+        hidden={!historyOpen()}
+        class="pointer-events-auto ml-3"
+      >
+        <Toolbar
+          size="icon-md"
+          aria-label="Canvas history"
+          class="rounded-b-none border-b-0 shadow-none"
+        >
           <Toolbar.Button
             label="Undo"
             hotkey={TOKENS.canvas.undo}
@@ -153,41 +90,181 @@ export function CanvasNavigationToolbar(props: {
           >
             <Redo />
           </Toolbar.Button>
+          <Toolbar.Divider />
+          <Dropdown placement="top-start">
+            <Dropdown.Trigger
+              size="icon-md"
+              variant="ghost"
+              label="Canvas menu"
+            >
+              <List />
+            </Dropdown.Trigger>
+            <Dropdown.Content>
+              <Dropdown.Group>
+                <Dropdown.Item onSelect={props.onLayers}>
+                  <Stack class="size-4" />
+                  {props.layers ? 'Hide layers' : 'Show layers'}
+                </Dropdown.Item>
+                <Show when={props.onReset}>
+                  <Dropdown.Item onSelect={props.onReset}>
+                    <ArrowCounterClockwise class="size-4" />
+                    Reset demo
+                  </Dropdown.Item>
+                </Show>
+              </Dropdown.Group>
+            </Dropdown.Content>
+          </Dropdown>
+        </Toolbar>
+      </div>
+      <Toolbar
+        size="icon-md"
+        aria-label="Drawing tools"
+        class="pointer-events-auto relative max-w-full overflow-x-auto"
+      >
+        <Toolbar.Group>
+          <For each={tools}>
+            {(tool) => (
+              <Toolbar.Button
+                label={`${tool.label} tool`}
+                shortcut={tool.key}
+                aria-pressed={props.tool === tool.id}
+                variant={props.tool === tool.id ? 'accent' : 'ghost'}
+                onClick={() => props.onTool(tool.id)}
+              >
+                <Dynamic component={tool.icon} />
+              </Toolbar.Button>
+            )}
+          </For>
         </Toolbar.Group>
-      </Toolbar>
-      <Toolbar size="icon-md" aria-label="Canvas panels">
-        <Toolbar.Button
-          label="Shape properties"
-          aria-pressed={props.inspector}
-          variant={props.inspector ? 'accent' : 'ghost'}
-          onClick={props.onInspector}
-        >
-          <Sliders />
-        </Toolbar.Button>
-        <Toolbar.Button
-          label="Layers"
-          aria-pressed={props.layers}
-          variant={props.layers ? 'accent' : 'ghost'}
-          onClick={props.onLayers}
-        >
-          <Stack />
-        </Toolbar.Button>
         <Toolbar.Divider />
-        <Dropdown placement="top-start">
-          <Dropdown.Trigger size="icon-md" variant="ghost" label="Canvas menu">
-            <List />
-          </Dropdown.Trigger>
-          <Dropdown.Content>
-            <Dropdown.Group>
-              <Dropdown.GroupLabel>Local canvas demo</Dropdown.GroupLabel>
-              <Dropdown.Item onSelect={props.onReset}>
-                <ArrowCounterClockwise class="size-4" />
-                Reset demo
-              </Dropdown.Item>
-            </Dropdown.Group>
-          </Dropdown.Content>
-        </Dropdown>
+        <Toolbar.Group>
+          <Toolbar.Button
+            label="Add media"
+            onClick={() => props.onInsert('media')}
+          >
+            <Image />
+          </Toolbar.Button>
+          <Toolbar.Button
+            label="Add document"
+            onClick={() => props.onInsert('document')}
+          >
+            <File />
+          </Toolbar.Button>
+          <Toolbar.Button
+            label="Add embed"
+            onClick={() => props.onInsert('embed')}
+          >
+            <Browsers />
+          </Toolbar.Button>
+        </Toolbar.Group>
+        <Toolbar.Divider />
+        <Toolbar.Button
+          label="Toggle history drawer"
+          aria-expanded={historyOpen()}
+          aria-controls={historyId}
+          onClick={() => setHistoryOpen((open) => !open)}
+        >
+          <CaretUp class={historyOpen() ? 'rotate-180' : ''} />
+        </Toolbar.Button>
       </Toolbar>
     </div>
+  );
+}
+
+function CanvasViewCheckboxItem(
+  props: ComponentProps<typeof Dropdown.CheckboxItem>
+) {
+  return (
+    <Dropdown.CheckboxItem
+      {...props}
+      indicator={
+        <span class="inline-flex size-3.5 shrink-0 items-center justify-center text-ink">
+          <Dropdown.ItemIndicator>
+            <Check class="size-3.5" />
+          </Dropdown.ItemIndicator>
+        </span>
+      }
+    />
+  );
+}
+
+export function CanvasViewControls(props: {
+  scale: number;
+  grid: boolean;
+  onGrid: (visible: boolean) => void;
+  onZoom: (factor: number) => void;
+  onFit: () => void;
+  snapMode: CanvasSnapMode;
+  onSnapMode: (mode: CanvasSnapMode) => void;
+}) {
+  return (
+    <Dropdown placement="bottom-end">
+      <Dropdown.Trigger
+        variant="ghost"
+        size="sm"
+        label="Zoom options"
+        class="gap-1.5 tabular-nums"
+      >
+        <output aria-label="Zoom level">
+          {Math.round(props.scale * 100)}%
+        </output>
+        <CaretDown class="size-3" />
+      </Dropdown.Trigger>
+      <Dropdown.Content class="w-56">
+        <Dropdown.Group>
+          <Dropdown.Item onSelect={() => props.onZoom(1.2)}>
+            <span class="flex-1">Zoom In</span>
+            <Hotkey shortcut="cmd+plus" theme="subtle" />
+          </Dropdown.Item>
+          <Dropdown.Item onSelect={() => props.onZoom(1 / 1.2)}>
+            <span class="flex-1">Zoom Out</span>
+            <Hotkey token={TOKENS.canvas.zoomOut} theme="subtle" />
+          </Dropdown.Item>
+          <Dropdown.Item onSelect={props.onFit}>
+            <span class="flex-1">Zoom to fit</span>
+            <Hotkey token={TOKENS.canvas.zoomFit} theme="subtle" />
+          </Dropdown.Item>
+        </Dropdown.Group>
+        <Dropdown.Group>
+          <For each={[25, 50, 100, 200]}>
+            {(percent) => (
+              <CanvasViewCheckboxItem
+                closeOnSelect
+                checked={Math.round(props.scale * 100) === percent}
+                onChange={() => props.onZoom(percent / 100 / props.scale)}
+              >
+                Zoom to {percent}%
+              </CanvasViewCheckboxItem>
+            )}
+          </For>
+        </Dropdown.Group>
+        <Dropdown.Group>
+          <CanvasViewCheckboxItem checked={props.grid} onChange={props.onGrid}>
+            Toggle dot grid
+          </CanvasViewCheckboxItem>
+        </Dropdown.Group>
+        <Dropdown.Group>
+          <For
+            each={
+              [
+                { mode: 'none', label: 'No snapping' },
+                { mode: 'pixel', label: 'Snap to px' },
+                { mode: 'auto', label: 'Auto snapping' },
+              ] as const
+            }
+          >
+            {(option) => (
+              <CanvasViewCheckboxItem
+                closeOnSelect
+                checked={props.snapMode === option.mode}
+                onChange={() => props.onSnapMode(option.mode)}
+              >
+                {option.label}
+              </CanvasViewCheckboxItem>
+            )}
+          </For>
+        </Dropdown.Group>
+      </Dropdown.Content>
+    </Dropdown>
   );
 }

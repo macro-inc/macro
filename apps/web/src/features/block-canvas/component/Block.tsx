@@ -52,26 +52,33 @@ export default function BlockCanvas(props: BlockCanvasProps) {
         }
         registerMethods={registerMethods}
       >
-        {(content) => (
-          <div
-            class="size-full select-none flex flex-col"
-            on:click={(event) => {
-              if (isNested) event.stopPropagation();
-            }}
-          >
-            <ModalsProvider>
-              <Show when={!isNested} fallback={content}>
-                <SidePanel.Layout defaultOpen={false}>
-                  <FileSidePanelSections />
-                  <div class="flex size-full min-w-0 flex-col overflow-hidden">
-                    <TopBar />
-                    {content}
-                  </div>
-                </SidePanel.Layout>
+        {(content, state) => {
+          const Chrome = () => (
+            <Show when={!isNested} fallback={content}>
+              <SidePanel.Layout defaultOpen={false}>
+                <FileSidePanelSections />
+                <div class="flex size-full min-w-0 flex-col overflow-hidden">
+                  <TopBar next={state.mode === 'next' ? state : undefined} />
+                  {content}
+                </div>
+              </SidePanel.Layout>
+            </Show>
+          );
+          return (
+            <div
+              class="size-full select-none flex flex-col"
+              on:click={(event) => {
+                if (isNested) event.stopPropagation();
+              }}
+            >
+              <Show when={state.mode === 'legacy'} fallback={<Chrome />}>
+                <ModalsProvider>
+                  <Chrome />
+                </ModalsProvider>
               </Show>
-            </ModalsProvider>
-          </div>
-        )}
+            </div>
+          );
+        }}
       </CanvasDocument>
     </DocumentBlockContainer>
   );

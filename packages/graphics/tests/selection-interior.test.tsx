@@ -66,7 +66,7 @@ it.each([false, true])(
     expect(worldBounds(editor.document, 'b').x).toBe(multiple ? 110 : 100);
     expect(editor.document.items.c).toEqual(before.items.c);
     editor.undo();
-    expect(editor.document).toBe(before);
+    expect(editor.document).toEqual(before);
     expect(editor.getSession().canUndo).toBe(false);
     if (multiple) {
       const nextBox = host.querySelector('[data-graphics-selection-bounds]')!;

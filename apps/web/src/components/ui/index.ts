@@ -48,6 +48,14 @@ export {
 } from './components/Checkbox';
 export type { CollapsedInputProps } from './components/CollapsedInput';
 export { CollapsedInput } from './components/CollapsedInput';
+export type {
+  ColorPickerFieldProps,
+  ColorPickerInputProps,
+  ColorPickerPreviewProps,
+  ColorPickerRootProps,
+  ColorPickerTrackProps,
+} from './components/ColorPicker';
+export { ColorPicker } from './components/ColorPicker';
 export {
   type CommandListController,
   CommandMenuEmptyState,

@@ -81,6 +81,21 @@ export const ellipseDefinition: ShapeDefinition<'ellipse'> = {
     width: item.geometry.width,
     height: item.geometry.height,
   }),
+  transformedBounds: (item, transform) => {
+    const rx = item.geometry.width / 2,
+      ry = item.geometry.height / 2;
+    const center = transformPoint(transform, { x: rx, y: ry });
+    // Each transformed coordinate is A cos(t) + B sin(t), whose amplitude
+    // is hypot(A, B). This also handles shear, reflection and ancestor scale.
+    const x = Math.hypot(transform[0] * rx, transform[2] * ry);
+    const y = Math.hypot(transform[1] * rx, transform[3] * ry);
+    return {
+      x: center.x - x,
+      y: center.y - y,
+      width: 2 * x,
+      height: 2 * y,
+    };
+  },
   resize: (item, size, context) =>
     resizeLabeledShape(item, size, context?.measureText),
   sameGeometry: (a, b) => sameLabeledGeometry(a.geometry, b.geometry),

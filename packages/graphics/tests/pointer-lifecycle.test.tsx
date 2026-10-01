@@ -85,9 +85,9 @@ it.each(['single', 'multiple', 'group'] as const)(
     pointer(outside, 'pointerup', 125, 135);
     expect(editor.document).toBe(committed);
     editor.undo();
-    expect(editor.document).toBe(before);
+    expect(editor.document).toEqual(before);
     editor.redo();
-    expect(editor.document).toBe(committed);
+    expect(editor.document).toEqual(committed);
   }
 );
 

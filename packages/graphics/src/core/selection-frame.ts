@@ -10,10 +10,10 @@ import {
 import type { Bounds, GraphicsDocument, Point } from './model';
 import {
   children,
-  nodeCorners,
-  resolvedShape,
+  nodeBoundsPoints,
   roots,
   type SceneOverrides,
+  shapeProjection,
   worldMatrix,
 } from './scene';
 import { isShape, shapeDefinition } from './shapes/registry';
@@ -40,19 +40,20 @@ export function selectionFrame(
   const firstId = selected[0];
   if (!firstId) return undefined;
   const first = overrides[firstId] ?? document.items[firstId];
-  const world = worldMatrix(document, firstId, overrides);
+  const projection = shapeProjection(document, firstId, overrides);
+  const world = projection.transform;
   const singleShape = selected.length === 1 && isShape(first);
   // A single leaf retains its full affine frame, including existing ancestor
   // scale/shear. Groups and multiple roots always use a world-aligned box.
   const angle = singleShape ? Math.atan2(world[1], world[0]) : 0;
   const transform = singleShape ? world : IDENTITY;
   const fromWorld = inverse(transform);
-  const points = selected.flatMap((id) => nodeCorners(document, id, overrides));
+  const points = selected.flatMap((id) =>
+    nodeBoundsPoints(document, id, overrides)
+  );
   if (!points.length) return undefined;
   const bounds = singleShape
-    ? shapeDefinition(first.type).bounds(
-        resolvedShape(document, firstId, overrides)!
-      )
+    ? shapeDefinition(first.type).bounds(projection.item!)
     : enclosing(points.map((point) => transformPoint(fromWorld, point)));
   const compatible = (id: string): boolean => {
     const item = overrides[id] ?? document.items[id];

@@ -2,22 +2,23 @@ import {
   StaticLexical,
   StaticMarkdownContext,
 } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import {
-  plainRichText,
-  type RichText,
-  type TextGeometry,
-  type TextMeasurer,
-} from '@macro-inc/graphics';
+import type { RichText, TextGeometry, TextMeasurer } from '@macro-inc/graphics';
 import { textLayoutStyle } from '@macro-inc/graphics/browser';
-import { createSignal, ErrorBoundary } from 'solid-js';
+import { createSignal, ErrorBoundary, Show } from 'solid-js';
 import { render } from 'solid-js/web';
+import { plainRichText, validCanvasText } from '../core/text-codec';
 import './text.css';
 
 export function CanvasTextContent(props: { content: RichText }) {
   return (
     <div class="canvas-lexical-text">
       <ErrorBoundary fallback={<span>Unsupported text</span>}>
-        <StaticLexical serializedState={props.content} />
+        <Show
+          when={validCanvasText(props.content)}
+          fallback={<span>Unsupported text</span>}
+        >
+          <StaticLexical serializedState={props.content} />
+        </Show>
       </ErrorBoundary>
     </div>
   );

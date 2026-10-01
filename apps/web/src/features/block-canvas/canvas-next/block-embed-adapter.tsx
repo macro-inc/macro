@@ -20,12 +20,25 @@ import {
   createUniqueId,
   on,
   Suspense,
+  useContext,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import type { CanvasEmbedViewProps } from './components/embed-view';
+import { CanvasAncestry } from './context/canvas-ancestry';
 
 /** The existing app's block loader/sync boundary; graphics only stores a reference. */
 export function CanvasBlockEmbed(props: CanvasEmbedViewProps) {
+  const ancestors = useContext(CanvasAncestry);
+  if (ancestors.includes(props.geometry.documentId) || ancestors.length >= 8)
+    return (
+      <div class="p-4 text-sm text-ink-muted">
+        Open this canvas separately to view it.
+      </div>
+    );
+  return <CanvasBlockEmbedContent {...props} />;
+}
+
+function CanvasBlockEmbedContent(props: CanvasEmbedViewProps) {
   const kind = props.geometry.fileType === 'canvas' ? 'canvas' : 'md';
   const documentId = props.geometry.documentId;
   // Unmanaged block-in-block instances deliberately support repeated references.

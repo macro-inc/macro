@@ -1,4 +1,10 @@
-import { corners, inverse, type Matrix, transformPoint } from './affine';
+import {
+  corners,
+  IDENTITY,
+  inverse,
+  type Matrix,
+  transformPoint,
+} from './affine';
 import type {
   Bounds,
   GraphicsDocument,
@@ -19,8 +25,8 @@ import { isShape, shapeDefinition } from './shapes/registry';
 
 export const canBindConnector = (
   item: GraphicsItem | undefined
-): item is Exclude<ShapeItem, ShapeItem<'connector'>> =>
-  isShape(item) && item.type !== 'connector';
+): item is Exclude<ShapeItem, ShapeItem<'connector' | 'pencil'>> =>
+  isShape(item) && item.type !== 'connector' && item.type !== 'pencil';
 const fractions: Record<ConnectorAnchor, Point> = {
   center: { x: 0.5, y: 0.5 },
   top: { x: 0.5, y: 0 },
@@ -286,6 +292,28 @@ export function retainConnectorBindings(
       ...item.geometry,
       start: retain(item.geometry.start, resolved.geometry.start),
       end: retain(item.geometry.end, resolved.geometry.end),
+    },
+  };
+}
+
+/** Bound connector ink stays in world units, independent of its own or group scale.
+ * Endpoints must already be resolved against their targets. */
+export function connectorWorldView(
+  item: ShapeItem<'connector'>,
+  world: Matrix
+): ShapeItem<'connector'> {
+  const endpoint = (end: ConnectorEndpoint): ConnectorEndpoint => ({
+    ...end,
+    point: transformPoint(world, end.point),
+    direction: end.direction ? vector(world, end.direction) : undefined,
+  });
+  return {
+    ...item,
+    transform: IDENTITY,
+    geometry: {
+      ...item.geometry,
+      start: endpoint(item.geometry.start),
+      end: endpoint(item.geometry.end),
     },
   };
 }

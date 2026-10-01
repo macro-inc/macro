@@ -98,7 +98,7 @@ it.each(['rectangle', 'ellipse'] as const)(
         geometry: { width: 80, height: 80 },
       });
       editor.undo();
-      expect(editor.document).toBe(before);
+      expect(editor.document).toEqual(before);
       editor.dispose();
     }
   }
@@ -140,7 +140,7 @@ it.each(['rectangle', 'ellipse'] as const)(
       geometry: { width: 80, height: 30 },
     });
     editor.undo();
-    expect(editor.document).toBe(before);
+    expect(editor.document).toEqual(before);
   }
 );
 
@@ -189,7 +189,7 @@ it.each(['child', 'group', 'multi'] as const)(
       -100
     );
     editor.undo();
-    expect(editor.document).toBe(before);
+    expect(editor.document).toEqual(before);
     editor.dispose();
   }
 );
@@ -221,7 +221,7 @@ it('preserves Shift-click toggling while Shift-drag moves, with live modifier ch
   pointer('pointerup', 70, 35, { shiftKey: true });
   expect(worldBounds(editor.document, 'a')).toMatchObject({ x: 50, y: 0 });
   editor.undo();
-  expect(editor.document).toBe(before);
+  expect(editor.document).toEqual(before);
   pointer('pointerdown', 20, 20, { shiftKey: true });
   pointer('pointerup', 20, 20, { shiftKey: true });
   expect(editor.getSession().selectedIds).toEqual([]);
@@ -236,7 +236,7 @@ it('constrains Option-Shift duplicates and cancels a pending Shift gesture witho
   expect(editor.document.items.a).toEqual(before.items.a);
   expect(worldBounds(editor.document, 'new')).toMatchObject({ x: 60, y: 0 });
   editor.undo();
-  expect(editor.document).toBe(before);
+  expect(editor.document).toEqual(before);
   editor.select('a');
   pointer('pointerdown', 20, 20, { shiftKey: true });
   viewport.dispatchEvent(

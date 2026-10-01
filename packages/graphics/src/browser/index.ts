@@ -2,6 +2,7 @@ import { screenToWorld } from '../core/camera';
 import type { DrawingKind } from '../core/drawing';
 import type { GraphicsEditor } from '../core/editor';
 import type { Appearance, Point } from '../core/model';
+import { isRadiusHandle } from '../core/radius';
 import {
   isResizeHandle,
   type ResizeHandle,
@@ -16,6 +17,9 @@ import { isShapeKind } from '../core/shapes/registry';
 import { selectionTarget } from './selection-target';
 
 export { type LocalImage, loadLocalImage } from './local-image';
+
+const WHEEL_ZOOM_RATE = 0.002;
+const MAX_WHEEL_ZOOM_EXPONENT = 0.2;
 
 export function resizeCursor(handle: ResizeHandle, frame?: SelectionFrame) {
   if (handle === 'n' || handle === 's') return 'ns-resize';
@@ -220,7 +224,9 @@ export function attachCameraControls(
         ?.closest('[data-graphics-handle]')
         ?.getAttribute('data-graphics-handle');
       const transformHandle =
-        isResizeHandle(handle) || handle === 'rotate' ? handle : undefined;
+        isResizeHandle(handle) || isRadiusHandle(handle) || handle === 'rotate'
+          ? handle
+          : undefined;
       const point = worldPoint(event);
       const deep = options.duplicateOnAltDrag
         ? event.metaKey || event.ctrlKey
@@ -241,7 +247,7 @@ export function attachCameraControls(
         }
       );
       cursor =
-        transformHandle === 'rotate'
+        transformHandle === 'rotate' || isRadiusHandle(transformHandle)
           ? 'grabbing'
           : transformHandle
             ? resizeCursor(transformHandle, frame)
@@ -416,7 +422,14 @@ export function attachCameraControls(
         editor.getCamera().scale * Math.exp(exponent)
       );
     } else if (event.ctrlKey || event.metaKey) {
-      const exponent = Math.max(-1, Math.min(1, -event.deltaY * unit * 0.01));
+      // Keep fine trackpad deltas continuous and bound coarse wheel/page jumps.
+      const exponent = Math.max(
+        -MAX_WHEEL_ZOOM_EXPONENT,
+        Math.min(
+          MAX_WHEEL_ZOOM_EXPONENT,
+          -event.deltaY * unit * WHEEL_ZOOM_RATE
+        )
+      );
       editor.zoomAt(
         { x: event.clientX - rect.left, y: event.clientY - rect.top },
         editor.getCamera().scale * Math.exp(exponent)
@@ -456,7 +469,6 @@ export function attachCameraControls(
 export { attachConnectorControls } from './connectors';
 export {
   createTextMeasurer,
-  richTextHtml,
   textFonts,
   textLayoutStyle,
 } from './rich-text';

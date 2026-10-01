@@ -1,17 +1,32 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import type { PortalScope } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
+import { enableCanvasNext } from '@core/constant/featureFlags';
 import { debounce } from '@solid-primitives/scheduled';
 import {
+  type Accessor,
   createEffect,
   createMemo,
   createRenderEffect,
   createResource,
   createSignal,
   type JSX,
+  lazy,
+  Match,
   on,
   onCleanup,
   Show,
+  Switch,
 } from 'solid-js';
+import {
+  type CanvasFile,
+  canvasVersion,
+} from '../canvas-next/core/document-format';
+import {
+  type CanvasLoadResult,
+  loadCanvasFile,
+} from '../canvas-next/core/load-document';
+import { importCanvasMarkdown } from '../canvas-next/primitives/text-lexical';
 import {
   CanvasDocumentProvider,
   type CanvasView,
@@ -30,6 +45,10 @@ import { CanvasRenderer } from './CanvasRenderer';
 import { Loading } from './Loading';
 import { ToolBar } from './ToolBar';
 
+const CanvasNextDocument = lazy(
+  () => import('../canvas-next/canvas-next-document')
+);
+
 const parseParams = createNumericParser<{
   x?: number;
   y?: number;
@@ -43,7 +62,7 @@ const parseParams = createNumericParser<{
 type CanvasDataState = 'loading' | 'error' | 'initialized';
 
 export type CanvasDocumentMethods = {
-  exportCanvas: () => Promise<Canvas>;
+  exportCanvas: () => Promise<Canvas | CanvasFile>;
   goToLocationFromParams: (params: Record<string, unknown>) => void;
 };
 
@@ -58,10 +77,115 @@ export type CanvasDocumentProps = {
   locationParams?: Record<string, string | string[] | undefined>;
   onLocationChange?: (location: CanvasView) => void;
   registerMethods?: (methods: Partial<CanvasDocumentMethods>) => void;
-  children?: (content: JSX.Element) => JSX.Element;
+  children?: (content: JSX.Element, state: CanvasDocumentChrome) => JSX.Element;
+};
+
+export type CanvasDocumentChrome = {
+  mode: 'legacy' | 'next';
+  savedFile: Accessor<Blob | undefined>;
+  location?: () => { x: number; y: number; s: number };
 };
 
 export function CanvasDocument(props: CanvasDocumentProps) {
+  return (
+    <Show when={props.documentId} keyed>
+      {(documentId) => (
+        <CanvasDocumentLoader {...props} documentId={documentId} />
+      )}
+    </Show>
+  );
+}
+
+function CanvasDocumentLoader(props: CanvasDocumentProps) {
+  const flag = useFeatureFlag(enableCanvasNext);
+  const [enabled, setEnabled] = createSignal<boolean>();
+  // Keep an open document on one editor until it is reopened.
+  createEffect(() => {
+    if (enabled() === undefined && !flag().loading) setEnabled(flag().enabled);
+  });
+  const [legacy, setLegacy] = createSignal(false);
+  const [loaded] = createResource(
+    () =>
+      enabled() === undefined
+        ? false
+        : { file: props.file, enabled: enabled()! },
+    async ({ file, enabled }): Promise<CanvasLoadResult> => {
+      if (!file)
+        return {
+          kind: 'error',
+          message: 'Canvas file unavailable',
+          canOpenLegacy: false,
+        };
+      try {
+        return loadCanvasFile(
+          JSON.parse(await file.text()),
+          enabled,
+          importCanvasMarkdown
+        );
+      } catch {
+        return {
+          kind: 'error',
+          message: 'Could not read canvas file',
+          canOpenLegacy: false,
+        };
+      }
+    }
+  );
+  createEffect(
+    on(
+      () => props.file,
+      () => setLegacy(false)
+    )
+  );
+  const legacyAllowed = () => {
+    const result = loaded();
+    return result?.kind === 'error' && result.canOpenLegacy;
+  };
+  return (
+    <Show
+      when={enabled() !== undefined && !loaded.loading}
+      fallback={<Loading />}
+    >
+      <Switch>
+        <Match
+          when={loaded()?.kind === 'legacy' || (legacy() && legacyAllowed())}
+        >
+          <LegacyCanvasDocument {...props} />
+        </Match>
+        <Match when={loaded()?.kind === 'next' && loaded()} keyed>
+          {(result) =>
+            result.kind === 'next' && (
+              <CanvasNextDocument {...props} initial={result.file} />
+            )
+          }
+        </Match>
+        <Match when={loaded()?.kind === 'error' && loaded()} keyed>
+          {(result) =>
+            result.kind === 'error' && (
+              <div
+                role="alert"
+                class="flex size-full flex-col items-center justify-center gap-3 p-6 text-sm"
+              >
+                <p>{result.message}</p>
+                <Show when={result.canOpenLegacy}>
+                  <button
+                    type="button"
+                    class="rounded border border-edge-muted px-3 py-2"
+                    onClick={() => setLegacy(true)}
+                  >
+                    Open in legacy editor
+                  </button>
+                </Show>
+              </div>
+            )
+          }
+        </Match>
+      </Switch>
+    </Show>
+  );
+}
+
+function LegacyCanvasDocument(props: CanvasDocumentProps) {
   return (
     <Show when={props.documentId} keyed>
       {(documentId) => (
@@ -171,6 +295,8 @@ function CanvasDocumentState(props: CanvasDocumentProps) {
     const loadFile = async () => {
       try {
         const data: Canvas = JSON.parse(await file.text());
+        if (canvasVersion(data) !== 1)
+          throw new Error('This canvas requires Canvas Next');
         const loaded = await loadCanvasData(data, () => !cancelled);
         if (loaded && !cancelled) setDataState('initialized');
       } catch (error) {
@@ -262,7 +388,13 @@ function CanvasDocumentState(props: CanvasDocumentProps) {
     </Show>
   );
 
-  return props.children ? props.children(content) : content;
+  return props.children
+    ? props.children(content, {
+        mode: 'legacy',
+        savedFile: () =>
+          canvas.state.signals.currentSavedFile[0]() ?? undefined,
+      })
+    : content;
 }
 
 function getCanvasState(state: {

@@ -1,5 +1,12 @@
 # Two-peer scene experiment
 
+Status reviewed 2026-09-28. See the [main progress plan](../../../../docs/GRAPHICS_PARITY.md).
+Automated mapping coverage now includes pencil, rich text/labels, connectors and
+media/document references. The visual peer UI still offers Select/Rectangle/Ellipse
+with default renderers; it is not the full Canvas Next rich editor. Full peer UI
+integration is deferred while the
+[legacy bridge and colors](../../../../docs/CANVAS_LEGACY_BRIDGE.md) take priority.
+
 `@macro-inc/graphics/loro` is an experimental adapter and in-memory transport for
 `/app/component/graphics-multiplayer-playground`. It uses the workspace Loro
 version (1.16.3). No SyncService, network requests, local storage, or server changes
@@ -90,9 +97,12 @@ seconds; states expire after 30 seconds without an update, checked on Loro's
 Ghosts are displayed only when their captured document clock matches the receiver's
 clock. A commit therefore suppresses a delayed, obsolete gesture until fresh
 presence arrives. Selection IDs still resolve against the current committed scene.
-This prototype sends simple rectangle/ellipse geometry and uses the default shape
-renderers for tinted ghosts. Rich custom shape previews, authenticated peer identity,
-payload validation and a real network presence transport remain integration work.
+The current ghost contract carries rectangle/ellipse dimensions and pencil samples,
+using default renderers. It does not carry complete text, connector, media or document
+geometry; do not assume every registered shape can render a valid ghost. A full
+Canvas Next peer lab needs typed preview coverage or deliberate bounds-only previews
+for these kinds, plus connector endpoint-draft awareness. Authenticated peer identity,
+payload validation and real network presence transport remain integration work.
 
 The cursor is a colored pointer with a rounded name-only badge, shown only while
 the peer's cursor is on the canvas. Pending ghosts replace redundant transform
@@ -117,9 +127,11 @@ previews, reordered packets, coalescing, offline/reconnect behavior and disposal
 Motion tests cover bounded debounce, mid-flight retargeting, shortest-arc rotation,
 stable ghost DOM, settling, reduced motion and animation cleanup.
 
-Production integration still needs a chosen geometry conflict policy, intent rebasing,
-asset/text schemas, shared collaboration runtime integration, durable initialization,
-permissions, reconnect/storage tests and deployment. This transport is only a demo
+Production integration still needs an accepted geometry/history conflict policy,
+an explicit choice to retain cancellation or implement intent rebasing, mixed-content
+editor validation, shared collaboration runtime integration, durable initialization,
+permissions, reconnect/storage tests and deployment. Asset/text mappings now exist;
+their production acceptance is separate from basic mapping tests. This transport is only a demo
 harness; do not turn it into another production sync engine.
 
 References: [Loro ordered trees](https://www.loro.dev/docs/tutorial/tree),
@@ -138,7 +150,7 @@ payloads are future transport optimizations, not core document requirements.
 
 ### Text and embedded items
 
-Text items and shape labels store the exact serialized Lexical JSON as one
+Text items and shape labels store the exact host-defined content string as one
 `textContent` LoroMap value. Concurrent edits select one complete string through
 last-write-wins; no LoroText, per-node CRDT, or character merging is involved.
 The text register is separate from pose and appearance; label layout is also
@@ -148,3 +160,19 @@ text-versus-move, new labels versus moves, and local undo preserving remote move
 
 Image, video and document references use the existing shape geometry mapping.
 Their source bytes, resolved URLs, loading state and playback are host concerns.
+
+### Next integration gates
+
+Use the actual Canvas view, rich-text measurer and content/asset renderers with two
+injected Loro editors. Exercise concurrent whole-string edits, text editing versus
+remote movement, local text/scene undo, reference deletion, selection/gesture
+awareness and mixed-content layering/focus. Keep embedded document editing under
+its own existing permissions/sync; the outer scene shares only the embed reference
+and display geometry. No character CRDT, durable seed or second network engine is
+needed for this checkpoint.
+
+For the later durable host, reuse the existing collaboration infrastructure and
+the [spreadsheet session](../../../../apps/web/src/features/block-spreadsheet/queries/spreadsheet-session.ts)
+as a reference for WAL/snapshot recovery and disposal. First audit canvas document
+initialization, content routing, authorization and legacy readers; the lab does not
+prove that enabling SyncService requires no server changes.

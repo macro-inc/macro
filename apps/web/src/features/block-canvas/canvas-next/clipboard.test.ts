@@ -1,7 +1,12 @@
-import { createGraphicsEditor, drawableIds } from '@macro-inc/graphics';
+import {
+  createGraphicsEditor,
+  drawableIds,
+  setShapeLabelCommand,
+} from '@macro-inc/graphics';
 import { afterEach, expect, it, vi } from 'vitest';
 import { createCanvasClipboard } from './clipboard';
 import { createCanvasNextScene } from './core/seed-scene';
+import { plainRichText } from './core/text-codec';
 
 const cleanup: (() => void)[] = [];
 afterEach(() => {
@@ -59,6 +64,31 @@ it('leaves clipboard editing in inputs alone and rejects unrelated external clip
   expect(drawableIds(editor.document)).toHaveLength(3);
   expect(editor.getSession().canUndo).toBe(false);
 });
+
+it.each([plainRichText('Pasted label'), '{broken'])(
+  'validates host text when importing shape fragments (%s)',
+  (content) => {
+    const { editor, event, notify } = setup();
+    editor.execute(setShapeLabelCommand, {
+      id: 'welcome-rectangle',
+      label: { content, fontSize: 24, fontFamily: 'sans', height: 32 },
+    });
+    event('copy');
+    const before = editor.document;
+    event('paste');
+    if (content === '{broken') {
+      expect(editor.document).toBe(before);
+      expect(notify).toHaveBeenLastCalledWith(
+        'Clipboard has invalid Canvas Next text'
+      );
+    } else {
+      expect(
+        editor.document.items[editor.getSession().selectedId!]
+      ).toMatchObject({ geometry: { label: { content } } });
+      expect(drawableIds(editor.document)).toHaveLength(4);
+    }
+  }
+);
 
 it('never deletes on failed clipboard write or deletes a newer selection after an async cut', async () => {
   const { editor, clipboard, notify } = setup();

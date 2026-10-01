@@ -8,24 +8,33 @@ import {
   resolveBlockAlias,
 } from '@core/constant/allBlocks';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import type { GraphicsEditor } from '@macro-inc/graphics';
 import { createGraphicsEditor, screenToWorld } from '@macro-inc/graphics';
-import { onCleanup } from 'solid-js';
+import { fetchDocumentMetadata } from '@queries/storage/document-metadata';
+import { createEffect, onCleanup, Show } from 'solid-js';
 import { CanvasBlockEmbed } from './block-embed-adapter';
 import { createCanvasClipboard } from './clipboard';
+import type { CanvasFile } from './core/document-format';
 import { createCanvasNextScene } from './core/seed-scene';
 import { registerCanvasNextHotkeys } from './hotkeys';
 import { createAssetState } from './primitives/create-asset-state';
 import { createCanvasState } from './primitives/create-canvas-state';
 import { importTextClipboard } from './primitives/text-lexical';
 import { canvasAssetSource } from './queries/assets';
+import { CanvasReadOnlyView } from './views/canvas-read-only-view';
 import { CanvasView } from './views/canvas-view';
 import { createCanvasTextMeasurer } from './views/text-content';
 
-/** Local composition root. Real document loading/saving is a later checkpoint. */
-export default function CanvasNext() {
+export function CanvasNextEditor(props: {
+  initial: CanvasFile;
+  canEdit: boolean;
+  debug?: boolean;
+  fitOnLoad?: boolean;
+  onReady?: (editor: GraphicsEditor, finishText: () => void) => void;
+}) {
   const measurement = createCanvasTextMeasurer();
   onCleanup(measurement.dispose);
-  const editor = createGraphicsEditor(createCanvasNextScene(), {
+  const editor = createGraphicsEditor(props.initial.document, {
     measureText: measurement.measure,
   });
   onCleanup(editor.dispose);
@@ -58,33 +67,77 @@ export default function CanvasNext() {
     }
   );
   const [attachScope, scopeId] = useHotkeyDOMScope('canvas-next');
-  registerCanvasNextHotkeys(scopeId, state, clipboard);
+  registerCanvasNextHotkeys(scopeId, state, clipboard, () => props.canEdit);
+  props.onReady?.(editor, state.text.finish);
+  createEffect(() => {
+    if (props.canEdit) return;
+    state.inspector.cancel();
+    state.text.cancel();
+    state.eraser.cancel();
+    state.connector.interaction.cancel();
+    state.embeds.exit();
+    assets.cancelPending();
+    editor.cancelShape();
+    editor.cancelTransform();
+  });
+  onCleanup(() => {
+    if (props.canEdit) state.text.finish();
+  });
   return (
-    <>
-      <SplitHeaderLeft>
-        <StaticSplitLabel label="Canvas Next" />
-      </SplitHeaderLeft>
-      <StaticMarkdownContext>
+    <StaticMarkdownContext>
+      <Show
+        when={props.canEdit}
+        fallback={
+          <CanvasReadOnlyView state={state} fitOnLoad={props.fitOnLoad} />
+        }
+      >
         <CanvasView
+          debug={props.debug}
+          fitOnLoad={props.fitOnLoad}
           state={state}
+          scopeId={scopeId}
           embedView={CanvasBlockEmbed}
           assets={assets}
           onViewport={(element) => {
             viewport = element;
           }}
-          onOpenDocument={(item) =>
-            openWithSplit(
-              {
-                id: item.documentId,
-                type: resolveBlockAlias(fileTypeToBlockName(item.fileType)),
-              },
-              { activate: true }
-            )
-          }
+          onOpenDocument={async (item) => {
+            try {
+              const fileType =
+                item.fileType === 'unknown'
+                  ? (await fetchDocumentMetadata(item.documentId)).fileType
+                  : item.fileType;
+              openWithSplit(
+                {
+                  id: item.documentId,
+                  type: resolveBlockAlias(fileTypeToBlockName(fileType)),
+                },
+                { activate: true }
+              );
+            } catch {
+              state.setNotice('Could not open this document');
+            }
+          }}
           clipboard={clipboard}
           attachScope={attachScope}
         />
-      </StaticMarkdownContext>
+      </Show>
+    </StaticMarkdownContext>
+  );
+}
+
+/** Disposable, browser-local demo; never used to persist real documents. */
+export default function CanvasNext() {
+  return (
+    <>
+      <SplitHeaderLeft>
+        <StaticSplitLabel label="Canvas Next" />
+      </SplitHeaderLeft>
+      <CanvasNextEditor
+        initial={{ version: 2, document: createCanvasNextScene() }}
+        canEdit
+        debug
+      />
     </>
   );
 }

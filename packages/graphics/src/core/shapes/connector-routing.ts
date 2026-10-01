@@ -165,9 +165,50 @@ export function connectorPath(
           ]
         : rounded(steppedPoints(a, b, from, to));
   const path = `M ${pair(a)} ${segments.map((s) => (s.controls ? `C ${pair(s.controls[0])} ${pair(s.controls[1])} ${pair(s.to)}` : `L ${pair(s.to)}`)).join(' ')}`;
-  // Convex hull bounds enclose curves. Samples follow the actual rounded path for picking.
   const bounds = enclosing(
-    segments.flatMap((s) => [s.from, ...(s.controls ?? []), s.to])
+    segments.flatMap((segment) => {
+      if (!segment.controls) return [segment.from, segment.to];
+      const [c1, c2] = segment.controls;
+      const times = new Set([0, 1]);
+      for (const axis of ['x', 'y'] as const) {
+        const p0 = segment.from[axis],
+          p1 = c1[axis],
+          p2 = c2[axis],
+          p3 = segment.to[axis];
+        const a = -p0 + 3 * p1 - 3 * p2 + p3;
+        const b = 2 * (p0 - 2 * p1 + p2);
+        const c = p1 - p0;
+        const roots =
+          Math.abs(a) < 1e-12
+            ? Math.abs(b) < 1e-12
+              ? []
+              : [-c / b]
+            : b * b - 4 * a * c < 0
+              ? []
+              : [
+                  (-b + Math.sqrt(b * b - 4 * a * c)) / (2 * a),
+                  (-b - Math.sqrt(b * b - 4 * a * c)) / (2 * a),
+                ];
+        roots.forEach((t) => {
+          if (t > 0 && t < 1) times.add(t);
+        });
+      }
+      return [...times].map((t) => {
+        const u = 1 - t;
+        return {
+          x:
+            u ** 3 * segment.from.x +
+            3 * u * u * t * c1.x +
+            3 * u * t * t * c2.x +
+            t ** 3 * segment.to.x,
+          y:
+            u ** 3 * segment.from.y +
+            3 * u * u * t * c1.y +
+            3 * u * t * t * c2.y +
+            t ** 3 * segment.to.y,
+        };
+      });
+    })
   );
   const points: Point[] = [a];
   for (const s of segments) {
