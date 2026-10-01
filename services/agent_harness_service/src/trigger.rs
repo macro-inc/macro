@@ -3,9 +3,7 @@
 use agent_session::outbound::postgres::PgAgentSessionRepo;
 use agent_trigger::domain::processing::process_message_event;
 use agent_trigger::domain::service::AgentTriggerService;
-use agent_trigger::domain::sources::{
-    MessageTriggerEvents, TriggerEvents,
-};
+use agent_trigger::domain::sources::{MessageTriggerEvents, TriggerEvents};
 use agent_trigger::domain::task_assignment::process_task_assignment;
 use agent_trigger::outbound::{
     BotRepoAgentLookup, ChannelRepoTypeLookup, DssTaskAssignmentContext, FastModelTriggerJudge,
