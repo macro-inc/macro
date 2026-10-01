@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 type UndoneArgs = Parameters<typeof executeMarkEntitiesUndone>[0];
 const mocks = vi.hoisted(() => ({
+  graphql: true,
   threadCanBeMarkedNotDone: vi.fn(async (_id: string) => true),
   executeMarkEntitiesUndone:
     vi.fn<(args: UndoneArgs) => Promise<EmailArchiveDisposition>>(),
@@ -38,6 +39,10 @@ const mocks = vi.hoisted(() => ({
   success: vi.fn(),
 }));
 
+vi.mock('@core/constant/featureFlags', () => ({
+  enableGraphqlSoup: { key: 'enable-graphql-soup' },
+  isFeatureEnabled: () => mocks.graphql,
+}));
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { alert: mocks.alert, failure: mocks.failure, success: mocks.success },
 }));
@@ -75,6 +80,7 @@ function optimisticFor(id: string) {
 describe('makeMarkNotDoneAction', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.graphql = true;
     mocks.outcomes.clear();
     mocks.writeGate = undefined;
     mocks.notificationFailure = undefined;
@@ -82,7 +88,7 @@ describe('makeMarkNotDoneAction', () => {
     mocks.fetchDoneNotificationIds.mockImplementation(async (ids) =>
       ids.map((id) => `server-${id}`)
     );
-    mocks.refetchSoupEntity.mockResolvedValue(undefined);
+    mocks.refetchSoupEntity.mockReset().mockResolvedValue(undefined);
     mocks.executeMarkEntitiesUndone.mockImplementation(async (args) => {
       if (args.emailIds.length === 0) {
         if (mocks.notificationFailure) throw mocks.notificationFailure;
@@ -102,6 +108,8 @@ describe('makeMarkNotDoneAction', () => {
         }
       }
       if (failure) throw failure;
+      if (args.notificationIds.length > 0 && mocks.notificationFailure)
+        throw mocks.notificationFailure;
       return disposition;
     });
   });
@@ -122,11 +130,8 @@ describe('makeMarkNotDoneAction', () => {
     expect(optimisticFor('inbound').settle).toHaveBeenCalledOnce();
     expect(optimisticFor('inbound').rollback).not.toHaveBeenCalled();
     expect(mocks.alert).not.toHaveBeenCalled();
-    expect(mocks.invalidateAllSoup).toHaveBeenCalledOnce();
-    expect(mocks.refetchSoupEntity).toHaveBeenCalledWith(
-      'inbound',
-      'emailThread'
-    );
+    expect(mocks.invalidateAllSoup).not.toHaveBeenCalled();
+    expect(mocks.refetchSoupEntity).not.toHaveBeenCalled();
   });
 
   it('does not refetch REST caches after a queued unarchive', async () => {
@@ -139,6 +144,7 @@ describe('makeMarkNotDoneAction', () => {
   });
 
   it('still skips threads rejected by the legacy eligibility preflight', async () => {
+    mocks.graphql = false;
     mocks.threadCanBeMarkedNotDone.mockResolvedValue(false);
     await createAction().execute([doneEmail('sent-only')]);
     expect(mocks.executeMarkEntitiesUndone).not.toHaveBeenCalled();
@@ -146,6 +152,7 @@ describe('makeMarkNotDoneAction', () => {
   });
 
   it('unarchives only eligible threads in a legacy mixed selection', async () => {
+    mocks.graphql = false;
     mocks.threadCanBeMarkedNotDone.mockImplementation(
       async (id) => id === 'inbound'
     );
@@ -185,14 +192,8 @@ describe('makeMarkNotDoneAction', () => {
         expect.objectContaining({ hideOnMobile: false })
       );
       expect(mocks.failure).not.toHaveBeenCalled();
-      expect(mocks.refetchSoupEntity).not.toHaveBeenCalledWith(
-        'sent-only',
-        'emailThread'
-      );
-      if (disposition === 'queued') {
-        expect(mocks.refetchSoupEntity).not.toHaveBeenCalled();
-        expect(mocks.invalidateAllSoup).not.toHaveBeenCalled();
-      }
+      expect(mocks.refetchSoupEntity).not.toHaveBeenCalled();
+      expect(mocks.invalidateAllSoup).not.toHaveBeenCalled();
     }
   );
 
@@ -245,16 +246,15 @@ describe('makeMarkNotDoneAction', () => {
     expect(mocks.invalidateAllSoup).not.toHaveBeenCalled();
   });
 
-  it('does not turn a refresh failure into a failed committed mutation', async () => {
-    mocks.refetchSoupEntity.mockRejectedValueOnce(new Error('refresh failed'));
+  it('does not start a replica-backed REST refresh after GraphQL commits', async () => {
+    mocks.refetchSoupEntity.mockRejectedValueOnce(new Error('must not fetch'));
     await expect(createAction().execute([doneEmail('inbound')])).resolves.toBe(
       'committed'
     );
     expect(optimisticFor('inbound').rollback).not.toHaveBeenCalled();
-    expect(mocks.alert).toHaveBeenCalledWith(
-      'Marked as not done. The list could not be refreshed.',
-      expect.any(Object)
-    );
+    expect(mocks.refetchSoupEntity).not.toHaveBeenCalled();
+    expect(mocks.invalidateAllSoup).not.toHaveBeenCalled();
+    expect(mocks.alert).not.toHaveBeenCalled();
   });
 
   it('still rejects a completely failed selection for single-thread cache wrappers', async () => {
@@ -297,6 +297,55 @@ describe('makeMarkNotDoneAction', () => {
     expect(mocks.fetchDoneNotificationIds).not.toHaveBeenCalled();
     gate.resolve();
     await action;
+  });
+
+  it('preserves REST notification lookup, single batch and post-success refetch', async () => {
+    mocks.graphql = false;
+    await expect(
+      createAction().execute([doneEmail('a'), doneEmail('b')])
+    ).resolves.toBe('committed');
+    expect(mocks.applyOptimistic).toHaveBeenCalledOnce();
+    expect(mocks.applyOptimistic).toHaveBeenCalledWith({
+      emailIds: ['a', 'b'],
+      notificationIds: ['local-a', 'local-b'],
+    });
+    expect(mocks.executeMarkEntitiesUndone).toHaveBeenCalledOnce();
+    expect(mocks.executeMarkEntitiesUndone).toHaveBeenCalledWith({
+      emailIds: ['a', 'b'],
+      notificationIds: ['local-a', 'local-b', 'server-a', 'server-b'],
+    });
+    expect(
+      mocks.fetchDoneNotificationIds.mock.invocationCallOrder[0]
+    ).toBeLessThan(mocks.executeMarkEntitiesUndone.mock.invocationCallOrder[0]);
+    expect(mocks.refetchSoupEntity).toHaveBeenCalledWith('a', 'emailThread');
+    expect(mocks.refetchSoupEntity).toHaveBeenCalledWith('b', 'emailThread');
+    expect(mocks.invalidateAllSoup).toHaveBeenCalledOnce();
+  });
+
+  it('preserves the legacy REST whole-batch rollback on a rejected sibling', async () => {
+    mocks.graphql = false;
+    const error = new Error('failed');
+    mocks.outcomes.set('b', error);
+    await expect(
+      createAction().execute([doneEmail('a'), doneEmail('b')])
+    ).rejects.toBe(error);
+    expect(mocks.applyOptimistic).toHaveBeenCalledOnce();
+    expect(
+      mocks.applyOptimistic.mock.results[0].value.rollback
+    ).toHaveBeenCalledOnce();
+    expect(mocks.failure).toHaveBeenCalledWith('Failed to mark as not done');
+    expect(mocks.refetchSoupEntity).not.toHaveBeenCalled();
+  });
+
+  it('preserves legacy REST rollback when its post-write refetch fails', async () => {
+    mocks.graphql = false;
+    mocks.refetchSoupEntity.mockRejectedValueOnce(new Error('refresh failed'));
+    await expect(createAction().execute([doneEmail('a')])).rejects.toThrow(
+      'refresh failed'
+    );
+    expect(
+      mocks.applyOptimistic.mock.results[0].value.rollback
+    ).toHaveBeenCalledOnce();
   });
 
   it('does not resolve threads when nothing is done', async () => {

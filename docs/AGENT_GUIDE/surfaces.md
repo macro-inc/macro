@@ -496,12 +496,19 @@ offline action followed by reconnect. Also wait for provider/metadata synchroniz
 before Undo, and repeat after reloading: an archived received thread can lose its
 inbox-sorting timestamp but must still be unarchivable. Sent-only threads and
 unsent drafts cannot be unarchived; sent mail addressed back to its sender can.
-Bulk Mark Not Done settles per email: a rejected sent-only/draft thread stays done,
-while successful and durably queued siblings remain restored. Only accepted
+With GraphQL Soup enabled, bulk Mark Not Done settles per email: a rejected
+sent-only/draft thread stays done, while successful and durably queued siblings
+remain restored. Only accepted
 threads get their notifications restored. Notification or list-refresh failures
 warn without rolling back accepted unarchives. Verify mixed committed/queued/
 rejected selections, partial-success counts, and that a queued sibling prevents
-shared-list refetch even when notification restoration fails.
+shared-list refetch even when notification restoration fails. GraphQL reversals
+rely on normalized writes and their durable revalidation, not an extra REST Soup
+refetch after rows settle. Verify the open-thread header too: with GraphQL enabled,
+Mark Not Done remains available for an archived thread whose inbox timestamp is
+missing; the server decides whether its received-message history allows restoration.
+The REST path retains its timestamp preflight, whole-batch handling, notification
+ordering, and existing cache reconciliation.
 
 The service retains both replica-backed Soup reads and a primary-backed email
 writer. Email mutations and their uncached reply reloads use the primary; ordinary

@@ -4,6 +4,10 @@ import {
   resolveMarkEntitiesDoneVariables,
 } from '@app/features/next-soup/utils';
 import { toast } from '@core/component/Toast/Toast';
+import {
+  enableGraphqlSoup,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import type { EntityData } from '@entity';
 import type { NotificationSource } from '@notifications';
 import type { EmailArchiveDisposition } from '@queries/email/integration';
@@ -47,7 +51,49 @@ const uncompleteReminders = async (reminders: EntityData[]) => {
   }
 };
 
-/** Each email owns its optimistic state; rejected siblings cannot undo it. */
+/** Preserve the legacy REST batch, notification ordering and reconciliation. */
+async function unarchiveRestTargets(
+  targets: EntityData[],
+  source: NotificationSource
+) {
+  const { emailIds, notificationIds } = resolveMarkEntitiesDoneVariables({
+    entities: targets,
+    notificationSource: source,
+  });
+  const optimistic = applyEntitiesNotDoneOptimistic({
+    emailIds,
+    notificationIds,
+  });
+  try {
+    const serverNotificationIds =
+      await fetchDoneNotificationIdsByEventItemIds(emailIds);
+    const disposition = await executeMarkEntitiesUndone({
+      emailIds,
+      notificationIds: [
+        ...new Set([...notificationIds, ...serverNotificationIds]),
+      ],
+    });
+    toast.success(
+      targets.length > 1
+        ? `Marked ${targets.length} items as not done`
+        : 'Marked as not done',
+      { duration: 3_000, stack: true, hideOnMobile: true }
+    );
+    if (disposition !== 'queued') {
+      await Promise.all(
+        emailIds.map((id) => refetchSoupEntity(id, 'emailThread'))
+      );
+      invalidateAllSoup();
+    }
+    return disposition;
+  } catch (err) {
+    optimistic.rollback();
+    toast.failure('Failed to mark as not done');
+    throw err;
+  }
+}
+
+/** Each GraphQL email owns its optimistic state; rejected siblings cannot undo it. */
 async function unarchiveTargets(targets: EntityData[]) {
   const attempts = new Map(
     targets.map((entity) => [
@@ -139,15 +185,19 @@ export const makeMarkNotDoneAction = (options: MakeMarkNotDoneOptions) => {
     const reminders = entities.filter(isCompletedReminder);
     if (reminders.length > 0) await uncompleteReminders(reminders);
 
-    // Snapshot identities before any await/optimistic write changes live rows,
-    // and send only one write when a thread occurs in more than one group.
-    const candidates = [
-      ...new Map(
-        entities
-          .filter((e) => e.type === 'email' && e.done === true)
-          .map((entity) => [entity.id, { ...entity }] as const)
-      ).values(),
-    ];
+    const graphql = isFeatureEnabled(enableGraphqlSoup);
+    const doneEmails = entities.filter(
+      (e) => e.type === 'email' && e.done === true
+    );
+    // GraphQL owns per-thread transactions: snapshot identities before awaiting
+    // and deduplicate group occurrences. Keep REST's existing input flow intact.
+    const candidates = graphql
+      ? [
+          ...new Map(
+            doneEmails.map((entity) => [entity.id, { ...entity }] as const)
+          ).values(),
+        ]
+      : doneEmails;
     if (candidates.length === 0) return;
 
     // REST may rule out sent-only threads up front. GraphQL leaves eligibility
@@ -168,6 +218,7 @@ export const makeMarkNotDoneAction = (options: MakeMarkNotDoneOptions) => {
     }
 
     const source = options.notificationSource();
+    if (!graphql) return unarchiveRestTargets(targets, source);
     const { accepted, disposition, error } = await unarchiveTargets(targets);
     if (accepted.length === 0) {
       toast.failure('Failed to mark as not done');
@@ -181,18 +232,9 @@ export const makeMarkNotDoneAction = (options: MakeMarkNotDoneOptions) => {
     if (!(await restoreEmailNotifications(accepted, source))) {
       warnings.push('Some notifications could not be restored.');
     }
-    // Never refetch a shared list over a durably queued sibling, even when
-    // another thread was rejected or its notification restoration failed.
-    if (disposition !== 'queued') {
-      try {
-        await Promise.all(
-          accepted.map(({ id }) => refetchSoupEntity(id, 'emailThread'))
-        );
-        invalidateAllSoup();
-      } catch {
-        warnings.push('The list could not be refreshed.');
-      }
-    }
+    // The GraphQL mutation/queue owns revalidation. A follow-up REST Soup read
+    // can return replica-stale archive state after accepted rows have settled,
+    // including when a sibling failed. Do not feed it over those accepted rows.
     const message =
       failedCount > 0
         ? `Marked ${accepted.length} of ${targets.length} items as not done`
