@@ -266,10 +266,13 @@ bottom of the area carries the other decisions, refusal first: `Dismiss · Open 
 for a tool draft, `Decline · Submit · Open in session` (or `Open` for a URL) for a question.
 Only the session's owner can act; other viewers see the question read-only and the header
 names who is being waited on. Once answered, the area shows the agent's passage again.
+Images made with `GenerateImage` are saved to static file service. The bot embeds
+the returned URL as a Markdown image in its channel reply; generated images have
+no document mention or filename card.
 Agent replies may contain mention chips (`<m-document-mention>`) that render like any
-other channel mention. A mention of an image document (PNG, JPG, GIF, SVG, WebP —
-including a picture the bot made with `GenerateImage`) also unfurls beneath the
-message text as an image card: a header with the filename above the picture,
+other channel mention. A mention of an image document (PNG, JPG, GIF, SVG, WebP)
+also unfurls beneath the message text as an image card: a header with the filename
+above the picture,
 inside the message's `[data-message-mentioned-images]` element. The chip stays;
 clicking the card opens the image document in a split. The same image mentioned
 twice unfurls once, mentions of other document types, channels, and chats never

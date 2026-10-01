@@ -1,21 +1,20 @@
-//! Prompt validation, naming, and generation-to-document orchestration.
+//! Prompt validation and generation-to-static-file orchestration.
 use super::models::{
-    GenerateImageError, GeneratedImageDocument, ImageGenerationError, ImageGenerationRequest,
-    MAX_PROMPT_BYTES, MAX_REFERENCE_BYTES, MAX_REFERENCE_IMAGES, NewGeneratedImage,
-    NewImageDocument,
+    GenerateImageError, ImageGenerationError, ImageGenerationRequest, MAX_PROMPT_BYTES,
+    MAX_REFERENCE_BYTES, MAX_REFERENCE_IMAGES, NewGeneratedImage, NewStaticImage,
+    StoredGeneratedImage,
 };
 use super::ports::{
-    ImageDocumentStore, ImageGenerationService, ImageGenerator, ImageReferenceReader,
+    ImageGenerationService, ImageGenerator, ImageReferenceReader, ImageStore,
     UnconfiguredImageReferenceReader,
 };
-use model::document::{FileType, FileTypeExt};
 use model_owner::CreationPrincipal;
 use std::sync::Arc;
 
 #[cfg(test)]
 mod test;
 
-/// Image generation use case composed from a model provider and document store.
+/// Image generation use case composed from a model provider and static file store.
 pub struct ImageGenerationServiceImpl<Store, References = UnconfiguredImageReferenceReader> {
     generator: Arc<dyn ImageGenerator>,
     store: Store,
@@ -23,7 +22,7 @@ pub struct ImageGenerationServiceImpl<Store, References = UnconfiguredImageRefer
 }
 
 impl<Store> ImageGenerationServiceImpl<Store> {
-    /// Compose the provider and document-saving capability.
+    /// Compose the provider and image-saving capability.
     pub fn new(generator: Arc<dyn ImageGenerator>, store: Store) -> Self {
         Self {
             generator,
@@ -44,21 +43,19 @@ impl<Store, References> ImageGenerationServiceImpl<Store, References> {
     }
 }
 
-impl<Store: ImageDocumentStore, References: ImageReferenceReader> ImageGenerationService
+impl<Store: ImageStore, References: ImageReferenceReader> ImageGenerationService
     for ImageGenerationServiceImpl<Store, References>
 {
-    /// Generate an image and store it through the document-saving port.
+    /// Generate an image and store it through the image-saving port.
     #[tracing::instrument(skip_all, err)]
     async fn create_generated_image(
         &self,
         principal: &CreationPrincipal,
         image: NewGeneratedImage,
-    ) -> Result<GeneratedImageDocument, GenerateImageError> {
+    ) -> Result<StoredGeneratedImage, GenerateImageError> {
         let NewGeneratedImage {
             prompt,
             aspect_ratio,
-            file_name,
-            project,
             reference_images,
         } = image;
         let prompt = prompt.trim();
@@ -77,11 +74,6 @@ impl<Store: ImageDocumentStore, References: ImageReferenceReader> ImageGeneratio
                 "referenceImages accepts at most {MAX_REFERENCE_IMAGES} images"
             )));
         }
-        let file_name = match file_name.as_deref().map(str::trim) {
-            Some(name) if !name.is_empty() => name.to_string(),
-            _ => file_name_from_prompt(prompt),
-        };
-
         let mut references = Vec::with_capacity(reference_images.len());
         let mut reference_bytes = 0;
         for reference in &reference_images {
@@ -114,66 +106,33 @@ impl<Store: ImageDocumentStore, References: ImageReferenceReader> ImageGeneratio
                 reference_images: references,
             })
             .await?;
-        let file_type = generated.file_type().ok_or_else(|| {
+        generated.file_type().ok_or_else(|| {
             ImageGenerationError::Provider(anyhow::anyhow!(
                 "provider returned an unsupported image type {}",
                 generated.mime_type
             ))
         })?;
-        let file_name = with_extension(&file_name, file_type);
+        if generated.bytes.is_empty() {
+            return Err(ImageGenerationError::Provider(anyhow::anyhow!(
+                "provider returned an empty image"
+            ))
+            .into());
+        }
         let size_bytes = generated.bytes.len();
 
-        let document_id = self
+        let static_file = self
             .store
-            .save_image(
-                principal,
-                NewImageDocument {
-                    file_name: file_name.clone(),
-                    bytes: generated.bytes,
-                    project,
-                },
-            )
+            .save_image(NewStaticImage {
+                mime_type: generated.mime_type.clone(),
+                bytes: generated.bytes,
+            })
             .await?;
 
-        Ok(GeneratedImageDocument {
-            document_id,
-            file_name,
+        Ok(StoredGeneratedImage {
+            static_file,
             mime_type: generated.mime_type,
             size_bytes,
             note: generated.note,
         })
-    }
-}
-
-/// Words of `prompt` used as the document name when the caller gave none.
-const FILE_NAME_WORDS: usize = 6;
-
-/// A document name from the opening words of `prompt`: letters, digits, and
-/// plain hyphens only, so the name needs no further filename validation.
-fn file_name_from_prompt(prompt: &str) -> String {
-    let name = prompt
-        .split(|c: char| !(c.is_alphanumeric() || c == '-'))
-        .filter(|word| !word.is_empty())
-        .take(FILE_NAME_WORDS)
-        .collect::<Vec<_>>()
-        .join(" ");
-    if name.is_empty() {
-        "Generated image".to_string()
-    } else {
-        name
-    }
-}
-
-/// `name` with `file_type`'s extension, unless it already ends in an image
-/// extension the storage pipeline recognises.
-fn with_extension(name: &str, file_type: FileType) -> String {
-    let lower = name.to_ascii_lowercase();
-    let already_image = FileType::split_suffix_match(&lower)
-        .and_then(|(_, extension)| extension.parse::<FileType>().ok())
-        .is_some_and(|existing| existing.is_image());
-    if already_image {
-        name.to_string()
-    } else {
-        format!("{name}.{}", file_type.as_str())
     }
 }

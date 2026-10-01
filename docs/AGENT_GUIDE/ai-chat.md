@@ -36,11 +36,10 @@ permission failures should display a failed tool call without a successful resul
 ## Generating images with AI
 
 `GenerateImage` takes a text prompt, renders it with Google's Nano Banana image
-model, and saves the result as an image document. Optional arguments: a short file
-name (otherwise the opening words of the prompt name the document), an aspect ratio
-(`square`, `landscape`, `portrait`, `widescreen`, `tall`), and a project ID (edit
-access required). The file extension comes from the generated format, so
-`fileName: "lighthouse"` yields `lighthouse.png`.
+model, and saves the result to static file service. An optional aspect ratio
+(`square`, `landscape`, `portrait`, `widescreen`, `tall`) controls its shape.
+The response includes `staticFileId` and the permanent image `url`; it does not
+create a document or take a filename or destination project.
 
 For edits or variations, attach photos with the existing paperclip or use Macro
 image documents the user can view. Pass up to three references in `referenceImages`,
@@ -48,18 +47,15 @@ for example `[{"type":"staticFile","id":"<UUID>"},{"type":"document","id":"<UUID
 For an uploaded photo, use the UUID from `/file/<id>` in its attachment URL;
 for a document, use its document ID. Describe the edit in `prompt`, referring to
 image 1, image 2, and image 3 in array order. A description alone does not send
-the photo to the image model. The result is saved as a new document.
+the photo to the image model. For a previous generation, use its `staticFileId`
+with type `staticFile`. Each result is saved as a new static file.
 
-The result appears as a standalone image card outside grouped tool calls. A
-rounded header shows the filename above the image preview; clicking the card
-opens the image document in a new app split. The card fits the image's scaled
-width without side padding, preserves its aspect ratio, and truncates long
-filenames in the header. The preview loads once the upload
-is ready, with a placeholder while it is being prepared. Any commentary the
-model added appears below the image.
-In a channel thread, where the bot's reply is plain message text with a
-mention chip rather than a tool card, the same image card renders beneath the
-message for every image document the reply mentions (see channels.md).
+The result appears directly as an image outside grouped tool calls, loaded from
+its SFS URL without a filename header or document navigation. It preserves its
+aspect ratio and fits the available width. A status appears while generation is
+pending; a failed image load shows “Preview unavailable”. The tool already renders
+the result in chat, so the assistant should not add a document mention or duplicate
+image there. In channel messages, embed the returned URL as a Markdown image.
 Refused prompts, provider failures, and hosts without a Google Generative AI key
 display a failed tool call; the error tells the agent whether to rephrase, retry,
 or stop.

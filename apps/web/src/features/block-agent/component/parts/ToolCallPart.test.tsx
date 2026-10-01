@@ -1231,8 +1231,8 @@ describe('generated image dispatch', () => {
     (kind) => {
       const input = { prompt: 'A frog under a leaf' };
       const output = {
-        documentId: '01a0eecf-1162-7bea-9ba9-925769372a8a',
-        fileName: 'frog.png',
+        staticFileId: '01a0eecf-1162-7bea-9ba9-925769372a8a',
+        url: 'https://static.example/file/01a0eecf-1162-7bea-9ba9-925769372a8a',
         mimeType: 'image/png',
         sizeBytes: 132421,
       };
