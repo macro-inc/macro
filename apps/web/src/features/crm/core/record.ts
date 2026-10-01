@@ -3,6 +3,24 @@ export type CrmRecordScope =
   | { type: 'company'; id: string; domains: string[] }
   | { type: 'contact'; id: string; email: string };
 
+/**
+ * Whether two scopes describe the same record. Record views keep their
+ * scope while a refetch changes nothing, so tabs keyed on it stay mounted.
+ */
+export function sameRecordScope(
+  a: CrmRecordScope | undefined,
+  b: CrmRecordScope | undefined
+): boolean {
+  if (!a || !b) return a === b;
+  if (a.type === 'company' && b.type === 'company') {
+    return a.id === b.id && a.domains.join('\n') === b.domains.join('\n');
+  }
+  if (a.type === 'contact' && b.type === 'contact') {
+    return a.id === b.id && a.email === b.email;
+  }
+  return false;
+}
+
 /** Tabs of a CRM record, in display order per record type. */
 export const COMPANY_SECTIONS = [
   'overview',

@@ -32,9 +32,14 @@ export function RecordItemList(props: {
     fetchNextPage: () => props.source.fetchNextPage(),
   });
 
+  // An enabled query is loading until its first page is readable, including
+  // paused requests; a disabled one shows the empty state instead.
+  const loading = () =>
+    props.pending || (props.source.isPending && props.source.isEnabled);
+
   return (
     <Show
-      when={!props.pending && !props.source.isLoading}
+      when={!loading()}
       fallback={
         <div class="p-6 text-center text-sm text-ink-muted">Loading…</div>
       }

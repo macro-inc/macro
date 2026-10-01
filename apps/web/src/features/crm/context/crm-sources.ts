@@ -120,6 +120,8 @@ export type CrmEmailSignal = 'signal' | 'all';
 export type ItemListSource = {
   /** True until the first page is readable (including disabled queries). */
   readonly isPending: boolean;
+  /** False while the query is disabled, e.g. a company without domains. */
+  readonly isEnabled: boolean;
   readonly isLoading: boolean;
   readonly data: { entities: import('@entity').EntityData[] } | undefined;
   readonly hasNextPage: boolean;

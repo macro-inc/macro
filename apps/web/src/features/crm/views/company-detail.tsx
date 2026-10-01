@@ -5,7 +5,11 @@ import { createMemo, Match, Show, Suspense, Switch } from 'solid-js';
 import { RecordSection } from '../components/record-section';
 import { useCrmContext } from '../context/crm-context';
 import type { CrmContact as CompanyContact } from '../core/contact';
-import type { CompanySection, CrmRecordScope } from '../core/record';
+import {
+  type CompanySection,
+  type CrmRecordScope,
+  sameRecordScope,
+} from '../core/record';
 import { CompanyContactsSection } from './company-contacts-section';
 import { CompanyDiscussionSection } from './company-discussion-section';
 import { CompanyEmailsSection } from './company-emails-section';
@@ -34,15 +38,19 @@ export function Company(props: {
   const listsEnabled = context.listsEnabled();
   const { company, contacts } = useCompanyQuery(() => props.companyId);
   const section = () => props.section ?? 'overview';
-  const scope = createMemo((): CrmRecordScope | undefined => {
-    const current = company();
-    if (!current) return;
-    return {
-      type: 'company',
-      id: current.id,
-      domains: current.domains.map((domain) => domain.domain),
-    };
-  });
+  const scope = createMemo(
+    (): CrmRecordScope | undefined => {
+      const current = company();
+      if (!current) return;
+      return {
+        type: 'company',
+        id: current.id,
+        domains: current.domains.map((domain) => domain.domain),
+      };
+    },
+    undefined,
+    { equals: sameRecordScope }
+  );
 
   return (
     <SidePanel.Layout headerToggle={props.headerToggle}>
@@ -99,7 +107,14 @@ export function Company(props: {
                 </div>
               }
             >
-              <Show when={scope()}>
+              <Show
+                when={scope()}
+                fallback={
+                  <div class="p-6 text-center text-sm text-ink-muted">
+                    Loading…
+                  </div>
+                }
+              >
                 {(current) => <context.RecordTasks scope={current()} />}
               </Show>
             </Suspense>

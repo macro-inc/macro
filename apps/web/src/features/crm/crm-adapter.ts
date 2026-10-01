@@ -94,6 +94,9 @@ function withRowNotifications(source: ItemListSource): ItemListSource {
     get isPending() {
       return source.isPending;
     },
+    get isEnabled() {
+      return source.isEnabled;
+    },
     get isLoading() {
       return source.isLoading;
     },
