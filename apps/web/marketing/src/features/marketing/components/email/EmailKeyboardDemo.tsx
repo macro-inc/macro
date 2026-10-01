@@ -183,11 +183,6 @@ export function EmailKeyboardDemo() {
               </button>
             )}
           </For>
-          <span class="email-shortcut-count" role="status">
-            {archived().length
-              ? `${archived().length} archived`
-              : 'Try the keys'}
-          </span>
         </div>
       </div>
     </div>

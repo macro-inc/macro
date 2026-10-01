@@ -92,14 +92,11 @@ export function RouteAgents() {
             Macro builds memory from your team’s emails, channel conversations,
             documents, tasks, and calls. It develops a shared understanding of
             active projects, who is responsible for what, and the decisions your
-            team has made.
-          </p>
-          <p>
-            That understanding carries across people, agents, and model
-            providers. An agent can identify the right task owner, find the
-            person who knows a customer, or pick up work another agent started.
-            Search retrieves the latest details, with your sharing permissions
-            determining what each agent can access.
+            team has made. That understanding carries across people, agents, and
+            model providers. An agent can identify the right task owner, find
+            the person who knows a customer, or pick up work another agent
+            started. Search retrieves the latest details, with your sharing
+            permissions determining what each agent can access.
           </p>
         </ProductProse>
       </FeaturePageSection>
@@ -118,12 +115,10 @@ export function RouteAgents() {
             Macro gives agents multimodal context: text, images, files, and the
             transcripts of your team’s calls. Unified search finds related work
             across these sources, and reading tools retrieve the content the
-            agent needs to answer or take action.
-          </p>
-          <p>
-            @mention an item to give the agent a starting point, or let it find
-            the relevant sources itself. Follow the references to inspect the
-            email, document, conversation, or task behind its answer.
+            agent needs to answer or take action. @mention an item to give the
+            agent a starting point, or let it find the relevant sources itself.
+            Follow the references to inspect the email, document, conversation,
+            or task behind its answer.
           </p>
         </ProductProse>
       </FeaturePageSection>
@@ -152,11 +147,9 @@ export function RouteAgents() {
             the workspace, read and edit native documents, and update properties
             using your access permissions. The agent you use for coding can also
             read the brief, check a customer conversation, and update the
-            document your team is working on.
-          </p>
-          <p>
-            Macro’s built-in agents also let you choose the model. Your team’s
-            memory and workspace tools carry across model providers.
+            document your team is working on. Macro’s built-in agents also let
+            you choose the model. Your team’s memory and workspace tools carry
+            across model providers.
           </p>
         </ProductProse>
       </FeaturePageSection>
@@ -175,13 +168,11 @@ export function RouteAgents() {
             Agents read the current document and apply edits through Macro’s
             CRDT sync service. A CRDT is a data structure that merges concurrent
             changes, so a person and an agent can write in the same document at
-            the same time.
-          </p>
-          <p>
-            The editing tool connects to the document on the server. You don’t
-            have to open it or keep an editor tab running. When you are in the
-            document, you can watch the agent’s edits arrive live and keep
-            writing alongside it. Its changes remain editable by your team.
+            the same time. The editing tool connects to the document on the
+            server. You don’t have to open it or keep an editor tab running.
+            When you are in the document, you can watch the agent’s edits arrive
+            live and keep writing alongside it. Its changes remain editable by
+            your team.
           </p>
         </ProductProse>
       </FeaturePageSection>
@@ -199,11 +190,9 @@ export function RouteAgents() {
           <p>
             Agents can search past emails, read the thread, and draft with
             information from your documents and calls. They can prepare the
-            recipients, subject, body, and requested attachments.
-          </p>
-          <p>
-            The email tools ask for confirmation before sending. You can edit
-            the draft and check who will receive it before approving the send.
+            recipients, subject, body, and requested attachments. The email
+            tools ask for confirmation before sending. You can edit the draft
+            and check who will receive it before approving the send.
           </p>
         </ProductProse>
       </FeaturePageSection>
@@ -221,11 +210,9 @@ export function RouteAgents() {
           <p>
             Task tools create and update workspace items, including their
             descriptions, status, priority, and assignees. The result opens in
-            the task list and can be linked in a document or channel.
-          </p>
-          <p>
-            People and agents use the same tasks. Assign the next step, edit the
-            checklist, or ask another agent to continue from the brief.
+            the task list and can be linked in a document or channel. People and
+            agents use the same tasks. Assign the next step, edit the checklist,
+            or ask another agent to continue from the brief.
           </p>
         </ProductProse>
       </FeaturePageSection>

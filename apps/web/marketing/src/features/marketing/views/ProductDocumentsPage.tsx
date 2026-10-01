@@ -77,12 +77,10 @@ export function RouteDocuments() {
           <p>
             Macro documents use CRDTs: data structures that merge concurrent
             edits. Your changes are saved locally, and the sync service combines
-            them with changes from other editors when you reconnect.
-          </p>
-          <p>
-            The editor supports Markdown, headings, lists, and rich @mentions.
-            Local snapshots and an edit log let you keep writing through a
-            dropped connection.
+            them with changes from other editors when you reconnect. The editor
+            supports Markdown, headings, lists, and rich @mentions. Local
+            snapshots and an edit log let you keep writing through a dropped
+            connection.
           </p>
         </ProductProse>
       </FeaturePageSection>
@@ -100,12 +98,9 @@ export function RouteDocuments() {
           <p>
             Agents use the document’s collaboration system to apply edits
             directly. You can write alongside them and continue editing the
-            result.
-          </p>
-          <p>
-            Ask Claude to shorten a section, turn meeting notes into a brief, or
-            restructure a draft. The agent reads the document and changes its
-            text and formatting in place.
+            result. Ask Claude to shorten a section, turn meeting notes into a
+            brief, or restructure a draft. The agent reads the document and
+            changes its text and formatting in place.
           </p>
         </ProductProse>
       </FeaturePageSection>
@@ -122,11 +117,9 @@ export function RouteDocuments() {
         <ProductProse>
           <p>
             Each document has its own discussion. Teammates can leave feedback,
-            reply, and @mention the people responsible for a decision.
-          </p>
-          <p>
-            Agents can read the discussion as well as the draft. Ask for an edit
-            based on the feedback your team has already given.
+            reply, and @mention the people responsible for a decision. Agents
+            can read the discussion as well as the draft. Ask for an edit based
+            on the feedback your team has already given.
           </p>
         </ProductProse>
       </FeaturePageSection>
@@ -144,12 +137,9 @@ export function RouteDocuments() {
           <p>
             A Macro @mention is a reference to a real workspace item. It shows
             up in the document and in the referenced item’s backlinks, so you
-            can navigate in either direction.
-          </p>
-          <p>
-            Link a task to its specification, a customer to a proposal, or a
-            call to its meeting notes. People and agents can follow those
-            references to read the source.
+            can navigate in either direction. Link a task to its specification,
+            a customer to a proposal, or a call to its meeting notes. People and
+            agents can follow those references to read the source.
           </p>
         </ProductProse>
       </FeaturePageSection>
@@ -167,11 +157,9 @@ export function RouteDocuments() {
           <p>
             When you have permission to share a document, mentioning it in a
             channel grants access to that channel. Membership determines who can
-            open the shared work.
-          </p>
-          <p>
-            Use Share for individual recipients and access levels. The document
-            stays live: edits sync to everyone who has access.
+            open the shared work. Use Share for individual recipients and access
+            levels. The document stays live: edits sync to everyone who has
+            access.
           </p>
         </ProductProse>
       </FeaturePageSection>

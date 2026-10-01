@@ -77,12 +77,9 @@ export function RouteCalls() {
           <p>
             Channel and DM call controls let you start a conversation in the
             browser. Share a call link with someone outside your workspace so
-            they can join too.
-          </p>
-          <p>
-            A processed recording has its own workspace record with
-            participants, a summary, and a transcript. Open previous calls from
-            the channel’s Calls tab.
+            they can join too. A processed recording has its own workspace
+            record with participants, a summary, and a transcript. Open previous
+            calls from the channel’s Calls tab.
           </p>
         </ProductProse>
       </FeaturePageSection>
@@ -100,8 +97,6 @@ export function RouteCalls() {
           <p>
             The transcript identifies speakers and timestamps their words. It
             gives you a readable record and a direct route back to the audio.
-          </p>
-          <p>
             Search call content through Macro, or ask an agent to read the
             transcript. Summaries give you a quick overview; the original words
             are there when you need the detail.
@@ -122,12 +117,9 @@ export function RouteCalls() {
           <p>
             Call-reading tools return the summary and transcript to the agent.
             Task and document tools let it turn those details into a checklist,
-            a brief, or an updated task.
-          </p>
-          <p>
-            Ask for a specific follow-up: record an owner, add a dependency, or
-            draft an email using the agreement from the call. The agent works
-            from the saved record.
+            a brief, or an updated task. Ask for a specific follow-up: record an
+            owner, add a dependency, or draft an email using the agreement from
+            the call. The agent works from the saved record.
           </p>
         </ProductProse>
       </FeaturePageSection>
@@ -145,11 +137,8 @@ export function RouteCalls() {
           <p>
             Call records use Macro’s sharing system. Choose a recipient and
             access level, or reference the record in a channel you can share
-            with.
-          </p>
-          <p>
-            The recording, summary, and transcript are parts of that record.
-            Teammates and agents with access can revisit the discussion.
+            with. The recording, summary, and transcript are parts of that
+            record. Teammates and agents with access can revisit the discussion.
           </p>
         </ProductProse>
       </FeaturePageSection>

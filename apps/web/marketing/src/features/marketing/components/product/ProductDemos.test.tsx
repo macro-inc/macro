@@ -14,7 +14,11 @@ import {
   ReviewDiscussionDemo,
   ReviewQueueDemo,
 } from '../reviews/ReviewStories';
-import { TaskFromMessageDemo, TaskOwnershipDemo } from '../tasks/TaskStories';
+import {
+  TaskFromChannelDemo,
+  TaskFromMessageDemo,
+  TaskOwnershipDemo,
+} from '../tasks/TaskStories';
 
 let intersections: IntersectionObserverCallback[];
 let motionListeners: (() => void)[];
@@ -83,6 +87,9 @@ it('creates the task with the source channel and stops at a useful final state',
     view.getByRole('button', { name: 'Create task from message' })
   ).toBeTruthy();
   visible(true);
+  vi.advanceTimersByTime(2800);
+  expect(view.getByRole('textbox', { name: 'New task title' })).toBeTruthy();
+  expect(view.queryByRole('textbox', { name: 'Task title' })).toBeNull();
   vi.advanceTimersByTime(4200);
   expect(view.getByRole('textbox', { name: 'Task title' }).textContent).toBe(
     'Fix the team invite handoff'
@@ -93,6 +100,69 @@ it('creates the task with the source channel and stops at a useful final state',
   ).toContain('Teo');
   vi.advanceTimersByTime(30000);
   expect(vi.getTimerCount()).toBe(0);
+});
+
+it('keeps a visitor’s conversion draft and assignment instead of advancing over it', () => {
+  const view = render(() => <TaskFromMessageDemo />);
+  fireEvent.click(
+    view.getByRole('button', { name: 'Create task from message' })
+  );
+  const title = view.getByRole('textbox', { name: 'New task title' });
+  fireEvent.input(title, {
+    target: { value: 'Keep the invited workspace selected' },
+  });
+  reduce();
+  visible(true);
+  vi.advanceTimersByTime(30000);
+  expect((title as HTMLInputElement).value).toBe(
+    'Keep the invited workspace selected'
+  );
+  fireEvent.submit(view.getByRole('form', { name: 'Create task preview' }));
+  expect(view.getByRole('textbox', { name: 'Task title' }).textContent).toBe(
+    'Keep the invited workspace selected'
+  );
+  expect(view.getByRole('button', { name: 'From launch' })).toBeTruthy();
+  fireEvent.click(view.getByRole('button', { name: '2 Create task' }));
+  fireEvent.input(view.getByRole('textbox', { name: 'New task title' }), {
+    target: { value: 'Revised invite handoff' },
+  });
+  fireEvent.submit(view.getByRole('form', { name: 'Create task preview' }));
+  expect(view.getByRole('textbox', { name: 'Task title' }).textContent).toBe(
+    'Revised invite handoff'
+  );
+});
+
+it('sends the new task to its channel and opens the same assigned task from its message', () => {
+  const view = render(() => <TaskFromChannelDemo />);
+  visible(true);
+  vi.advanceTimersByTime(2800);
+  expect(
+    view
+      .getByRole('switch', { name: 'Send as task' })
+      .getAttribute('aria-checked')
+  ).toBe('true');
+  vi.advanceTimersByTime(4200);
+  const log = within(view.getByRole('log', { name: 'Channel launch' }));
+  fireEvent.click(
+    log.getByRole('button', { name: 'Fix the team invite handoff' })
+  );
+  expect(
+    view.getByRole('textbox', { name: 'Task description' }).textContent
+  ).toContain('Keep the invited team selected');
+  expect(
+    view.getAllByRole('button', { name: 'Change assignee' })[0].textContent
+  ).toContain('Teo');
+  fireEvent.click(view.getByRole('button', { name: 'From launch' }));
+  expect(view.getByRole('log', { name: 'Channel launch' })).toBeTruthy();
+  vi.advanceTimersByTime(30000);
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+it('shows a linked result without animation for reduced motion', () => {
+  reduced = true;
+  const view = render(() => <TaskFromMessageDemo />);
+  expect(view.getByRole('button', { name: 'From launch' })).toBeTruthy();
+  expect(view.container.querySelector('.task-flow-pointer')).toBeNull();
 });
 
 it('pauses offscreen and in a hidden tab, then preserves a visitor’s task edits', () => {

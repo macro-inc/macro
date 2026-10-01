@@ -129,7 +129,7 @@ it('finishes keyboard playback and cleans up its timer', () => {
     view.getByRole('heading', { name: 'Next steps for our team' })
   ).toBeTruthy();
   vi.advanceTimersByTime(7000);
-  expect(view.getByText('1 archived')).toBeTruthy();
+  expect(view.queryByText('1 archived')).toBeNull();
   expect(view.getAllByRole('button', { name: /^Read / })).toHaveLength(3);
   expect(view.queryByRole('button', { name: /Play|Pause|Replay/ })).toBeNull();
   view.unmount();

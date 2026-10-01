@@ -1,9 +1,8 @@
-import { createUniqueId, type ParentProps } from 'solid-js';
+import type { ParentProps } from 'solid-js';
 import './email-feature-graphics.css';
 
 /** Decorative artwork; the adjacent link provides the accessible label. */
 function Graphic(props: ParentProps) {
-  const id = createUniqueId();
   return (
     <svg
       class="email-feature-graphic"
@@ -17,29 +16,6 @@ function Graphic(props: ParentProps) {
       stroke-linejoin="round"
       aria-hidden="true"
     >
-      <defs>
-        <pattern
-          id={`${id}-dots`}
-          width="16"
-          height="16"
-          patternUnits="userSpaceOnUse"
-        >
-          <circle cx="4" cy="4" r=".7" fill="white" opacity=".55" />
-          <circle cx="12" cy="4" r=".65" fill="white" opacity=".3" />
-          <circle cx="4" cy="12" r=".65" fill="white" opacity=".35" />
-          <circle cx="12" cy="12" r=".7" fill="white" opacity=".5" />
-        </pattern>
-        <radialGradient id={`${id}-fade`}>
-          <stop offset=".15" stop-color="white" stop-opacity=".7" />
-          <stop offset="1" stop-color="white" stop-opacity="0" />
-        </radialGradient>
-        <mask id={`${id}-mask`}>
-          <ellipse cx="100" cy="64" rx="98" ry="62" fill={`url(#${id}-fade)`} />
-        </mask>
-      </defs>
-      <g stroke="none" mask={`url(#${id}-mask)`}>
-        <path d="M0 0h200v128H0z" fill={`url(#${id}-dots)`} />
-      </g>
       {props.children}
     </svg>
   );
@@ -74,24 +50,15 @@ export function OneInboxGraphic() {
 export function AgenticEditingGraphic() {
   return (
     <Graphic>
-      <rect
-        x="67"
-        y="30"
-        width="58"
-        height="68"
-        rx="7"
-        fill="#141414"
-        stroke-opacity=".55"
-      />
-      <path d="M79 46h30M79 56h24" stroke-opacity=".3" />
-      <path d="M79 70h22" stroke-opacity=".8" />
-      <path d="M107 65v10" stroke="#eee" />
-      <path d="M79 84h16" stroke-opacity=".2" />
+      <path d="M65 36 99 17l42 24-34 20Z" fill="#111213" />
       <path
-        d="M130 33c0 6-3 9-9 9 6 0 9 3 9 9 0-6 3-9 9-9-6 0-9-3-9-9Z"
-        fill="#151515"
-        stroke-opacity=".85"
+        d="m65 36 42 25v36L65 72ZM107 61l34-20v36l-34 20"
+        stroke="#555a60"
       />
+      <path d="m79 36 20-11 28 16-20 12Z" stroke="#555a60" />
+      <path d="m84 36 13 8m-6-12 18 11m-10-15 19 11" />
+      <path d="m116 65 13-8m-13 15 19-11" stroke="#555a60" />
+      <path d="m98 43 8 5" stroke="#b6c7bf" stroke-width="2" />
     </Graphic>
   );
 }
@@ -113,27 +80,12 @@ export function SignalNoiseGraphic() {
 export function EmailSharingGraphic() {
   return (
     <Graphic>
-      <path d="M85 65v12a8 8 0 0 0 8 8h14" stroke-opacity=".35" />
-      <rect
-        x="54"
-        y="35"
-        width="57"
-        height="38"
-        rx="6"
-        fill="#141414"
-        stroke-opacity=".55"
-      />
-      <path d="m56 39 22 16a8 8 0 0 0 9 0l22-16" stroke-opacity=".7" />
-      <rect
-        x="104"
-        y="62"
-        width="40"
-        height="35"
-        rx="9"
-        fill="#191919"
-        stroke-opacity=".65"
-      />
-      <path d="M117 75h15m-16 9h15m-9-15-3 21m11-21-3 21" stroke-opacity=".9" />
+      <path d="m48 51 37-21 43 25-37 21Z" fill="#111213" />
+      <path d="m48 51 43 25v9L48 60Zm43 25 37-21v9L91 85" stroke="#555a60" />
+      <path d="m53 51 34 5 34-1M87 56l4 15" />
+      <path d="m109 81 16-9 24 14-16 9Z" fill="#111213" />
+      <path d="m109 81 24 14v6l-24-14m24 8 16-9v6l-16 9" stroke="#555a60" />
+      <path d="m119 82 12 7m-7-10 12 7m-16 0 11-6m-6 9 11-6" />
     </Graphic>
   );
 }
@@ -141,13 +93,10 @@ export function EmailSharingGraphic() {
 export function AutoTagsGraphic() {
   return (
     <Graphic>
-      <path
-        d="M66 44h39l29 29-27 27-41-41Z"
-        fill="#141414"
-        stroke-opacity=".7"
-      />
-      <circle cx="80" cy="57" r="4" stroke-opacity=".5" />
-      <path d="m98 75 6 6 13-13M128 29v14m-7-7h14" stroke-opacity=".85" />
+      <path d="m52 56 33-25 57 34-31 19-29-1Z" fill="#111213" />
+      <path d="m52 56 30 27 29 1 31-19v7l-31 19-29-1-30-27Z" stroke="#555a60" />
+      <ellipse cx="81" cy="51" rx="5" ry="3" />
+      <path d="m96 63 8 6 18-10" stroke="#b6c7bf" />
     </Graphic>
   );
 }
@@ -155,28 +104,12 @@ export function AutoTagsGraphic() {
 export function KeyboardSpeedGraphic() {
   return (
     <Graphic>
-      <rect
-        x="54"
-        y="47"
-        width="42"
-        height="40"
-        rx="8"
-        fill="#141414"
-        stroke-opacity=".55"
-      />
-      <rect
-        x="104"
-        y="47"
-        width="42"
-        height="40"
-        rx="8"
-        fill="#191919"
-        stroke-opacity=".7"
-      />
-      <path
-        d="M80 59v12a5 5 0 0 1-10 0m50-12v16m0-8 10-8m-10 8 10 8"
-        stroke-opacity=".9"
-      />
+      <path d="m46 52 24-14 33 19-24 14Z" fill="#111213" />
+      <path d="m46 52 33 19v9L46 61Zm33 19 24-14v9L79 80" stroke="#555a60" />
+      <path d="m68 47 13 8q5 3 0 6l-3 2" />
+      <path d="m104 52 24-14 33 19-24 14Z" fill="#111213" />
+      <path d="m104 52 33 19v9l-33-19Zm33 19 24-14v9l-24 14" stroke="#555a60" />
+      <path d="m124 47 16 9m-9-5 9-1m-9 1 3 8" />
     </Graphic>
   );
 }

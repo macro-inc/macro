@@ -78,8 +78,6 @@ export function RouteGithub() {
           <p>
             GitHub events bring pull requests into Macro. Involving me collects
             the reviews you participate in, alongside the rest of your work.
-          </p>
-          <p>
             Each pull request retains its author, repository, description, and
             status. Search by title or open the GitHub link for repository
             actions.
@@ -100,12 +98,9 @@ export function RouteGithub() {
           <p>
             Coding agent sessions expose proposed file changes in a diff. You
             can inspect the implementation alongside the prompt and the agent’s
-            explanation.
-          </p>
-          <p>
-            A linked pull request opens the GitHub review record. Its discussion
-            is available in Macro, with a link to GitHub for the repository
-            diff.
+            explanation. A linked pull request opens the GitHub review record.
+            Its discussion is available in Macro, with a link to GitHub for the
+            repository diff.
           </p>
         </ProductProse>
       </FeaturePageSection>
@@ -123,12 +118,9 @@ export function RouteGithub() {
           <p>
             Macro imports GitHub discussion, including review threads and author
             replies. File and line references show which part of the code a
-            comment concerns.
-          </p>
-          <p>
-            Comments and mentions appear with the pull request in your
-            workspace. You can follow the review while reading the task that
-            prompted the change.
+            comment concerns. Comments and mentions appear with the pull request
+            in your workspace. You can follow the review while reading the task
+            that prompted the change.
           </p>
         </ProductProse>
       </FeaturePageSection>
@@ -146,11 +138,9 @@ export function RouteGithub() {
           <p>
             The coding session contains the request, proposed changes, and agent
             conversation. Ask about a specific file or branch of the
-            implementation and inspect its answer against the diff.
-          </p>
-          <p>
-            Use your review to decide the next step: request a revision, run a
-            check, or open the pull request on GitHub.
+            implementation and inspect its answer against the diff. Use your
+            review to decide the next step: request a revision, run a check, or
+            open the pull request on GitHub.
           </p>
         </ProductProse>
       </FeaturePageSection>
@@ -167,12 +157,9 @@ export function RouteGithub() {
         <ProductProse>
           <p>
             GitHub events update linked tasks. A new pull request sets In
-            Review, and a merge sets Completed.
-          </p>
-          <p>
-            The task keeps its brief, owner, and discussion. Open the pull
-            request from the task, or follow the reference back to the request
-            behind the code.
+            Review, and a merge sets Completed. The task keeps its brief, owner,
+            and discussion. Open the pull request from the task, or follow the
+            reference back to the request behind the code.
           </p>
         </ProductProse>
       </FeaturePageSection>

@@ -979,34 +979,24 @@ const timelineEase = (t: number) => 1 - (1 - t) ** 5;
 
 const pad2 = (n: number) => (n < 10 ? `0${n}` : `${n}`);
 
-/**
- * The clock half of the scrubber's label, at a given offset from rest.
- *
- * Only the clock: the whole sweep is 11 hours inside one day, so the date is
- * fixed text in the artwork and nothing here can move it. They are two <text>
- * elements at two fixed x's rather than one string, because a centred string
- * that changes width drags the date around with the seconds.
- *
- * Fixed width, three ways, because everything about the shape of this string
- * has to stay still while its digits race:
- *
- *   - Tabular figures, set on the element in the SVG. Inter's proportional
- *     digits are not one width -- measured at 8 units, "1" is 3.254 against
- *     "0" at 5.047 -- so a timestamp could breathe by 7 units as it counted.
- *     Tabular puts every digit at 5.189.
- *   - A padded hour, so 9 -> 10 does not add a character. This is the one
- *     label on the artwork that is padded, and it is the only one that moves.
- *   - Anchored at its START, not centred. AM and PM are still not the same
- *     width (50.314 against 49.899), and left-anchored that difference lands
- *     on the trailing edge instead of shifting every digit by half of it.
- *
- * Written out by hand rather than through Date, which would render this in the
- * viewer's timezone and quietly move a label the artwork's gridlines fix.
- */
+/** UTC keeps the artwork clock independent of the viewer's timezone. */
+function timelineDate(offset: number) {
+  return new Date(
+    Date.UTC(
+      2026,
+      7,
+      30,
+      0,
+      0,
+      TIMELINE_REST_S + Math.round(offset * TIMELINE_S_PER_UNIT)
+    )
+  );
+}
+
 function timelineStamp(offset: number) {
-  const total = Math.round(TIMELINE_REST_S + offset * TIMELINE_S_PER_UNIT);
-  const hour = Math.floor(total / 3600);
-  return `${pad2(hour % 12 || 12)}:${pad2(Math.floor(total / 60) % 60)}:${pad2(total % 60)} ${hour < 12 ? 'AM' : 'PM'}`;
+  const date = timelineDate(offset);
+  const hour = date.getUTCHours();
+  return `${pad2(hour % 12 || 12)}:${pad2(date.getUTCMinutes())}:${pad2(date.getUTCSeconds())} ${hour < 12 ? 'AM' : 'PM'}`;
 }
 
 /** Where the scrubber is, and how present it is, at a point in the cycle. */
@@ -1037,6 +1027,7 @@ export function TimelineArtworkBand(props: {
   /** A normalized history position, when a caller supplies a scrubber. */
   position?: number;
   versionLabel?: string;
+  positionRange?: readonly [number, number];
 }) {
   const [elapsed, setElapsed] = createSignal(0);
   // Nothing is written to the artwork until the sweep is actually running, so
@@ -1048,7 +1039,15 @@ export function TimelineArtworkBand(props: {
   const frame = () =>
     props.position === undefined
       ? timelineFrame(elapsed())
-      : { offset: (props.position - 1) * TIMELINE_TRAVEL, opacity: 1 };
+      : {
+          offset: props.positionRange
+            ? props.positionRange[0] +
+              props.position *
+                (props.positionRange[1] - props.positionRange[0]) -
+              793
+            : (props.position - 1) * TIMELINE_TRAVEL,
+          opacity: 1,
+        };
   // Memoised on the string, so the label is written only on the frames where
   // it actually reads differently. Once the ease has settled that is a handful
   // of frames rather than sixty a second.
@@ -1059,10 +1058,13 @@ export function TimelineArtworkBand(props: {
   let root!: HTMLDivElement;
   let scrub: SVGGElement | null = null;
   let label: Element | null = null;
+  let dateLabel: Element | null = null;
 
   onMount(() => {
     scrub = root.querySelector<SVGGElement>('.docs-timeline-scrub');
     label = root.querySelector('.docs-timeline-stamp tspan');
+    dateLabel =
+      scrub?.querySelector('text:not(.docs-timeline-stamp) tspan') ?? null;
     if (!scrub || !label) return;
     if (props.position !== undefined) {
       setRunning(true);
@@ -1110,6 +1112,10 @@ export function TimelineArtworkBand(props: {
   createEffect(() => {
     const text = stamp();
     if (running() && label) label.textContent = text;
+    if (running() && dateLabel && props.positionRange) {
+      const date = timelineDate(frame().offset);
+      dateLabel.textContent = `${date.getUTCMonth() === 7 ? 'Aug' : 'Sep'} ${date.getUTCDate()},`;
+    }
   });
 
   return (

@@ -1,27 +1,15 @@
 .feature-page .email-feature-links {
   border-block: 0;
   padding-block: 12px 32px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
-
 .email-feature-links .email-feature-graphic {
-  width: 200px;
-  height: 128px;
+  width: 180px;
+  height: 116px;
   max-width: 100%;
-  color: #c6c6c0;
+  color: #a5abad;
 }
-
-.email-feature-links a {
-  gap: 8px;
-}
-
-@media (max-width: 699px) {
-  .email-feature-links .email-feature-graphic {
-    width: 168px;
-    height: 108px;
-  }
-}
-
-.feature-page .email-feature-links { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.email-feature-links a { gap: 8px; }
 @media (max-width: 699px) {
   .feature-page .email-feature-links { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .email-feature-links a { font-size: 12px; text-align: center; }

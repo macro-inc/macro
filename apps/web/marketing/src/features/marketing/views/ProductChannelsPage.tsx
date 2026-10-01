@@ -77,12 +77,9 @@ export function RouteChannels() {
         <ProductProse>
           <p>
             Macro references are bidirectional. Mention a document in chat, and
-            the document links back to that conversation.
-          </p>
-          <p>
-            When you have permission to share the item, a channel mention grants
-            access to the channel. Shared email threads keep updating as new
-            replies arrive.
+            the document links back to that conversation. When you have
+            permission to share the item, a channel mention grants access to the
+            channel. Shared email threads keep updating as new replies arrive.
           </p>
         </ProductProse>
       </FeaturePageSection>
@@ -100,12 +97,9 @@ export function RouteChannels() {
           <p>
             Create a task from a channel message or ask an agent to do it. The
             source remains linked, so the assignee can read the original request
-            and replies.
-          </p>
-          <p>
-            Mention the task in another conversation and its current status
-            appears in the reference. Open it to update the brief, assign
-            someone, or comment.
+            and replies. Mention the task in another conversation and its
+            current status appears in the reference. Open it to update the
+            brief, assign someone, or comment.
           </p>
         </ProductProse>
       </FeaturePageSection>
@@ -123,12 +117,9 @@ export function RouteChannels() {
           <p>
             Agents can participate in channels and DMs. @mention an agent with a
             question or instruction and give it the relevant documents, tasks,
-            or emails.
-          </p>
-          <p>
-            Workspace tools let it search for an answer, edit a document, create
-            a task, or prepare an email. Your team can read the request and
-            continue the conversation.
+            or emails. Workspace tools let it search for an answer, edit a
+            document, create a task, or prepare an email. Your team can read the
+            request and continue the conversation.
           </p>
         </ProductProse>
       </FeaturePageSection>
@@ -146,11 +137,9 @@ export function RouteChannels() {
           <p>
             Threads expand in the message flow, with curved rails connecting
             replies to their parent. Questions, answers, reactions, and linked
-            work stay readable in order.
-          </p>
-          <p>
-            Collapse a thread when you’re finished. The main conversation stays
-            in view while you catch up or write a reply.
+            work stay readable in order. Collapse a thread when you’re finished.
+            The main conversation stays in view while you catch up or write a
+            reply.
           </p>
         </ProductProse>
       </FeaturePageSection>
@@ -168,12 +157,9 @@ export function RouteChannels() {
           <p>
             Read and done are separate states. Opening a message marks it read;
             marking it done clears it from your inbox. Leave it there when it
-            still needs a response.
-          </p>
-          <p>
-            Use Signal and Noise to prioritize conversations, and Recent to
-            return to channels and DMs. The Attachments tab collects the items
-            shared in each conversation.
+            still needs a response. Use Signal and Noise to prioritize
+            conversations, and Recent to return to channels and DMs. The
+            Attachments tab collects the items shared in each conversation.
           </p>
         </ProductProse>
       </FeaturePageSection>

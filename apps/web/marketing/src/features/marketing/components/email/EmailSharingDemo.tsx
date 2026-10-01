@@ -1,9 +1,10 @@
+import Cursor from '@phosphor/cursor.svg';
 import Envelope from '@phosphor/envelope.svg';
 import Hash from '@phosphor/hash.svg';
 import PaperPlane from '@phosphor/paper-plane-tilt.svg';
 import X from '@phosphor/x.svg';
 import { Button } from '@ui';
-import { createSignal, onCleanup, onMount, Show } from 'solid-js';
+import { createEffect, createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { homepagePeople } from '../../core/homepage-demo-people';
 import { HomepageConversation } from '../HomepageConversation';
 import { demoEmails } from './email-fixtures';
@@ -102,7 +103,7 @@ function ShareForm(props: {
               <Button
                 variant={props.phase >= 3 ? 'accent' : 'ghost'}
                 depth={3}
-                class="rounded-lg border-0"
+                class="mail-share-submit rounded-lg border-0"
                 disabled={props.phase < 3}
                 onClick={props.advance}
                 data-active={props.phase === 5}
@@ -191,6 +192,8 @@ export function EmailSharingDemo(props: { onClose?: () => void } = {}) {
   const [playing, setPlaying] = createSignal(true);
   const [opened, setOpened] = createSignal(false);
   let root!: HTMLDivElement;
+  let stage!: HTMLDivElement;
+  const [pointer, setPointer] = createSignal<{ x: number; y: number }>();
   let timer: ReturnType<typeof setTimeout> | undefined;
   let visible = false;
   let reduced = false;
@@ -215,6 +218,41 @@ export function EmailSharingDemo(props: { onClose?: () => void } = {}) {
     setOpened(false);
   };
   onMount(() => {
+    function positionPointer() {
+      const selectors = [
+        '[data-demo-share-trigger]',
+        '.mail-recipient-input',
+        '.mail-recipient-option',
+        '.mail-share-note',
+        '.mail-share-note',
+        '.mail-share-submit',
+        '.mail-shared-thread',
+      ];
+      const selector = selectors[phase()];
+      const target = selector && stage.querySelector<HTMLElement>(selector);
+      if (!playing() || !visible || reduced || !target) {
+        setPointer(undefined);
+        return;
+      }
+      const bounds = target.getBoundingClientRect();
+      const frame = stage.getBoundingClientRect();
+      setPointer({
+        x: bounds.left - frame.left + Math.min(bounds.width / 2, 100),
+        y: bounds.top - frame.top + bounds.height / 2,
+      });
+    }
+    // Measure actual controls so the walkthrough follows mobile and desktop layouts.
+    createEffect(() => {
+      phase();
+      if (!playing()) {
+        setPointer(undefined);
+        return;
+      }
+      const frame = requestAnimationFrame(positionPointer);
+      onCleanup(() => cancelAnimationFrame(frame));
+    });
+    const resize = new ResizeObserver(positionPointer);
+    resize.observe(stage);
     const preference = matchMedia('(prefers-reduced-motion: reduce)');
     const syncPreference = () => {
       reduced = preference.matches;
@@ -229,6 +267,7 @@ export function EmailSharingDemo(props: { onClose?: () => void } = {}) {
       ([entry]) => {
         visible = entry.isIntersecting;
         schedule();
+        positionPointer();
       },
       { threshold: 0.2 }
     );
@@ -238,6 +277,7 @@ export function EmailSharingDemo(props: { onClose?: () => void } = {}) {
     onCleanup(() => {
       clear();
       observer.disconnect();
+      resize.disconnect();
       preference.removeEventListener('change', syncPreference);
       document.removeEventListener('visibilitychange', schedule);
     });
@@ -245,7 +285,16 @@ export function EmailSharingDemo(props: { onClose?: () => void } = {}) {
   return (
     <div ref={root} class="mail-sharing-demo" data-phase={phase()}>
       <div
+        ref={stage}
         class="mail-sharing-stage"
+        onPointerDown={() => {
+          clear();
+          setPlaying(false);
+        }}
+        onFocusIn={() => {
+          clear();
+          setPlaying(false);
+        }}
         data-result={phase() >= 6 && !opened()}
         data-opened={opened()}
       >
@@ -292,6 +341,20 @@ export function EmailSharingDemo(props: { onClose?: () => void } = {}) {
             advance={() => manual(phase() < 3 ? 3 : 6)}
             cancel={() => manual(0)}
           />
+        </Show>
+        <Show when={playing() && pointer()}>
+          {(position) => (
+            <div
+              class="mail-sharing-pointer"
+              data-clicking={phase() === 5}
+              aria-hidden="true"
+              style={{
+                transform: `translate(${position().x}px, ${position().y}px)`,
+              }}
+            >
+              <Cursor />
+            </div>
+          )}
         </Show>
       </div>
       <div class="mail-demo-controls">

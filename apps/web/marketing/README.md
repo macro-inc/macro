@@ -68,6 +68,12 @@ Local preview data must not be presented as server-backed account state.
 The preview proceeds from integration selection directly to workspace setup;
 Back from workspace setup returns to integrations.
 
+The homepage document and version timeline share a single playhead. Verify that
+dragging the blue handle restores earlier and later edits, remains paused after
+release, and supports arrow keys/Home/End. Repeat with reduced motion, which
+starts finished but permits manual scrubbing. Below 768px the existing compact
+layout continues to hide the timeline.
+
 ## Develop and validate
 
 From this directory:
@@ -138,6 +144,11 @@ mail or changes a workspace. Playback pauses offscreen and when the page is
 hidden; reduced-motion mode shows the completed share. The animations run once
 without playback controls. Test opening a shared email, plus typing and sending
 a local channel message.
+
+The email sharing walkthrough measures its controls to position an animated mouse
+pointer. Manual pointer or keyboard interaction stops it. Email, channel, and
+new-reply views share a fixed-height viewport with internal scrolling, so the
+section below stays in place.
 
 The four feature links have inline SVG illustrations. Full app frames use a
 raised rim and a bottom mask into the page background; keep interactive controls

@@ -1,12 +1,9 @@
 import FileText from '@phosphor/file-text.svg';
-import Hash from '@phosphor/hash.svg';
 import { createSignal, For, Show } from 'solid-js';
 import { createDummyWorkspace } from '../../primitives/createDummyWorkspace';
 import { createProductWalkthrough } from '../../primitives/createProductWalkthrough';
-import { ViewShell } from '../DemoWorkspaceChrome';
 import { HomepageConversation } from '../HomepageConversation';
 import { ProductDemo } from '../product/ProductPage';
-import { MessageRow } from '../workspace/frozen/MessageRow';
 import { TaskNotebook } from '../workspace/frozen/TaskNotebook';
 import { WorkspaceChannel } from '../workspace/WorkspaceChannel';
 import { WorkspaceDocuments } from '../workspace/WorkspaceDocuments';
@@ -14,65 +11,13 @@ import { type TaskFilter, WorkspaceTasks } from '../workspace/WorkspaceTasks';
 import '../workspace/dummy-workspace.css';
 import '../demo-markdown.css';
 
-const request =
-  'Keep the invited team selected through sign-up. New and existing accounts should land in the right workspace.';
+import { TaskCreationFlow } from './TaskCreationFlow';
 
-/** A channel request becomes an editable notebook with its source retained. */
 export function TaskFromMessageDemo() {
-  let root!: HTMLDivElement;
-  const w = createDummyWorkspace('messages');
-  const [highlight, setHighlight] = createSignal(false);
-  let created = false;
-  const create = () => {
-    if (created) return;
-    created = true;
-    const id = w.createTask('Fix the team invite handoff', request, 'launch');
-    w.updateTask(id, { owner: 'teo', priority: 'High' });
-    setHighlight(false);
-  };
-  const playback = createProductWalkthrough({
-    root: () => root,
-    steps: 3,
-    reset: () => {},
-    reduced: create,
-    advance: (step) => {
-      if (step === 1) setHighlight(true);
-      if (step === 2) create();
-    },
-  });
-  return (
-    <ProductDemo
-      ref={(el) => (root = el)}
-      label="Create a task from a channel message"
-      onInteract={playback.pause}
-      action={highlight() ? 'create' : undefined}
-    >
-      <Show
-        when={w.contentView() === 'tasks'}
-        fallback={
-          <>
-            <ViewShell.TopBar>
-              <Hash class="size-4" />
-              <span class="text-sm font-medium">launch</span>
-            </ViewShell.TopBar>
-            <div class="sample-chat-log dummy-scroll">
-              <MessageRow
-                message={{
-                  id: 'invite-request',
-                  person: 'julia',
-                  body: request,
-                  time: '9:18 AM',
-                }}
-                onTask={create}
-              />
-            </div>
-          </>
-        }
-      >
-        <WorkspaceTasks workspace={w} filter="all" />
-      </Show>
-    </ProductDemo>
-  );
+  return <TaskCreationFlow />;
+}
+export function TaskFromChannelDemo() {
+  return <TaskCreationFlow fromChannel />;
 }
 
 export function TaskOwnershipDemo() {

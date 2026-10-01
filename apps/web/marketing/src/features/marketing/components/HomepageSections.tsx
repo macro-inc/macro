@@ -220,10 +220,6 @@ export function HomepageSections() {
                 <HomepageCollaborativeDoc />
               </DeferredDemo>
             </div>
-            <figcaption>
-              <span>An audit log for every edit.</span>
-              Track changes by humans and agents over time.
-            </figcaption>
           </figure>
         </Feature>
         <Feature

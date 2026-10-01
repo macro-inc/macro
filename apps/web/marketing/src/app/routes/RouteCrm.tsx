@@ -125,11 +125,9 @@ export function RouteCrm() {
             <p>
               CRM tools let agents read company records and update their
               properties. Ask Claude to assign an owner, save rollout notes, or
-              move a deal to the next stage.
-            </p>
-            <p>
-              The changes appear in the customer record and pipeline board. Open
-              the record to review the values or edit them yourself.
+              move a deal to the next stage. The changes appear in the customer
+              record and pipeline board. Open the record to review the values or
+              edit them yourself.
             </p>
           </div>
         </FeaturePageSection>
@@ -147,12 +145,10 @@ export function RouteCrm() {
             <p>
               Macro creates contacts and companies from your email. The sender’s
               domain identifies the company, and enrichment adds available
-              details such as its website, industry, location, and size.
-            </p>
-            <p>
-              Your team can add its own properties, including deal stage, owner,
-              and revenue. Those fields are available in the customer view and
-              to agents through CRM tools.
+              details such as its website, industry, location, and size. Your
+              team can add its own properties, including deal stage, owner, and
+              revenue. Those fields are available in the customer view and to
+              agents through CRM tools.
             </p>
           </div>
         </FeaturePageSection>
@@ -170,12 +166,10 @@ export function RouteCrm() {
             <p>
               Customer records link the company’s contacts and email
               conversations. Each record has a discussion where your team can
-              leave notes and @mention related work.
-            </p>
-            <p>
-              An agent can read the record and available conversations before
-              answering a question or updating a property. People can follow the
-              same links to check its sources.
+              leave notes and @mention related work. An agent can read the
+              record and available conversations before answering a question or
+              updating a property. People can follow the same links to check its
+              sources.
             </p>
           </div>
         </FeaturePageSection>
@@ -193,12 +187,9 @@ export function RouteCrm() {
             <p>
               Companies and contacts are workspace items you can @mention. Link
               the customer record in a rollout plan, a support request, or a
-              team conversation.
-            </p>
-            <p>
-              Opening the reference shows the customer’s details and related
-              work. Your team can navigate from the request to the relationship
-              it concerns.
+              team conversation. Opening the reference shows the customer’s
+              details and related work. Your team can navigate from the request
+              to the relationship it concerns.
             </p>
           </div>
         </FeaturePageSection>
@@ -239,12 +230,9 @@ export function RouteCrm() {
             <p>
               Tell the agent which customer asked for a proposal and which
               signed. Its CRM tools can read the records and set their stage
-              properties.
-            </p>
-            <p>
-              Macro’s MCP tools also expose company records and property updates
-              to external agents. The pipeline and customer views read those
-              same values.
+              properties. Macro’s MCP tools also expose company records and
+              property updates to external agents. The pipeline and customer
+              views read those same values.
             </p>
           </div>
         </FeaturePageSection>

@@ -147,12 +147,9 @@ export function RouteEmail() {
           <p>
             Automatic tags label incoming messages so you can browse email by
             customer, project, or follow-up. Tags also work on documents, tasks,
-            and other workspace items.
-          </p>
-          <p>
-            You can add, remove, or change a tag yourself. A thread can have
-            several tags, so it can appear under both the customer and the
-            project.
+            and other workspace items. You can add, remove, or change a tag
+            yourself. A thread can have several tags, so it can appear under
+            both the customer and the project.
           </p>
         </div>
       </FeaturePageSection>
@@ -170,11 +167,9 @@ export function RouteEmail() {
           <p>
             Choose a channel, add a note, and share the email. Channel members
             can open the original thread, including its messages and
-            attachments.
-          </p>
-          <p>
-            New replies update that same thread. Your team can leave comments
-            and @mention documents or tasks alongside the customer’s email.
+            attachments. New replies update that same thread. Your team can
+            leave comments and @mention documents or tasks alongside the
+            customer’s email.
           </p>
         </div>
       </FeaturePageSection>
@@ -192,12 +187,9 @@ export function RouteEmail() {
           <p>
             Macro syncs email into its own database and search index. Search and
             agent reading tools work on the indexed messages across your
-            connected accounts.
-          </p>
-          <p>
-            J and K move to the next and previous thread. E marks the
-            conversation done. Enter opens it, and Esc returns to the list.
-            These shortcuts work with a thread open too.
+            connected accounts. J and K move to the next and previous thread. E
+            marks the conversation done. Enter opens it, and Esc returns to the
+            list. These shortcuts work with a thread open too.
           </p>
         </div>
       </FeaturePageSection>
@@ -215,31 +207,23 @@ export function RouteEmail() {
           <p>
             Agents can search past emails and read the documents and calls you
             reference. Ask Claude to write a reply, attach a proposal, and copy
-            the people involved.
-          </p>
-          <p>
-            The result is an editable email draft. Change the subject or
-            wording, check the recipients, and approve the send when you’re
-            ready.
+            the people involved. The result is an editable email draft. Change
+            the subject or wording, check the recipients, and approve the send
+            when you’re ready.
           </p>
         </div>
       </FeaturePageSection>
       <FeaturePageFaq
         id="email-faq-title"
-        eyebrow="Your account, explained"
-        title="Your email. Your permission."
+        title="Gmail accounts and agent permissions"
         introduction={
-          <>
-            <p>
-              Macro connects to your existing Google account. You can read,
-              organize, and reply to email alongside your team’s work.
-            </p>
-            <p>
-              You approve the connection on Google. Macro does not receive your
-              Google password. Email agents show you the draft and ask for
-              approval before sending.
-            </p>
-          </>
+          <p>
+            Macro connects to your existing Google account. You can read,
+            organize, and reply to email alongside your team’s work. You approve
+            the connection on Google. Macro does not receive your Google
+            password. Email agents show you the draft and ask for approval
+            before sending.
+          </p>
         }
         items={faqItems}
       />

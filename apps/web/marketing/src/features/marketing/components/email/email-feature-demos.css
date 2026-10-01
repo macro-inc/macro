@@ -93,7 +93,6 @@
 .email-shortcut-dock > button:hover, .email-shortcut-dock > button[data-active='true'] { background: var(--color-active); color: var(--color-ink); }
 .email-shortcut-dock > button[data-active='true'] kbd { color: var(--color-surface-0); background: var(--color-ink); }
 .email-shortcut-dock > button:disabled { opacity: .4; }
-.email-shortcut-count { margin-left: auto; font: 400 12px Inter, sans-serif; color: var(--color-ink-extra-muted); }
 .email-inbox-clear { display: flex; min-height: 380px; flex-direction: column; align-items: center; justify-content: center; gap: 16px; color: var(--color-ink-muted); }
 .email-inbox-clear > svg { width: 32px; height: 32px; }
 .email-inbox-clear h3 { font: 500 22px Inter, sans-serif; }
@@ -109,7 +108,6 @@
   .email-shortcut-dock { flex-wrap: wrap; padding: 12px 8px; gap: 2px; }
   .email-shortcut-dock > button { gap: 5px; font-size: 11px; }
   .email-shortcut-dock kbd { min-width: 25px; height: 28px; }
-  .email-shortcut-count { display: none; }
   .email-tag-summary { padding: 20px 12px; gap: 6px; font-size: 11px; }
   .email-tag-summary > svg { display: none; }
 }

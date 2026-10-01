@@ -7,14 +7,14 @@
 .email-editing-stage { position: relative; isolation: isolate; padding: 24px; }
 .email-editing-stage::before {
   content: ''; position: absolute; inset: 0 -24px; z-index: -1; pointer-events: none;
-  background: radial-gradient(ellipse at 50% 50%, #a0aabc10, transparent 70%);
+  background: radial-gradient(ellipse at 50% 50%, #a0aabc08, transparent 70%);
 }
 .email-editing-stage::after {
   content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
   background-image: radial-gradient(#d0d6e133 .6px, transparent .9px);
   background-size: 8px 8px;
   mask-image: radial-gradient(ellipse at 50% 40%, #000, transparent 70%);
-  opacity: .45;
+  opacity: .16;
 }
 .email-editing-stage .homepage-conversation { width: 100%; }
 .email-editing-stage .homepage-email-body p + p { margin-top: 16px; }

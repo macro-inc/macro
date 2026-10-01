@@ -15,6 +15,8 @@ the conversation to read earlier chatter while the top bar and composer stay fix
 Home thread links expand and scroll to their root instead. Check switching channels,
 expanding a thread, and sending a new local message while scrolled into history.
 
+On the homepage, the **Document version history** slider below Julia’s document edits controls the document above it. Drag the blue handle backward and forward, or focus it and use arrow keys, Home, and End. Grabbing it pauses playback and keeps the selected version after release. Reduced motion starts with the completed document and still allows manual scrubbing.
+
 The public `/startups` page is retired. Old links redirect to the homepage; it
 is absent from navigation and the sitemap.
 
@@ -59,7 +61,9 @@ use local sample data only. Open an incoming email and use **Tags** to add or
 remove a tag. In the sharing demo, choose **Share**, then **launch**, then
 **Share** to open the channel; the email link reopens the original sample thread.
 The sharing walkthrough ends with a simulated new reply appearing in that same
-shared thread. Each animation runs once and leaves its final result visible.
+shared thread. A mouse pointer follows the sharing controls during automatic
+playback and disappears when you interact. The email and channel use the same
+fixed-height frame; longer conversations scroll inside it. Each animation runs once and leaves its final result visible.
 Focus the keyboard demo before pressing **J/K** to navigate, **E** to archive,
 **Enter** to open, or **Esc** to return to its inbox. Shortcuts do not act outside
 that demo. The five shortcut buttons below the inbox also perform these actions;
@@ -97,13 +101,18 @@ scroll-to-footer animation as the email page.
 
 ### Public product-page demonstrations
 
-At `/tasks`, `/channels`, `/documents`, `/agents`, `/calls`, and `/github`, use
-**On this page** to reach each focused demonstration. These are fictional,
+At `/channels`, `/documents`, `/agents`, `/calls`, and `/github`, use
+**On this page** to reach each focused demonstration. On `/tasks`, scroll past
+the founder letter and use the numbered creation steps. These are fictional,
 local examples, separate from authenticated workspace data. Email is their
 visual reference; `/crm` is outside this rollout.
 
-- Tasks: create from a message, open **From launch**, edit the brief, properties,
-  or checklist, and use **My Tasks** with search.
+- Tasks: the founder letter precedes two finite creation walkthroughs. Convert
+  an existing message through **Create task**, edit the draft and assignee, then
+  submit; or write in the channel, enable **Send as task**, assign someone, and
+  send. Step buttons revisit the flow, and interaction stops autoplay. Both
+  paths retain the source channel and use local sample data. Open **From launch**,
+  edit the brief, properties, or checklist, and use **My Tasks** with search.
 - Channels: open the shared document, expand **2 replies**, and reply inside the
   thread. Chat navigation switches between channels and DMs.
 - Documents: edit the working draft, add discussion, open its linked task, or

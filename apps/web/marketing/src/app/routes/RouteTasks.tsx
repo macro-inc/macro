@@ -12,15 +12,9 @@ import {
   TaskAgentDemo,
   TaskAttentionDemo,
   TaskContextDemo,
+  TaskFromChannelDemo,
   TaskFromMessageDemo,
-  TaskOwnershipDemo,
 } from '../../features/marketing/components/tasks/TaskStories';
-import {
-  TaskAgentsGraphic,
-  TaskConversationGraphic,
-  TaskListGraphic,
-  TaskPropertiesGraphic,
-} from '../../features/marketing/components/tasks/TasksFeatureGraphics';
 import { WorkspaceDesktopDemo } from '../../features/marketing/components/WorkspaceDesktopDemo';
 import { setPageSeo } from '../utils/utilSeo';
 
@@ -114,24 +108,29 @@ export function RouteTasks() {
         label="Explore Macro Tasks"
         caption="Open a task, change its owner, or add a comment. This sample stays local."
       />
-      <nav class="feature-page-jump-links" aria-label="On this page">
-        <a href="#from-conversation">
-          <TaskConversationGraphic />
-          <span>From a message</span>
-        </a>
-        <a href="#task-properties">
-          <TaskPropertiesGraphic />
-          <span>Clear ownership</span>
-        </a>
-        <a href="#task-agents">
-          <TaskAgentsGraphic />
-          <span>Work with agents</span>
-        </a>
-        <a href="#task-list">
-          <TaskListGraphic />
-          <span>Your next action</span>
-        </a>
-      </nav>
+      <section
+        class="tasks-founder-letter"
+        aria-labelledby="tasks-founder-title"
+      >
+        <h2 id="tasks-founder-title">Why did we build Macro Tasks?</h2>
+        <p>
+          Macro Tasks was designed based off our frustration with tools like
+          Linear, Notion and Jira... we've tried every task manager and every
+          way of using them. None of them helped our team move faster. Each kept
+          us organized for a while until they inevitably got stale. The core
+          problem is “tracking tasks” felt like busywork to our team. We
+          migrated from GitHub Issues to Notion to Linear and nothing seemed to
+          make us more organized.
+        </p>
+        <p>
+          Macro Tasks fixes this by tightly co-locating tasks with your team
+          chat. Tickets are so easy to create from task messages, and their
+          status gets updated automatically so they'll actually get closed.
+          After two years of dogfooding it's finally working for us. We hope you
+          like it too!
+        </p>
+        <footer>— Jacob Beckerman, CEO and founder of Macro</footer>
+      </section>
       <FeaturePageSection
         id="from-conversation"
         title="Turn a message into a task."
@@ -146,33 +145,28 @@ export function RouteTasks() {
           <p>
             A task can start from a chat message, email, or document checklist.
             References connect it to the original request, and backlinks let you
-            navigate back.
-          </p>
-          <p>
-            For a new task, press C then T. Add a title, description, and
-            assignee from the keyboard.
+            navigate back. For a new task, press C then T. Add a title,
+            description, and assignee from the keyboard.
           </p>
         </ProductProse>
       </FeaturePageSection>
       <FeaturePageSection
-        id="task-properties"
-        title="Owner, status, priority."
+        id="tasks-in-channels"
+        title="Send a task right in the channel."
         description={
-          'Assign a person or agent and set the priority.\nUpdate the status directly from the task or list.'
+          'Write the request, switch on Send as task, and pick an assignee.\nThe task appears in the conversation where your team is working.'
         }
       >
         <div class="feature-page-visual">
-          <TaskOwnershipDemo />
+          <TaskFromChannelDemo />
         </div>
         <ProductProse>
           <p>
-            Tasks have assignees, status, priority, and tags. Those properties
-            appear in the task list and in rich task references across Macro.
-          </p>
-          <p>
-            Your team can see who is responsible and whether the work is
-            started, in review, or complete. The same fields are available to
-            agents through task tools.
+            Send a channel message as a task to create the brief and share it in
+            one action. Choose an assignee before sending. Teammates can open
+            the task from its message to change the status, add a checklist, or
+            discuss the request. The task links back to the channel, and the
+            assignee receives it in their inbox.
           </p>
         </ProductProse>
       </FeaturePageSection>
@@ -190,11 +184,9 @@ export function RouteTasks() {
           <p>
             Task descriptions support Markdown and references to workspace
             items. Link the specification, source email, or meeting recording
-            directly in the brief.
-          </p>
-          <p>
-            Each task has a discussion for questions and updates. Agents can
-            read the brief, follow its references, and update the description.
+            directly in the brief. Each task has a discussion for questions and
+            updates. Agents can read the brief, follow its references, and
+            update the description.
           </p>
         </ProductProse>
       </FeaturePageSection>
@@ -212,12 +204,9 @@ export function RouteTasks() {
           <p>
             Task tools let agents create work and update descriptions, status,
             priority, and assignees. Ask for a specific change and review it in
-            the task.
-          </p>
-          <p>
-            Coding agents can implement a task and open a linked pull request.
-            GitHub events move the task into review and mark it complete when
-            the code is merged.
+            the task. Coding agents can implement a task and open a linked pull
+            request. GitHub events move the task into review and mark it
+            complete when the code is merged.
           </p>
         </ProductProse>
       </FeaturePageSection>
@@ -234,10 +223,8 @@ export function RouteTasks() {
         <ProductProse>
           <p>
             My Tasks shows your assignments. All Tasks shows the work you can
-            access, and Created by me tracks the requests you made.
-          </p>
-          <p>
-            Task assignments also arrive in the unified inbox, alongside emails,
+            access, and Created by me tracks the requests you made. Task
+            assignments also arrive in the unified inbox, alongside emails,
             messages, and agent responses. Open one to read the brief or update
             its properties.
           </p>

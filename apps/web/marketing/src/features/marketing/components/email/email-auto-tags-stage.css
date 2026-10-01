@@ -17,7 +17,7 @@
   inset: -48px -64px 0;
   z-index: -2;
   pointer-events: none;
-  background: radial-gradient(ellipse at 65% 31%, rgb(144 148 159 / 0.13), transparent 57%), radial-gradient(ellipse at 25% 60%, rgb(106 117 135 / 0.07), transparent 60%);
+  background: radial-gradient(ellipse at 65% 31%, rgb(144 148 159 / 0.05), transparent 57%), radial-gradient(ellipse at 25% 60%, rgb(106 117 135 / 0.025), transparent 60%);
   mask-image: linear-gradient(transparent, #000 18%, #000 60%, transparent);
 }
 
@@ -30,7 +30,7 @@
   background-image: radial-gradient(rgb(208 214 225 / 0.2) 0.6px, transparent 0.9px);
   background-size: 8px 8px;
   mask-image: radial-gradient(ellipse at 63% 34%, #000, transparent 69%);
-  opacity: 0.48;
+  opacity: 0.16;
 }
 
 .email-tags-demo .mail-app {
