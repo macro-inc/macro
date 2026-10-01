@@ -1229,11 +1229,14 @@ primary copy. The details popover and the editor act on the displayed copy, so e
 deleting it targets that calendar's event at Google.
 When changing only a reminder in the event editor, choose `All events` to apply it
 to the recurring series or `This event` for one occurrence. Saving preserves the
-existing dates, time zone, title, location, and description unless those controls
+existing dates, time zone, title, location, description, and repeat rule unless those controls
 changed. To verify, open a later occurrence of an event you were invited to,
 change the reminder, and inspect the PATCH: it should include only `reminders`
 plus the calendar and scope identifiers. Also verify that intentional edits to
-the start, end, all-day setting, title, location, or description are still sent.
+the start, end, all-day setting, title, location, description, or repeat rule are still sent.
+Test reminder removal as well as changing its time, including a series whose stored
+rule contains `INTERVAL=1`, `WKST`, differently ordered weekdays, or a precise `UNTIL`:
+an untouched rule must not be reformatted and included in a reminder-only PATCH.
 As in Google Calendar, the guests row of the details popover (a bottom sheet on phones)
 carries `Copy guest emails` and `Email guests` icon buttons. Copying puts every guest's
 address on the clipboard, comma-separated. Emailing opens a new email addressed to every

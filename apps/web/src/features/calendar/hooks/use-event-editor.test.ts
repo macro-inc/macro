@@ -129,6 +129,27 @@ describe('editing event times', () => {
 
   describe.each(['all', 'this_event'] as const)('%s scope', (scope) => {
     it.each([
+      'RRULE:FREQ=WEEKLY;WKST=SU;INTERVAL=1;BYDAY=MO,TU,WE,TH,FR',
+      'RRULE:BYDAY=FR,TH,WE,TU,MO;FREQ=WEEKLY',
+      'RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR;UNTIL=20261231T180000Z',
+    ])('removes only reminders without rewriting %s', async (rule) => {
+      const { editor, form, onSaved, dispose } = editorFor({
+        recurrenceLines: [rule],
+      });
+      try {
+        form.setReminderMinutes([]);
+        await editor.save(form.submitValues()!, scope);
+        expect(mocks.updateEvent).toHaveBeenCalledOnce();
+        expect(mocks.updateEvent.mock.lastCall?.[0].patch).toEqual({
+          reminders: { useDefault: false, overrides: [] },
+        });
+        expect(onSaved).toHaveBeenCalledOnce();
+      } finally {
+        dispose();
+      }
+    });
+
+    it.each([
       { label: 'timed', overrides: {} },
       {
         label: 'timed with seconds and an explicit offset',
