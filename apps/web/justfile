@@ -1,6 +1,6 @@
 set positional-arguments
 
-# Android: the launcher fetches pinned Firebase config from Doppler by default.
+# Android: fetch pinned Firebase config and provision missing release signing from Doppler.
 android-dev *ARGS:
     bash scripts/android.sh dev "$@"
 

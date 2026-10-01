@@ -1,12 +1,22 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  readlink,
+  rm,
+  stat,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   androidPackage,
   androidReleaseMetadata,
+  ensureAndroidSigning,
   parseAndroidSigning,
   propertyValue,
   provisionAndroidSigning,
@@ -60,6 +70,92 @@ describe('Android release versions', () => {
 });
 
 describe('Android signing provisioning', () => {
+  it('fetches once, preserves configured builds, and reuses signing across worktrees', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'android-signing-test-'));
+    try {
+      const directory = join(root, 'private');
+      const properties = join(root, 'keystore.properties');
+      vi.mocked(execFileSync).mockReturnValue(JSON.stringify(signing));
+      await ensureAndroidSigning(directory, properties);
+      await ensureAndroidSigning(directory, properties);
+      const otherProperties = join(root, 'other.properties');
+      await ensureAndroidSigning(directory, otherProperties);
+      expect(execFileSync).toHaveBeenCalledTimes(1);
+      expect(execFileSync).toHaveBeenCalledWith(
+        'doppler',
+        expect.arrayContaining([
+          'ANDROID_UPLOAD_SIGNING_JSON',
+          'android-release',
+          'prd',
+        ]),
+        expect.objectContaining({ stdio: ['ignore', 'pipe', 'pipe'] })
+      );
+      expect(await readFile(otherProperties, 'utf8')).toBe(
+        await readFile(properties, 'utf8')
+      );
+      expect((await stat(directory)).mode & 0o777).toBe(0o700);
+      expect((await stat(properties)).mode & 0o777).toBe(0o600);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('preserves explicit configuration without fetching credentials', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'android-signing-test-'));
+    try {
+      const properties = join(root, 'keystore.properties');
+      await writeFile(properties, 'existing CI signing configuration');
+      await ensureAndroidSigning(join(root, 'unused'), properties);
+      expect(execFileSync).not.toHaveBeenCalled();
+      expect(await readFile(properties, 'utf8')).toBe(
+        'existing CI signing configuration'
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('preserves broken symlinks and incomplete cached signing without fetching', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'android-signing-test-'));
+    try {
+      const directory = join(root, 'private');
+      const properties = join(root, 'keystore.properties');
+      const missing = join(root, 'missing.properties');
+      await symlink(missing, properties);
+      await expect(
+        ensureAndroidSigning(directory, properties)
+      ).rejects.toThrow(/broken symlink/);
+      expect(await readlink(properties)).toBe(missing);
+      await mkdir(directory);
+      await expect(
+        ensureAndroidSigning(directory, join(root, 'other.properties'))
+      ).rejects.toThrow(/incomplete/);
+      expect(execFileSync).not.toHaveBeenCalled();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('reports missing Doppler access without leaking secrets or leaving files', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'android-signing-test-'));
+    try {
+      const directory = join(root, 'private');
+      const properties = join(root, 'keystore.properties');
+      vi.mocked(execFileSync).mockImplementation(() => {
+        throw new Error('secret-password');
+      });
+      await expect(
+        ensureAndroidSigning(directory, properties)
+      ).rejects.toThrow(
+        'Unable to fetch Android signing credentials. Install the Doppler CLI and authenticate with read access to android-release/prd (CI: DOPPLER_TOKEN). See docs/ANDROID_DEVELOPMENT.md.'
+      );
+      await expect(stat(directory)).rejects.toMatchObject({ code: 'ENOENT' });
+      await expect(stat(properties)).rejects.toMatchObject({ code: 'ENOENT' });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('rejects malformed secrets and incorrect keystore checksums without exposing values', () => {
     for (const contents of [
       '{secret-password',
