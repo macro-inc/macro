@@ -2723,6 +2723,50 @@ impl ChannelRepo for PgChannelsRepo {
         })
     }
 
+    async fn create_channel_invite_link(
+        &self,
+        channel_id: Uuid,
+        code: Uuid,
+        expires_at: chrono::DateTime<chrono::Utc>,
+    ) -> Result<(), Self::Err> {
+        sqlx::query!(
+            "INSERT INTO channel_invite_links (code, channel_id, expires_at) VALUES ($1, $2, $3)",
+            code,
+            channel_id,
+            expires_at,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn get_channel_invite_link(
+        &self,
+        code: Uuid,
+    ) -> Result<Option<(ChannelInfo, chrono::DateTime<chrono::Utc>)>, Self::Err> {
+        let row = sqlx::query!(
+            r#"SELECT c.id, c.name, c.channel_type AS "channel_type: ChannelType",
+                      c.org_id, c.team_id, i.expires_at
+               FROM channel_invite_links i JOIN comms_channels c ON c.id = i.channel_id
+               WHERE i.code = $1"#,
+            code,
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row.map(|row| {
+            (
+                ChannelInfo {
+                    id: row.id,
+                    name: row.name,
+                    channel_type: row.channel_type,
+                    org_id: row.org_id,
+                    team_id: row.team_id,
+                },
+                row.expires_at,
+            )
+        }))
+    }
+
     async fn get_or_create_channel_join_code(&self, channel_id: Uuid) -> Result<Uuid, Self::Err> {
         let candidate_join_code = macro_uuid::generate_uuid_v7();
         let join_code = sqlx::query_scalar!(

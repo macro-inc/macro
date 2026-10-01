@@ -293,6 +293,7 @@ struct FakeMutationRepoState {
     user_team_id: Option<Uuid>,
     user_team_id_lookups: usize,
     join_code: Option<Uuid>,
+    invite_links: HashMap<Uuid, chrono::DateTime<Utc>>,
     message: MutatedMessage,
     owner: String,
     participants: Vec<ChannelParticipant>,
@@ -334,6 +335,7 @@ impl FakeMutationRepo {
                 user_team_id: None,
                 user_team_id_lookups: 0,
                 join_code: None,
+                invite_links: HashMap::new(),
                 owner: sender.to_string(),
                 message,
                 participants: vec![
@@ -497,6 +499,32 @@ impl ChannelRepo for FakeMutationRepo {
             org_id: None,
             team_id: state.channel_team_id,
         })
+    }
+
+    async fn create_channel_invite_link(
+        &self,
+        _channel_id: Uuid,
+        code: Uuid,
+        expires_at: chrono::DateTime<Utc>,
+    ) -> Result<(), Self::Err> {
+        self.state
+            .lock()
+            .unwrap()
+            .invite_links
+            .insert(code, expires_at);
+        Ok(())
+    }
+
+    async fn get_channel_invite_link(
+        &self,
+        code: Uuid,
+    ) -> Result<Option<(ChannelInfo, chrono::DateTime<Utc>)>, Self::Err> {
+        let expiry = self.state.lock().unwrap().invite_links.get(&code).copied();
+        let channel_id = self.state.lock().unwrap().channel_id;
+        match expiry {
+            Some(expiry) => Ok(Some((self.get_channel_info(channel_id).await?, expiry))),
+            None => Ok(None),
+        }
     }
 
     async fn get_or_create_channel_join_code(&self, _channel_id: Uuid) -> Result<Uuid, Self::Err> {
@@ -3706,3 +3734,6 @@ async fn channel_picture_removal_does_not_require_static_file_availability() {
     svc.set_channel_picture(access, None).await.unwrap();
     assert_eq!(*repo.picture_updates.lock().unwrap(), [(channel_id, None)]);
 }
+
+#[path = "invite_links/test.rs"]
+mod invite_link_tests;

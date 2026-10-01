@@ -4,17 +4,25 @@ import LogoIcon from '@icon/macro-logo.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
 import { useUserInfo } from '@queries/auth';
 import { useJoinChannelByCodeMutation } from '@queries/channel/join-links';
-import { useLocation, useNavigate, useSearchParams } from '@solidjs/router';
+import {
+  useLocation,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from '@solidjs/router';
 import { Button, Surface } from '@ui';
 import { Match, Switch } from 'solid-js';
+import { decodeInviteCode } from './core/invite-code';
 
 export function ChannelInviteAcceptance() {
+  const params = useParams();
   const [searchParams] = useSearchParams();
   const location = useLocation();
   const navigate = useNavigate();
   const userInfo = useUserInfo();
 
   const joinCode = () => {
+    if (params.code) return decodeInviteCode(params.code);
     const code = searchParams.code;
     return typeof code === 'string' && code.length > 0 ? code : undefined;
   };
@@ -86,7 +94,7 @@ function InvalidInviteLink() {
     <div class="w-full flex flex-col items-center gap-4 text-center">
       <h2 class="text-lg font-medium text-ink">Invalid Invite Link</h2>
       <p class="text-sm text-ink-muted">
-        This channel invitation is invalid or no longer available.
+        This channel invitation is invalid, expired, or no longer available.
       </p>
       <Button
         variant="outline"
@@ -128,7 +136,8 @@ function JoinConfirmation(props: { onJoin: () => void }) {
           Join Channel
         </h2>
         <p class="text-sm text-ink-muted">
-          Confirm that you want to join this channel.
+          Join this channel as an external participant. This does not add you to
+          its team.
         </p>
       </div>
       <Button variant="outline" size="md" class="w-full" onClick={props.onJoin}>

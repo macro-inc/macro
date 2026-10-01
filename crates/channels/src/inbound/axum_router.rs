@@ -1,3 +1,7 @@
+/// Expiring channel invitation endpoints.
+pub mod invite_links;
+pub use invite_links::create_channel_invite_link_handler;
+
 #[cfg(test)]
 mod test;
 
@@ -313,6 +317,10 @@ where
         .route(
             "/{channel_id}/message/{message_id}",
             delete(delete_message_handler::<S, Svc, Auth>),
+        )
+        .route(
+            "/{channel_id}/invite-link",
+            post(create_channel_invite_link_handler::<S, Svc, Auth>),
         )
         .route(
             "/{channel_id}/join",

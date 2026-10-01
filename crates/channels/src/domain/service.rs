@@ -35,6 +35,8 @@ use uuid::Uuid;
 #[cfg(test)]
 mod test;
 
+mod invite_links;
+
 /// Default number of preview replies per thread.
 const THREAD_PREVIEW_COUNT: u16 = 3;
 
@@ -1287,12 +1289,21 @@ where
         self.join_channel_with_info(actor, info).await
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, join_code))]
     async fn join_channel_by_code(
         &self,
         actor: Sender,
         join_code: Uuid,
     ) -> Result<(), ChannelMutationErr> {
+        if let Some((info, expires_at)) = self
+            .repo
+            .get_channel_invite_link(join_code)
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?
+        {
+            invite_links::validate_invitation(&info, expires_at, chrono::Utc::now())?;
+            return self.join_channel_with_info(actor, info).await;
+        }
         let info = self
             .repo
             .get_channel_info_by_join_code(join_code)
@@ -2191,6 +2202,13 @@ where
         req: RemoveParticipantsRequest,
     ) -> Result<(), ChannelMutationErr> {
         ChannelServiceImpl::remove_participants(self, actor, channel_id, req).await
+    }
+
+    async fn create_channel_invite_link(
+        &self,
+        access: EntityAccessReceipt<MemberParticipantRole>,
+    ) -> Result<ChannelJoinCodeResponse, ChannelMutationErr> {
+        self.create_invite_link(access).await
     }
 
     async fn get_channel_join_code(

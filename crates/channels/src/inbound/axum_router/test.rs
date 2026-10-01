@@ -267,6 +267,18 @@ impl EntityAccessService for TestAccessService {
 struct MockService;
 
 impl ChannelService for MockService {
+    async fn create_channel_invite_link(
+        &self,
+        _access: entity_access::domain::models::EntityAccessReceipt<
+            entity_access::domain::models::MemberParticipantRole,
+        >,
+    ) -> Result<
+        crate::domain::models::ChannelJoinCodeResponse,
+        crate::domain::ports::ChannelMutationErr,
+    > {
+        unimplemented!("invite creation is not used by this test double")
+    }
+
     async fn set_channel_picture(
         &self,
         _access: entity_access::domain::models::EntityAccessReceipt<
@@ -401,6 +413,18 @@ impl ChannelService for MockService {
 struct ErrorService;
 
 impl ChannelService for ErrorService {
+    async fn create_channel_invite_link(
+        &self,
+        _access: entity_access::domain::models::EntityAccessReceipt<
+            entity_access::domain::models::MemberParticipantRole,
+        >,
+    ) -> Result<
+        crate::domain::models::ChannelJoinCodeResponse,
+        crate::domain::ports::ChannelMutationErr,
+    > {
+        unimplemented!("invite creation is not used by this test double")
+    }
+
     async fn set_channel_picture(
         &self,
         _access: entity_access::domain::models::EntityAccessReceipt<
@@ -470,6 +494,18 @@ impl ChannelService for ErrorService {
 struct ParticipantsService;
 
 impl ChannelService for ParticipantsService {
+    async fn create_channel_invite_link(
+        &self,
+        _access: entity_access::domain::models::EntityAccessReceipt<
+            entity_access::domain::models::MemberParticipantRole,
+        >,
+    ) -> Result<
+        crate::domain::models::ChannelJoinCodeResponse,
+        crate::domain::ports::ChannelMutationErr,
+    > {
+        unimplemented!("invite creation is not used by this test double")
+    }
+
     async fn set_channel_picture(
         &self,
         _access: entity_access::domain::models::EntityAccessReceipt<
@@ -591,6 +627,17 @@ impl JoinLinkService {
 }
 
 impl ChannelService for JoinLinkService {
+    async fn create_channel_invite_link(
+        &self,
+        access: EntityAccessReceipt<MemberParticipantRole>,
+    ) -> Result<ChannelJoinCodeResponse, ChannelMutationErr> {
+        let channel_id = Uuid::parse_str(&access.entity().entity_id).unwrap();
+        self.requested_channel_ids.lock().unwrap().push(channel_id);
+        Ok(ChannelJoinCodeResponse {
+            join_code: self.join_code,
+        })
+    }
+
     async fn set_channel_picture(
         &self,
         _access: entity_access::domain::models::EntityAccessReceipt<
@@ -760,6 +807,18 @@ impl crate::domain::ports::ChannelMessageCommands for RecordingMutationService {
 }
 
 impl ChannelService for RecordingMutationService {
+    async fn create_channel_invite_link(
+        &self,
+        _access: entity_access::domain::models::EntityAccessReceipt<
+            entity_access::domain::models::MemberParticipantRole,
+        >,
+    ) -> Result<
+        crate::domain::models::ChannelJoinCodeResponse,
+        crate::domain::ports::ChannelMutationErr,
+    > {
+        unimplemented!("invite creation is not used by this test double")
+    }
+
     async fn set_channel_picture(
         &self,
         access: EntityAccessReceipt<AdminParticipantRole>,
@@ -1766,6 +1825,18 @@ async fn participants_returns_500_on_service_error() {
 struct NotFoundService;
 
 impl ChannelService for NotFoundService {
+    async fn create_channel_invite_link(
+        &self,
+        _access: entity_access::domain::models::EntityAccessReceipt<
+            entity_access::domain::models::MemberParticipantRole,
+        >,
+    ) -> Result<
+        crate::domain::models::ChannelJoinCodeResponse,
+        crate::domain::ports::ChannelMutationErr,
+    > {
+        unimplemented!("invite creation is not used by this test double")
+    }
+
     async fn set_channel_picture(
         &self,
         _access: entity_access::domain::models::EntityAccessReceipt<
@@ -1848,6 +1919,18 @@ struct AroundHasItemsService {
 }
 
 impl ChannelService for AroundHasItemsService {
+    async fn create_channel_invite_link(
+        &self,
+        _access: entity_access::domain::models::EntityAccessReceipt<
+            entity_access::domain::models::MemberParticipantRole,
+        >,
+    ) -> Result<
+        crate::domain::models::ChannelJoinCodeResponse,
+        crate::domain::ports::ChannelMutationErr,
+    > {
+        unimplemented!("invite creation is not used by this test double")
+    }
+
     async fn set_channel_picture(
         &self,
         _access: entity_access::domain::models::EntityAccessReceipt<
@@ -2077,6 +2160,18 @@ impl CapturingService {
 }
 
 impl ChannelService for std::sync::Arc<CapturingService> {
+    async fn create_channel_invite_link(
+        &self,
+        _access: entity_access::domain::models::EntityAccessReceipt<
+            entity_access::domain::models::MemberParticipantRole,
+        >,
+    ) -> Result<
+        crate::domain::models::ChannelJoinCodeResponse,
+        crate::domain::ports::ChannelMutationErr,
+    > {
+        unimplemented!("invite creation is not used by this test double")
+    }
+
     async fn set_channel_picture(
         &self,
         _access: entity_access::domain::models::EntityAccessReceipt<
@@ -2604,6 +2699,18 @@ struct ActivityService {
 }
 
 impl ChannelService for ActivityService {
+    async fn create_channel_invite_link(
+        &self,
+        _access: entity_access::domain::models::EntityAccessReceipt<
+            entity_access::domain::models::MemberParticipantRole,
+        >,
+    ) -> Result<
+        crate::domain::models::ChannelJoinCodeResponse,
+        crate::domain::ports::ChannelMutationErr,
+    > {
+        unimplemented!("invite creation is not used by this test double")
+    }
+
     async fn set_channel_picture(
         &self,
         _access: entity_access::domain::models::EntityAccessReceipt<
@@ -2879,4 +2986,68 @@ async fn picture_endpoint_requires_channel_admin_and_passes_the_verified_channel
             );
         }
     }
+}
+
+#[tokio::test]
+async fn create_invitation_requires_channel_membership() {
+    let channel_id = Uuid::new_v4();
+    for allowed in [true, false] {
+        let service = JoinLinkService::new(channel_id, Uuid::new_v4(), vec![]);
+        let calls = service.requested_channel_ids.clone();
+        let router = channels_router(ChannelsRouterState::new(
+            Arc::new(RecordingMutationService::default()),
+            service,
+            if allowed {
+                TestAccessService::allow()
+            } else {
+                TestAccessService::deny()
+            },
+            authorization_state(),
+        ))
+        .layer(axum::middleware::map_request(attach_bearer));
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(format!("/{channel_id}/invite-link"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            response.status(),
+            if allowed {
+                StatusCode::OK
+            } else {
+                StatusCode::UNAUTHORIZED
+            }
+        );
+        assert_eq!(calls.lock().unwrap().len(), usize::from(allowed));
+    }
+}
+
+#[tokio::test]
+async fn create_invitation_requires_authentication() {
+    let channel_id = Uuid::new_v4();
+    let service = JoinLinkService::new(channel_id, Uuid::new_v4(), vec![]);
+    let calls = service.requested_channel_ids.clone();
+    let router = channels_router(ChannelsRouterState::new(
+        Arc::new(RecordingMutationService::default()),
+        service,
+        TestAccessService::allow(),
+        authorization_state(),
+    ));
+    let response = router
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/{channel_id}/invite-link"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert!(calls.lock().unwrap().is_empty());
 }

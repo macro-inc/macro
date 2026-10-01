@@ -239,6 +239,20 @@ pub trait ChannelRepo: Send + Sync + 'static {
         channel_id: Uuid,
     ) -> impl Future<Output = Result<ChannelInfo, Self::Err>> + Send;
 
+    /// Persist an independently expiring channel invitation.
+    fn create_channel_invite_link(
+        &self,
+        channel_id: Uuid,
+        code: Uuid,
+        expires_at: DateTime<Utc>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Load an invitation, including expired ones so the domain checks expiry.
+    fn get_channel_invite_link(
+        &self,
+        code: Uuid,
+    ) -> impl Future<Output = Result<Option<(ChannelInfo, DateTime<Utc>)>, Self::Err>> + Send;
+
     /// Atomically assign a channel join code if absent and return the persisted code.
     fn get_or_create_channel_join_code(
         &self,
@@ -926,6 +940,12 @@ pub trait ChannelService: Send + Sync + 'static {
             ))
         }
     }
+
+    /// Mint a fresh, 14-day invitation for a current channel participant.
+    fn create_channel_invite_link(
+        &self,
+        access: EntityAccessReceipt<MemberParticipantRole>,
+    ) -> impl Future<Output = Result<ChannelJoinCodeResponse, ChannelMutationErr>> + Send;
 
     /// Get or create the reusable join code for a private channel.
     fn get_channel_join_code(

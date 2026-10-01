@@ -879,6 +879,13 @@ export const storageServiceClient = {
     ).map((result) => result);
   },
 
+  async createChannelInviteLink(args: WithChannelId) {
+    return await dssFetch<ChannelJoinCodeResponse>(
+      `/channels/${args.channel_id}/invite-link`,
+      { method: 'POST' }
+    );
+  },
+
   async getChannelJoinLink(args: WithChannelId) {
     return await dssFetch<ChannelJoinCodeResponse>(
       `/channels/${args.channel_id}/join-link`,

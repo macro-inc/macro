@@ -1,12 +1,15 @@
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
+import { getWebOrigin } from '@core/util/webOrigin';
 import UserPlusIcon from '@phosphor/user-plus.svg';
 import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
+import { useCreateChannelInviteLinkMutation } from '@queries/channel/join-links';
 import { useAddParticipantsMutation } from '@queries/channel/participants';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import { Button, cn } from '@ui';
 import { createSignal, Show, Suspense } from 'solid-js';
+import { encodeInviteCode } from '../channel-invitations/core/invite-code';
 import { ChannelInviteModal } from './views/channel-invite-modal';
 
 export function ChannelInviteButton(props: {
@@ -63,6 +66,7 @@ function ChannelInviteDialog(props: {
   onClose: () => void;
 }) {
   const teamQuery = useCurrentTeamQuery();
+  const createInviteLink = useCreateChannelInviteLinkMutation();
   const { users } = useCombinedRecipients();
   const addParticipants = useAddParticipantsMutation();
   const team = () => {
@@ -82,6 +86,12 @@ function ChannelInviteDialog(props: {
       teamLoading={teamQuery.isPending}
       teamError={teamQuery.isError}
       options={users}
+      createInviteLink={async () => {
+        const result = await createInviteLink.mutateAsync({
+          channelId: props.channelId,
+        });
+        return `${getWebOrigin()}/app/c/${encodeInviteCode(result.join_code)}`;
+      }}
       onAdd={(participants) =>
         addParticipants.mutateAsync({
           channelId: props.channelId,

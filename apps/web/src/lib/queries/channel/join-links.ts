@@ -52,6 +52,17 @@ export function useGetChannelJoinLinkMutation(
   return useMutation(() => getChannelJoinLinkMutationOptions(callbacks));
 }
 
+/** Each mutation creates a separate invitation with a 14-day lifetime. */
+export function useCreateChannelInviteLinkMutation() {
+  return useMutation(() => ({
+    gcTime: 0,
+    mutationFn: async ({ channelId }: GetChannelJoinLinkArgs) =>
+      await throwOnErr(() =>
+        storageServiceClient.createChannelInviteLink({ channel_id: channelId })
+      ),
+  }));
+}
+
 export type JoinChannelByCodeArgs = {
   joinCode: string;
 };
@@ -78,6 +89,12 @@ export function joinChannelByCodeMutationOptions(
         onSuccess() {
           void queryClient.invalidateQueries({
             queryKey: channelKeys.listChannels.queryKey,
+          });
+          void queryClient.invalidateQueries({
+            queryKey: soupKeys.items._def,
+          });
+          void queryClient.invalidateQueries({
+            queryKey: soupKeys.astItems._def,
           });
         },
         onError(error) {

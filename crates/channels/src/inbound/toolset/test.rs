@@ -182,6 +182,18 @@ impl ToolTestChannelService {
 }
 
 impl ChannelService for ToolTestChannelService {
+    async fn create_channel_invite_link(
+        &self,
+        _access: entity_access::domain::models::EntityAccessReceipt<
+            entity_access::domain::models::MemberParticipantRole,
+        >,
+    ) -> Result<
+        crate::domain::models::ChannelJoinCodeResponse,
+        crate::domain::ports::ChannelMutationErr,
+    > {
+        unimplemented!("invite creation is not used by this test double")
+    }
+
     async fn set_channel_picture(
         &self,
         _access: entity_access::domain::models::EntityAccessReceipt<

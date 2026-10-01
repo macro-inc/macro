@@ -12943,6 +12943,33 @@ export type CreateChannelScopedBotResponses = {
 
 export type CreateChannelScopedBotResponse2 = CreateChannelScopedBotResponses[keyof CreateChannelScopedBotResponses];
 
+export type CreateChannelInviteLinkData = {
+    body?: never;
+    path: {
+        /**
+         * Channel ID
+         */
+        channel_id: string;
+    };
+    query?: never;
+    url: '/channels/{channel_id}/invite-link';
+};
+
+export type CreateChannelInviteLinkErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateChannelInviteLinkError = CreateChannelInviteLinkErrors[keyof CreateChannelInviteLinkErrors];
+
+export type CreateChannelInviteLinkResponses = {
+    200: ChannelJoinCodeResponse;
+};
+
+export type CreateChannelInviteLinkResponse = CreateChannelInviteLinkResponses[keyof CreateChannelInviteLinkResponses];
+
 export type JoinChannelData = {
     body?: never;
     path: {

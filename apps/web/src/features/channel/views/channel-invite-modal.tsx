@@ -4,6 +4,7 @@ import XIcon from '@phosphor/x.svg';
 import { Button, Dialog, Panel, RadioGroup } from '@ui';
 import { type ComponentProps, createSignal, Show } from 'solid-js';
 import { createChannelInvites } from '../primitives/create-channel-invites';
+import { ChannelInviteLink } from './channel-invite-link';
 
 export type ChannelInviteTeam = {
   name: string;
@@ -22,6 +23,7 @@ export function ChannelInviteModal(props: {
   participantsReady: boolean;
   participantIds: string[];
   options: PeoplePickerProps['options'];
+  createInviteLink: () => Promise<string>;
   onAdd: (participantIds: string[]) => Promise<unknown>;
   onClose: () => void;
 }) {
@@ -145,6 +147,7 @@ export function ChannelInviteModal(props: {
                 {error()}
               </p>
             </Show>
+            <ChannelInviteLink createLink={props.createInviteLink} />
             <div class="flex justify-end gap-2">
               <Button variant="ghost" onClick={close} disabled={pending()}>
                 Cancel

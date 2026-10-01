@@ -6,6 +6,7 @@ import { MobileAuthWelcome } from '@app/features/auth/mobile-onboarding/MobileAu
 import { MobileOnboarding } from '@app/features/auth/mobile-onboarding/MobileOnboarding';
 import { setCookie } from '@app/features/auth/Shared';
 import { ChannelInviteAcceptance } from '@app/features/channel-invitations/ChannelInviteAcceptance';
+import { channelInviteRedirect } from '@app/features/channel-invitations/core/invite-code';
 import { InviteLinksPortal } from '@app/features/gtm-invite/InviteLinksPortal';
 import { InviteWelcome } from '@app/features/gtm-invite/InviteWelcome';
 import { usePendingInviteRedemption } from '@app/features/gtm-invite/usePendingInviteRedemption';
@@ -69,7 +70,6 @@ import {
 } from '@core/util/cookies';
 import { licenseChannel } from '@core/util/licenseUpdateBroadcastChannel';
 import { isTauri } from '@core/util/platform';
-import { transformShortIdInUrlPathname } from '@core/util/url';
 import { EntityProvider } from '@entity';
 import { MaybeTauriProvider } from '@macro/tauri';
 import { TauriRouteListener } from '@macro/tauri/TauriProvider';
@@ -127,6 +127,7 @@ import {
 import { useReminderAlerts } from '../features/reminders/reminder-alerts';
 import { BasePathComponent } from './BasePath';
 import { TaskRoute } from './TaskRoute';
+import { transformAppPathname } from './transform-pathname';
 
 /** Syncs login cookie with auth state. Only updates on successful query (not errors/loading). */
 function useSyncLoginCookie() {
@@ -172,7 +173,7 @@ const rootPreload: RoutePreloadFunc = async (args) => {
   });
 
   const existingPathname = url.pathname;
-  const transformedPathname = transformShortIdInUrlPathname(existingPathname);
+  const transformedPathname = transformAppPathname(existingPathname);
   if (existingPathname !== transformedPathname) {
     console.warn(
       `replacing url pathname from ${existingPathname} to ${transformedPathname}`
@@ -332,6 +333,10 @@ const ROUTES: RouteDefinition[] = [
     component: TeamInviteAcceptance,
   },
   {
+    path: '/c/:code',
+    component: ChannelInviteAcceptance,
+  },
+  {
     path: '/channel-invite',
     component: ChannelInviteAcceptance,
   },
@@ -467,12 +472,14 @@ function QuerySyncProviderWithUserId() {
 }
 
 function InitialInteractiveOnboardingModal() {
+  const location = useLocation();
   const userInfoQuery = useUserInfoQuery();
   const onboardingV4 = useOnboardingV4Flag();
   const [open, setOpen] = createSignal(true);
   const [onboardingStarted, setOnboardingStarted] = createSignal(false);
 
   const modalOpen = () =>
+    !channelInviteRedirect(location.pathname) &&
     open() &&
     // `just run_local` sets VITE_ENABLE_ONBOARDING_V4=false; without this the
     // v4-off fallback would still open this legacy modal. Opt in with
@@ -595,7 +602,7 @@ export function Root() {
                                   {/* Loading boundaries belong inside Layout so
                                     a pending resource cannot detach the app shell. */}
                                   <IsomorphicRouter
-                                    transformUrl={transformShortIdInUrlPathname}
+                                    transformUrl={transformAppPathname}
                                     root={AppRouteLayout}
                                     rootPreload={rootPreload}
                                     base={ROUTER_BASE}

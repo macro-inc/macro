@@ -3492,3 +3492,36 @@ async fn channel_picture_round_trips_through_batched_previews(pool: Pool<Postgre
         assert!(previews[0].has_access);
     }
 }
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn channel_invitations_persist_independent_expirations(pool: Pool<Postgres>) {
+    let repo = repo(pool);
+    let first = Uuid::new_v4();
+    let second = Uuid::new_v4();
+    let expires_at = chrono::DateTime::parse_from_rfc3339("2026-10-12T00:00:00Z")
+        .unwrap()
+        .with_timezone(&Utc);
+    repo.create_channel_invite_link(CH1, first, expires_at)
+        .await
+        .unwrap();
+    repo.create_channel_invite_link(CH1, second, expires_at + chrono::Duration::days(1))
+        .await
+        .unwrap();
+    for (code, expected_expiry) in [
+        (first, expires_at),
+        (second, expires_at + chrono::Duration::days(1)),
+    ] {
+        let (info, expiry) = repo.get_channel_invite_link(code).await.unwrap().unwrap();
+        assert_eq!(info.id, CH1);
+        assert_eq!(expiry, expected_expiry);
+    }
+    assert!(
+        repo.get_channel_invite_link(Uuid::new_v4())
+            .await
+            .unwrap()
+            .is_none()
+    );
+}

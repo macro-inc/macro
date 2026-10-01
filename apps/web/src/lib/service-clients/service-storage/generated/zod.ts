@@ -3837,6 +3837,19 @@ export const createChannelScopedBotBody = zod
   .describe('Request to create a bot scoped to a channel.');
 
 /**
+ * @summary Creates a fresh channel invitation that expires in 14 days.
+ */
+export const createChannelInviteLinkParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+export const createChannelInviteLinkResponse = zod
+  .object({
+    join_code: zod.uuid().describe('Reusable code for joining the channel.'),
+  })
+  .describe("Response containing a channel's reusable join code.");
+
+/**
  * @summary Handler for `POST /channels/{channel_id}/join`.
  */
 export const joinChannelParams = zod.object({

@@ -8,6 +8,7 @@ import { render } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
+  shortCode: undefined as string | undefined,
   authenticated: true,
   code: '9b2b1535-ab93-4071-871f-c18ad1f98164' as string | undefined,
   error: null as Error | null,
@@ -43,6 +44,7 @@ vi.mock('@queries/channel/join-links', () => ({
 }));
 
 vi.mock('@solidjs/router', () => ({
+  useParams: () => ({ code: mocks.shortCode }),
   useLocation: () => ({
     get pathname() {
       return mocks.pathname;
@@ -92,6 +94,7 @@ function buttonWithText(
 }
 
 beforeEach(() => {
+  mocks.shortCode = undefined;
   mocks.authenticated = true;
   mocks.code = '9b2b1535-ab93-4071-871f-c18ad1f98164';
   mocks.error = null;
@@ -133,6 +136,26 @@ describe('ChannelInviteAcceptance', () => {
       )}`
     );
     expect(mocks.mutate).not.toHaveBeenCalled();
+  });
+
+  it('decodes short invitations before joining', () => {
+    mocks.shortCode = 'mysVNauTQHGHH8GK0fmBZA';
+    // UUID 9b2b1535-ab93-4071-871f-c18ad1f98164 in base64url.
+    const container = renderAcceptance();
+    fireEvent.click(buttonWithText(container, 'Join Channel'));
+    expect(mocks.mutate).toHaveBeenCalledWith({ joinCode: mocks.code });
+  });
+
+  it('preserves a short invitation through login', () => {
+    mocks.authenticated = false;
+    mocks.shortCode = 'mysVNauTQHGHH8GK0fmBZA';
+    mocks.pathname = `/c/${mocks.shortCode}`;
+    mocks.search = '';
+    const container = renderAcceptance();
+    fireEvent.click(buttonWithText(container, 'Sign In to Continue'));
+    expect(mocks.navigate).toHaveBeenCalledWith(
+      `/login?redirect=${encodeURIComponent(mocks.pathname)}`
+    );
   });
 
   it('waits for confirmation before joining and returns home after success', () => {

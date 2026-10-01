@@ -44,6 +44,7 @@ import {
   untrack,
 } from 'solid-js';
 import { match } from 'ts-pattern';
+import { channelInviteRedirect } from '../channel-invitations/core/invite-code';
 import {
   autoLoginCode,
   sendEmailCode,
@@ -54,13 +55,13 @@ import { OtpInput } from './OtpInput';
 import { Stage } from './Shared';
 import { useSsoLogin } from './useSsoLogin';
 
-function PostLoginRedirect() {
+function PostLoginRedirect(props: { destination?: string }) {
   const navigate = useNavigate();
 
   // Login init is owned by the per-method handlers (the session-token effect and
   // onComplete); this redirect only navigates, so login doesn't fire init twice.
   onMount(() => {
-    navigate('/', { replace: true });
+    navigate(props.destination ?? '/', { replace: true });
   });
 
   return <LoadingBlock />;
@@ -73,6 +74,8 @@ function PostLoginRedirect() {
  * /login a single surface that decides what the user needs next.
  */
 function PostAuthGate() {
+  const [params] = useSearchParams();
+  const invitation = () => channelInviteRedirect(params.redirect);
   const userInfoQuery = useUserInfoQuery();
   const onboardingV4 = useOnboardingV4Flag();
 
@@ -83,18 +86,21 @@ function PostAuthGate() {
     userInfoQuery.data.tutorialComplete === false;
 
   const needsOnboarding = () =>
-    onboardingV4().enabled && isFirstTimeDesktopUser();
+    !invitation() && onboardingV4().enabled && isFirstTimeDesktopUser();
 
   // Don't redirect into the app while the gate is still unknown: a first-time
   // user would land on home for a beat and then get yanked to /onboarding.
   const waitingOnFlag = () =>
-    onboardingV4().loading && isFirstTimeDesktopUser();
+    !invitation() && onboardingV4().loading && isFirstTimeDesktopUser();
 
   return (
     <Suspense fallback={<LoadingBlock />}>
       <Show when={userInfoQuery.data} fallback={<LoadingBlock />}>
         <Show when={!waitingOnFlag()} fallback={<LoadingBlock />}>
-          <Show when={needsOnboarding()} fallback={<PostLoginRedirect />}>
+          <Show
+            when={needsOnboarding()}
+            fallback={<PostLoginRedirect destination={invitation()} />}
+          >
             <OnboardingFlow />
           </Show>
         </Show>

@@ -37,6 +37,7 @@ function setup(team = true) {
   const onClose = vi.fn();
   render(() => (
     <ChannelInviteModal
+      createInviteLink={async () => 'https://macro.com/app/c/test-link'}
       channelName="Design"
       team={
         team

@@ -4,6 +4,7 @@ import Banner from '@app/features/auth/banner/Banner';
 import { CalendarPermissionPrompt } from '@app/features/auth/CalendarPermissionPrompt';
 import { GithubReauthenticationPrompt } from '@app/features/auth/GithubReauthenticationPrompt';
 import { GmailReauthenticationPrompt } from '@app/features/auth/GmailReauthenticationPrompt';
+import { channelInviteRedirect } from '@app/features/channel-invitations/core/invite-code';
 import { CommandMenu } from '@app/features/command';
 import { FavoritesCommands } from '@app/features/command/FavoritesCommands';
 import {
@@ -97,6 +98,13 @@ const AUTH_URLS = [
   `${ROUTER_BASE_CONCAT}internal/invite-links`,
 ];
 
+function isAuthRoute(pathname: string) {
+  return (
+    AUTH_URLS.includes(pathname) ||
+    channelInviteRedirect(pathname) !== undefined
+  );
+}
+
 export function Layout(props: RouteSectionProps) {
   const isAuthenticated = useIsAuthenticated();
   const location = useLocation();
@@ -104,7 +112,7 @@ export function Layout(props: RouteSectionProps) {
     () =>
       !isTouchDevice() &&
       isAuthenticated() === true &&
-      !AUTH_URLS.includes(location.pathname) &&
+      !isAuthRoute(location.pathname) &&
       // Settings-as-the-sole-split has its own tab nav — hide app chrome.
       !isSoloSettings()
   );
@@ -137,7 +145,7 @@ function NewOnboardingRedirect() {
     if (data?.authenticated !== true || data.tutorialComplete !== false) {
       return;
     }
-    if (AUTH_URLS.includes(location.pathname)) return;
+    if (isAuthRoute(location.pathname)) return;
     // Preserve the deep link the user arrived on (a shared doc, an invite):
     // /setup carries it as ?next and its finish() returns there instead of
     // the post-setup landing. Base-relative so navigate() can resolve it
@@ -206,7 +214,7 @@ function LayoutInner(props: RouteSectionProps) {
       <Suspense>
         <Show when={isAuthenticated()}>
           <NewOnboardingRedirect />
-          <Show when={!AUTH_URLS.includes(location.pathname)}>
+          <Show when={!isAuthRoute(location.pathname)}>
             <GithubReauthenticationPrompt />
             <GmailReauthenticationPrompt />
             <CalendarPermissionPrompt />
@@ -239,10 +247,7 @@ function LayoutInner(props: RouteSectionProps) {
           </Show>
         </Show>
         <Show
-          when={
-            isAuthenticated() === false &&
-            !AUTH_URLS.includes(location.pathname)
-          }
+          when={isAuthenticated() === false && !isAuthRoute(location.pathname)}
         >
           <Banner />
         </Show>
@@ -275,7 +280,7 @@ function LayoutInner(props: RouteSectionProps) {
         when={
           isTouchDevice() &&
           isAuthenticated() &&
-          !AUTH_URLS.includes(location.pathname)
+          !isAuthRoute(location.pathname)
         }
       >
         <FloatRegionHost />
@@ -295,9 +300,7 @@ function LayoutInner(props: RouteSectionProps) {
       </Show>
       <SwipeDownDismissKeyboard />
       <Suspense>
-        <Show
-          when={isAuthenticated() && !AUTH_URLS.includes(location.pathname)}
-        >
+        <Show when={isAuthenticated() && !isAuthRoute(location.pathname)}>
           <Launcher open={createMenuOpen()} onOpenChange={setCreateMenuOpen} />
           <AutomationComposer />
         </Show>

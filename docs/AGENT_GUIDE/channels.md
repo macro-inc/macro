@@ -859,3 +859,17 @@ Picture changes refresh other participants' open sessions, including after
 reconnecting.
 Members see the picture without editing controls. One-to-one direct messages
 continue to show the other person's user picture.
+
+## Share an expiring channel invitation
+
+Open a team or private channel you participate in and select **Invite**. The
+**Invite with a link** section creates a fresh short link each time the dialog
+opens. Copy it with **Copy link**, or select the read-only URL and copy manually.
+Each link remains usable for 14 days, including after another link is created.
+Recipients open `/app/c/<code>`, sign in or create an account if needed, and
+confirm **Join Channel**. They become channel participants without joining the
+team. Expired or invalid links show an invalid-invitation message.
+
+Verify reopening produces a different URL; both links work before expiry.
+Check copying, generation failure/retry, sign-in return to the invitation, and
+joining from an account outside the team.

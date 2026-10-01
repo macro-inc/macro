@@ -3,6 +3,7 @@ import { storageServiceClient } from '@service-storage/client';
 import { QueryClient } from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { soupKeys } from '../../soup/keys';
 
 let testQueryClient: QueryClient;
 
@@ -79,6 +80,12 @@ describe('channel join-link mutations', () => {
     await options.onSuccess?.(undefined, args, undefined, mutationContext());
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: channelKeys.listChannels.queryKey,
+    });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: soupKeys.items._def,
+    });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: soupKeys.astItems._def,
     });
   });
 
