@@ -441,6 +441,11 @@ show the previous email. A failed load must still show its error and Retry actio
 reconciling an already-open offline draft must preserve its composer and text.
 If local cache initialization fails, ordinary server threads must still load
 through the session's uncached GraphQL client, including the thread being opened.
+In that fallback, leave a thread open and mark it Done/Not Done from its list:
+the open thread must refresh through GraphQL after the committed mutation, including
+its loaded message pages. Disabled/unmounted thread readers must not refetch.
+With the normalized cache active, the shared email record updates the thread
+without an extra network refresh. Neither path relies on REST thread-cache invalidation.
 
 If a saved inbox selection references an unlinked account, successfully loading
 linked accounts resets the filter to All inboxes while preserving an open or

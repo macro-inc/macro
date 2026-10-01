@@ -29,6 +29,7 @@ import {
   on,
   onCleanup,
 } from 'solid-js';
+import { registerActiveGraphqlSoupQuery } from '../../soup/graphql/active-queries';
 import { mapGraphqlEmailThreadPage } from './mapper';
 
 /** REST-compatible pages exposed to the email query facade. */
@@ -281,5 +282,21 @@ export function createGraphqlEmailThreadQuery<TData = GraphqlEmailThreadPages>(
       return options().select?.(mapped) ?? (mapped as TData);
     },
   }));
+  // The normalized cache updates this reader through the same email entity as
+  // Soup. The fetch-only fallback has no such propagation, so include its open
+  // server threads in mutation-driven GraphQL revalidation instead of touching
+  // the inactive REST thread cache. Refetch preserves the loaded page chain.
+  onCleanup(
+    registerActiveGraphqlSoupQuery({
+      isEnabled: () =>
+        query.isEnabled && !graphqlCacheEnabled() && !identity()?.localOnly,
+      refresh: async () => {
+        await query.refetch({
+          requestPolicy: 'network-only',
+          throwOnError: true,
+        });
+      },
+    })
+  );
   return { query, resolvedThreadId };
 }
