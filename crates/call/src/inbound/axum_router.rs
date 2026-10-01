@@ -116,6 +116,11 @@ where
     T: Send + Sync,
 {
     Router::new()
+        .route("/meetings/prepare", post(meetings::prepare::<S, Svc, Auth>))
+        .route(
+            "/meetings/prepare/{preparation_id}",
+            axum::routing::delete(meetings::cancel_preparation::<S, Svc, Auth>),
+        )
         .route(
             "/meetings",
             get(meetings::list::<S, Svc, Auth>).post(meetings::create::<S, Svc, Auth>),
@@ -132,6 +137,10 @@ where
         .route(
             "/meetings/join/{token}",
             post(meetings::join::<S, Svc, Auth>),
+        )
+        .route(
+            "/meetings/join/{token}/participants",
+            get(meetings::participants::<S, Svc, Auth>),
         )
         .route(
             "/meetings/invite/{token}",
@@ -214,6 +223,15 @@ where
     R: rate_limit::RateLimitService + Clone + Send + Sync + 'static,
     T: Send + Sync,
 {
+    let preview = Router::new()
+        .route(
+            "/join/{token}/participants",
+            get(meetings::guest_participants::<S>),
+        )
+        .route_layer(axum::middleware::from_fn_with_state(
+            rate_limiter.clone(),
+            meetings::enforce_preview_rate_limit::<R>,
+        ));
     Router::new()
         .route(
             "/join/{token}",
@@ -226,6 +244,7 @@ where
             rate_limiter,
             meetings::enforce_public_rate_limit::<R>,
         ))
+        .merge(preview)
         .route("/webhook", post(webhook_handler::<S>))
         .route("/ring-status/{call_id}", get(ring_status_handler::<S>))
         .with_state(state)

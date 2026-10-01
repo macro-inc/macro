@@ -338,6 +338,8 @@ fn explain_rejection(error: SessionError) -> SessionError {
 fn is_prompt_rejection(error: &SessionError) -> bool {
     match error {
         SessionError::Rejected(_) => true,
+        #[cfg(feature = "postgres")]
+        SessionError::Admission(_) => true,
         SessionError::Cursor(report) => report
             .downcast_current_context::<crate::domain::error::PromptRejected>()
             .is_some(),
@@ -1152,9 +1154,14 @@ where
                     // request there, which no later correction undoes.
                     Err(error) => {
                         tracing::warn!(error = ?error, "could not choose a repository for this session");
-                        Err(SessionError::Rejected(PromptRefusal::plain(
-                            "Couldn't prepare repository access for this session. Please retry; if this persists, check your GitHub connection.",
-                        )))
+                        let error = SessionError::from(error);
+                        match error {
+                            #[cfg(feature = "postgres")]
+                            SessionError::Admission(_) => Err(error),
+                            _ => Err(SessionError::Rejected(PromptRefusal::plain(
+                                "Couldn't prepare repository access for this session. Please retry; if this persists, check your GitHub connection.",
+                            ))),
+                        }
                     }
                 }
             }
@@ -1173,6 +1180,11 @@ where
                     .await?;
                     if cancel.is_cancelled() {
                         return Ok(StopReason::Cancelled);
+                    }
+                    // Quota-refused prompts must not be silently bundled into a later run.
+                    #[cfg(feature = "postgres")]
+                    if matches!(error, SessionError::Admission(_)) {
+                        return Err(error);
                     }
                     // Only a create's refusal is carried: a follow-up run
                     // refused on an existing agent is already in a conversation

@@ -1,3 +1,4 @@
+import type { IdentityBindingWire } from '../protocol';
 /**
  * Transport-agnostic cache host interface consumed by the urql exchange and
  * imperative writers (websocket handlers). Implementations:
@@ -73,6 +74,7 @@ export interface CacheWriteArgs extends Omit<CacheReadArgs, 'priority'> {
 export interface EnqueueOptimisticMutationArgs extends CacheWriteArgs {
   /** Caller-supplied RFC UUID used for explicit safe coalescing. */
   uuid: string;
+  identityBindings?: IdentityBindingWire[];
   linkPatches?: OptimisticLinkPatchWire[];
   /** Revalidations for relevant cached fields that could not be patched. */
   revalidations?: QueryRevalidationWire[];
@@ -163,7 +165,8 @@ export interface CacheHost {
   rollbackOptimisticWrite(
     transactionId: string,
     claim: MutationClaim,
-    error: string
+    error: string,
+    errorCode?: string
   ): Promise<RollbackOptimisticWriteResult>;
   /** Evict records by entity key (external/push updates); returns affected local op ids. */
   invalidate(keys: string[]): Promise<AffectedOperationsResult>;

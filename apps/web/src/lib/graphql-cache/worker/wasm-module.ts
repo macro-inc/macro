@@ -1,3 +1,4 @@
+import type { IdentityBindingWire } from '../protocol';
 /**
  * Typed surface of the generated wasm package (`cache-wasm`), loaded
  * dynamically so the repo type-checks without the generated artifacts.
@@ -124,6 +125,7 @@ export interface CacheEngine {
     data: unknown,
     linkPatches: OptimisticLinkPatchWire[] | undefined,
     revalidations: QueryRevalidationWire[] | undefined,
+    identityBindings: IdentityBindingWire[] | undefined,
     createdAtMs: number,
     leaseOwner: string,
     nowMs: number,

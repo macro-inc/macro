@@ -198,7 +198,7 @@ fn resolve_entity(
 /// holding proof for another. The repo stays user-scoped on top of this: the
 /// receipt says who proved what, the `WHERE user_id` says what the query may
 /// touch.
-fn receipt_owner_and_id(
+pub(crate) fn receipt_owner_and_id(
     receipt: &EntityAccessReceipt<OwnerAccessLevel>,
 ) -> Result<(MacroUserIdStr<'static>, Uuid), ReminderError> {
     let user_id = receipt

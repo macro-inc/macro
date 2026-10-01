@@ -48,7 +48,7 @@ vi.mock('@queries/channel/get-or-create-dm', () => ({
   useGetOrCreateDirectMessageMutation: () => ({ mutateAsync: vi.fn() }),
 }));
 
-vi.mock('@queries/crm/contacts', () => ({
+vi.mock('@app/features/crm/record-adapter', () => ({
   useCrmContactByEmailQuery: () => ({
     // Pending lookups report no data yet, exactly as solid-query does.
     get isSuccess() {

@@ -1,12 +1,21 @@
+import { createNativeStagedUploadFile } from '@core/mobile/nativeStagedUpload';
 import { err, ok, type Result } from 'neverthrow';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useUploadDraftAttachmentsMutation } from './attachment';
 import { mountEmailMutation } from './tests/mutation';
+
+const invokeMock = vi.hoisted(() => vi.fn());
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: invokeMock,
+  convertFileSrc: (path: string) => `asset://${path}`,
+}));
 
 const addDraftAttachmentMock = vi.hoisted(() => vi.fn());
 const removeDraftAttachmentMock = vi.hoisted(() => vi.fn());
 const uploadToPresignedUrlMock = vi.hoisted(() => vi.fn());
 const toastFailureMock = vi.hoisted(() => vi.fn());
+const fetchMock = vi.hoisted(() => vi.fn());
+const contentHashMock = vi.hoisted(() => vi.fn(async () => 'a'.repeat(64)));
 
 vi.mock('@service-email/client', () => ({
   emailClient: {
@@ -20,7 +29,7 @@ vi.mock('@service-storage/util/uploadToPresignedUrl', () => ({
 }));
 
 vi.mock('@core/util/hash', () => ({
-  contentHash: vi.fn(async () => 'a'.repeat(64)),
+  contentHash: contentHashMock,
 }));
 
 vi.mock('@core/component/Toast/Toast', () => ({
@@ -40,6 +49,8 @@ const file = () => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.stubGlobal('fetch', fetchMock);
+  fetchMock.mockReset();
   addDraftAttachmentMock.mockResolvedValue(
     ok({
       attachment_id: 'att-1',
@@ -49,6 +60,7 @@ beforeEach(() => {
   );
   removeDraftAttachmentMock.mockResolvedValue(ok(undefined));
 });
+afterEach(() => vi.unstubAllGlobals());
 
 describe('useUploadDraftAttachmentsMutation', () => {
   it('assigns the attachment id before the content upload completes', async () => {
@@ -144,4 +156,117 @@ describe('useUploadDraftAttachmentsMutation', () => {
     expect(onAttachmentUploadFailed).toHaveBeenCalledWith(attachment);
     expect(toastFailureMock).toHaveBeenCalledWith('Failed to save attachments');
   });
+  it('uploads native clipboard bytes with the real size and checksum', async () => {
+    const attachment = createNativeStagedUploadFile('pasteboard', {
+      token: 'paste-stage-fixture',
+      name: 'photo.png',
+      mimeType: 'image/png',
+      size: 1024,
+      previewPath: null,
+      sha256: 'ab'.repeat(32),
+    })!;
+    invokeMock.mockResolvedValue(undefined);
+    const mutation = mountEmailMutation(useUploadDraftAttachmentsMutation);
+    await mutation.mutateAsync({
+      draftID: 'draft-1',
+      attachments: [attachment],
+    });
+    expect(addDraftAttachmentMock).toHaveBeenCalledWith(
+      {
+        draftID: 'draft-1',
+        attachment: {
+          file_name: 'photo.png',
+          size: 1024,
+          sha: 'ab'.repeat(32),
+        },
+      },
+      undefined
+    );
+    expect(uploadToPresignedUrlMock).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(invokeMock).toHaveBeenCalledWith(
+      'upload_staged_file_to_presigned_url',
+      {
+        source: 'pasteboard',
+        token: 'paste-stage-fixture',
+        uploadUrl: 'https://bucket/att-1',
+        mimeType: 'application/pdf',
+        checksumSha256: btoa(
+          String.fromCharCode(...new Uint8Array(32).fill(171))
+        ),
+      }
+    );
+  });
+
+  it.each(['pasteboard', 'photo-library'] as const)(
+    'hashes the real staged %s bytes when the iOS plugin supplies no digest',
+    async (source) => {
+      const bytes = new Uint8Array([1, 2, 3]).buffer;
+      fetchMock.mockResolvedValue({ ok: true, arrayBuffer: async () => bytes });
+      const attachment = createNativeStagedUploadFile(source, {
+        token: 'native-fixture',
+        name: 'photo.png',
+        mimeType: 'image/png',
+        size: 3,
+        previewPath: '/staging/photo.png',
+      })!;
+      Object.defineProperty(attachment, 'arrayBuffer', {
+        value: () => {
+          throw new Error('Must not hash the empty placeholder');
+        },
+      });
+      invokeMock.mockResolvedValue(undefined);
+      const mutation = mountEmailMutation(useUploadDraftAttachmentsMutation);
+      await mutation.mutateAsync({
+        draftID: 'draft-1',
+        attachments: [attachment],
+      });
+
+      expect(fetchMock).toHaveBeenCalledWith('asset:///staging/photo.png');
+      expect(contentHashMock).toHaveBeenCalledWith(bytes);
+      expect(addDraftAttachmentMock).toHaveBeenCalledWith(
+        {
+          draftID: 'draft-1',
+          attachment: { file_name: 'photo.png', size: 3, sha: 'a'.repeat(64) },
+        },
+        undefined
+      );
+      expect(invokeMock).toHaveBeenCalledWith(
+        'upload_staged_file_to_presigned_url',
+        {
+          source,
+          token: 'native-fixture',
+          uploadUrl: 'https://bucket/att-1',
+          mimeType: 'application/pdf',
+          checksumSha256: btoa(
+            String.fromCharCode(...new Uint8Array(32).fill(170))
+          ),
+        }
+      );
+      expect(uploadToPresignedUrlMock).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each([
+    { ok: false, bytes: new Uint8Array([1, 2, 3]).buffer },
+    { ok: true, bytes: new ArrayBuffer(0) },
+  ])(
+    'does not create a record when the staged bytes cannot be read intact: $ok',
+    async ({ ok, bytes }) => {
+      fetchMock.mockResolvedValue({ ok, arrayBuffer: async () => bytes });
+      const attachment = createNativeStagedUploadFile('pasteboard', {
+        token: 'native-fixture',
+        name: 'photo.png',
+        mimeType: 'image/png',
+        size: 3,
+        previewPath: '/staging/photo.png',
+      })!;
+      const mutation = mountEmailMutation(useUploadDraftAttachmentsMutation);
+      await expect(
+        mutation.mutateAsync({ draftID: 'draft-1', attachments: [attachment] })
+      ).rejects.toThrow();
+      expect(addDraftAttachmentMock).not.toHaveBeenCalled();
+      expect(invokeMock).not.toHaveBeenCalled();
+    }
+  );
 });

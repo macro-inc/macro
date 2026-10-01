@@ -14,6 +14,65 @@ use rootcause::Report;
 use std::sync::{Arc, Mutex};
 use tower::ServiceExt;
 
+#[tokio::test]
+async fn admission_maps_to_shared_public_http_contract_on_create_and_control() {
+    use ai_billing::{AiAdmissionError, DenyReason};
+    for (error, status) in [
+        (
+            AiAdmissionError::Denied(DenyReason::AllowanceExhausted),
+            StatusCode::PAYMENT_REQUIRED,
+        ),
+        (
+            AiAdmissionError::Unavailable,
+            StatusCode::SERVICE_UNAVAILABLE,
+        ),
+    ] {
+        let responses = [
+            AgentSessionApiError::Domain(error.into()).into_response(),
+            CreateSessionApiError::Domain(error.into()).into_response(),
+            AgentSessionApiError::Domain(AgentSessionError::from(
+                rootcause::report!(error).into_dynamic(),
+            ))
+            .into_response(),
+        ];
+        for response in responses {
+            assert_eq!(response.status(), status);
+            let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+                .await
+                .unwrap();
+            let value: serde_json::Value = serde_json::from_slice(&body).unwrap();
+            assert_eq!(
+                value,
+                serde_json::json!({"error": error.to_string(), "code": error.code()})
+            );
+        }
+    }
+}
+
+#[test]
+fn openapi_documents_session_admission_failures() {
+    #[derive(utoipa::OpenApi)]
+    #[openapi(paths(create_agent_session_handler, control_agent_session_handler))]
+    struct ApiDoc;
+
+    let schema = serde_json::to_value(<ApiDoc as utoipa::OpenApi>::openapi()).unwrap();
+    for path in ["/agent-sessions", "/agent-sessions/{session_id}/control"] {
+        let responses = &schema["paths"][path]["post"]["responses"];
+        for status in ["402", "503"] {
+            assert_eq!(
+                responses[status]["content"]["application/json"]["schema"]["$ref"],
+                "#/components/schemas/AiAdmissionErrorBody"
+            );
+        }
+    }
+    assert_eq!(
+        schema["paths"]["/agent-sessions/{session_id}/control"]["post"]["responses"]["503"]["content"]
+            ["text/plain"]["schema"]["type"],
+        "string"
+    );
+    assert!(schema["components"]["schemas"]["AiAdmissionErrorBody"].is_object());
+}
+
 const BOT_TOKEN: &str = "mbot_self_test";
 const HARNESS_TOKEN: &str = "mhns_self_test";
 const OWNER: &str = "macro|owner@example.com";

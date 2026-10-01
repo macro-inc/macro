@@ -80,9 +80,13 @@ async fn main() -> Result<()> {
         .context("failed to connect to macrodb")?;
 
     let lifecycle = ServiceLifecycle::default();
-    let tool_context = build_tool_service_context_from_env(db.clone(), lifecycle.publishes.clone())
-        .await
-        .context("failed to build tool service context")?;
+    let tool_context = build_tool_service_context_from_env(
+        db.clone(),
+        lifecycle.publishes.clone(),
+        config.enable_ai_usage_enforcement,
+    )
+    .await
+    .context("failed to build tool service context")?;
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
     let notification_ingress = Arc::new(SqsNotificationIngress {
@@ -116,6 +120,7 @@ async fn main() -> Result<()> {
         tool_context.clone(),
         tools_for(AiHost::Chat),
     );
+    let ai_admission = tool_context.admission.clone();
     let runner = Arc::new(AgentTaskRunner::new(
         Arc::clone(&tool_context.chat_tool_context.service),
         PgChatRepo::new(db.clone(), registrar),
@@ -134,7 +139,8 @@ async fn main() -> Result<()> {
         live_updates,
         lifecycle.executions.clone(),
         lifecycle.stop_executions.clone(),
-    );
+    )
+    .with_admission(ai_admission);
     let service_executor = Arc::new(dispatcher_executor.clone());
 
     let jwt_args = JwtValidationArgs::new_with_secret_manager(environment, &secretsmanager_client)

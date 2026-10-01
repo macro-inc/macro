@@ -273,7 +273,7 @@ export function DiscussionThreadView(props: {
             }
           : undefined,
       onDelete:
-        own && canEdit()
+        (own || source.canModerate?.()) && canEdit()
           ? async () => {
               try {
                 await source.deleteComment(comment);

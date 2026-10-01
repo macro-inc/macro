@@ -233,7 +233,7 @@ export const MarkdownShell: Component<MarkdownShellProps> = (props) => {
           }}
           disabled={!!props.disabled}
           showPlaceholder={showPlaceholder()}
-          placeholder={props.placeholder ?? '...'}
+          placeholder={props.placeholder}
         />
 
         <DecoratorRenderer editor={editor} />

@@ -7,6 +7,7 @@
  */
 import type {
   ActionExecutionRecord,
+  AiAdmissionErrorBody,
   CreateScheduledAction,
   EmptyResponse,
   InProgressExecution,
@@ -425,6 +426,11 @@ export type executeScheduledActionNowResponse401 = {
   status: 401;
 };
 
+export type executeScheduledActionNowResponse402 = {
+  data: AiAdmissionErrorBody;
+  status: 402;
+};
+
 export type executeScheduledActionNowResponse404 = {
   data: string;
   status: 404;
@@ -440,6 +446,11 @@ export type executeScheduledActionNowResponse500 = {
   status: 500;
 };
 
+export type executeScheduledActionNowResponse503 = {
+  data: AiAdmissionErrorBody;
+  status: 503;
+};
+
 export type executeScheduledActionNowResponseSuccess =
   executeScheduledActionNowResponse200 & {
     headers: Headers;
@@ -447,9 +458,11 @@ export type executeScheduledActionNowResponseSuccess =
 export type executeScheduledActionNowResponseError = (
   | executeScheduledActionNowResponse400
   | executeScheduledActionNowResponse401
+  | executeScheduledActionNowResponse402
   | executeScheduledActionNowResponse404
   | executeScheduledActionNowResponse409
   | executeScheduledActionNowResponse500
+  | executeScheduledActionNowResponse503
 ) & {
   headers: Headers;
 };

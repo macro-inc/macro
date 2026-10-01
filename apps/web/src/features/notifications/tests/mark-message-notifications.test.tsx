@@ -1,12 +1,14 @@
 import type { NotificationSource } from '@notifications/notification-source';
 import type { UnifiedNotification } from '@notifications/types';
 import { render, waitFor } from '@solidjs/testing-library';
-import { createSignal } from 'solid-js';
+import { createMemo, createSignal } from 'solid-js';
+import { createStore } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   MarkMessageNotifications,
-  MessageNotificationSourceContext,
+  MessageNotificationIndexContext,
 } from '../components/MarkMessageNotifications';
+import { indexUnreadMessageNotifications } from '../unread-message-notifications';
 
 const mocks = vi.hoisted(() => ({
   notificationSource: undefined as NotificationSource | undefined,
@@ -95,16 +97,21 @@ describe('MarkMessageNotifications', () => {
     const [notifications, setNotifications] = createSignal(
       matchingNotifications
     );
-    const view = render(() => (
-      <MessageNotificationSourceContext.Provider value={notifications}>
-        <MarkMessageNotifications
-          messageId="message-1"
-          parent={{ type: 'channel', id: 'channel-1' }}
-        >
-          <span>Message</span>
-        </MarkMessageNotifications>
-      </MessageNotificationSourceContext.Provider>
-    ));
+    const view = render(() => {
+      const index = createMemo(() =>
+        indexUnreadMessageNotifications(notifications())
+      );
+      return (
+        <MessageNotificationIndexContext.Provider value={index}>
+          <MarkMessageNotifications
+            messageId="message-1"
+            parent={{ type: 'channel', id: 'channel-1' }}
+          >
+            <span>Message</span>
+          </MarkMessageNotifications>
+        </MessageNotificationIndexContext.Provider>
+      );
+    });
     expect(globalRead).not.toHaveBeenCalled();
     await waitFor(() => expect(bulkMarkAsRead).toHaveBeenCalledOnce());
     expect(bulkMarkAsRead).toHaveBeenCalledWith(matchingNotifications);
@@ -119,6 +126,48 @@ describe('MarkMessageNotifications', () => {
     expect(view.container.firstElementChild?.tagName).toBe('SPAN');
   });
 
+  it('marks a newly unread store record and a new batch arriving while a mark is pending', async () => {
+    const [notifications, setNotifications] = createStore([
+      { ...documentMentionNotification('first'), state: 'seen' as const },
+    ] as UnifiedNotification[]);
+    let finishMark: (() => void) | undefined;
+    bulkMarkAsRead.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          finishMark = resolve;
+        })
+    );
+    render(() => {
+      const index = createMemo(() =>
+        indexUnreadMessageNotifications(notifications)
+      );
+      return (
+        <MessageNotificationIndexContext.Provider value={index}>
+          <MarkMessageNotifications
+            messageId="message-1"
+            parent={{ type: 'channel', id: 'channel-1' }}
+          >
+            <span>Message</span>
+          </MarkMessageNotifications>
+        </MessageNotificationIndexContext.Provider>
+      );
+    });
+    expect(bulkMarkAsRead).not.toHaveBeenCalled();
+    setNotifications(0, 'state', 'unseen');
+    await waitFor(() => expect(bulkMarkAsRead).toHaveBeenCalledOnce());
+
+    setNotifications(0, 'state', 'seen');
+    setNotifications(1, documentMentionNotification('second'));
+    expect(bulkMarkAsRead).toHaveBeenCalledOnce();
+    finishMark!();
+    await waitFor(() => expect(bulkMarkAsRead).toHaveBeenCalledTimes(2));
+    expect(bulkMarkAsRead.mock.calls[1][0].map((n) => n.id)).toEqual([
+      'second',
+    ]);
+    setNotifications(1, 'state', 'seen');
+    finishMark!();
+  });
+
   it('bounds retries for the same notifications and retries a new batch after exhaustion', async () => {
     const error = new Error('mark failed');
     bulkMarkAsRead.mockRejectedValue(error);
@@ -130,16 +179,21 @@ describe('MarkMessageNotifications', () => {
     );
 
     try {
-      render(() => (
-        <MessageNotificationSourceContext.Provider value={notifications}>
-          <MarkMessageNotifications
-            messageId="message-1"
-            parent={{ type: 'channel', id: 'channel-1' }}
-          >
-            <span>Message</span>
-          </MarkMessageNotifications>
-        </MessageNotificationSourceContext.Provider>
-      ));
+      render(() => {
+        const index = createMemo(() =>
+          indexUnreadMessageNotifications(notifications())
+        );
+        return (
+          <MessageNotificationIndexContext.Provider value={index}>
+            <MarkMessageNotifications
+              messageId="message-1"
+              parent={{ type: 'channel', id: 'channel-1' }}
+            >
+              <span>Message</span>
+            </MarkMessageNotifications>
+          </MessageNotificationIndexContext.Provider>
+        );
+      });
 
       await waitFor(() => {
         expect(bulkMarkAsRead).toHaveBeenCalledTimes(3);

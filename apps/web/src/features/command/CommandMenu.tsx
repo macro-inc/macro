@@ -372,8 +372,8 @@ export function CommandMenuInner(props: {
     }
 
     if (isAskAiItem(item)) {
-      // Opens a new chat split and sends the query immediately.
-      openChatWithMessage(item.query);
+      // Opens a new agent session and sends the query when ready.
+      void openChatWithMessage(item.query);
       CommandState.close();
       CommandState.setQuery('');
       return;

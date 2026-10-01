@@ -130,7 +130,8 @@ vi.mock('@queries/history/graphql', () => ({
 vi.mock('@queries/soup/quick-access-agent-sessions', () => ({
   useQuickAccessAgentSessionsQuery: () => ({ query: {}, sessions: () => [] }),
 }));
-vi.mock('@queries/soup/quick-access-crm-companies', () => ({
+vi.mock('@app/features/crm/crm-search', async () => ({
+  ...(await import('@app/features/crm/queries/graphql')),
   useQuickAccessCrmCompaniesQuery: () => ({
     query: {},
     companies: () => mocks.companies,

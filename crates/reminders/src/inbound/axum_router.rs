@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use axum::{
     Json, Router,
-    extract::{FromRef, State},
+    extract::{FromRef, Path, State},
     http::StatusCode,
     response::IntoResponse,
     routing::{delete, get, patch, post},
@@ -99,6 +99,11 @@ where
     T: Send + Sync + 'static,
 {
     Router::new()
+        .route(
+            "/email/{thread_id}",
+            get(get_email_followup_handler::<S, Eas, Auth>)
+                .put(set_email_followup_handler::<S, Eas, Auth>),
+        )
         .route("/", get(list_reminders_handler::<S, Eas, Auth>))
         .route("/", post(create_reminder_handler::<S, Eas, Auth>))
         .route("/{id}", get(get_reminder_handler::<S, Eas, Auth>))
@@ -513,4 +518,53 @@ impl IntoResponse for ReminderError {
         )
             .into_response()
     }
+}
+
+/// Read an email follow-up and reconcile inbound reply cancellation.
+#[utoipa::path(get, tag = "reminders", operation_id = "get_email_followup",
+    path = "/reminders/email/{thread_id}", params(("thread_id" = Uuid, Path)),
+    responses((status = 200, body = crate::domain::email_followup::EmailFollowupResponse),
+              (status = 403, body = ErrorResponse), (status = 500, body = ErrorResponse)))]
+pub async fn get_email_followup_handler<S, Eas, Auth>(
+    State(state): State<RemindersRouterState<S, Eas, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Path(thread_id): Path<Uuid>,
+) -> Result<Json<crate::domain::email_followup::EmailFollowupResponse>, ReminderError>
+where
+    S: RemindersService,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    Ok(Json(crate::domain::email_followup::EmailFollowupResponse {
+        followup: state
+            .service
+            .get_email_followup(user.authorization.user.macro_user_id, thread_id)
+            .await?,
+    }))
+}
+
+/// Schedule, edit or remove one email follow-up as an idempotent operation.
+#[utoipa::path(put, tag = "reminders", operation_id = "set_email_followup",
+    path = "/reminders/email/{thread_id}", params(("thread_id" = Uuid, Path)),
+    request_body = crate::domain::email_followup::EmailFollowupCommand,
+    responses((status = 200, body = crate::domain::email_followup::EmailFollowup),
+              (status = 400, body = ErrorResponse), (status = 403, body = ErrorResponse),
+              (status = 500, body = ErrorResponse)))]
+pub async fn set_email_followup_handler<S, Eas, Auth>(
+    State(state): State<RemindersRouterState<S, Eas, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Path(thread_id): Path<Uuid>,
+    Json(command): Json<crate::domain::email_followup::EmailFollowupCommand>,
+) -> Result<Json<crate::domain::email_followup::EmailFollowup>, ReminderError>
+where
+    S: RemindersService,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    Ok(Json(
+        state
+            .service
+            .execute_email_followup(user.authorization.user.macro_user_id, thread_id, command)
+            .await?,
+    ))
 }

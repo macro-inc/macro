@@ -999,6 +999,10 @@ export function MarkdownEditor(props: {
             });
           }}
           contentEditable={isContentEditable()}
+          role="textbox"
+          aria-multiline="true"
+          aria-readonly={!isContentEditable()}
+          aria-label="Document content"
           class="ph-no-capture w-full max-w-full min-h-52"
           classList={{
             'select-auto': !canEdit(),

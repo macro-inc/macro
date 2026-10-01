@@ -1,7 +1,7 @@
 import { openReminderDetail } from '@app/features/reminders/reminder-navigation';
 import { toast } from '@core/component/Toast/Toast';
-import type { EntityData } from '@entity';
-import { EntitySelectionBadge } from '@entity/components/EntitySelectionBadge';
+import { Entity, type EntityData } from '@entity';
+
 import {
   reminderTarget,
   useCreateReminderMutation,
@@ -10,13 +10,15 @@ import { refetchSoupEntity } from '@queries/soup/cache';
 import type { CreateReminderRequest } from '@service-storage/generated/schemas/createReminderRequest';
 import type { Reminder } from '@service-storage/generated/schemas/reminder';
 import type { ReminderSchedule } from '@service-storage/generated/schemas/reminderSchedule';
-import { ActionDialogShell, Dialog } from '@ui';
+import { ActionDialogShell, Button, Dialog } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { ReminderForm } from './ReminderForm';
 import {
+  chooseReminderTarget,
   closeReminderComposer,
   reminderComposerOpen,
   reminderComposerState,
+  showReminderEntityPicker,
   takeReminderCreatedHandler,
 } from './reminder-composer';
 import {
@@ -24,6 +26,8 @@ import {
   resolveReminderDescription,
   resolveStandaloneDescription,
 } from './reminder-schedule';
+import { EmailReminderComposer } from './views/email-reminder-composer';
+import { ReminderEntityPicker } from './views/reminder-entity-picker';
 
 const CREATE_FAILURE_MESSAGE =
   'We couldn’t save this reminder. Your draft is still here—try again. If the request timed out, it may already exist; check Reminders before retrying.';
@@ -159,42 +163,83 @@ export function ReminderComposerModal() {
       class="w-[calc(100vw-2rem)] max-w-110"
     >
       <ActionDialogShell>
-        <Show when={hasTarget()}>
-          <ReminderForm
-            layout="dialog"
-            header={
-              <ActionDialogShell.Header>
-                <ActionDialogShell.Title>New reminder</ActionDialogShell.Title>
-                <ActionDialogShell.Description>
-                  Choose when you’d like to be reminded.
-                </ActionDialogShell.Description>
-              </ActionDialogShell.Header>
-            }
-            placeholder={
-              standalone()
-                ? "What's the reminder?"
-                : "What's the reminder? (optional)"
-            }
-            descriptionRequired={standalone()}
-            submitLabel="Set reminder"
-            autofocus
-            pending={submitting()}
-            error={saveError()}
-            reference={
+        <Show
+          when={reminderComposerState.choosing}
+          fallback={
+            <Show
+              when={entity()?.type === 'email'}
+              fallback={
+                <Show when={hasTarget()}>
+                  <ReminderForm
+                    layout="dialog"
+                    header={
+                      <ActionDialogShell.Header>
+                        <ActionDialogShell.Title>
+                          {standalone() ? 'New reminder' : 'Remind me'}
+                        </ActionDialogShell.Title>
+                        <ActionDialogShell.Description>
+                          Choose when you’d like to be reminded.
+                        </ActionDialogShell.Description>
+                      </ActionDialogShell.Header>
+                    }
+                    placeholder={
+                      standalone()
+                        ? 'What would you like to remember?'
+                        : "What's the reminder? (optional)"
+                    }
+                    descriptionRequired={standalone()}
+                    optionalNote={!standalone()}
+                    submitLabel="Set reminder"
+                    autofocus
+                    pending={submitting()}
+                    error={saveError()}
+                    reference={
+                      <Show when={entity()}>
+                        {(target) => (
+                          <div class="flex min-w-0 items-center gap-3 rounded-lg border border-edge-muted p-3">
+                            <span class="size-6 shrink-0">
+                              <Entity.Icon entity={target()} />
+                            </span>
+                            <span class="min-w-0 flex-1 font-medium">
+                              <Entity.Title entity={target()} />
+                            </span>
+                            <Show when={!submitting()}>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={showReminderEntityPicker}
+                              >
+                                Change
+                              </Button>
+                            </Show>
+                          </div>
+                        )}
+                      </Show>
+                    }
+                    onCancel={() => {
+                      if (submitting()) return;
+                      setSaveError(undefined);
+                      closeReminderComposer();
+                    }}
+                    onSubmit={(values) => void handleSubmit(values)}
+                  />
+                </Show>
+              }
+            >
               <Show when={entity()}>
                 {(target) => (
-                  <div class="flex min-w-0">
-                    <EntitySelectionBadge entity={target()} />
-                  </div>
+                  <EmailReminderComposer
+                    entity={target()}
+                    onPending={setSubmitting}
+                  />
                 )}
               </Show>
-            }
-            onCancel={() => {
-              if (submitting()) return;
-              setSaveError(undefined);
-              closeReminderComposer();
-            }}
-            onSubmit={(values) => void handleSubmit(values)}
+            </Show>
+          }
+        >
+          <ReminderEntityPicker
+            onSelect={chooseReminderTarget}
+            onWrite={() => chooseReminderTarget()}
           />
         </Show>
       </ActionDialogShell>

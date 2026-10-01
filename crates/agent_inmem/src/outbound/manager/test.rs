@@ -22,7 +22,7 @@ use model_owner::Owner;
 use super::*;
 use crate::domain::engine::AgentIdentity;
 use crate::outbound::log_frames::LogFrameSource;
-use crate::testing::ScriptedEngine;
+use crate::testing::{ScriptedEngine, TestAdmission, disabled_admission};
 use agent_session::domain::model::ReplicaId;
 use agent_session::domain::ports::{
     NoOpAgentSessionNameGenerator, NoOpTurnObserver, NoopLifecyclePublisher,
@@ -193,6 +193,7 @@ async fn a_prompt_runs_end_to_end_through_the_real_session_machine() {
             "streamed reply".to_owned(),
         )])),
     );
+    let manager = manager.with_admission(disabled_admission());
     let transport = manager.attach(facts(id), None).await;
     sessions
         .attach_session(id, RuntimeAttachment::solo(transport))
@@ -288,6 +289,96 @@ async fn a_prompt_runs_end_to_end_through_the_real_session_machine() {
         );
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
+}
+
+#[tokio::test]
+async fn manager_admission_rejects_turns_without_wedging_the_session() {
+    use ai_billing::domain::{AiAdmissionError, DenyReason};
+
+    let repo = InMemoryAgentSessionRepo::new();
+    let sessions = AgentSessionServiceImpl::new(
+        repo.clone(),
+        FoldedMessageService::new(repo.clone()),
+        NoOpRealtime,
+        NoOpAgentSessionNameGenerator,
+        Arc::new(NoOpTurnObserver),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
+    );
+    let id = AgentSessionId::new();
+    sessions
+        .create_session(CreateAgentSessionParams {
+            repo_branch: None,
+            id,
+            owner_id: Owner::User(owner()),
+            bot_id: BotId::TEST_A,
+            thread_id: None,
+            originating_message_id: None,
+            model: "anthropic/claude-sonnet-5".to_owned(),
+            harness: "macro-inmem".to_owned(),
+            repo_url: None,
+            workspace: "/workspace".to_owned(),
+            sandbox_size: agent_session::domain::model::SandboxSize::Default,
+            instructions: None,
+            mcp_servers: Default::default(),
+            egress_token_hash: None,
+        })
+        .await
+        .unwrap();
+    let engine = Arc::new(ScriptedEngine::new(vec![]));
+    let denial = AiAdmissionError::Denied(DenyReason::AllowanceExhausted);
+    let admission = Arc::new(TestAdmission::new(Err(denial)));
+    let manager = manager(&repo, engine.clone()).with_admission(admission.clone());
+    let transport = manager.attach(facts(id), None).await;
+    sessions
+        .attach_session(id, RuntimeAttachment::solo(transport))
+        .await
+        .unwrap();
+    sessions
+        .send_action(
+            id,
+            Some(owner()),
+            // Development commands are disabled, so this is provider-backed text.
+            AgentAction::prompt("/ask unavailable"),
+            AgentActionId::mint(),
+        )
+        .await
+        .unwrap();
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            if logged_frames(&repo, id)
+                .await
+                .iter()
+                .any(|frame| frame.contains(denial.code()))
+            {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .expect("the runtime must return its sanitized denial");
+    assert!(engine.requests().is_empty());
+    assert!(manager.store.get(&id).unwrap().history.is_empty());
+    assert_eq!(
+        *admission.calls.lock().unwrap(),
+        vec![(owner().to_string(), ai_usage::AiFeature::AgentSession)]
+    );
+
+    // A second prompt must run on the same connection: a rejection is not a
+    // disconnect and must release the session machine's pending turn.
+    *admission.result.lock().unwrap() = Ok(());
+    sessions
+        .send_action(
+            id,
+            Some(owner()),
+            AgentAction::prompt("retry"),
+            AgentActionId::mint(),
+        )
+        .await
+        .unwrap();
+    await_turns(&engine, "retry").await;
+    assert_eq!(engine.requests()[0].messages, ["retry"]);
 }
 
 /// A "restart": the second manager shares nothing with the first but the

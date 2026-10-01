@@ -6,7 +6,7 @@ import type { EventEditorInitialValues } from '@app/features/calendar/components
 import type { CalendarEvent } from '@app/features/calendar/types';
 import { CalendarRouteView } from '@app/features/calendar-view/route';
 import { ChannelsRouteView } from '@app/features/channels-view/route';
-import { CompaniesRouteView } from '@app/features/companies/route';
+import { CompaniesRouteView } from '@app/features/crm/route';
 import { DriveRouteView } from '@app/features/drive-view/route';
 import { EmailCompose } from '@app/features/email-compose/email-compose';
 import { MailRouteView } from '@app/features/email-view/route';
@@ -66,6 +66,7 @@ type ComponentFactory = (params: ComponentParams) => JSXElement;
 export type ComponentMeta = {
   kind?: string;
   splitPanelLayout?: 'legacy' | 'composable';
+  ownsCollectionState?: boolean;
 };
 
 export type UnifiedListMeta = ComponentMeta & {
@@ -262,7 +263,10 @@ registerComponent('calls', () => <CallsRouteView />);
 registerComponent(
   'companies',
   () => <CompaniesRouteView />,
-  () => (isTouchDevice() ? undefined : { splitPanelLayout: 'composable' })
+  () => ({
+    ownsCollectionState: true,
+    ...(isTouchDevice() ? {} : { splitPanelLayout: 'composable' as const }),
+  })
 );
 registerComponent('folders', () => <FoldersRouteView />);
 registerComponent('search', () => <SearchRouteView />);

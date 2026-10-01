@@ -288,6 +288,12 @@ async fn run() -> anyhow::Result<()> {
             macro_queues::NotificationIngressQueue::new().to_string(),
         ),
     });
+    let admission = ai_billing::composition::pg_admission_service(
+        pool.clone(),
+        config.enable_ai_usage_enforcement,
+    );
+    let recorder =
+        ai_usage::pg_recorder_with_enforcement(pool.clone(), config.enable_ai_usage_enforcement);
     let lifecycle_publisher = Arc::new(BrokerLifecyclePublisher::new(broker.clone()));
     let sessions = AgentSessionServiceImpl::new(
         session_repo.clone(),
@@ -296,7 +302,10 @@ async fn run() -> anyhow::Result<()> {
             connection_gateway.clone(),
             session_audience.clone(),
         ),
-        HaikuAgentSessionNameGenerator::new(ai_usage::pg_recorder(pool.clone())),
+        agent_session::domain::name_generation::AdmittedAgentSessionNameGenerator::new(
+            HaikuAgentSessionNameGenerator::new(recorder.clone()),
+            admission.clone(),
+        ),
         turn_observer.clone(),
         lifecycle_publisher.clone(),
         replica,
@@ -448,10 +457,13 @@ async fn run() -> anyhow::Result<()> {
         ))));
     let sessions = sessions.with_tool_catalog(Arc::clone(&tool_catalog));
 
-    let tool_context =
-        ai_tools::build_tool_service_context_from_env(pool.clone(), event_broker_tracker.clone())
-            .await
-            .context("failed to build the in-memory agent tool context")?;
+    let tool_context = ai_tools::build_tool_service_context_from_env(
+        pool.clone(),
+        event_broker_tracker.clone(),
+        config.enable_ai_usage_enforcement,
+    )
+    .await
+    .context("failed to build the in-memory agent tool context")?;
     let inmem_model_engine: Arc<dyn TurnEngine> =
         Arc::new(RigTurnEngine::new(pool.clone(), tool_context));
     // A model provider cannot fetch images from a private local-stack hostname.
@@ -489,6 +501,7 @@ async fn run() -> anyhow::Result<()> {
                 &egress_base_url,
             ))),
         )
+        .with_admission(admission.clone())
         .with_dev_commands(enable_dev_commands),
     };
     // The sandbox provider serves every bot but the in-memory one, which the
@@ -571,7 +584,7 @@ async fn run() -> anyhow::Result<()> {
         cursor_api_base_url(),
         session_repo.clone(),
         Arc::clone(&reachable_repositories),
-        ai_usage::pg_recorder(pool.clone()),
+        recorder.clone(),
         PostgresJournal {
             pool: pool.clone(),
             replica,
@@ -589,6 +602,7 @@ async fn run() -> anyhow::Result<()> {
             ),
         ),
     )
+    .with_admission(admission.clone())
     .with_pull_requests(session_pull_requests.clone())
     .with_working_branches(session_working_branches);
     let codex_connections: Option<Arc<dyn codex_connection::domain::ConnectionService>> = config
@@ -820,7 +834,7 @@ async fn run() -> anyhow::Result<()> {
     let prompt_mentions =
         LexicalPromptMentions::new(lexical.clone(), PgSessionAccess::new(pool.clone()));
     let prompt_context = MessagePromptContextAdapter::new(
-        message_service,
+        message_service.clone(),
         Arc::clone(&entity_access),
         Arc::new(lexical.clone()),
     );
@@ -929,6 +943,7 @@ async fn run() -> anyhow::Result<()> {
             // notification ingress channel messages use.
             IngressAgentSessionNotifier::new(Arc::clone(&notifications)),
         )
+        .with_admission(admission.clone())
         .with_repositories(open_repositories),
     );
     let model_probe_timeout = std::time::Duration::from_secs(10);
@@ -1181,7 +1196,13 @@ async fn run() -> anyhow::Result<()> {
         pool.clone(),
         config.kafka_brokers.as_ref().to_owned(),
         config.internal_api_key.clone(),
+        config.document_storage_service_auth_key.clone(),
         config.agent_trigger_event_source,
+        trigger::TriggerServices {
+            recorder,
+            admission,
+            messages: message_service,
+        },
     ));
 
     let egress_port = config.egress_port;

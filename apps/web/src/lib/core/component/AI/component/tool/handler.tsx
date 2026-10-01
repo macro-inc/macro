@@ -1,10 +1,15 @@
 import {
+  getCompanyHandler,
+  listCompaniesHandler,
+} from '@app/features/crm/crm-tool-renderers';
+import {
   deserializeToolCall,
   deserializeToolResponse,
   type ToolName,
 } from '@service-cognition/generated/tools/tool';
 import { createMemo } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { configureAgentHandler, listAgentsHandler } from './Agents';
 import { bashCodeExecutionHandler } from './BashCodeExecution';
 import {
   configureBotHandler,
@@ -30,7 +35,6 @@ import {
 import { createDocumentHandler } from './CreateDocument';
 import { createProjectHandler } from './CreateProject';
 import { createTagHandler } from './CreateTag';
-import { getCompanyHandler, listCompaniesHandler } from './Crm';
 import { deleteTagHandler } from './DeleteTag';
 import { displayResultsHandler } from './DisplayResults';
 import {
@@ -117,6 +121,8 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ReadSpreadsheet: readSpreadsheetHandler,
   CalculateSpreadsheet: calculateSpreadsheetHandler,
   EditSpreadsheet: editSpreadsheetHandler,
+  ConfigureAgent: configureAgentHandler,
+  ListAgents: listAgentsHandler,
   ConfigureBot: configureBotHandler,
   CreateChannel: createChannelHandler,
   CreateBot: createBotHandler,

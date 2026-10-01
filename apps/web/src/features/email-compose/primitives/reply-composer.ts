@@ -5,6 +5,7 @@ import {
 import type { EmailMessage } from '@app/features/email-message/core/email-message';
 import type { UserMentionRecord } from '@core/component/LexicalMarkdown/utils/mentionsUtils';
 import { setEditorStateFromHtml } from '@core/component/LexicalMarkdown/utils/setEditorStateFromHtml';
+import { getUploadFileSize } from '@core/mobile/nativeStagedUpload';
 import { plural } from '@core/util/string';
 import { $generateHtmlFromNodes } from '@lexical/html';
 import {
@@ -46,6 +47,7 @@ import {
   refuseAttachmentsOffline,
 } from './attachment-persistence';
 import { createDraftAutosave } from './draft-autosave';
+import { observeDraftIdentity } from './draft-identity';
 import {
   createDraftPersistence,
   deleteDraftForDiscard,
@@ -254,12 +256,25 @@ export function createReplyComposer(
         ? {
             draftId: draftSeed.db_id,
             threadId: draftSeed.thread_db_id,
+            // A cached seed may still use local IDs. Only a cache read or save
+            // can confirm it for REST actions.
+            persistence: props.drafts.readDraft ? 'queued' : undefined,
             inboxId: draftSeed.link_id,
           }
         : undefined
   );
   const savedDraftId = session.draftId;
   const savedDraftThreadId = session.threadId;
+  observeDraftIdentity(
+    props.drafts,
+    session,
+    props.notices,
+    () => {
+      if (scheduleBlocked() || schedule.state().type === 'scheduled') return;
+      detachFromObsoleteDraft('Saving your edits as a new draft.');
+    },
+    handleAlreadySent
+  );
   const persistedInboxId = session.inboxId;
   const [movingInbox, setMovingInbox] = createSignal(false);
   let identityVersion = 0;
@@ -498,7 +513,9 @@ export function createReplyComposer(
   ) {
     props.notices.reportError(error);
     if (!session.serverConfirmed()) {
-      if (schedule?.pending()) {
+      // A best-effort pre-send save may fail while delivery still succeeds.
+      // Background saves and explicit draft actions report their own failure.
+      if (schedule?.pending() || !submitting()) {
         props.notices.feedback.failure(`Failed to ${operation} draft`);
       }
       return;
@@ -536,19 +553,21 @@ export function createReplyComposer(
       }, 0);
     }
   };
+  function handleAlreadySent() {
+    identityVersion += 1;
+    props.notices.feedback.alert('This reply was already sent');
+    void withDeletionGuard(() => {
+      resetState();
+      clearDraftState();
+    });
+  }
+
   const persistence = createDraftPersistence({
     session,
     drafts: props.drafts,
     attachments: attachmentPersistence,
     mintThreadHandle: false,
-    onAlreadySent: () => {
-      identityVersion += 1;
-      props.notices.feedback.alert('This reply was already sent');
-      void withDeletionGuard(() => {
-        resetState();
-        clearDraftState();
-      });
-    },
+    onAlreadySent: handleAlreadySent,
   });
 
   async function persistDraft({
@@ -1127,7 +1146,10 @@ export function createReplyComposer(
       return;
     const currentAttachments = form.attachments.list();
 
-    const attachmentsToAddByteSize = files.reduce((sum, f) => sum + f.size, 0);
+    const attachmentsToAddByteSize = files.reduce(
+      (sum, f) => sum + getUploadFileSize(f),
+      0
+    );
 
     if (attachmentsToAddByteSize >= MAX_ATTACHMENTS_BYTES_SIZE) {
       props.notices.feedback.failure(
@@ -1137,7 +1159,8 @@ export function createReplyComposer(
     }
 
     const currentAttachmentsByteSize = currentAttachments.reduce(
-      (sum, a) => sum + (a.type === 'local' ? a.file.size : a.fileSize),
+      (sum, a) =>
+        sum + (a.type === 'local' ? getUploadFileSize(a.file) : a.fileSize),
       0
     );
 

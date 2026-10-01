@@ -34,6 +34,15 @@ impl ConnectorDirectory for FakeDirectory {
         ));
         Ok(self.page.clone())
     }
+
+    async fn retrieve(&self, app_slug: &str) -> anyhow::Result<Option<CatalogEntry>> {
+        Ok(self
+            .page
+            .entries
+            .iter()
+            .find(|entry| entry.app_slug == app_slug)
+            .cloned())
+    }
 }
 
 fn directory_entry(app_slug: &str) -> CatalogEntry {

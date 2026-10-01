@@ -27,6 +27,7 @@ When referencing a Macro item, person, date/time, agent session, or other mentio
 Use `<m-document-mention>` with the right `blockName` (and `blockParams` when needed):
 
 - Document mention: `<m-document-mention>{"documentId":"{id}","documentName":"","blockName":"md","blockParams":{}}</m-document-mention>`
+- Image document mention (a generated or uploaded picture): `<m-document-mention>{"documentId":"{id}","documentName":"","blockName":"image","blockParams":{}}</m-document-mention>`
 - Channel mention: `<m-document-mention>{"documentId":"{id}","documentName":"","blockName":"channel","blockParams":{}}</m-document-mention>`
 - Channel message mention: `<m-document-mention>{"documentId":"{channel_id}","documentName":"","blockName":"channel","blockParams":{"channel_message_id":"{message_id}"}}</m-document-mention>`
 - Chat mention: `<m-document-mention>{"documentId":"{id}","documentName":"","blockName":"chat","blockParams":{}}</m-document-mention>`

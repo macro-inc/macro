@@ -1979,6 +1979,35 @@ export const meetingLeaveResponse = zod
   .describe('Response for the leave\/end call operation.');
 
 /**
+ * @summary Read a standalone meeting preview without admitting a guest to the room.
+ */
+export const meetingGuestParticipantsParams = zod.object({
+  token: zod.string(),
+});
+
+export const meetingGuestParticipantsResponse = zod
+  .object({
+    participants: zod
+      .array(
+        zod
+          .object({
+            avatarUrl: zod
+              .string()
+              .nullish()
+              .describe('Profile image, when available for a Macro member.'),
+            displayName: zod
+              .string()
+              .describe('Name displayed in the waiting room.'),
+          })
+          .describe(
+            'Minimal waiting-room display data, without account identities or call content.'
+          )
+      )
+      .describe('Human attendees only; transcription agents are excluded.'),
+  })
+  .describe("People currently connected to a meeting's room.");
+
+/**
  * @summary Handle `GET /call/meetings` through the call domain service.
  */
 export const meetingListResponse = zod
@@ -2028,6 +2057,12 @@ export const meetingListResponse = zod
  */
 export const meetingCreateBody = zod
   .object({
+    preparationId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'Optional unused room reserved by this actor on the setup screen.'
+      ),
     scheduledEnd: zod.iso
       .datetime({})
       .nullish()
@@ -2206,6 +2241,58 @@ export const meetingJoinResponse = zod
     token: zod.string().describe('The RTC token for connecting to the room.'),
   })
   .describe('Response returned when creating or joining a call.');
+
+/**
+ * @summary Read the participant preview for an authenticated invitation holder.
+ */
+export const meetingParticipantsParams = zod.object({
+  token: zod.string(),
+});
+
+export const meetingParticipantsResponse = zod
+  .object({
+    participants: zod
+      .array(
+        zod
+          .object({
+            avatarUrl: zod
+              .string()
+              .nullish()
+              .describe('Profile image, when available for a Macro member.'),
+            displayName: zod
+              .string()
+              .describe('Name displayed in the waiting room.'),
+          })
+          .describe(
+            'Minimal waiting-room display data, without account identities or call content.'
+          )
+      )
+      .describe('Human attendees only; transcription agents are excluded.'),
+  })
+  .describe("People currently connected to a meeting's room.");
+
+/**
+ * @summary Reserve a room while the authenticated caller configures a new call.
+ */
+export const meetingPrepareResponse = zod
+  .object({
+    expiresAt: zod.iso
+      .datetime({})
+      .describe(
+        'After this deadline Start falls back to ordinary room creation.'
+      ),
+    id: zod
+      .uuid()
+      .describe("Also the reserved RTC room's UUID and prospective call ID."),
+  })
+  .describe('An empty room reservation, not a started call or an invitation.');
+
+/**
+ * @summary Cancel an unused room; the domain owns ownership and activation checks.
+ */
+export const meetingCancelPreparationParams = zod.object({
+  preparation_id: zod.uuid(),
+});
 
 /**
  * @summary Handle `DELETE /call/meetings/{meeting_id}` through the call domain service.
@@ -35231,6 +35318,143 @@ export const createReminderBody = zod
       .describe('When a reminder fires.'),
   })
   .describe('Request body for creating a reminder.');
+
+/**
+ * @summary Read an email follow-up and reconcile inbound reply cancellation.
+ */
+export const getEmailFollowupParams = zod.object({
+  thread_id: zod.uuid(),
+});
+
+export const getEmailFollowupResponse = zod
+  .object({
+    followup: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            condition: zod
+              .enum(['if_no_reply', 'regardless'])
+              .describe(
+                'When an email follow-up should return the conversation.'
+              ),
+            linkId: zod.uuid().describe('Canonical owned\/delegated inbox.'),
+            remindAt: zod.iso.datetime({}).describe('Confirmed schedule.'),
+            reminderId: zod
+              .uuid()
+              .describe(
+                'Its ordinary reminder, used by the existing alert\/management surfaces.'
+              ),
+            revision: zod
+              .uuid()
+              .describe(
+                'Last accepted operation; edits\/removal compare this to prevent stale undo.'
+              ),
+            state: zod
+              .enum([
+                'archiving',
+                'pending',
+                'returning',
+                'returned',
+                'cancelled',
+                'removed',
+              ])
+              .describe('Durable progress of an email operation.'),
+            threadId: zod.uuid().describe('Conversation identity.'),
+          })
+          .describe(
+            'Public status shown on email and in the Reminders editor.'
+          ),
+      ])
+      .optional(),
+  })
+  .describe('Lookup response, including an email with no follow-up yet.');
+
+/**
+ * @summary Schedule, edit or remove one email follow-up as an idempotent operation.
+ */
+export const setEmailFollowupParams = zod.object({
+  thread_id: zod.uuid(),
+});
+
+export const setEmailFollowupBody = zod
+  .union([
+    zod
+      .object({
+        condition: zod
+          .enum(['if_no_reply', 'regardless'])
+          .describe('When an email follow-up should return the conversation.'),
+        expectedRevision: zod
+          .uuid()
+          .nullish()
+          .describe('None for creation, the current revision for edits.'),
+        operationId: zod
+          .uuid()
+          .describe('Unique request identity retained across network retries.'),
+        remindAt: zod.iso
+          .datetime({})
+          .describe(
+            'One future instant; conditional recurrence is deliberately absent.'
+          ),
+        type: zod.enum(['set']),
+      })
+      .describe(
+        'Create or edit one follow-up. An edit requires the displayed revision.'
+      ),
+    zod
+      .object({
+        expectedRevision: zod
+          .uuid()
+          .describe(
+            'Reject removal if a newer edit has replaced this operation.'
+          ),
+        operationId: zod.uuid().describe('Unique request identity.'),
+        type: zod.enum(['remove']),
+        undo: zod
+          .boolean()
+          .optional()
+          .describe(
+            'Undo restores original visibility; ordinary Remove returns to inbox.'
+          ),
+      })
+      .describe(
+        'Cancel and restore the conversation without leaving a future alert.'
+      ),
+  ])
+  .describe(
+    'Idempotent email command. Reusing an operation ID with different data fails.'
+  );
+
+export const setEmailFollowupResponse = zod
+  .object({
+    condition: zod
+      .enum(['if_no_reply', 'regardless'])
+      .describe('When an email follow-up should return the conversation.'),
+    linkId: zod.uuid().describe('Canonical owned\/delegated inbox.'),
+    remindAt: zod.iso.datetime({}).describe('Confirmed schedule.'),
+    reminderId: zod
+      .uuid()
+      .describe(
+        'Its ordinary reminder, used by the existing alert\/management surfaces.'
+      ),
+    revision: zod
+      .uuid()
+      .describe(
+        'Last accepted operation; edits\/removal compare this to prevent stale undo.'
+      ),
+    state: zod
+      .enum([
+        'archiving',
+        'pending',
+        'returning',
+        'returned',
+        'cancelled',
+        'removed',
+      ])
+      .describe('Durable progress of an email operation.'),
+    threadId: zod.uuid().describe('Conversation identity.'),
+  })
+  .describe('Public status shown on email and in the Reminders editor.');
 
 /**
  * @summary Fetch one of the caller's reminders.

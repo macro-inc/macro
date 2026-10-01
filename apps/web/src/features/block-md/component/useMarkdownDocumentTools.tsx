@@ -61,6 +61,7 @@ export function useMarkdownDocumentTools() {
   const openShare = useMarkdownShareModal();
   const dispatchAgentActions = useDispatchAgentSplitFileActions();
   const isTask = kind() === 'task';
+  const isDocument = kind() === 'document';
 
   const chatEntity = () => ({
     type: 'document' as const,
@@ -82,6 +83,11 @@ export function useMarkdownDocumentTools() {
             icon: GitBranch,
             action: copyBranchName,
           },
+        ] satisfies FileOperation[])
+      : []),
+    ...(isDocument
+      ? ([
+          { ...dispatchAgentActions.copyAsPrompt, group: 'file' as const },
         ] satisfies FileOperation[])
       : []),
     {
@@ -129,7 +135,7 @@ export function useMarkdownDocumentTools() {
             label: 'Code Actions',
             icon: TerminalWindowIcon,
             action: () => {},
-            children: dispatchAgentActions,
+            children: dispatchAgentActions.all,
           },
         ] satisfies BlockTool[])
       : []),

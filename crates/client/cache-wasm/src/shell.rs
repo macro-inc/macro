@@ -16,7 +16,7 @@ use cache_core::query_inspection::QueryInspection;
 use cache_core::queue::{
     ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationUpsertKind,
 };
-use cache_core::record_selection::RecordSelection;
+use cache_core::record_selection::cache::RecordSelectionCache;
 use cache_core::search::SearchRequest;
 use cache_core::store::QueueDiagnosticsAvailability;
 use cache_core::value::EntityKey;
@@ -149,6 +149,8 @@ struct JsQueryRegistration {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct JsWriteResult {
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    identity_errors: Vec<String>,
     revision: String,
     revision_advanced: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -157,6 +159,8 @@ struct JsWriteResult {
     affected_ops: Vec<String>,
     reset: bool,
     revalidations: Vec<QueryRevalidation>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    mutation_uuid: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -169,6 +173,8 @@ struct JsHydrationWriteResult {
     affected_ops: Vec<String>,
     reset: bool,
     revalidations: Vec<QueryRevalidation>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    mutation_uuid: Option<String>,
     data: Option<serde_json::Value>,
 }
 
@@ -188,6 +194,8 @@ struct JsEnqueueOptimisticMutationResult {
     affected_ops: Vec<String>,
     reset: bool,
     revalidations: Vec<QueryRevalidation>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    mutation_uuid: Option<String>,
     initial_claim: JsInitialMutationClaim,
 }
 
@@ -231,6 +239,7 @@ struct JsClaimedMutation {
     transaction_id: String,
     uuid: String,
     superseded: bool,
+    requires_confirmation: bool,
     lease_generation: String,
     query: String,
     operation_name: Option<String>,
@@ -243,11 +252,13 @@ impl TryFrom<ClaimedMutation> for JsClaimedMutation {
     type Error = JsValue;
 
     fn try_from(claimed: ClaimedMutation) -> Result<Self, Self::Error> {
+        let requires_confirmation = claimed.queued.requires_confirmation();
         let request = claimed.queued.mutation.request;
         Ok(Self {
             transaction_id: claimed.queued.id.to_string(),
             uuid: claimed.queued.uuid.to_string(),
             superseded: claimed.queued.superseded,
+            requires_confirmation,
             lease_generation: claimed.lease_generation.to_string(),
             query: request.query,
             operation_name: request.operation_name,
@@ -385,6 +396,13 @@ enum JsDeferOptimisticWriteResult {
     rename_all_fields = "camelCase"
 )]
 enum JsCommitOptimisticWriteResult {
+    Failed {
+        error: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        replacement_transaction_id: Option<String>,
+        #[serde(flatten)]
+        result: JsWriteResult,
+    },
     Committed {
         #[serde(flatten)]
         result: JsWriteResult,
@@ -416,6 +434,7 @@ enum JsRollbackOptimisticWriteResult {
 
 fn js_write_result(result: WriteResult, ops: &OpInterner) -> JsWriteResult {
     JsWriteResult {
+        identity_errors: result.identity_errors,
         revision: result.revision.to_string(),
         revision_advanced: result.revision_advanced,
         search_changed_buckets: result.search_changed_buckets,
@@ -427,10 +446,12 @@ fn js_write_result(result: WriteResult, ops: &OpInterner) -> JsWriteResult {
         affected_ops: ops.names(result.affected_ops),
         reset: result.reset,
         revalidations: result.revalidations,
+        mutation_uuid: result.mutation_uuid,
     }
 }
 
 struct CacheState {
+    selections: RecordSelectionCache,
     engine: Option<BrowserEngine>,
     mail_generation: String,
     scope: String,
@@ -717,6 +738,7 @@ async fn open_cache_inner(
     Ok((
         CacheEngine {
             state: Rc::new(Mutex::new(CacheState {
+                selections: RecordSelectionCache::default(),
                 engine: Some(build_engine(storage, hot_capacity)),
                 mail_generation: soup_filter_cache_adapter::mail::new_generation(),
                 scope,
@@ -1012,6 +1034,37 @@ fn to_js<T: Serialize>(value: &T) -> Result<JsValue, JsValue> {
         .map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
+/// Read envelopes contain strings and JSON values. Converting the JSON in one
+/// call avoids a Wasm/JS crossing for every nested field and array element.
+fn read_response_to_js<'a, T: Serialize>(
+    response: &T,
+    values: impl IntoIterator<Item = &'a serde_json::Value>,
+) -> Result<JsValue, JsValue> {
+    // Preserve the existing rejection of integer values outside JS's safe
+    // range. JSON.parse would otherwise silently round them. Floating-point
+    // values already have JS Number semantics and are allowed at any magnitude.
+    if values.into_iter().any(has_unsafe_json_integer) {
+        return to_js(response);
+    }
+    let json = serde_json::to_string(response).map_err(err_js)?;
+    js_sys::JSON::parse(&json)
+}
+
+fn has_unsafe_json_integer(value: &serde_json::Value) -> bool {
+    const MAX_SAFE_INTEGER: i64 = 9_007_199_254_740_991;
+    match value {
+        serde_json::Value::Number(number) => {
+            !number.is_f64()
+                && number
+                    .as_i64()
+                    .is_none_or(|n| !(-MAX_SAFE_INTEGER..=MAX_SAFE_INTEGER).contains(&n))
+        }
+        serde_json::Value::Array(values) => values.iter().any(has_unsafe_json_integer),
+        serde_json::Value::Object(values) => values.values().any(has_unsafe_json_integer),
+        _ => false,
+    }
+}
+
 const RESET_REQUIRED_MARKER: &str = "cacheStorageResetRequired";
 const RESET_REQUIRED_MESSAGE: &str = "cache storage reset required";
 const OWNER_LOCK_UNAVAILABLE_MARKER: &str = "cacheOwnerLockUnavailable";
@@ -1233,10 +1286,15 @@ impl CacheEngine {
                 )
                 .await;
             let result = state.engine_result(result)?;
-            to_js(&match result {
+            let response = match result {
                 ReadResult::Hit { data } => JsReadResult::Hit { data },
                 ReadResult::Miss => JsReadResult::Miss,
-            })
+            };
+            let data = match &response {
+                JsReadResult::Hit { data } => Some(data),
+                JsReadResult::Miss => None,
+            };
+            read_response_to_js(&response, data)
         })
     }
 
@@ -1253,7 +1311,10 @@ impl CacheEngine {
         future_to_promise(async move {
             let mut state = state.lock().await;
             state.ensure_callable()?;
-            let selection = RecordSelection::parse(&document, &fragment_name).map_err(err_js)?;
+            let selection = state
+                .selections
+                .get(document, fragment_name)
+                .map_err(err_js)?;
             let keys: Vec<String> = parse_vec(keys)?;
             let keys: Vec<_> = keys.into_iter().map(|key| EntityKey(key.into())).collect();
             let result = state
@@ -1261,10 +1322,14 @@ impl CacheEngine {
                 .read_records_by_keys(&selection, &keys)
                 .await;
             let records = state.engine_result(result)?;
-            to_js(&JsRecordSelectionResult {
+            let response = JsRecordSelectionResult {
                 revision: records.revision.to_string(),
                 records: records.value,
-            })
+            };
+            read_response_to_js(
+                &response,
+                response.records.iter().map(|record| &record.record),
+            )
         })
     }
 
@@ -1573,6 +1638,7 @@ impl CacheEngine {
                 affected_ops: ops.borrow().names(result.write_result.affected_ops),
                 reset: result.write_result.reset,
                 revalidations: result.write_result.revalidations,
+                mutation_uuid: result.write_result.mutation_uuid,
                 data: result.data,
             })
         })
@@ -1593,6 +1659,7 @@ impl CacheEngine {
         data: JsValue,
         link_patches: JsValue,
         revalidations: JsValue,
+        identity_bindings: JsValue,
         created_at_ms: f64,
         lease_owner: String,
         now_ms: f64,
@@ -1607,6 +1674,8 @@ impl CacheEngine {
             let data: serde_json::Value = serde_wasm_bindgen::from_value(data).map_err(err_js)?;
             let link_patches: Vec<OptimisticLinkPatch> = parse_vec(link_patches)?;
             let revalidations: Vec<QueryRevalidation> = parse_vec(revalidations)?;
+            let identity_bindings: Vec<cache_core::identity::IdentityBinding> =
+                parse_vec(identity_bindings)?;
             let created_at_ms = parse_timestamp(created_at_ms, "enqueue timestamp")?;
             let mut projection_mutations = optimistic_projection_mutations(&data, created_at_ms);
             projection_mutations.extend(
@@ -1634,6 +1703,17 @@ impl CacheEngine {
                 .await
                 .map_err(|error| state.mail_projection_error(error))?,
             ));
+            projection_mutations.extend(
+                soup_filter_cache_adapter::mail::draft_optimistic_updates(
+                    state.engine_mut()?.storage(),
+                    &query,
+                    operation_name.as_deref(),
+                    &vars,
+                    &data,
+                )
+                .await
+                .map_err(|error| state.mail_projection_error(error))?,
+            );
             let projection_mutations = soup_filter_cache_adapter::properties::augment_optimistic(
                 state.engine_mut()?.storage(),
                 &query,
@@ -1666,6 +1746,7 @@ impl CacheEngine {
                         link_patches: &link_patches,
                         revalidations: &revalidations,
                         created_at_ms,
+                        identity_bindings: &identity_bindings,
                     },
                     claim,
                     projection_mutations,
@@ -1698,6 +1779,7 @@ impl CacheEngine {
                 affected_ops: ops.borrow().names(result.write_result.affected_ops),
                 reset: result.write_result.reset,
                 revalidations: result.write_result.revalidations,
+                mutation_uuid: result.write_result.mutation_uuid,
                 initial_claim,
             })
         })
@@ -1886,6 +1968,15 @@ impl CacheEngine {
                 )
                 .await;
             let result = match state.engine_result(result)? {
+                CommitOptimisticWriteResult::Failed(result) => {
+                    JsCommitOptimisticWriteResult::Failed {
+                        error: result.error,
+                        replacement_transaction_id: result
+                            .replacement_transaction_id
+                            .map(|id| id.to_string()),
+                        result: js_write_result(result.write_result, &ops.borrow()),
+                    }
+                }
                 CommitOptimisticWriteResult::Committed(result) => {
                     JsCommitOptimisticWriteResult::Committed {
                         result: js_write_result(result, &ops.borrow()),

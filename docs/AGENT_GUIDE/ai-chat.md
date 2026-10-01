@@ -57,9 +57,26 @@ width without side padding, preserves its aspect ratio, and truncates long
 filenames in the header. The preview loads once the upload
 is ready, with a placeholder while it is being prepared. Any commentary the
 model added appears below the image.
+In a channel thread, where the bot's reply is plain message text with a
+mention chip rather than a tool card, the same image card renders beneath the
+message for every image document the reply mentions (see channels.md).
 Refused prompts, provider failures, and hosts without a Google Generative AI key
 display a failed tool call; the error tells the agent whether to rephrase, retry,
 or stop.
+
+## Ask AI entry points
+
+**Ask AI** in search (including Tab), the command menu, and mobile search opens
+an agent session. A nonempty search query is sent as the first prompt once the
+session is ready; an empty search opens an empty composer. Desktop search replaces
+its current split, while command-menu and mobile actions open a new split.
+
+**Ask Macro** and **Chat with Agent** on documents, PDFs, spreadsheets, email,
+channels, calls, and projects also open agent sessions. Their entity mention stays
+in the composer as an unsent draft. Spreadsheet mentions retain the current sheet
+and selected range; channel-message actions retain the referenced message.
+Add a question and press Send to submit that context. These actions do not create
+legacy cognition chats, regardless of the Agents workspace feature flag.
 
 ## Where chats live
 
@@ -212,6 +229,8 @@ the shimmer.
 - Chat agents' empty input cycles tips about connectors, skills, mentions, and
   agents; coding agents show **Describe what you want to build**. Type `@` for
   mentions and `/` for skills.
+  Check `/` with the Android software keyboard too: the skills menu should open
+  and filter while typing, without sending the draft.
 - Opening a conversation updates the URL based on that conversation's kind:
   `/app/agents/<id>` for Chat sessions, `/app/coders/<id>` for Code sessions,
   and `/app/agent-chats/<id>` for legacy chats. Reload and back/forward restore
@@ -312,9 +331,9 @@ The composer has one editable field. Its placeholder appears only while empty;
 placeholder updates and disabled-state changes preserve the editor and draft.
 
 The **Ask AI** button beside the mobile search field sends the typed query.
-With `enable-chat-v3-agents` on, it opens an agent session (`/app/agent/<id>`)
-and delivers the query as the first prompt. With the flag off, it opens a
-cognition chat (`/app/chat/<uuid>`) and sends the query.
+It opens an agent session and delivers the query as the first prompt, regardless
+of `enable-chat-v3-agents`. Mobile uses the agent session surface at
+`/app/agent/<id>`; desktop uses the Agents workspace.
 
 Almost every list surface (Home, Agents, Files, Tasks, Customers, Email) has a bottom
 composer with placeholder **`Ask AI, @mention anything`**. Click it, `type_text` the message,
@@ -371,14 +390,42 @@ documents:
 
 ## AI usage limits
 
-AI usage billing is enabled only in the dev environment (`dev.macro.com/app`,
-including a local frontend pointed at the dev backend). The backend enforces
-allowances and settles usage only in `Environment::Develop`. In production and
-local-backend environments, requests are not blocked by credits, spending caps,
-or failed-overage-payment state, and usage is recorded without settlement.
+Quota admission uses the backend's default-off `ENABLE_AI_USAGE_ENFORCEMENT`
+policy once configured by the host; it is independent of environment. Settlement
+(credit consumption and Stripe overage collection) is gated by the separate
+default-off `ENABLE_AI_USAGE_BILLING` policy, also independent of environment.
+With admission enabled, cognition chat
+and structured completion return 402 for exhausted allowance or 503 with
+`ai_billing_unavailable` when validation is unavailable. Neither starts AI work;
+chat admission also precedes chat/message creation. Existing model and chat
+permission failures take precedence over quota errors. Retry 503 later rather
+than treating it as approval or repeatedly sending the prompt.
+
+Automatic chat naming is admitted independently. If naming is denied or validation
+is unavailable, the successful chat continues with its existing/default title.
 Usage meters, credit controls, out-of-credit dialogs, and model usage multipliers
 are hidden outside frontend development mode. Normal paid-model access rules
-still apply everywhere.
+still apply everywhere. Backend enforcement does not depend on those frontend
+controls, and enabling it does not enable credit collection; that needs
+`ENABLE_AI_USAGE_BILLING`. There is no new upgrade prompt in this rollout.
+
+Session creation and spending controls also return 402/503 for admission failures.
+Waiting prompts are checked again before execution: exhaustion removes rejected
+work from the queue and resolves its announced reply as failed, publishing
+`agent_session.command_rejected` with the action ID and safe failure details.
+Billing unavailability retains waiting work for a later queue-driving event rather
+than retrying continuously. Already-running turns are not retroactively cancelled;
+Stop/cancel and non-spending controls remain usable. Direct ACP requests receive a
+protocol error with a stable `code` and `retryable` flag, not an HTTP status.
+
+A direct AI tool/MCP or AI-edit refusal is a failed tool result even if the outer
+transport succeeds. No worker/provider edit should happen after refusal. Ordinary
+manual editing, deterministic tools/imports, and the exempt Memory, AiProjection,
+CallSummary, and Dictation features are not blocked by quota. Optional naming or
+trigger inference may be skipped without blocking successful primary work; it
+must not make a fallback model call. Managed sessions use their persisted owner
+for quota, not a collaborating sender. Externally funded runtimes skip session
+quota, but Macro-funded tools and helpers still check independently.
 
 In dev, paid plans include a monthly AI allowance (Premium $40, Max $200, at Macro's
 usage rates). When it is used up and no credits or usage billing cover the
@@ -392,12 +439,41 @@ or turn on usage billing.
 Each team seat has its own allowance; unused allowance never moves between
 members. The team owner's prepaid credits and usage-billing cap are shared.
 
+### Quota manual checks
+
+Use an isolated local backend with local billing fixtures, not real hosted
+accounts. See [quota rollout and coverage](../AI_QUOTA_ENFORCEMENT.md) for setup
+and the full matrix. Record both browser behavior and the Network/protocol result;
+existing UI does not promise a dedicated quota dialog outside development mode.
+
+1. With the flag absent/false across all hosts, send a legacy chat and a managed
+   session prompt. Confirm ordinary behavior and new uncounted usage rows.
+2. With enforcement true and an exhausted paid fixture, select a Macro-funded
+   model and send from Home, a legacy chat, and a doc-scoped chat. Confirm 402 with
+   a stable denial code, no new orphaned session/chat/message/stream, no provider
+   work, and usable retry/cancel controls.
+   Repeat with unavailable billing: expect 503 `ai_billing_unavailable`, not success
+   or repeated automatic sends. Existing permission/model-access errors still win.
+3. Start a managed turn while allowed, queue a follow-up, then exhaust the owner
+   before dispatch. Check queue removal, the failed announced reply (when present),
+   and the matching `agent_session.command_rejected` action ID. Do not expect a
+   completed runtime turn for rejected work. During an outage, check that waiting
+   work remains without a retry loop and that Stop still works.
+4. Invoke AI editing on an editable document and an independent AI tool with the
+   exhausted fixture. Confirm failed results and unchanged document content. Check
+   manual editing and dictation still work. A successful chat whose optional rename
+   is refused keeps its existing/default title rather than failing the chat.
+5. Set false consistently and restart/redeploy all local processes. Retry refused
+   work explicitly and confirm recovery, new uncounted rows, and unchanged counted
+   history. Do not erase history to simulate rollback or claim that rollback is a
+   quota reset. Check cancellation in both flag states.
+
 ## Start a doc-scoped chat
 
-Open a doc → side panel `Actions` → `Ask Macro`. Opens a chat pane with the document already
-attached as context (it appears as a link chip in the composer). New-chat pane shows tips:
-`@mention anything` to attach entities, `Ctrl+Enter` to send in the background (you get
-notified when the AI responds). Legacy Home background sends preserve the submitted tool selection.
+Open a doc → side panel `Actions` → `Ask Macro`. Opens an agent session with the
+document already mentioned as context (a link chip in the composer). The mention
+is an unsent draft: add a question, then Send. Legacy Home background sends
+preserve the submitted tool selection.
 
 ## Composer anatomy (a11y)
 
@@ -1036,6 +1112,21 @@ and built-in skills with `ListSkills`, then load the full instructions with
 recently updated visible skill documents plus built-ins; `SearchSkills` finds a
 skill by name, including older skills outside that list. A skill mention's id can
 also be passed directly to `ReadSkill`.
+
+## Configuring agents from a conversation
+
+The built-in **Configure Agent** skill walks an agent through changing another
+agent's instructions or settings on the user's behalf. `ListAgents` returns every
+agent the user can manage with its current instructions, runtime, model, channel
+scope, connected apps, permission choice, and coding/chat mode; `ConfigureAgent`
+patches only the fields it is given. A selected MCP app slug must be a real
+Pipedream app; an invented slug is rejected and the agent is left unchanged.
+Instructions are replaced whole, so the skill
+has the agent edit the current text and send the complete result. Changes reach
+sessions opened afterwards; running sessions keep the instructions they started
+with. Both tools render as expandable rows in chat, agent sessions, and channel
+replies; the profile fields (name, handle, description, picture) stay with
+`ConfigureBot`.
 
 The chat's **Read skill** tool row expands to show the full instructions. When
 verifying this flow, invoke a saved skill by name, confirm the agent reads it,

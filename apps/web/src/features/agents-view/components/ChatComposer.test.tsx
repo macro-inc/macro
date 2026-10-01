@@ -138,6 +138,15 @@ function type(text: string) {
 }
 
 describe('Chat session input', () => {
+  it('seeds the supplied context without sending it', () => {
+    const send = vi.fn();
+    render(() => (
+      <ChatSessionInput initialInput="Document context" onSend={send} />
+    ));
+    expect(editor.setMarkdown).toHaveBeenCalledWith('Document context');
+    expect(send).not.toHaveBeenCalled();
+  });
+
   it('shows only the model control and submits a trimmed follow-up', () => {
     const send = vi.fn();
     render(() => (

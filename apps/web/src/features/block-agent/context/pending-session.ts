@@ -44,6 +44,8 @@ export type PendingSession = {
    * opens rather than once the create has answered.
    */
   prompt: string | undefined;
+  /** Unsent composer context supplied by an Ask AI action. */
+  initialInput?: string;
 };
 
 const pending = new Map<string, PendingSession>();
@@ -54,6 +56,8 @@ const pending = new Map<string, PendingSession>();
 export type StartPendingSessionOptions = {
   /** Persisted managed persona to run; omitted for Macro Coder. */
   botId?: string;
+  /** Unsent composer context; never issued as a prompt. */
+  initialInput?: string;
   /** First prompt. */
   prompt?: string;
   /** Uploaded SFS files delivered with the first prompt. */
@@ -90,6 +94,7 @@ export function startPendingSession(
     failed: () => error() !== undefined,
     error,
     prompt: options.prompt?.trim() || undefined,
+    initialInput: options.initialInput,
   });
 
   void agentHarnessServiceClient

@@ -51,7 +51,7 @@ fn quick_access_document(name: &str, timestamp: u64) -> Record {
     document
 }
 
-fn queued(label: &str) -> NewQueuedMutation {
+pub(super) fn queued(label: &str) -> NewQueuedMutation {
     NewQueuedMutation {
         uuid: uuid::Uuid::new_v4(),
         mutation: StoredMutation::new(
@@ -94,7 +94,7 @@ fn pending_projection(key: &str, owner: &str, updated_at: i64) -> PendingOptimis
     }
 }
 
-fn authoritative_projection(key: &str, owner: &str) -> predicate_index::IndexDocument {
+pub(super) fn authoritative_projection(key: &str, owner: &str) -> predicate_index::IndexDocument {
     let token = |value| Token::new(value).unwrap();
     predicate_index::IndexDocument {
         record_key: PredicateRecordKey::new(key).unwrap(),

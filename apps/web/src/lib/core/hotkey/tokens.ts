@@ -29,6 +29,7 @@ export const TOKENS = {
   unifiedList: {
     navigation: {
       parent: 'unifiedList.navigation.parent',
+      collapseGroup: 'unifiedList.navigation.collapseGroup',
       child: 'unifiedList.navigation.child',
     },
   },
@@ -148,6 +149,7 @@ export const TOKENS = {
     previousMessage: 'email.previousMessage',
     nextMessage: 'email.nextMessage',
     cancelReply: 'email.cancelReply',
+    trash: 'email.trash',
     blockSender: 'email.blockSender',
     markSenderSignal: 'email.markSenderSignal',
     markSenderNoise: 'email.markSenderNoise',

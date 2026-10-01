@@ -1,6 +1,7 @@
 import { channelsSearch } from '@app/features/channels-view/channels-route';
 import { useMobileSearchText } from '@app/features/command/mobile/use-mobile-search-text';
 import { driveSearch } from '@app/features/drive-view/primitives/drive-search';
+import { reminderSourceContent } from '@app/features/reminders/reminder-source';
 import type { FacetSelection } from '@app/features/soup/filters/facets/types';
 import { makePersistedState } from '@app/lib/persistence';
 import {
@@ -16,6 +17,7 @@ import {
   previewBlockTarget,
 } from '@components/app/previewTarget';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { isBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { useUserId } from '@core/context/user';
 import type { ContextProviderProps } from '@solid-primitives/context';
@@ -187,17 +189,27 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
   const [previewNavigationRequest, setPreviewNavigationRequest] =
     createSignal(0);
   const openPreview = (entity: PreviewSelection) => {
-    if (entity.type === 'calendar_event') {
-      return openCalendarEvent(entity);
-    }
+    if (entity.type === 'calendar_event') return openCalendarEvent(entity);
     if (entity.type === 'reminder') {
-      navigate(
-        { route: homeReminderRoute, params: { reminderId: entity.id } },
-        { search: withTab(homeDetailSearch()) }
-      );
-      return true;
+      const source = reminderSourceContent(entity);
+      if (!source) {
+        navigate(
+          { route: homeReminderRoute, params: { reminderId: entity.id } },
+          { search: withTab(homeDetailSearch()) }
+        );
+        return true;
+      }
+      return openPreviewTarget({
+        blockType: resolveBlockAlias(source.type),
+        blockId: source.id,
+        aliasContext: isBlockAlias(source.type)
+          ? { alias: source.type, baseType: resolveBlockAlias(source.type) }
+          : undefined,
+      });
     }
-    const target = previewBlockTarget(entity);
+    return openPreviewTarget(previewBlockTarget(entity));
+  };
+  const openPreviewTarget = (target: PreviewBlockTarget) => {
     if (!selectPreview.canSelect(target)) return false;
     const current = previewTarget();
     if (

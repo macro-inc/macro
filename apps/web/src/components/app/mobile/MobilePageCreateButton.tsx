@@ -4,7 +4,7 @@ import {
   setCreateMenuOpen,
   useCreateMenuBlocks,
 } from '@app/features/command/Launcher';
-import { openCreateCompanyModal } from '@app/features/companies/CreateCompanyModal';
+import { openCreateCompanyModal } from '@app/features/crm/crm-create';
 import { hapticImpact } from '@core/mobile/haptics';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import BellIcon from '@phosphor/bell.svg';

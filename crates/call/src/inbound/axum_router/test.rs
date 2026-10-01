@@ -106,6 +106,7 @@ mod public_routes {
     async fn malformed_tokens_are_rejected_without_touching_the_service() {
         for (method, uri) in [
             ("GET", "/join/not-a-token"),
+            ("GET", "/join/not-a-token/participants"),
             ("POST", "/join/not-a-token"),
             // Right length, wrong alphabet.
             ("GET", &format!("/join/{}", "g".repeat(64))[..]),
@@ -134,6 +135,7 @@ mod public_routes {
         let valid_token = "a".repeat(64);
         for (method, uri) in [
             ("GET", format!("/join/{valid_token}")),
+            ("GET", format!("/join/{valid_token}/participants")),
             ("POST", format!("/join/{valid_token}")),
             ("POST", format!("/join/{valid_token}/leave")),
         ] {

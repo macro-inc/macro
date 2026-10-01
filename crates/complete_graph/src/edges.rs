@@ -377,6 +377,18 @@ where
             .map(|timestamp| timestamp.to_rfc3339()))
     }
 
+    /// Complete body-free metadata for local draft edits and discards.
+    async fn mail_draft_state(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Option<graphql_email::GraphqlMailDraftState>> {
+        Ok(load_email_thread_mail_projection::<ER>(ctx, self.thread_id)
+            .await?
+            .draft_state
+            .clone()
+            .map(Into::into))
+    }
+
     /// Latest eligible message for ALL, INBOX, Calendar and Shared, without bodies.
     async fn mail_all_preview(
         &self,

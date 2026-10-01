@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use ai_billing::{AiAdmissionService, AiFeature, DisabledAiAdmissionService};
 use async_trait::async_trait;
 use messages::domain::{api::MessageReader, events::MessagePostedMetadata};
 use uuid::Uuid;
@@ -26,6 +27,7 @@ pub struct MentionOrInferredDetector<I> {
     messages: Arc<dyn MessageReader>,
     access: Arc<dyn ConversationAccess>,
     classifier: Arc<I>,
+    admission: Arc<dyn AiAdmissionService>,
 }
 
 impl<I> MentionOrInferredDetector<I>
@@ -42,7 +44,14 @@ where
             messages,
             access,
             classifier,
+            admission: Arc::new(DisabledAiAdmissionService),
         }
+    }
+
+    /// Configure admission for optional inference; explicit mentions need no model.
+    pub fn with_admission(mut self, admission: Arc<dyn AiAdmissionService>) -> Self {
+        self.admission = admission;
+        self
     }
 
     /// Load the thread (parent + replies, oldest-first) as a transcript. The
@@ -98,6 +107,14 @@ where
         if !transcript.iter().any(|message| message.from_agent) {
             return None;
         }
+
+        self.admission
+            .admit(requesting_user, AiFeature::ChannelBot)
+            .await
+            .inspect_err(|error| {
+                tracing::info!(code = error.code(), "skipping bot trigger inference");
+            })
+            .ok()?;
 
         match self
             .classifier

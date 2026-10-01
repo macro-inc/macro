@@ -1,3 +1,4 @@
+mod admission;
 mod user_cleanup;
 
 use super::*;
@@ -121,12 +122,20 @@ impl ScheduledActionRepo for FakeRepo {
 #[derive(Default)]
 pub(crate) struct FakeExecutor {
     calls: Mutex<Vec<ScheduledAction>>,
+    admission_error: Mutex<Option<ai_billing::AiAdmissionError>>,
+}
+
+pub(crate) fn set_admission_error(service: &TestService, error: ai_billing::AiAdmissionError) {
+    *service.executor.admission_error.lock().unwrap() = Some(error);
 }
 
 impl ScheduledActionExecutor for FakeExecutor {
     async fn execute_action(&self, action: ScheduledAction) -> Result<InProgressExecution> {
         let action_id = action.id.unwrap();
         self.calls.lock().unwrap().push(action);
+        if let Some(error) = *self.admission_error.lock().unwrap() {
+            return Err(error.into());
+        }
         Ok(InProgressExecution {
             action_id,
             chat_id: Some("manual-chat".into()),

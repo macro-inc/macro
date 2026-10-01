@@ -11,6 +11,7 @@ import {
   openEntityInSplitFromUnifiedList,
   trashEmails,
 } from '@app/features/next-soup/utils';
+import { EmailReminderStatus } from '@app/features/reminders/email-reminder-status';
 import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
 import { getPermissions } from '@core/component/SharePermissions';
 import { toast } from '@core/component/Toast/Toast';
@@ -295,6 +296,21 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
     tools,
     menuTools: emailActions,
     controls: {
+      get reminder() {
+        const entity = emailEntity();
+        return entity && isOwnThread() ? (
+          <EmailReminderStatus
+            entity={entity}
+            onSaved={async () => {
+              const navigation = props.listNavigation;
+              if (navigation?.afterReminderSaved)
+                await navigation.afterReminderSaved();
+              else if (navigation?.canNext()) navigation.next();
+              else if (navigation?.canPrevious()) navigation.previous();
+            }}
+          />
+        ) : undefined;
+      },
       get isOwnThread() {
         return isOwnThread();
       },

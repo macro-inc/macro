@@ -314,6 +314,16 @@
               }
             }
           },
+          "402": {
+            "description": "AI allowance exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
+                }
+              }
+            }
+          },
           "403": {
             "description": "",
             "content": {
@@ -350,6 +360,16 @@
               "text/plain": {
                 "schema": {
                   "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "AI usage validation unavailable; retry later",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
                 }
               }
             }
@@ -836,6 +856,16 @@
               }
             }
           },
+          "402": {
+            "description": "AI allowance exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
+                }
+              }
+            }
+          },
           "403": {
             "description": "",
             "content": {
@@ -859,6 +889,21 @@
           "500": {
             "description": "",
             "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "AI usage validation unavailable, or replica draining; retry later",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
+                }
+              },
               "text/plain": {
                 "schema": {
                   "type": "string"
@@ -2308,6 +2353,21 @@
           }
         }
       },
+      "AiAdmissionErrorBody": {
+        "type": "object",
+        "description": "Public admission error payload. Handlers with additional fields can reuse the\ndomain error's code and message and [`admission_status`].",
+        "required": ["error", "code"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Stable denial or unavailability code."
+          },
+          "error": {
+            "type": "string",
+            "description": "Human-readable explanation, without internal billing diagnostics."
+          }
+        }
+      },
       "BotId": {
         "type": "string"
       },
@@ -2648,6 +2708,10 @@
                 "description": "Entity the mentioning message was posted in."
               }
             ]
+          },
+          "reuseOriginMessage": {
+            "type": "boolean",
+            "description": "Update the existing bot response reserved by a task assignment."
           },
           "threadId": {
             "type": ["string", "null"],

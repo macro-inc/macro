@@ -1,6 +1,6 @@
 //! Plans, the margin math, billing periods, and the API-facing snapshot.
 
-use ai_usage::AiFeature;
+pub use ai_usage::NON_BILLABLE_AI_FEATURES;
 use chrono::{DateTime, Datelike, Months, TimeZone, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -9,6 +9,27 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use thiserror::Error;
 use utoipa::ToSchema;
+
+/// Whether usage past a payer's allowance is settled: prepaid credits consumed
+/// and overage collected through Stripe. Hosts load it from
+/// `ENABLE_AI_USAGE_BILLING` at startup. It is independent of quota admission
+/// ([`AiUsageEnforcement`](ai_usage::AiUsageEnforcement)) and of the deployment
+/// environment.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum AiUsageBilling {
+    /// Never consume credits, reserve overage, or collect payment.
+    #[default]
+    Disabled,
+    /// Settle uncovered usage from credits, then collect overage.
+    Enabled,
+}
+
+impl AiUsageBilling {
+    /// Whether settlement is enabled.
+    pub const fn is_enabled(self) -> bool {
+        matches!(self, Self::Enabled)
+    }
+}
 
 /// Persisted usage-policy identity, independent of purchase availability or today's roles.
 /// A verified period activation selects this value; legacy records are never repriced.
@@ -26,15 +47,6 @@ pub enum UsagePolicy {
 pub const TARGET_GROSS_MARGIN_BPS: i64 = 6_000;
 
 const BPS_PER_UNIT: i64 = 10_000;
-
-/// Features whose provider costs are recorded but never consume allowances,
-/// prepaid credits, or overage. Dictation is the Whispr transcription feature.
-pub const NON_BILLABLE_AI_FEATURES: [AiFeature; 4] = [
-    AiFeature::Memory,
-    AiFeature::AiProjection,
-    AiFeature::CallSummary,
-    AiFeature::Dictation,
-];
 
 /// Legacy only: convert a provider cost in USD to Macro's list rate in whole cents,
 /// rounding up so fractional cents never accrue in the customer's favour.

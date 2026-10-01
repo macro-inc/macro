@@ -102,6 +102,14 @@ only the send control, with no format or discard button; Escape cancels the edit
 The iOS share sheet keeps its editor above the attachment and formatting controls.
 Check this arrangement at both phone and tablet widths.
 
+On Android, tap `@` on the software keyboard in an empty channel composer or
+after a space: the mentions menu should open above the keyboard. Type a name to
+filter, then tap a result to insert one mention without sending the draft.
+An `@` inside a word stays literal text. Check hardware-keyboard input too;
+it should open only one menu.
+The same software-keyboard check applies to `:` for emoji and `/` for formatting
+commands: type a search and tap a result without sending the draft.
+
 The shared `@` menu also offers `Recent agent sessions` after Channels and
 before Companies (the latest 500 accessible sessions, searchable by title or
 persona). These inline chips show the shared
@@ -148,6 +156,18 @@ bot asks before scheduling a specific clock time. Within the rollout, `@Macro` �
 `@coder` / `@cursor` / `@codex` / `@claude` for everyone — opens
 an agent session; follow-up
 `@` mentions of that bot in the same thread route to it.
+When the backend is configured with AI usage enforcement, a rejected classic
+`@Macro` request gets a thread reply explaining the allowance failure (for example,
+`ai_allowance_exhausted`) or temporary validation failure (`ai_billing_unavailable`),
+without a lingering thinking placeholder. This also applies in document discussions.
+Optional unmentioned follow-up inference, including attached-image descriptions,
+is skipped when admission fails; silence does not mean the request was approved.
+Explicit mentions and reply-target routing still reach downstream execution checks.
+To verify after backend wiring, test an exhausted account and unavailable billing:
+explicit classic mentions should show the failure, while unmentioned follow-ups
+should not generate responses. Repeat with an attached image. Enforcement is off
+by default; browser verification requires a configured backend.
+
 A follow-up sent while that session is still working stops the current turn,
 posts a new Magic Chip on the follow-up message, and steers the agent with
 that text — the chip appears at the follow-up, not after the cancelled turn
@@ -247,7 +267,16 @@ for a tool draft, `Decline · Submit · Open in session` (or `Open` for a URL) f
 Only the session's owner can act; other viewers see the question read-only and the header
 names who is being waited on. Once answered, the area shows the agent's passage again.
 Agent replies may contain mention chips (`<m-document-mention>`) that render like any
-other channel mention. With GraphQL enabled, document mentions and preview cards load
+other channel mention. A mention of an image document (PNG, JPG, GIF, SVG, WebP —
+including a picture the bot made with `GenerateImage`) also unfurls beneath the
+message text as an image card: a header with the filename above the picture,
+inside the message's `[data-message-mentioned-images]` element. The chip stays;
+clicking the card opens the image document in a split. The same image mentioned
+twice unfurls once, mentions of other document types, channels, and chats never
+unfurl, and inaccessible images show nothing. This applies to every channel
+message, not only bot replies, so a person sharing an image document by `@`
+mention sees the same card. The preview shows `Preparing preview` until storage
+has the bytes. With GraphQL enabled, document mentions and preview cards load
 in bounded batches, including task status/priority/assignees and the viewer's edit
 permission. Task badges can appear with the initial preview rather than waiting for
 separate properties/document-metadata requests; cached titles may appear first while
@@ -414,6 +443,35 @@ including mentions and reactions, only after the split is opened or reused.
 Deferred navigation waits until the destination is applied; an unavailable split
 must leave unread state unchanged. Join-only channels remain
 blocked after hydration, including on mobile.
+
+Right-clicking a favorite opens the same menu as its channel's row in the
+sections below — `Mark Read`, `Unfavorite`, `Mute notifications`, `Copy Link`,
+and the label actions when channel labels are enabled — and focuses the
+favorite row rather than the channel's own row.
+
+### Threads tab
+
+The `enable-channel-threads-preview` feature flag adds a third `Threads` tab.
+It is on in development; `VITE_ENABLE_CHANNEL_THREADS_PREVIEW` overrides it
+locally. The rail shows an `All threads` row above a `Conversations` section
+with the same sort and `+` controls as the All tab's sections. Conversations
+lists only channels and DMs that hold threads the user takes part in; it pages
+through the user's threads and loads their channels, so scrolling the section
+reveals more. Selecting a row filters the main pane instead of opening the
+conversation. `All threads` clears the filter.
+
+The main pane is a virtualized list of channel threads the user takes part in,
+newest reply first. It loads more as it nears the end and returns to the top
+when the selected conversation changes. Messages the user sent that have no
+replies are hidden. Each card shows the root message with its replies collapsed
+the same way as a channel timeline: the first reply groups, then a
+`N more replies` control that expands the rest in place. In `All threads`, each
+card is labelled with its conversation. An icon button (`View in channel`)
+appears at a card's top right on hover or focus, and always on touch; it
+switches back to `All` and opens the channel at that thread. Shift-clicking a
+conversation row opens it in a new split. The filter lives in the view's state,
+not the URL: it survives back/forward within the split and reloads, but a
+copied link opens the Threads tab on `All threads`.
 
 ### Channel labels
 
@@ -752,8 +810,14 @@ In the Chat workspace — and wherever a channel opens inline inside another
 view's detail stack (a channel mention followed from the email view, say) — the
 conversation renders an inline detail whose top bar holds the channel avatar
 and name, the same tab strip, live viewer avatars, and the `Call` and
-`Ask Macro` buttons. The title `...` menu (rename, channel picture) is not
-offered there; open the channel as a split (shift-click a rail row) to use it.
+`Ask Macro` buttons. In Chat an ellipsis follows the name and opens the same
+entity actions as right-clicking the conversation's rail row — `Open in new
+split`, `Rename`, `Favorite`/`Unfavorite`, `Snooze notifications…`, `Mute
+notifications`, `Remind me`, `Copy Link`, `Copy ID` — so a channel can be
+favorited without finding its row. A channel inlined in another view's detail
+stack has no such menu. Channel-picture actions are in neither: they belong to
+the split's own title `...` menu, so open the channel as a split (shift-click a
+rail row) to reach them.
 
 `Calls` tab: recordings, transcriptions, and summaries for this channel. Click a
 row to open the call. The search field above the list matches call names and

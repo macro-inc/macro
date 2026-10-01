@@ -64,8 +64,10 @@ vi.mock(
 );
 
 vi.mock('@core/component/LexicalMarkdown/builder/MarkdownShell', () => ({
-  MarkdownShell: (props: { disabled?: boolean }) => (
-    <div data-testid="agent-input-editor" data-disabled={props.disabled} />
+  MarkdownShell: (props: { disabled?: boolean; initialValue?: string }) => (
+    <div data-testid="agent-input-editor" data-disabled={props.disabled}>
+      {props.initialValue}
+    </div>
   ),
 }));
 
@@ -118,6 +120,17 @@ beforeEach(() => {
   editor.enter = undefined;
   editor.change = undefined;
   vi.mocked(isTouchDevice).mockReturnValue(false);
+});
+
+it('seeds context without sending it and submits it only on Send', () => {
+  const onSend = vi.fn();
+  render(() => <AgentInput initialInput="Document context" onSend={onSend} />);
+  expect(screen.getByTestId('agent-input-editor').textContent).toBe(
+    'Document context'
+  );
+  expect(onSend).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+  expect(onSend).toHaveBeenCalledWith('Document context', []);
 });
 
 describe('on a touch device', () => {

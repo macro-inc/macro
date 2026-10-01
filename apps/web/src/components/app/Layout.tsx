@@ -12,8 +12,10 @@ import {
   setCreateMenuOpen,
 } from '@app/features/command/Launcher';
 import { SearchState } from '@app/features/command/mobile/mobileSearchState';
-import { CreateCompanyModal } from '@app/features/companies/CreateCompanyModal';
-import { CreateContactModal } from '@app/features/companies/CreateContactModal';
+import {
+  CreateCompanyModal,
+  CreateContactModal,
+} from '@app/features/crm/crm-create';
 import { DevStatusBar } from '@app/features/devtools/DevStatusBar';
 import { GlobalBulkEditEntityModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
 import {
@@ -28,7 +30,7 @@ import { ReminderComposerModal } from '@app/features/reminders/ReminderComposerM
 import { MobileSettingsProvider } from '@app/features/settings/context/mobile-settings';
 import { MobileSettings } from '@app/features/settings/MobileSettings';
 import { useOnboardingV4Flag } from '@app/features/setup/flow/useOnboardingV4Flag';
-import { IosShareSheet } from '@app/features/sharing/ios-share-sheet/IosShareSheet';
+import { NativeShareSheet } from '@app/features/sharing/native-share-sheet/NativeShareSheet';
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { mountGlobalFocusListener } from '@app/signal/focus';
 import { AutomationComposer } from '@block-automation/component';
@@ -221,7 +223,7 @@ function LayoutInner(props: RouteSectionProps) {
             <PropertyEditorModal />
           </Suspense>
           <GlobalBulkEditEntityModal />
-          <IosShareSheet />
+          <NativeShareSheet />
           <MacroMcpSetupModal />
           <CreateChannelModal />
           <CreateCompanyModal />
