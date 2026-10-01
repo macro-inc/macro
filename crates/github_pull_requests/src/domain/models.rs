@@ -26,6 +26,8 @@ pub use key::GithubKey;
 pub use pull_request::{
     EnrichGithubPullRequestsProxyRequest, EnrichGithubPullRequestsResponse,
     EnrichedGithubPullRequest, GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE,
+    GithubMergeMethod, GithubMergeOutcome, GithubMergeRejection, GithubPullRequestMerge,
+    GithubRepositoryMergeSettings, MergeGithubPullRequestRequest, MergeGithubPullRequestResponse,
     GithubPullRequestCheckRun, GithubPullRequestComment, GithubPullRequestDetails,
     GithubPullRequestLabel, GithubPullRequestRef, GithubPullRequestReview,
     GithubPullRequestReviewDecision, GithubPullRequestReviewState, GithubPullRequestStatus,

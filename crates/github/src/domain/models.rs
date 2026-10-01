@@ -17,6 +17,8 @@ pub(crate) use app_jwt::app_jwt;
 pub use github_pull_requests::domain::models::{
     EnrichGithubPullRequestsProxyRequest, EnrichGithubPullRequestsResponse,
     EnrichedGithubPullRequest, GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE, GitRef, GithubKey,
+    GithubMergeMethod, GithubMergeOutcome, GithubMergeRejection, GithubPullRequestMerge,
+    GithubRepositoryMergeSettings, MergeGithubPullRequestRequest, MergeGithubPullRequestResponse,
     GithubPullRequestCheckRun, GithubPullRequestComment, GithubPullRequestDetails,
     GithubPullRequestLabel, GithubPullRequestRef, GithubPullRequestReview,
     GithubPullRequestReviewState, GithubPullRequestStatus, GithubPullRequestUser, latest_reviews,
@@ -78,4 +80,13 @@ pub enum GithubError {
     /// what they report about other people's accounts.
     #[error("no GitHub App installation for this user and repository")]
     RepositoryUnavailable,
+    /// GitHub declined to merge the pull request. The message is GitHub's
+    /// own and is written for the person who asked, so it is safe to show.
+    #[error("GitHub declined to merge the pull request: {message}")]
+    PullRequestMergeRejected {
+        /// Why GitHub declined.
+        rejection: GithubMergeRejection,
+        /// GitHub's message for the user.
+        message: String,
+    },
 }
