@@ -1,6 +1,6 @@
 import { getDefaultTimezone } from '@core/util/cron';
 import { parseTime, useDateSearch } from '@core/util/dateSearch/useDateSearch';
-import { ActionDialogShell, Button, Input } from '@ui';
+import { ActionDialogShell, Button, Input, SegmentedControl } from '@ui';
 import {
   createSignal,
   createUniqueId,
@@ -43,6 +43,19 @@ export function EmailReminderForm(props: {
   const now = new Date();
   const zone = getDefaultTimezone();
   const presets = reminderQuickPresets(now);
+  const presetTime = (at: Date) =>
+    new Intl.DateTimeFormat(undefined, {
+      timeZone: zone,
+      hour: 'numeric',
+      minute: '2-digit',
+    }).format(at);
+  const presetDay = (at: Date) =>
+    new Intl.DateTimeFormat(undefined, {
+      timeZone: zone,
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+    }).format(at);
   const seed = props.initialTime
     ? new Date(props.initialTime)
     : presets[0].date;
@@ -128,7 +141,7 @@ export function EmailReminderForm(props: {
               aria-invalid={!valid()}
             />
             <Show when={!query().trim()}>
-              <div class="grid min-w-0 grid-cols-2 gap-2">
+              <div class="grid min-w-0 grid-cols-1 gap-2 min-[480px]:grid-cols-2">
                 <For each={presets}>
                   {(preset) => (
                     <Button
@@ -138,12 +151,14 @@ export function EmailReminderForm(props: {
                           ? 'accent'
                           : 'outline'
                       }
-                      class="h-auto min-h-11 min-w-0 flex-col items-start px-3 py-2 text-left whitespace-normal"
+                      class="h-auto min-h-11 min-w-0 justify-between gap-x-3 px-3 py-2 text-left whitespace-normal min-[480px]:flex-col min-[480px]:items-start"
                       onClick={() => choose(preset.date)}
                     >
                       <span class="text-xs">{preset.label}</span>
-                      <span class="max-w-full truncate text-xxs text-ink-muted">
-                        {formatReminderInstant(preset.date, zone, now)}
+                      <span class="text-right text-xxs text-ink-muted min-[480px]:text-left">
+                        {preset.id === 'next-week'
+                          ? `${presetDay(preset.date)} · ${presetTime(preset.date)}`
+                          : presetTime(preset.date)}
                       </span>
                     </Button>
                   )}
@@ -190,33 +205,27 @@ export function EmailReminderForm(props: {
             </Show>
             <p class="text-xs text-ink-muted" role="status">
               {valid()
-                ? `${formatReminderInstant(selected()!, zone, now)} · ${zone}`
+                ? formatReminderInstant(selected()!, zone, now)
                 : 'Choose a future time. Times skipped by a clock change are unavailable.'}
             </p>
-            <div
-              class="flex flex-wrap gap-x-4 gap-y-2 text-sm"
-              role="radiogroup"
+            <SegmentedControl<EmailReminderCondition>
               aria-label="Reminder condition"
-            >
-              <label class="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name={`${id}-condition`}
-                  checked={condition() === 'if_no_reply'}
-                  onChange={() => setCondition('if_no_reply')}
-                />
-                If no reply
-              </label>
-              <label class="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name={`${id}-condition`}
-                  checked={condition() === 'regardless'}
-                  onChange={() => setCondition('regardless')}
-                />
-                Regardless
-              </label>
-            </div>
+              class="self-start"
+              value={condition()}
+              onChange={setCondition}
+              options={[
+                {
+                  value: 'if_no_reply',
+                  label: 'If no reply',
+                  disabled: props.pending,
+                },
+                {
+                  value: 'regardless',
+                  label: 'Regardless',
+                  disabled: props.pending,
+                },
+              ]}
+            />
           </fieldset>
           <Show when={props.error}>
             <p role="alert" class="text-xs text-failure-ink">
