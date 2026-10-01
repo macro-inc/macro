@@ -67,6 +67,7 @@ import {
   unreadFilterFn,
 } from '@entity';
 import { useQueryClient } from '@queries/client';
+import { queryReadyGate } from '@queries/gate';
 import { invalidateUserNotifications } from '@queries/notification/user-notifications';
 import { useReminderCollectionQuery } from '@queries/reminders/collection';
 import { createGroupedSoupQueries } from '@queries/soup/grouped/create-grouped-soup-queries';
@@ -968,7 +969,7 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
     completed: queryFilters.state.include.reminderCompleted,
   }));
   const reminderCollectionData = () =>
-    reminderCollection.isSuccess ? reminderCollection.data : undefined;
+    queryReadyGate(reminderCollection) ? reminderCollection.data : undefined;
   const reminderSource = {
     data: reminderCollectionData,
     error: () => reminderCollection.error,
