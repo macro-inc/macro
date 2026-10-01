@@ -17,6 +17,10 @@ import type {
   ContactMentionNode,
 } from './nodes/ContactMentionNode';
 import type {
+  CursorSystemNotificationDecoratorProps,
+  CursorSystemNotificationNode,
+} from './nodes/CursorSystemNotificationNode';
+import type {
   DateMentionDecoratorProps,
   DateMentionNode,
 } from './nodes/DateMentionNode';
@@ -194,6 +198,10 @@ export interface NodeDecoratorMap {
   MagicChipNode: {
     klass: typeof MagicChipNode;
     props: MagicChipDecoratorProps;
+  };
+  CursorSystemNotificationNode: {
+    klass: typeof CursorSystemNotificationNode;
+    props: CursorSystemNotificationDecoratorProps;
   };
 }
 

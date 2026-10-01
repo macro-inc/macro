@@ -1,7 +1,7 @@
 use super::*;
 use crate::domain::models::{
     GeneratedImage, ImageAspectRatio, ImageReference, ReadImageError, ReferenceImage,
-    SaveImageError,
+    SaveImageError, StoredImage,
 };
 use crate::domain::ports::UnconfiguredImageGenerator;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -9,7 +9,7 @@ use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
-const DOCUMENT_ID: Uuid = Uuid::from_u128(0x123);
+const STATIC_FILE_ID: Uuid = Uuid::from_u128(0x123);
 const PNG: &[u8] = b"\x89PNG\r\n\x1a\nfake";
 const DOCUMENT_REFERENCE: ImageReference = ImageReference::Document(Uuid::from_u128(0x456));
 const STATIC_REFERENCE: ImageReference = ImageReference::StaticFile(Uuid::from_u128(0x789));
@@ -23,21 +23,22 @@ fn principal() -> CreationPrincipal {
 
 #[derive(Default)]
 struct RecordingStore {
-    saves: Mutex<Vec<(CreationPrincipal, NewImageDocument)>>,
-    deny: bool,
+    saves: Mutex<Vec<NewStaticImage>>,
+    fail: bool,
 }
 
-impl ImageDocumentStore for Arc<RecordingStore> {
-    async fn save_image(
-        &self,
-        principal: &CreationPrincipal,
-        image: NewImageDocument,
-    ) -> Result<Uuid, SaveImageError> {
-        if self.deny {
-            return Err(SaveImageError::Unauthorized);
+impl ImageStore for Arc<RecordingStore> {
+    async fn save_image(&self, image: NewStaticImage) -> Result<StoredImage, SaveImageError> {
+        if self.fail {
+            return Err(SaveImageError::Internal(rootcause::report!(
+                "upload failed"
+            )));
         }
-        self.saves.lock().unwrap().push((principal.clone(), image));
-        Ok(DOCUMENT_ID)
+        self.saves.lock().unwrap().push(image);
+        Ok(StoredImage {
+            id: STATIC_FILE_ID,
+            url: "https://static.example/file/image".to_string(),
+        })
     }
 }
 
@@ -84,30 +85,25 @@ fn png() -> GeneratedImage {
     }
 }
 
-fn request(prompt: &str, file_name: &str) -> NewGeneratedImage {
+fn request(prompt: &str) -> NewGeneratedImage {
     NewGeneratedImage {
         prompt: prompt.to_string(),
         aspect_ratio: Some(ImageAspectRatio::Widescreen),
-        file_name: Some(file_name.to_string()),
-        project: None,
         reference_images: Vec::new(),
     }
 }
 
 #[tokio::test]
-async fn generates_then_saves_with_the_delegated_identity() {
+async fn generates_then_uploads_bytes_and_returns_the_static_file() {
     let store = Arc::new(RecordingStore::default());
     let generator = Arc::new(FakeGenerator::returning(png()));
     let service = ImageGenerationServiceImpl::new(generator.clone(), store.clone());
     let created = service
-        .create_generated_image(
-            &principal(),
-            request("  a lighthouse at dusk ", "Lighthouse"),
-        )
+        .create_generated_image(&principal(), request("  a lighthouse at dusk "))
         .await
         .unwrap();
-    assert_eq!(created.document_id, DOCUMENT_ID);
-    assert_eq!(created.file_name, "Lighthouse.png");
+    assert_eq!(created.static_file.id, STATIC_FILE_ID);
+    assert_eq!(created.static_file.url, "https://static.example/file/image");
     assert_eq!(created.mime_type, "image/png");
     assert_eq!(created.size_bytes, PNG.len());
     assert_eq!(created.note.as_deref(), Some("A calm scene."));
@@ -121,71 +117,8 @@ async fn generates_then_saves_with_the_delegated_identity() {
     );
     let saves = store.saves.lock().unwrap();
     assert_eq!(saves.len(), 1);
-    assert_eq!(saves[0].0, principal());
-    assert_eq!(saves[0].1.bytes, PNG);
-    assert_eq!(saves[0].1.file_name, "Lighthouse.png");
-    assert!(saves[0].1.project.is_none());
-}
-
-#[tokio::test]
-async fn keeps_an_existing_image_extension_and_adds_the_generated_one_otherwise() {
-    for (file_name, mime_type, expected) in [
-        ("hero.png", "image/png", "hero.png"),
-        ("hero.PNG", "image/jpeg", "hero.PNG"),
-        ("hero", "image/jpeg", "hero.jpg"),
-        ("hero", "image/webp", "hero.webp"),
-        ("v1.2 draft", "image/png", "v1.2 draft.png"),
-        ("notes.md", "image/png", "notes.md.png"),
-    ] {
-        let generator = Arc::new(FakeGenerator::returning(GeneratedImage {
-            mime_type: mime_type.to_string(),
-            ..png()
-        }));
-        let service =
-            ImageGenerationServiceImpl::new(generator, Arc::new(RecordingStore::default()));
-        let created = service
-            .create_generated_image(&principal(), request("prompt", file_name))
-            .await
-            .unwrap();
-        assert_eq!(created.file_name, expected, "{file_name} / {mime_type}");
-    }
-}
-
-#[tokio::test]
-async fn names_the_document_after_the_prompt_when_no_name_is_given() {
-    for (prompt, file_name, expected) in [
-        (
-            "A red lighthouse on a rocky shore at dusk, flat vector",
-            None,
-            "A red lighthouse on a rocky.png",
-        ),
-        (
-            "Draw: \"Q3 revenue\" chart (bar)!",
-            Some("  "),
-            "Draw Q3 revenue chart bar.png",
-        ),
-        ("café-style sign", None, "café-style sign.png"),
-        ("!!! ???", None, "Generated image.png"),
-    ] {
-        let service = ImageGenerationServiceImpl::new(
-            Arc::new(FakeGenerator::returning(png())),
-            Arc::new(RecordingStore::default()),
-        );
-        let created = service
-            .create_generated_image(
-                &principal(),
-                NewGeneratedImage {
-                    prompt: prompt.to_string(),
-                    aspect_ratio: None,
-                    file_name: file_name.map(str::to_string),
-                    project: None,
-                    reference_images: Vec::new(),
-                },
-            )
-            .await
-            .unwrap();
-        assert_eq!(created.file_name, expected, "{prompt:?}");
-    }
+    assert_eq!(saves[0].bytes, PNG);
+    assert_eq!(saves[0].mime_type, "image/png");
 }
 
 #[tokio::test]
@@ -193,10 +126,7 @@ async fn rejects_bad_input_before_calling_the_provider() {
     let generator = Arc::new(FakeGenerator::returning(png()));
     let store = Arc::new(RecordingStore::default());
     let service = ImageGenerationServiceImpl::new(generator.clone(), store.clone());
-    for image in [
-        request("   ", "name"),
-        request(&"p".repeat(MAX_PROMPT_BYTES + 1), "name"),
-    ] {
+    for image in [request("   "), request(&"p".repeat(MAX_PROMPT_BYTES + 1))] {
         assert!(matches!(
             service.create_generated_image(&principal(), image).await,
             Err(GenerateImageError::BadRequest(_))
@@ -207,58 +137,66 @@ async fn rejects_bad_input_before_calling_the_provider() {
 }
 
 #[tokio::test]
-async fn provider_failures_create_no_document() {
+async fn provider_failures_upload_no_image() {
     let store = Arc::new(RecordingStore::default());
     let service = ImageGenerationServiceImpl::new(
         Arc::new(FakeGenerator::refusing("blocked by safety filters")),
         store.clone(),
     );
     assert!(
-        matches!(service.create_generated_image(&principal(), request("prompt", "name")).await,
+        matches!(service.create_generated_image(&principal(), request("prompt")).await,
         Err(GenerateImageError::Generation(ImageGenerationError::Refused(ref reason))) if reason == "blocked by safety filters")
     );
     let service =
         ImageGenerationServiceImpl::new(Arc::new(UnconfiguredImageGenerator), store.clone());
     assert!(matches!(
         service
-            .create_generated_image(&principal(), request("prompt", "name"))
+            .create_generated_image(&principal(), request("prompt"))
             .await,
         Err(GenerateImageError::Generation(
             ImageGenerationError::Unavailable
         ))
     ));
-    let service = ImageGenerationServiceImpl::new(
-        Arc::new(FakeGenerator::returning(GeneratedImage {
+    for image in [
+        GeneratedImage {
             mime_type: "application/pdf".to_string(),
             ..png()
-        })),
-        store.clone(),
-    );
-    assert!(matches!(
-        service
-            .create_generated_image(&principal(), request("prompt", "name"))
-            .await,
-        Err(GenerateImageError::Generation(
-            ImageGenerationError::Provider(_)
-        ))
-    ));
+        },
+        GeneratedImage {
+            bytes: Vec::new(),
+            ..png()
+        },
+    ] {
+        let service = ImageGenerationServiceImpl::new(
+            Arc::new(FakeGenerator::returning(image)),
+            store.clone(),
+        );
+        assert!(matches!(
+            service
+                .create_generated_image(&principal(), request("prompt"))
+                .await,
+            Err(GenerateImageError::Generation(
+                ImageGenerationError::Provider(_)
+            ))
+        ));
+    }
     assert!(store.saves.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
-async fn propagates_document_authorization_failures() {
+async fn propagates_static_file_upload_failures() {
     let service = ImageGenerationServiceImpl::new(
         Arc::new(FakeGenerator::returning(png())),
         Arc::new(RecordingStore {
-            deny: true,
+            fail: true,
             ..Default::default()
         }),
     );
     assert!(matches!(
         service
-            .create_generated_image(&principal(), request("prompt", "name"))
+            .create_generated_image(&principal(), request("prompt"))
             .await,
-        Err(GenerateImageError::Document(SaveImageError::Unauthorized))
+        Err(GenerateImageError::Storage(SaveImageError::Internal(_)))
     ));
 }
 
@@ -314,7 +252,7 @@ async fn resolves_references_in_order_under_the_creating_principal_before_genera
     let store = Arc::new(RecordingStore::default());
     let service = ImageGenerationServiceImpl::new(generator.clone(), store.clone())
         .with_reference_reader(reader.clone());
-    let mut image = request("  edit image 1 using image 2  ", "Edited image");
+    let mut image = request("  edit image 1 using image 2  ");
     image.reference_images = vec![DOCUMENT_REFERENCE, STATIC_REFERENCE];
 
     let created = service
@@ -322,7 +260,7 @@ async fn resolves_references_in_order_under_the_creating_principal_before_genera
         .await
         .unwrap();
 
-    assert_eq!(created.document_id, DOCUMENT_ID);
+    assert_eq!(created.static_file.id, STATIC_FILE_ID);
     assert_eq!(
         *reader.calls.lock().unwrap(),
         [
@@ -340,9 +278,8 @@ async fn resolves_references_in_order_under_the_creating_principal_before_genera
     );
     let saves = store.saves.lock().unwrap();
     assert_eq!(saves.len(), 1);
-    assert_eq!(saves[0].0, principal());
-    assert_eq!(saves[0].1.bytes, PNG);
-    assert_eq!(saves[0].1.file_name, "Edited image.png");
+    assert_eq!(saves[0].bytes, PNG);
+    assert_eq!(saves[0].mime_type, "image/png");
 }
 
 #[tokio::test]
@@ -352,7 +289,7 @@ async fn excessive_reference_count_is_rejected_before_any_read_or_generation() {
     let store = Arc::new(RecordingStore::default());
     let service = ImageGenerationServiceImpl::new(generator.clone(), store.clone())
         .with_reference_reader(reader.clone());
-    let mut image = request("edit these images", "Edited");
+    let mut image = request("edit these images");
     image.reference_images = vec![DOCUMENT_REFERENCE; MAX_REFERENCE_IMAGES + 1];
 
     assert!(matches!(
@@ -381,7 +318,7 @@ async fn failed_reference_reads_never_generate_from_a_partial_set() {
         let store = Arc::new(RecordingStore::default());
         let service = ImageGenerationServiceImpl::new(generator.clone(), store.clone())
             .with_reference_reader(reader.clone());
-        let mut image = request("combine all three images", "Combined");
+        let mut image = request("combine all three images");
         image.reference_images = vec![DOCUMENT_REFERENCE, STATIC_REFERENCE, DOCUMENT_REFERENCE];
 
         assert!(matches!(
@@ -416,7 +353,7 @@ async fn invalid_reference_content_is_rejected_before_generation_or_storage() {
         let store = Arc::new(RecordingStore::default());
         let service = ImageGenerationServiceImpl::new(generator.clone(), store.clone())
             .with_reference_reader(reader.clone());
-        let mut image = request("edit these images", "Edited");
+        let mut image = request("edit these images");
         image.reference_images = vec![DOCUMENT_REFERENCE; image_count];
 
         assert!(matches!(
@@ -443,7 +380,7 @@ async fn accepts_three_supported_images_at_the_total_byte_limit() {
     let store = Arc::new(RecordingStore::default());
     let service = ImageGenerationServiceImpl::new(generator.clone(), store.clone())
         .with_reference_reader(reader);
-    let mut image = request("combine all three images", "Combined");
+    let mut image = request("combine all three images");
     image.reference_images = vec![DOCUMENT_REFERENCE, STATIC_REFERENCE, DOCUMENT_REFERENCE];
 
     service
@@ -470,7 +407,7 @@ async fn missing_reference_reader_does_not_silently_fall_back_to_text_only() {
     let generator = Arc::new(FakeGenerator::returning(png()));
     let store = Arc::new(RecordingStore::default());
     let service = ImageGenerationServiceImpl::new(generator.clone(), store.clone());
-    let mut image = request("edit this photo", "Edited");
+    let mut image = request("edit this photo");
     image.reference_images = vec![DOCUMENT_REFERENCE];
 
     assert!(matches!(

@@ -6,7 +6,6 @@
 
 pub(crate) mod helpers;
 
-mod comments;
 mod create_company;
 mod create_contact;
 mod get_company_for_team;

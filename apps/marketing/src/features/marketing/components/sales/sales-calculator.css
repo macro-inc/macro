@@ -1,0 +1,48 @@
+/* Homepage palette: ink on black, hairline edges, glass panels, slab numerals. */
+.sales-calc { display: grid; gap: 16px; width: 100%; font-family: 'Inter Variable', Inter, sans-serif; }
+.sales-calc-controls, .sales-calc-result { border-radius: 24px; background: var(--color-panel); }
+.sales-calc-controls { display: grid; gap: 18px; padding: 20px 16px; }
+.sales-calc-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.sales-calc-label { color: var(--color-ink-muted); font-size: 14px; line-height: 1.5; }
+.sales-calc-stepper { display: inline-flex; align-items: center; padding: 3px; border: 1px solid var(--color-edge-muted); border-radius: 999px; }
+.sales-calc-stepper button { display: grid; place-items: center; width: 40px; height: 40px; border: 0; border-radius: 50%; background: none; color: var(--color-ink-muted); }
+.sales-calc-stepper button:disabled { opacity: .3; }
+.sales-calc-stepper svg { width: 16px; height: 16px; }
+.sales-calc-stepper input { width: 52px; border: 0; background: none; color: var(--color-ink); font-size: 18px; font-weight: 500; font-variant-numeric: tabular-nums; text-align: center; appearance: textfield; -moz-appearance: textfield; }
+.sales-calc-stepper input::-webkit-inner-spin-button, .sales-calc-stepper input::-webkit-outer-spin-button { margin: 0; -webkit-appearance: none; }
+.sales-calc-tiers { display: grid; grid-template-columns: 1fr 1fr; padding: 3px; border: 1px solid var(--color-edge-muted); border-radius: 999px; }
+.sales-calc-tiers button { min-height: 40px; border: 0; border-radius: 999px; background: none; color: var(--color-ink-muted); font-size: 14px; font-weight: 500; }
+.sales-calc-tiers button[aria-pressed=true] { background: var(--color-active); color: var(--color-ink); }
+.sales-calc-tools { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+.sales-calc-tools button { display: grid; grid-template-columns: 18px 20px minmax(0, 1fr); align-items: center; gap: 2px 8px; width: 100%; min-height: 60px; padding: 10px 12px; border: 1px solid var(--color-edge-muted); border-radius: 16px; background: none; color: var(--color-ink); text-align: left; transition: border-color 150ms, background 150ms; }
+.sales-calc-tools button[aria-pressed=true] { border-color: color-mix(in srgb, var(--color-ink) 24%, transparent); background: var(--color-hover); }
+.sales-calc-tools button[aria-pressed=false] :is(.sales-calc-icon, .sales-calc-name, .sales-calc-price) { opacity: .45; }
+.sales-calc-check { grid-area: 1 / 1; display: grid; place-items: center; width: 18px; height: 18px; border: 1px solid var(--color-edge); border-radius: 5px; color: transparent; }
+.sales-calc-check svg { width: 12px; height: 12px; }
+.sales-calc-tools button[aria-pressed=true] .sales-calc-check { border-color: var(--color-ink); background: var(--color-ink); color: #000; }
+.sales-calc-icon { grid-area: 1 / 2; width: 20px; height: 20px; }
+.sales-calc-name { grid-area: 1 / 3; overflow: hidden; font-size: 14px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.sales-calc-price { grid-area: 2 / 3; color: var(--color-ink-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.sales-calc-price::after { content: '/seat/mo'; }
+.sales-calc-result { display: grid; gap: 20px; padding: 24px 20px; }
+.sales-calc-lines { display: grid; gap: 10px; }
+.sales-calc-lines p { display: flex; justify-content: space-between; gap: 12px; color: var(--color-ink-muted); font-size: 14px; font-variant-numeric: tabular-nums; }
+.sales-calc-lines s { text-decoration-color: color-mix(in srgb, var(--color-ink) 50%, transparent); }
+.sales-calc-lines strong { color: var(--color-ink); font-weight: 500; }
+.sales-calc-saved { display: grid; justify-items: center; gap: 4px; padding-top: 20px; border-top: 1px solid var(--color-edge-muted); color: var(--color-ink-muted); font-size: 14px; text-align: center; }
+.sales-calc-saved strong { color: var(--color-ink); font: 315 clamp(48px, 14vw, 64px)/1.1 'Roboto Slab Variable', display, serif; letter-spacing: -.035em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.sales-calc-even { padding-top: 20px; border-top: 1px solid var(--color-edge-muted); color: var(--color-ink-muted); font-size: 15px; line-height: 1.6; text-align: center; text-wrap: balance; }
+.sales-calc-result .homepage-hero-cta { width: 100%; color: #000; }
+/* Beats `.feature-page p { margin: 0 }` without !important. */
+.sales-calc .sales-calc-note { max-width: 520px; margin: 8px auto 0; color: var(--color-ink-placeholder); font-size: 12px; line-height: 1.7; text-align: center; text-wrap: balance; }
+@media (min-width: 760px) {
+  .sales-calc { grid-template-columns: minmax(0, 1fr) 320px; align-items: start; gap: 20px; }
+  .sales-calc-controls { padding: 24px; }
+  .sales-calc-tools { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .sales-calc-result { padding: 28px; }
+  .sales-calc-note { grid-column: 1 / -1; }
+}
+@media (hover: hover) {
+  .sales-calc-tools button:hover { border-color: var(--color-edge); }
+  .sales-calc-tiers button:hover, .sales-calc-stepper button:hover:not(:disabled) { color: var(--color-ink); }
+}

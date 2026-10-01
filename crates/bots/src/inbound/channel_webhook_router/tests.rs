@@ -9,7 +9,7 @@ use axum::{
     body::Body,
     http::{Request, StatusCode, header},
 };
-use channels::domain::models::{PostMessageRequest, Sender};
+use channels::domain::models::Sender;
 use entity_access::domain::models::TeamRole;
 use entity_access::domain::{
     models::{
@@ -480,11 +480,22 @@ impl EntityAccessService for TestAccessService {
     }
 }
 
+/// The post as the shared message service received it.
+#[derive(Debug, Clone)]
+struct PostedRequest {
+    content: String,
+    mentions: Vec<messages::domain::models::SimpleMention>,
+    thread_id: Option<Uuid>,
+    attachments: Vec<messages::domain::models::NewAttachment>,
+    nonce: Option<String>,
+    triggered_by: Option<String>,
+}
+
 #[derive(Debug, Clone)]
 struct PostedMessage {
     actor: Sender,
     channel_id: Uuid,
-    req: PostMessageRequest,
+    req: PostedRequest,
 }
 
 #[derive(Clone, Copy)]
@@ -539,13 +550,12 @@ impl messages::domain::api::MessageCommands for TestChannelPoster {
             .push(PostedMessage {
                 actor: actor.clone(),
                 channel_id,
-                req: PostMessageRequest {
+                req: PostedRequest {
                     content: input.content.clone(),
                     mentions: input.mentions.clone(),
                     thread_id: input.thread_id,
-                    attachments: Vec::new(),
+                    attachments: input.attachments.clone(),
                     nonce: input.nonce.clone(),
-                    notification_policy: input.notification_policy,
                     triggered_by: triggered_by.clone(),
                 },
             });

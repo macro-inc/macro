@@ -5,8 +5,6 @@ import {
   type PdfRootLayout,
 } from '@block-pdf/type/comments';
 import {
-  type CommentId,
-  type DeleteCommentInfo,
   isDraftThreadId,
   isRoot,
   type MessageCommentOperations,
@@ -14,23 +12,10 @@ import {
 } from '@core/comments/commentType';
 import { threadMeasureContainerId } from '@core/comments/Thread';
 import { toast } from '@core/component/Toast/Toast';
-import type {
-  CreateCommentRequest,
-  EditCommentRequest,
-} from '@service-storage/generated/schemas';
-import type { CreateCommentResponse } from '@service-storage/generated/schemas/createCommentResponse';
 import type { Message } from '@service-storage/messages';
 import { createCallback } from '@solid-primitives/rootless';
 import { usePdfComments } from '../../context/pdf-comments-context';
 import { usePdfViewer } from '../../context/pdf-viewer-context';
-import {
-  useAttachHighlightCommentResource,
-  useCreateFreeCommentResource,
-  useCreateHighlightCommentResource,
-  useCreateThreadReplyResource,
-  useDeleteCommentResource,
-  useEditCommentResource,
-} from '../commentsResource';
 import {
   useAttachHighlightMessageComment,
   useCreateFreeMessageComment,
@@ -40,89 +25,6 @@ import {
 } from '../messageCommentsResource';
 import { useDeleteNewFreeComment, useNewThreadPlaceable } from './freeComments';
 import { useDeleteNewHighlightComment } from './highlightComments';
-
-export function useCreateComment() {
-  const analytics = useAnalytics();
-  const annotations = usePdfDocument().annotations;
-  const comments = usePdfComments().all;
-
-  const deleteNewComments = useDeleteNewComments();
-  const createFreeComment = useCreateFreeCommentResource();
-  const createHighlightComment = useCreateHighlightCommentResource();
-  const attachHighlightComment = useAttachHighlightCommentResource();
-  const createThreadReply = useCreateThreadReplyResource();
-  const newThreadPlaceable = useNewThreadPlaceable();
-
-  return createCallback(
-    async (
-      info: Omit<CreateCommentRequest, 'threadId'> & { threadId: ThreadId }
-    ) => {
-      analytics.track('comment_create', { blockType: 'pdf' });
-      const { threadId, text, mentions } = info;
-
-      if (isPdfDraftThreadId(threadId)) {
-        const comment = comments().find((c) => c.threadId === threadId);
-        if (!comment) {
-          console.error('Unable to comment');
-          return null;
-        }
-
-        let response: CreateCommentResponse | null = null;
-        switch (comment.type) {
-          case 'highlight':
-            const highlight = annotations.highlightsByUuid()[comment.anchorId];
-            if (!highlight) {
-              console.error('Unable to find highlight');
-              return response;
-            }
-
-            if (highlight.existsOnServer) {
-              response = await attachHighlightComment(
-                text,
-                highlight.uuid,
-                mentions
-              );
-            } else {
-              response = await createHighlightComment(
-                text,
-                highlight,
-                mentions
-              );
-            }
-            break;
-          case 'free':
-            const newThreadPlaceableValue = newThreadPlaceable();
-            if (
-              !newThreadPlaceableValue ||
-              newThreadPlaceableValue.internalId !== comment.anchorId
-            ) {
-              console.error('Unable to find new thread placeable');
-              return response;
-            }
-
-            response = await createFreeComment(
-              text,
-              newThreadPlaceableValue,
-              mentions
-            );
-            break;
-          default:
-            console.error('invalid comment type', comment.type);
-            return response;
-        }
-
-        if (response) {
-          deleteNewComments();
-        }
-
-        return response;
-      }
-
-      if (typeof threadId !== 'number') return null;
-      return await createThreadReply({ ...info, threadId });
-    }
-  );
-}
 
 /**
  * Message-path comment writes: a draft posts a root carrying its highlight or
@@ -219,50 +121,6 @@ export function useDeleteMessageCommentThread() {
     }
     analytics.track('comment_delete', { blockType: 'pdf' });
     return true;
-  });
-}
-
-export function useUpdateComment() {
-  const analytics = useAnalytics();
-
-  const editComment = useEditCommentResource();
-
-  return createCallback(
-    (
-      commentId: CommentId,
-      info: Omit<EditCommentRequest, 'threadId'> & { threadId: ThreadId }
-    ) => {
-      analytics.track('comment_update', { blockType: 'pdf' });
-      if (typeof commentId !== 'number' || typeof info.threadId !== 'number')
-        return Promise.resolve(false);
-      return editComment(commentId, { ...info, threadId: info.threadId });
-    }
-  );
-}
-
-export function useDeleteComment() {
-  const analytics = useAnalytics();
-
-  const deleteComment = useDeleteCommentResource();
-  const deleteNewComments = useDeleteNewComments();
-
-  return createCallback(async (info: DeleteCommentInfo) => {
-    const commentId = info.commentId;
-
-    if (isPdfDraftThreadId(commentId)) {
-      deleteNewComments();
-      return false;
-    }
-    if (typeof commentId !== 'number') return false;
-
-    const success = await deleteComment(commentId, {
-      removeAnchorThreadOnly: info.removeAnchorThreadOnly,
-    });
-
-    if (success) {
-      analytics.track('comment_delete', { blockType: 'pdf' });
-    }
-    return success;
   });
 }
 

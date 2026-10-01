@@ -19,32 +19,6 @@ import {
 } from './TasksLifecycleScene';
 import '../../routes/RouteTasks.css';
 
-// ---------------------------------------------------------------------------
-// The lifecycle of a Macro task — one continuous animated scene, driven by a
-// clock this section owns.
-//
-// The scene (TasksLifecycleScene) is a pure function of `t`, milliseconds
-// into a CYCLE. This file advances `t` with a single requestAnimationFrame
-// loop accumulating real dt (not setInterval, which drifts and keeps running
-// in background tabs) and maps `t` onto the four-step stepper: the active
-// step is the last phase whose start is behind the clock, and the fill bar is
-// how far through that phase the clock is.
-//
-// Controls. A step click seeks the clock to that phase's start and lets it
-// play up to the phase's `rest` -- the frame that stands for the phase -- then
-// holds there. Holding at the rest rather than pausing on the spot is the
-// point: with an animated scene, "pause where the user clicked" would freeze
-// a half-typed sentence or a cursor in mid-air. The play button resumes the
-// free-running loop. Reduced motion starts held on the first phase's rest
-// frame and makes step clicks jump straight between rest frames; play still
-// animates, because it is an explicit choice.
-//
-// The loop only runs while the frame is on screen (createVisible), and the
-// clock starts from 0 when JS arrives so the story begins at the top when the
-// section scrolls into view. The server renders PHASES[0].rest -- the issue
-// typed and the toggle about to be pressed -- rather than an empty composer.
-// ---------------------------------------------------------------------------
-
 const mobile = () => viewportWidth() < 700;
 const compact = () => viewportWidth() < 1000;
 
@@ -307,7 +281,7 @@ export function TasksLifecycle(props: {
              links will not fit a 320px phone. It ellipsises rather than
              pushing the rail into an overflow. */
           flex: none;
-          font-family: rajdhani, body;
+          font-family: Inter, body;
           font-size: 12px;
           font-weight: 700;
           gap: 0;
@@ -637,7 +611,7 @@ export function TasksLifecycle(props: {
                     <span
                       style={{
                         color: 'var(--c4)',
-                        'font-family': 'rajdhani, body',
+                        'font-family': 'Inter, body',
                         'font-size': '11.5px',
                         'font-variant-numeric': 'tabular-nums',
                         'font-weight': '700',
@@ -652,7 +626,7 @@ export function TasksLifecycle(props: {
                         color: active() === i() ? 'var(--c1)' : 'var(--c2)',
                         'font-family': 'display',
                         'font-size': '18px',
-                        'font-weight': '410',
+                        'font-weight': '315',
                         'letter-spacing': '-0.01em',
                         'line-height': 1.15,
                         transition: 'color 160ms ease',

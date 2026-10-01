@@ -122,7 +122,7 @@ function PartnerCtaBar() {
     cursor: 'default',
     display: 'inline-flex',
     'font-family': 'body',
-    'font-size': compact() ? '15px' : '17px',
+    'font-size': compact() ? '15px' : '14px',
     'font-weight': '700',
     height: compact() ? '38px' : '40px',
     'justify-content': 'center',
@@ -278,7 +278,7 @@ function PartnerAnnouncementPlayer() {
           <div
             style={{
               color: 'var(--c1)',
-              'font-family': 'rajdhani, body',
+              'font-family': 'Inter, body',
               'font-size': compact() ? '14px' : '15px',
               'font-weight': '700',
               'letter-spacing': '0.1em',
@@ -338,7 +338,7 @@ export const RoutePartners: Component = () => {
         }
         .posts-article-header .partners-subtitle {
           color: var(--c4);
-          font-family: cyberreader, system-ui, sans-serif;
+          font-family: Inter, system-ui, sans-serif;
           font-size: clamp(16px, 1.8vw, 18px);
           font-weight: 300;
           letter-spacing: -0.01em;
@@ -460,7 +460,7 @@ export const RoutePartners: Component = () => {
         }
         .partners-steps {
           color: var(--c4);
-          font-family: cyberreader, system-ui, sans-serif;
+          font-family: Inter, system-ui, sans-serif;
           font-size: 17px;
           font-weight: 300;
           letter-spacing: -0.01em;
@@ -594,11 +594,11 @@ export const RoutePartners: Component = () => {
 
           <h2>Why become a Macro partner?</h2>
           <p>
-            Macro is the first unified workspace that combines docs, tasks,
-            email, calendar, calls, messaging, CRM, and agents. We prioritize
-            craft and quality while striving to create the best and most
-            extensible product on the marketplace. The quality bar we hold for
-            our software is why our partners refer us to their clients.
+            Macro combines docs, tasks, email, calendar, calls, messaging, CRM,
+            and agents. Partners can help clients migrate their work, configure
+            channel access, and use agents to edit documents and update customer
+            records. The code is open source, so you can inspect and extend the
+            product you recommend.
           </p>
           <p>
             Our product is completely open source and holds an AGPLv3 license.
@@ -616,12 +616,10 @@ export const RoutePartners: Component = () => {
 
           <h2>Where partners come in.</h2>
           <p>
-            Most of our partners are system integrators, consultants, or
-            agencies that spend their days setting up different softwares like
-            Notion, Linear, and Slack for their clients. As an all-in-one
-            solution, Macro not only replaces these but helps overburdened
-            implementors by focusing expertise on a single product. Introducing
-            Macro to your clients can save you resources and your clients money.
+            System integrators, consultants, and agencies help clients set up
+            Macro and bring their existing work into it. Email, documents,
+            tasks, and customer records use one workspace, with shared
+            navigation, search, and agent tools.
           </p>
 
           <h2>How to become a partner</h2>

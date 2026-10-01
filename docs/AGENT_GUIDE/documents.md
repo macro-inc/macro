@@ -562,14 +562,11 @@ document should stay visible and the thread should open; loading the document
 with its badges still collapsed does not exercise thread rendering. Comment
 copy links should retain the document/task route and the selected comment.
 
-### Unified document discussions (`enable-unified-document-discussions`)
+### Document discussions
 
-With the PostHog flag `enable-unified-document-discussions` on (locally
-`VITE_ENABLE_UNIFIED_DOCUMENT_DISCUSSIONS=true`), document comments are messages
-read and written through `/dss/messages/document/<id>`, and both comment
-surfaces reuse the channel message components. The legacy annotation comment
-endpoints are not called for that document. Channels are not gated and always
-use the message API.
+Document comments are messages read and written through
+`/dss/messages/document/<id>`, and both comment surfaces reuse the channel
+message components, as channels do.
 
 Below the editor, expand `Discussion` to see comments without a text anchor.
 Its `Leave a comment...` composer is the channel composer: `Attach files`,
@@ -622,21 +619,15 @@ editable view removes the retained mark when the document loads. Read-only
 viewers see plain text without a dead comment highlight; the stored document
 and overlapping live comments stay intact.
 
-PDFs follow the same flag. With it on, PDF comment threads in the right margin
-use the channel composer (`Leave a comment...`, Enter sends) and the message
+PDF comment threads in the right margin use the channel composer (`Leave a comment...`, Enter sends) and the message
 thread controls. Highlight comments come from selecting text and choosing the
 comment button in the selection menu; placeable comments come from the toolbar
 `Comment` tool and a click on the page. Discussions read and post through
 `/dss/messages/document/<id>`; anchor geometry still loads from
-`/dss/annotations/anchors/document/<id>`, and `/dss/annotations/comments/...`
-is not called. Deleting a highlight's discussion keeps the highlight as a plain
-highlight; deleting a placeable's discussion removes the placeable. With the
-flag off, PDFs use the legacy composer (`Add a comment...`). A PDF anchor
-created by the other path is hidden rather than shown as a bare highlight, so a
-comment written on one path does not appear on the other until the comment
-importer runs.
-
-With the flag off, documents behave exactly as described above this section.
+`/dss/annotations/anchors/document/<id>`. Deleting a highlight's discussion keeps the highlight as a plain
+highlight; deleting a placeable's discussion removes the placeable. An anchor bound only
+to a legacy annotation thread that was never imported stays hidden rather than
+shown as a bare highlight.
 
 ## Side panel
 

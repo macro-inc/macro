@@ -12,7 +12,7 @@ pub struct CreateMessageMentionOptions {
 /// Creates message mentions for a given message
 /// returns the mentioned users
 /// a user is mentioned if the entity_type is "user" and the entity_id is a user_id that is
-/// included in the channel_participants table associated with the message's channel_id
+/// included in the channel_participants table of the message's parent channel
 #[tracing::instrument(skip(executor))]
 pub async fn create_message_mentions<'e, E>(
     executor: E,
@@ -39,7 +39,9 @@ where
     let mentioned_users = sqlx::query_scalar!(
         r#"
         WITH message_channel AS (
-            SELECT channel_id FROM comms_messages WHERE id = $1
+            SELECT parent_entity_id::uuid AS channel_id
+            FROM comms_messages
+            WHERE parent_entity_type = 'channel' AND id = $1
         ),
         mentions_to_insert AS (
             SELECT t.entity_type, t.entity_id

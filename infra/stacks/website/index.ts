@@ -145,12 +145,13 @@ const securityHeadersPolicy = new aws.cloudfront.ResponseHeadersPolicy(
   `security-headers-${stack}`,
   {
     securityHeadersConfig: {
+      // Same-origin only: the homepage embeds its own /demo workspace in an iframe.
       frameOptions: {
-        frameOption: 'DENY',
+        frameOption: 'SAMEORIGIN',
         override: true,
       },
       contentSecurityPolicy: {
-        contentSecurityPolicy: "frame-ancestors 'none'",
+        contentSecurityPolicy: "frame-ancestors 'self'",
         override: true,
       },
       contentTypeOptions: {

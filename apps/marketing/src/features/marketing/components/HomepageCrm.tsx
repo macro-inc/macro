@@ -47,7 +47,9 @@ function DemoCard(props: { company: Company }) {
   );
 }
 
-export default function HomepageCrm() {
+export default function HomepageCrm(
+  props: { playbackControls?: boolean } = {}
+) {
   const [time, setTime] = createSignal(0);
   const [paused, setPaused] = createSignal(false);
   const [visible, setVisible] = createSignal(false);
@@ -198,7 +200,7 @@ export default function HomepageCrm() {
           <span class="homepage-crm-status" role="status">
             {frame().status}
           </span>
-          <Show when={!reduced()}>
+          <Show when={!reduced() && props.playbackControls !== false}>
             <div class="flex gap-3 shrink-0">
               <Show when={!complete()}>
                 <button

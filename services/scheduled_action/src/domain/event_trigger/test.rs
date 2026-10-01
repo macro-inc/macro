@@ -28,16 +28,66 @@ fn incoming(name: &str, mut metadata: Value) -> IncomingEvent {
     if name == "document.updated" {
         metadata["file_type"] = Value::Null;
     }
-    let value = json!({"event_type": name, "metadata": metadata});
     let payload = if name.starts_with("document.") {
+        let value = json!({"event_type": name, "metadata": metadata});
         EventPayload::Document(serde_json::from_value(value).unwrap())
+    } else if let Some(message_name) = message_event_name(name) {
+        EventPayload::Message(message_fact(message_name, metadata))
     } else {
+        let value = json!({"event_type": name, "metadata": metadata});
         EventPayload::Channel(serde_json::from_value(value).unwrap())
     };
     IncomingEvent {
         event_id: Uuid::parse_str(EVENT_ID).unwrap(),
         schema_version: 1,
         payload,
+    }
+}
+
+/// Channel message triggers arrive on `macro.messages` under these names.
+fn message_event_name(trigger: &str) -> Option<&'static str> {
+    match trigger {
+        "channel.message_posted" => Some("message.posted"),
+        "channel.mentioned" => Some("message.mentioned"),
+        "channel.message_patched" => Some("message.patched"),
+        "channel.message_attachment_created" => Some("message.attachment_created"),
+        _ => None,
+    }
+}
+
+fn message_fact(name: &str, mut metadata: Value) -> MessageFact {
+    if metadata.get("parent").is_none() {
+        metadata["parent"] = json!({"type": "channel", "id": metadata["channel_id"]});
+    }
+    metadata["root_id"] = metadata["message_id"].clone();
+    let value = json!({"event_type": name, "metadata": metadata});
+    match serde_json::from_value(value).unwrap() {
+        messages::outbound::broker::MessageTopicEvent::Posted(data) => MessageFact::Posted(data),
+        messages::outbound::broker::MessageTopicEvent::Mentioned(data) => {
+            MessageFact::Mentioned(data)
+        }
+        messages::outbound::broker::MessageTopicEvent::Patched(data) => MessageFact::Patched(data),
+        messages::outbound::broker::MessageTopicEvent::AttachmentCreated(data) => {
+            MessageFact::AttachmentCreated(data)
+        }
+        _ => MessageFact::Other,
+    }
+}
+
+#[test]
+fn message_facts_on_other_parents_never_trigger() {
+    for name in [
+        "channel.message_posted",
+        "channel.mentioned",
+        "channel.message_patched",
+        "channel.message_attachment_created",
+    ] {
+        let mut data = metadata();
+        data["parent"] = json!({"type": "document", "id": "document-1"});
+        assert_eq!(
+            incoming(name, data).normalize(),
+            Err(EventRejection::UnsupportedEvent)
+        );
     }
 }
 
@@ -162,8 +212,6 @@ fn every_non_allowlisted_variant_is_rejected() {
         "document.interaction",
         "channel.updated",
         "channel.deleted",
-        "channel.message_deleted",
-        "channel.message_attachment_removed",
         "channel.participant_added",
         "channel.participant_removed",
     ] {
@@ -172,6 +220,14 @@ fn every_non_allowlisted_variant_is_rejected() {
             Err(EventRejection::UnsupportedEvent)
         );
         assert!(serde_json::from_value::<EventName>(json!(name)).is_err());
+    }
+    for name in ["message.deleted", "message.attachment_removed"] {
+        let event = IncomingEvent {
+            event_id: Uuid::parse_str(EVENT_ID).unwrap(),
+            schema_version: 1,
+            payload: EventPayload::Message(message_fact(name, metadata())),
+        };
+        assert_eq!(event.normalize(), Err(EventRejection::UnsupportedEvent));
     }
     assert!(serde_json::from_value::<EventName>(json!("document.future_event")).is_err());
     assert!(serde_json::from_value::<EventName>(json!("document.*")).is_err());
