@@ -10,7 +10,7 @@ import {
   QueryClientProvider,
   useQuery,
 } from '@tanstack/solid-query';
-import { Suspense } from 'solid-js';
+import { type ParentProps, Suspense } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ListEntityMetadataQueryProvider,
@@ -151,3 +151,7 @@ describe('ListEntityMetadataProvider', () => {
     expect(mocks.useTagsQuery).not.toHaveBeenCalled();
   });
 });
+
+vi.mock('@app/features/reminders/email-row-reminders-provider', () => ({
+  EmailRowRemindersQueryProvider: (props: ParentProps) => <>{props.children}</>,
+}));
