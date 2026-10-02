@@ -176,9 +176,13 @@ that top bar. Opening an associated task extends the breadcrumb trail; choose
 the project breadcrumb to return, or Projects to restore the collection and its
 filters, groups, and scroll position. Project URLs retain identity and section:
 `/app/component/initiative-view~<project-id>~overview` (or `tasks`).
-Project properties live in the shared Details/Properties side panel and honor
+Project properties live in the shared floating information panel and honor
 project access. Editors can rename the project; its owner can delete it.
 Deleting a project leaves its tasks in the workspace.
+
+Project information panels start closed and float over the content at every
+width, both in the Tasks project view and standalone initiative blocks. Opening
+the panel does not resize the content; use its toggle or click outside to close.
 
 Share (or Cmd+S) opens the same Share menu as tasks and documents: the
 `To: Email or group` field, optional message, access choice, and `Share`

@@ -58,7 +58,7 @@ export function ProjectWorkspace(props: {
   };
 
   return (
-    <SidePanel.Layout headerToggle={false}>
+    <SidePanel.Layout headerToggle={false} floating defaultOpen={false}>
       <SidePanel.Footer>
         <EntityMetadata
           ownerId={props.project.ownerId}

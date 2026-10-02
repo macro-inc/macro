@@ -9,6 +9,7 @@ import { Accordion } from '@kobalte/core/accordion';
 import ArrowLeft from '@phosphor/arrow-left.svg';
 import CaretRight from '@phosphor/caret-right.svg';
 import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
+import InfoIcon from '@phosphor/info.svg';
 import SidePanelIcon from '@phosphor/sidebar-simple.svg';
 import { Button, Panel, Scroll } from '@ui';
 import { cn } from '@ui/utils/classname';
@@ -30,6 +31,7 @@ import {
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { Transition } from 'solid-transition-group';
+import { MobileDrawer } from '../mobile/MobileDrawer';
 import { HeaderIsland } from '../split-layout/components/HeaderIsland';
 import { SplitHeaderRight } from '../split-layout/components/SplitHeader';
 import { useSplitPanel } from '../split-layout/layoutUtils';
@@ -259,16 +261,28 @@ function SidePanelLayoutInner(
   );
   const hasSections = createMemo(() => props.sections().length > 0);
 
-  createEffect(() => props.setIsOverlayMode(props.floating || isNarrow()));
+  createEffect(() =>
+    props.setIsOverlayMode(props.floating || isTouchDevice() || isNarrow())
+  );
 
   const showSplit = createMemo(
-    () => !props.floating && !isNarrow() && hasSections() && props.isOpen()
+    () =>
+      !isTouchDevice() &&
+      !props.floating &&
+      !isNarrow() &&
+      hasSections() &&
+      props.isOpen()
   );
   const showOverlay = createMemo(
-    () => !props.floating && isNarrow() && hasSections() && props.isOpen()
+    () =>
+      !isTouchDevice() &&
+      !props.floating &&
+      isNarrow() &&
+      hasSections() &&
+      props.isOpen()
   );
   const showFloating = createMemo(
-    () => props.floating && hasSections() && props.isOpen()
+    () => !isTouchDevice() && props.floating && hasSections() && props.isOpen()
   );
 
   return (
@@ -322,7 +336,32 @@ function SidePanelLayoutInner(
           </Scroll>
         </div>
       </Show>
-      <Show when={props.floating}>
+      <Show when={isTouchDevice()}>
+        <MobileDrawer
+          side="bottom"
+          open={hasSections() && props.isOpen()}
+          onOpenChange={props.setIsOpen}
+          preventScroll={false}
+          preventScrollbarShift={false}
+        >
+          <MobileDrawer.Portal>
+            <MobileDrawer.Overlay />
+            <MobileDrawer.Content aria-label="Item details">
+              <MobileDrawer.Handle />
+              <MobileDrawer.ScrollBody>
+                <SidePanelOutlet
+                  floating
+                  scrollable={false}
+                  sections={props.sections}
+                  openIds={props.openIds}
+                  setOpenIds={props.setOpenIds}
+                />
+              </MobileDrawer.ScrollBody>
+            </MobileDrawer.Content>
+          </MobileDrawer.Portal>
+        </MobileDrawer>
+      </Show>
+      <Show when={props.floating && !isTouchDevice()}>
         <div class="absolute inset-0 z-split-panel-chrome pointer-events-none">
           <Show when={showFloating()}>
             <div
@@ -378,13 +417,30 @@ function Toggle() {
             'border-0 hover:bg-transparent! active:bg-transparent! focus-visible:bg-transparent! active:text-accent',
           isTouchDevice() && ctx.isOpen() && 'text-accent'
         )}
-        tooltip={ctx.isOpen() ? 'Hide Side Panel' : 'Show Side Panel'}
+        tooltip={
+          isTouchDevice()
+            ? ctx.isOpen()
+              ? 'Hide details'
+              : 'Show details'
+            : ctx.isOpen()
+              ? 'Hide Side Panel'
+              : 'Show Side Panel'
+        }
+        aria-haspopup={isTouchDevice() ? 'dialog' : undefined}
+        aria-expanded={ctx.isOpen()}
         hotkey={TOKENS.block.toggleSidePanel}
         onClick={() => ctx.toggle()}
       >
-        <SidePanelIcon
-          class={cn('rotate-180', ctx.isOpen() && 'text-accent')}
-        />
+        <Show
+          when={isTouchDevice()}
+          fallback={
+            <SidePanelIcon
+              class={cn('rotate-180', ctx.isOpen() && 'text-accent')}
+            />
+          }
+        >
+          <InfoIcon class={cn(ctx.isOpen() && 'text-accent')} />
+        </Show>
       </Button>
     </Show>
   );
@@ -449,6 +505,7 @@ function SidePanelHeaderToggle() {
 
 function SidePanelOutlet(props: {
   floating?: boolean;
+  scrollable?: boolean;
   sections: Accessor<SidePanelSectionEntry[]>;
   openIds: Accessor<string[]>;
   setOpenIds: (ids: string[]) => void;
@@ -490,7 +547,12 @@ function SidePanelOutlet(props: {
         </Scroll>
       }
     >
-      <div class="min-h-0 overflow-y-auto overscroll-contain">
+      <div
+        class={cn(
+          'min-h-0',
+          props.scrollable !== false && 'overflow-y-auto overscroll-contain'
+        )}
+      >
         <Sections />
         <Footers />
       </div>

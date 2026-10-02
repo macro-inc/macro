@@ -1465,6 +1465,9 @@ the company; click the first breadcrumb to return directly to the originating
 view. Shift-click still opens a contact in a separate split. Direct contact links
 use the standalone contact page.
 Company and contact headers have `Copy link` beside the side-panel toggle.
+Their information panel starts closed and opens as a floating bubble at every
+width, without shrinking the record content. Click outside the bubble or use
+the toggle to dismiss it; the open state is not restored on a later visit.
 It copies the record's direct URL and shows a confirmation toast; this is also
 available in the embedded company and contact breadcrumb header.
 
@@ -1953,15 +1956,18 @@ Block information panels float over the right side of the block without changing
 the content width or its centered position. A single rounded bubble fits its
 contents, with `edge-muted` dividers between sections. Its height is capped at
 the block height with internal scrolling. At every width it starts closed and
-acts as a split-local overlay menu. The top-right sidebar icon, rotated 180 degrees,
-opens it, and clicking outside dismisses it. Opening is never restored from saved
-preferences or triggered by the global chrome shortcut. The 320px bubble enters
+acts as a split-local overlay menu on desktop. The top-right sidebar icon, rotated
+180 degrees, opens it, and clicking outside dismisses it. On touch devices the
+control uses the Phosphor info-circle icon and opens the standard bottom drawer
+with a drag handle, scrollable sections, and safe-area/keyboard-aware spacing.
+Dismiss the drawer by swiping down or tapping its backdrop. Opening is never
+restored from saved preferences or triggered by the global chrome shortcut. The 320px bubble enters
 with a slight slide from the right and a 120ms fade;
 closing fades it out in 70ms.
 This applies across Markdown/tasks,
 snippets, email, calls, agents, pull requests, projects, and all file blocks
-including PDFs, images, code, video, canvas, and unknown file types. CRM company
-and contact views keep their existing treatment.
+including PDFs, images, code, video, canvas, unknown file types, and CRM company
+and contact views (both inside the CRM workspace and in standalone blocks).
 
 ### Email reminders
 
