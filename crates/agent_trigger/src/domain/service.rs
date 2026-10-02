@@ -297,9 +297,7 @@ where
                 | MessageParent::Initiative(_)
                 | MessageParent::CrmCompany(_)
                 | MessageParent::CrmContact(_)
-                | MessageParent::Call(_) => {
-                    self.owner_allows(caller, bot.owner.as_ref()).await
-                }
+                | MessageParent::Call(_) => self.owner_allows(caller, bot.owner.as_ref()).await,
             },
         }
     }

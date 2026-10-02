@@ -780,7 +780,10 @@ while scrolled into history.
 After the call ends, its recording page shows a read-only **Call chat** below
 the transcript. A copied chat message link opens
 `/app/call/<callId>?call_message_id=<messageId>` and highlights that message in
-the recording's chat. A new call in the same channel starts a separate thread.
+the recording's chat. Clicking the highlighted message clears the target from
+the pane's route while leaving chat expanded; verify this on standalone and
+Drive recording pages. A transcript search result clears any earlier chat
+target in that pane. A new call in the same channel starts a separate thread.
 
 For recovery checks, keep another participant connected and briefly interrupt
 the first participant's network. Recovery may rejoin that same live call. It

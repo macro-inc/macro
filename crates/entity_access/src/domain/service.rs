@@ -59,12 +59,14 @@ where
                     Some(AgentSessionParent::Document(document)) => {
                         self.repo.get_document_access(&document, user_id).await?
                     }
-                    Some(AgentSessionParent::Call(call_id)) => {
+                    // Call history and chat require sign-in, including public
+                    // call links. Their sessions inherit the same boundary.
+                    Some(AgentSessionParent::Call(call_id)) if user_id.is_some() => {
                         self.repo
                             .get_call_access(&call_id.to_string(), user_id)
                             .await?
                     }
-                    None => None,
+                    Some(AgentSessionParent::Call(_)) | None => None,
                 };
                 Ok(direct.max(parent_access.map(session_permission_from_parent)))
             }

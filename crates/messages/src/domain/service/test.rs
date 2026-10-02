@@ -3,6 +3,7 @@ use chrono::Utc;
 use entity_access::domain::models::{AccessLevel, EntityAccessAuth};
 use std::sync::{Arc, Mutex};
 
+mod call_retries;
 mod event_posts;
 mod initiative;
 
@@ -18,6 +19,7 @@ struct Repo {
     reaction_changed: bool,
     file_type: Option<String>,
     concurrent_create: bool,
+    client_message_id: Option<Uuid>,
 }
 
 impl Repo {
@@ -75,6 +77,20 @@ impl MessageRepository for Repo {
         }
         Ok(message)
     }
+    async fn get_by_client_message_id(
+        &self,
+        parent: &MessageParent,
+        actor: &ChannelSender<'_>,
+        client_message_id: Uuid,
+    ) -> Result<Option<Message>, MessageError> {
+        if self.client_message_id == Some(client_message_id)
+            && self.message.sender_id.as_ref() == actor.as_ref()
+        {
+            self.get(parent, self.message.id).await
+        } else {
+            Ok(None)
+        }
+    }
     async fn thread(
         &self,
         parent: &MessageParent,
@@ -115,7 +131,9 @@ impl MessageRepository for Repo {
         })
     }
     async fn create(&self, command: CreateMessage) -> Result<Message, MessageError> {
-        if command.input.id == Some(self.message.id) {
+        if command.input.id == Some(self.message.id)
+            || (self.client_message_id.is_some() && command.input.id == self.client_message_id)
+        {
             self.creates.lock().unwrap().push(command);
             return Err(MessageError::Conflict);
         }
@@ -254,6 +272,7 @@ fn fixture() -> Repo {
         reaction_changed: true,
         file_type: Some("md".into()),
         concurrent_create: false,
+        client_message_id: None,
     }
 }
 
@@ -1171,6 +1190,16 @@ impl MessageRepository for StrictRepo {
     }
     async fn get(&self, parent: &MessageParent, id: Uuid) -> Result<Option<Message>, MessageError> {
         self.inner.get(parent, id).await
+    }
+    async fn get_by_client_message_id(
+        &self,
+        parent: &MessageParent,
+        actor: &ChannelSender<'_>,
+        client_message_id: Uuid,
+    ) -> Result<Option<Message>, MessageError> {
+        self.inner
+            .get_by_client_message_id(parent, actor, client_message_id)
+            .await
     }
     async fn thread(
         &self,

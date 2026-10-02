@@ -1535,6 +1535,9 @@ async fn retrying_first_call_message_cannot_append_it_twice(pool: PgPool) {
     let repo = PgMessageRepository::new(pool);
     let mut input = call_message(call_id, "First message");
     input.input.id = Some(macro_uuid::generate_uuid_v7());
+    let client_message_id = input.input.id.unwrap();
+    let actor = input.actor.clone();
+    let parent = input.parent.clone();
     let first = repo.create(input.clone()).await.unwrap();
     assert_eq!(first.id, call_id);
     assert!(matches!(
@@ -1547,4 +1550,36 @@ async fn retrying_first_call_message_cannot_append_it_twice(pool: PgPool) {
             .unwrap()
             .is_empty()
     );
+    let recovered = repo
+        .get_by_client_message_id(&parent, &actor, client_message_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(recovered.id, call_id);
+    assert_eq!(recovered.content, "First message");
+    for (parent, actor) in [
+        (
+            MessageParent::Call(macro_uuid::generate_uuid_v7()),
+            actor.clone(),
+        ),
+        (
+            parent.clone(),
+            "macro|other@example.com".to_owned().try_into().unwrap(),
+        ),
+    ] {
+        assert!(
+            repo.get_by_client_message_id(&parent, &actor, client_message_id)
+                .await
+                .unwrap()
+                .is_none()
+        );
+    }
+    repo.delete(&parent, call_id).await.unwrap();
+    let deleted = repo
+        .get_by_client_message_id(&parent, &actor, client_message_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(deleted.deleted_at.is_some());
+    assert!(deleted.content.is_empty());
 }

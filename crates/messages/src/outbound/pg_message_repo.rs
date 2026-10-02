@@ -1,4 +1,5 @@
 use crate::domain::{mentions::MessageReferenceKind, models::*, ports::*};
+use channel_sender::ChannelSender;
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use sqlx::{PgPool, Postgres, Transaction, types::Json};
@@ -584,6 +585,27 @@ impl MessageRepository for PgMessageRepository {
             id,
             parent.entity_type(),
             parent.entity_id(),
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(database_error)?;
+        Ok(self.hydrate(rows).await?.pop())
+    }
+
+    async fn get_by_client_message_id(
+        &self,
+        parent: &MessageParent,
+        actor: &ChannelSender<'_>,
+        client_message_id: Uuid,
+    ) -> Result<Option<Message>, MessageError> {
+        let rows = sqlx::query_scalar!(
+            r#"SELECT to_jsonb(m) AS "message!: Json<StoredMessage>" FROM comms_messages m
+               WHERE client_message_id = $1 AND parent_entity_type = $2
+                   AND parent_entity_id = $3 AND sender_id = $4"#,
+            client_message_id,
+            parent.entity_type(),
+            parent.entity_id(),
+            actor.as_ref(),
         )
         .fetch_all(&self.pool)
         .await

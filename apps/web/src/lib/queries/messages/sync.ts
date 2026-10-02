@@ -138,7 +138,8 @@ export function applyRootDeletion(
   cached?: MessageThread['state']
 ) {
   const parent = message.parent;
-  if (parent.type !== 'document' || message.thread_id) return;
+  if (parent.type === 'channel' || parent.type === 'call' || message.thread_id)
+    return;
   const state = cached ?? getCachedThreadState(parent, message.id);
   if (!state) {
     void queryClient.invalidateQueries({

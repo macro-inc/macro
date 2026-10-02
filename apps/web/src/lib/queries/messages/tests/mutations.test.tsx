@@ -299,52 +299,58 @@ describe('root deletion', () => {
       .getQueryData<MessageTimelineData>(getMessageTimelineQueryKey(parent))!
       .pages.flatMap((page) => page.items);
 
-  it("takes the whole discussion, including another author's replies", async () => {
-    const parent: MessageParent = { type: 'document', id: 'doc' };
-    seed(parent);
-    mocks.delete.mockResolvedValue({
-      ...message(parent, 'root'),
-      content: '',
-      deleted_at: time,
-    });
-    const deletedThreads: string[] = [];
-    const stop = onThreadStateUpdated((_parent, state) => {
-      if (state.deleted_at) deletedThreads.push(state.root_id);
-    });
+  it.each(['document', 'initiative', 'crm_company', 'crm_contact'] as const)(
+    "takes the whole %s discussion, including another author's replies",
+    async (type) => {
+      const parent: MessageParent = { type, id: 'parent' };
+      seed(parent);
+      mocks.delete.mockResolvedValue({
+        ...message(parent, 'root'),
+        content: '',
+        deleted_at: time,
+      });
+      const deletedThreads: string[] = [];
+      const stop = onThreadStateUpdated((_parent, state) => {
+        if (state.deleted_at) deletedThreads.push(state.root_id);
+      });
 
-    await mount().mutateAsync({ parent, messageID: 'root' });
+      await mount().mutateAsync({ parent, messageID: 'root' });
 
-    expect(roots(parent)).toEqual([]);
-    const thread = testQueryClient.getQueryData<MessageThread>(
-      getThreadRepliesQueryKey(parent, 'root')
-    )!;
-    expect(thread.state.deleted_at).toBe(time);
-    expect(thread.replies).toEqual([]);
-    // The margin and the document mark clear off this notification.
-    expect(deletedThreads).toEqual(['root']);
-    stop();
-  });
+      expect(roots(parent)).toEqual([]);
+      const thread = testQueryClient.getQueryData<MessageThread>(
+        getThreadRepliesQueryKey(parent, 'root')
+      )!;
+      expect(thread.state.deleted_at).toBe(time);
+      expect(thread.replies).toEqual([]);
+      // The margin and the document mark clear off this notification.
+      expect(deletedThreads).toEqual(['root']);
+      stop();
+    }
+  );
 
-  it('tears down a root whose replies were never opened', async () => {
-    // The only copy of this thread's state is the timeline item the optimistic
-    // delete removes, so the teardown has to read it before that happens.
-    const parent: MessageParent = { type: 'document', id: 'doc' };
-    seed(parent, false);
-    mocks.delete.mockResolvedValue({
-      ...message(parent, 'root'),
-      content: '',
-      deleted_at: time,
-    });
-    const deletedThreads: string[] = [];
-    const stop = onThreadStateUpdated((_parent, state) => {
-      if (state.deleted_at) deletedThreads.push(state.root_id);
-    });
+  it.each(['document', 'initiative', 'crm_company', 'crm_contact'] as const)(
+    'tears down a %s root whose replies were never opened',
+    async (type) => {
+      // The only copy of this thread's state is the timeline item the optimistic
+      // delete removes, so the teardown has to read it before that happens.
+      const parent: MessageParent = { type, id: 'parent' };
+      seed(parent, false);
+      mocks.delete.mockResolvedValue({
+        ...message(parent, 'root'),
+        content: '',
+        deleted_at: time,
+      });
+      const deletedThreads: string[] = [];
+      const stop = onThreadStateUpdated((_parent, state) => {
+        if (state.deleted_at) deletedThreads.push(state.root_id);
+      });
 
-    await mount().mutateAsync({ parent, messageID: 'root' });
+      await mount().mutateAsync({ parent, messageID: 'root' });
 
-    expect(deletedThreads).toEqual(['root']);
-    stop();
-  });
+      expect(deletedThreads).toEqual(['root']);
+      stop();
+    }
+  );
 
   it('restores the discussion when the delete fails', async () => {
     const parent: MessageParent = { type: 'document', id: 'doc' };

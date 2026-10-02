@@ -252,6 +252,14 @@ pub trait MessageRepository: Send + Sync + 'static {
         parent: &MessageParent,
         id: Uuid,
     ) -> impl Future<Output = Result<Option<Message>, MessageError>> + Send;
+    /// Recover a call submission within its authorized parent and original sender.
+    /// Includes tombstones so retries never recreate deleted content.
+    fn get_by_client_message_id(
+        &self,
+        parent: &MessageParent,
+        actor: &ChannelSender<'_>,
+        client_message_id: Uuid,
+    ) -> impl Future<Output = Result<Option<Message>, MessageError>> + Send;
     /// Read thread state; returns deleted state so callers can reject writes.
     fn thread(
         &self,

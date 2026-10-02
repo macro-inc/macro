@@ -1,5 +1,6 @@
 import { ViewShell } from '@app/components/view-shell';
 import { ChatWithAgentButton } from '@app/features/chat/ChatWithAgentButton';
+import { createSearchParams } from '@app/lib/split-router';
 import { SidePanel } from '@components/app/side-panel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
@@ -27,6 +28,7 @@ import {
   Suspense,
   Switch,
 } from 'solid-js';
+import { callDetailSearch } from '../call-route';
 import { CallRecordingBody } from '../component/CallRecording/CallRecordingBody';
 import { CallSidePanelSections } from '../component/sidepanel/CallSidePanelSections';
 import { useCallAgain } from '../component/use-call-again';
@@ -112,6 +114,7 @@ function LoadedCallContent(props: {
   transcriptTarget?: CallTranscriptTarget;
   messageId?: string;
 }) {
+  const [, setSearch] = createSearchParams(callDetailSearch);
   onMount(() => {
     optimisticUpdateSoupItemViewedAt(props.callId);
     if (!hasSoupEntity(props.callId)) {
@@ -127,6 +130,9 @@ function LoadedCallContent(props: {
           callId={props.callId}
           transcriptTarget={props.transcriptTarget}
           messageTarget={props.messageId}
+          onClearMessageTarget={() =>
+            setSearch({ messageId: undefined }, { history: 'replace' })
+          }
         />
       </div>
     </SidePanel.Layout>

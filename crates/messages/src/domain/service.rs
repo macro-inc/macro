@@ -187,7 +187,32 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         if let Some(id) = input.id {
             validate_client_id(id, chrono::Utc::now())?;
         }
-        self.post_validated(access, input).await
+        let parent = parent_from_receipt(&access)?;
+        if !matches!(parent, MessageParent::Call(_)) {
+            return self.post_validated(access, input).await;
+        }
+        let Some(client_message_id) = input.id else {
+            return self.post_validated(access, input).await;
+        };
+        let actor = actor_from_receipt(&access, &parent)?;
+        self.ensure_parent(&parent).await?;
+        // The first call message uses the call ID, so its submitted ID must be
+        // resolved separately. Replays return persisted content without delivery.
+        if let Some(message) = self
+            .repo
+            .get_by_client_message_id(&parent, &actor, client_message_id)
+            .await?
+        {
+            return Ok(message);
+        }
+        match self.post_validated(access, input).await {
+            Err(MessageError::Conflict) => self
+                .repo
+                .get_by_client_message_id(&parent, &actor, client_message_id)
+                .await?
+                .ok_or(MessageError::Conflict),
+            result => result,
+        }
     }
 
     /// Post a trusted server event once, including after long broker delays.

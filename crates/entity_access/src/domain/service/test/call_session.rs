@@ -1,6 +1,46 @@
 use super::*;
 
 #[tokio::test]
+async fn public_call_permissions_do_not_grant_anonymous_session_access() {
+    let repo = MockRepo::new();
+    *repo.agent_session_parent.lock().await = Some(AgentSessionParent::Call(Uuid::now_v7()));
+    let service = EntityAccessServiceImpl::new(repo.clone());
+    for permission in [AccessLevel::View, AccessLevel::Comment, AccessLevel::Edit] {
+        *repo.call_access.lock().await = Some(permission);
+        assert_eq!(
+            service
+                .get_access_level(None, "session", EntityType::AgentSession)
+                .await
+                .unwrap(),
+            None
+        );
+        assert!(matches!(
+            service
+                .get_entity_permission(None, "session", EntityType::AgentSession, None)
+                .await,
+            Err(AccessError::Unauthorized)
+        ));
+    }
+}
+
+#[tokio::test]
+async fn directly_shared_public_sessions_keep_their_own_access_without_inheriting_call_access() {
+    let repo = MockRepo::new().with_call_access(AccessLevel::Comment);
+    *repo.agent_session_parent.lock().await = Some(AgentSessionParent::Call(Uuid::now_v7()));
+    *repo.agent_session_access.lock().await = Some(AccessLevel::View);
+    let service = EntityAccessServiceImpl::new(repo);
+    assert_eq!(
+        service
+            .get_entity_permission(None, "session", EntityType::AgentSession, None)
+            .await
+            .unwrap(),
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::View,
+        }
+    );
+}
+
+#[tokio::test]
 async fn call_session_access_tracks_current_call_permission_and_preserves_owner_grants() {
     let repo = MockRepo::new();
     let call_id = Uuid::now_v7();
