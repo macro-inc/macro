@@ -23,6 +23,7 @@ import type { MacroEvents } from './events/receiver';
 import { MacroClient } from './utils/client';
 
 export type { MacroOpts } from './config';
+export type { CallMessage } from './entities/calls/message';
 export type { ListenOptions, MacroEvents } from './events/receiver';
 export {
   here,
