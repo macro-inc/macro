@@ -34,7 +34,7 @@ use models_properties::{EntityReference, EntityType};
 use system_properties::{StatusOption, SystemPropertyKey};
 use uuid::Uuid;
 
-use super::error::PropertiesErr;
+use super::error::{InvalidStoredPropertyValue, PropertiesErr};
 use super::events::{
     EntityPropertiesClearedMetadata, EntityPropertyDeletedMetadata, EntityPropertyUpdatedMetadata,
     PropertyCreatedMetadata, PropertyDeletedMetadata, PropertyMacroEvent,
@@ -92,6 +92,15 @@ fn published_event_actors(access: &EditReceipt) -> PublishedEventActors {
             on_behalf_of: None,
             actor_user_id: None,
         },
+    }
+}
+
+fn inheritance_error(error: PropertiesErr) -> PropertiesErr {
+    match error {
+        PropertiesErr::Repo(error) if error.is::<InvalidStoredPropertyValue>() => {
+            PropertiesErr::Validation("Stored assignees are invalid".to_string())
+        }
+        error => error,
     }
 }
 
@@ -784,7 +793,8 @@ where
 
         let Some(PropertyValue::EntityRef(references)) = self
             .get_system_property_value(project, SystemPropertyKey::Assignees)
-            .await?
+            .await
+            .map_err(inheritance_error)?
         else {
             return Ok(());
         };
@@ -808,7 +818,7 @@ where
                 agents,
             )
             .await
-            .map_err(anyhow::Error::from)?;
+            .map_err(|error| inheritance_error(anyhow::Error::from(error).into()))?;
         if mutation.value != mutation.previous_value {
             self.publish_property_event(Self::entity_property_updated_event(
                 &mutation.property,

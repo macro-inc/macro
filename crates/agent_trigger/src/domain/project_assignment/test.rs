@@ -277,16 +277,71 @@ async fn inheritance_failure_is_propagated_for_retry() {
     let mut access = MockProjectAssignmentAccess::new();
     access.expect_receipts().once().returning(allowed_receipts);
     let mut properties = MockProjectAgentInheritance::new();
-    properties
-        .expect_inherit()
-        .once()
-        .returning(|_, _| Box::pin(async { Err(PropertiesErr::PermissionServiceNotConfigured) }));
+    properties.expect_inherit().once().returning(|_, _| {
+        Box::pin(async { Err(PropertiesErr::Repo(anyhow::anyhow!("database unavailable"))) })
+    });
     assert!(matches!(
         ProjectAssignmentService::new(properties, memberships, access)
             .process(&event)
             .await,
         Err(ProjectAssignmentError::Properties(_))
     ));
+}
+
+#[tokio::test]
+async fn invalid_assignment_does_not_block_later_tasks() {
+    for failure in [
+        PropertiesErr::Validation("invalid stored assignees".into()),
+        PropertiesErr::PermissionDenied,
+        PropertiesErr::NotFound,
+    ] {
+        let project = InitiativeId::generate();
+        let event = event(vec![
+            TaskMembershipChange {
+                task_id: "invalid".into(),
+                from: None,
+                to: Some(project),
+            },
+            TaskMembershipChange {
+                task_id: "valid".into(),
+                from: None,
+                to: Some(project),
+            },
+        ]);
+        let mut memberships = MockProjectMemberships::new();
+        memberships
+            .expect_memberships()
+            .once()
+            .return_once(move |_| {
+                Box::pin(async move {
+                    Ok(HashMap::from([
+                        ("invalid".into(), project),
+                        ("valid".into(), project),
+                    ]))
+                })
+            });
+        let mut access = MockProjectAssignmentAccess::new();
+        access
+            .expect_receipts()
+            .times(2)
+            .returning(allowed_receipts);
+        let mut properties = MockProjectAgentInheritance::new();
+        properties
+            .expect_inherit()
+            .once()
+            .withf(|_, task| task.entity().entity_id == "invalid")
+            .return_once(move |_, _| Box::pin(async move { Err(failure) }));
+        properties
+            .expect_inherit()
+            .once()
+            .withf(|_, task| task.entity().entity_id == "valid")
+            .returning(|_, _| Box::pin(async { Ok(()) }));
+
+        ProjectAssignmentService::new(properties, memberships, access)
+            .process(&event)
+            .await
+            .unwrap();
+    }
 }
 
 #[test]

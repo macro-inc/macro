@@ -590,16 +590,6 @@ impl PropertiesRepo for PropertiesPgRepo {
         .fetch_optional(&self.pool)
         .await?;
 
-        match row {
-            None => Ok(None),
-            Some(r) => match r.values {
-                None => Ok(None),
-                Some(json_value) if json_value.is_null() => Ok(None),
-                Some(json_value) => {
-                    let value: PropertyValue = serde_json::from_value(json_value)?;
-                    Ok(Some(value))
-                }
-            },
-        }
+        entity_property_queries::decode_stored_property_value(row.and_then(|row| row.values))
     }
 }

@@ -104,7 +104,7 @@ async fn attributed_receipt<A: EntityAccessService, T: RequiredPermission>(
         .ok_or(AccessError::Unauthorized)?;
     access
         .generate_bot_entity_access_receipt(
-            bot.bot_id().into(),
+            bot.bot_id(),
             BotAccessScope::user(user),
             entity_id,
             entity_type,
@@ -211,7 +211,35 @@ impl<P: ProjectAgentInheritance, I: ProjectMemberships, A: ProjectAssignmentAcce
             else {
                 continue;
             };
-            self.properties.inherit(&project, &task).await?;
+            match self.properties.inherit(&project, &task).await {
+                Ok(()) => {}
+                Err(
+                    error
+                    @ (PropertiesErr::Repo(_) | PropertiesErr::PermissionServiceNotConfigured),
+                ) => {
+                    return Err(error.into());
+                }
+                Err(
+                    error @ (PropertiesErr::Validation(_)
+                    | PropertiesErr::PermissionDenied
+                    | PropertiesErr::NotFound
+                    | PropertiesErr::OptionNotFound
+                    | PropertiesErr::EntityPropertyNotFound
+                    | PropertiesErr::RequiredProperty
+                    | PropertiesErr::DuplicateOptionValue
+                    | PropertiesErr::ConflictingTeamLabel(_)
+                    | PropertiesErr::SystemPropertyNotModifiable
+                    | PropertiesErr::TeamMembershipRequired
+                    | PropertiesErr::ManagedDefinition),
+                ) => {
+                    tracing::warn!(
+                        error = ?error,
+                        task_id = %change.task_id,
+                        project_id = %project_id,
+                        "skipping invalid project agent assignment"
+                    );
+                }
+            }
         }
         Ok(())
     }

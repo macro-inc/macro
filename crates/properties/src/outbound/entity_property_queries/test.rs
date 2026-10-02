@@ -9,6 +9,70 @@ fn assignment() -> PropertyValue {
     )])
 }
 
+#[test]
+fn malformed_stored_values_have_a_typed_error_and_preserve_the_decode_failure() {
+    for value in [
+        serde_json::json!({"type": "Unknown", "value": []}),
+        serde_json::json!({"type": "EntityReference", "value": "legacy"}),
+        serde_json::json!({"type": "EntityReference", "value": [{}]}),
+    ] {
+        let error = decode_stored_property_value(Some(value)).unwrap_err();
+        assert!(error.is::<InvalidStoredPropertyValue>());
+        assert!(error.is::<serde_json::Error>());
+    }
+    assert_eq!(decode_stored_property_value(None).unwrap(), None);
+    assert_eq!(
+        decode_stored_property_value(Some(serde_json::Value::Null)).unwrap(),
+        None
+    );
+    assert_eq!(
+        decode_stored_property_value(Some(serde_json::to_value(assignment()).unwrap())).unwrap(),
+        Some(assignment())
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn inheritance_rejects_non_reference_values_without_overwriting_them(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let task_id = Uuid::now_v7().to_string();
+    let invalid = Some(PropertyValue::Str("legacy assignees".to_string()));
+    upsert_entity_property(
+        &pool,
+        &task_id,
+        EntityType::Task,
+        SystemPropertyKey::ASSIGNEES_UUID,
+        invalid.clone(),
+    )
+    .await?;
+
+    let error = add_entity_property_references(
+        &pool,
+        &task_id,
+        EntityType::Task,
+        SystemPropertyKey::ASSIGNEES_UUID,
+        vec![EntityReference::new(
+            bot_id::CODEX_BOT_ID.into_storage_id().as_ref(),
+            EntityType::User,
+        )],
+    )
+    .await
+    .unwrap_err();
+    assert!(error.is::<InvalidStoredPropertyValue>());
+
+    let repaired = upsert_entity_property(
+        &pool,
+        &task_id,
+        EntityType::Task,
+        SystemPropertyKey::ASSIGNEES_UUID,
+        Some(assignment()),
+    )
+    .await?;
+    assert_eq!(repaired.previous_value, invalid);
+    assert_eq!(repaired.value, Some(assignment()));
+    Ok(())
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn inherited_agents_preserve_assignees_and_dedupe_retries(
     pool: Pool<Postgres>,

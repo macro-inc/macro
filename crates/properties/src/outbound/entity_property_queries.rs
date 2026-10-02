@@ -3,14 +3,25 @@
 #[cfg(test)]
 mod test;
 
+use anyhow::Context as _;
 use models_properties::service::{entity_property::EntityProperty, property_value::PropertyValue};
 use models_properties::{EntityReference, EntityType};
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
+use crate::domain::error::InvalidStoredPropertyValue;
 use crate::domain::model::{
     EntityPropertyMutationSnapshot, EntityPropertyOptionSelection, EntityPropertyOptionUpdate,
 };
+
+pub(super) fn decode_stored_property_value(
+    value: Option<serde_json::Value>,
+) -> anyhow::Result<Option<PropertyValue>> {
+    value
+        .filter(|value| !value.is_null())
+        .map(|value| serde_json::from_value(value).context(InvalidStoredPropertyValue))
+        .transpose()
+}
 
 pub(super) struct EntityPropertyMutationRow {
     pub(super) id: Uuid,
@@ -109,14 +120,10 @@ pub async fn add_entity_property_references(
         entity_type,
         property_definition_id,
         |previous| {
-            let mut current = match previous
-                .filter(|value| !value.is_null())
-                .map(serde_json::from_value::<PropertyValue>)
-                .transpose()?
-            {
+            let mut current = match decode_stored_property_value(previous)? {
                 Some(PropertyValue::EntityRef(current)) => current,
                 None => Vec::new(),
-                Some(_) => anyhow::bail!("Cannot append references to a non-reference value"),
+                Some(_) => return Err(InvalidStoredPropertyValue.into()),
             };
             for reference in references {
                 if !current.contains(&reference) {

@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::error::InvalidStoredPropertyValue;
 use models_properties::EntityReference;
 
 fn agent() -> EntityReference {
@@ -20,6 +21,52 @@ fn task_repo(task_id: Uuid) -> MockPropertiesRepo {
             Box::pin(async move { Ok(HashMap::from([(task_id, DocumentSubType::Task)])) })
         });
     repo
+}
+
+#[tokio::test]
+async fn inheritance_classifies_invalid_values_without_hiding_repository_failures() {
+    for source_read_fails in [false, true] {
+        for invalid_value in [false, true] {
+            let task_id = Uuid::from_u128(1);
+            let mut repo = task_repo(task_id);
+            let error = if invalid_value {
+                anyhow::Error::new(InvalidStoredPropertyValue)
+            } else {
+                anyhow::Error::new(std::io::Error::other("database unavailable"))
+            }
+            .context("property repository operation failed");
+            if source_read_fails {
+                repo.expect_get_entity_property_value()
+                    .once()
+                    .return_once(|_, _, _| Box::pin(async move { Err(error) }));
+            } else {
+                repo.expect_get_entity_property_value()
+                    .once()
+                    .return_once(|_, _, _| {
+                        Box::pin(async { Ok(Some(PropertyValue::EntityRef(vec![agent()]))) })
+                    });
+                repo.expect_add_entity_property_references()
+                    .once()
+                    .return_once(|_, _, _, _| Box::pin(async move { Err(error) }));
+            }
+            let events = RecordingEventBroker::default();
+            let service = service_with_event_broker(repo, events.clone());
+            let result = service
+                .inherit_project_agent_assignees(
+                    &view_receipt("project", EntityType::Initiative),
+                    &edit_receipt(&task_id.to_string(), EntityType::Task),
+                )
+                .await;
+            if invalid_value {
+                assert!(matches!(result, Err(PropertiesErr::Validation(_))));
+            } else {
+                assert!(
+                    matches!(result, Err(PropertiesErr::Repo(error)) if error.is::<std::io::Error>())
+                );
+            }
+            assert!(events.events().is_empty());
+        }
+    }
 }
 
 #[tokio::test]
