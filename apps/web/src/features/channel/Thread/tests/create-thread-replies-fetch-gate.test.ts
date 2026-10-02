@@ -1,13 +1,15 @@
-import { createRoot, createSignal } from 'solid-js';
+import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createThreadRepliesFetchGate,
   THREAD_REPLIES_FETCH_DEBOUNCE_MS,
 } from '../create-thread-replies-fetch-gate';
+import { DEFAULT_VISIBLE_REPLY_GROUP_COUNT } from '../utils/thread-reply-indicator-helpers';
 
 type FixtureOptions = {
   isExpanded?: boolean;
   isFindBarOpen?: boolean;
+  replyCount?: number;
   targetReplyId?: string;
   targetThreadId?: string;
 };
@@ -31,6 +33,7 @@ describe('createThreadRepliesFetchGate', () => {
       dispose = rootDispose;
       enabled = createThreadRepliesFetchGate({
         threadId: () => 'thread-1',
+        replyCount: () => options.replyCount ?? 0,
         isExpanded: () => options.isExpanded ?? false,
         isFindBarOpen: () => options.isFindBarOpen ?? false,
         targetThreadId: () => options.targetThreadId,
@@ -45,37 +48,25 @@ describe('createThreadRepliesFetchGate', () => {
     await Promise.resolve();
   };
 
-  it('does not fetch full replies merely because a collapsed thread stays mounted', async () => {
-    const fixture = createFixture();
-    await flushEffects();
-    vi.advanceTimersByTime(THREAD_REPLIES_FETCH_DEBOUNCE_MS * 10);
-    expect(fixture.enabled()).toBe(false);
-  });
-
-  it('enables immediately when the thread is expanded', async () => {
-    const [isExpanded, setIsExpanded] = createSignal(false);
-    let enabled!: () => boolean;
-
-    createRoot((rootDispose) => {
-      dispose = rootDispose;
-      enabled = createThreadRepliesFetchGate({
-        threadId: () => 'thread-1',
-        isExpanded,
-        isFindBarOpen: () => false,
-        targetThreadId: () => undefined,
-        targetReplyId: () => undefined,
-      });
+  it('waits 300ms before enabling an ordinary thread reply fetch', async () => {
+    const fixture = createFixture({
+      replyCount: DEFAULT_VISIBLE_REPLY_GROUP_COUNT + 1,
     });
-
     await flushEffects();
-    expect(enabled()).toBe(false);
 
-    setIsExpanded(true);
-    await flushEffects();
-    expect(enabled()).toBe(true);
+    expect(fixture.enabled()).toBe(false);
+    vi.advanceTimersByTime(THREAD_REPLIES_FETCH_DEBOUNCE_MS - 1);
+    expect(fixture.enabled()).toBe(false);
+    vi.advanceTimersByTime(1);
+    expect(fixture.enabled()).toBe(true);
   });
 
-  it('debounces non-find-bar reply navigation', async () => {
+  it('also debounces expansion and non-find-bar reply navigation', async () => {
+    const expanded = createFixture({ isExpanded: true });
+    await flushEffects();
+    expect(expanded.enabled()).toBe(false);
+
+    dispose();
     const targeted = createFixture({
       targetThreadId: 'thread-1',
       targetReplyId: 'reply-1',
@@ -87,7 +78,7 @@ describe('createThreadRepliesFetchGate', () => {
     expect(targeted.enabled()).toBe(true);
   });
 
-  it('enables Cmd+F targeted replies and expansion immediately', async () => {
+  it('enables only the Cmd+F targeted reply immediately', async () => {
     const targeted = createFixture({
       isFindBarOpen: true,
       targetThreadId: 'thread-1',
@@ -102,14 +93,11 @@ describe('createThreadRepliesFetchGate', () => {
       isExpanded: true,
     });
     await flushEffects();
-    expect(expanded.enabled()).toBe(true);
+    expect(expanded.enabled()).toBe(false);
   });
 
-  it('cancels the pending navigation fetch when a transient thread unmounts', async () => {
-    const fixture = createFixture({
-      targetThreadId: 'thread-1',
-      targetReplyId: 'reply-1',
-    });
+  it('cancels the pending fetch when a transient thread unmounts', async () => {
+    const fixture = createFixture({ isExpanded: true });
     await flushEffects();
     vi.advanceTimersByTime(THREAD_REPLIES_FETCH_DEBOUNCE_MS - 1);
 
