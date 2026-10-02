@@ -36,6 +36,8 @@ use agent_fold::domain::transcript::{Fold, LogEvent};
 use claude_fold::ClaudeLog;
 use codex_fold::CodexLog;
 
+mod commands;
+
 /// The subcommand macrod's harness config names to run this adapter.
 pub(crate) const SUBCOMMAND: &str = "herdr-acp";
 
@@ -242,8 +244,7 @@ pub async fn run(options: AdapterOptions) -> rootcause::Result<()> {
                         );
                         return;
                     }
-                    let result = adapter.request(&method, params).await;
-                    adapter.respond(id, result);
+                    adapter.respond_to_request(id, &method, params).await;
                     if let Some(session) = prompt_session {
                         session.prompt_pending.store(false, Ordering::SeqCst);
                     }
@@ -694,6 +695,18 @@ impl Adapter {
             ));
         }
         herdr.prompt_agent(&live.name, text).await?;
+        if let Some(command) = commands::native_control(self.options.kind, text) {
+            // Herdr acknowledges PTY delivery, not the resulting setting. These
+            // commands need not write a transcript entry or start a model turn.
+            self.notify_update(&session.id, json!({
+                "sessionUpdate": "agent_message_chunk",
+                "content": {"type": "text", "text": format!(
+                    "Sent `{command}` to {} in Herdr. Check its response and complete any confirmation there.",
+                    self.options.kind.herdr_kind(),
+                )},
+            }));
+            return Ok("end_turn");
+        }
         let outcome = self.follow(herdr, session, live, &cancel).await;
         *lock(&session.cancel) = None;
         self.save(session, guard.as_ref())?;
