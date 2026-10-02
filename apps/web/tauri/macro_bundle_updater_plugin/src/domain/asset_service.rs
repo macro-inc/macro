@@ -106,6 +106,7 @@ where
         match &routes.active {
             BundleSource::Embedded { .. } => {
                 if path.has_extension()
+                    && path != &BundleAssetPath::entrypoint()
                     && let Some(BundleSource::Ota { root, .. }) = &routes.fallback
                     && let Some(bytes) = self.assets.read_asset(root, path).await?
                 {
@@ -133,6 +134,12 @@ where
                         },
                         None => BundleAssetResolution::NotFound,
                     });
+                }
+
+                // Entrypoints select the active generation. Serving a previous
+                // index would prevent the new document from acknowledging it.
+                if path == &BundleAssetPath::entrypoint() {
+                    return Ok(BundleAssetResolution::NotFound);
                 }
 
                 match &routes.fallback {

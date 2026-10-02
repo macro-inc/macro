@@ -9,13 +9,14 @@ import {
   waitFor,
   within,
 } from '@solidjs/testing-library';
-import type { JSX } from 'solid-js';
+import { createSignal, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildAgentRoster, type PersistedAgentLike } from '../core/roster';
 import { AgentPicker } from './AgentPicker';
 import { NewChatPage } from './NewChatPage';
 
 const mocks = vi.hoisted(() => ({
+  userId: () => 'user' as string | undefined,
   openSettings: vi.fn(),
   capabilitiesPending: false,
   attachments: [] as InputAttachmentData[],
@@ -32,7 +33,9 @@ vi.mock('@channel/Input', async () => ({
   ...(await import('../../channel/Input/attachment-tracker')),
   uploadInputAttachments: vi.fn(),
 }));
-vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user' }));
+vi.mock('@core/context/user', () => ({
+  useUserId: () => () => mocks.userId(),
+}));
 vi.mock('@core/constant/SettingsState', () => ({
   useSettingsState: () => ({ openSettings: mocks.openSettings }),
 }));
@@ -162,6 +165,7 @@ type ComposerProps = {
   drawer: JSX.Element;
   drawerOpen: boolean;
   draft: string;
+  attachments: InputAttachmentData[];
   onDraftChange: (draft: string) => void;
   onSend: (prompt: string, attachments: InputAttachmentData[]) => void;
 };
@@ -169,6 +173,9 @@ vi.mock('../components/ChatComposer', () => ({
   ChatComposer: (props: ComposerProps) => (
     <>
       {props.selector}
+      <output data-testid="attachments">
+        {props.attachments.map((a) => a.name).join(',')}
+      </output>
       <div data-testid="drawer" hidden={!props.drawerOpen}>
         {props.drawer}
       </div>
@@ -193,6 +200,7 @@ vi.mock('../components/ChatComposer', () => ({
 
 beforeEach(() => {
   localStorage.clear();
+  mocks.userId = () => 'user';
 });
 
 function page(
@@ -754,5 +762,32 @@ it('starts a conversation with an uploaded image and no text', () => {
         },
       ],
     })
+  );
+});
+
+it('isolates drafts and attachment projections as identity arrives and changes', () => {
+  const [identity, setIdentity] = createSignal<string>();
+  mocks.userId = identity;
+  const base = 'attachment-tracker-agents-new-conversation-persist-v0';
+  const attachment = { id: 'private', name: 'alice-only.txt', kind: 'file' };
+  localStorage.setItem(`${base}:`, JSON.stringify([attachment]));
+  localStorage.setItem(`${base}:alice`, JSON.stringify([attachment]));
+  page();
+  expect(screen.getByTestId('attachments').textContent).toBe('');
+  fireEvent.input(screen.getByLabelText('Draft'), {
+    target: { value: 'anonymous' },
+  });
+  setIdentity('alice');
+  expect((screen.getByLabelText('Draft') as HTMLInputElement).value).toBe('');
+  expect(screen.getByTestId('attachments').textContent).toBe('alice-only.txt');
+  fireEvent.input(screen.getByLabelText('Draft'), {
+    target: { value: 'Alice private' },
+  });
+  setIdentity('bob');
+  expect((screen.getByLabelText('Draft') as HTMLInputElement).value).toBe('');
+  expect(screen.getByTestId('attachments').textContent).toBe('');
+  setIdentity('alice');
+  expect((screen.getByLabelText('Draft') as HTMLInputElement).value).toBe(
+    'Alice private'
   );
 });

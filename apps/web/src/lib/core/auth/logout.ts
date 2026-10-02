@@ -5,17 +5,16 @@ import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { syncLoginStorage } from '@core/util/cookies';
 import { clearPostLoginRedirect } from '@core/util/postLoginRedirect';
 import { clearRegisteredCaches } from '@graphql-cache/lifecycle';
+import { rotateCacheScope } from '@graphql-cache/scope';
 import { authKeys, type UserInfoData } from '@queries/auth/user-info';
-import { queryClient } from '@queries/client';
-import { emailKeys } from '@queries/email/keys';
-import { notificationKeys } from '@queries/notification/keys';
-import { propertiesKeys } from '@queries/properties/keys';
+import { queryClient, queryPersistence } from '@queries/client';
 import { clearDocumentQueryCache } from '@queries/storage/document-cache';
 import { clearOfflineDocumentContexts } from '@queries/storage/documentLoad/offline-context-runtime';
 import { authServiceClient } from '@service-auth/client';
 import { raceTimeout } from '@solid-primitives/promise';
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
+import { clearComposerStorage } from './clear-composer-storage';
 import { unregisterPushRegistrationsForLogout } from './push-registration-lifecycle';
 
 const unauthenticatedUserInfo: UserInfoData = {
@@ -41,17 +40,17 @@ export async function clearLocalAuthSession() {
   syncLoginStorage(false);
   const documentContextsCleared = clearOfflineDocumentContexts();
   clearDocumentQueryCache(queryClient);
+  // Start every wipe before waiting, including stores not hydrated this session.
+  const results = await Promise.allSettled([
+    Promise.resolve().then(clearComposerStorage),
+    documentContextsCleared,
+    clearRegisteredCaches(),
+    queryPersistence.clear(),
+  ]);
+  if (results.some((result) => result.status === 'rejected')) {
+    await rotateCacheScope();
+  }
   queryClient.setQueryData(authKeys.userInfo.queryKey, unauthenticatedUserInfo);
-  queryClient.removeQueries({ queryKey: emailKeys.links.queryKey });
-  queryClient.removeQueries({ queryKey: notificationKeys._def });
-  queryClient.removeQueries({ queryKey: propertiesKeys._def });
-  // The billing position (usage, credits, overage settings) belongs to the
-  // account that fetched it; never let it render for the next sign-in.
-  queryClient.removeQueries({ queryKey: authKeys.aiBillingSummary.queryKey });
-
-  // Queued mutations are user intent; never allow them to replay under a
-  // subsequent account sharing this anonymous device cache scope.
-  await Promise.all([documentContextsCleared, clearRegisteredCaches()]);
   clearMcpAuthAttempts();
 }
 

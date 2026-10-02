@@ -158,3 +158,43 @@ async fn ota_to_embedded_transition_checks_the_previous_ota_first() {
         }
     );
 }
+
+#[tokio::test]
+async fn rollback_entrypoint_never_comes_from_the_previous_ota() {
+    let routes = BundleRoutes::new(1);
+    routes
+        .restore(BundleSource::ota(2, PathBuf::from("/ota/2")))
+        .await;
+    routes.transition_to(BundleSource::embedded(1)).await;
+    let assets = FakeAssets::default();
+    assets
+        .insert("/ota/2", "index.html", "stale entrypoint")
+        .await;
+    let resolver = BundleAssetResolver::new(routes, assets);
+    for entrypoint in ["", "index.html"] {
+        assert_eq!(
+            resolver.resolve(&path(entrypoint)).await.unwrap(),
+            BundleAssetResolution::Embedded
+        );
+    }
+}
+
+#[tokio::test]
+async fn missing_active_entrypoint_never_uses_the_previous_generation() {
+    let routes = BundleRoutes::new(1);
+    routes
+        .restore(BundleSource::ota(2, PathBuf::from("/ota/2")))
+        .await;
+    routes
+        .transition_to(BundleSource::ota(3, PathBuf::from("/ota/3")))
+        .await;
+    let assets = FakeAssets::default();
+    assets
+        .insert("/ota/2", "index.html", "stale entrypoint")
+        .await;
+    let resolver = BundleAssetResolver::new(routes, assets);
+    assert_eq!(
+        resolver.resolve(&path("index.html")).await.unwrap(),
+        BundleAssetResolution::NotFound
+    );
+}
