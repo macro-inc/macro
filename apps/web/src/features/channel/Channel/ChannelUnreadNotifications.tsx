@@ -12,7 +12,9 @@ import type { MessageListItem } from '@service-storage/messages';
 import { type Accessor, createMemo, type JSX } from 'solid-js';
 import type { ThreadListScrollState } from './ThreadList';
 import {
+  type ThreadPlacement,
   type UnreadNotificationChip,
+  type UnreadThread,
   unreadNotificationChip,
   unreadThreads,
 } from './unread-thread-navigation';
@@ -68,39 +70,45 @@ export function ChannelUnreadNotifications(props: {
     }
   );
   const unreadChip = createMemo(() => {
-    const positions = new Map(
+    const unloaded = new Map(
       (queryReadyGate(unreadRoots) ? unreadRoots.data : []).map((message) => [
         message.id,
         message,
       ])
     );
-    for (const message of props.messages()) positions.set(message.id, message);
     const scroll = props.scrollState();
-    const target = unread()[0];
     const container = props.container();
     const viewport = container?.querySelector('[data-channel-scroll]');
-    const element =
-      target &&
-      container?.querySelector(
-        `[data-message-id="${CSS.escape(target.messageId)}"]`
-      );
-    let targetPosition: 'above' | 'below' | 'visible' | undefined;
-    if (viewport && element) {
-      const bounds = viewport.getBoundingClientRect();
-      const message = element.getBoundingClientRect();
-      const insets = props.insets();
-      targetPosition =
-        message.bottom <= bounds.top + insets.start
-          ? 'above'
-          : message.top >= bounds.bottom - insets.end
-            ? 'below'
-            : 'visible';
-    }
+    const insets = props.insets();
+    const place = (element: Element): ThreadPlacement => {
+      const bounds = viewport!.getBoundingClientRect();
+      const rect = element.getBoundingClientRect();
+      return rect.bottom <= bounds.top + insets.start
+        ? 'above'
+        : rect.top >= bounds.bottom - insets.end
+          ? 'below'
+          : 'visible';
+    };
+    const measure = (thread: UnreadThread) => {
+      if (!container || !viewport) return;
+      const row = container
+        .querySelector(`[data-message-id="${CSS.escape(thread.threadId)}"]`)
+        ?.closest('[data-index]');
+      // The unread message when it is rendered, otherwise the control that
+      // reveals it while collapsed, otherwise the thread row around both.
+      const element =
+        container.querySelector(
+          `[data-message-id="${CSS.escape(thread.messageId)}"]`
+        ) ??
+        row?.querySelector('[data-thread-collapsed-replies]') ??
+        row;
+      return element ? place(element) : undefined;
+    };
     return unreadNotificationChip(
       unread(),
-      positions,
+      { rows: props.messages(), unloaded },
       scroll?.didInitialScroll ? scroll.visibleRange : undefined,
-      targetPosition
+      measure
     );
   });
 

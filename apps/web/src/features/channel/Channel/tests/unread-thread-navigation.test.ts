@@ -27,12 +27,15 @@ function reply(id: string, threadId: string, hour = 12): UnifiedNotification {
     },
   };
 }
-const positions = new Map([
-  ['old', { id: 'old', created_at: '2026-08-01T00:00:00Z' }],
-  ['middle', { id: 'middle', created_at: '2026-08-02T00:00:00Z' }],
-  ['new', { id: 'new', created_at: '2026-08-03T00:00:00Z' }],
-]);
+const rows = [
+  { id: 'old', created_at: '2026-08-01T00:00:00Z' },
+  { id: 'middle', created_at: '2026-08-02T00:00:00Z' },
+  { id: 'new', created_at: '2026-08-03T00:00:00Z' },
+];
+const order = { rows, unloaded: new Map() };
 const visible = { first: 'middle', last: 'middle' };
+/** Nothing inside the thread is mounted, so placement falls back to row order. */
+const unrendered = () => undefined;
 
 describe('channel unread notification navigation', () => {
   it('counts three replies and a mention of one reply as one thread', () => {
@@ -123,7 +126,9 @@ describe('channel unread notification navigation', () => {
       reply('a', 'new', 12),
       reply('b', 'old', 13),
     ]);
-    expect(unreadNotificationChip(threads, positions, visible)).toMatchObject({
+    expect(
+      unreadNotificationChip(threads, order, visible, unrendered)
+    ).toMatchObject({
       count: 2,
       direction: 'above',
       thread: { messageId: 'b' },
@@ -134,34 +139,117 @@ describe('channel unread notification navigation', () => {
       reply('b', 'old', 13),
       reply('c', 'new', 14),
     ]);
-    expect(unreadNotificationChip(live, positions, visible)).toMatchObject({
+    expect(
+      unreadNotificationChip(live, order, visible, unrendered)
+    ).toMatchObject({
       count: 2,
       direction: 'below',
       thread: { messageId: 'c' },
     });
   });
 
-  it('uses measured reply position within a tall thread and hides for a visible message', () => {
-    const threads = unreadThreads([reply('a', 'middle')]);
+  it('prefers the measured position of a rendered reply over its row', () => {
+    const threads = unreadThreads([reply('a', 'old')]);
     expect(
-      unreadNotificationChip(threads, positions, visible, 'above')?.direction
-    ).toBe('above');
-    expect(
-      unreadNotificationChip(threads, positions, visible, 'below')?.direction
+      unreadNotificationChip(threads, order, visible, () => 'below')?.direction
     ).toBe('below');
     expect(
-      unreadNotificationChip(threads, positions, visible, 'visible')
+      unreadNotificationChip(threads, order, visible, () => 'above')?.direction
+    ).toBe('above');
+  });
+
+  it('shows no chip for an unread thread the reader can already see', () => {
+    // The reader sits at the bottom of the channel with the thread on screen;
+    // a down arrow would point past the end of the conversation.
+    const onScreen = unreadThreads([reply('a', 'middle')]);
+    expect(
+      unreadNotificationChip(onScreen, order, visible, () => 'visible')
     ).toBeUndefined();
-    expect(unreadNotificationChip(threads, positions, visible)?.direction).toBe(
-      'below'
-    );
+    // Row granularity agrees when nothing inside the row is rendered.
+    expect(
+      unreadNotificationChip(onScreen, order, visible, unrendered)
+    ).toBeUndefined();
+  });
+
+  it('skips a visible thread and points at the newest unread one off screen', () => {
+    const threads = unreadThreads([
+      reply('a', 'old', 12),
+      reply('b', 'middle', 13),
+    ]);
+    expect(threads[0].threadId).toBe('middle');
+    expect(
+      unreadNotificationChip(threads, order, visible, unrendered)
+    ).toMatchObject({
+      count: 2,
+      direction: 'above',
+      thread: { messageId: 'a' },
+    });
+  });
+
+  it('follows the rendered row order when a live insert arrives out of timestamp order', () => {
+    // Concurrent sends reach the client in delivery order, so the newest row
+    // can carry an older timestamp than the rows rendered above it.
+    const shuffled = {
+      rows: [rows[0], rows[2], rows[1]],
+      unloaded: new Map(),
+    };
+    const below = unreadThreads([reply('a', 'middle', 13)]);
+    expect(
+      unreadNotificationChip(
+        below,
+        shuffled,
+        { first: 'new', last: 'new' },
+        unrendered
+      )?.direction
+    ).toBe('below');
+    const above = unreadThreads([reply('a', 'new', 13)]);
+    expect(
+      unreadNotificationChip(
+        above,
+        shuffled,
+        { first: 'middle', last: 'middle' },
+        unrendered
+      )?.direction
+    ).toBe('above');
+  });
+
+  it('places an unloaded parent against the loaded window, not the viewport', () => {
+    const older = { id: 'older', created_at: '2026-07-01T00:00:00Z' };
+    const newer = { id: 'newer', created_at: '2026-09-01T00:00:00Z' };
+    const window = (root: typeof older) => ({
+      rows,
+      unloaded: new Map([[root.id, root]]),
+    });
+    expect(
+      unreadNotificationChip(
+        unreadThreads([reply('a', 'older')]),
+        window(older),
+        { first: 'new', last: 'new' },
+        unrendered
+      )?.direction
+    ).toBe('above');
+    expect(
+      unreadNotificationChip(
+        unreadThreads([reply('a', 'newer')]),
+        window(newer),
+        { first: 'old', last: 'old' },
+        unrendered
+      )?.direction
+    ).toBe('below');
   });
 
   it('waits for layout and an unloaded parent position instead of guessing from reply time', () => {
     const threads = unreadThreads([reply('a', 'old')]);
     expect(
-      unreadNotificationChip(threads, positions, undefined)
+      unreadNotificationChip(threads, order, undefined, unrendered)
     ).toBeUndefined();
-    expect(unreadNotificationChip(threads, new Map(), visible)).toBeUndefined();
+    expect(
+      unreadNotificationChip(
+        threads,
+        { rows: [], unloaded: new Map() },
+        visible,
+        unrendered
+      )
+    ).toBeUndefined();
   });
 });
