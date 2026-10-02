@@ -87,6 +87,47 @@ Use browser Back to return from GitHub: when the page is restored from BFCache,
 it refreshes link status and restores the retry prompt only if reconnection is
 still needed.
 
+## Desktop onboarding
+
+With onboarding v4 enabled, new desktop users enter the same flow from
+`/app/signup`, `/app/login`, or `/app/onboarding`. Marketing Get Started links
+open `/app/signup`. Existing members and native mobile keep their existing routes.
+
+Signed-out `/app/signup` starts at the workspace color picker, followed by feature
+interests and security. No account is required for these slides. At the work-email
+step, Connect work email uses Google sign-up to create the Macro account and link
+the primary inbox. This step offers Google sign-up only, with no alternate email
+button. The chosen accent and work step survive the OAuth
+redirect; after authentication the accent is saved to the user's theme and setup
+resumes at work email. Regular `/app/login` retains the direct sign-in screen.
+
+The steps are workspace color, feature interests, security, work Google account,
+personal Google account, tools, team, and the trial offer. Color selection forks
+the default Macro Light or Macro Dark theme for the current mode and pins the
+custom accent palette; it does not modify a built-in theme. Interests are visual
+preferences only. Security and Google steps have a Read more section below the fold.
+
+Work and personal account buttons use the existing Gmail linking flow. Skipping
+work email skips the secondary-account prompt. Verify that a Google return
+restores the correct step, shows the connected address, and allows continuation.
+Tools use the same Pipedream catalog and connection UI as Settings. Search, load
+more, cancel/retry connection, and confirm connected checks persist on return.
+Team setup retains existing membership, invite acceptance, domain suggestions,
+and editable invite recipients; submitting the form sends real invitations.
+
+The trial offer contains no card fields or wallet buttons. Its primary button
+requests an automatic 30-day Premium trial through Stripe Checkout; no coupon
+code is required. Stripe collects the payment method for billing after the trial.
+Only a customer's first subscription qualifies, including canceled subscriptions
+in that check. Ineligible trial requests show an error instead of opening an
+immediately paid checkout. Standard purchases retain their existing billing terms.
+Cancellation returns to this step. A successful return
+polls the server's license state, completes onboarding, and enters the app without
+an extra confirmation click. A pending webhook shows a retryable confirmation
+state. The Guest scroll cue opens a comparison with a separate Guest continuation.
+Both completion paths preserve an original `next` destination. Old saved email,
+connector, building, and summary step names are migrated on resume.
+
 ## Public onboarding preview
 
 The standalone marketing development route `/onboarding-preview.html` continues
@@ -107,8 +148,8 @@ Reduced-motion users scroll immediately. Wallet buttons only display a
 preview message. The card number stays in the input only and is never sent or
 saved; the remaining fields are display-only. Both plan
 continuation buttons finish the preview at the login URL; they do not purchase a
-subscription. Back returns to team setup. This screen is preview-only and does
-not change the authenticated onboarding or Stripe checkout flow.
+subscription. Back returns to team setup. This payment mock remains preview-only; the authenticated flow instead opens
+Stripe Checkout as described above.
 
 ## Mailpit (local email)
 

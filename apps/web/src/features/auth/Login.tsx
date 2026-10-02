@@ -1,6 +1,8 @@
+import { clearSignupDraft } from '@app/features/setup/core/signupDraft';
 import { OnboardingFlow } from '@app/features/setup/flow/OnboardingFlow';
 import { NoiseBackground } from '@app/features/setup/flow/shared';
 import { useOnboardingV4Flag } from '@app/features/setup/flow/useOnboardingV4Flag';
+import { SignupJourney } from '@app/features/setup/views/SignupJourney';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { GOOGLE_GMAIL_IDP } from '@core/auth/email';
 import { LoadingBlock } from '@core/component/LoadingBlock';
@@ -60,6 +62,7 @@ function PostLoginRedirect() {
   // Login init is owned by the per-method handlers (the session-token effect and
   // onComplete); this redirect only navigates, so login doesn't fire init twice.
   onMount(() => {
+    clearSignupDraft();
     navigate('/', { replace: true });
   });
 
@@ -475,6 +478,13 @@ function VerifyFormNew(props: {
 }
 
 export function Login(props: { signupMode?: boolean }) {
+  const onboardingV4 = useOnboardingV4Flag();
+  const startSignup = useSsoLogin({ signupMode: true });
+  const useSignupJourney = () =>
+    props.signupMode &&
+    !isMobile() &&
+    !isNativeMobilePlatform() &&
+    onboardingV4().enabled;
   const [searchParams] = useSearchParams();
   const [stage, setStage] = createSignal(
     searchParams.email ? Stage.Email : Stage.None
@@ -597,9 +607,12 @@ export function Login(props: { signupMode?: boolean }) {
 
   return (
     <Show when={!userInfo()?.authenticated} fallback={<PostAuthGate />}>
-      <div class="flex items-center justify-center size-full overflow-hidden relative">
-        <style>{
-          /*css*/ `
+      <Show
+        when={useSignupJourney()}
+        fallback={
+          <div class="flex items-center justify-center size-full overflow-hidden relative">
+            <style>{
+              /*css*/ `
           @keyframes ln-card-in {
             from { opacity: 0; transform: translateY(14px) scale(0.985); }
             to   { opacity: 1; transform: translateY(0)    scale(1);     }
@@ -617,35 +630,76 @@ export function Login(props: { signupMode?: boolean }) {
             transition: background-color 5000s ease-in-out 0s;
           }
         `
-        }</style>
+            }</style>
 
-        <NoiseBackground />
+            <NoiseBackground />
 
-        <div class="relative z-10 w-full max-w-sm sm:max-w-lg ln-card">
-          <div class="px-4 sm:px-8 flex flex-col gap-12">
-            <div class="flex flex-col gap-8">
-              <Show when={!virtualKeyboardVisible()}>
-                <div class="flex flex-col gap-1.5">
-                  <LogoIcon class="mb-2 size-9 text-accent" />
-                  <h1 class="font-semibold tracking-tight text-ink text-2xl">
-                    Welcome to Macro
-                  </h1>
-                  <p class="text-sm text-ink-muted">
-                    The open source workspace
-                  </p>
+            <div class="relative z-10 w-full max-w-sm sm:max-w-lg ln-card">
+              <div class="px-4 sm:px-8 flex flex-col gap-12">
+                <div class="flex flex-col gap-8">
+                  <Show when={!virtualKeyboardVisible()}>
+                    <div class="flex flex-col gap-1.5">
+                      <LogoIcon class="mb-2 size-9 text-accent" />
+                      <h1 class="font-semibold tracking-tight text-ink text-2xl">
+                        Welcome to Macro
+                      </h1>
+                      <p class="text-sm text-ink-muted">
+                        The open source workspace
+                      </p>
+                    </div>
+                  </Show>
+
+                  <Stepper
+                    step={stepIndex()}
+                    transition={Stepper.transitions.scale}
+                  >
+                    <Stepper.Step>
+                      <LoginPicker
+                        setStage={onStageChange}
+                        signupMode={props.signupMode}
+                      />
+                    </Stepper.Step>
+                    <Stepper.Step>
+                      <EmailFormNew setStage={onStageChange} onBack={onBack} />
+                    </Stepper.Step>
+                    <Stepper.Step>
+                      <VerifyFormNew setStage={onStageChange} onBack={onBack} />
+                    </Stepper.Step>
+                  </Stepper>
                 </div>
-              </Show>
 
+                <div class="text-center text-xs text-ink/50 wrap-break-word">
+                  By continuing, you agree to our{' '}
+                  <a
+                    class="text-link hover:text-link-hover visited:text-link-visited underline underline-offset-2 focus-visible:text-link-hover"
+                    href="/terms"
+                  >
+                    terms
+                  </a>{' '}
+                  and{' '}
+                  <a
+                    class="text-link hover:text-link-hover visited:text-link-visited underline underline-offset-2 focus-visible:text-link-hover"
+                    href="/privacy"
+                  >
+                    privacy policy
+                  </a>
+                  .
+                </div>
+              </div>
+            </div>
+          </div>
+        }
+      >
+        <SignupJourney
+          onGoogle={() => startSignup(GOOGLE_GMAIL_IDP)}
+          showingEmail={stage() !== Stage.None}
+          onBackFromEmail={onBack}
+          emailForm={
+            <Show when={stage() === Stage.Email || stage() === Stage.Verify}>
               <Stepper
-                step={stepIndex()}
+                step={stage() === Stage.Verify ? 1 : 0}
                 transition={Stepper.transitions.scale}
               >
-                <Stepper.Step>
-                  <LoginPicker
-                    setStage={onStageChange}
-                    signupMode={props.signupMode}
-                  />
-                </Stepper.Step>
                 <Stepper.Step>
                   <EmailFormNew setStage={onStageChange} onBack={onBack} />
                 </Stepper.Step>
@@ -653,28 +707,10 @@ export function Login(props: { signupMode?: boolean }) {
                   <VerifyFormNew setStage={onStageChange} onBack={onBack} />
                 </Stepper.Step>
               </Stepper>
-            </div>
-
-            <div class="text-center text-xs text-ink/50 wrap-break-word">
-              By continuing, you agree to our{' '}
-              <a
-                class="text-link hover:text-link-hover visited:text-link-visited underline underline-offset-2 focus-visible:text-link-hover"
-                href="/terms"
-              >
-                terms
-              </a>{' '}
-              and{' '}
-              <a
-                class="text-link hover:text-link-hover visited:text-link-visited underline underline-offset-2 focus-visible:text-link-hover"
-                href="/privacy"
-              >
-                privacy policy
-              </a>
-              .
-            </div>
-          </div>
-        </div>
-      </div>
+            </Show>
+          }
+        />
+      </Show>
     </Show>
   );
 }

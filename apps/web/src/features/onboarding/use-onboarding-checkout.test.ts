@@ -12,12 +12,14 @@ describe('onboardingCheckoutArgs', () => {
       successUrl: `${window.location.origin}/app/onboarding?subscriptionSuccess=true&type=premium`,
       cancelUrl: `${window.location.origin}/app/onboarding?subscriptionCancel=true`,
       plan: 'premium',
+      onboardingTrial: true,
     });
   });
 
   it('carries the purchased tier back on the success leg', () => {
     const args = onboardingCheckoutArgs('max');
     expect(args.plan).toBe('max');
+    expect(args.onboardingTrial).toBe(false);
     expect(args.successUrl).toBe(
       `${window.location.origin}/app/onboarding?subscriptionSuccess=true&type=max`
     );

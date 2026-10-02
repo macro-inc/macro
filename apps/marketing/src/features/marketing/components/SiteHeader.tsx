@@ -172,7 +172,7 @@ export function SiteHeader() {
         <a
           class="site-nav-start"
           target="_self"
-          href={import.meta.env.DEV ? '/onboarding-preview.html' : '/app'}
+          href="/app/signup"
           onPointerEnter={moveGlow}
           onPointerMove={moveGlow}
           onPointerLeave={stopGlow}

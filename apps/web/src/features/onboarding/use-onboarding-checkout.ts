@@ -36,6 +36,7 @@ export function onboardingCheckoutArgs(
     successUrl: `${onboardingUrl}?subscriptionSuccess=true&type=${tier}`,
     cancelUrl: `${onboardingUrl}?subscriptionCancel=true`,
     plan: tier,
+    onboardingTrial: tier === 'premium',
   };
 }
 

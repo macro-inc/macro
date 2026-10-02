@@ -4469,7 +4469,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/StripeSessionResponse"
+                  "$ref": "#/components/schemas/CheckoutSessionV2Response"
                 }
               }
             }
@@ -4785,6 +4785,23 @@
           }
         }
       },
+      "CheckoutSessionV2Response": {
+        "type": "object",
+        "description": "Hosted checkout with the billing terms the server actually granted.",
+        "required": ["url"],
+        "properties": {
+          "trialDays": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Trial duration, absent for an immediately paid checkout.",
+            "minimum": 0
+          },
+          "url": {
+            "type": "string",
+            "description": "The opaque URL returned by Stripe."
+          }
+        }
+      },
       "CodexConfigRequest": {
         "type": "object",
         "description": "Explicit remote environment for future Codex sessions.",
@@ -4940,6 +4957,10 @@
           "metadata": {
             "$ref": "#/components/schemas/CheckoutSessionMetadata",
             "description": "Tracking metadata for conversion attribution"
+          },
+          "onboardingTrial": {
+            "type": "boolean",
+            "description": "Request the automatic, first-subscription 30-day Premium trial."
           },
           "plan": {
             "oneOf": [

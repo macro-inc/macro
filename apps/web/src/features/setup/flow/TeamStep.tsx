@@ -2,8 +2,6 @@ import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useEmail } from '@core/context/user';
 import { idToDisplayName } from '@core/user/util';
 import CheckIcon from '@phosphor/check.svg';
-import Plus from '@phosphor/plus.svg';
-import XIcon from '@phosphor/x.svg';
 import { useContacts, useContactsQuery } from '@queries/contacts/contacts';
 import { useOnboardingQuery } from '@queries/onboarding';
 import {
@@ -16,20 +14,10 @@ import {
 } from '@queries/team/teams';
 import type { TeamInviteDetails } from '@service-auth/generated/schemas/teamInviteDetails';
 import { Button } from '@ui';
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  For,
-  Index,
-  Show,
-} from 'solid-js';
-import {
-  ContinueButton,
-  deriveTeamName,
-  FormInput,
-  SkipButton,
-} from './shared';
+import { createEffect, createSignal, For, Show } from 'solid-js';
+import { ContinueButton, SkipButton } from '../components/controls';
+import { TeamSetup, TeamSetupFields } from '../components/TeamSetup';
+import { deriveTeamName } from './shared';
 import {
   prefillableTeammates,
   removeInviteSlot,
@@ -47,14 +35,15 @@ export function TeamStep(props: {
   const teamsQuery = useUserTeamsQuery();
   const invitesQuery = useUserInvitesQuery();
 
-  const team = createMemo(() => teamsQuery.data?.[0]);
-  const invites = createMemo(() => invitesQuery.data?.invites ?? []);
+  const team = () => (teamsQuery.isSuccess ? teamsQuery.data?.[0] : undefined);
+  const invites = () =>
+    invitesQuery.isSuccess ? (invitesQuery.data?.invites ?? []) : [];
 
   // One-shot on the FIRST resolved teams payload, so a create/join later
   // in this step doesn't also read as auto-joined.
   let membershipReported = false;
   createEffect(() => {
-    if (membershipReported || teamsQuery.data === undefined) return;
+    if (membershipReported || !teamsQuery.isSuccess) return;
     membershipReported = true;
     if (teamsQuery.data.length > 0) {
       analytics.track('onboarding_v4_team', { action: 'already_on_team' });
@@ -62,19 +51,52 @@ export function TeamStep(props: {
   });
 
   return (
-    <Show
-      when={!team()}
-      fallback={
-        <OnTeamPanel name={team()?.name} onContinue={props.onContinue} />
-      }
-    >
-      <Show
-        when={invites().length === 0}
-        fallback={<InvitesPanel invites={invites()} onSkip={props.onSkip} />}
-      >
-        <CreateTeamForm onContinue={props.onContinue} onSkip={props.onSkip} />
+    <TeamSetup>
+      <Show when={teamsQuery.isError || invitesQuery.isError}>
+        <p role="alert" class="text-center text-sm text-ink-muted">
+          Couldn't load your team.{' '}
+          <button
+            type="button"
+            class="underline"
+            onClick={() => {
+              void teamsQuery.refetch();
+              void invitesQuery.refetch();
+            }}
+          >
+            Try again
+          </button>
+        </p>
       </Show>
-    </Show>
+      <Show
+        when={teamsQuery.isSuccess && invitesQuery.isSuccess}
+        fallback={
+          <Show when={!teamsQuery.isError && !invitesQuery.isError}>
+            <p role="status" class="text-center text-sm text-ink-muted">
+              Loading your team…
+            </p>
+          </Show>
+        }
+      >
+        <Show
+          when={!team()}
+          fallback={
+            <OnTeamPanel name={team()?.name} onContinue={props.onContinue} />
+          }
+        >
+          <Show
+            when={invites().length === 0}
+            fallback={
+              <InvitesPanel invites={invites()} onSkip={props.onSkip} />
+            }
+          >
+            <CreateTeamForm
+              onContinue={props.onContinue}
+              onSkip={props.onSkip}
+            />
+          </Show>
+        </Show>
+      </Show>
+    </TeamSetup>
   );
 }
 
@@ -151,14 +173,23 @@ function CreateTeamForm(props: { onContinue: () => void; onSkip: () => void }) {
   // Server-judged with the same list the teams service uses for
   // auto-join/claiming, so we never suggest a team the server would refuse.
   const customDomain = () =>
-    onboardingQuery.data?.suggested_team_domain ?? undefined;
+    onboardingQuery.isSuccess
+      ? (onboardingQuery.data?.suggested_team_domain ?? undefined)
+      : undefined;
 
   // Settled, not succeeded: an errored query opens the plain form.
   const ready = () =>
     !contactsQuery.isPending && !onboardingQuery.isPlaceholderData;
 
   return (
-    <Show when={ready()}>
+    <Show
+      when={ready()}
+      fallback={
+        <p role="status" class="text-center text-sm text-ink-muted">
+          Finding your teammates…
+        </p>
+      }
+    >
       <TeamForm
         domain={customDomain()}
         prefilledTeammates={prefillableTeammates({
@@ -194,23 +225,8 @@ function TeamForm(props: {
   const [inviteSlots, setInviteSlots] = createSignal<string[]>(
     prefilled.length > 0 ? [...prefilled, ''] : ['', '']
   );
-  let inviteListEl: HTMLDivElement | undefined;
 
   const validInvites = () => validInviteEmails(inviteSlots(), email());
-
-  // The X means "don't invite this person", so it belongs on rows that name
-  // one. Blank rows need no removing — they're dropped on submit anyway.
-  const canRemoveSlot = (value: string) => value.trim() !== '';
-
-  const addEmptyInvite = () => {
-    setInviteSlots((slots) => [...slots, '']);
-    requestAnimationFrame(() => {
-      inviteListEl?.lastElementChild?.scrollIntoView({
-        behavior: 'smooth',
-        block: 'nearest',
-      });
-    });
-  };
 
   const create = async () => {
     if (createTeam.isPending || name().trim().length === 0) return;
@@ -237,91 +253,35 @@ function TeamForm(props: {
 
   return (
     <div class="flex flex-col gap-3">
-      {/* Same row shape as an invite, with the remove gutter left empty, so
-          every input in the form shares one width. Labelled, because the
-          name arrives pre-filled — a placeholder alone would be invisible
-          exactly when the field needs explaining. */}
-      <div class="flex items-center gap-1.5">
-        <div class="flex min-w-0 flex-1 flex-col gap-1.5">
-          <label for="team-name" class="text-xs text-ink-muted">
-            Team name
-          </label>
-          <FormInput
-            id="team-name"
-            // An example, not "Team name" again — the label says that.
-            placeholder="Acme Inc."
-            value={name()}
-            autoFocus={!props.domain}
-            onInput={setName}
-          />
-        </div>
-        <div class="size-7 shrink-0" />
-      </div>
-
-      {/* Index, not For: slots are edited strings, and For keys by value —
-          each keystroke would recreate the input node and drop focus.
-          No inner scroller: the list opens pre-filled now, and a capped box
-          left a row sliced in half above the buttons — the flow's own
-          scroll container takes the height instead. */}
-      <div ref={(el) => (inviteListEl = el)} class="flex flex-col gap-3">
-        <Index each={inviteSlots()}>
-          {(slot, i) => (
-            <div class="flex items-center gap-1.5">
-              <div class="min-w-0 flex-1">
-                <FormInput
-                  id={`invite-${i}`}
-                  type="email"
-                  placeholder="teammate@company.com"
-                  value={slot()}
-                  onInput={(value) =>
-                    setInviteSlots((slots) =>
-                      slots.map((v, j) => (j === i ? value : v))
-                    )
-                  }
-                />
-              </div>
-              {/* Gutter is always reserved, so a blank row's input still lines
-                  up with the ones carrying a remove button. */}
-              <div class="flex size-7 shrink-0 items-center justify-center">
-                <Show when={canRemoveSlot(slot())}>
-                  <button
-                    type="button"
-                    aria-label={`Don't invite ${slot().trim()}`}
-                    title={`Don't invite ${slot().trim()}`}
-                    onClick={() =>
-                      setInviteSlots((slots) => removeInviteSlot(slots, i))
-                    }
-                    class="rounded-md p-1.5 text-ink-extra-muted transition-colors hover:bg-ink/5 hover:text-ink"
-                  >
-                    <XIcon class="size-4" />
-                  </button>
-                </Show>
-              </div>
-            </div>
-          )}
-        </Index>
-      </div>
-
-      <Button
-        variant="ghost"
-        size="sm"
-        class="self-center text-ink-muted"
-        onClick={addEmptyInvite}
-      >
-        <Plus class="size-4" />
-        Add another teammate
-      </Button>
-
+      <TeamSetupFields
+        id="team"
+        name={name()}
+        emails={inviteSlots()}
+        disabled={createTeam.isPending}
+        suggested={prefilled.length > 0}
+        onNameChange={setName}
+        onEmailChange={(index, value) =>
+          setInviteSlots((slots) =>
+            slots.map((slot, i) => (i === index ? value : slot))
+          )
+        }
+        onRemoveEmail={(index) =>
+          setInviteSlots((slots) => removeInviteSlot(slots, index))
+        }
+        onAddEmail={() => setInviteSlots((slots) => [...slots, ''])}
+      />
       <ContinueButton
         label={
-          validInvites().length > 0
-            ? `Create team & invite ${validInvites().length}`
-            : 'Create team'
+          createTeam.isPending
+            ? 'Creating workspace…'
+            : validInvites().length > 0
+              ? `Create team & invite ${validInvites().length}`
+              : 'Create team'
         }
         disabled={name().trim().length === 0 || createTeam.isPending}
         onClick={() => void create()}
       />
-      <SkipButton onClick={props.onSkip} />
+      <SkipButton disabled={createTeam.isPending} onClick={props.onSkip} />
     </div>
   );
 }

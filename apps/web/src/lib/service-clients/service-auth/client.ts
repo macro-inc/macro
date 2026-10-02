@@ -21,6 +21,7 @@ import type {
 } from './ai-billing-types';
 import { fetchWithAuth as _fetchWithAuth } from './fetch';
 import type {
+  CheckoutSessionV2Response,
   CursorApiKeyStatus,
   CursorModelsResponse,
   EnrichGithubPullRequestsProxyRequest,
@@ -608,22 +609,23 @@ export const authServiceClient = {
     };
     /** The plan to subscribe to. The backend defaults to Premium. */
     plan?: PaidPlan;
+    /** Request the server-validated first-subscription trial. */
+    onboardingTrial?: boolean;
   }) {
-    return (
-      await fetchWithAuth<{ url: string }>(
-        `${authHost}/user/stripe/checkoutv2`,
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            successUrl: args.successUrl,
-            cancelUrl: args.cancelUrl,
-            discount: args.discount ?? undefined,
-            metadata: args.metadata,
-            plan: args.plan,
-          }),
-        }
-      )
-    ).map((result) => result.url);
+    return await fetchWithAuth<CheckoutSessionV2Response>(
+      `${authHost}/user/stripe/checkoutv2`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          successUrl: args.successUrl,
+          cancelUrl: args.cancelUrl,
+          discount: args.discount ?? undefined,
+          metadata: args.metadata,
+          plan: args.plan,
+          onboardingTrial: args.onboardingTrial,
+        }),
+      }
+    );
   },
 
   /**

@@ -105,10 +105,11 @@ export function createFlowFinish(options?: {
   const finishFree = async (planSkipped = false) => {
     if (finishing()) return;
     setFinishing(true);
+    const target = afterTarget();
     try {
       if (await completeFlow()) {
         trackCompleted('free', planSkipped);
-        navigate(afterTarget(), { replace: true });
+        navigate(target, { replace: true });
       }
     } finally {
       setFinishing(false);
@@ -132,8 +133,12 @@ export function createFlowFinish(options?: {
       // Deliberately leave `finishing` set: the page is navigating away,
       // and re-enabling the buttons mid-unload invites a double checkout.
       window.location.href = checkoutUrl;
-    } catch {
-      toast.failure("Couldn't start checkout — please try again");
+    } catch (error) {
+      toast.failure(
+        error instanceof Error
+          ? error.message
+          : "Couldn't start checkout — please try again"
+      );
       setFinishing(false);
     }
   };
@@ -143,10 +148,11 @@ export function createFlowFinish(options?: {
   const finishPremium = async (tier: PaidPlanTier = 'premium') => {
     if (finishing()) return;
     setFinishing(true);
+    const target = afterTarget();
     try {
       if (await completeFlow()) {
         trackCompleted(tier, false);
-        navigate(afterTarget(), { replace: true });
+        navigate(target, { replace: true });
       }
     } finally {
       setFinishing(false);
