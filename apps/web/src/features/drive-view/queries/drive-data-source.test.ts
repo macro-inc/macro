@@ -78,6 +78,7 @@ function setup() {
   ];
   mocks.database.error = null;
   mocks.database.isSuccess = true;
+  mocks.soup.hasNextPage = false;
   mocks.soup.error = null;
   mocks.soup.isSuccess = true;
   return createRoot((cleanup) => {
@@ -128,6 +129,20 @@ describe('Drive database source integration', () => {
     await source.refresh();
     expect(mocks.database.refetch).toHaveBeenCalledOnce();
     expect(mocks.soup.refresh).toHaveBeenCalledOnce();
+  });
+  it('retains cached database rows after a failed refetch without blocking file pagination', async () => {
+    const { source, setSelection, selection } = setup();
+    expect(source.items()).toHaveLength(1);
+    mocks.database.error = new Error('catalog unavailable');
+    mocks.database.isSuccess = false;
+    mocks.soup.hasNextPage = true;
+    setSelection({ ...selection() });
+    expect(source.items()).toHaveLength(1);
+    expect(source.databaseError()).toBe(mocks.database.error);
+    expect(source.error()).toBeUndefined();
+    expect(source.isFetching()).toBe(false);
+    await source.loadMore();
+    expect(mocks.soup.fetchNextPage).toHaveBeenCalledOnce();
   });
   it('keeps database rows visible when the file transport fails', () => {
     const { source } = setup();

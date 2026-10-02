@@ -3,6 +3,10 @@
 Choose **Create → Database** to create a database and its first table with a Name
 column. **C → L** opens a new database with its title selected and ready to type.
 Enter saves the title and focuses A1, ready to type without another click.
+Opening **Ctrl-K** refreshes database discovery so a database created by AI or
+another client appears without reloading. **All** and **Documents** categories
+match its name, including databases with no view history.
+
 Creating from Home immediately shows the table tabs, **New table**, **Database
 actions**, and **AI**; no reload is needed to use them.
 Databases open at

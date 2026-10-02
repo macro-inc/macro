@@ -54,8 +54,8 @@ export function createDriveDataSource(options: {
     );
   };
   const databaseEntities = () =>
-    includesDatabases() && databasesQuery.isSuccess
-      ? selectDriveDatabases(databasesQuery.data, selection(), userId())
+    includesDatabases() && !databasesQuery.isPending
+      ? selectDriveDatabases(databasesQuery.data ?? [], selection(), userId())
       : [];
 
   const facetContext = createMemo(() =>
@@ -194,36 +194,19 @@ export function createDriveDataSource(options: {
 
   const items = createSoupRowStore(() => buildFlatSoupRows(entities()));
 
-  const isFetching = () => {
-    if (search.isSearching())
-      return (
-        search.isFetching() ||
-        search.isLocalSearchSettling() ||
-        (includesDatabases() && databasesQuery.isFetching)
-      );
-
-    return (
-      query.isFetching || (includesDatabases() && databasesQuery.isFetching)
-    );
-  };
+  const isFetching = () =>
+    search.isSearching()
+      ? search.isFetching() || search.isLocalSearchSettling()
+      : query.isFetching;
 
   const hasMore = () =>
     search.isSearching() ? search.hasNextPage() : query.hasNextPage;
 
-  const error = () => {
-    if (search.isSearching())
-      return (
-        search.error() ??
-        (includesDatabases() ? databasesQuery.error : undefined) ??
-        undefined
-      );
+  const error = () =>
+    search.isSearching() ? search.error() : (query.error ?? undefined);
 
-    return (
-      query.error ??
-      (includesDatabases() ? databasesQuery.error : undefined) ??
-      undefined
-    );
-  };
+  const databaseError = () =>
+    includesDatabases() ? (databasesQuery.error ?? undefined) : undefined;
 
   return {
     items,
@@ -231,7 +214,10 @@ export function createDriveDataSource(options: {
     isLoading: () => {
       if (items().length > 0) return false;
       if (!facetsReady()) return true;
-      if (search.isSearching()) return isFetching();
+      if (search.isSearching())
+        return (
+          isFetching() || (includesDatabases() && databasesQuery.isPending)
+        );
 
       return (
         query.isLoading ||
@@ -243,6 +229,7 @@ export function createDriveDataSource(options: {
     isFetching,
 
     error,
+    databaseError,
 
     hasData: () => {
       if (search.isSearching())

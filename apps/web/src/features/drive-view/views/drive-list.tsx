@@ -264,6 +264,17 @@ export function DriveList() {
           tabIndex={0}
           class="@container/u-list relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden outline-none"
         >
+          <Show when={source.databaseError()}>
+            <div
+              role="alert"
+              class="flex shrink-0 items-center gap-2 border-b border-edge-muted p-3 text-xs text-ink-muted"
+            >
+              Databases couldn’t be loaded.
+              <Button variant="outline" onClick={() => void refresh()}>
+                Try again
+              </Button>
+            </div>
+          </Show>
           <ListLayoutProvider ref={grid}>
             <Switch>
               <Match when={!forceEmptyState() && showError()}>
@@ -467,7 +478,7 @@ export function DriveList() {
                                 More files couldn’t be loaded.
                                 <Button
                                   variant="outline"
-                                  onClick={() => void refresh()}
+                                  onClick={() => void loadMore()}
                                 >
                                   Try again
                                 </Button>

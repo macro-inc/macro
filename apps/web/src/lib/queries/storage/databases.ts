@@ -17,7 +17,7 @@ import type { OpResult } from '@service-storage/generated/schemas/opResult';
 import type { UndoOutcome } from '@service-storage/generated/schemas/undoOutcome';
 import { useQueries, useQuery } from '@tanstack/solid-query';
 import { ResultAsync } from 'neverthrow';
-import type { Accessor } from 'solid-js';
+import { type Accessor, createEffect, on } from 'solid-js';
 import { match, P } from 'ts-pattern';
 import { queryClient } from '../client';
 import { databasesKeys } from './keys';
@@ -37,6 +37,22 @@ export function useDatabasesQuery() {
     ...databaseListQueryOptions,
     enabled: flag().enabled,
   }));
+}
+
+/** Re-read discovery when its surface opens, including databases created by AI or other clients. */
+export function useDatabaseDiscoverySync(isActive: Accessor<boolean>) {
+  const flag = useFeatureFlag(enableDatabases);
+  createEffect(
+    on(
+      () => isActive() && flag().enabled,
+      (active) => {
+        if (!active) return;
+        void queryClient.invalidateQueries({
+          queryKey: databasesKeys.list.queryKey,
+        });
+      }
+    )
+  );
 }
 
 /** One database's schema; spread it and override what a read needs differently. */
