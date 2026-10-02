@@ -394,11 +394,11 @@ composer or spreadsheet cell. Projects (not folders) come from Quick Access, so
 they appear alongside documents and tasks in the **Documents, Agents, & Tasks**
 section and in entity property pickers that accept projects. The command menu
 keeps its own project search. Selecting one inserts a document mention with the
-project's icon and current name, like a channel mention; clicking it or
-pressing Enter on it opens the project in a split (the `initiative` block,
-which shows the same project view as Tasks), and a project you cannot read
-shows **No Access**. Pasting `/app/initiative/<id>` or a Tasks project link
-inserts the same mention.
+project's icon and current name, like a channel mention. Clicking it or
+pressing Enter on it opens the project the way a task mention opens a task:
+in Tasks, under **Projects** › the project (on touch devices, as the project
+view on its own). A project you cannot read shows **No Access**. Pasting
+`/app/initiative/<id>` or a Tasks project link inserts the same mention.
 
 The mention is stored as
 `<m-document-mention>{"documentId":"<initiative id>","blockName":"initiative",…}</m-document-mention>`
