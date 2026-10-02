@@ -3,6 +3,7 @@ import { setPageSeo } from '../../../app/utils/utilSeo';
 import { FeatureConstellation } from '../../setup/components/FeatureOverview';
 import { WelcomeStep } from '../../setup/components/WelcomeSteps';
 import { FeaturePage } from '../components/FeaturePage';
+import { HomepageTrustBadges } from '../components/HomepageTrustBadges';
 import { DemoBookingEmbed } from '../components/sales/DemoBookingEmbed';
 import { SalesCalculator } from '../components/sales/SalesCalculator';
 import { formatWholeUsd } from '../core/sales-savings';
@@ -65,8 +66,7 @@ export function RouteTour() {
                 onContinue={() => {}}
                 title={
                   <>
-                    The only app you need{' '}
-                    <br />
+                    The only app you need <br />
                     for your entire company.
                   </>
                 }
@@ -115,7 +115,13 @@ export function RouteTour() {
                 </span>
               </p>
             </div>
-            <FeatureConstellation expanded />
+            {/* Phones get the compact 8-feature ring; the full grid is too busy. */}
+            <div class="tour-constellation-desktop">
+              <FeatureConstellation expanded />
+            </div>
+            <div class="tour-constellation-mobile">
+              <FeatureConstellation />
+            </div>
           </section>
 
           <section
@@ -145,6 +151,10 @@ export function RouteTour() {
             />
             <DemoBookingEmbed id="tour-booking" />
           </section>
+
+          <footer class="tour-footer">
+            <HomepageTrustBadges />
+          </footer>
         </div>
       </div>
     </FeaturePage>

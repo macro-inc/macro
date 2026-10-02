@@ -97,28 +97,32 @@ export function NarrowLayout(props: LayoutProps) {
 
       <Show
         when={
-          !props.hasNotifications &&
-          !(isChannelEntity(props.entity) && isSearchEntity(props.entity))
+          props.scheduleStatus ||
+          (!props.hasNotifications &&
+            !(isChannelEntity(props.entity) && isSearchEntity(props.entity)))
         }
       >
         <Entity.Slot
           placement="timestamp"
-          class="text-xs text-right text-ink-extra-muted font-light"
+          class="flex items-center justify-end gap-1 text-xs text-right text-ink-extra-muted font-light"
         >
-          <RowEnd actions={props.actions} leadingAction={props.leadingAction}>
-            <Show
-              when={!isTaskEntity(props.entity)}
-              fallback={
-                <Entity.Properties
-                  entity={props.entity}
-                  maxUserStackUsers={0}
-                  showCaret={false}
-                />
-              }
-            >
-              <Entity.Timestamp entity={props.entity} />
-            </Show>
-          </RowEnd>
+          {props.scheduleStatus}
+          <Show when={!props.hasNotifications}>
+            <RowEnd actions={props.actions} leadingAction={props.leadingAction}>
+              <Show
+                when={!isTaskEntity(props.entity)}
+                fallback={
+                  <Entity.Properties
+                    entity={props.entity}
+                    maxUserStackUsers={0}
+                    showCaret={false}
+                  />
+                }
+              >
+                <Entity.Timestamp entity={props.entity} />
+              </Show>
+            </RowEnd>
+          </Show>
         </Entity.Slot>
       </Show>
     </Entity.Layout>

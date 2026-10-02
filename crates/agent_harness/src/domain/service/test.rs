@@ -208,14 +208,15 @@ type PromptCompositionCall = (String, Option<String>, Option<ConversationContext
 #[derive(Clone, Default)]
 struct PromptComposerMock {
     calls: Arc<Mutex<Vec<PromptCompositionCall>>>,
+    parents: Arc<Mutex<Vec<Option<MessageParent>>>>,
     failure: Arc<Mutex<Option<String>>>,
 }
 
 impl PromptComposerMock {
     fn failing(message: &str) -> Self {
         Self {
-            calls: Arc::default(),
             failure: Arc::new(Mutex::new(Some(message.to_owned()))),
+            ..Default::default()
         }
     }
 
@@ -229,9 +230,10 @@ impl AgentPromptComposer for PromptComposerMock {
         &self,
         prompt_markdown: &str,
         instructions: Option<&str>,
-        _parent: Option<&MessageParent>,
+        parent: Option<&MessageParent>,
         context: Option<&ConversationContext>,
     ) -> crate::domain::error::Result<String> {
+        self.parents.lock().unwrap().push(parent.cloned());
         self.calls.lock().unwrap().push((
             prompt_markdown.to_owned(),
             instructions.map(str::to_owned),

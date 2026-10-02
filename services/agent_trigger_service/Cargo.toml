@@ -34,6 +34,7 @@ macro_env_var = { path = "../../crates/macro_env_var" }
 macro_event_broker = { path = "../../crates/macro_event_broker", features = ["outbound"] }
 macro_service_urls = { path = "../../crates/macro_service_urls" }
 messages = { path = "../../crates/messages", features = ["broker", "delivery", "outbound"] }
+properties = { path = "../../crates/properties", default-features = false, features = ["outbound"] }
 rdkafka = { workspace = true }
 rootcause = { workspace = true }
 serde_json = { workspace = true }

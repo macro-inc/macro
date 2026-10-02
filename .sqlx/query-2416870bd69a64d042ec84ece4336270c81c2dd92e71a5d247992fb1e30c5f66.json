@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE team_user SET team_role = 'member' WHERE team_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2416870bd69a64d042ec84ece4336270c81c2dd92e71a5d247992fb1e30c5f66"
+}

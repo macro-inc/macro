@@ -9,6 +9,7 @@ import { useUserId } from '@core/context/user';
 import ProjectIcon from '@phosphor/stack.svg';
 import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
+import { createLazyMemo } from '@solid-primitives/memo';
 import { type Accessor, createMemo, type JSX, untrack } from 'solid-js';
 import { match } from 'ts-pattern';
 import { useProjectIdentityQuery } from '../../projects/queries/project-identity';
@@ -69,10 +70,12 @@ export function usePropertyEntityDisplay(
     specificMessageId?: Accessor<string | null | undefined>;
   }
 ): PropertyEntityDisplayResult {
-  const projectsFlag = useFeatureFlag(enableProjects);
+  const projectsFlag = createMemo(() =>
+    entityType() === 'INITIATIVE' ? useFeatureFlag(enableProjects) : undefined
+  );
   // Until Projects is enabled, a project stays the generic "Project" label.
   const projectSource = createMemo(() => {
-    if (entityType() !== 'INITIATIVE' || !projectsFlag().enabled) return;
+    if (!projectsFlag()?.().enabled) return;
     return untrack(() => {
       const userId = useUserId();
       return useProjectIdentityQuery(entityId, userId);
@@ -143,7 +146,8 @@ export function usePropertyEntityDisplay(
       })
   );
 
-  const icon = createMemo(() =>
+  // Built on first read: a caller that draws its own icon pays nothing.
+  const icon = createLazyMemo(() =>
     match(entityType())
       .when(
         (type) => type === 'INITIATIVE' && projectSource(),

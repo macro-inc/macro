@@ -1,4 +1,5 @@
 import { notificationKeys } from '@queries/notification/keys';
+import { graphqlSoupKeys } from '@queries/soup/graphql/keys';
 import { isCancelledError, QueryClient } from '@tanstack/solid-query';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -40,6 +41,29 @@ vi.mock('./push-registration-lifecycle', () => ({
 import { clearLocalAuthSession } from './logout';
 
 describe('logout notification cache isolation', () => {
+  it('retires pending Done buckets and rotates the display-intent session', async () => {
+    const queryClient = new QueryClient();
+    client.current = queryClient;
+    const first = graphqlSoupKeys.pendingDone('alice', 'old-session').queryKey;
+    const second = graphqlSoupKeys.pendingDone('bob', 'older-session').queryKey;
+    queryClient.setQueryData(first, [{ entityId: 'shared' }]);
+    queryClient.setQueryData(second, [{ entityId: 'shared' }]);
+    queryClient.setQueryData(
+      graphqlSoupKeys.doneSession.queryKey,
+      'old-session'
+    );
+    await clearLocalAuthSession();
+    expect(queryClient.getQueryData(first)).toBeUndefined();
+    expect(queryClient.getQueryData(second)).toBeUndefined();
+    expect(
+      queryClient.getQueryData(graphqlSoupKeys.doneSession.queryKey)
+    ).toEqual(expect.any(String));
+    expect(
+      queryClient.getQueryData(graphqlSoupKeys.doneSession.queryKey)
+    ).not.toBe('old-session');
+    queryClient.clear();
+  });
+
   it('cancels an old in-flight snapshot even when its transport ignores abort', async () => {
     const queryClient = new QueryClient();
     client.current = queryClient;

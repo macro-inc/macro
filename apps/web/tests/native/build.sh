@@ -15,6 +15,7 @@ fi
 export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$out/prepare-target}"
 just ensure-cache-wasm
 just ensure-agent-fold-wasm
+just ensure-database-sql-wasm
 
 # build.rs reads this ignored file. Restore it even if compilation fails.
 env_file="$web/tauri/src-tauri/.macro-tauri-env"

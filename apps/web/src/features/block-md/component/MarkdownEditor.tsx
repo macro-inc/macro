@@ -75,6 +75,7 @@ import {
   blameTooltipPlugin,
   createBlameTooltipStore,
 } from '@core/component/LexicalMarkdown/plugins/blame-tooltip';
+import { blockDecoratorNavigationPlugin } from '@core/component/LexicalMarkdown/plugins/block-decorator-navigation';
 import {
   CONVERT_CHECKBOXES_TO_TASKS,
   checkboxToTaskPlugin,
@@ -595,6 +596,7 @@ export function MarkdownEditor(props: {
       })
     )
     .use(mediaPlugin())
+    .use(blockDecoratorNavigationPlugin())
     .use(
       tablePlugin({
         hasCellMerge: true,

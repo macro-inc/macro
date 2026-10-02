@@ -87,7 +87,11 @@ impl SessionAnnouncer for AnnouncerMock {
         }
 
         let message = AnnouncedMessage {
-            message_id: macro_uuid::generate_uuid_v7(),
+            message_id: if announcement.reuse_origin_message {
+                announcement.origin_message_id
+            } else {
+                macro_uuid::generate_uuid_v7()
+            },
         };
         self.announced
             .lock()

@@ -72,6 +72,10 @@ use agent_session::{
     outbound::postgres::PgAgentSessionRepo,
 };
 use collab_surface::inbound::axum_router::CollabSurfaceRouterState;
+use databases::{
+    inbound::axum_router::DatabasesRouterState,
+    outbound::gateway_event_publisher::GatewayTableEventPublisher, wiring::PgDatabasesService,
+};
 use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
 use foreign_entity::{
@@ -476,6 +480,7 @@ pub(crate) type DssEntityMutationService =
         DssCallService,
         DssEmailService,
         ProjectService,
+        DatabasesServiceType,
         EntityAccessService,
         crate::outbound::entity_mutation::DssEntityLifecycleAdapter<DssEventBroker>,
     >;
@@ -504,6 +509,100 @@ pub(crate) type UserApiKeyServiceType = UserApiKeyServiceImpl<PgUserApiKeysRepo>
 /// Type alias for the user API key router state.
 pub(crate) type DssUserApiKeyState =
     UserApiKeyRouterState<UserApiKeyServiceType, AuthorizationService>;
+
+/// Type alias for the databases service.
+pub(crate) type DatabasesServiceType =
+    PgDatabasesService<GatewayTableEventPublisher, DssEventBroker, EntityAccessService>;
+
+/// Type alias for the databases router state.
+pub(crate) type DssDatabasesState =
+    DatabasesRouterState<DatabasesServiceType, EntityAccessService, AuthorizationService>;
+
+/// Database onboarding composes transaction-capable owning domain adapters.
+pub(crate) type DssDatabaseStarterState =
+    databases::inbound::starter_router::DatabaseStarterRouterState<
+        databases::domain::starter::DatabaseStarterServiceImpl<
+            databases::outbound::pg_starter::PgDatabaseStarterRepo<
+                properties::outbound::properties_pg_repo::PropertiesPgRepo,
+            >,
+            DssEventBroker,
+        >,
+        AuthorizationService,
+    >;
+
+/// HTTP-only authorization adapter: revalidates notification recipients. DSS
+/// never authorizes worker targets; that capability fails closed here.
+pub(crate) struct SlackAdminAuthorizer(
+    pub Arc<EntityAccessService>,
+    pub entity_access::outbound::PgAccessRepository,
+);
+
+impl slack_integration::domain::ports::ImportProgressAccess for SlackAdminAuthorizer {
+    async fn participating_targets(
+        &self,
+        viewer: &macro_user_id::user_id::MacroUserIdStr<'_>,
+        targets: &[uuid::Uuid],
+    ) -> slack_integration::domain::ports::PortResult<Vec<uuid::Uuid>> {
+        use entity_access::domain::ports::AccessRepository as _;
+        self.1
+            .check_user_channel_membership(Some(&viewer.0), targets)
+            .await
+            .map_err(|error| {
+                rootcause::Report::new(error)
+                    .context(slack_integration::domain::models::ImportError::Retryable)
+            })
+    }
+}
+
+impl slack_integration::domain::ports::ImportAuthorizer for SlackAdminAuthorizer {
+    async fn require_admin(
+        &self,
+        team: slack_integration::domain::models::TeamId,
+        user: &macro_user_id::user_id::MacroUserIdStr<'_>,
+    ) -> slack_integration::domain::ports::PortResult<()> {
+        use entity_access::domain::{
+            models::{AdminTeamRole, EntityType},
+            ports::EntityAccessService as _,
+        };
+        self.0
+            .generate_entity_access_receipt::<AdminTeamRole>(
+                &user.0,
+                None,
+                &team.to_string(),
+                EntityType::Team,
+            )
+            .await
+            .map_err(|_| slack_integration::domain::models::ImportError::AdminRequired)?;
+        Ok(())
+    }
+
+    async fn require_target(
+        &self,
+        _: slack_integration::domain::models::TeamId,
+        _: &macro_user_id::user_id::MacroUserIdStr<'_>,
+        _: &slack_integration::domain::models::ConversationMetadata,
+        _: uuid::Uuid,
+    ) -> slack_integration::domain::ports::PortResult<()> {
+        Err(slack_integration::domain::models::ImportError::Unavailable.into())
+    }
+}
+
+pub(crate) type SlackService = slack_integration::domain::service::SlackImportService<
+    slack_integration::outbound::pg_slack_import_repo::PgSlackImportRepo,
+    slack_integration::outbound::s3_storage::S3ImportStorage,
+    slack_integration::outbound::import_ledger::CanonicalImportLedger<
+        import::outbound::pg_import_repo::PgImportRepo,
+    >,
+    slack_integration::outbound::gateway_notifier::GatewayImportNotifier,
+    SlackAdminAuthorizer,
+    Box<dyn Fn(slack_integration::domain::models::TeamId) -> bool + Send + Sync>,
+>;
+
+pub(crate) type DssSlackState = slack_integration::inbound::axum_router::SlackRouterState<
+    SlackService,
+    EntityAccessService,
+    AuthorizationService,
+>;
 
 /// Type alias for the reminders service.
 pub(crate) type RemindersServiceType =
@@ -629,10 +728,13 @@ pub(crate) struct ApiContext {
     pub channel_labels_state: DssChannelLabelsState,
     pub user_api_key_state: DssUserApiKeyState,
     pub reminders_state: DssRemindersState,
+    pub slack_state: DssSlackState,
     pub initiative_state: DssInitiativeState,
     pub graphql_initiative_context: graphql_initiative::InitiativeGraphqlContext,
     pub graphql_scheduled_action_context: graphql_scheduled_action::ScheduledActionGraphqlContext,
     pub graphql_initiative_entity_loader: graphql_initiative::InitiativeEntityLoader,
+    pub databases_state: DssDatabasesState,
+    pub database_starter_state: DssDatabaseStarterState,
     pub collab_surface_state: DssCollabSurfaceState,
     pub foreign_entity_state: DssForeignEntityState,
     pub macro_event_broker: DssEventBroker,

@@ -78,7 +78,7 @@ export function ReminderComposerModal() {
     setSubmitting(false);
     closeReminderComposer();
     toast.success(
-      `Reminder set · ${describeReminderConfirmation(reminder.schedule)}`,
+      `Reminder set · ${describeReminderConfirmation(reminder.schedule, reminder.nextRunAt)}`,
       {
         actions: [
           {

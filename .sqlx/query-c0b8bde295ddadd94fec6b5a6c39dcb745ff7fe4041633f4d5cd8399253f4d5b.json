@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO databases (id, name, owner_id) VALUES ($1, 'Guests', $2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c0b8bde295ddadd94fec6b5a6c39dcb745ff7fe4041633f4d5cd8399253f4d5b"
+}

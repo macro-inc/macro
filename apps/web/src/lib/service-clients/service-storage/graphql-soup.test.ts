@@ -296,7 +296,14 @@ vi.mock('@graphql-cache/exchange/normalized-cache-exchange', () => ({
   normalizedCacheExchange: mocks.normalizedCacheExchange,
 }));
 vi.mock('@macro-inc/observability', () => ({
-  Telemetry: { error: mocks.telemetryError },
+  Telemetry: {
+    error: mocks.telemetryError,
+    span: (_name: string, work: (span: unknown) => Promise<unknown>) =>
+      work({
+        event: vi.fn(),
+        setAttr: vi.fn(),
+      }),
+  },
 }));
 vi.mock('@service-auth/fetch', () => ({ getMacroApiToken: vi.fn() }));
 vi.mock('graphql-ws', () => ({

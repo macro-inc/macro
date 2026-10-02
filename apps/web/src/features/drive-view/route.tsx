@@ -54,6 +54,7 @@ function DriveCallRouteView() {
     <DriveCallDetail
       callId={params.callId}
       transcriptId={search.transcriptId}
+      messageId={search.messageId}
       seek={search.seek}
     />
   );
@@ -176,7 +177,7 @@ export const driveSplitRoute = defineRoute({
       typeof routeParams<{ callId?: string }>(entry.location.route).callId ===
       'string'
     )
-      return [CALL_URL_PARAMS.transcriptId];
+      return [CALL_URL_PARAMS.transcriptId, CALL_URL_PARAMS.messageId];
     return [];
   },
   children: [

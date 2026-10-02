@@ -395,6 +395,10 @@ export const Dropdown = Object.assign(
     Separator:
       KobalteDropdownMenu.Separator /* passthrough — styled via class at use sites */,
     ItemIndicator: DropdownItemIndicator,
+    ItemLabel:
+      KobalteDropdownMenu.ItemLabel /* passthrough — names the item for assistive tech */,
+    ItemDescription:
+      KobalteDropdownMenu.ItemDescription /* passthrough — describes the item for assistive tech */,
     CheckboxItem: DropdownCheckboxItem,
     SubContent: DropdownSubContent,
     SubTrigger: DropdownSubTrigger,

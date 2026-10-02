@@ -256,14 +256,19 @@ export function optimisticDeleteMessage(
     target,
   };
 
-  if (target.kind === 'top_level' && vars.parent.type !== 'channel') {
+  if (
+    target.kind === 'top_level' &&
+    vars.parent.type !== 'channel' &&
+    vars.parent.type !== 'call'
+  ) {
     context.threadState = getCachedThreadState(vars.parent, target.messageId);
   }
 
   if (
     target.kind === 'top_level' &&
-    vars.parent.type === 'channel' &&
-    topLevelMessageHasReplies(vars.parent, target.messageId)
+    (vars.parent.type === 'call' ||
+      (vars.parent.type === 'channel' &&
+        topLevelMessageHasReplies(vars.parent, target.messageId)))
   ) {
     context.previousDeletedAt =
       getTopLevelMessageDeletedAt(vars.parent, target.messageId) ?? null;
@@ -458,12 +463,18 @@ export function useSendMessageMutation(
           return { insert, updatedAt };
         },
         onSuccess(data, variables, context) {
-          const threadId = variables.message.thread_id ?? undefined;
+          const threadId = data.thread_id ?? undefined;
           // A server predating client-minted ids ignores `id` and mints its
           // own. Rebuild the optimistic row under the server id so it keeps
           // its thread state (including the anchor) and never holds a dead id;
           // `applyMessage` below then settles it on the server's fields.
-          if (data.id !== variables.optimisticId && context?.insert) {
+          // A concurrent first call message may become a reply to the root
+          // another participant just created, while retaining its client id.
+          if (
+            (data.id !== variables.optimisticId ||
+              threadId !== (variables.message.thread_id ?? undefined)) &&
+            context?.insert
+          ) {
             rollbackInsertChannelMessage(variables.parent, context.insert);
             optimisticInsertMessage({
               parent: variables.parent,
@@ -471,6 +482,7 @@ export function useSendMessageMutation(
               senderId: variables.senderId,
               optimisticAttachments: variables.optimisticAttachments,
               ...variables.message,
+              thread_id: threadId,
             });
           }
 
@@ -494,7 +506,7 @@ export function useSendMessageMutation(
               attachmentsLength: variables.message.attachments?.length ?? 0,
               isThreadReply: threadId !== undefined,
             });
-          applyMessage(data, 'edited');
+          applyMessage(data, 'posted');
         },
         onError(error, vars, context) {
           console.error('failed to send message', error);
@@ -504,13 +516,15 @@ export function useSendMessageMutation(
           }
           context?.updatedAt?.rollback();
         },
-        onSettled: (_data, _error, variables) => {
+        onSettled: (data, _error, variables) => {
           softInvalidateTargetCaches(
             variables.parent,
             resolveMessageTarget({
               parent: variables.parent,
-              messageId: variables.optimisticId,
-              threadId: variables.message.thread_id ?? undefined,
+              messageId: data?.id ?? variables.optimisticId,
+              threadId:
+                (data ? data.thread_id : variables.message.thread_id) ??
+                undefined,
             })
           );
         },

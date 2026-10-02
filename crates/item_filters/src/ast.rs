@@ -12,6 +12,7 @@ use crate::{
         channel::{ChannelLiteral, ChannelThreadLiteral, ChannelTypeFilter},
         chat::{ChatLiteral, ChatRole},
         crm_company::CrmCompanyLiteral,
+        database_row::DatabaseRowLiteral,
         email::EmailLiteral,
         foreign_entity::ForeignEntityLiteral,
         initiative::InitiativeLiteral,
@@ -39,6 +40,8 @@ pub mod channel;
 pub mod chat;
 /// contains the ast literal value for crm companies
 pub mod crm_company;
+/// Database row filter literals.
+pub mod database_row;
 /// contains the date comparison literal type
 pub mod date;
 /// contains the ast literal value for documents
@@ -246,6 +249,10 @@ pub struct EntityFilterAst {
     #[serde(default, rename = "if")]
     #[cfg_attr(feature = "schema", schema(value_type = serde_json::Value))]
     pub initiative_filter: LiteralTree<InitiativeLiteral>,
+    /// Database row filter, absent for queries that do not request rows.
+    #[serde(default, rename = "drf")]
+    #[cfg_attr(feature = "schema", schema(value_type = serde_json::Value))]
+    pub database_row_filter: LiteralTree<DatabaseRowLiteral>,
     /// the filters that should be applied based on entity properties
     #[serde(default, rename = "propf")]
     #[cfg_attr(feature = "schema", schema(value_type = serde_json::Value))]
@@ -304,6 +311,9 @@ impl EntityFilterAst {
             .map(Arc::new),
             initiative_filter: InitiativeFilters::expand_ast(entity_filter.initiative_filters)?
                 .map(Arc::new),
+            // Rows are requested through GraphQL only; the REST filters
+            // cannot name a table.
+            database_row_filter: None,
             properties_filter: Vec::<PropertyFilter>::expand_ast(entity_filter.property_filters)?
                 .map(Arc::new),
         }))
@@ -345,6 +355,7 @@ impl EntityFilterAst {
             reminder_filter: None,
             agent_session_filter: None,
             initiative_filter: None,
+            database_row_filter: None,
             properties_filter: None,
         }
     }
@@ -382,6 +393,7 @@ impl IsEmpty for EntityFilterAst {
             reminder_filter,
             agent_session_filter,
             initiative_filter,
+            database_row_filter,
             properties_filter,
         } = self;
         favorites_only != &Some(true)
@@ -398,6 +410,7 @@ impl IsEmpty for EntityFilterAst {
             && reminder_filter.is_none()
             && agent_session_filter.is_none()
             && initiative_filter.is_none()
+            && database_row_filter.is_none()
             && properties_filter.is_none()
     }
 }

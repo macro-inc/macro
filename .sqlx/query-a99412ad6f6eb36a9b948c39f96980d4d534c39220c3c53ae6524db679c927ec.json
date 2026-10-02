@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE entity_properties\n        SET values = 'null'::jsonb, updated_at = NOW()\n        WHERE property_definition_id = $1\n          AND entity_type = 'DATABASE_ROW'\n          AND values -> 'value' = '[]'::jsonb\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a99412ad6f6eb36a9b948c39f96980d4d534c39220c3c53ae6524db679c927ec"
+}

@@ -37,7 +37,7 @@ import { ControlPart } from './parts/ControlPart';
 import { ElicitationPart } from './parts/ElicitationPart';
 import { PermissionPart } from './parts/PermissionPart';
 import { PlanPart } from './parts/PlanPart';
-import type { ToolUsePart } from './parts/shared';
+import { type ToolUsePart, toolUsedAfter } from './parts/shared';
 import { TextPart } from './parts/TextPart';
 import { ToolCallPart } from './parts/ToolCallPart';
 
@@ -89,6 +89,7 @@ function AgentMessagePart(props: {
               messageId: `${props.message.agentSessionId}:${props.message.turn}:${props.message.author.kind}`,
               partIndex: props.index,
               inFlight: props.inFlight,
+              followedBy: toolUsedAfter(props.message.parts, props.index),
             }}
           />
         )}

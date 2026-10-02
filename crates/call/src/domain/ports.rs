@@ -201,7 +201,7 @@ pub trait CallRepository: Send + Sync + 'static {
         user_id: MacroUserIdStr<'a>,
     ) -> impl Future<Output = Result<CallParticipant, AddParticipantError>> + Send;
 
-    /// Commit authenticated link participation and grant view access to this call only.
+    /// Commit authenticated link participation and grant comment access to this call only, enabling chat.
     fn add_meeting_participant<'a>(
         &self,
         call_id: &Uuid,

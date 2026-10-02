@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO comms_channels\n            (id, owner_id, channel_type, auto_join_team, created_at, updated_at)\n        VALUES ($1, $2, 'direct_message', false, COALESCE($3, NOW()), COALESCE($3, NOW()))\n        ON CONFLICT (id) DO NOTHING\n        RETURNING created_at\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "17d37146ef07af9aced554388cabcd17811935d85d1d27aa6af1fbb2aa319afb"
+}

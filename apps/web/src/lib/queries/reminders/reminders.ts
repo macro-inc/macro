@@ -10,7 +10,7 @@ import { useMutation, useQuery } from '@tanstack/solid-query';
 
 import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
-
+import { updateReminderCollection } from './collection';
 import { reminderKeys } from './keys';
 
 /** The entity types a reminder can be attached to, as the API names them. */
@@ -98,9 +98,11 @@ type CreateReminderCallbacks = MutationCallbacks<
  * here; `next-soup/utils` keeps only the orchestration.
  */
 export async function setReminderCompleted(id: string, completed: boolean) {
-  return await throwOnErr(() =>
+  const reminder = await throwOnErr(() =>
     storageServiceClient.reminders.updateReminder(id, { completed })
   );
+  updateReminderCollection(reminder);
+  return reminder;
 }
 
 /**
@@ -108,15 +110,33 @@ export async function setReminderCompleted(id: string, completed: boolean) {
  *
  * `refetch` should be true only when the server state is unknown — after a
  * failed or partly-failed write. On success the optimistic layer already
- * holds the right values, and an immediate refetch would detach the list's
- * Suspense boundary and reset its scroll.
+ * holds the right values. Keep unfiltered collection rows in place; completion
+ * filters still need a refresh to fill gaps left by rows that no longer match.
  */
 export function invalidateRemindersById(
   ids: string[],
   { refetch = false }: { refetch?: boolean } = {}
 ) {
   if (ids.length === 0) return;
+  // A mirror completion also changes its email workflow. Invalidate once per
+  // batch so a just-opened composer cannot reuse a five-minute-old revision.
+  void queryClient.invalidateQueries({ queryKey: reminderKeys.email._def });
   const refetchType = refetch ? undefined : ('none' as const);
+  for (const query of queryClient.getQueryCache().findAll({
+    queryKey: reminderKeys.collection._def,
+  })) {
+    const filters = query.queryKey.at(-1);
+    const completionFiltered =
+      typeof filters === 'object' &&
+      filters !== null &&
+      'completed' in filters &&
+      typeof filters.completed === 'boolean';
+    void queryClient.invalidateQueries({
+      queryKey: query.queryKey,
+      exact: true,
+      refetchType: completionFiltered ? undefined : refetchType,
+    });
+  }
   void queryClient.invalidateQueries({
     queryKey: reminderKeys.list._def,
     refetchType,
@@ -131,6 +151,10 @@ export function invalidateRemindersById(
 
 /** Invalidate every reminder list, plus one detail when the id is known. */
 function invalidateReminders(id?: string) {
+  void queryClient.invalidateQueries({ queryKey: reminderKeys.email._def });
+  void queryClient.invalidateQueries({
+    queryKey: reminderKeys.collection._def,
+  });
   void queryClient.invalidateQueries({ queryKey: reminderKeys.list._def });
   if (id) {
     void queryClient.invalidateQueries({

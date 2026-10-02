@@ -198,6 +198,10 @@ export function filterSoupItemByRequestBody(
         !isValueFilteredOut(filters?.owners, data.ownerId)
       );
     })
+    .with({ tag: 'databaseRow' }, () => {
+      // A REST body cannot name a table, and rows are opt-in.
+      return false;
+    })
     .exhaustive();
 }
 

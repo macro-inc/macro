@@ -172,7 +172,7 @@ async fn assert_inbox_state(
 async fn archive_undo_redo_are_idempotent_and_use_the_threads_own_inbox(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let service = service(pool);
+    let service = service(pool.clone());
     let owner = MacroUserIdStr::try_from_email("user1@test.com")?;
     let first = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
     let second = Uuid::parse_str("33333333-3333-3333-3333-333333333333")?;
@@ -182,6 +182,27 @@ async fn archive_undo_redo_are_idempotent_and_use_the_threads_own_inbox(
             .await?;
         assert_inbox_state(&service.email_repo, second, !archived).await?;
         assert_inbox_state(&service.email_repo, first, true).await?;
+        // Model provider sync between actions, including delayed Undo. The
+        // inbox sort timestamp legitimately vanishes when INBOX is removed.
+        let mut tx = pool.begin().await?;
+        super::super::thread::update_thread_metadata(
+            &mut tx,
+            second,
+            Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-bbbbbbbbbbbb")?,
+        )
+        .await?;
+        tx.commit().await?;
+        if archived {
+            assert!(
+                service
+                    .email_repo
+                    .thread_by_id(second)
+                    .await?
+                    .unwrap()
+                    .latest_inbound_message_ts
+                    .is_none()
+            );
+        }
     }
     Ok(())
 }
@@ -257,21 +278,60 @@ async fn failed_archive_rolls_back_inbox_label_removal(pool: Pool<Postgres>) -> 
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_thread_labels"))
 )]
-async fn unarchive_requires_a_canonical_inbound_message(
+async fn unarchive_uses_messages_when_the_inbox_sort_timestamp_is_missing(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let service = service(pool);
     let thread = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
-    assert!(matches!(
+    assert!(
         service
-            .set_thread_archived_impl(
-                MacroUserIdStr::try_from_email("user1@test.com")?,
-                thread,
-                false,
-            )
-            .await,
-        Err(EmailErr::ThreadHasNoInboundMessages)
-    ));
+            .email_repo
+            .thread_by_id(thread)
+            .await?
+            .unwrap()
+            .latest_inbound_message_ts
+            .is_none()
+    );
+    service
+        .set_thread_archived_impl(
+            MacroUserIdStr::try_from_email("user1@test.com")?,
+            thread,
+            false,
+        )
+        .await?;
     assert_inbox_state(&service.email_repo, thread, true).await?;
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("email_thread_labels", "email_thread_unarchive")
+    )
+)]
+async fn unarchive_rejects_sent_only_and_drafts_but_accepts_self_addressed_mail(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let service = service(pool);
+    let owner = MacroUserIdStr::try_from_email("user1@test.com")?;
+    for id in [
+        "44444444-4444-4444-4444-444444444444",
+        "55555555-5555-5555-5555-555555555555",
+    ] {
+        let thread = Uuid::parse_str(id)?;
+        assert!(matches!(
+            service
+                .set_thread_archived_impl(owner.clone(), thread, false)
+                .await,
+            Err(EmailErr::ThreadHasNoInboundMessages)
+        ));
+        assert_inbox_state(&service.email_repo, thread, false).await?;
+    }
+    let self_addressed = Uuid::parse_str("66666666-6666-6666-6666-666666666666")?;
+    service
+        .set_thread_archived_impl(owner, self_addressed, false)
+        .await?;
+    assert_inbox_state(&service.email_repo, self_addressed, true).await?;
     Ok(())
 }

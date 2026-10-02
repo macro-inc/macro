@@ -195,7 +195,9 @@ where
             .compose(
                 &raw_prompt,
                 instructions,
-                announce.map(|origin| &origin.parent),
+                announce
+                    .filter(|origin| !origin.reuse_origin_message)
+                    .map(|origin| &origin.parent),
                 context.as_ref(),
             )
             .await?;
@@ -217,6 +219,11 @@ where
             ))
         })?;
         self.prompt_context.authorize_origin(actor, origin).await?;
+        // Assignment context is supplied privately. It was not a user message
+        // in the discussion, so do not add history or thread-reply instructions.
+        if origin.reuse_origin_message {
+            return Ok(Default::default());
+        }
         Ok(self
             .prompt_context
             .conversation_context(actor, origin)
@@ -313,6 +320,11 @@ where
         else {
             return;
         };
+        // An assignment announces a session link, not a discussion reply.
+        // Later user messages have their own origins and can still be answered.
+        if origin.reuse_origin_message {
+            return;
+        }
         let session = match self.sessions.get_session(session_id).await {
             Ok(session) => session,
             Err(error) => {

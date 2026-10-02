@@ -19,6 +19,51 @@ Deleting a project shows its result without a link to the deleted project.
 Failed project deletions show `Not deleted`. Clearing projects from several tasks
 reports each task's outcome, including partial failures.
 
+## Phones with new agents enabled
+
+With `enable-chat-v3-agents`, **Agents** opens the new conversation list on phones,
+including GitHub PR state and links. Tap a row to open a full-screen conversation;
+the header back button returns to the previous screen, or Agents for a direct link.
+Portrait and landscape touch layouts have no conversation side panel. **Changes** opens a full-width,
+unified diff with **Back to conversation**; returning preserves the unsent draft.
+
+The mobile conversation list omits the desktop **New conversation**, **Agents**,
+and **Connections** controls. Use the Home composer or global create menu to start
+a conversation. Returning to the list and reopening the composer preserves the
+draft, attachments, agent, model, repository, and branch. Tap the
+agent/model control to open a searchable bottom sheet. Tap an agent to use its
+default model, or its model arrow to choose a model; **Create agent** opens the
+roster. Desktop navigation remains unchanged.
+
+The mobile Home composer is a filled, rounded input with no placeholder or
+rotating tips. Its collapsed height matches the New button, with the model
+selector and Send always visible. Tap the input to reveal attachment, microphone
+(when enabled), and repository controls; they collapse again when tapping outside.
+The editor and model picker stay mounted so collapsing preserves the draft.
+Repository and branch pickers keep the composer expanded while their search
+fields are focused, so their anchor stays in place.
+
+With the flag enabled, Home/list composers, search, the create menu, folder AI
+creation, contextual **Chat with AI**, and onboarding prompts all start new agent
+sessions. Existing legacy chat rows still open their original chats. Contextual
+chat actions use agent sessions regardless of the flag; without the flag, the
+legacy list and flag-gated composer flows remain available.
+
+While an agent works, a draft can be sent to its queue. Above the queue,
+**Send next** explicitly interrupts the current turn and sends the oldest queued
+message. The empty composer offers the same action when messages are queued;
+with a draft it offers **Send**. With no draft or queue, the busy composer offers
+**Stop**. Send-next actions disable during stopping/starting and for read-only
+sessions.
+
+Phone verification: check portrait and landscape with touch emulation. In the
+Home composer, enter multiple lines and tap Send, attach, or the model control;
+blurring the editor during the tap must not collapse or move the controls. Then exercise
+list → new conversation → back → new conversation, a row and direct session link,
+the model sheet and repository controls, queued sends, and Changes → back. Check
+that composers remain above the keyboard and neither Changes nor headers cause
+horizontal overflow.
+
 ## Uploading files with AI
 
 `UploadFile` accepts a filename and standard padded base64 contents, up to 25 MiB
@@ -269,10 +314,11 @@ the shimmer.
   Archived sessions are read-only: Rename and all message controls are unavailable,
   and an **Unarchive** action replaces the composer at the bottom. Archive /
   Unarchive is also available from the title dropdown.
-- Touch devices and users outside the flag retain the Owned / Running / Shared /
-  Automations / Skills list. On touch devices, conversation links open standalone
-  agent sessions or legacy chats instead of the desktop Agents workspace. A standalone legacy chat is `/app/chat/<uuid>`; doc-scoped chat
-  is `/app/md/<doc>/chat/<chat>` (split view).
+- Users without `enable-chat-v3-agents` retain the Owned / Running / Shared /
+  Automations / Skills list. With the flag enabled, touch devices use the new
+  conversation list described above. Touch conversation links open standalone
+  agent sessions or legacy chats. A standalone legacy chat is `/app/chat/<uuid>`;
+  doc-scoped chat is `/app/md/<doc>/chat/<chat>` (split view).
 
 ## Routine run history
 

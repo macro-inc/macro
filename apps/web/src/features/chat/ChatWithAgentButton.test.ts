@@ -157,6 +157,19 @@ describe('openChatWithAgent', () => {
     });
   });
 
+  it('starts a session with hidden instructions on the chosen model, the draft left unsent', async () => {
+    await openChatWithInput('<m-document-mention>{}</m-document-mention> ', {
+      model: 'database-model',
+      instructions: 'Use this database by default.',
+    });
+    expect(mocks.startPendingSession).toHaveBeenCalledWith({
+      prompt: undefined,
+      initialInput: '<m-document-mention>{}</m-document-mention> ',
+      modelOverride: 'database-model',
+      instructions: 'Use this database by default.',
+    });
+  });
+
   it.each(['Find invoices', ''])(
     'replaces the search split for query %j',
     async (query) => {

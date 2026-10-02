@@ -70,7 +70,11 @@ function tool(
       }
       tool={{ name, data }}
       response={response === undefined ? undefined : { name, data: response }}
-      renderContext={{ isStreaming: response === undefined, grouped: false }}
+      renderContext={{
+        isStreaming: response === undefined,
+        grouped: false,
+        followedBy: () => false,
+      }}
     />
   ));
 }

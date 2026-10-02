@@ -44,6 +44,8 @@ use uuid::Uuid;
 
 use super::*;
 
+mod database_activity;
+mod database_row;
 mod email_archive;
 mod initiative;
 mod scheduled_actions;
@@ -895,9 +897,25 @@ impl EntityAccessService for CountingEntityAccessService {
         &self,
         _user_id: &MacroUserId<Lowercase<'_>>,
         _user_org_id: Option<i64>,
-        _entity_id: &str,
-        _entity_type: EntityType,
+        entity_id: &str,
+        entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
+        // The viewer can see exactly one database and no other.
+        if entity_type == EntityType::Database {
+            if entity_id != database_activity::VIEWABLE_DATABASE_ID {
+                return Err(AccessError::Unauthorized);
+            }
+            return EntityAccessReceipt::try_new_authenticated_user(
+                MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap(),
+                entity_access::domain::models::Entity {
+                    entity_id: entity_id.to_owned(),
+                    entity_type,
+                },
+                EntityPermission::AccessLevel {
+                    access_level: AccessLevel::View,
+                },
+            );
+        }
         Err(AccessError::internal("test access failure"))
     }
 

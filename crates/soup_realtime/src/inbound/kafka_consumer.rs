@@ -347,6 +347,8 @@ fn channel_and_thread_entities(
 fn soup_entity_type_from_channel_reference(entity_type: &str) -> Option<EntityType> {
     match ReferencedShareItemType::from_raw(entity_type)? {
         ReferencedShareItemType::AgentSession => Some(EntityType::AgentSession),
+        // Databases use their own list and table-change gateway events.
+        ReferencedShareItemType::Database => None,
         ReferencedShareItemType::Document => Some(EntityType::Document),
         ReferencedShareItemType::Chat => Some(EntityType::Chat),
         ReferencedShareItemType::Project => Some(EntityType::Project),
@@ -476,6 +478,7 @@ fn soup_entity_type_from_property(entity_type: PropertyEntityType) -> Option<Ent
         PropertyEntityType::Project => Some(EntityType::Project),
         PropertyEntityType::Thread => Some(EntityType::EmailThread),
         PropertyEntityType::Initiative => Some(EntityType::Initiative),
+        PropertyEntityType::DatabaseRow => Some(EntityType::DatabaseRow),
         // Soup channels do not expose properties; users and CRM contacts are
         // not Soup items.
         PropertyEntityType::Channel | PropertyEntityType::User | PropertyEntityType::Contact => {

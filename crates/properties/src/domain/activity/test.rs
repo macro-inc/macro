@@ -100,6 +100,14 @@ fn initiative_property_changes_keep_the_initiative_identity() {
 }
 
 #[test]
+fn database_row_property_changes_have_no_activity() {
+    let mut metadata = update(Some(user("macro|seamus@example.com")));
+    metadata.entity_type = PropertyEntityType::DatabaseRow;
+    let event = envelope(PropertyTopicEvent::EntityPropertyUpdated(metadata));
+    assert_eq!(event.event.ingest(event.event_id), Ingest::Ignore);
+}
+
+#[test]
 fn delegated_property_update_keeps_the_user_as_subject() {
     let mut metadata = update(None);
     metadata.actor = Some(

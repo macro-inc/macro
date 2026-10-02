@@ -1767,6 +1767,56 @@ input GraphqlCrmScope @oneOf {
 }
 
 """
+The two operands of a recursive `DatabaseRowFilterExpr` binary expression.
+"""
+input GraphqlDatabaseRowBinaryExpr {
+	"""
+	Left expression.
+	"""
+	left: GraphqlDatabaseRowExpr!
+	"""
+	Right expression.
+	"""
+	right: GraphqlDatabaseRowExpr!
+}
+
+"""
+A recursive `DatabaseRowFilterExpr` filter expression.
+"""
+input GraphqlDatabaseRowExpr @oneOf {
+	"""
+	Both expressions must match.
+	"""
+	and: GraphqlDatabaseRowBinaryExpr
+	"""
+	Either expression may match.
+	"""
+	or: GraphqlDatabaseRowBinaryExpr
+	"""
+	Negate an expression.
+	"""
+	not: GraphqlDatabaseRowExpr
+	"""
+	Match a literal.
+	"""
+	literal: GraphqlDatabaseRowLiteral
+}
+
+"""
+GraphQL input for selecting database rows through Soup.
+"""
+input GraphqlDatabaseRowLiteral @oneOf {
+	"""
+	Match the rows of a table.
+	"""
+	tableId: ID
+	"""
+	Match one row.
+	"""
+	id: ID
+}
+
+"""
 GraphQL input representing the date literal.
 """
 input GraphqlDateLiteral @oneOf {
@@ -1887,6 +1937,14 @@ input GraphqlDocumentLiteral @oneOf {
 	The updated at option.
 	"""
 	updatedAt: GraphqlDateLiteral
+	"""
+	An entity-property condition on the document or task.
+	"""
+	property: GraphqlFilterPropertiesLiteral
+	"""
+	Uploaded from an email attachment sent by, or to, a matching address.
+	"""
+	emailAttachmentParticipant: GraphqlEmailValue
 }
 
 """
@@ -2342,6 +2400,10 @@ input GraphqlEntityFilterAst {
 	"""
 	initiativeFilter: GraphqlInitiativeExpr
 	"""
+	The database row filter to apply. Rows are opt-in: name a table.
+	"""
+	databaseRowFilter: GraphqlDatabaseRowExpr
+	"""
 	The properties filter to apply.
 	"""
 	propertiesFilter: GraphqlFilterPropertiesExpr
@@ -2533,6 +2595,14 @@ enum GraphqlEntityType {
 	Initiative entity.
 	"""
 	INITIATIVE
+	"""
+	Macro Database entity (a collection of user-defined tables).
+	"""
+	DATABASE
+	"""
+	Row of a Macro Database table.
+	"""
+	DATABASE_ROW
 }
 
 """
@@ -4127,6 +4197,10 @@ enum GraphqlPropertyEntityType {
 	"""
 	COMPANY
 	"""
+	Database row entity.
+	"""
+	DATABASE_ROW
+	"""
 	CRM contact entity.
 	"""
 	CONTACT
@@ -4211,6 +4285,10 @@ enum GraphqlPropertyOwnerScope {
 	A system definition.
 	"""
 	SYSTEM
+	"""
+	A column of one database.
+	"""
+	DATABASE
 }
 
 """
@@ -4233,6 +4311,10 @@ enum GraphqlPropertyTargetEntityType {
 	CRM company target.
 	"""
 	COMPANY
+	"""
+	Row of a Macro database table.
+	"""
+	DATABASE_ROW
 	"""
 	Document target, including tasks and snippets.
 	"""
@@ -5571,6 +5653,88 @@ type GraphqlSoupCrmCompany implements GraphqlSoupEntity {
 }
 
 """
+A row of a Macro database table. Its cells are its `properties`, keyed
+by the columns' property definitions.
+"""
+type GraphqlSoupDatabaseRow implements GraphqlSoupEntity {
+	"""
+	The row identifier.
+	"""
+	id: ID!
+	"""
+	Canonical entity kind.
+	"""
+	entityType: GraphqlSoupEntityType!
+	"""
+	Server-only projection facts are unavailable for rows.
+	"""
+	cacheProjection: SoupCacheProjection
+	"""
+	Rows have no name of their own.
+	"""
+	displayName: String
+	"""
+	Common row metadata; the owner is the database's.
+	"""
+	metadata: GraphqlEntityMetadata!
+	"""
+	The table the row belongs to.
+	"""
+	tableId: ID!
+	"""
+	The database the table belongs to.
+	"""
+	databaseId: ID!
+	"""
+	Fractional index ordering the row within its table.
+	"""
+	position: String!
+	"""
+	The principal identifier of the owner: the database's owner.
+	"""
+	ownerId: String!
+	"""
+	Who created the row, when they still exist. Named apart from other
+	entities' non-null `createdBy` so one selection can hold both.
+	"""
+	creatorId: String
+	"""
+	The created timestamp in RFC 3339 format.
+	"""
+	createdAt: String!
+	"""
+	The updated timestamp in RFC 3339 format.
+	"""
+	updatedAt: String!
+	"""
+	Properties assigned to this entity that the authenticated user may view.
+	"""
+	properties: [GraphqlProperty!]!
+	"""
+	Notifications associated with this entity for the authenticated user.
+	"""
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
+	"""
+	Whether the authenticated viewer has favorited this entity.
+	"""
+	isFavorited: Boolean!
+	"""
+	The authenticated viewer's effective permission for this entity.
+	"""
+	viewerPermission: GraphqlEntityPermission
+	"""
+	The newest activity on this entity, newest first. Loaded lazily and
+	batched across entities; an activity outage degrades to an empty
+	timeline. Deeper history belongs to the viewer's activity feed.
+	"""
+	activity(limit: Int): [GraphqlActivityEvent!]!
+	"""
+	The viewer's frecency score for this entity, when loaded.
+	"""
+	frecencyScore: Float
+}
+
+"""
 GraphQL representation of the soup document.
 """
 type GraphqlSoupDocument implements GraphqlSoupEntity {
@@ -6314,6 +6478,10 @@ enum GraphqlSoupEntityType {
 	AI coding agent session entity.
 	"""
 	AGENT_SESSION
+	"""
+	Row of a Macro database table.
+	"""
+	DATABASE_ROW
 }
 
 """
@@ -6827,6 +6995,12 @@ type GraphqlUser {
 	Delegated actions performed on the user's behalf are included.
 	"""
 	activity(input: ActivityFeedInput!): GraphqlActivityPage!
+	"""
+	The newest activity on a database the authenticated user can view,
+	newest first. Databases are not Soup items, so this stands in for the
+	`activity` edge Soup entities carry.
+	"""
+	databaseActivity(databaseId: ID!, limit: Int): [GraphqlActivityEvent!]!
 	"""
 	The authenticated user's activity over the trailing year, bucketed
 	into local dates in the requested time zone.

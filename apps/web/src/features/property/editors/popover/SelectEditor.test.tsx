@@ -121,6 +121,7 @@ it('offers only the three project statuses even when the shared catalog contains
       property_definition_id: SYSTEM_PROPERTY_IDS.STATUS,
       value: { type: 'string', value: name },
       display_order,
+      color: null,
       created_at: '',
       updated_at: '',
     })
@@ -134,6 +135,7 @@ it('offers only the three project statuses even when the shared catalog contains
         is_system: true,
         is_metadata: false,
         is_multi_select: false,
+        specific_entity_type: null,
         owner: { scope: 'system' },
         created_at: '',
         updated_at: '',
@@ -156,6 +158,7 @@ it('keeps all task statuses available', () => {
       property_definition_id: SYSTEM_PROPERTY_IDS.STATUS,
       value: { type: 'string', value: name },
       display_order,
+      color: null,
       created_at: '',
       updated_at: '',
     })

@@ -8,6 +8,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use activity::Actor;
+use bot_id::BotIdStr;
 use document_sub_type::DocumentSubType;
 use entity_access::domain::models::{
     BotReceiptScope, EntityAccessAuth, EntityAccessReceipt, EntityType as AccessEntityType,
@@ -33,7 +34,7 @@ use models_properties::{EntityReference, EntityType};
 use system_properties::{StatusOption, SystemPropertyKey};
 use uuid::Uuid;
 
-use super::error::PropertiesErr;
+use super::error::{InvalidStoredPropertyValue, PropertiesErr};
 use super::events::{
     EntityPropertiesClearedMetadata, EntityPropertyDeletedMetadata, EntityPropertyUpdatedMetadata,
     PropertyCreatedMetadata, PropertyDeletedMetadata, PropertyMacroEvent,
@@ -91,6 +92,15 @@ fn published_event_actors(access: &EditReceipt) -> PublishedEventActors {
             on_behalf_of: None,
             actor_user_id: None,
         },
+    }
+}
+
+fn inheritance_error(error: PropertiesErr) -> PropertiesErr {
+    match error {
+        PropertiesErr::Repo(error) if error.is::<InvalidStoredPropertyValue>() => {
+            PropertiesErr::Validation("Stored assignees are invalid".to_string())
+        }
+        error => error,
     }
 }
 
@@ -750,6 +760,74 @@ where
             value: property_value,
             options: None,
         })
+    }
+
+    #[tracing::instrument(skip_all, err)]
+    async fn inherit_project_agent_assignees(
+        &self,
+        project: &ViewReceipt,
+        task: &EditReceipt,
+    ) -> Result<(), PropertiesErr> {
+        if project.entity_type() != AccessEntityType::Initiative
+            || task.entity_type() != AccessEntityType::Document
+        {
+            return Err(PropertiesErr::Validation(
+                "Agent inheritance requires a project and a task".to_string(),
+            ));
+        }
+        let same_actor = match (project.auth(), task.auth()) {
+            (EntityAccessAuth::Authenticated(project), EntityAccessAuth::Authenticated(task)) => {
+                project == task
+            }
+            (EntityAccessAuth::Bot(project), EntityAccessAuth::Bot(task)) => project == task,
+            (EntityAccessAuth::Internal, EntityAccessAuth::Internal) => true,
+            _ => false,
+        };
+        if !same_actor {
+            return Err(PropertiesErr::PermissionDenied);
+        }
+        if self.resolve_subject(task).await?.storage_entity_type != EntityType::Task {
+            // Membership events may outlive the document's task subtype.
+            return Ok(());
+        }
+
+        let Some(PropertyValue::EntityRef(references)) = self
+            .get_system_property_value(project, SystemPropertyKey::Assignees)
+            .await
+            .map_err(inheritance_error)?
+        else {
+            return Ok(());
+        };
+        let agents = references
+            .into_iter()
+            .filter(|reference| {
+                reference.entity_type == EntityType::User
+                    && BotIdStr::parse_from_str(&reference.entity_id).is_ok()
+            })
+            .collect::<Vec<_>>();
+        if agents.is_empty() {
+            return Ok(());
+        }
+
+        let mutation = self
+            .repository
+            .add_entity_property_references(
+                task.entity_id(),
+                EntityType::Task,
+                SystemPropertyKey::ASSIGNEES_UUID,
+                agents,
+            )
+            .await
+            .map_err(|error| inheritance_error(anyhow::Error::from(error).into()))?;
+        if mutation.value != mutation.previous_value {
+            self.publish_property_event(Self::entity_property_updated_event(
+                &mutation.property,
+                &mutation.value,
+                &mutation.previous_value,
+                task,
+            ));
+        }
+        Ok(())
     }
 
     #[tracing::instrument(

@@ -1,0 +1,11 @@
+{"type":"message","ts":"1700000000.000001","thread_ts":"1700000000.000001","user":"U100","text":"Synthetic root","replies":[{"user":"U200","ts":"1700086400.000003"}],"files":[{"id":"F100"}],"attachments":[{"text":"Ignored synthetic attachment"}]}
+{"type":"message","ts":"1700000000.000002","subtype":"future_slack_subtype","user":"U200","text":"Adjacent microsecond","unknown":{"field":true}}
+{"type":"message","ts":"1700086400.000003","thread_ts":"1700000000.000001","subtype":"thread_broadcast","user":"U200","text":"Next-day reply"}
+{"type":"message","subtype":"message_changed","ts":"1700090000.000004","event_ts":"1700090000.000004","message":{"type":"message","ts":"1700086400.000003","thread_ts":"1700000000.000001","user":"U200","text":"Edited next-day reply"},"previous_message":{"ts":"1700086400.000003","text":"Old text"}}
+{"type":"message","subtype":"message_deleted","deleted_ts":"1700000000.000001","previous_message":{"ts":"1700000000.000001","text":"Do not import previous content"}}
+{"type":"message","subtype":"tombstone","ts":"1700000000.000005","text":"This message was deleted"}
+{"type":"message","ts":"1700172800.000001","thread_ts":"1699999999.999999","user":"W200","user_profile":{"display_name":"Phantom Example"},"text":"Missing root"}
+{"type":"message","subtype":"bot_message","ts":"1700172800.000002","user":"U100","username":"Synthetic Build Bot","user_profile":{"email":"human@example.test"},"text":"Bot attribution stays a bot"}
+{"type":"message","ts":"1700172800.000003","user":"U999","user_profile":{"display_name":"Connect Example","email":"Connect.User+Alias@Example.Test"},"text":"Synthetic external author"}
+{"type":"message","ts":"1700172800.000004","user":"USLACKBOT","text":"Synthetic Slackbot"}
+{"type":"reaction_added","event_ts":"1700172800.000005","user":"U100"}

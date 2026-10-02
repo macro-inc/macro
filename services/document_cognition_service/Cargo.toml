@@ -52,6 +52,11 @@ connection_gateway = { path = "../connection_gateway" }
 connection_gateway_client = { path = "../../crates/connection_gateway_client" }
 cookie = { workspace = true }
 crm = { path = "../../crates/crm" }
+# `ai_tools` for the toolset, `gateway` for the table-changed fan-out, and
+# `postgres` for the adapters behind the service.
+databases = { path = "../../crates/databases", features = ["ai_tools", "gateway", "postgres"] }
+# The SQL tools' types, to read their receipts in a structured completion.
+databases_sql = { path = "../../crates/databases_sql", features = ["ai_tools"] }
 document_storage_service_client = { path = "../../crates/document_storage_service_client" }
 documents = { path = "../../crates/documents", features = ["ai_tools", "attachment"] }
 doppleganger = { workspace = true }

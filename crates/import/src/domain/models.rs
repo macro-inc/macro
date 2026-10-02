@@ -163,6 +163,8 @@ pub enum Initiator {
     Onboarding,
     /// Staged by an AI chat session.
     Chat,
+    /// Imported from an administrator-uploaded archive.
+    Archive,
 }
 
 /// Lifecycle of a gather run (one per user × source).
@@ -194,6 +196,110 @@ pub enum RunStatus {
     Failed,
     /// The user dismissed this source's import section.
     Dismissed,
+}
+
+/// A stable Slack conversation ID, never a legacy channel name.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct SlackConversationId(String);
+
+impl SlackConversationId {
+    /// Validate the source ID without trimming or name normalization.
+    pub fn new(value: &str) -> Option<Self> {
+        valid_slack_id(value, b"CGD").then(|| Self(value.to_owned()))
+    }
+
+    /// The exact source identifier.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+/// A stable Slack workspace ID.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SlackWorkspaceId(String);
+
+impl SlackWorkspaceId {
+    /// Validate a Slack workspace ID.
+    pub fn new(value: &str) -> Option<Self> {
+        valid_slack_id(value, b"T").then(|| Self(value.to_owned()))
+    }
+
+    /// The exact source identifier.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+fn valid_slack_id(value: &str, prefixes: &[u8]) -> bool {
+    (2..=64).contains(&value.len())
+        && prefixes.contains(&value.as_bytes()[0])
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_uppercase() || byte.is_ascii_digit())
+}
+
+/// Durable single-workspace binding for a Macro team. Absence of this row means unbound.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImportSourceBinding {
+    /// Known workspace, if the source supplied identity.
+    pub workspace_id: Option<SlackWorkspaceId>,
+    /// First explicit administrator confirmation of an unidentified archive.
+    pub confirmed_unknown_at: Option<DateTime<Utc>>,
+}
+
+/// Explicit canonical namespace. This API supports only the Slack source in v1;
+/// it never derives the team from the requesting user's current membership.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImportTargetKey {
+    /// Team that owns the source namespace, including private/DM provenance.
+    pub team_id: Uuid,
+    /// Stable source identity, not a name-only onboarding identifier.
+    pub foreign_id: SlackConversationId,
+}
+
+/// Allowed target shapes. Slack public channels become Team, never Public.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::AsRefStr)]
+#[strum(serialize_all = "snake_case")]
+pub enum ImportTargetKind {
+    /// Shared with exactly the explicitly supplied team.
+    Team,
+    /// Private channel or group DM; team provenance lives only in the reservation.
+    Private,
+    /// Two-person DM; pair validation/authorization belongs to the channel service.
+    DirectMessage,
+}
+
+/// A committed reservation survives crashes before channel creation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImportTargetReservation {
+    /// Canonical source namespace.
+    pub key: ImportTargetKey,
+    /// Stable UUID to pass to idempotent channel creation, or an existing claimed target.
+    pub channel_id: Uuid,
+    /// Whether channel creation has been durably completed.
+    pub ready: bool,
+}
+
+/// Maximum exact source IDs per canonical read; validated IDs bound input bytes
+/// to 32 KiB, below the archive database batch byte ceiling.
+pub const MAX_TARGET_LOOKUP: usize = 500;
+
+/// Read-only canonical mapping state. Pending candidates are deliberately hidden.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ImportTargetLookup {
+    /// No unambiguous, compatible target exists.
+    Missing,
+    /// Creation has not durably completed.
+    Pending,
+    /// Existing compatible channel; provenance is not a read-access grant.
+    Ready {
+        /// Canonical channel identity.
+        channel_id: Uuid,
+        /// Persisted channel kind.
+        kind: ImportTargetKind,
+        /// Persisted name, disclose only after authorization.
+        name: String,
+    },
 }
 
 // ---------------------------------------------------------------------------

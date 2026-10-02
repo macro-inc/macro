@@ -111,13 +111,13 @@ export function createChannelMessageActions(
     const currentUserId = options.userId();
     const writable = options.canWrite?.(message) ?? true;
     const canEdit = writable && canEditMessage(message, currentUserId);
+    const canModerate = options.canModerate?.() ?? false;
     const canDelete =
       writable &&
-      canDeleteMessage(
-        message,
-        currentUserId,
-        options.canModerate?.() ?? false
-      );
+      canDeleteMessage(message, currentUserId, canModerate) &&
+      (canModerate ||
+        (message.parent ?? options.parent()).type === 'channel' ||
+        message.sender_id === currentUserId);
     const canReply = writable && canReplyToMessage(message);
     const isDeleted = !!message.deleted_at;
 

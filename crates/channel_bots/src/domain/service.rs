@@ -386,8 +386,8 @@ where
     ///
     /// The invoking user's current access to the parent gates every read, and
     /// the live trigger must still sit in the thread the event claims. When
-    /// the mention is a thread reply or a document discussion, the thread is
-    /// the primary context and nearby channel messages are demoted to a
+    /// the mention is a thread reply or belongs to a non-channel parent, its
+    /// thread is the primary context and nearby channel messages are demoted to a
     /// clearly labeled background block. For a top-level channel mention, the
     /// chronological channel slice is the primary context. In both cases the
     /// triggering message is marked inline rather than repeated at the end.
@@ -428,12 +428,12 @@ where
         );
 
         let mut prompt = format!("Conversation parent: {}\n", serde_json::to_string(parent)?);
-        // A document discussion is a thread from its root; a top-level channel
-        // message is the channel's own timeline.
+        // Entity discussions and call chat are threads from their roots;
+        // top-level channel messages use the channel's own timeline.
         let thread_root = event
             .message
             .thread_id
-            .or_else(|| parent.is_discussion().then_some(trigger_id));
+            .or_else(|| (!matches!(parent, MessageParent::Channel(_))).then_some(trigger_id));
         if let Some(root_id) = thread_root {
             let place = match parent {
                 MessageParent::Channel(_) => "a channel thread",
@@ -441,6 +441,7 @@ where
                 MessageParent::Initiative(_) => "a project discussion",
                 MessageParent::CrmCompany(_) => "a CRM company discussion",
                 MessageParent::CrmContact(_) => "a CRM contact discussion",
+                MessageParent::Call(_) => "a call chat",
             };
             let (intro, thread_instruction, marker) = match event.trigger {
                 BotTrigger::Mention => (

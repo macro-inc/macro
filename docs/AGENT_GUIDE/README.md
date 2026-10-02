@@ -9,6 +9,7 @@ verified live against a local stack (`just run_local`).
 | [login.md](login.md) | Passwordless login end to end, Mailpit, known crash + recovery |
 | [navigation.md](navigation.md) | Routes, sidebar, command menu, keyboard model, splits |
 | [documents.md](documents.md) | Creating docs, typing in the editor, AI edit, comments, side panel |
+| [databases.md](databases.md) | Properties, records, kanban boards, saved views, AI questions, live answers |
 | [ai-chat.md](ai-chat.md) | Standalone and doc-scoped AI chat |
 | [../CLAUDE_CLOUD_DEMO.md](../CLAUDE_CLOUD_DEMO.md) | Claude in Harness settings, encrypted saved connection, Open in Claude, and cloud-side transcript polling |
 | [channels.md](channels.md) | Channels: create, invite, message, participants, bots |

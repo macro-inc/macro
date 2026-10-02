@@ -292,6 +292,7 @@ fn soup_interface_exposes_the_complete_shared_entity_contract() {
         "GraphqlSoupForeignEntity",
         "GraphqlSoupReminder",
         "GraphqlSoupAgentSession",
+        "GraphqlSoupDatabaseRow",
     ] {
         let ExtendedType::Object(object) = schema.types.get(name).expect("Soup object exists")
         else {
@@ -469,6 +470,43 @@ fn initiative_reads_and_mutations_share_the_canonical_soup_entity() {
             "duplicate initiative field remains: {duplicate}"
         );
     }
+}
+
+#[test]
+fn database_rows_are_an_opt_in_soup_entity_named_by_table() {
+    let sdl = crate::build_schema().sdl();
+    let block = |declaration: &str| {
+        sdl.split_once(declaration)
+            .unwrap_or_else(|| panic!("schema has no `{declaration}`"))
+            .1
+            .split_once("\n}")
+            .unwrap()
+            .0
+            .to_owned()
+    };
+    let row = block("type GraphqlSoupDatabaseRow implements GraphqlSoupEntity {");
+    for field in [
+        "id: ID!",
+        "entityType: GraphqlSoupEntityType!",
+        "tableId: ID!",
+        "databaseId: ID!",
+        "position: String!",
+        "ownerId: String!",
+        "creatorId: String",
+        "createdAt: String!",
+        "updatedAt: String!",
+        "properties: [GraphqlProperty!]!",
+    ] {
+        assert_sdl_line(&row, field);
+    }
+    assert_sdl_line(
+        &block("input GraphqlEntityFilterAst {"),
+        "databaseRowFilter: GraphqlDatabaseRowExpr",
+    );
+    let literal = block("input GraphqlDatabaseRowLiteral @oneOf {");
+    assert_sdl_line(&literal, "tableId: ID");
+    assert_sdl_line(&literal, "id: ID");
+    assert_sdl_line(&block("enum GraphqlSoupEntityType {"), "DATABASE_ROW");
 }
 
 #[test]

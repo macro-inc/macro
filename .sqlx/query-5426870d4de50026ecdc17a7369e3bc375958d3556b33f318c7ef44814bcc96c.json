@@ -32,7 +32,8 @@
                 "CALL_RECORD",
                 "CALENDAR_EVENT",
                 "INITIATIVE",
-                "CONTACT"
+                "CONTACT",
+                "DATABASE_ROW"
               ]
             }
           }
@@ -83,7 +84,8 @@
                 "CALL_RECORD",
                 "CALENDAR_EVENT",
                 "INITIATIVE",
-                "CONTACT"
+                "CONTACT",
+                "DATABASE_ROW"
               ]
             }
           }
