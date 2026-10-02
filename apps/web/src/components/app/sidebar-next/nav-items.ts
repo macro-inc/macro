@@ -25,6 +25,7 @@ import ListChecksFillIcon from '@phosphor-fill/list-checks-fill.svg';
 import PhoneCallFillIcon from '@phosphor-fill/phone-call-fill.svg';
 import AgentFillIcon from '@phosphor-fill/sparkle-fill.svg';
 import type { NavIcon } from './nav-glyph';
+import type { SidebarPrefs } from './use-sidebar-prefs';
 
 /**
  * A SidebarRail nav button's definition: a `SidebarItem` plus the filled icon
@@ -38,7 +39,7 @@ export type SidebarNextNavItem = SidebarItem & {
 };
 
 /**
- * SidebarRail's nav buttons, in render order.
+ * SidebarRail's nav buttons, in default render order.
  *
  * Phosphor icons rather than the animated `wide-*` set: they are plain
  * `fill="currentColor"` SVGs, so the active button's `text-ink-muted` colours
@@ -48,7 +49,7 @@ export type SidebarNextNavItem = SidebarItem & {
  * `GoToHotkeys` registers off `buildSidebarLinks` — `g h` reaches Home, `g f`
  * reaches Drive. These tokens only label the tooltips.
  */
-const SIDEBAR_NEXT_NAV_ITEMS = [
+export const SIDEBAR_NEXT_NAV_ITEMS = [
   {
     id: 'home',
     label: 'Home',
@@ -157,31 +158,81 @@ export type NavItemGates = {
   showReminders: boolean;
   showCalls: boolean;
   showReviews: boolean;
-  /** User preferences for pinned/unpinned sidebar items. */
-  pinnedItems?: Set<string>;
+  /** User preferences for which items are shown and in what order. */
+  prefs: SidebarPrefs;
+};
+
+/** Whether a feature-gated item is available for this account. */
+export const isNavItemAvailable = (
+  item: SidebarNextNavItem,
+  gates: NavItemGates
+): boolean => {
+  if (item.id === 'calendar') return gates.showCalendar;
+  if (item.id === 'companies') return gates.showCustomers;
+  if (item.id === 'reminders') return gates.showReminders;
+  if (item.id === 'calls') return gates.showCalls;
+  if (item.id === 'reviews') return gates.showReviews;
+  return true;
 };
 
 /**
- * The items available for the More menu (Calls, Reviews). These are shown
- * in the More menu by default, but can be pinned to the main sidebar.
+ * Apply the user's custom order. Home stays first. Ids absent from `order`
+ * keep their relative catalog position after ordered ones.
  */
-export const MORE_MENU_ITEM_IDS = ['calls', 'reviews'] as const;
-export type MoreMenuItemId = (typeof MORE_MENU_ITEM_IDS)[number];
+export const orderNavItems = (
+  items: SidebarNextNavItem[],
+  order: readonly string[]
+): SidebarNextNavItem[] => {
+  if (order.length === 0) return items;
+
+  const byId = new Map(items.map((item) => [item.id, item]));
+  const used = new Set<string>();
+  const result: SidebarNextNavItem[] = [];
+
+  const home = byId.get('home');
+  if (home) {
+    result.push(home);
+    used.add('home');
+  }
+
+  for (const id of order) {
+    if (id === 'home' || used.has(id)) continue;
+    const item = byId.get(id);
+    if (item) {
+      result.push(item);
+      used.add(id);
+    }
+  }
+
+  for (const item of items) {
+    if (!used.has(item.id)) result.push(item);
+  }
+
+  return result;
+};
 
 /**
- * Returns the nav items that should appear in the More menu (not pinned).
+ * Available items in customize-menu order — includes both shown and hidden.
+ * Home is always first.
+ */
+export const customizableNavItems = (
+  gates: NavItemGates
+): SidebarNextNavItem[] =>
+  orderNavItems(
+    SIDEBAR_NEXT_NAV_ITEMS.filter((item) => isNavItemAvailable(item, gates)),
+    gates.prefs.order
+  );
+
+/**
+ * Items hidden from the rail but available for quick open in the More menu.
  */
 export const moreMenuItems = (gates: NavItemGates): SidebarNextNavItem[] =>
-  SIDEBAR_NEXT_NAV_ITEMS.filter((item) => {
-    if (!MORE_MENU_ITEM_IDS.includes(item.id as MoreMenuItemId)) return false;
-    if (item.id === 'calls' && !gates.showCalls) return false;
-    if (item.id === 'reviews' && !gates.showReviews) return false;
-    if (gates.pinnedItems?.has(item.id)) return false;
-    return true;
-  });
+  customizableNavItems(gates).filter(
+    (item) => item.id !== 'home' && gates.prefs.hidden.has(item.id)
+  );
 
 /**
- * The nav buttons on offer right now.
+ * The nav buttons currently on the outer rail.
  *
  * Gates are passed in rather than read here: both are PostHog-backed, and the
  * imperative `ENABLE_CRM()` / `ENABLE_CALENDAR_UI()` readers call
@@ -189,13 +240,6 @@ export const moreMenuItems = (gates: NavItemGates): SidebarNextNavItem[] =>
  * would never reach the rendered list. Callers subscribe with `useFeatureFlag`.
  */
 export const visibleNavItems = (gates: NavItemGates): SidebarNextNavItem[] =>
-  SIDEBAR_NEXT_NAV_ITEMS.filter((item) => {
-    if (item.id === 'calendar') return gates.showCalendar;
-    if (item.id === 'companies') return gates.showCustomers;
-    if (item.id === 'reminders') return gates.showReminders;
-    if (item.id === 'calls')
-      return gates.showCalls && gates.pinnedItems?.has('calls');
-    if (item.id === 'reviews')
-      return gates.showReviews && gates.pinnedItems?.has('reviews');
-    return true;
-  });
+  customizableNavItems(gates).filter(
+    (item) => item.id === 'home' || !gates.prefs.hidden.has(item.id)
+  );

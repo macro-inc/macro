@@ -575,7 +575,7 @@ const REVIEWS_LINK: SidebarItem = {
   id: 'reviews',
   label: 'Reviews',
   href: '/reviews',
-  icon: getIconConfig('pr').icon,
+  icon: getIconConfig('githubPullRequest').icon,
   hotkey: 'v',
   hotkeyToken: TOKENS.sidebar.goTo.reviews,
 };

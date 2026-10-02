@@ -2,225 +2,178 @@ import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { navigateToSidebarView } from '@components/app/app-sidebar/sidebar';
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
-import { ContextMenu } from '@kobalte/core/context-menu';
+import CaretDownIcon from '@phosphor/caret-down.svg';
+import CaretRightIcon from '@phosphor/caret-right.svg';
+import CaretUpIcon from '@phosphor/caret-up.svg';
 import DotsThreeIcon from '@phosphor/dots-three.svg';
-import PushPinIcon from '@phosphor/push-pin.svg';
-import PushPinSlashIcon from '@phosphor/push-pin-slash.svg';
-import { Button, cn } from '@ui';
-import { createSignal, For, Show } from 'solid-js';
+import { Button, Dropdown } from '@ui';
+import { For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import {
-  MORE_MENU_ITEM_IDS,
-  type MoreMenuItemId,
+  customizableNavItems,
   moreMenuItems,
   type NavItemGates,
   type SidebarNextNavItem,
-  visibleNavItems,
 } from './nav-items';
-import {
-  isSidebarItemPinned,
-  pinSidebarItem,
-  unpinSidebarItem,
-} from './use-sidebar-pinned-items';
+import { moveSidebarItem, setSidebarItemVisible } from './use-sidebar-prefs';
 
 export type MoreMenuProps = {
   gates: NavItemGates;
 };
 
-function MoreMenuItem(props: {
-  item: SidebarNextNavItem;
-  onNavigate: () => void;
-}) {
-  const analytics = useAnalytics();
-  const layout = useSplitLayout();
-
-  const navigate = () => {
-    analytics.track('sidebar_click', { view: props.item.id });
-    navigateToSidebarView({
-      viewId: props.item.id,
-      params: props.item.params,
-      shiftKey: false,
-      openWithSplit: layout.openWithSplit,
-      referredFrom: 'sidebar',
-    });
-    globalSplitManager()?.returnFocus();
-    props.onNavigate();
-  };
-
-  return (
-    <MenuItem
-      text={props.item.label}
-      onClick={navigate}
-      icon={
-        <Dynamic component={props.item.icon} class="size-4 text-ink-muted" />
-      }
-    />
-  );
+function navigateToItem(
+  item: SidebarNextNavItem,
+  openWithSplit: ReturnType<typeof useSplitLayout>['openWithSplit'],
+  analytics: ReturnType<typeof useAnalytics>
+) {
+  analytics.track('sidebar_click', { view: item.id });
+  navigateToSidebarView({
+    viewId: item.id,
+    params: item.params,
+    shiftKey: false,
+    openWithSplit,
+    referredFrom: 'sidebar',
+  });
+  globalSplitManager()?.returnFocus();
 }
 
-function PinnableItemRow(props: {
+function CustomizeRow(props: {
   item: SidebarNextNavItem;
-  isPinned: boolean;
-  onTogglePin: () => void;
-  onNavigate: () => void;
+  checked: boolean;
+  index: number;
+  count: number;
+  orderIds: readonly string[];
 }) {
-  const analytics = useAnalytics();
-  const layout = useSplitLayout();
-
-  const navigate = () => {
-    analytics.track('sidebar_click', { view: props.item.id });
-    navigateToSidebarView({
-      viewId: props.item.id,
-      params: props.item.params,
-      shiftKey: false,
-      openWithSplit: layout.openWithSplit,
-      referredFrom: 'sidebar',
-    });
-    globalSplitManager()?.returnFocus();
-    props.onNavigate();
-  };
+  const isHome = () => props.item.id === 'home';
+  const canMoveUp = () => !isHome() && props.index > 1;
+  const canMoveDown = () => !isHome() && props.index < props.count - 1;
 
   return (
-    <div class="group flex items-center gap-1 rounded-md px-2 py-1.5 hover:bg-hover">
-      <button
-        type="button"
-        class="flex min-w-0 flex-1 cursor-default items-center gap-2 text-sm text-ink"
-        onClick={navigate}
-      >
-        <Dynamic component={props.item.icon} class="size-4 text-ink-muted" />
-        <span class="truncate">{props.item.label}</span>
-      </button>
-      <button
-        type="button"
-        class="flex size-5 cursor-default items-center justify-center rounded text-ink-extra-muted opacity-0 hover:bg-ink/5 hover:text-ink-muted group-hover:opacity-100"
-        onClick={(e) => {
-          e.stopPropagation();
-          props.onTogglePin();
-        }}
-        title={props.isPinned ? 'Unpin from sidebar' : 'Pin to sidebar'}
-      >
-        <Show when={props.isPinned} fallback={<PushPinIcon class="size-3.5" />}>
-          <PushPinSlashIcon class="size-3.5" />
-        </Show>
-      </button>
-    </div>
-  );
-}
-
-function CustomizeSidebarSection(props: {
-  gates: NavItemGates;
-  onClose: () => void;
-}) {
-  const pinnedNavItems = () =>
-    visibleNavItems(props.gates).filter((item) =>
-      MORE_MENU_ITEM_IDS.includes(item.id as MoreMenuItemId)
-    );
-
-  const unpinnedItems = () => moreMenuItems(props.gates);
-
-  const allConfigurableItems = () => {
-    const pinned = pinnedNavItems();
-    const unpinned = unpinnedItems();
-    const pinnedIds = new Set(pinned.map((i) => i.id));
-    return [...pinned, ...unpinned.filter((i) => !pinnedIds.has(i.id))];
-  };
-
-  const togglePin = (itemId: MoreMenuItemId) => {
-    if (isSidebarItemPinned(itemId)) {
-      unpinSidebarItem(itemId);
-    } else {
-      pinSidebarItem(itemId);
-    }
-  };
-
-  return (
-    <Show when={allConfigurableItems().length > 0}>
-      <div class="-mx-1.5 my-1.5 h-px bg-edge-divider" />
-      <div class="px-2 py-1">
-        <span class="text-xs font-medium text-ink-muted">
-          Customize sidebar
-        </span>
-      </div>
-      <For each={allConfigurableItems()}>
-        {(item) => (
-          <PinnableItemRow
-            item={item}
-            isPinned={isSidebarItemPinned(item.id)}
-            onTogglePin={() => togglePin(item.id as MoreMenuItemId)}
-            onNavigate={props.onClose}
-          />
-        )}
-      </For>
-    </Show>
+    <Dropdown.CheckboxItem
+      checked={props.checked}
+      disabled={isHome()}
+      closeOnSelect={false}
+      onChange={(checked) => setSidebarItemVisible(props.item.id, checked)}
+    >
+      <Dynamic
+        component={props.item.icon}
+        class="size-4 shrink-0 text-ink-muted"
+      />
+      <span class="min-w-0 flex-1 truncate">{props.item.label}</span>
+      <Show when={!isHome()}>
+        <div class="flex shrink-0 items-center -mr-1">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            class="size-6"
+            label={`Move ${props.item.label} up`}
+            disabled={!canMoveUp()}
+            onClick={(e: MouseEvent) => {
+              e.preventDefault();
+              e.stopPropagation();
+              moveSidebarItem(props.item.id, -1, props.orderIds);
+            }}
+            onPointerDown={(e: PointerEvent) => e.stopPropagation()}
+          >
+            <CaretUpIcon class="size-3" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            class="size-6"
+            label={`Move ${props.item.label} down`}
+            disabled={!canMoveDown()}
+            onClick={(e: MouseEvent) => {
+              e.preventDefault();
+              e.stopPropagation();
+              moveSidebarItem(props.item.id, 1, props.orderIds);
+            }}
+            onPointerDown={(e: PointerEvent) => e.stopPropagation()}
+          >
+            <CaretDownIcon class="size-3" />
+          </Button>
+        </div>
+      </Show>
+    </Dropdown.CheckboxItem>
   );
 }
 
 /**
- * The "More" menu button in the sidebar rail, shown below CRM.
- * Provides access to Calls, Reviews tabs, and sidebar customization options.
+ * The "More" menu button in the sidebar rail, shown below the main nav.
+ * Lists hidden items for quick open, plus a Customize sidebar submenu with
+ * checkboxes and reorder controls for every item except a locked Home.
  */
 export function MoreMenu(props: MoreMenuProps) {
-  const [menuOpen, setMenuOpen] = createSignal(false);
-  const items = () => moreMenuItems(props.gates);
-
-  const hasItems = () => items().length > 0;
-  const hasAnyConfigurableItems = () =>
-    props.gates.showCalls || props.gates.showReviews;
+  const analytics = useAnalytics();
+  const layout = useSplitLayout();
+  const hiddenItems = () => moreMenuItems(props.gates);
+  const customizeItems = () => customizableNavItems(props.gates);
+  const orderIds = () => customizeItems().map((item) => item.id);
 
   return (
-    <Show when={hasAnyConfigurableItems()}>
-      <ContextMenu onOpenChange={setMenuOpen}>
-        <ContextMenu.Trigger
-          as="div"
-          class="flex size-10 cursor-default items-center justify-center"
-        >
-          <Button
-            variant="ghost"
-            size="icon-md"
-            class={cn(
-              'size-10 cursor-default rounded-xl',
-              menuOpen() && 'bg-hover text-ink'
-            )}
-            label="More"
-            tooltip="More options"
-            tooltipPlacement="right"
-            draggable={false}
-            onClick={(e: MouseEvent) => {
-              e.preventDefault();
-              const target = e.currentTarget as HTMLElement;
-              target.dispatchEvent(
-                new MouseEvent('contextmenu', {
-                  bubbles: true,
-                  clientX: e.clientX,
-                  clientY: e.clientY,
-                })
-              );
-            }}
-          >
-            <DotsThreeIcon class="size-5" />
-          </Button>
-        </ContextMenu.Trigger>
-
-        <ContextMenu.Portal>
-          <ContextMenuContent class="min-w-[12rem] text-xs text-ink-muted">
-            <Show when={hasItems()}>
-              <For each={items()}>
-                {(item) => (
-                  <MoreMenuItem
-                    item={item}
-                    onNavigate={() => setMenuOpen(false)}
+    <Dropdown placement="right-start" gutter={6}>
+      <Dropdown.Trigger
+        variant="ghost"
+        size="icon-md"
+        class="size-10 cursor-default rounded-xl"
+        label="More"
+        tooltip="More options"
+        tooltipPlacement="right"
+        draggable={false}
+        data-sidebar-next-item="more"
+      >
+        <DotsThreeIcon class="size-5" />
+      </Dropdown.Trigger>
+      <Dropdown.Content class="min-w-[14rem]">
+        <Show when={hiddenItems().length > 0}>
+          <Dropdown.Group>
+            <For each={hiddenItems()}>
+              {(item) => (
+                <Dropdown.Item
+                  class="gap-2"
+                  onSelect={() =>
+                    navigateToItem(item, layout.openWithSplit, analytics)
+                  }
+                >
+                  <Dynamic
+                    component={item.icon}
+                    class="size-4 shrink-0 text-ink-muted"
                   />
-                )}
-              </For>
-            </Show>
-            <CustomizeSidebarSection
-              gates={props.gates}
-              onClose={() => setMenuOpen(false)}
-            />
-          </ContextMenuContent>
-        </ContextMenu.Portal>
-      </ContextMenu>
-    </Show>
+                  <span class="flex-1 truncate text-ink">{item.label}</span>
+                </Dropdown.Item>
+              )}
+            </For>
+          </Dropdown.Group>
+        </Show>
+
+        <Dropdown.Group>
+          <Dropdown.Sub>
+            <Dropdown.SubTrigger>
+              <span class="min-w-0 flex-1 truncate">Customize sidebar</span>
+              <CaretRightIcon class="size-3 shrink-0 text-ink-muted" />
+            </Dropdown.SubTrigger>
+            <Dropdown.SubContent class="min-w-[16rem]">
+              <Dropdown.Group>
+                <Dropdown.GroupLabel>Show in sidebar</Dropdown.GroupLabel>
+                <For each={customizeItems()}>
+                  {(item, index) => (
+                    <CustomizeRow
+                      item={item}
+                      checked={
+                        item.id === 'home' ||
+                        !props.gates.prefs.hidden.has(item.id)
+                      }
+                      index={index()}
+                      count={customizeItems().length}
+                      orderIds={orderIds()}
+                    />
+                  )}
+                </For>
+              </Dropdown.Group>
+            </Dropdown.SubContent>
+          </Dropdown.Sub>
+        </Dropdown.Group>
+      </Dropdown.Content>
+    </Dropdown>
   );
 }
