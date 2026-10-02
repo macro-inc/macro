@@ -11,6 +11,7 @@ import { useMutation, useQuery } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 import { updateReminderCollection } from './collection';
+import { invalidateEmailReminderReads } from './email-collection';
 import { reminderKeys } from './keys';
 
 /** The entity types a reminder can be attached to, as the API names them. */
@@ -120,6 +121,7 @@ export function invalidateRemindersById(
   if (ids.length === 0) return;
   // A mirror completion also changes its email workflow. Invalidate once per
   // batch so a just-opened composer cannot reuse a five-minute-old revision.
+  void invalidateEmailReminderReads();
   void queryClient.invalidateQueries({ queryKey: reminderKeys.email._def });
   const refetchType = refetch ? undefined : ('none' as const);
   for (const query of queryClient.getQueryCache().findAll({
@@ -151,6 +153,7 @@ export function invalidateRemindersById(
 
 /** Invalidate every reminder list, plus one detail when the id is known. */
 function invalidateReminders(id?: string) {
+  void invalidateEmailReminderReads();
   void queryClient.invalidateQueries({ queryKey: reminderKeys.email._def });
   void queryClient.invalidateQueries({
     queryKey: reminderKeys.collection._def,

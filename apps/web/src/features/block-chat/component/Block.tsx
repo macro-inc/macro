@@ -24,7 +24,7 @@ export default function ChatBlock() {
           notificationSource={notificationSource}
           entity={{ type: 'chat', id: blockId }}
         />
-        <SidePanel.Layout defaultOpen={false}>
+        <SidePanel.Layout defaultOpen={false} floating>
           <ChatSidePanelSections />
           <Show when={chatBlockData()}>{(data) => <Chat data={data()} />}</Show>
         </SidePanel.Layout>

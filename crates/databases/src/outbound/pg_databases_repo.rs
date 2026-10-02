@@ -63,6 +63,9 @@ pub enum PgDatabasesRepoError {
     /// A stored journal row's kind is not one the journal writes.
     #[error("stored change kind `{0}` is not a row change kind")]
     CorruptChangeKind(String),
+    /// This build cannot interpret the persisted journal payload format.
+    #[error("unsupported database journal payload version {0}")]
+    UnsupportedJournalPayloadVersion(i32),
 }
 
 /// The UUIDs of typed ids, for a statement's `ANY($n)`.

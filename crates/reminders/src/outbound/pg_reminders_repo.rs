@@ -1,6 +1,7 @@
 //! PostgreSQL implementation of the [`RemindersRepo`] port.
 
 mod collection;
+mod email_collection;
 mod email_followup;
 #[cfg(test)]
 mod test;
@@ -97,6 +98,7 @@ pub enum RemindersRepoErr {
 
 /// A `reminder` row, before the schedule columns are folded into a
 /// [`ReminderSchedule`].
+#[derive(serde::Deserialize)]
 struct ReminderRow {
     id: Uuid,
     description: String,
@@ -249,6 +251,17 @@ fn schedule_columns(
 }
 
 impl RemindersRepo for PgRemindersRepo {
+    async fn email_candidates(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        thread_ids: Option<&[Uuid]>,
+        cursor: Option<crate::domain::email_collection::EmailReminderCursor>,
+        as_of: DateTime<Utc>,
+        limit: u32,
+    ) -> Result<Vec<crate::domain::email_collection::EmailReminderCandidate>, Self::Err> {
+        self.read_email_candidates(user, thread_ids, cursor, as_of, limit)
+            .await
+    }
     async fn list_collection(
         &self,
         user: &MacroUserIdStr<'_>,

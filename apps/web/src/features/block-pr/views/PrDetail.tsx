@@ -128,7 +128,7 @@ export function PrDetailContent(props: PrDetailBodyProps) {
           </Scroll>
         }
       >
-        <SidePanel.Layout headerToggle={false}>
+        <SidePanel.Layout headerToggle={false} floating>
           <PrSidePanelSections enrichment={props.data?.pullRequest} />
           <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
             <PrDetailBody
@@ -178,7 +178,7 @@ export function StandalonePrDetail(props: { foreignEntityId: string }) {
     return data ? (data.pullRequest.url ?? prHtmlUrl(data.prRef)) : undefined;
   };
   return (
-    <SidePanel.Root persistKey={`pr:${props.foreignEntityId}`}>
+    <SidePanel.Root floating persistKey={`pr:${props.foreignEntityId}`}>
       <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden @container">
         <ViewShell.TopBar class="touch:flex">
           <SplitPanel.CloseButton class="hidden shrink-0 touch:flex" />

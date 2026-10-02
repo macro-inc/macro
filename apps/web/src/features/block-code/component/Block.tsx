@@ -56,7 +56,7 @@ export default function BlockCode() {
     <DocumentBlockContainer usesCenterBar>
       <Show when={!isNestedBlock} fallback={<CodeMarkdown />}>
         <div class="size-full select-none overscroll-none overflow-hidden flex flex-col items-end relative">
-          <SidePanel.Layout defaultOpen={false}>
+          <SidePanel.Layout defaultOpen={false} floating>
             <FileSidePanelSections />
             <div class="flex size-full min-w-0 flex-col items-end overflow-hidden">
               <TopBar

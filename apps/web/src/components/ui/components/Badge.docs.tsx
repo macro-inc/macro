@@ -2,6 +2,7 @@ import { defineDoc } from '@app/features/ui-gallery/types';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
 import { For } from 'solid-js';
+import { Avatar } from './Avatar';
 import { Badge, type BadgeVariant } from './Badge';
 
 const VARIANTS: BadgeVariant[] = ['ghost', 'outline'];
@@ -20,6 +21,28 @@ function VariantsDemo() {
             <Badge variant={variant}>
               <CheckIcon />
               With icon
+            </Badge>
+          </div>
+        )}
+      </For>
+    </div>
+  );
+}
+// #endregion
+
+// #region demo:avatars
+function AvatarsDemo() {
+  return (
+    <div class="flex flex-wrap items-end gap-3">
+      <For each={['xs', 'sm', 'md', 'lg'] as const}>
+        {(size) => (
+          <div class="flex flex-col items-start gap-1.5">
+            <span class="font-mono text-xs text-ink-subtle">{size}</span>
+            <Badge variant="outline" size={size}>
+              <Avatar size={size === 'xs' || size === 'sm' ? 'sm' : 'md'}>
+                <Avatar.Fallback>JD</Avatar.Fallback>
+              </Avatar>
+              Jordan
             </Badge>
           </div>
         )}
@@ -102,6 +125,13 @@ export default defineDoc({
       description:
         'Badges take arbitrary children — a color dot for a tag, a status glyph, a caret when the badge is the visible half of a menu trigger.',
       render: ContentDemo,
+    },
+    {
+      id: 'avatars',
+      title: 'Leading avatars',
+      description:
+        'Use a small Avatar in xs / sm badges and a medium Avatar in md / lg badges. Each gets an even circular inset; text-only badges retain their usual padding.',
+      render: AvatarsDemo,
     },
   ],
 });

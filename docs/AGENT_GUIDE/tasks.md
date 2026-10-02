@@ -176,9 +176,13 @@ that top bar. Opening an associated task extends the breadcrumb trail; choose
 the project breadcrumb to return, or Projects to restore the collection and its
 filters, groups, and scroll position. Project URLs retain identity and section:
 `/app/component/initiative-view~<project-id>~overview` (or `tasks`).
-Project properties live in the shared Details/Properties side panel and honor
+Project properties live in the shared floating information panel and honor
 project access. Editors can rename the project; its owner can delete it.
 Deleting a project leaves its tasks in the workspace.
+
+Project information panels start closed and float over the content at every
+width, both in the Tasks project view and standalone initiative blocks. Opening
+the panel does not resize the content; use its toggle or click outside to close.
 
 Share (or Cmd+S) opens the same Share menu as tasks and documents: the
 `To: Email or group` field, optional message, access choice, and `Share`
@@ -203,7 +207,7 @@ Assigning an agent to the project does not start work on tasks already in it.
 Removing the project agent stops assignment to future tasks; it does not cancel
 sessions already started for its tasks.
 For verification, create a task from the project's Tasks tab, then move another
-task into the project through `Set project…`; both should start the assigned
+task into the project through `Add to project…`; both should start the assigned
 agent's normal task session and show its message in the task's Discussion.
 
 Overview's Description uses the shared collaborative Markdown editor and saves
@@ -222,14 +226,21 @@ inserted into the query cache before the composer closes, including its selected
 properties and project chip. It stays in its group while saving and assigning,
 then uses the saved task ID. Failed creations or assignments roll back that row.
 Verify this with GraphQL Soup both enabled and disabled. The section tabs
-use the same control as Channels. Existing tasks can be assigned through their
-`Set project…` context menu; there is no bulk-add dialog in the project view.
-The regular Tasks list includes a Project column; clicking a project chip opens
-that project. Right-click a task and choose `Set project…` to choose or clear its
-project. On mobile the same action is in the long-press menu. Selecting several
-tasks exposes `Set project` in the selection toolbar, and a context action on a
-selected row applies to the selection. Partial assignment failures leave only
-failed tasks in the picker for retry.
+use the same control as Channels. Editors can choose `Add existing tasks` beside
+`New task`, search for tasks, select several, and confirm `Add N tasks`. Tasks
+already in this project are excluded. Adding a task moves it from its previous
+project; the dialog explains this before saving. A partial failure keeps only
+failed tasks selected for retry, and a request failure preserves the selection.
+
+The regular Tasks list includes a Project column; clicking its cell opens the
+project picker. Right-click a task and choose `Add to project…` to choose or clear
+its project. On mobile the same action is in the long-press menu. For a selection,
+choose `Actions → Add to project…`; there is no separate assignment button in the
+selection toolbar. A context action on a selected row applies to the selection.
+Inside an open task, use the Project pill below the title, the Project row in
+the Properties side panel, or `Add to project…` in the title's actions menu.
+The property shows `No project` until assigned and stays read-only without edit
+access. Choose `No project` in the assignment dialog to remove the association.
 
 Discussion at the bottom of Overview uses the new discussions system. Comments
 appear from oldest to newest, with the comment input below them. The Discussion

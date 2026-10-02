@@ -87,7 +87,7 @@ export function createProjectTaskMutation(
         }
         if (!assigned)
           toast.failure(
-            'Task created, but could not be added to the project. Use Set project from the task menu to try again.'
+            'Task created, but could not be added to the project. Use Add to project from the task menu to try again.'
           );
         return { result, assigned };
       },

@@ -18,6 +18,8 @@ export type EntitySelectorConfig = {
   placeholder: string;
   specificEntityType?: EntityType | null;
   selfFilter?: { entityType: EntityType; blockId?: string };
+  /** Entities already linked to the destination are not selectable again. */
+  excludedIds?: Accessor<ReadonlySet<string>>;
   /** Explicit pool for USER pickers (e.g. company owner → team members);
    * replaces the default quick-access people list. */
   users?: Accessor<IUser[]>;

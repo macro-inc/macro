@@ -114,7 +114,7 @@ const Block: Component = () => {
         <Show when={isDragging() && !isSpecialProject}>
           <FileDropOverlay>Upload to this folder</FileDropOverlay>
         </Show>
-        <SidePanel.Layout defaultOpen={false}>
+        <SidePanel.Layout defaultOpen={false} floating>
           <Show when={!isSpecialProject}>
             <ProjectSidePanelSections />
           </Show>

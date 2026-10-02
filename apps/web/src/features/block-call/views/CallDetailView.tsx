@@ -1,5 +1,4 @@
 import { ViewShell } from '@app/components/view-shell';
-import { ChatWithAgentButton } from '@app/features/chat/ChatWithAgentButton';
 import { createSearchParams } from '@app/lib/split-router';
 import { SidePanel } from '@components/app/side-panel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -73,21 +72,14 @@ export function CallDetailActions(props: {
   }));
 
   return (
-    <div class="ml-auto flex shrink-0 items-center gap-2">
+    <div class="ml-auto flex shrink-0 items-center gap-1">
       <Show when={!isMobile() && !props.record.isActive && canCallAgain()}>
         <Button variant="outline" size="sm" onClick={callAgain}>
           <PhoneCallIcon class="size-4" />
           Call Again
         </Button>
       </Show>
-      <ChatWithAgentButton
-        entity={{
-          type: 'document',
-          id: props.callId,
-          name: props.name,
-          fileType: 'call',
-        }}
-      />
+      <SidePanel.HeaderActionsOutlet />
       <ShareTrigger
         onClick={openShare}
         id={props.callId}
@@ -102,7 +94,7 @@ export function CallDetailActions(props: {
 /** Keep side-panel state alive across call-record query updates. */
 export function CallDetailRoot(props: ParentProps<{ callId: string }>) {
   return (
-    <SidePanel.Root persistKey={`call:${props.callId}`}>
+    <SidePanel.Root floating persistKey={`call:${props.callId}`}>
       {props.children}
     </SidePanel.Root>
   );
@@ -123,7 +115,7 @@ function LoadedCallContent(props: {
     }
   });
   return (
-    <SidePanel.Layout headerToggle={false}>
+    <SidePanel.Layout headerToggle={false} floating>
       <CallSidePanelSections callId={props.callId} record={props.record} />
       <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
         <CallRecordingBody

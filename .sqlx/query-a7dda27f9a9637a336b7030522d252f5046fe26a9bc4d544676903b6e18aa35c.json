@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, table_id, version, actor, acting_bot, at, ops, inverse\n           FROM database_changes WHERE table_id = $1 AND version > $2\n           ORDER BY version",
+  "query": "SELECT id, table_id, version, actor, acting_bot, at, ops, inverse, payload_version\n           FROM database_changes WHERE id = $1 AND database_id = $2",
   "describe": {
     "columns": [
       {
@@ -42,12 +42,17 @@
         "ordinal": 7,
         "name": "inverse",
         "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 8,
+        "name": "payload_version",
+        "type_info": "Int4"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid",
-        "Int8"
+        "Int8",
+        "Uuid"
       ]
     },
     "nullable": [
@@ -58,8 +63,9 @@
       true,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "348cd1e39a77870cf9cce42d6d25f6a2634515ca35c2e14b9a0e4f225d14d670"
+  "hash": "a7dda27f9a9637a336b7030522d252f5046fe26a9bc4d544676903b6e18aa35c"
 }

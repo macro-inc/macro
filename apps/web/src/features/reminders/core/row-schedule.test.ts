@@ -1,6 +1,10 @@
 import type { ReminderEntity } from '@entity';
 import { describe, expect, it } from 'vitest';
-import { reminderScheduleLabel, reminderScheduleState } from './row-schedule';
+import {
+  emailReminderScheduleLabel,
+  reminderScheduleLabel,
+  reminderScheduleState,
+} from './row-schedule';
 
 const now = Date.parse('2026-10-01T12:00:00Z');
 const reminder: ReminderEntity = {
@@ -107,4 +111,37 @@ it('omits the zone for a local schedule and retains a different year', () => {
   );
   expect(label).toContain('2027');
   expect(label).not.toContain('UTC');
+});
+
+describe('email workflow clock labels', () => {
+  it.each([
+    ['archiving', 'Scheduling return:', true],
+    ['pending', 'Returning:', true],
+    ['returning', 'Returning to inbox:', false],
+    ['returned', 'Returned:', false],
+  ] as const)(
+    'labels %s honestly even while disabled',
+    (state, prefix, conditional) => {
+      const label = emailReminderScheduleLabel(
+        {
+          ...reminder,
+          enabled: false,
+          emailFollowup: {
+            state,
+            condition: 'if_no_reply',
+            linkId: 'link',
+            threadId: 'thread',
+            revision: 'revision',
+            reminderId: reminder.id,
+            remindAt: '2026-10-02T13:00:00Z',
+          },
+        },
+        now,
+        'UTC'
+      );
+      expect(label.startsWith(prefix)).toBe(true);
+      expect(label.includes('if no reply')).toBe(conditional);
+      expect(label).not.toContain('Paused');
+    }
+  );
 });

@@ -339,9 +339,10 @@ function SoupNavigationButtons() {
 /** Shared header controls; each host supplies its current list navigation. */
 export function ListNavigationButtons(props: {
   navigation: ListDetailNavigationTarget;
+  class?: string;
 }) {
   return (
-    <div class="flex items-center gap-0.5">
+    <div class={cn('flex items-center gap-0.5', props.class)}>
       <Button
         size="icon-md"
         label="Previous item"
@@ -646,7 +647,7 @@ export function SplitHeader(props: {
             }}
           />
 
-          <div class="header-actions h-full grow shrink flex items-center justify-end gap-0.5 px-2 touch:px-0 touch:gap-2">
+          <div class="header-actions h-full grow shrink flex items-center justify-end gap-1 px-2 touch:px-0 touch:gap-2">
             <div
               class="contents"
               ref={(ref) => {
