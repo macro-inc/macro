@@ -50,6 +50,10 @@ pub struct SkippedCell {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum UndoRefusal {
+    /// A row created by the change is now referenced elsewhere.
+    RowInUse,
+    /// An option created by the change is now selected by an entity.
+    OptionInUse,
     /// The change is someone else's: each person undoes their own.
     NotYours,
     /// Nothing undoes the change, such as a table's removal.
@@ -116,13 +120,20 @@ pub fn guard(
             }
         )
     });
-    if removes_table || inverse.ops.is_empty() {
+    if removes_table
+        || inverse.format_version != super::INVERSE_FORMAT_VERSION
+        || inverse.incomplete
+        || inverse.ops.is_empty()
+    {
         return refused(UndoRefusal::NotUndoable, None);
     }
     let by_others = |record: &&ChangeRecord| record.change.actor.as_deref() != actor;
 
     let mut ops = Vec::new();
-    let mut restoration = Restoration::default();
+    let mut restoration = Restoration {
+        columns: inverse.restored_columns.clone(),
+        ..Restoration::default()
+    };
     let mut skipped = Vec::new();
     let mut readded: BTreeSet<OptionId> = BTreeSet::new();
     let mut recreated: BTreeSet<ColumnId> = BTreeSet::new();
@@ -194,6 +205,7 @@ pub fn guard(
                     .filter(|row| current.rows.contains_key(row))
                     .collect();
                 if !rows.is_empty() {
+                    restoration.unreferenced_rows.extend(rows.iter().copied());
                     ops.push(DatabaseOp::Rows {
                         table: *table,
                         change: RowsChange::Delete { rows },
@@ -235,6 +247,16 @@ pub fn guard(
                                 .any(|touch| touch.columns.contains(column))
                         }) {
                             return refused(UndoRefusal::ColumnWrittenSince, Some(writer));
+                        }
+                        if let Some(writer) = later.iter().rev().find(|record| {
+                            record.columns.iter().any(|touch| touch.column == *column)
+                                || record
+                                    .change
+                                    .ops
+                                    .iter()
+                                    .any(|op| matches!(op, DatabaseOp::View { .. }))
+                        }) {
+                            return refused(UndoRefusal::ChangedSince, Some(writer));
                         }
                         if present.is_none() {
                             continue;
@@ -293,11 +315,33 @@ pub fn guard(
                         continue;
                     }
                     ColumnChange::DeleteOption { option } => {
+                        restoration.unused_options.insert(*option);
+                        if let Some(writer) = later.iter().rev().find(|record| {
+                            record.change.ops.iter().any(|op| matches!(op,
+                                DatabaseOp::Column { change: ColumnChange::UpdateOption { option: changed, .. }, .. }
+                                    if changed == option))
+                        }) {
+                            return refused(UndoRefusal::ChangedSince, Some(writer));
+                        }
                         let Some(held) = present.and_then(|present| {
                             present.options.iter().find(|held| held.id == *option)
                         }) else {
                             continue;
                         };
+                        if let Some(present) = present
+                            && current.schema.views.iter().any(|view| {
+                                !removed_views.contains(&view.id)
+                                    && current.schema.columns_of(view.table_id).any(|column| {
+                                        column.definition == present.definition
+                                            && (view.query.without_option(column.id, *option)
+                                                != view.query
+                                                || view.layout.without_option(column.id, *option)
+                                                    != view.layout)
+                                    })
+                            })
+                        {
+                            return refused(UndoRefusal::OptionInUse, None);
+                        }
                         let added = added_label(&change.change.ops, *column, *option);
                         if added.is_some_and(|label| label.trim() != held.label) {
                             return refused(
@@ -354,7 +398,7 @@ pub fn guard(
                     ops.push(op.clone());
                 }
                 TableChange::ReorderColumns { order } => {
-                    let set = change.change.ops.iter().find_map(|op| match op {
+                    let set = change.change.ops.iter().rev().find_map(|op| match op {
                         DatabaseOp::Table {
                             table: named,
                             change: TableChange::ReorderColumns { order },
@@ -394,7 +438,7 @@ pub fn guard(
                     }
                 }
                 TableChange::ReorderViews { order } => {
-                    let set = change.change.ops.iter().find_map(|op| match op {
+                    let set = change.change.ops.iter().rev().find_map(|op| match op {
                         DatabaseOp::Table {
                             table: named,
                             change: TableChange::ReorderViews { order },
@@ -428,7 +472,7 @@ pub fn guard(
                 TableChange::Create { .. } => ops.push(op.clone()),
             },
             DatabaseOp::ReorderTables { .. } => {
-                let set = change.change.ops.iter().find_map(|op| match op {
+                let set = change.change.ops.iter().rev().find_map(|op| match op {
                     DatabaseOp::ReorderTables { order } => Some(order),
                     _ => None,
                 });
@@ -450,7 +494,8 @@ pub fn guard(
                         .view(*view)
                         .and_then(|board| board.layout.group_by());
                     if let Some(mover) = later.iter().rev().find(|record| {
-                        moves_card(record, *row)
+                        names_view(record, *view)
+                            || moves_card(record, *row)
                             || record.rows.iter().any(|touch| {
                                 touch.row == *row
                                     && (touch.kind == RowChangeKind::Delete
@@ -463,7 +508,10 @@ pub fn guard(
                     ops.push(op.clone());
                     continue;
                 }
-                if let Some(changer) = later.iter().rev().find(|record| names_view(record, *view)) {
+                if let Some(changer) = later.iter().rev().find(|record| {
+                    names_view(record, *view) || record.change.ops.iter().any(|op| matches!(op,
+                        DatabaseOp::View { view: moved, change: ViewChange::MoveCard { .. }, .. } if moved == view))
+                }) {
                     return refused(UndoRefusal::ChangedSince, Some(changer));
                 }
                 let present = current.schema.view(*view).is_some();
@@ -530,8 +578,9 @@ fn updated_option(
     column: ColumnId,
     option: OptionId,
 ) -> Option<(Option<&String>, Option<&Option<String>>)> {
-    ops.iter().rev().find_map(|op| match op {
-        DatabaseOp::Column {
+    let mut written = None;
+    for op in ops {
+        if let DatabaseOp::Column {
             column: named,
             change:
                 ColumnChange::UpdateOption {
@@ -540,9 +589,20 @@ fn updated_option(
                     color,
                 },
             ..
-        } if *named == column && *updated == option => Some((label.as_ref(), color.as_ref())),
-        _ => None,
-    })
+        } = op
+            && *named == column
+            && *updated == option
+        {
+            let (held_label, held_color) = written.get_or_insert((None, None));
+            if label.is_some() {
+                *held_label = label.as_ref();
+            }
+            if color.is_some() {
+                *held_color = color.as_ref();
+            }
+        }
+    }
+    written
 }
 
 fn moves_card(record: &ChangeRecord, row: RowId) -> bool {

@@ -9,7 +9,7 @@ mod invert;
 #[cfg(test)]
 mod test;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use bot_id::BotId;
 use chrono::{DateTime, Utc};
@@ -29,10 +29,22 @@ pub use invert::{Planned, invert};
 use crate::domain::catalog::entity_kind;
 use crate::domain::models::PropertyDefinitionId;
 
+/// Current persisted inverse format; older formats lack restoration metadata.
+pub const INVERSE_FORMAT_VERSION: u8 = 1;
+
 /// What undoes one change, as the journal stores it (`database_changes.inverse`).
-#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ChangeInverse {
+    /// Inverse format. Missing in legacy records, which are not safe to replay.
+    #[serde(default)]
+    pub format_version: u8,
+    /// True when the original write affected state this inverse cannot restore.
+    #[serde(default)]
+    pub incomplete: bool,
+    /// Placement metadata for columns recreated by the inverse.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub restored_columns: BTreeMap<ColumnId, RestoredColumn>,
     /// The ops that undo the change, to apply in order: the change's ops
     /// inverted newest first, then any order they disturbed put back.
     pub ops: Vec<DatabaseOp>,
@@ -54,6 +66,21 @@ pub struct ChangeInverse {
     pub after: CellImage,
 }
 
+impl Default for ChangeInverse {
+    fn default() -> Self {
+        Self {
+            format_version: INVERSE_FORMAT_VERSION,
+            incomplete: false,
+            restored_columns: BTreeMap::new(),
+            ops: Vec::new(),
+            restored_rows: BTreeMap::new(),
+            rebinds: BTreeMap::new(),
+            before: CellImage::default(),
+            after: CellImage::default(),
+        }
+    }
+}
+
 /// Cells by row, then column.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct CellImage {
@@ -73,6 +100,12 @@ impl CellImage {
 /// bind back, each by the op's index in the batch.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Restoration {
+    /// Rows an undo may remove only without surviving incoming relations.
+    pub unreferenced_rows: BTreeSet<RowId>,
+    /// Placement metadata that cannot be expressed by binding a property.
+    pub columns: BTreeMap<ColumnId, RestoredColumn>,
+    /// Options an undo may remove only while no entity selects them.
+    pub unused_options: BTreeSet<OptionId>,
     /// The rows each row insert puts back.
     pub rows: BTreeMap<usize, Vec<RestoredRow>>,
     /// The definition each type change binds back.
@@ -83,10 +116,22 @@ impl ChangeInverse {
     /// What applying the inverse's ops puts back beyond them.
     pub fn restoration(&self) -> Restoration {
         Restoration {
+            unreferenced_rows: BTreeSet::new(),
+            columns: self.restored_columns.clone(),
+            unused_options: BTreeSet::new(),
             rows: self.restored_rows.clone(),
             rebinds: self.rebinds.clone(),
         }
     }
+}
+
+/// Placement state to restore along with a deleted column's definition.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RestoredColumn {
+    /// Original kind, including a relation's target.
+    pub kind: Option<ColumnKind>,
+    /// Whether the first value should still infer a type.
+    pub infer_type: bool,
 }
 
 /// A row a delete removed: its id and place.
@@ -322,6 +367,8 @@ pub struct TableImage {
 /// A column as the planner read it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ColumnImage {
+    /// Whether a first value still determines the column's type.
+    pub infer_type: bool,
     /// The column.
     pub id: ColumnId,
     /// Its table.
@@ -352,6 +399,8 @@ pub struct OptionImage {
 /// What a batch touches, read under its locks before it writes.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Before {
+    /// Option removals with uses outside the captured table's cells.
+    pub incomplete_options: BTreeSet<OptionId>,
     /// The schema the batch was planned against.
     pub schema: SchemaImage,
     /// Every existing row the batch updates, deletes or moves.

@@ -45,16 +45,19 @@ where
             let entries = self
                 .entries_for(&HashMap::from([(database_id, grant)]))
                 .await?;
-            let Some(entry) = entries
+            if !entries
                 .iter()
-                .find(|entry| entry.table.id == record.change.table)
-            else {
+                .any(|entry| entry.table.id == record.change.table)
+            {
                 return Ok(UndoOutcome::Refused {
                     reason: journal::UndoRefusal::NotUndoable,
                     by: None,
                 });
-            };
-            let version = entry.table.version;
+            }
+            let base_versions = entries
+                .iter()
+                .map(|entry| (entry.table.id, entry.table.version))
+                .collect();
             let later = self
                 .repository
                 .changes_after(record.change.table, record.change.version)
@@ -88,10 +91,7 @@ where
                     }
                 });
             }
-            let batch = OpBatch {
-                ops,
-                base_versions: HashMap::from([(record.change.table, version)]),
-            };
+            let batch = OpBatch { ops, base_versions };
             match self
                 .apply_batch(&receipt, &viewer, &batch, &restoration)
                 .await
@@ -109,6 +109,18 @@ where
                     });
                 }
                 Err(DatabaseError::VersionConflict) => continue,
+                Err(DatabaseError::RowInUse) => {
+                    return Ok(UndoOutcome::Refused {
+                        reason: journal::UndoRefusal::RowInUse,
+                        by: None,
+                    });
+                }
+                Err(DatabaseError::OptionInUse) => {
+                    return Ok(UndoOutcome::Refused {
+                        reason: journal::UndoRefusal::OptionInUse,
+                        by: None,
+                    });
+                }
                 Err(DatabaseError::InvalidOp(refusal))
                     if refusal.reason.contains("is back already") || refusal.taken.is_some() =>
                 {

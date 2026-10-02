@@ -114,6 +114,7 @@ fn schema() -> SchemaImage {
         columns: vec![
             ColumnImage {
                 id: NAME,
+                infer_type: false,
                 table: GUESTS,
                 name: "Name".into(),
                 definition_name: "Name".into(),
@@ -123,6 +124,7 @@ fn schema() -> SchemaImage {
             },
             ColumnImage {
                 id: RSVP,
+                infer_type: false,
                 table: GUESTS,
                 name: "RSVP".into(),
                 definition_name: "RSVP".into(),
@@ -148,6 +150,7 @@ fn schema() -> SchemaImage {
             },
             ColumnImage {
                 id: PLUS_ONES,
+                infer_type: false,
                 table: GUESTS,
                 name: "Plus Ones".into(),
                 definition_name: "Extra guests".into(),
@@ -338,6 +341,7 @@ fn a_row_delete_is_undone_by_reinserting_the_rows_under_their_ids_and_positions(
         change: RowsChange::Delete { rows: vec![OMAR] },
     };
     let write = Write::DeleteRows {
+        only_if_unreferenced: false,
         table_id: GUESTS,
         rows: vec![OMAR],
     };
@@ -499,6 +503,20 @@ fn a_column_delete_is_undone_by_binding_its_definition_back_with_its_name_cells_
                     previous_name: None,
                 },
             },
+            DatabaseOp::View {
+                table: GUESTS,
+                view: GRID,
+                change: ViewChange::Update {
+                    name: Some("Everyone".into()),
+                    query: Some(grid.query.clone()),
+                    layout: Some(RequestedLayout::Table {
+                        columns: vec![ViewColumn {
+                            column: PLUS_ONES,
+                            width: Some(80)
+                        }],
+                    }),
+                },
+            },
             DatabaseOp::Rows {
                 table: GUESTS,
                 change: RowsChange::Update {
@@ -511,20 +529,6 @@ fn a_column_delete_is_undone_by_binding_its_definition_back_with_its_name_cells_
                             }],
                         }],
                     },
-                },
-            },
-            DatabaseOp::View {
-                table: GUESTS,
-                view: GRID,
-                change: ViewChange::Update {
-                    name: Some("Everyone".into()),
-                    query: Some(grid.query.clone()),
-                    layout: Some(RequestedLayout::Table {
-                        columns: vec![ViewColumn {
-                            column: PLUS_ONES,
-                            width: Some(80),
-                        }],
-                    }),
                 },
             },
             DatabaseOp::Table {
@@ -807,6 +811,7 @@ fn an_option_delete_is_undone_by_the_option_its_colour_and_the_cells_that_held_i
         change: ColumnChange::DeleteOption { option: NO },
     };
     let write = Write::DeleteOption {
+        only_if_unused: false,
         table_id: GUESTS,
         tables: vec![GUESTS],
         definition_id: RSVP_DEFINITION,
@@ -1229,6 +1234,7 @@ fn what_a_batch_creates_and_removes_again_needs_no_inverse() {
             restored: Vec::new(),
         },
         Write::DeleteRows {
+            only_if_unreferenced: false,
             table_id: GUESTS,
             rows: vec![walk_in],
         },

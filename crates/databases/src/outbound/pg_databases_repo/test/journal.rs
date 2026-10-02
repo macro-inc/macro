@@ -365,6 +365,8 @@ async fn every_committed_batch_of_the_guest_list_is_journaled_with_its_inverse(p
                     ]},
                 }]),
                 json!({
+                    "formatVersion": 1,
+                    "incomplete": false,
                     "ops": [{
                         "kind": "rows",
                         "table": wedding.table_id,
@@ -393,6 +395,8 @@ async fn every_committed_batch_of_the_guest_list_is_journaled_with_its_inverse(p
                     }]}},
                 }]),
                 json!({
+                    "formatVersion": 1,
+                    "incomplete": false,
                     "ops": [{
                         "kind": "rows",
                         "table": wedding.table_id,
@@ -420,6 +424,8 @@ async fn every_committed_batch_of_the_guest_list_is_journaled_with_its_inverse(p
                     "change": {"kind": "delete", "rows": [omar]},
                 }]),
                 json!({
+                    "formatVersion": 1,
+                    "incomplete": false,
                     "ops": [{
                         "kind": "rows",
                         "table": wedding.table_id,
@@ -447,6 +453,9 @@ async fn every_committed_batch_of_the_guest_list_is_journaled_with_its_inverse(p
                     "change": {"kind": "delete"},
                 }]),
                 json!({
+                    "formatVersion": 1,
+                    "incomplete": false,
+                    "restoredColumns": {wedding.plus_ones.to_string(): {"kind": {"type": "number"}, "infer_type": false}},
                     "ops": [
                         {
                             "kind": "column",

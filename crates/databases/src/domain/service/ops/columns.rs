@@ -103,7 +103,19 @@ impl Planner {
                 if entry.column_for(definition.definition.id).is_some() {
                     return Err(place.refuse(SchemaError::DefinitionAlreadyBound.to_string()));
                 }
-                (definition, None, None, false)
+                let restored = self.restoration.columns.get(&id);
+                let config = match restored.and_then(|column| column.kind) {
+                    Some(ColumnKind::Relation { database, table }) => {
+                        self.link_target(place, database, table)?;
+                        Some(ColumnConfig::Link {
+                            database_id: database,
+                            table_id: table,
+                        })
+                    }
+                    _ => None,
+                };
+                let infer_type = restored.is_some_and(|column| column.infer_type);
+                (definition, None, config, infer_type)
             }
         };
         let column = Column {
@@ -533,6 +545,7 @@ impl Planner {
         let tables = self.tables_binding(definition_id);
         let views = self.views_without_option(&tables, definition_id, option);
         Ok(Write::DeleteOption {
+            only_if_unused: self.restoration.unused_options.contains(&option),
             table_id: entry.table.id,
             tables,
             definition_id,

@@ -12,7 +12,9 @@ use properties::domain::database_cell_writer::DatabaseCellWriter;
 use properties::domain::database_definition_writer::{
     DatabaseDefinitionWriter, NewDatabaseDefinition,
 };
-use properties::domain::database_option_writer::{ColorChange, DatabaseOptionWriter};
+use properties::domain::database_option_writer::{
+    ColorChange, DatabaseOptionWriter, DeleteUnusedOptionOutcome,
+};
 use properties::domain::model::UpdatePropertyOptionOutcome;
 use properties::domain::ports::PropertiesRepo;
 use sqlx::{PgPool, Postgres, Transaction};
@@ -616,7 +618,22 @@ where
                 }
                 rows::settle_inference(&mut **transaction, *table_id, &valued).await?;
             }
-            Write::DeleteRows { table_id, rows } => {
+            Write::DeleteRows {
+                table_id,
+                rows,
+                only_if_unreferenced,
+            } => {
+                if *only_if_unreferenced {
+                    rows::lock_rows(&mut **transaction, *table_id, rows).await?;
+                    if self
+                        .properties
+                        .database_rows_referenced_in(transaction, &journal::entity_ids(rows))
+                        .await
+                        .map_err(cells_error)?
+                    {
+                        return refused(WritesOutcome::RowInUse);
+                    }
+                }
                 for row in rows {
                     // The row's cells go with it, by the schema's trigger.
                     if !rows::delete_row(&mut **transaction, *table_id, *row).await? {
@@ -660,18 +677,33 @@ where
                 }
             }
             Write::DeleteOption {
+                only_if_unused,
                 tables,
                 definition_id,
                 option_id,
                 views: rewritten,
                 ..
             } => {
-                if !self
-                    .properties
-                    .delete_option_in(transaction, *definition_id, option_id.into_uuid())
-                    .await
-                    .map_err(cells_error)?
-                {
+                let deleted = if *only_if_unused {
+                    match self
+                        .properties
+                        .delete_unused_option_in(transaction, *definition_id, option_id.into_uuid())
+                        .await
+                        .map_err(cells_error)?
+                    {
+                        DeleteUnusedOptionOutcome::Deleted => true,
+                        DeleteUnusedOptionOutcome::NotFound => false,
+                        DeleteUnusedOptionOutcome::InUse => {
+                            return refused(WritesOutcome::OptionInUse);
+                        }
+                    }
+                } else {
+                    self.properties
+                        .delete_option_in(transaction, *definition_id, option_id.into_uuid())
+                        .await
+                        .map_err(cells_error)?
+                };
+                if !deleted {
                     return refused(WritesOutcome::MissingOption { write: index });
                 }
                 for view in rewritten {
@@ -768,6 +800,30 @@ where
             schema: schema.clone(),
             ..Before::default()
         };
+        for write in &writes.writes {
+            if let Write::DeleteOption {
+                table_id,
+                definition_id,
+                option_id,
+                ..
+            } = write
+            {
+                let rows = journal::table_rows(&mut **transaction, *table_id).await?;
+                if self
+                    .properties
+                    .option_used_outside_rows_in(
+                        transaction,
+                        *definition_id,
+                        option_id.into_uuid(),
+                        &journal::entity_ids(&rows),
+                    )
+                    .await
+                    .map_err(cells_error)?
+                {
+                    before.incomplete_options.insert(*option_id);
+                }
+            }
+        }
         let places = journal::row_places(&mut **transaction, &reads.rows).await?;
         if !places.is_empty() {
             let rows: Vec<RowId> = places.iter().map(|(row, _, _)| *row).collect();

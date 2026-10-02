@@ -5525,6 +5525,8 @@ export const undoDatabaseChangeResponse = zod
             kind: zod.enum(['refused']),
             reason: zod
               .enum([
+                'row_in_use',
+                'option_in_use',
                 'not_yours',
                 'not_undoable',
                 'row_edited_since',

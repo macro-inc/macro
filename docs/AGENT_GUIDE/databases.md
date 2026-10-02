@@ -314,6 +314,18 @@ and redo show no toast; the grid shows what the server returned, and a refused
 undo drops off the stack. Deleting records, a column or an option shows a toast
 with an **Undo** action. Deleting a table cannot be undone.
 
+Undoing option creation refuses while any entity still selects the option,
+including uses of a shared property outside this table. Later column metadata
+edits, incoming row references, and board regrouping also protect collaborators'
+changes. Mixed batches restore required options and columns before their cells,
+then remove options the original batch created.
+
+Undo refuses when the stored inverse cannot restore the whole affected scope:
+legacy unversioned inverses, shared-option deletions affecting other tables or
+entities, and removing positioned cards, their lanes, or their boards. Regrouping
+a board with saved card positions also refuses undo. These refusals write
+nothing; they do not report a partial restoration as success.
+
 Every committed batch is journaled with its inverse. `POST /databases/{id}/ops`
 answers `changes` (one journal id per table version), `POST
 /databases/{id}/changes/{change}/undo` undoes one of your own (undoing the undo

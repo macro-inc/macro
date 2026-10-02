@@ -135,6 +135,10 @@ pub async fn upsert_entity_property_in_transaction(
     property_definition_id: Uuid,
     value: Option<PropertyValue>,
 ) -> Result<EntityPropertyMutationSnapshot, PropertyQueryError> {
+    if let Some(PropertyValue::SelectOption(options)) = &value {
+        super::property_option_queries::hold_selected_options(tx, property_definition_id, options)
+            .await?;
+    }
     mutate_entity_property_in_transaction(
         tx,
         entity_id,
@@ -278,6 +282,13 @@ pub async fn add_entity_property_option(
     property_definition_id: Uuid,
     option_id: Uuid,
 ) -> anyhow::Result<EntityPropertyMutationSnapshot> {
+    let mut tx = pool.begin().await?;
+    super::property_option_queries::hold_selected_options(
+        &mut tx,
+        property_definition_id,
+        &[option_id],
+    )
+    .await?;
     let id = macro_uuid::generate_uuid_v7();
 
     let row = sqlx::query_as!(
@@ -323,9 +334,10 @@ pub async fn add_entity_property_option(
         property_definition_id,
         option_id.to_string(),
     )
-    .fetch_one(pool)
+    .fetch_one(&mut *tx)
     .await?;
 
+    tx.commit().await?;
     Ok(row.into_snapshot()?)
 }
 
@@ -414,6 +426,12 @@ pub async fn bulk_update_entity_property_options(
     ordered.sort_by_key(|update| update.property_definition_id);
 
     for update in ordered {
+        super::property_option_queries::hold_selected_options(
+            &mut tx,
+            update.property_definition_id,
+            &update.add_option_ids,
+        )
+        .await?;
         let has_additions = !update.add_option_ids.is_empty();
 
         // Attach the property only when adding options. A concurrent creator

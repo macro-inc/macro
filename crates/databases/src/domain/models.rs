@@ -427,6 +427,8 @@ pub enum Write {
     },
     /// Remove rows of the table with their cells.
     DeleteRows {
+        /// Refuse an undo's removal while another entity references these rows.
+        only_if_unreferenced: bool,
         /// The table the rows must belong to.
         table_id: TableId,
         /// The rows.
@@ -453,6 +455,8 @@ pub enum Write {
     /// holding it, emptying the cells left with nothing, out of the views
     /// naming it, and out of the boards with a lane for it.
     DeleteOption {
+        /// Refuse removal while any entity selects this option.
+        only_if_unused: bool,
         /// The table the op named.
         table_id: TableId,
         /// Every table of the database binding the definition, the op's
@@ -599,6 +603,10 @@ impl Writes {
 /// What applying [`Writes`] did. Anything but `Applied` wrote nothing.
 #[derive(Debug, Clone, PartialEq)]
 pub enum WritesOutcome {
+    /// A row the undo would remove has a surviving incoming relation.
+    RowInUse,
+    /// An option the batch must leave unused is selected by an entity.
+    OptionInUse,
     /// Everything committed.
     Applied {
         /// Per write, the rows it inserted; empty for everything else.
@@ -995,6 +1003,12 @@ pub struct Awareness {
 /// Errors for schema and persistence operations.
 #[derive(Debug, thiserror::Error)]
 pub enum DatabaseError {
+    /// Undo would remove a row with a surviving incoming relation.
+    #[error("This row is now referenced elsewhere.")]
+    RowInUse,
+    /// Undo would remove an option that an entity still selects.
+    #[error("This option is now in use.")]
+    OptionInUse,
     /// The database, table, column, or row does not exist (or is invisible
     /// to the viewer, which is deliberately indistinguishable).
     #[error("not found")]

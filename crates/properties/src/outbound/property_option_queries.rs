@@ -15,6 +15,38 @@ use crate::domain::model::{
     UpdatePropertyOptionOutcome,
 };
 
+/// Keep selected options alive until their assignment commits. Validation
+/// happens after waiting for removals, so a stale writer cannot resurrect a
+/// deleted option in JSON. Ordered locks also support multi-select values.
+pub(super) async fn hold_selected_options(
+    connection: &mut sqlx::PgConnection,
+    definition: Uuid,
+    options: &[Uuid],
+) -> Result<(), PropertyQueryError> {
+    if options.is_empty() {
+        return Ok(());
+    }
+    // Take the definition before the options, like guarded removal and tag
+    // promotion. The entity row's foreign key will need this lock too.
+    sqlx::query_scalar!(
+        "SELECT id FROM property_definitions WHERE id = $1 FOR KEY SHARE",
+        definition
+    )
+    .fetch_optional(&mut *connection)
+    .await?;
+    let held = sqlx::query_scalar!(
+        "SELECT id FROM property_options WHERE property_definition_id = $1 AND id = ANY($2) ORDER BY id FOR KEY SHARE",
+        definition,
+        options
+    )
+    .fetch_all(&mut *connection)
+    .await?;
+    if let Some(missing) = options.iter().find(|id| !held.contains(id)) {
+        return Err(PropertyQueryError::MissingOption(*missing));
+    }
+    Ok(())
+}
+
 /// Gets a single property option by ID.
 #[tracing::instrument(skip(pool))]
 pub async fn get_property_option(
@@ -414,6 +446,21 @@ pub(crate) async fn delete_options_in_tx(
     property_definition_id: Uuid,
     option_ids: &[Uuid],
 ) -> Result<u64, PropertyQueryError> {
+    // Serialize removals before their cleanup snapshot. Otherwise an
+    // assignment can commit between cleanup and DELETE, leaving a stale id.
+    sqlx::query_scalar!(
+        "SELECT id FROM property_definitions WHERE id = $1 FOR UPDATE",
+        property_definition_id
+    )
+    .fetch_optional(&mut **tx)
+    .await?;
+    sqlx::query_scalar!(
+        "SELECT id FROM property_options WHERE property_definition_id = $1 AND id = ANY($2) ORDER BY id FOR UPDATE",
+        property_definition_id,
+        option_ids
+    )
+    .fetch_all(&mut **tx)
+    .await?;
     let option_id_strings: Vec<String> = option_ids.iter().map(Uuid::to_string).collect();
     sqlx::query!(
         r#"

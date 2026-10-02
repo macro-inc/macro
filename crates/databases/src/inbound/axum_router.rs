@@ -414,7 +414,9 @@ impl IntoResponse for DatabaseError {
         let status = match &self {
             DatabaseError::NotFound => StatusCode::NOT_FOUND,
             DatabaseError::Unauthorized => StatusCode::FORBIDDEN,
-            DatabaseError::VersionConflict => StatusCode::CONFLICT,
+            DatabaseError::VersionConflict
+            | DatabaseError::OptionInUse
+            | DatabaseError::RowInUse => StatusCode::CONFLICT,
             DatabaseError::InvalidSchemaOperation(_)
             | DatabaseError::InvalidSharing(_)
             | DatabaseError::InvalidOp(_) => StatusCode::BAD_REQUEST,

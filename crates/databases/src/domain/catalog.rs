@@ -308,6 +308,7 @@ pub fn schema_image(entries: &[TableEntry]) -> crate::domain::journal::SchemaIma
             let mut options: Vec<_> = column.definition.property_options.iter().collect();
             options.sort_by_key(|option| option.display_order);
             image.columns.push(ColumnImage {
+                infer_type: column.column.infer_type,
                 id: column.column.id,
                 table: entry.table.id,
                 name: column.name().to_owned(),

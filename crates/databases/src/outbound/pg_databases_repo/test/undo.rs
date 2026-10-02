@@ -1,6 +1,9 @@
 //! Undo over Postgres, on the guest list: each person undoes their own
 //! change, under the table's lock, leaving everyone else's alone.
 
+mod options;
+mod structure;
+
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use models_databases::views::{
     Conjunction, FilterCondition, FilterGroup, FilterNode, FilterTest, NewView, NumberOperator,

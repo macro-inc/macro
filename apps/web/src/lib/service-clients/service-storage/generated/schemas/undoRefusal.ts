@@ -12,6 +12,8 @@ export type UndoRefusal = (typeof UndoRefusal)[keyof typeof UndoRefusal];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const UndoRefusal = {
+  row_in_use: 'row_in_use',
+  option_in_use: 'option_in_use',
   not_yours: 'not_yours',
   not_undoable: 'not_undoable',
   row_edited_since: 'row_edited_since',

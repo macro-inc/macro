@@ -5,6 +5,9 @@ use models_properties::db::error::DbConversionError;
 /// A property query failed; a caller's transaction is to be dropped.
 #[derive(Debug, thiserror::Error)]
 pub enum PropertyQueryError {
+    /// A selected option no longer belongs to the property definition.
+    #[error("selected option {0} no longer exists")]
+    MissingOption(uuid::Uuid),
     /// Postgres rejected or failed the statement.
     #[error(transparent)]
     Sqlx(#[from] sqlx::Error),

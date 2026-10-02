@@ -321,6 +321,8 @@ where
                 other @ (DatabaseError::InvalidSchemaOperation(_)
                 | DatabaseError::InvalidSharing(_)
                 | DatabaseError::VersionConflict
+                | DatabaseError::RowInUse
+                | DatabaseError::OptionInUse
                 | DatabaseError::InvalidOp(_)) => {
                     SqlError::Infrastructure(rootcause::Report::new(other).into_dynamic())
                 }

@@ -14,6 +14,26 @@ impl DatabaseWriteTransaction for PropertiesPgRepo {
 }
 
 impl DatabaseCellWriter for PropertiesPgRepo {
+    async fn database_rows_referenced_in(
+        &self,
+        transaction: &mut Self::Transaction,
+        rows: &[String],
+    ) -> Result<bool, Self::Err> {
+        Ok(sqlx::query_scalar!(
+            r#"SELECT EXISTS (
+                SELECT 1 FROM entity_properties,
+                LATERAL jsonb_array_elements(CASE WHEN values ->> 'type' = 'EntityReference'
+                    THEN values -> 'value' ELSE '[]'::jsonb END) AS reference
+                WHERE reference ->> 'entity_type' = 'DATABASE_ROW'
+                  AND reference ->> 'entity_id' = ANY($1)
+                  AND NOT (entity_type = 'DATABASE_ROW' AND entity_id = ANY($1))
+            ) AS "used!""#,
+            rows
+        )
+        .fetch_one(&mut **transaction)
+        .await?)
+    }
+
     async fn upsert_entity_property_in(
         &self,
         transaction: &mut Self::Transaction,

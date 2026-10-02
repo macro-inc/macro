@@ -34406,6 +34406,8 @@
         "type": "string",
         "description": "Why an undo was refused. Nothing was written.",
         "enum": [
+          "row_in_use",
+          "option_in_use",
           "not_yours",
           "not_undoable",
           "row_edited_since",

@@ -18,6 +18,14 @@ pub trait DatabaseWriteTransaction: Send + Sync + 'static {
 /// Lets a composition root write entity properties within an owning use
 /// case's transaction.
 pub trait DatabaseCellWriter: DatabaseWriteTransaction {
+    /// Whether an entity outside `rows` references one of these database rows.
+    /// The caller holds the target row locks against relation assignments.
+    fn database_rows_referenced_in(
+        &self,
+        transaction: &mut Self::Transaction,
+        rows: &[String],
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
     /// Set one entity property, or with `None` clear its value.
     fn upsert_entity_property_in(
         &self,

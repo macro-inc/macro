@@ -1,10 +1,12 @@
 //! The row ops: inserting, updating and deleting a table's rows, their cells
 //! checked against the columns as earlier ops leave them.
 
+use models_databases::views::LaneKey;
 use models_databases::{RowChanges, RowsChange};
 
 use super::{MAX_WRITTEN_ROWS, Planner, refuse};
 use crate::domain::catalog::TableEntry;
+use crate::domain::journal::cell_value;
 use crate::domain::models::{DatabaseError, Write};
 
 impl Planner {
@@ -46,7 +48,7 @@ impl Planner {
                             .filter_map(|(definition, value)| {
                                 value.map(|value| (definition, value))
                             })
-                            .collect())
+                            .collect::<Vec<_>>())
                     })
                     .collect::<Result<Vec<_>, DatabaseError>>()?;
                 let restored = self.restoration.rows.remove(&index).unwrap_or_default();
@@ -57,6 +59,18 @@ impl Planner {
                         None,
                         "the rows to put back do not match the rows inserted",
                     ));
+                }
+                // Subsequent card moves must see rows restored earlier in this batch.
+                for view in &entry.views {
+                    if let Some(board) = self.boards.get_mut(&view.id) {
+                        for (row, cells) in restored.iter().zip(&rows) {
+                            let value = cells.iter().find_map(|(definition, value)| {
+                                (*definition == board.grouping).then_some(value)
+                            });
+                            let lane = LaneKey::of_cell(value.and_then(cell_value).as_ref());
+                            board.cards.insert(row.id, (lane, None));
+                        }
+                    }
                 }
                 Ok(Write::InsertRows {
                     table_id: table,
@@ -98,6 +112,9 @@ impl Planner {
                     }
                 }
                 Ok(Write::DeleteRows {
+                    only_if_unreferenced: rows
+                        .iter()
+                        .any(|row| self.restoration.unreferenced_rows.contains(row)),
                     table_id: table,
                     rows: rows.clone(),
                 })

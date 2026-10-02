@@ -328,7 +328,9 @@ pub(crate) fn database_error(error: DatabaseError) -> ToolCallError {
              schema and version, then retry."
                 .to_string()
         }
-        DatabaseError::InvalidOp(_) => error.to_string(),
+        DatabaseError::InvalidOp(_) | DatabaseError::OptionInUse | DatabaseError::RowInUse => {
+            error.to_string()
+        }
         DatabaseError::Repo(_) => "The databases service failed.".to_string(),
     };
 

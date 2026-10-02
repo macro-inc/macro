@@ -4,8 +4,8 @@
 use std::collections::{BTreeMap, HashMap};
 
 use models_databases::{
-    CellValue, ColumnChange, ColumnId, DatabaseId, DatabaseOp, OptionId, OptionRef, RowId,
-    TableChange, TableId, TableVersion,
+    CellValue, ColumnChange, ColumnId, DatabaseId, DatabaseOp, OptionRef, RowId, TableChange,
+    TableId, TableVersion,
 };
 
 use super::{
@@ -22,11 +22,27 @@ pub fn reads(writes: &Writes) -> Reads {
             Write::UpdateRows { rows, .. } => {
                 reads.rows.extend(rows.iter().map(|(row, _)| *row));
             }
-            Write::DeleteRows { rows, .. } => reads.rows.extend(rows.iter().copied()),
+            Write::DeleteRows { table_id, rows, .. } => {
+                reads.rows.extend(rows.iter().copied());
+                reads.boards.extend(
+                    writes
+                        .journal
+                        .schema
+                        .views
+                        .iter()
+                        .filter(|view| view.table_id == *table_id)
+                        .map(|view| view.id),
+                );
+            }
             Write::MoveCard { view_id, row, .. } => {
                 reads.rows.push(*row);
                 reads.boards.push(*view_id);
             }
+            Write::DeleteView { view_id, .. } => reads.boards.push(*view_id),
+            Write::UpdateView {
+                view,
+                regrouped: true,
+            } => reads.boards.push(view.id),
             Write::DeleteColumn {
                 table_id,
                 column_id,
@@ -45,8 +61,18 @@ pub fn reads(writes: &Writes) -> Reads {
             Write::DeleteOption {
                 table_id,
                 definition_id,
+                tables,
                 ..
             } => {
+                reads.boards.extend(
+                    writes
+                        .journal
+                        .schema
+                        .views
+                        .iter()
+                        .filter(|view| tables.contains(&view.table_id))
+                        .map(|view| view.id),
+                );
                 if let DatabaseOp::Column { column, .. } = op {
                     reads.columns.push((*table_id, *column, *definition_id));
                 }
@@ -219,7 +245,7 @@ fn row_touches(
     definitions: &HashMap<(TableId, PropertyDefinitionId), ColumnId>,
 ) -> (Vec<RowTouch>, CellImage) {
     let mut touches: BTreeMap<RowId, (Vec<RowChangeKind>, Vec<ColumnId>)> = BTreeMap::new();
-    let mut after = CellImage::default();
+    let mut after = before_cells(before, table);
     let mut touch = |row: RowId, kind: RowChangeKind, columns: &[ColumnId]| {
         let entry = touches.entry(row).or_default();
         entry.0.push(kind);
@@ -300,12 +326,18 @@ fn row_touches(
             }
             Write::DeleteColumn { column_id, .. } => {
                 for row in column_rows(before, *column_id, |_| true) {
+                    if let Some(cells) = after.cells.get_mut(&row) {
+                        cells.remove(column_id);
+                    }
                     touch(row, RowChangeKind::Update, &[*column_id]);
                 }
             }
             Write::ReplaceColumn { replacement, .. } => {
                 let column = replacement.column.id;
                 for row in column_rows(before, column, |_| true) {
+                    if let Some(cells) = after.cells.get_mut(&row) {
+                        cells.remove(&column);
+                    }
                     touch(row, RowChangeKind::Update, &[column]);
                 }
                 for (row, value) in &replacement.values {
@@ -317,7 +349,25 @@ fn row_touches(
             }
             Write::DeleteOption { option_id, .. } => {
                 if let DatabaseOp::Column { column, .. } = step.op {
-                    for row in column_rows(before, *column, |value| holds(value, *option_id)) {
+                    let candidates: Vec<_> = after
+                        .cells
+                        .iter()
+                        .filter_map(|(row, values)| Some((*row, values.get(column)?.clone())))
+                        .collect();
+                    for (row, value) in candidates {
+                        let CellValue::Options(mut options) = value else {
+                            continue;
+                        };
+                        if !options.contains(&OptionRef::Id(*option_id)) {
+                            continue;
+                        }
+                        options.retain(|option| *option != OptionRef::Id(*option_id));
+                        let written = after.cells.entry(row).or_default();
+                        if options.is_empty() {
+                            written.remove(column);
+                        } else {
+                            written.insert(*column, CellValue::Options(options));
+                        }
                         touch(row, RowChangeKind::Update, &[*column]);
                     }
                 }
@@ -325,7 +375,14 @@ fn row_touches(
             _ => {}
         }
     }
-    after.cells.retain(|_, row| !row.is_empty());
+    after.cells.retain(|row, values| {
+        values.retain(|column, _| {
+            touches
+                .get(row)
+                .is_some_and(|(_, columns)| columns.contains(column))
+        });
+        !values.is_empty()
+    });
     let rows = touches
         .into_iter()
         .filter_map(|(row, (kinds, columns))| {
@@ -354,10 +411,6 @@ fn column_rows(before: &Before, column: ColumnId, keep: impl Fn(&CellValue) -> b
         .filter(|(_, value)| keep(value))
         .map(|(row, _)| *row)
         .collect()
-}
-
-fn holds(value: &CellValue, option: OptionId) -> bool {
-    matches!(value, CellValue::Options(options) if options.contains(&OptionRef::Id(option)))
 }
 
 /// The columns an entry's ops changed.

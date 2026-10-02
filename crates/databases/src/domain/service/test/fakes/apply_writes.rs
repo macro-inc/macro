@@ -420,7 +420,24 @@ pub(super) fn apply_in_world(
                 }
                 inserted.push(Vec::new());
             }
-            Write::DeleteRows { table_id, rows } => {
+            Write::DeleteRows {
+                table_id,
+                rows,
+                only_if_unreferenced,
+            } => {
+                if *only_if_unreferenced
+                    && world.cells.iter().any(|(row, cells)| {
+                        !rows.contains(row)
+                            && cells.values().any(|value| {
+                                matches!(value,
+                        PropertyValue::EntityRef(references) if references.iter().any(|reference|
+                            reference.entity_type == models_properties::EntityType::DatabaseRow
+                            && rows.iter().any(|row| row.to_string() == reference.entity_id)))
+                            })
+                    })
+                {
+                    return Ok(WritesOutcome::RowInUse);
+                }
                 for row in rows {
                     let table_rows = world.rows.entry(*table_id).or_default();
                     let Some(position) = table_rows.iter().position(|stored| stored.id == *row)
@@ -464,12 +481,18 @@ pub(super) fn apply_in_world(
                 inserted.push(Vec::new());
             }
             Write::DeleteOption {
+                only_if_unused,
                 tables,
                 definition_id,
                 option_id,
                 views,
                 ..
             } => {
+                if *only_if_unused && world.cells.values().any(|cells| {
+                    matches!(cells.get(definition_id), Some(PropertyValue::SelectOption(options)) if options.contains(option_id.as_uuid()))
+                }) {
+                    return Ok(WritesOutcome::OptionInUse);
+                }
                 if !rewrite_views(world, views) {
                     return Ok(WritesOutcome::MissingView { write: index });
                 }

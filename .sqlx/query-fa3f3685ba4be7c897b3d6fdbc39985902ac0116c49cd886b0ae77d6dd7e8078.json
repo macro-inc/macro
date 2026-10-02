@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE database_changes SET inverse = inverse - 'formatVersion' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fa3f3685ba4be7c897b3d6fdbc39985902ac0116c49cd886b0ae77d6dd7e8078"
+}

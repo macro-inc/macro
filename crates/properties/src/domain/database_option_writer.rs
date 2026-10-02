@@ -18,9 +18,40 @@ pub enum ColorChange {
     Set(String),
 }
 
+/// Result of removing an option without changing anyone's selections.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeleteUnusedOptionOutcome {
+    /// The unused option was removed.
+    Deleted,
+    /// The definition no longer contains this option.
+    NotFound,
+    /// An entity selects the option; nothing was changed.
+    InUse,
+}
+
 /// Lets a composition root add, change and remove select options within an
 /// owning use case's transaction.
 pub trait DatabaseOptionWriter: DatabaseWriteTransaction {
+    /// Whether an option is selected outside the given database rows. Holds
+    /// the definition against assignments/removals until the transaction ends.
+    fn option_used_outside_rows_in(
+        &self,
+        transaction: &mut Self::Transaction,
+        definition: Uuid,
+        option: Uuid,
+        rows: &[String],
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Remove an option only when no entity selects it, serializing with
+    /// assignments until the transaction ends. Includes all uses of a shared
+    /// definition, regardless of the entity's database or type.
+    fn delete_unused_option_in(
+        &self,
+        transaction: &mut Self::Transaction,
+        property_definition_id: Uuid,
+        option_id: Uuid,
+    ) -> impl Future<Output = Result<DeleteUnusedOptionOutcome, Self::Err>> + Send;
+
     /// Append options, under the ids given, after a definition's existing
     /// ones, holding the definition's lock so concurrent appends take
     /// distinct places. Each takes the palette colour of its position

@@ -1,7 +1,7 @@
 //! Inverting a change: the ops that put back what a batch's ops on one table
 //! changed, built from the before-image.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use models_databases::views::{LaneKey, NewView, RequestedLayout};
 use models_databases::{
@@ -41,12 +41,14 @@ pub fn invert(planned: &[Planned<'_>], before: &Before) -> ChangeInverse {
         view_orders: BTreeSet::new(),
         table_order: false,
         deleted_tables: BTreeSet::new(),
+        cells: BTreeMap::new(),
     };
     for (index, step) in planned.iter().enumerate().rev() {
         let later = &planned[index + 1..];
         inverse.step(step, later);
     }
     inverse.finish();
+    inverse.order_dependencies();
     inverse.inverse
 }
 
@@ -57,9 +59,65 @@ struct Inverter<'before> {
     view_orders: BTreeSet<TableId>,
     table_order: bool,
     deleted_tables: BTreeSet<TableId>,
+    cells: BTreeMap<TableId, BTreeMap<RowId, BTreeMap<ColumnId, CellValue>>>,
 }
 
 impl Inverter<'_> {
+    fn order_dependencies(&mut self) {
+        let mut ops: Vec<_> = std::mem::take(&mut self.inverse.ops)
+            .into_iter()
+            .enumerate()
+            .collect();
+        ops.sort_by_key(|(_, op)| match op {
+            DatabaseOp::Rows {
+                change: RowsChange::Insert { .. },
+                ..
+            } => 1,
+            DatabaseOp::Rows {
+                change: RowsChange::Update { .. },
+                ..
+            }
+            | DatabaseOp::View {
+                change: ViewChange::MoveCard { .. },
+                ..
+            } => 2,
+            DatabaseOp::Column {
+                change: ColumnChange::DeleteOption { .. },
+                ..
+            } => 3,
+            DatabaseOp::ReorderTables { .. }
+            | DatabaseOp::Table {
+                change: TableChange::ReorderColumns { .. } | TableChange::ReorderViews { .. },
+                ..
+            } => 4,
+            _ => 0,
+        });
+        let mut rows = std::mem::take(&mut self.inverse.restored_rows);
+        let mut rebinds = std::mem::take(&mut self.inverse.rebinds);
+        for (previous, op) in ops {
+            let index = self.inverse.ops.len();
+            if let Some(restored) = rows.remove(&previous) {
+                self.inverse.restored_rows.insert(index, restored);
+            }
+            if let Some(definition) = rebinds.remove(&previous) {
+                self.inverse.rebinds.insert(index, definition);
+            }
+            self.inverse.ops.push(op);
+        }
+    }
+    fn restore_rows(&mut self, table: TableId, rows: Vec<RowChange>) {
+        for row in rows {
+            let cells = self
+                .cells
+                .entry(table)
+                .or_default()
+                .entry(row.row)
+                .or_default();
+            for cell in row.cells {
+                cells.insert(cell.column, cell.value);
+            }
+        }
+    }
     fn push(&mut self, op: DatabaseOp) -> usize {
         self.inverse.ops.push(op);
         self.inverse.ops.len() - 1
@@ -68,6 +126,18 @@ impl Inverter<'_> {
     fn step(&mut self, step: &Planned<'_>, later: &[Planned<'_>]) {
         if matches!(step.write, Write::Unchanged { .. }) {
             return;
+        }
+        if let Write::UpdateView {
+            view,
+            regrouped: true,
+        } = step.write
+            && self
+                .before
+                .cards
+                .get(&view.id)
+                .is_some_and(|cards| !cards.is_empty())
+        {
+            self.inverse.incomplete = true;
         }
         match step.op {
             DatabaseOp::ReorderTables { .. } => self.table_order = true,
@@ -97,6 +167,9 @@ impl Inverter<'_> {
                 }
             }
             TableChange::Rename { name, .. } => {
+                if later.iter().any(|step| !matches!(step.write, Write::Unchanged { .. }) && matches!(step.op, DatabaseOp::Table { table: named, change: TableChange::Rename { .. } } if *named == table)) {
+                    return;
+                }
                 if let Some(image) = self.before.schema.table(table) {
                     self.push(DatabaseOp::Table {
                         table,
@@ -139,6 +212,9 @@ impl Inverter<'_> {
                 }
             }
             ColumnChange::Rename { name, .. } => {
+                if later.iter().any(|step| !matches!(step.write, Write::Unchanged { .. }) && matches!(step.op, DatabaseOp::Column { column: named, change: ColumnChange::Rename { .. }, .. } if *named == column)) {
+                    return;
+                }
                 if let Some(image) = image {
                     self.push(DatabaseOp::Column {
                         table,
@@ -166,6 +242,13 @@ impl Inverter<'_> {
             }
             ColumnChange::Delete => {
                 let Some(image) = image else { return };
+                self.inverse.restored_columns.insert(
+                    column,
+                    super::RestoredColumn {
+                        kind: image.kind,
+                        infer_type: image.infer_type,
+                    },
+                );
                 self.push(DatabaseOp::Column {
                     table,
                     column,
@@ -233,6 +316,16 @@ impl Inverter<'_> {
                 });
             }
             ColumnChange::DeleteOption { option } => {
+                if self.before.incomplete_options.contains(option)
+                    || self
+                        .before
+                        .cards
+                        .values()
+                        .flatten()
+                        .any(|card| card.lane == LaneKey::Option(*option))
+                {
+                    self.inverse.incomplete = true;
+                }
                 let Some(old) = image.and_then(|image| {
                     image
                         .options
@@ -293,17 +386,16 @@ impl Inverter<'_> {
         if rows.is_empty() {
             return;
         }
-        self.push(DatabaseOp::Rows {
-            table,
-            change: RowsChange::Update {
-                changes: RowChanges::PerRow { rows },
-            },
-        });
+        self.restore_rows(table, rows);
     }
 
     /// Put back the views a schema change rewrote, as they were.
     fn restore_views(&mut self, table: TableId, rewritten: &[DatabaseView]) {
         for rewritten in rewritten {
+            if rewritten.table_id != table {
+                self.inverse.incomplete = true;
+                continue;
+            }
             if let Some(old) = self.before.schema.view(rewritten.id).cloned() {
                 self.push(view_update(table, &old));
             }
@@ -363,15 +455,19 @@ impl Inverter<'_> {
                     })
                     .collect();
                 if !rows.is_empty() {
-                    self.push(DatabaseOp::Rows {
-                        table,
-                        change: RowsChange::Update {
-                            changes: RowChanges::PerRow { rows },
-                        },
-                    });
+                    self.restore_rows(table, rows);
                 }
             }
             RowsChange::Delete { rows } => {
+                if self
+                    .before
+                    .cards
+                    .values()
+                    .flatten()
+                    .any(|card| rows.contains(&card.row))
+                {
+                    self.inverse.incomplete = true;
+                }
                 let images: Vec<(RowId, &super::RowImage)> = rows
                     .iter()
                     .filter_map(|row| Some((*row, self.before.rows.get(row)?)))
@@ -427,6 +523,14 @@ impl Inverter<'_> {
             }
             ViewChange::Delete => {
                 let Some(image) = image else { return };
+                if self
+                    .before
+                    .cards
+                    .get(&view)
+                    .is_some_and(|cards| !cards.is_empty())
+                {
+                    self.inverse.incomplete = true;
+                }
                 self.push(DatabaseOp::View {
                     table,
                     view,
@@ -485,6 +589,52 @@ impl Inverter<'_> {
     /// Put back the orders the batch disturbed, once everything it removed
     /// is back and everything it added is gone.
     fn finish(&mut self) {
+        // Restore dependent values only after every option and column is
+        // back. Multiple writes to a cell collapse to its pre-batch value.
+        for (table, rows) in std::mem::take(&mut self.cells) {
+            let rows = rows
+                .into_iter()
+                .filter_map(|(row, cells)| {
+                    if self
+                        .inverse
+                        .restored_rows
+                        .values()
+                        .flatten()
+                        .any(|restored| restored.id == row)
+                    {
+                        return None;
+                    }
+                    if self
+                        .inverse
+                        .ops
+                        .iter()
+                        .any(|op| deletes_row(op, row) || deletes_table(op, table))
+                    {
+                        return None;
+                    }
+                    let cells: Vec<_> = cells
+                        .into_iter()
+                        .filter(|(column, _)| {
+                            !self
+                                .inverse
+                                .ops
+                                .iter()
+                                .any(|op| deletes_column(op, *column))
+                        })
+                        .map(|(column, value)| CellWrite { column, value })
+                        .collect();
+                    (!cells.is_empty()).then_some(RowChange { row, cells })
+                })
+                .collect::<Vec<_>>();
+            if !rows.is_empty() {
+                self.push(DatabaseOp::Rows {
+                    table,
+                    change: RowsChange::Update {
+                        changes: RowChanges::PerRow { rows },
+                    },
+                });
+            }
+        }
         let schema = &self.before.schema;
         for table in std::mem::take(&mut self.column_orders) {
             let order: Vec<ColumnId> = schema.columns_of(table).map(|column| column.id).collect();

@@ -26,6 +26,8 @@ impl From<DatabaseError> for EntityMutationErrorCode {
             error @ (DatabaseError::InvalidSchemaOperation(_)
             | DatabaseError::InvalidSharing(_)
             | DatabaseError::InvalidOp(_)
+            | DatabaseError::OptionInUse
+            | DatabaseError::RowInUse
             | DatabaseError::VersionConflict) => Self::invalid(rootcause::report!(error)),
             error @ DatabaseError::Repo(_) => Self::internal(rootcause::report!(error)),
         }
