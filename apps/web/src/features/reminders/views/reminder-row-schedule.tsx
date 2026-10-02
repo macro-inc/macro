@@ -1,7 +1,8 @@
 import type { ReminderEntity } from '@entity';
+import ArrowCounterClockwiseIcon from '@phosphor/arrow-counter-clockwise.svg';
 import CheckIcon from '@phosphor/check.svg';
-import CircleIcon from '@phosphor/circle.svg';
-import { ActionDialogShell, Button, Dialog } from '@ui';
+import ClockIcon from '@phosphor/clock.svg';
+import { ActionDialogShell, Button, cn, Dialog } from '@ui';
 import { createSignal, Show, Suspense } from 'solid-js';
 import { ReminderScheduleIndicator } from '../components/reminder-schedule-indicator';
 import {
@@ -76,11 +77,24 @@ export function ReminderRowSchedule(props: {
                   ? 'Mark reminder not done'
                   : 'Mark reminder done'
             }
-            aria-pressed={done()}
+            class={cn(
+              'text-ink-extra-muted',
+              !done() &&
+                'not-touch:opacity-0 not-touch:pointer-events-none group-hover/entity:opacity-100 group-hover/entity:pointer-events-auto group-focus-within/entity:opacity-100 group-focus-within/entity:pointer-events-auto'
+            )}
+            aria-busy={pending()}
             onClick={() => void toggle()}
           >
-            <Show when={done()} fallback={<CircleIcon class="size-4" />}>
-              <CheckIcon class="size-4" />
+            <Show when={done()} fallback={<CheckIcon class="size-4" />}>
+              <CheckIcon class="size-4 touch:hidden group-hover/entity:hidden group-focus-within/entity:hidden" />
+              <span class="hidden touch:inline-flex group-hover/entity:inline-flex group-focus-within/entity:inline-flex">
+                <Show
+                  when={reschedule()}
+                  fallback={<ArrowCounterClockwiseIcon class="size-4" />}
+                >
+                  <ClockIcon class="size-4" />
+                </Show>
+              </span>
             </Show>
           </Button>
         </span>

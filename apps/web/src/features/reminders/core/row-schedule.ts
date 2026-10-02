@@ -1,9 +1,6 @@
-import { isCronRepresentable } from '@core/util/cron';
 import type { ReminderEntity } from '@entity';
-import {
-  describeReminderSchedule,
-  scheduleFromRow,
-} from '../reminder-schedule';
+import { describeReminderRecurrence } from './recurrence-label';
+import { formatReminderOccurrence } from './schedule-instant';
 
 /** Completion acknowledges an occurrence; it does not stop a recurring schedule. */
 export function reminderScheduleState(
@@ -21,41 +18,45 @@ export function reminderScheduleState(
   return new Date(reminder.nextRunAt).getTime() > now ? 'scheduled' : 'due';
 }
 
-/** Full schedule text is never shortened to fit the row. */
+/** A concise next occurrence, with a zone only when it differs from the viewer's. */
 export function reminderScheduleLabel(
   reminder: ReminderEntity,
-  now: number
+  now: number,
+  viewerTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone
 ): string {
   const state = reminderScheduleState(reminder, now);
   const timezone =
-    reminder.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const date = new Intl.DateTimeFormat(undefined, {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    timeZone: timezone,
-  }).format(new Date(reminder.nextRunAt));
-  const recurrence =
     reminder.scheduleType === 'recurring'
-      ? reminder.cron && !isCronRepresentable(reminder.cron)
-        ? `Custom repeat: ${reminder.cron}`
-        : describeReminderSchedule(scheduleFromRow(reminder))
+      ? (reminder.timezone ?? viewerTimezone)
+      : viewerTimezone;
+  const instant = formatReminderOccurrence(
+    reminder.nextRunAt,
+    timezone,
+    viewerTimezone
+  );
+  if (!instant) return 'Schedule unavailable';
+  const recurrence =
+    reminder.scheduleType === 'recurring' && reminder.cron
+      ? describeReminderRecurrence(reminder.cron).cadence
       : undefined;
   const status = {
-    scheduled: 'Scheduled',
+    scheduled: reminder.emailFollowup
+      ? 'Returning'
+      : reminder.scheduleType === 'recurring'
+        ? 'Next'
+        : 'Remind me',
     due: 'Due',
     paused: 'Paused',
     completed: 'Completed',
   }[state];
-  const condition = reminder.emailFollowup
-    ? reminder.emailFollowup.condition === 'if_no_reply'
-      ? 'If no reply'
-      : 'Regardless'
-    : undefined;
-  return [`${status}: ${date} (${timezone})`, recurrence, condition]
+  const condition =
+    reminder.emailFollowup?.condition === 'if_no_reply'
+      ? 'if no reply'
+      : undefined;
+  return [
+    `${status}: ${instant}${condition ? ` ${condition}` : ''}`,
+    recurrence,
+  ]
     .filter(Boolean)
     .join(' · ');
 }

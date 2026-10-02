@@ -201,7 +201,7 @@ function ReminderDetailsForId(props: {
       });
       if (!active || props.reminderId !== submittedReminderId) return;
       toast.success(
-        `Reminder updated · ${describeReminderConfirmation(updated.schedule)}`
+        `Reminder updated · ${describeReminderConfirmation(updated.schedule, updated.nextRunAt)}`
       );
       props.onClose();
     } catch {

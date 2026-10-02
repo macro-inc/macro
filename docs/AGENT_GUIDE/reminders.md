@@ -12,13 +12,18 @@ The Reminders workspace is one continuous list, without Active/Scheduled/Done
 tabs. Due reminders come first, then upcoming schedules, then completed history;
 ordering applies before pagination. An old saved tab opens the unified view.
 Completion is acknowledgment of an occurrence: a done recurring reminder can
-still have a future schedule. Its completed check and clock appear together.
+still have a future schedule. Its quiet completed check and clock appear together.
+Hover/focus reveals the native undo action; incomplete rows reveal Mark done.
+Touch keeps these actions visible. Neither control uses a filled status pill.
 Marking done keeps the row in the unfiltered collection. The explicit Completion
 filter can limit the collection to Done or Not done. These choices are exclusive;
 selecting the active choice again or using Clear all restores the full collection.
 
-A persistent clock beside the row metadata exposes the full date, time, timezone,
-repeat rule, and email condition on hover or keyboard focus. Click or tap it to
+A persistent clock beside the row metadata shows a compact exact date/time,
+human-readable repeat rule, and relevant email condition on hover or keyboard
+focus. A short timezone appears only for a foreign zone or ambiguous local hour;
+raw cron and IANA zone names never appear in the summary. Custom schedules show
+the actual next occurrence when known, without guessing a cadence. Click or tap it to
 edit using the existing reminder form. It remains available when row-hover
 actions or notification metadata are visible and on narrow/touch layouts. Paused
 and due tooltips describe those states without claiming a future firing or
@@ -43,8 +48,8 @@ selecting a task/document opens a time-first form with its title and icon.
 selection. **Write a reminder instead** opens the freeform form, where
 **Reminder description** is required. The **When** field accepts date language such as
 `tomorrow 9am`, `in 30 minutes`, weekdays, and explicit dates. The resolved
-weekday, date, time, and timezone appear in the **Scheduled:** preview before
-saving.
+date and time appear in the **Scheduled:** preview before saving. The
+preview includes a timezone only when it is needed to interpret that time.
 
 Quick choices are **In 30m**, **Later today** (only before 5 PM), **Tomorrow**,
 **Next week**, and **Custom**. Each choice names its resolved time. Custom reveals

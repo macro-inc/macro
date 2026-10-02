@@ -36,7 +36,7 @@ describe('independent reminder occurrence and schedule state', () => {
     expect(reminderScheduleState({ ...reminder, ...patch }, now)).toBe(state);
   });
 
-  it('exposes the full date, time zone and recurring rule', () => {
+  it('shows a compact date, one foreign zone and a readable recurrence', () => {
     const label = reminderScheduleLabel(
       {
         ...reminder,
@@ -44,13 +44,17 @@ describe('independent reminder occurrence and schedule state', () => {
         cron: '0 0 9 * * MON-FRI',
         timezone: 'America/New_York',
       },
-      now
+      now,
+      'UTC'
     );
-    expect(label).toContain('Friday');
-    expect(label).toContain('October');
+    expect(label).not.toContain('Friday');
+    expect(label).toContain('Oct 2');
     expect(label).toContain('2026');
     expect(label).toContain('9:00');
-    expect(label).toContain('America/New_York');
+    expect(label).toContain('EDT');
+    expect(label).not.toContain('America/New_York');
+    expect(label).toContain('Repeats on weekdays');
+    expect(label.match(/9:00/g)).toHaveLength(1);
     expect(label).toContain(' · ');
   });
 
@@ -64,7 +68,18 @@ describe('independent reminder occurrence and schedule state', () => {
       },
       now
     );
-    expect(label).toContain('Custom repeat: 0 0 9 1,15 * *');
+    expect(label).toContain('Repeats monthly on the 1st and 15th');
+    expect(label).not.toContain('0 0 9 1,15 * *');
     expect(label).not.toContain('Weekdays');
   });
+});
+
+it('omits the zone for a local schedule and retains a different year', () => {
+  const label = reminderScheduleLabel(
+    { ...reminder, nextRunAt: '2027-10-02T13:00:00Z', timezone: 'UTC' },
+    now,
+    'UTC'
+  );
+  expect(label).toContain('2027');
+  expect(label).not.toContain('UTC');
 });
