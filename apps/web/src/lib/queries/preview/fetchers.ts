@@ -2,6 +2,7 @@ import {
   fetchCrmCompanyPreviews,
   fetchCrmContactPreviews,
 } from '@app/features/crm/preview-adapter';
+import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
 import { itemToSafeName } from '@core/constant/allBlocks';
 import {
   enableGraphqlSoup,
@@ -255,6 +256,42 @@ async function fetchProjectPreviews(
   });
 }
 
+/** Task projects through the authorized Soup list; absent ids have no access. */
+async function fetchInitiativePreviews(
+  initiativeIds: string[]
+): Promise<PreviewItem[]> {
+  const result = await storageServiceClient.getSoupItems({
+    params: {},
+    body: {
+      ...QUERY_FILTERS_BASE,
+      initiative_filters: { initiative_ids: initiativeIds },
+      limit: initiativeIds.length,
+    },
+  });
+
+  if (result.isErr()) {
+    console.error('Failed to fetch project previews');
+    return [];
+  }
+
+  return result.value.items.flatMap((item): PreviewItem[] =>
+    item.tag === 'initiative'
+      ? [
+          {
+            id: item.data.id,
+            type: 'initiative',
+            access: 'access',
+            loading: false,
+            rawName: item.data.name,
+            name: item.data.name,
+            owner: item.data.ownerId,
+            updatedAt: item.data.updatedAt,
+          },
+        ]
+      : []
+  );
+}
+
 /**
  * Reuse the thread-messages query the email block fetches on open: returns
  * cached data (any staleness — previews tolerate 24h), or joins an in-flight
@@ -402,6 +439,7 @@ export async function fetchRestPreviewBatch(
     doFetch(fetchChannelPreviews, filterMapToId(items, 'channel')),
     doFetch(fetchDocumentPreviews, filterMapToId(items, 'document')),
     doFetch(fetchProjectPreviews, filterMapToId(items, 'project')),
+    doFetch(fetchInitiativePreviews, filterMapToId(items, 'initiative')),
     doFetch(fetchEmailPreviews, filterMapToId(items, 'email')),
     doFetch(fetchCrmCompanyPreviews, filterMapToId(items, 'crm_company')),
     doFetch(fetchCrmContactPreviews, filterMapToId(items, 'crm_contact')),
