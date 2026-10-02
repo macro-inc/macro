@@ -29,10 +29,21 @@ forwarded in order, including multiple local turns between polls.
 
 ### Native controls and MCP
 
-Model selection from Macro applies before native launch. Change a running
-session's model in its native TUI; macrod rejects remote model changes it cannot
-confirm. Unconfirmed prompt submission is reported as an error, never retried by
-pressing Enter. Cancellation sends Escape without a delayed input-clearing key.
+Model selection from Macro applies before launch and to idle native sessions.
+Claude receives `/model <id>`; Codex opens its native model picker, selects the
+exact model row, and retains the reasoning level selected by the native picker.
+Each key requires the expected dialog, session identity, and unchanged screen
+and state generation. Only native confirmation reports success; unexpected
+screens require completing the selection in Herdr. The session is not restarted.
+
+The model label follows native transcript metadata, including after a reload.
+Codex also reports its live footer model before a turn and reads available models
+from its installed CLI catalog. Until the native agent identifies its model, an
+unconfigured session reports the native default. Claude identifies the actual
+model when its first assistant record arrives.
+
+Unconfirmed prompt submission is reported as an error, never retried by pressing
+Enter. Cancellation sends Escape without a delayed input-clearing key.
 
 New and reloaded sessions advertise `/compact`, `/init`, and `/fast` in Macro;
 Codex also advertises `/ultrafast`. Speed controls are delivered unchanged to

@@ -15,6 +15,8 @@ const TOOL_OUTPUT_LIMIT: usize = 4_000;
 /// What one transcript line means for the ACP session.
 #[derive(Debug, Clone, PartialEq, serde::Serialize)]
 pub enum LogEvent {
+    /// The native transcript identifies the model actually used by the session.
+    ModelChanged(String),
     /// A `session/update` payload to send.
     Update(Value),
     /// The turn is over, with this ACP stop reason.
