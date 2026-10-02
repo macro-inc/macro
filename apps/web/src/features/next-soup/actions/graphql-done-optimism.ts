@@ -16,18 +16,23 @@ export function applyGraphqlDoneOptimistic(args: {
         ? hideGraphqlSoupEntitiesAsDone({ ...intentArgs, done })
         : undefined;
     let rollbackNotifications = setDoneOverride(args.notificationIds, done);
+    const notificationRollbacks = [rollbackNotifications];
 
     const apply = (done: boolean) =>
       batch(() => {
         intent?.setDone(done);
         rollbackNotifications = setDoneOverride(args.notificationIds, done);
+        notificationRollbacks.push(rollbackNotifications);
       });
 
     return {
       rollback: () =>
         batch(() => {
           intent?.release();
-          rollbackNotifications();
+          // Initial Done can fail after an early Undo. Unwind all of this
+          // action's leases, not just Undo back to its own pending Done.
+          for (const rollback of notificationRollbacks.reverse()) rollback();
+          notificationRollbacks.length = 0;
         }),
       reapply: () => apply(true),
       // The query-local projection retains admitted rows/notification witnesses

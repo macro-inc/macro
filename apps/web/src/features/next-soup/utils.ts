@@ -1649,6 +1649,20 @@ function setRemindersCompleted(
   return reminderIds.map((id) => setReminderCompleted(id, completed));
 }
 
+/** A write receipt is delivered even when another write in the action fails. */
+export type MarkDoneWriteOutcome =
+  | {
+      kind: 'email';
+      id: string;
+      result: PromiseSettledResult<EmailArchiveDisposition>;
+    }
+  | { kind: 'reminder'; id: string; result: PromiseSettledResult<unknown> }
+  | { kind: 'notifications'; result: PromiseSettledResult<string[]> }
+  | {
+      kind: 'entity-notifications';
+      result: PromiseSettledResult<UnifiedNotification[]>;
+    };
+
 /**
  * Fires archive, selective ID-scoped notification, entity-scoped notification,
  * and reminder completion writes. Returns the authoritative notification IDs
@@ -1660,6 +1674,7 @@ export async function executeMarkEntitiesDone(args: {
   notificationIds: string[];
   notificationEntities?: NotificationEntityRef[];
   reminderIds?: string[];
+  onWriteSettled?: (outcome: MarkDoneWriteOutcome) => void;
 }): Promise<string[]> {
   const {
     emailIds,
@@ -1675,30 +1690,50 @@ export async function executeMarkEntitiesDone(args: {
     ]);
   }
 
-  let authoritativeNotificationIds: string[] = [];
-  const results = await Promise.allSettled([
-    ...emailIds.map((id) => archiveEmailThread({ value: true, id })),
-    notificationIds.length > 0
-      ? bulkMarkNotificationsAsDone(notificationIds)
-      : Promise.resolve(),
-    notificationEntities.length > 0
-      ? updateNotificationsForEntities({
-          entities: notificationEntities,
-          operation: 'MARK_DONE',
-        }).then((notifications) => {
-          authoritativeNotificationIds = notifications.map(
-            (notification) => notification.id
-          );
-        })
-      : Promise.resolve(),
-    ...setRemindersCompleted(reminderIds, true),
-  ]);
+  const writeNotificationIds = async () => {
+    if (notificationIds.length > 0)
+      await bulkMarkNotificationsAsDone(notificationIds);
+    return notificationIds;
+  };
+  const writeNotificationEntities = async () => {
+    if (notificationEntities.length === 0) return [];
+    return await updateNotificationsForEntities({
+      entities: notificationEntities,
+      operation: 'MARK_DONE',
+    });
+  };
+  const [emailResults, [notificationResult], [entityResult], reminderResults] =
+    await Promise.all([
+      Promise.allSettled(
+        emailIds.map((id) => archiveEmailThread({ value: true, id }))
+      ),
+      Promise.allSettled([writeNotificationIds()]),
+      Promise.allSettled([writeNotificationEntities()]),
+      Promise.allSettled(setRemindersCompleted(reminderIds, true)),
+    ]);
+  const report = args.onWriteSettled ?? (() => {});
+  for (const [index, result] of emailResults.entries())
+    report({ kind: 'email', id: emailIds[index], result });
+  if (notificationIds.length > 0)
+    report({ kind: 'notifications', result: notificationResult });
+  if (notificationEntities.length > 0)
+    report({ kind: 'entity-notifications', result: entityResult });
+  for (const [index, result] of reminderResults.entries())
+    report({ kind: 'reminder', id: reminderIds[index], result });
 
-  const hasQueuedEmail = results
-    .slice(0, emailIds.length)
-    .some(
-      (result) => result.status === 'fulfilled' && result.value === 'queued'
-    );
+  const authoritativeNotificationIds =
+    entityResult.status === 'fulfilled'
+      ? entityResult.value.map(({ id }) => id)
+      : [];
+  const results = [
+    ...emailResults,
+    notificationResult,
+    entityResult,
+    ...reminderResults,
+  ];
+  const hasQueuedEmail = emailResults.some(
+    (result) => result.status === 'fulfilled' && result.value === 'queued'
+  );
   const rejected = results.find(
     (r): r is PromiseRejectedResult => r.status === 'rejected'
   );
@@ -1768,6 +1803,7 @@ export async function executeMarkEntitiesUndone(args: {
     id: string,
     result: PromiseSettledResult<EmailArchiveDisposition>
   ) => void;
+  onWriteSettled?: (outcome: MarkDoneWriteOutcome) => void;
 }): Promise<EmailArchiveDisposition> {
   const { emailIds, notificationIds, reminderIds = [] } = args;
   const graphql = isFeatureEnabled(enableGraphqlSoup);
@@ -1778,21 +1814,31 @@ export async function executeMarkEntitiesUndone(args: {
     ]);
   }
 
-  const [emailResults, otherResults] = await Promise.all([
-    Promise.allSettled(
-      emailIds.map((id) => archiveEmailThread({ value: false, id }))
-    ),
-    Promise.allSettled([
-      notificationIds.length > 0
-        ? bulkMarkNotificationsAsUndone(notificationIds)
-        : Promise.resolve(),
-      ...setRemindersCompleted(reminderIds, false),
-    ]),
-  ]);
+  const writeNotificationIds = async () => {
+    if (notificationIds.length > 0)
+      await bulkMarkNotificationsAsUndone(notificationIds);
+    return notificationIds;
+  };
+  const [emailResults, [notificationResult], reminderResults] =
+    await Promise.all([
+      Promise.allSettled(
+        emailIds.map((id) => archiveEmailThread({ value: false, id }))
+      ),
+      Promise.allSettled([writeNotificationIds()]),
+      Promise.allSettled(setRemindersCompleted(reminderIds, false)),
+    ]);
   for (const [index, result] of emailResults.entries()) {
     args.onEmailSettled?.(emailIds[index], result);
+    args.onWriteSettled?.({ kind: 'email', id: emailIds[index], result });
   }
-  const results = [...emailResults, ...otherResults];
+  if (notificationIds.length > 0)
+    args.onWriteSettled?.({
+      kind: 'notifications',
+      result: notificationResult,
+    });
+  for (const [index, result] of reminderResults.entries())
+    args.onWriteSettled?.({ kind: 'reminder', id: reminderIds[index], result });
+  const results = [...emailResults, notificationResult, ...reminderResults];
   const hasQueuedEmail = emailResults.some(
     (result) => result.status === 'fulfilled' && result.value === 'queued'
   );

@@ -3,14 +3,20 @@ import type { NotificationSource } from '@notifications';
 import { createRoot } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SoupState } from '../create-soup-state';
+import {
+  type DoneWriteArgs,
+  reportDoneWriteOutcomes,
+} from './tests/done-write-fixture';
 
 const mocks = vi.hoisted(() => ({
   splitHandle: {
     content: vi.fn(() => ({ id: 'other' })),
     referredFrom: vi.fn(() => undefined),
   },
-  executeMarkEntitiesDone: vi.fn(async () => [] as string[]),
-  executeMarkEntitiesUndone: vi.fn(async () => {}),
+  executeMarkEntitiesDone: vi.fn(
+    async (_args: DoneWriteArgs) => [] as string[]
+  ),
+  executeMarkEntitiesUndone: vi.fn(async (_args: DoneWriteArgs) => {}),
   graphqlSoupEnabled: vi.fn(() => false),
   mutateAsync: vi.fn(async (_variables: unknown) => {}),
   openEntityInSplitFromUnifiedList: vi.fn(async () => {}),
@@ -20,7 +26,22 @@ const mocks = vi.hoisted(() => ({
     reminderIds: [] as string[],
   })),
   toNotificationEntityRef: vi.fn(),
-  undoableOptionsFactory: vi.fn(),
+  mutationOptionsFactory: vi.fn(),
+  pushUndo: vi.fn(
+    (_entry: {
+      undo: () => Promise<void>;
+      redo: () => Promise<void>;
+      onUndone?: () => void;
+      onRedone?: () => void;
+    }) => ({ id: 'undo', undo: vi.fn(async () => {}), dispose: vi.fn() })
+  ),
+  applyOptimistic: vi.fn(() => ({
+    applyUndone: vi.fn(),
+    reapply: vi.fn(),
+    rollback: vi.fn(),
+    settle: vi.fn(),
+    releaseGraphql: vi.fn(),
+  })),
 }));
 
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
@@ -42,6 +63,7 @@ vi.mock('@core/component/Toast/Toast', () => ({
     dismiss: vi.fn(),
     failure: vi.fn(),
     success: vi.fn(),
+    alert: vi.fn(),
   },
 }));
 
@@ -50,17 +72,42 @@ vi.mock('@queries/notification/entity-mutations', () => ({
   updateNotificationsForEntities: vi.fn(),
 }));
 
+vi.mock('./graphql-done-optimism', () => ({
+  applyGraphqlDoneOptimistic: mocks.applyOptimistic,
+}));
+
 vi.mock('@queries/undo', () => ({
-  useUndoableMutation: (optionsFactory: () => unknown) => {
-    mocks.undoableOptionsFactory.mockImplementation(optionsFactory);
+  useMutationUndoContext: () => ({ pushUndo: mocks.pushUndo }),
+}));
+vi.mock('@tanstack/solid-query', () => ({
+  useMutation: (optionsFactory: () => unknown) => {
+    mocks.mutationOptionsFactory.mockImplementation(optionsFactory);
     return { mutateAsync: mocks.mutateAsync };
   },
 }));
 
 vi.mock('@app/features/next-soup/utils', () => ({
-  applyEntitiesDoneOptimistic: vi.fn(),
-  executeMarkEntitiesDone: mocks.executeMarkEntitiesDone,
-  executeMarkEntitiesUndone: mocks.executeMarkEntitiesUndone,
+  applyEntitiesDoneOptimistic: mocks.applyOptimistic,
+  executeMarkEntitiesDone: async (args: DoneWriteArgs) => {
+    const [result] = await Promise.allSettled([
+      mocks.executeMarkEntitiesDone(args),
+    ]);
+    reportDoneWriteOutcomes(args, result);
+    if (result.status === 'rejected') throw result.reason;
+    return result.value;
+  },
+  executeMarkEntitiesUndone: async (args: DoneWriteArgs) => {
+    const [result] = await Promise.allSettled([
+      mocks.executeMarkEntitiesUndone(args),
+    ]);
+    reportDoneWriteOutcomes(
+      args,
+      result.status === 'fulfilled'
+        ? { status: 'fulfilled', value: [] }
+        : result
+    );
+    if (result.status === 'rejected') throw result.reason;
+  },
   openEntityInSplitFromUnifiedList: mocks.openEntityInSplitFromUnifiedList,
   resolveMarkEntitiesDoneVariables: mocks.resolveMarkEntitiesDoneVariables,
   restoreSoupFocus: vi.fn(),
@@ -145,6 +192,8 @@ describe('makeMarkDoneAction', () => {
     mocks.executeMarkEntitiesUndone.mockClear();
     mocks.graphqlSoupEnabled.mockReturnValue(false);
     mocks.mutateAsync.mockClear();
+    mocks.pushUndo.mockClear();
+    mocks.applyOptimistic.mockClear();
     mocks.openEntityInSplitFromUnifiedList.mockClear();
     mocks.resolveMarkEntitiesDoneVariables.mockReset();
     mocks.resolveMarkEntitiesDoneVariables.mockReturnValue({
@@ -188,19 +237,37 @@ describe('makeMarkDoneAction', () => {
       entities: [ordinary],
       onUndoHandle,
     });
-    const options = mocks.undoableOptionsFactory() as {
-      onPushed: (
-        handle: { dispose: () => void },
+    const options = mocks.mutationOptionsFactory() as {
+      onMutate: (
         variables: unknown
-      ) => unknown;
+      ) => ReturnType<typeof mocks.applyOptimistic>;
+      onSuccess: (
+        data: void,
+        variables: unknown,
+        context: ReturnType<typeof mocks.applyOptimistic>
+      ) => void;
     };
-    const mirrorHandle = { dispose: vi.fn() };
-    const ordinaryHandle = { dispose: vi.fn() };
-    options.onPushed(mirrorHandle, mirrorVariables);
-    options.onPushed(ordinaryHandle, ordinaryVariables);
-    expect(mirrorHandle.dispose).toHaveBeenCalledOnce();
+    options.onSuccess(
+      undefined,
+      mirrorVariables,
+      options.onMutate(mirrorVariables)
+    );
+    expect(mocks.pushUndo).not.toHaveBeenCalled();
+    expect(onUndoHandle).not.toHaveBeenCalled();
+    options.onSuccess(
+      undefined,
+      ordinaryVariables,
+      options.onMutate(ordinaryVariables)
+    );
+    expect(mocks.pushUndo).toHaveBeenCalledOnce();
+    const ordinaryHandle = mocks.pushUndo.mock.results[0].value;
     expect(ordinaryHandle.dispose).not.toHaveBeenCalled();
-    expect(onUndoHandle).toHaveBeenCalledWith(ordinaryHandle);
+    expect(onUndoHandle).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: ordinaryHandle.id,
+        undo: ordinaryHandle.undo,
+      })
+    );
     dispose();
   });
 
@@ -222,16 +289,19 @@ describe('makeMarkDoneAction', () => {
       const failure = new Error('mirror failed');
       const { action, dispose } = createAction();
       const onUndoHandle = vi.fn();
-      const ordinaryHandle = { dispose: vi.fn() };
-      const options = mocks.undoableOptionsFactory() as {
-        onPushed: (
-          handle: { dispose: () => void },
+      const options = mocks.mutationOptionsFactory() as {
+        onMutate: (
           variables: unknown
-        ) => unknown;
+        ) => ReturnType<typeof mocks.applyOptimistic>;
+        onSuccess: (
+          data: void,
+          variables: unknown,
+          context: ReturnType<typeof mocks.applyOptimistic>
+        ) => void;
       };
       mocks.mutateAsync.mockImplementationOnce(() => pendingMirror);
       mocks.mutateAsync.mockImplementationOnce(async (variables) => {
-        options.onPushed(ordinaryHandle, variables);
+        options.onSuccess(undefined, variables, options.onMutate(variables));
       });
       try {
         const result = action
@@ -246,7 +316,13 @@ describe('makeMarkDoneAction', () => {
           settlement === 'reject' ? failure : undefined
         );
         expect(mocks.mutateAsync).toHaveBeenCalledTimes(2);
-        expect(onUndoHandle).toHaveBeenCalledWith(ordinaryHandle);
+        const ordinaryHandle = mocks.pushUndo.mock.results[0].value;
+        expect(onUndoHandle).toHaveBeenCalledWith(
+          expect.objectContaining({
+            id: ordinaryHandle.id,
+            undo: ordinaryHandle.undo,
+          })
+        );
         expect(ordinaryHandle.dispose).not.toHaveBeenCalled();
       } finally {
         dispose();
@@ -480,9 +556,19 @@ describe('makeMarkDoneAction', () => {
       settle: vi.fn(),
       releaseGraphql: vi.fn(),
     };
-    const options = mocks.undoableOptionsFactory() as {
-      undoFn: (input: typeof variables, ctx: typeof context) => Promise<void>;
+    const options = mocks.mutationOptionsFactory() as {
+      onSuccess: (
+        data: void,
+        input: typeof variables & { entities: EntityData[] },
+        ctx: typeof context
+      ) => void;
     };
+    options.onSuccess(
+      undefined,
+      { ...variables, entities: [currentEntity] },
+      context
+    );
+    context.settle.mockClear();
     let finish!: () => void;
     mocks.executeMarkEntitiesUndone.mockImplementationOnce(
       () =>
@@ -490,7 +576,7 @@ describe('makeMarkDoneAction', () => {
           finish = resolve;
         })
     );
-    const undo = options.undoFn(variables, context);
+    const undo = mocks.pushUndo.mock.calls[0][0].undo();
     expect(context.applyUndone).toHaveBeenCalledOnce();
     expect(context.settle).not.toHaveBeenCalled();
     finish();
@@ -512,13 +598,23 @@ describe('makeMarkDoneAction', () => {
       settle: vi.fn(),
       releaseGraphql: vi.fn(),
     };
-    const options = mocks.undoableOptionsFactory() as {
-      undoFn: (input: typeof variables, ctx: typeof context) => Promise<void>;
+    const options = mocks.mutationOptionsFactory() as {
+      onSuccess: (
+        data: void,
+        input: typeof variables & { entities: EntityData[] },
+        ctx: typeof context
+      ) => void;
     };
+    options.onSuccess(
+      undefined,
+      { ...variables, entities: [currentEntity] },
+      context
+    );
+    context.settle.mockClear();
     mocks.executeMarkEntitiesUndone.mockRejectedValueOnce(
       new Error('partial failure')
     );
-    await expect(options.undoFn(variables, context)).rejects.toThrow(
+    await expect(mocks.pushUndo.mock.calls[0][0].undo()).rejects.toThrow(
       'partial failure'
     );
     expect(context.reapply).toHaveBeenCalledOnce();
@@ -549,36 +645,44 @@ describe('makeMarkDoneAction', () => {
       notificationEntities: Array<{ type: string; id: string }>;
       reminderIds: string[];
     };
-    const mutationOptions = mocks.undoableOptionsFactory() as {
+    const mutationOptions = mocks.mutationOptionsFactory() as {
+      onMutate: (
+        input: typeof variables
+      ) => ReturnType<typeof mocks.applyOptimistic>;
       mutationFn: (input: typeof variables) => Promise<void>;
-      redoFn: (input: typeof variables, context: undefined) => Promise<void>;
-      undoFn: (input: typeof variables, context: undefined) => Promise<void>;
+      onSuccess: (
+        data: void,
+        input: typeof variables,
+        context: ReturnType<typeof mocks.applyOptimistic>
+      ) => void;
     };
 
+    const context = mutationOptions.onMutate(variables);
     await mutationOptions.mutationFn(variables);
+    mutationOptions.onSuccess(undefined, variables, context);
     expect(mocks.executeMarkEntitiesDone).toHaveBeenCalledWith({
       emailIds: ['current'],
       notificationIds: [],
       notificationEntities: [{ type: 'email', id: 'current' }],
       reminderIds: [],
+      onWriteSettled: expect.any(Function),
     });
-    expect(variables.exactNotificationIds.current).toEqual([
-      'authoritative-notification',
-    ]);
 
-    await mutationOptions.undoFn(variables, undefined);
+    await mocks.pushUndo.mock.calls[0][0].undo();
     expect(mocks.executeMarkEntitiesUndone).toHaveBeenCalledWith({
       emailIds: ['current'],
       notificationIds: ['authoritative-notification'],
       reminderIds: [],
+      onWriteSettled: expect.any(Function),
     });
 
     mocks.executeMarkEntitiesDone.mockClear();
-    await mutationOptions.redoFn(variables, undefined);
+    await mocks.pushUndo.mock.calls[0][0].redo();
     expect(mocks.executeMarkEntitiesDone).toHaveBeenCalledWith({
       emailIds: ['current'],
       notificationIds: ['authoritative-notification'],
       reminderIds: [],
+      onWriteSettled: expect.any(Function),
     });
     dispose();
   });

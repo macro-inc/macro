@@ -1,5 +1,5 @@
 import { createRoot } from 'solid-js';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { MutationUndoProvider, useMutationUndoContext } from './undo';
 
 describe('MutationUndoProvider', () => {
@@ -183,6 +183,47 @@ describe('MutationUndoProvider', () => {
       dispose();
     });
   });
+
+  for (const operation of ['undo', 'redo'] as const) {
+    for (const retire of ['dispose', 'clear'] as const) {
+      it.each([false, true])(
+        `does not resurrect a pending ${operation} after ${retire} (failure=%s)`,
+        async (failure) => {
+          await createRoot(async (dispose) => {
+            let ctx!: ReturnType<typeof useMutationUndoContext>;
+            MutationUndoProvider({
+              get children() {
+                ctx = useMutationUndoContext();
+                return null;
+              },
+            });
+            const pending = Promise.withResolvers<void>();
+            const onUndone = vi.fn();
+            const onRedone = vi.fn();
+            const handle = ctx.pushUndo({
+              undo: () => (operation === 'undo' ? pending.promise : undefined),
+              redo: () => pending.promise,
+              onUndone,
+              onRedone,
+            });
+            if (operation === 'redo') await ctx.undo();
+            onUndone.mockClear();
+            const action = ctx[operation]();
+            if (retire === 'dispose') handle.dispose();
+            else ctx.clear();
+            if (failure) pending.reject(new Error('failed'));
+            else pending.resolve();
+            await action;
+            expect(ctx.canUndo()).toBe(false);
+            expect(ctx.canRedo()).toBe(false);
+            expect(onUndone).not.toHaveBeenCalled();
+            expect(onRedone).not.toHaveBeenCalled();
+            dispose();
+          });
+        }
+      );
+    }
+  }
 
   it('calls onError on failed redo and restores stack', async () => {
     await createRoot(async (dispose) => {
