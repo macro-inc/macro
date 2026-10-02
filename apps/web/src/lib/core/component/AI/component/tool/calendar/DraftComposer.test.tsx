@@ -219,5 +219,28 @@ describe('AI calendar draft account selection', () => {
     expect(
       screen.getByText(/requested calendar is unavailable/)
     ).not.toBeNull();
+    expect(
+      screen.getByRole('button', { name: 'Connect calendar' })
+    ).not.toBeNull();
   });
+
+  it.each([false, true])(
+    'does not reconnect the primary inbox for a removed calendar account (primary expired: %s)',
+    async (needsReauth) => {
+      mocks.links = [link('work', { needs_reauth: needsReauth })];
+      showDraft('personal-calendar');
+      expect(
+        screen.getByRole('button', { name: 'Create event' })
+      ).toHaveProperty('disabled', true);
+      expect(
+        screen.queryByRole('button', { name: 'Reconnect calendar' })
+      ).toBeNull();
+      await fireEvent.click(
+        screen.getByRole('button', { name: 'Connect calendar' })
+      );
+      expect(mocks.startAddInbox).toHaveBeenCalledExactlyOnceWith({
+        scopes: 'gmail_and_calendar',
+      });
+    }
+  );
 });

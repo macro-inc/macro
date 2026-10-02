@@ -106,13 +106,11 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
   const primaryNeedsAccess = () =>
     primaryInbox()?.needs_reauth || primaryInbox()?.needs_calendar_permission;
   const requestedInbox = () => {
+    if (!props.initialData.calendarId) return primaryInbox();
     const calendar = calendars().find(
       (calendar) => calendar.id === props.initialData.calendarId
     );
-    return (
-      links().find((link) => link.id === calendar?.emailLinkId) ??
-      primaryInbox()
-    );
+    return links().find((link) => link.id === calendar?.emailLinkId);
   };
   const requestedNeedsAccess = () =>
     requestedInbox()?.needs_reauth ||
