@@ -8,6 +8,7 @@ pub mod deps;
 pub mod document;
 pub mod engine;
 pub mod entity_resolver;
+pub mod field_changes;
 pub mod identity;
 pub mod link_patch;
 pub mod meta;

@@ -30,6 +30,7 @@ import type {
   ReadRecordsByKeysArgs,
   ReadRecordsByKeysResult,
   ReadResult,
+  RecordFieldChange,
   RollbackOptimisticWriteResult,
   SearchCacheArgs,
   SearchCachePage,
@@ -102,6 +103,11 @@ export type CacheChangeOptions = {
 export type CacheGenerationChange = {
   storage: 'preserved' | 'reset';
 };
+
+export type AffectedOperationsListener = (
+  opKeys: number[],
+  fieldChanges?: RecordFieldChange[]
+) => void;
 
 export interface CacheHost {
   /** Stable id of this context; used to namespace operation ids. */
@@ -182,7 +188,7 @@ export interface CacheHost {
    * (local writes from other operations, other tabs, push invalidation).
    * Only keys belonging to this client are delivered. Returns unsubscribe.
    */
-  onOpsAffected(cb: (opKeys: number[]) => void): () => void;
+  onOpsAffected(cb: AffectedOperationsListener): () => void;
 
   /** Subscribes whenever the effective normalized-cache view changes. */
   onCacheChanged(

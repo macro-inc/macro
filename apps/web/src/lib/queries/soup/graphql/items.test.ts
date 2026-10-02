@@ -19,18 +19,16 @@ const useInstructionsMdIdQueryMock = vi.hoisted(() => vi.fn());
 const REVISION_0 = '0';
 const REVISION_1 = '1';
 const REVISION_2 = '2';
-const mapGraphqlSoupPageMock = vi.hoisted(() =>
-  vi.fn(
-    (data: {
-      user: { soup: { items: unknown[]; nextCursor: string | null } };
-    }) => ({
-      items: data.user.soup.items,
-      next_cursor: data.user.soup.nextCursor,
-    })
-  )
-);
+const mapGraphqlSoupItemMock = vi.hoisted(() => vi.fn((item) => item));
 const mapSoupPageToEntityListMock = vi.hoisted(() =>
-  vi.fn((page) => page.items)
+  vi.fn(
+    (
+      page,
+      _options?: {
+        instructionsIdQuery: { isSuccess: boolean; data?: string | null };
+      }
+    ) => page.items
+  )
 );
 const makeGraphqlSoupInputMock = vi.hoisted(() => vi.fn());
 
@@ -56,8 +54,7 @@ vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: getGraphqlSoupClientMock,
   getGraphqlSoupCacheHost: getGraphqlSoupCacheHostMock,
   graphqlSoupProjectionSupported: () => true,
-  mapGraphqlSoupItem: vi.fn((item) => item),
-  mapGraphqlSoupPage: mapGraphqlSoupPageMock,
+  mapGraphqlSoupItem: mapGraphqlSoupItemMock,
 }));
 
 vi.mock('./ast', () => ({
@@ -798,7 +795,7 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       fake.executions[0].next(
         graphqlSoupPage({ items: [{ id: 'retained' }], next_cursor: null })
       );
-      expect(mapGraphqlSoupPageMock).toHaveBeenCalledTimes(1);
+      expect(mapGraphqlSoupItemMock).toHaveBeenCalledTimes(1);
       const entities = query.data()?.entities;
 
       setEnabled(false);
@@ -808,7 +805,7 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       query.resetToInitialPage();
 
       expect(query.data()?.entities).toBe(entities);
-      expect(mapGraphqlSoupPageMock).toHaveBeenCalledTimes(1);
+      expect(mapGraphqlSoupItemMock).toHaveBeenCalledTimes(1);
       expect(mapSoupPageToEntityListMock).toHaveBeenCalledTimes(1);
     } finally {
       dispose();
@@ -836,10 +833,11 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       },
     };
     useInstructionsMdIdQueryMock.mockReturnValue(instructionsQuery);
-    mapSoupPageToEntityListMock.mockImplementation((page) =>
+    mapSoupPageToEntityListMock.mockImplementation((page, options) =>
       page.items.filter(
         (item: { id: string }) =>
-          !instructionsQuery.isSuccess || item.id !== instructionsQuery.data
+          !options?.instructionsIdQuery.isSuccess ||
+          item.id !== options.instructionsIdQuery.data
       )
     );
     const { query, dispose } = createRoot((dispose) => ({
@@ -862,7 +860,7 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       );
       expect(ids()).toEqual(['visible', 'instructions']);
       expect(readInstructionsData).not.toHaveBeenCalled();
-      expect(mapGraphqlSoupPageMock).toHaveBeenCalledTimes(1);
+      expect(mapGraphqlSoupItemMock).toHaveBeenCalledTimes(2);
 
       setInstructions({ isSuccess: true, data: 'instructions' });
       expect(ids()).toEqual(['visible']);
@@ -871,7 +869,7 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       );
       expect(query.hasNextPage()).toBe(true);
       expect(fake.executions).toHaveLength(1);
-      expect(mapGraphqlSoupPageMock).toHaveBeenCalledTimes(2);
+      expect(mapGraphqlSoupItemMock).toHaveBeenCalledTimes(4);
 
       // An identical id and activity-only changes must keep the cached selector.
       setInstructions({ isSuccess: true, data: 'instructions' });
@@ -879,15 +877,15 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       setEnabled(true);
       query.resetToInitialPage();
       expect(ids()).toEqual(['visible']);
-      expect(mapGraphqlSoupPageMock).toHaveBeenCalledTimes(2);
+      expect(mapGraphqlSoupItemMock).toHaveBeenCalledTimes(4);
 
       setInstructions({ isSuccess: true, data: 'visible' });
       expect(ids()).toEqual(['instructions']);
-      expect(mapGraphqlSoupPageMock).toHaveBeenCalledTimes(3);
+      expect(mapGraphqlSoupItemMock).toHaveBeenCalledTimes(6);
 
       setInstructions({ isSuccess: true, data: null });
       expect(ids()).toEqual(['visible', 'instructions']);
-      expect(mapGraphqlSoupPageMock).toHaveBeenCalledTimes(4);
+      expect(mapGraphqlSoupItemMock).toHaveBeenCalledTimes(8);
     } finally {
       dispose();
     }
@@ -989,16 +987,16 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       expect(query.data()?.oldestFetchedTimestamp).toBe(
         Date.parse('2026-01-01T00:00:00Z')
       );
-      expect(mapGraphqlSoupPageMock).toHaveBeenCalledTimes(1);
+      expect(mapGraphqlSoupItemMock).toHaveBeenCalledTimes(1);
 
       setSort('notified_at');
       expect(query.data()?.oldestFetchedTimestamp).toBe(
         Date.parse('2025-01-01T00:00:00Z')
       );
-      expect(mapGraphqlSoupPageMock).toHaveBeenCalledTimes(2);
+      expect(mapGraphqlSoupItemMock).toHaveBeenCalledTimes(2);
 
       setShowForeign(true);
-      expect(mapGraphqlSoupPageMock).toHaveBeenCalledTimes(3);
+      expect(mapGraphqlSoupItemMock).toHaveBeenCalledTimes(3);
       expect(mapSoupPageToEntityListMock).toHaveBeenLastCalledWith(
         expect.anything(),
         expect.objectContaining({ showSupportedForeignEntities: true })
@@ -1007,6 +1005,34 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       dispose();
     }
   });
+
+  it.each([
+    ['invalid', undefined],
+    [undefined, Date.parse('2026-09-08T00:00:00Z')],
+  ])(
+    'preserves timestamp coverage with a %s timestamp',
+    (notifiedAt, expected) => {
+      const fake = makeFakeClient();
+      getGraphqlSoupClientMock.mockReturnValue(fake.client);
+      createRoot((dispose) => {
+        const query = createGraphqlSoupAstItemsQuery(
+          () => ({ params: { sort_method: 'notified_at' }, body: {} }),
+          () => ({ enabled: true })
+        );
+        fake.executions[0].next(
+          graphqlSoupPage({
+            items: [
+              { id: 'known', notifiedAt: '2026-09-08T00:00:00Z' },
+              { id: 'unknown', notifiedAt },
+            ],
+            next_cursor: 'next-page',
+          })
+        );
+        expect(query.data()?.oldestFetchedTimestamp).toBe(expected);
+        dispose();
+      });
+    }
+  );
 
   it('retains fetched coverage when display filtering hides every row', () => {
     const fake = makeFakeClient();
@@ -2870,7 +2896,7 @@ describe('createGraphqlSoupAstItemsQuery', () => {
 
       expect(fake.executions).toHaveLength(1);
       fake.executions[0]?.next(graphqlSoupPage(firstPage));
-      expect(mapGraphqlSoupPageMock).toHaveBeenCalledTimes(1);
+      expect(mapGraphqlSoupItemMock).toHaveBeenCalledTimes(1);
 
       const initial = query.data();
       const initialEntity = initial?.entities[0];

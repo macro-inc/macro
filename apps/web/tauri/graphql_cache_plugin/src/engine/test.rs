@@ -98,6 +98,7 @@ fn read(handle: &EngineHandle, op_id: Option<&str>) -> ReadResultWire {
 
 fn empty_write_result() -> WriteResultWire {
     WriteResultWire {
+        field_changes: None,
         identity_errors: Vec::new(),
         mutation_uuid: None,
         revision: "0".to_string(),

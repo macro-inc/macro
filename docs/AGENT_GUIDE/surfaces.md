@@ -484,6 +484,11 @@ unrelated rows retained. Quickly reverse the action, then reject the first reque
 the later intent must remain visible. A stale refresh while either write is pending
 must not clear its optimistic state. A retryable failure should remain queued;
 a permanent failure should restore only the failed intent's fields.
+With two views of the same thread mounted, a read/unread or archive scalar
+change should update both existing query stores without a full query reread.
+Observers of unrelated fields should stay idle. Changes to links, record
+identity, or unsupported query projections still take the cache reread path;
+a subsequent scalar update must not cancel that pending structural refresh.
 
 The service retains both replica-backed Soup reads and a primary-backed email
 writer. Email mutations and their uncached reply reloads use the primary; ordinary

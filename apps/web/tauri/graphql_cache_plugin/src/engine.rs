@@ -55,6 +55,9 @@ pub enum ReadResultWire {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WriteResultWire {
+    /// Effective scalar patches; absent when a query reread is required.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub field_changes: Option<Vec<cache_core::field_changes::RecordFieldChange>>,
     /// Bindings omitted while preserving a normalizable server response.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub identity_errors: Vec<String>,
@@ -388,6 +391,7 @@ pub struct EngineHandle {
 
 fn wire_write_result(ops: &OpInterner, result: WriteResult) -> WriteResultWire {
     WriteResultWire {
+        field_changes: result.field_changes,
         identity_errors: result.identity_errors,
         revision: result.revision.to_string(),
         revision_advanced: result.revision_advanced,

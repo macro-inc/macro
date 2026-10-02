@@ -16,6 +16,7 @@ import {
   type OperationResult,
   stringifyDocument,
 } from '@urql/core';
+import { createComputed, createRoot } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   makeSubject,
@@ -26,8 +27,13 @@ import {
   subscribe,
 } from 'wonka';
 import { soupOptimisticResolvers } from '../../queries/optimistic-resolvers';
+import { createUrqlQuery } from '../../urql-solid/create-urql-query';
 import { CacheNavigationError } from '../host/navigation-error';
-import type { CacheGenerationChange, CacheHost } from '../host/types';
+import type {
+  AffectedOperationsListener,
+  CacheGenerationChange,
+  CacheHost,
+} from '../host/types';
 import {
   ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE,
   type ClaimedMutation,
@@ -206,13 +212,13 @@ type FakeHost = CacheHost & {
   seedQueued: (
     args: Parameters<CacheHost['enqueueOptimisticMutation']>[0]
   ) => void;
-  pushAffected: (opKeys: number[]) => void;
+  pushAffected: AffectedOperationsListener;
   pushGeneration: (change: CacheGenerationChange) => void;
 };
 
 function makeFakeHost(): FakeHost {
   let readResult: ReadResult = { kind: 'miss' };
-  const subscribers = new Set<(opKeys: number[]) => void>();
+  const subscribers = new Set<AffectedOperationsListener>();
   const generationSubscribers = new Set<
     (change: CacheGenerationChange) => void
   >();
@@ -273,8 +279,8 @@ function makeFakeHost(): FakeHost {
         leased: false,
       });
     },
-    pushAffected: (opKeys) => {
-      for (const cb of subscribers) cb(opKeys);
+    pushAffected: (opKeys, changes) => {
+      for (const cb of subscribers) cb(opKeys, changes);
     },
     pushGeneration: (change) => {
       for (const cb of generationSubscribers) cb(change);
@@ -668,6 +674,103 @@ describe('normalizedCacheExchange', () => {
 
   beforeEach(() => {
     host = makeFakeHost();
+  });
+
+  it('updates multiple live queries and selected membership without rereading the worker', async () => {
+    type Rows = { rows: { __typename: string; id: string; isRead: boolean }[] };
+    const first = gql<Rows>`query First { rows { __typename id isRead } }`;
+    const second = gql<Rows>`query Second { rows { __typename id isRead } }`;
+    const snapshot = {
+      rows: [{ __typename: 'Thread', id: '17', isRead: false }],
+    };
+    host.scriptRead({ kind: 'hit', data: snapshot });
+    const network = vi.fn();
+    const client = createClient({
+      url: '/graphql',
+      exchanges: [
+        normalizedCacheExchange(host),
+        () => (source) =>
+          pipe(
+            source,
+            map((operation) => {
+              network();
+              return { operation, data: {}, stale: false, hasNext: false };
+            })
+          ),
+      ],
+    });
+    const observed: boolean[] = [];
+    const { a, b, selected, dispose } = createRoot((dispose) => {
+      const a = createUrqlQuery(() => ({
+        client,
+        query: first,
+        variables: {},
+        requestPolicy: 'cache-only' as const,
+      }));
+      const b = createUrqlQuery(() => ({
+        client,
+        query: second,
+        variables: {},
+        requestPolicy: 'cache-only' as const,
+      }));
+      const selected = createUrqlQuery(() => ({
+        client,
+        query: first,
+        variables: {},
+        requestPolicy: 'cache-only' as const,
+        select: (data: Rows) =>
+          data.rows.filter((row) => !row.isRead).map((row) => row.id),
+      }));
+      createComputed(() => {
+        if (a.isSuccess) observed.push(a.data!.rows[0].isRead);
+      });
+      return { a, b, selected, dispose };
+    });
+    try {
+      await vi.waitFor(() =>
+        expect(a.isSuccess && b.isSuccess && selected.isSuccess).toBe(true)
+      );
+      const row = a.data!.rows[0];
+      const reads = host.reads.length;
+      const keys = host.reads.flatMap((read) =>
+        read.opKey === undefined ? [] : [read.opKey]
+      );
+      host.pushAffected(keys, [
+        { kind: 'fields', key: 'Thread:17', fields: { isRead: true } },
+      ]);
+      expect(a.data!.rows[0]).toBe(row);
+      expect(b.data!.rows[0].isRead).toBe(true);
+      expect(selected.data).toEqual([]);
+      expect(snapshot.rows[0].isRead).toBe(false);
+      host.pushAffected(keys, [
+        { kind: 'fields', key: 'Thread:17', fields: { isRead: false } },
+      ]);
+      expect(selected.data).toEqual(['17']);
+      expect(observed).toEqual([false, true, false]);
+      await tick();
+      expect(host.reads).toHaveLength(reads);
+      expect(network).not.toHaveBeenCalled();
+
+      // A scalar push arriving before a structural reread must not cancel it.
+      host.scriptRead({
+        kind: 'hit',
+        data: {
+          rows: [
+            { __typename: 'Thread', id: '17', isRead: true },
+            { __typename: 'Thread', id: '18', isRead: false },
+          ],
+        },
+      });
+      host.pushAffected(keys, [{ kind: 'invalidate', key: 'Thread:17' }]);
+      host.pushAffected(keys, [
+        { kind: 'fields', key: 'Thread:17', fields: { isRead: true } },
+      ]);
+      await vi.waitFor(() => expect(a.data?.rows).toHaveLength(2));
+      expect(selected.data).toEqual(['18']);
+      expect(host.reads.length).toBeGreaterThan(reads);
+    } finally {
+      dispose();
+    }
   });
 
   it('evicts inferred missing records after writing the network response', async () => {

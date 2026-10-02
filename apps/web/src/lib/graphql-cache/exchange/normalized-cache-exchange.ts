@@ -50,6 +50,7 @@ import {
   parse,
   visit,
 } from 'graphql';
+import { batch } from 'solid-js';
 import { match } from 'ts-pattern';
 import {
   empty,
@@ -57,6 +58,7 @@ import {
   fromPromise,
   fromValue,
   makeSubject,
+  map,
   merge,
   mergeMap,
   pipe,
@@ -80,6 +82,7 @@ import {
   compileEntityResolvers,
   type EntityResolverConfig,
 } from './entity-resolvers';
+import { isQueryObject, LiveQuery, withLiveQueryData } from './live-query';
 import type { QueryRevalidation } from './optimistic';
 import {
   normalizedEntityKey,
@@ -121,6 +124,7 @@ export type NormalizedCacheResultMetadata =
       persistence?: Promise<CacheRevision | undefined>;
     }
   | { source: 'normalized-cache-hit' }
+  | { source: 'normalized-cache-patch' }
   | { source: 'affected-cache-reread' };
 
 /** Reads normalized-cache authority metadata from an urql operation result. */
@@ -130,7 +134,11 @@ export function normalizedCacheResultMetadata(
   const metadata = result.extensions?.[NORMALIZED_CACHE_RESULT_METADATA_KEY];
   if (metadata === null || typeof metadata !== 'object') return;
   const source = (metadata as { source?: unknown }).source;
-  if (source === 'normalized-cache-hit' || source === 'affected-cache-reread') {
+  if (
+    source === 'normalized-cache-hit' ||
+    source === 'affected-cache-reread' ||
+    source === 'normalized-cache-patch'
+  ) {
     return { source };
   }
   if (source !== 'live-network') return;
@@ -471,6 +479,10 @@ export function normalizedCacheExchange(
   return ({ forward, client }) => {
     /** Operations registered with the host, for push-driven re-execution. */
     const activeOps = new Map<number, Operation>();
+    const liveQueries = new Map<
+      number,
+      { view: LiveQuery; result: OperationResult }
+    >();
     const { source: affectedResults$, next: emitAffectedResult } =
       makeSubject<OperationResult>();
     type RetainedReplacementFallback = {
@@ -709,30 +721,57 @@ export function normalizedCacheExchange(
       }
     );
 
-    const unsubscribePush = host.onOpsAffected((opKeys) => {
-      for (const key of opKeys) {
-        if (!activeOps.has(key)) continue;
-        const state = queryState(key);
-        if (state.networkBoundQueries > 0) {
-          state.deferredAffected = true;
+    const unsubscribePush = host.onOpsAffected((opKeys, fieldChanges) =>
+      batch(() => {
+        for (const key of opKeys) {
+          if (!activeOps.has(key)) continue;
+          const state = queryState(key);
+          const live = liveQueries.get(key);
           if (
+            fieldChanges &&
+            live &&
+            !live.result.error &&
+            !live.result.hasNext &&
+            state.networkBoundQueries === 0 &&
             !state.replacementFallback &&
-            !state.retainedReplacementFallback
+            !state.retainedReplacementFallback &&
+            !state.completedReplacementFallback &&
+            live.view.apply(fieldChanges)
           ) {
-            affectedRereads.request(key);
+            state.cacheReadVersion += 1;
+            affectedRereads.forget(key);
+            emitAffectedResult(
+              withResultMetadata(
+                { ...live.result, data: live.view.snapshot, stale: false },
+                { source: 'normalized-cache-patch' }
+              )
+            );
+            continue;
           }
-          continue;
+          // A later scalar delta cannot repair a skipped structural change.
+          // Keep rereading until a complete snapshot rebuilds the index.
+          live?.view.invalidate();
+          if (state.networkBoundQueries > 0) {
+            state.deferredAffected = true;
+            if (
+              !state.replacementFallback &&
+              !state.retainedReplacementFallback
+            ) {
+              affectedRereads.request(key);
+            }
+            continue;
+          }
+          const registrationOnly = state.completedReplacementFallback;
+          state.completedReplacementFallback = false;
+          state.replacementFallback = false;
+          if (state.retainedReplacementFallback) {
+            recoverRetainedReplacementFallback(key);
+            continue;
+          }
+          affectedRereads.request(key, registrationOnly);
         }
-        const registrationOnly = state.completedReplacementFallback;
-        state.completedReplacementFallback = false;
-        state.replacementFallback = false;
-        if (state.retainedReplacementFallback) {
-          recoverRetainedReplacementFallback(key);
-          continue;
-        }
-        affectedRereads.request(key, registrationOnly);
-      }
-    });
+      })
+    );
 
     return (ops$) => {
       const shared = pipe(ops$, share);
@@ -1667,6 +1706,7 @@ export function normalizedCacheExchange(
           if (op.kind === 'teardown') {
             subscriptionGenerations.delete(op.key);
             activeOps.delete(op.key);
+            liveQueries.delete(op.key);
             queryStates.delete(op.key);
             affectedRereads.forget(op.key);
             host.teardown(op.key).catch(() => undefined);
@@ -1685,18 +1725,37 @@ export function normalizedCacheExchange(
         // Includes BFCache restoration, even with no active query keys. The
         // host gates claims on initialization; durable leases still decide
         // which head is runnable after reconnecting.
-        host.onCacheGenerationChanged(wakeDrain);
+        host.onCacheGenerationChanged(() => {
+          liveQueries.clear();
+          wakeDrain();
+        });
         if (typeof addEventListener === 'function') {
           addEventListener('online', wakeDrain);
         }
       }
       void unsubscribePush;
-      return merge([
-        affectedResults$,
-        cacheResults$,
-        mutationPrep$,
-        forwarded$,
-      ]);
+      return pipe(
+        merge([affectedResults$, cacheResults$, mutationPrep$, forwarded$]),
+        map((result) => {
+          if (
+            result.operation.kind !== 'query' ||
+            isHydrateOnly(result.operation) ||
+            !activeOps.has(result.operation.key)
+          )
+            return result;
+          if (!isQueryObject(result.data)) {
+            liveQueries.delete(result.operation.key);
+            return result;
+          }
+          const current = liveQueries.get(result.operation.key);
+          const view =
+            current?.view ?? new LiveQuery(result.operation, result.data);
+          if (current) view.replace(result.data);
+          const liveResult = withLiveQueryData({ ...result }, view.data);
+          liveQueries.set(result.operation.key, { view, result: liveResult });
+          return liveResult;
+        })
+      );
     };
   };
 }

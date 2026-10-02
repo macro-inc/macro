@@ -140,6 +140,8 @@ pub struct QueryRegistration<'a> {
 /// Result of writing a network response.
 #[derive(Debug)]
 pub struct WriteResult {
+    /// Effective scalar changes; absent when consumers must re-read queries.
+    pub field_changes: Option<Vec<crate::field_changes::RecordFieldChange>>,
     /// Identity bindings omitted while committing otherwise normalizable server data.
     pub identity_errors: Vec<String>,
     /// Revision installed after this logical cache mutation.
@@ -482,6 +484,7 @@ impl<S: Storage> Engine<S> {
         let affected_ops = self.deps.ops_for_keys(changed.iter());
         let revision = self.advance_revision()?;
         Ok(WriteResult {
+            field_changes: Some(crate::field_changes::between(&before_all, &after)),
             identity_errors: Vec::new(),
             revision,
             revision_advanced: true,
@@ -1375,6 +1378,7 @@ impl<S: Storage> Engine<S> {
         }
         Ok((
             WriteResult {
+                field_changes: None,
                 identity_errors: Vec::new(),
                 mutation_uuid: None,
                 revision,
@@ -1831,6 +1835,7 @@ impl<S: Storage> Engine<S> {
             transaction_id: upsert.id,
             upsert_kind: upsert.kind,
             write_result: WriteResult {
+                field_changes: Some(crate::field_changes::between(&before, &after)),
                 identity_errors: Vec::new(),
                 revision,
                 revision_advanced: true,
@@ -2373,6 +2378,7 @@ impl<S: Storage> Engine<S> {
             .collect();
         let affected_ops = self.deps.ops_for_keys(visible_changed.iter());
         Ok(WriteResult {
+            field_changes: Some(crate::field_changes::between(&before, &after)),
             identity_errors,
             revision,
             revision_advanced: true,
@@ -2469,6 +2475,7 @@ impl<S: Storage> Engine<S> {
             .collect();
         let affected_ops = self.deps.ops_for_keys(visible_changed.iter());
         Ok(WriteResult {
+            field_changes: Some(crate::field_changes::between(&before, &after)),
             identity_errors: Vec::new(),
             revision,
             revision_advanced: true,
@@ -2773,6 +2780,7 @@ impl<S: PredicateIndexStorage> Engine<S> {
             affected_ops.remove(&origin_op);
         }
         Ok(WriteResult {
+            field_changes: None,
             identity_errors: Vec::new(),
             revision,
             revision_advanced,

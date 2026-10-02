@@ -27,18 +27,21 @@ import type {
   ReadRecordsByKeysArgs,
   ReadRecordsByKeysResult,
   ReadResult,
+  RecordFieldChange,
   RollbackOptimisticWriteResult,
   SearchCacheArgs,
   SearchCachePage,
   WriteResult,
 } from '../protocol';
 import {
+  isRecordFieldChanges,
   parseCacheRevision,
   parseStorageGeneration,
   validateCacheSearchArgs,
   validateRecordSelectionKeys,
 } from '../protocol';
 import type {
+  AffectedOperationsListener,
   CacheChangeListener,
   CacheChangeOptions,
   CacheGenerationChange,
@@ -62,6 +65,7 @@ const MUTATION_SETTLED_EVENT = 'graphql-cache://mutation-settled';
 
 /** Payload of the ops-affected event (graphql_cache_plugin `OpsAffectedEvent`). */
 type OpsAffectedPayload = {
+  fieldChanges?: RecordFieldChange[];
   opIds: string[];
   keys: string[];
 };
@@ -92,7 +96,7 @@ const ENTITY_FILTER_COMMAND = 'graphql_cache_entity_filter';
 
 export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
   const clientId = crypto.randomUUID();
-  const affectedSubscribers = new Set<(opKeys: number[]) => void>();
+  const affectedSubscribers = new Set<AffectedOperationsListener>();
   const cacheChangeSubscribers = new Set<CacheChangeListener>();
   const hydrationSubscribers = new Set<CacheChangeListener>();
   const generationChangeSubscribers = new Set<
@@ -156,7 +160,11 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
         .map((id) => Number(id.slice(prefix.length)))
         .filter((n) => Number.isFinite(n));
       if (opKeys.length > 0) {
-        for (const cb of affectedSubscribers) cb(opKeys);
+        for (const cb of affectedSubscribers) {
+          if (isRecordFieldChanges(event.payload.fieldChanges))
+            cb(opKeys, event.payload.fieldChanges);
+          else cb(opKeys);
+        }
       }
     }).catch((error) => {
       console.warn('graphql cache ops-affected listener failed', error);
@@ -517,7 +525,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       );
     },
 
-    onOpsAffected(cb: (opKeys: number[]) => void): () => void {
+    onOpsAffected(cb: AffectedOperationsListener): () => void {
       affectedSubscribers.add(cb);
       return () => affectedSubscribers.delete(cb);
     },

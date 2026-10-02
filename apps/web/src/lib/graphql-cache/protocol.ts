@@ -365,7 +365,17 @@ export type HydrationResult = HydrationSearchChanges &
     | { kind: 'void'; revision: CacheRevision }
   );
 
+export type RecordFieldChange =
+  | {
+      kind: 'fields';
+      key: string;
+      fields: Record<string, string | number | boolean | null>;
+    }
+  | { kind: 'invalidate'; key: string };
+
 export type WriteResult = HydrationSearchChanges & {
+  /** Effective view changes. Missing metadata requires a conservative reread. */
+  fieldChanges?: RecordFieldChange[];
   /** Bindings omitted while committing an otherwise normalizable response. */
   identityErrors?: string[];
   mutationUuid?: string;
@@ -655,6 +665,7 @@ export type CachePush =
       opIds: string[];
       /** Changed entity keys, for diagnostics/advanced consumers. */
       keys: string[];
+      fieldChanges?: RecordFieldChange[];
     }
   | ({
       kind: 'cache-changed';
@@ -737,15 +748,43 @@ export function isCacheResponse(value: unknown): value is CacheResponse {
   );
 }
 
+/** Validates patches before they can be applied to live query objects. */
+export function isRecordFieldChanges(
+  value: unknown
+): value is RecordFieldChange[] {
+  return (
+    Array.isArray(value) &&
+    value.every((change) => {
+      if (!isWireRecord(change) || typeof change.key !== 'string') return false;
+      if (change.kind === 'invalidate')
+        return hasOnlyWireKeys(change, ['kind', 'key']);
+      return (
+        change.kind === 'fields' &&
+        hasOnlyWireKeys(change, ['kind', 'key', 'fields']) &&
+        isWireRecord(change.fields) &&
+        Object.values(change.fields).every(
+          (field) =>
+            field === null ||
+            typeof field === 'string' ||
+            typeof field === 'boolean' ||
+            (typeof field === 'number' && Number.isFinite(field))
+        )
+      );
+    })
+  );
+}
+
 /** Strictly validates a pushed cache notification. */
 export function isCachePush(value: unknown): value is CachePush {
   if (!isWireRecord(value)) return false;
   switch (value.kind) {
     case 'ops-affected':
       return (
-        hasOnlyWireKeys(value, ['kind', 'opIds', 'keys']) &&
+        hasOnlyWireKeys(value, ['kind', 'opIds', 'keys', 'fieldChanges']) &&
         isWireStringArray(value.opIds) &&
-        isWireStringArray(value.keys)
+        isWireStringArray(value.keys) &&
+        (value.fieldChanges === undefined ||
+          isRecordFieldChanges(value.fieldChanges))
       );
     case 'cache-changed':
       return (

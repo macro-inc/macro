@@ -1055,6 +1055,9 @@ export class CacheWorkerCore {
         kind: 'ops-affected',
         opIds: result.affectedOps,
         keys: result.changed,
+        ...(result.fieldChanges === undefined
+          ? {}
+          : { fieldChanges: result.fieldChanges }),
       });
     }
     if (cacheChanged && result.revisionAdvanced) {

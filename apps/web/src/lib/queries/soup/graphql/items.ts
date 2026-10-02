@@ -40,7 +40,6 @@ import {
   getGraphqlSoupClient,
   graphqlSoupProjectionSupported,
   mapGraphqlSoupItem,
-  mapGraphqlSoupPage,
 } from '@service-storage/graphql-soup';
 import type { CombinedError } from '@urql/core';
 import {
@@ -55,10 +54,12 @@ import {
   untrack,
 } from 'solid-js';
 import { NIL as NIL_UUID } from 'uuid';
+import { querySnapshot } from '../../../graphql-cache/exchange/live-query';
+import { createKeyedProjection } from '../../../urql-solid/create-keyed-projection';
 import { registerChannelNotificationRefresh } from '../../channel/register-notification-refresh';
 import { soupQueryExcludesDone } from '../excludes-done';
 import type { SoupAstBody, SoupAstItemsData, SoupAstParams } from '../items';
-import { soupPageTimestamp } from '../page-timestamp';
+import { soupEntityTimestamp } from '../page-timestamp';
 import {
   mapApiSoupItemToEntity,
   mapSoupPageToEntityList,
@@ -581,9 +582,51 @@ export function createGraphqlSoupAstItemsQuery(
   const selectPages = createMemo(() => {
     // The mapper reads this query inside the untracked observer callback.
     // Track its resolved id here so cached pages reselect when it changes.
-    projectionInstructionsId();
+    const instructionsId = projectionInstructionsId();
     const sortMethod = projectionSortMethod();
     const showSupportedForeignEntities = projectionForeignEntities();
+    const [inputRecords, setInputRecords] = createSignal<
+      { key: string; record: GraphqlSoupItem }[]
+    >([]);
+    const projected = createKeyedProjection(
+      inputRecords,
+      (item) => item.key,
+      ({ record }) => {
+        const item = mapGraphqlSoupItem(record);
+        return {
+          id: soupItemKey(record),
+          entity: item
+            ? mapSoupPageToEntityList(
+                { items: [item], next_cursor: undefined },
+                {
+                  instructionsIdQuery: {
+                    isSuccess: instructionsId !== undefined,
+                    data: instructionsId,
+                  },
+                  showSupportedForeignEntities,
+                }
+              )[0]
+            : undefined,
+          timestamp: item
+            ? soupEntityTimestamp(mapApiSoupItemToEntity(item), sortMethod)
+            : undefined,
+        };
+      }
+    );
+    const data = createMemo(() => {
+      const entities: SoupAstItemsData['entities'] = [];
+      let oldest = Infinity;
+      for (const item of projected()) {
+        if (item.entity) entities.push(item.entity);
+        if (item.timestamp !== undefined)
+          oldest = Math.min(oldest, item.timestamp);
+      }
+      return {
+        entities,
+        groups: undefined,
+        oldestFetchedTimestamp: Number.isFinite(oldest) ? oldest : undefined,
+      };
+    });
     return ({
       pages,
       pageParams,
@@ -591,27 +634,39 @@ export function createGraphqlSoupAstItemsQuery(
       SoupQuery | ChannelListSoupQuery,
       string | null
     >): ServerProjection => {
-      const mappedPages = pages.map(mapGraphqlSoupPage);
-      const oldestFetchedTimestamp = soupPageTimestamp(
-        mappedPages.flatMap((page) => page.items.map(mapApiSoupItemToEntity)),
-        sortMethod
-      );
-      const entities = mappedPages.flatMap((page) =>
-        mapSoupPageToEntityList(page, {
-          instructionsIdQuery,
-          showSupportedForeignEntities,
-        })
-      );
       const records = pages.flatMap<GraphqlSoupItem>(
         (page) => page.user.soup.items
       );
+      untrack(() => {
+        const previous = inputRecords();
+        if (
+          previous.length !== records.length ||
+          previous.some((item, index) => item.record !== records[index])
+        ) {
+          const byKey = new Map(previous.map((item) => [item.key, item]));
+          const occurrences = new Map<string, number>();
+          setInputRecords(
+            records.map((record) => {
+              const identity = soupItemKey(record);
+              const occurrence = occurrences.get(identity) ?? 0;
+              occurrences.set(identity, occurrence + 1);
+              const key = `${identity}:${occurrence}`;
+              const existing = byKey.get(key);
+              return existing?.record === record ? existing : { key, record };
+            })
+          );
+        }
+      });
       return {
         // Raw wire records are reconciliation evidence, not reactive UI state.
         // Publish them atomically without walking their entire notification
         // payload again. Mapped entities retain deep reactivity and identity.
-        records: () => records,
+        records: () =>
+          pages.flatMap<GraphqlSoupItem>(
+            (page) => querySnapshot(page).user.soup.items
+          ),
         pageParams,
-        data: { entities, groups: undefined, oldestFetchedTimestamp },
+        data: data(),
       };
     };
   });

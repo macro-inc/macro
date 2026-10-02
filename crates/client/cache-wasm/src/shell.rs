@@ -149,6 +149,8 @@ struct JsQueryRegistration {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct JsWriteResult {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    field_changes: Option<Vec<cache_core::field_changes::RecordFieldChange>>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     identity_errors: Vec<String>,
     revision: String,
@@ -186,6 +188,8 @@ struct JsInspectionPathSegment {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct JsEnqueueOptimisticMutationResult {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    field_changes: Option<Vec<cache_core::field_changes::RecordFieldChange>>,
     transaction_id: String,
     upsert_kind: JsMutationUpsertKind,
     revision: String,
@@ -434,6 +438,7 @@ enum JsRollbackOptimisticWriteResult {
 
 fn js_write_result(result: WriteResult, ops: &OpInterner) -> JsWriteResult {
     JsWriteResult {
+        field_changes: result.field_changes,
         identity_errors: result.identity_errors,
         revision: result.revision.to_string(),
         revision_advanced: result.revision_advanced,
@@ -1766,6 +1771,7 @@ impl CacheEngine {
                 },
             };
             to_js(&JsEnqueueOptimisticMutationResult {
+                field_changes: result.write_result.field_changes,
                 transaction_id: result.transaction_id.to_string(),
                 upsert_kind: result.upsert_kind.into(),
                 revision: result.write_result.revision.to_string(),
