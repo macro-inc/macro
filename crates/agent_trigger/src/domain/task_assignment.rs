@@ -17,6 +17,9 @@ use models_properties::{EntityType, service::property_value::PropertyValue};
 use properties::domain::events::EntityPropertyUpdatedMetadata;
 use system_properties::SystemPropertyKey;
 
+mod project_context;
+pub use project_context::ProjectTaskAssignmentContext;
+
 use super::{
     broker_events::{AgentAssignedToTaskEvent, AgentSessionMacroEvent, NewAgentSessionEvent},
     processing::ProcessMessageEventError,
@@ -36,6 +39,8 @@ pub struct TaskBrief {
     pub title: String,
     /// Current task description in Markdown.
     pub markdown: String,
+    /// Current project, only when the assigning principal can view it.
+    pub project_id: Option<initiative::domain::models::InitiativeId>,
 }
 
 /// Reads the task through its owning service under a verified document capability.
@@ -198,12 +203,25 @@ fn discussion_id(event_id: Uuid, bot_id: BotId) -> Uuid {
 }
 
 fn assignment_prompt(assignment: &TaskAssignment, brief: &TaskBrief) -> String {
-    format!(
-        "{}\n\n{}\n\n{}",
+    let mut prompt = format!(
+        "{}\n\n{}",
         include_str!("task_assignment/prompt.md").trim(),
         task_reference(&assignment.parent, &brief.title),
-        brief.markdown,
-    )
+    );
+    if let Some(project_id) = brief.project_id {
+        let project_reference = serde_json::json!({
+            "documentId": project_id,
+            "documentName": "Task project",
+            "blockName": "initiative",
+            "blockParams": {},
+        });
+        prompt.push_str(&format!(
+            "\n\nProject: <m-document-mention>{project_reference}</m-document-mention>"
+        ));
+    }
+    prompt.push_str("\n\n");
+    prompt.push_str(&brief.markdown);
+    prompt
 }
 
 /// Persistent task guidance for session system instructions, without snapshotting

@@ -295,8 +295,10 @@ session; progress and final answers stay in that session. The agent retains the
 original task reference in its session instructions and updates the task's
 description or status as appropriate. It must not post or edit discussion messages
 unless explicitly asked. This also applies to task assignments inherited from a
-project. The assignment instructions and task details are private startup context;
-no message is posted as you. People and agents
+project. When the task belongs to a project the assigning user can view, the
+startup prompt links that project and tells the agent to read its current
+description before starting work. The assignment instructions and task details
+are private startup context; no message is posted as you. People and agents
 can remain assigned together. Removing an agent and saving, then assigning it
 again starts a new session; saving an unchanged assignment does not restart it.
 
