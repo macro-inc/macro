@@ -5,7 +5,9 @@ use agent_trigger::domain::processing::process_message_event;
 use agent_trigger::domain::project_assignment::ProjectAssignmentService;
 use agent_trigger::domain::service::AgentTriggerService;
 use agent_trigger::domain::sources::{MessageTriggerEvents, TriggerEvents};
-use agent_trigger::domain::task_assignment::process_task_assignment;
+use agent_trigger::domain::task_assignment::{
+    ProjectTaskAssignmentContext, TaskAssignmentContext, process_task_assignment,
+};
 use agent_trigger::outbound::{
     BotRepoAgentLookup, ChannelRepoTypeLookup, DssTaskAssignmentContext, FastModelTriggerJudge,
     LexicalExplicitReplyExtractor, MessageThreadHistory, VisionImageCaptioner,
@@ -138,12 +140,16 @@ async fn run(
         messages,
     } = services;
     let lexical = LexicalClient::new(internal_api_key, LexicalServiceUrl::new()?.to_string());
-    let task_context = DssTaskAssignmentContext::new(
-        DocumentStorageServiceClient::new(
-            document_storage_service_auth_key,
-            DocumentStorageServiceUrl::new()?.to_string(),
+    let task_context = ProjectTaskAssignmentContext::new(
+        DssTaskAssignmentContext::new(
+            DocumentStorageServiceClient::new(
+                document_storage_service_auth_key,
+                DocumentStorageServiceUrl::new()?.to_string(),
+            ),
+            lexical.clone(),
         ),
-        lexical.clone(),
+        PgInitiativeRepo::new(pool.clone()),
+        EntityAccessServiceImpl::new(PgAccessRepository::new(pool.clone())),
     );
     let images = VisionImageCaptioner::new(
         static_file::outbound::CdnStaticFileRepo::new(StaticFileServiceUrl::new()?.to_string()),
@@ -215,7 +221,7 @@ async fn consume<Events: TriggerEvents>(
     publisher: &Publisher,
     channel_types: &ChannelTypes,
     messages: &dyn MessageServiceApi,
-    task_context: &DssTaskAssignmentContext,
+    task_context: &impl TaskAssignmentContext,
     project_assignments: &ProjectAssignmentService<
         impl PropertiesService,
         impl InitiativeRepo,
