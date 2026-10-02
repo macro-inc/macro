@@ -38,6 +38,11 @@ macro_env_var::env_vars!(
     pub struct PipedreamClientSecret;
     /// The Pipedream Connect project ID (`proj_...`).
     pub struct PipedreamProjectId;
+    /// AES key the `mcp_servers` rows' OAuth credentials are encrypted with -
+    /// the same one `document_cognition_service` writes them with, so the
+    /// custom MCP servers a person added in Macro are the ones the egress
+    /// proxy can refresh and stamp for their sandboxes.
+    pub struct McpCredentialsKeySecretName;
 );
 
 macro_env_var::maybe_env_vars!(
@@ -180,6 +185,8 @@ pub struct Config {
     pub pipedream_mcp_url: String,
     /// RSA key Macro API tokens are signed with.
     pub macro_api_token_private_secret_key: LocalOrRemoteSecret<MacroApiTokenPrivateSecretKey>,
+    /// AES key the custom MCP servers' stored OAuth credentials are encrypted with.
+    pub mcp_credentials_key_secret_name: LocalOrRemoteSecret<McpCredentialsKeySecretName>,
     /// Issuer stamped into minted Macro API tokens.
     pub macro_api_token_issuer: MacroApiTokenIssuer,
     /// S3 bucket the Changes pane's patches are stored in, one object per
