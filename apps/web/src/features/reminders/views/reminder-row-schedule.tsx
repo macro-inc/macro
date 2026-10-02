@@ -1,7 +1,6 @@
 import type { ReminderEntity } from '@entity';
 import ArrowCounterClockwiseIcon from '@phosphor/arrow-counter-clockwise.svg';
 import CheckIcon from '@phosphor/check.svg';
-import ClockIcon from '@phosphor/clock.svg';
 import { ActionDialogShell, Button, cn, Dialog } from '@ui';
 import { createSignal, Show, Suspense } from 'solid-js';
 import { ReminderScheduleIndicator } from '../components/reminder-schedule-indicator';
@@ -88,12 +87,7 @@ export function ReminderRowSchedule(props: {
             <Show when={done()} fallback={<CheckIcon class="size-4" />}>
               <CheckIcon class="size-4 touch:hidden group-hover/entity:hidden group-focus-within/entity:hidden" />
               <span class="hidden touch:inline-flex group-hover/entity:inline-flex group-focus-within/entity:inline-flex">
-                <Show
-                  when={reschedule()}
-                  fallback={<ArrowCounterClockwiseIcon class="size-4" />}
-                >
-                  <ClockIcon class="size-4" />
-                </Show>
+                <ArrowCounterClockwiseIcon class="size-4" />
               </span>
             </Show>
           </Button>
