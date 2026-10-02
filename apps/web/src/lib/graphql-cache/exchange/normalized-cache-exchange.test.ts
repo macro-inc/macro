@@ -8,6 +8,7 @@ import { shouldRetryGraphqlMutation } from '@service-storage/graphql-mutation-re
 import {
   type Client,
   CombinedError,
+  createClient,
   createRequest,
   gql,
   makeOperation,
@@ -24,6 +25,7 @@ import {
   type Source,
   subscribe,
 } from 'wonka';
+import { soupOptimisticResolvers } from '../../queries/optimistic-resolvers';
 import { CacheNavigationError } from '../host/navigation-error';
 import type { CacheGenerationChange, CacheHost } from '../host/types';
 import {
@@ -48,6 +50,7 @@ import {
   optimisticContextOf,
   optimisticMutationDispositionOf,
 } from './optimistic';
+import { optimisticResolversExchange } from './optimistic-resolvers';
 
 const QUERY = gql`
   query Soup($input: SoupInput!) {
@@ -2472,33 +2475,30 @@ describe('normalizedCacheExchange', () => {
       'revalidates Soup membership after a queued read-state write replays on startup',
       async (markReadState) => {
         let submitted: Operation | undefined;
-        const capturingClient = {
-          mutation: (
-            query: Operation['query'],
-            variables: Operation['variables'],
-            context: Operation['context']
-          ) => {
-            submitted = makeOperation(
-              'mutation',
-              createRequest(query, variables),
-              {
-                ...context,
-                url: 'http://test',
-                requestPolicy: 'network-only',
-              }
-            );
-            return {
-              toPromise: async () => ({
-                extensions: {
-                  normalizedCacheMutationDisposition: {
-                    kind: 'queued',
-                    transactionId: 'tx',
-                  },
-                },
-              }),
-            };
-          },
-        } as unknown as Client;
+        const capturingClient = createClient({
+          url: 'http://test',
+          exchanges: [
+            optimisticResolversExchange(soupOptimisticResolvers),
+            () => (operations) =>
+              pipe(
+                operations,
+                map((operation) => {
+                  submitted = operation;
+                  return {
+                    operation,
+                    stale: false,
+                    hasNext: false,
+                    extensions: {
+                      normalizedCacheMutationDisposition: {
+                        kind: 'queued',
+                        transactionId: 'tx',
+                      },
+                    },
+                  };
+                })
+              ),
+          ],
+        });
         const variables = [
           { input: { initial: { limit: 2 } } },
           { input: { continuation: { cursor: 'next' } } },

@@ -13,6 +13,7 @@ import {
   HYDRATE_ONLY_CONTEXT_KEY,
   normalizedCacheExchange,
 } from '@graphql-cache/exchange/normalized-cache-exchange';
+import { optimisticResolversExchange } from '@graphql-cache/exchange/optimistic-resolvers';
 import { CacheNavigationError } from '@graphql-cache/host/navigation-error';
 import { createRetirableCacheHost } from '@graphql-cache/host/retirable-host';
 import type { CacheHost } from '@graphql-cache/host/types';
@@ -56,6 +57,7 @@ import {
 import { createSignal } from 'solid-js';
 import { match } from 'ts-pattern';
 import { delegateChannelNotificationRefresh } from '../../queries/channel/notification-refresh';
+import { soupOptimisticResolvers } from '../../queries/optimistic-resolvers';
 import { emailCacheDeletionKeys } from './email-cache-deletions';
 import type { SoupApiItem } from './generated/schemas/soupApiItem';
 import type { SoupCalendarEventSoupPropertiesField } from './generated/schemas/soupCalendarEventSoupPropertiesField';
@@ -507,6 +509,7 @@ export function getGraphqlSoupClient(): Client {
         // See graphqlSoupClient: GET serves GraphiQL on this path.
         preferGetMethod: false,
         exchanges: [
+          optimisticResolversExchange(soupOptimisticResolvers),
           normalizedCacheExchange(host, {
             deletedRecordKeys: emailCacheDeletionKeys,
             onCacheError: (error, operation) => {

@@ -302,6 +302,9 @@ vi.mock('@service-auth/fetch', () => ({ getMacroApiToken: vi.fn() }));
 vi.mock('graphql-ws', () => ({
   createClient: () => ({ subscribe: vi.fn(), dispose: vi.fn() }),
 }));
+vi.mock('../../queries/optimistic-resolvers', () => ({
+  soupOptimisticResolvers: [],
+}));
 vi.mock('./graphql/generated/graphql', () => ({
   GroupSoupDocument: {},
   SoupDocument: {},

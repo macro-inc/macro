@@ -478,6 +478,12 @@ thread archive replay. Committed writes and failed non-queued batches still
 reconcile. Permanent failures roll back the failed intent.
 Check Signal/Noise removal and All's done indicator, then Undo/Redo, including an
 offline action followed by reconnect. Sent-only threads cannot be unarchived.
+For optimistic mutation interface changes, delay the network response and verify
+that only the affected row's read/done indicator changes, with scroll position and
+unrelated rows retained. Quickly reverse the action, then reject the first request:
+the later intent must remain visible. A stale refresh while either write is pending
+must not clear its optimistic state. A retryable failure should remain queued;
+a permanent failure should restore only the failed intent's fields.
 
 The service retains both replica-backed Soup reads and a primary-backed email
 writer. Email mutations and their uncached reply reloads use the primary; ordinary
