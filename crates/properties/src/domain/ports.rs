@@ -272,6 +272,16 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         value: Option<PropertyValue>,
     ) -> impl Future<Output = Result<EntityPropertyMutationSnapshot, Self::Err>> + Send;
 
+    /// Append entity references atomically while preserving current references.
+    /// Duplicates are ignored and the snapshot captures the locked previous value.
+    fn add_entity_property_references(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        property_definition_id: Uuid,
+        references: Vec<EntityReference>,
+    ) -> impl Future<Output = Result<EntityPropertyMutationSnapshot, Self::Err>> + Send;
+
     /// Atomically add one option to a multi-select entity property value,
     /// attaching the property if needed. Re-adding a present option is deduped.
     /// Composes with concurrent option changes without a lost update and returns

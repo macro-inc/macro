@@ -193,6 +193,19 @@ Assigning a person to a project also adds them as a collaborator with edit acces
 Clearing the assignee leaves that access in place; the owner can remove it through
 Manage collaborators in Share. Removing a collaborator does not clear assignees.
 
+Project Assignees also offers the same agents as task Assignees. Choose an agent
+in the project composer, Overview property pills, project list, or Properties
+side panel; dismiss the picker to save. The picker explains that assigned agents
+automatically take on tasks created in or moved into the project. People and
+agents can remain assigned together. Existing agent permissions still apply:
+private agents run for their owner, and shared team agents run for team members.
+Assigning an agent to the project does not start work on tasks already in it.
+Removing the project agent stops assignment to future tasks; it does not cancel
+sessions already started for its tasks.
+For verification, create a task from the project's Tasks tab, then move another
+task into the project through `Set project…`; both should start the assigned
+agent's normal task session and show its message in the task's Discussion.
+
 Overview's Description uses the shared collaborative Markdown editor and saves
 automatically to the existing backing document. Edit/owner access allows typing;
 view/comment access is read-only. The description is part of the native project

@@ -38,6 +38,7 @@ channel_sender = { path = "../channel_sender" }
 macro_uuid = { path = "../macro_uuid" }
 messages = { path = "../messages", features = ["broker", "ports"] }
 properties = { path = "../properties", default-features = false }
+initiative = { path = "../initiative", default-features = false, features = ["ports"] }
 models_properties = { path = "../models_properties" }
 system_properties = { path = "../system_properties" }
 # Domain vocabulary: channel-parent trigger events keep the channel-only post
