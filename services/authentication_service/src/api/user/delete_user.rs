@@ -12,6 +12,7 @@ use crate::api::{
     jwt_session::JwtSessionContext,
     utils::{create_access_token_cookie, create_refresh_token_cookie},
 };
+use authentication_service::service::user::delete_user::delete_requested_account;
 
 use model::response::{ErrorResponse, GenericSuccessResponse};
 
@@ -41,7 +42,32 @@ pub async fn handler(
     if user_context.user_id == "macro|hutch@macro.com" {
         return Err((StatusCode::FORBIDDEN, "you cannot delete hutch").into_response());
     }
-    // Perform a logout for the user
+
+    let email = user_id.replace("macro|", "");
+
+    let fusion_auth_user_id = ctx
+        .auth_client
+        .get_user_id_by_email(&email)
+        .await
+        .map_err(|e| {
+            tracing::error!(error=?e, email, "unable to get user id by email");
+            (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
+        })?;
+    let account = uuid::Uuid::parse_str(&fusion_auth_user_id).map_err(|e| {
+        tracing::error!(error=?e, fusion_auth_user_id, "fusionauth user id is not a uuid");
+        StatusCode::INTERNAL_SERVER_ERROR.into_response()
+    })?;
+
+    // Deleting the FusionAuth user triggers the delete user webhook, which removes the
+    // user's profiles from the db
+    delete_requested_account(ctx.user_deletion.as_ref(), &account)
+        .await
+        .map_err(|error| {
+            tracing::error!(error=?error, user_id, fusion_auth_user_id, email, "unable to delete user");
+            (StatusCode::INTERNAL_SERVER_ERROR, "unable to delete user").into_response()
+        })?;
+
+    // A failed deletion leaves the account usable, so only sign out once it is gone.
     // Remove access token cookie
     let mut access_token_cookie = create_access_token_cookie("");
     access_token_cookie.set_expires(Some(time::OffsetDateTime::now_utc()));
@@ -58,27 +84,6 @@ pub async fn handler(
     {
         tracing::warn!(error=?e, "error logging out");
     }
-
-    let email = user_id.replace("macro|", "");
-
-    // Delete the user from fusionauth
-    // This will trigger the delete user webhook to clear out the user's items from the db async
-    let fusion_auth_user_id = ctx
-        .auth_client
-        .get_user_id_by_email(&email)
-        .await
-        .map_err(|e| {
-            tracing::error!(error=?e, email, "unable to get user id by email");
-            (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
-        })?;
-
-    ctx.auth_client
-        .delete_user(&fusion_auth_user_id)
-        .await
-        .map_err(|e| {
-            tracing::error!(error=?e, user_id, fusion_auth_user_id, email, "unable to delete user");
-            (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
-        })?;
 
     Ok((StatusCode::OK, Json(GenericSuccessResponse::default())).into_response())
 }

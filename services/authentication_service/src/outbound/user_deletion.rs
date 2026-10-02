@@ -3,6 +3,7 @@
 use std::{sync::Arc, time::Duration};
 
 use document_storage_service_client::DocumentStorageServiceClient;
+use fusionauth::FusionAuthClient;
 use macro_authorization::INTERNAL_API_KEY_HEADER;
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::{
@@ -15,12 +16,13 @@ use uuid::Uuid;
 
 use crate::service::user::delete_user::UserDeletionGateway;
 
-/// HTTP, in-process team service, and database adapter composed at
+/// HTTP, in-process team service, FusionAuth, and database adapter composed at
 /// authentication-service startup.
 pub struct UserDeletionAdapter<T: TeamService> {
     db: PgPool,
     documents: Arc<DocumentStorageServiceClient>,
     teams: Arc<T>,
+    identities: FusionAuthClient,
     client: reqwest::Client,
     internal_key: String,
     harness_url: String,
@@ -38,6 +40,7 @@ impl<T: TeamService> UserDeletionAdapter<T> {
         db: PgPool,
         documents: Arc<DocumentStorageServiceClient>,
         teams: Arc<T>,
+        identities: FusionAuthClient,
         internal_key: String,
         harness_url: String,
         scheduled_action_url: String,
@@ -46,6 +49,7 @@ impl<T: TeamService> UserDeletionAdapter<T> {
             db,
             documents,
             teams,
+            identities,
             client: reqwest::Client::builder()
                 .timeout(Duration::from_secs(300))
                 .redirect(reqwest::redirect::Policy::none())
@@ -83,6 +87,20 @@ impl<T: TeamService> UserDeletionAdapter<T> {
 }
 
 impl<T: TeamService> UserDeletionGateway for UserDeletionAdapter<T> {
+    async fn list_profiles(&self, account: &Uuid) -> Result<Vec<MacroUserIdStr<'static>>, Report> {
+        let profiles = macro_db_client::user::get::get_user_profiles_by_fusionauth_user_id(
+            &self.db,
+            &account.to_string(),
+        )
+        .await
+        .into_rootcause()
+        .context("failed to list user profiles")?;
+        profiles
+            .into_iter()
+            .map(|profile| Ok(MacroUserIdStr::try_from(profile)?))
+            .collect()
+    }
+
     async fn delete_scheduled_actions(&self, user: &MacroUserIdStr<'static>) -> Result<(), Report> {
         self.delete_owned(&self.scheduled_action_url, "scheduled-actions", user)
             .await
@@ -127,6 +145,15 @@ impl<T: TeamService> UserDeletionGateway for UserDeletionAdapter<T> {
             .await
             .into_rootcause()
             .context("failed to delete macro user")?;
+        Ok(())
+    }
+
+    async fn delete_identity(&self, account: &Uuid) -> Result<(), Report> {
+        self.identities
+            .delete_user(&account.to_string())
+            .await
+            .map_err(|error| Report::new(error).into_dynamic())
+            .context("failed to delete FusionAuth user")?;
         Ok(())
     }
 }

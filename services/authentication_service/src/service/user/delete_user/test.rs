@@ -19,6 +19,10 @@ impl FakeGateway {
 }
 
 impl UserDeletionGateway for FakeGateway {
+    async fn list_profiles(&self, _: &Uuid) -> Result<Vec<MacroUserIdStr<'static>>, Report> {
+        self.call("profiles", "")?;
+        Ok(users())
+    }
     async fn delete_scheduled_actions(&self, user: &MacroUserIdStr<'static>) -> Result<(), Report> {
         self.call("actions", user.as_ref())
     }
@@ -37,6 +41,9 @@ impl UserDeletionGateway for FakeGateway {
     async fn delete_account(&self, _: &Uuid) -> Result<(), Report> {
         self.call("account", "")
     }
+    async fn delete_identity(&self, _: &Uuid) -> Result<(), Report> {
+        self.call("identity", "")
+    }
 }
 
 fn users() -> Vec<MacroUserIdStr<'static>> {
@@ -54,6 +61,17 @@ fn expected_calls() -> Vec<String> {
         }
     }
     expected.push("account:".into());
+    expected
+}
+
+fn expected_requested_calls() -> Vec<String> {
+    let mut expected = vec!["profiles:".to_string()];
+    for user in users() {
+        for step in ["actions", "sessions", "teams", "items"] {
+            expected.push(format!("{step}:{user}"));
+        }
+    }
+    expected.push("identity:".into());
     expected
 }
 
@@ -90,4 +108,46 @@ async fn retry_after_profiles_are_gone_still_deletes_the_account() {
         .await
         .unwrap();
     assert_eq!(*gateway.calls.lock().unwrap(), ["account:"]);
+}
+
+#[tokio::test]
+async fn requested_deletion_releases_every_profile_before_the_identity() {
+    let gateway = FakeGateway::default();
+    delete_requested_account(&gateway, &Uuid::now_v7())
+        .await
+        .unwrap();
+    assert_eq!(*gateway.calls.lock().unwrap(), expected_requested_calls());
+}
+
+#[tokio::test]
+async fn requested_deletion_keeps_the_identity_when_cleanup_fails() {
+    let expected = expected_requested_calls();
+    for fail_at in 1..expected.len() {
+        let gateway = FakeGateway {
+            fail_at: Some(fail_at),
+            ..Default::default()
+        };
+        assert!(
+            delete_requested_account(&gateway, &Uuid::now_v7())
+                .await
+                .is_err()
+        );
+        let calls = gateway.calls.lock().unwrap();
+        assert_eq!(*calls, expected[..fail_at]);
+        assert!(!calls.iter().any(|call| call.starts_with("identity:")));
+    }
+}
+
+#[tokio::test]
+async fn requested_deletion_leaves_profiles_for_the_webhook() {
+    let gateway = FakeGateway::default();
+    delete_requested_account(&gateway, &Uuid::now_v7())
+        .await
+        .unwrap();
+    let calls = gateway.calls.lock().unwrap();
+    assert!(
+        !calls
+            .iter()
+            .any(|call| call.starts_with("profile:") || call.starts_with("account:"))
+    );
 }
