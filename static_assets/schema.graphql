@@ -4120,6 +4120,10 @@ enum GraphqlPropertyEntityType {
 	"""
 	COMPANY
 	"""
+	CRM contact entity.
+	"""
+	CONTACT
+	"""
 	Document entity.
 	"""
 	DOCUMENT

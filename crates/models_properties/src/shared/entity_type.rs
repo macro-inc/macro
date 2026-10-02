@@ -20,7 +20,10 @@ pub enum EntityType {
     CallRecord,
     Channel,
     Chat,
+    /// CRM company.
     Company,
+    /// CRM contact.
+    Contact,
     Document,
     /// Initiative, displayed as a Project in the application.
     Initiative,
@@ -38,6 +41,7 @@ impl fmt::Display for EntityType {
             EntityType::Channel => write!(f, "channel"),
             EntityType::Chat => write!(f, "chat"),
             EntityType::Company => write!(f, "company"),
+            EntityType::Contact => write!(f, "contact"),
             EntityType::Document => write!(f, "document"),
             EntityType::Initiative => write!(f, "initiative"),
             EntityType::Project => write!(f, "project"),
@@ -61,6 +65,7 @@ impl FromStr for EntityType {
             "channel" => Ok(Self::Channel),
             "chat" => Ok(Self::Chat),
             "company" => Ok(Self::Company),
+            "contact" => Ok(Self::Contact),
             "document" => Ok(Self::Document),
             "initiative" => Ok(Self::Initiative),
             "project" => Ok(Self::Project),

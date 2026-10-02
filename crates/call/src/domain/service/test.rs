@@ -4018,3 +4018,32 @@ async fn sharing_a_cancelled_standalone_meeting_rejects_the_revoked_link() {
         Err(CallError::NotFound(_))
     ));
 }
+
+#[tokio::test]
+async fn call_record_query_service_reads_the_people_on_a_call() {
+    use crate::domain::models::CallPeople;
+    use crate::domain::ports::CallRecordQueryService;
+
+    let people = CallPeople {
+        user_ids: vec![user("rep@ours.com")],
+        invitee_emails: vec!["buyer@acme.com".to_string()],
+    };
+    let mut repo = MockCallRepository::new();
+    let stored = people.clone();
+    repo.expect_get_call_record_people()
+        .withf(|call_record_id| *call_record_id == SUMMARIZED_EVENT_CALL_ID)
+        .returning(move |_| {
+            let stored = stored.clone();
+            Box::pin(async move { Ok(stored) })
+        });
+
+    let service = super::CallRecordQueryServiceImpl::new(repo);
+
+    assert_eq!(
+        service
+            .get_call_record_people(SUMMARIZED_EVENT_CALL_ID)
+            .await
+            .unwrap(),
+        people
+    );
+}

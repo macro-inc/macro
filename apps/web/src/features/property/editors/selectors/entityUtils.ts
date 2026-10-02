@@ -10,6 +10,8 @@ import type { FreshSortConfig, TimestampedItem } from '@core/util/freshSort';
 import type {
   ChannelEntity,
   ChatEntity,
+  CrmCompanyEntity,
+  CrmContactEntity,
   DocumentEntity,
   EmailEntity,
   EntityData,
@@ -29,7 +31,8 @@ export type EntityTypeItemMap = {
   CHAT: EntityItem<ChatEntity>;
   TASK: EntityItem<TaskEntity>;
   THREAD: EntityItem<EmailEntity>;
-  COMPANY: never;
+  COMPANY: EntityItem<CrmCompanyEntity>;
+  CONTACT: EntityItem<CrmContactEntity>;
   INITIATIVE: EntityItem<InitiativeEntity>;
   // Call records aren't entity-reference targets in quickAccess.
   CALL_RECORD: never;
@@ -49,7 +52,8 @@ function entityTypeToBuckets(entityType: EntityType): readonly Bucket[] {
     .with('TASK', () => ['task'] as const)
     .with('THREAD', () => ['email'] as const) // Note: emails aren't in quickAccess yet, handled separately
     .with('INITIATIVE', () => ['initiative'] as const)
-    .with('COMPANY', () => [] as const) // Companies aren't in quickAccess
+    .with('COMPANY', () => ['crm_company'] as const)
+    .with('CONTACT', () => ['crm_contact'] as const)
     .with('CALL_RECORD', () => [] as const) // Call records aren't in quickAccess
     .with('CALENDAR_EVENT', () => [] as const) // Calendar events aren't in quickAccess
     .exhaustive();
@@ -135,6 +139,9 @@ export function getEntitySearchText(entity: CombinedEntity): string {
     if (name === email) return `${email} | ${email}`;
     return `${name} | ${email}`;
   }
+  if (entity.data.type === 'crm_contact') {
+    return `${entity.data.name} | ${entity.data.email}`;
+  }
 
   return entity.data.name ?? '';
 }
@@ -160,6 +167,10 @@ export function getEntityType(entity: CombinedEntity): EntityType {
       return 'PROJECT';
     case 'email':
       return 'THREAD';
+    case 'crm_company':
+      return 'COMPANY';
+    case 'crm_contact':
+      return 'CONTACT';
     default:
       return (data as EntityData).type.toUpperCase() as EntityType;
   }

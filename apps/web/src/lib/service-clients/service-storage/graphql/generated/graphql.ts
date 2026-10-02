@@ -986,6 +986,8 @@ export type GraphqlPropertyEntityType =
   | 'CHAT'
   /** Company entity. */
   | 'COMPANY'
+  /** CRM contact entity. */
+  | 'CONTACT'
   /** Document entity. */
   | 'DOCUMENT'
   /** Initiative entity. */

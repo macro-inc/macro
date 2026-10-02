@@ -1113,6 +1113,8 @@ export * from './saveDocumentRequestSha';
 export * from './saveDocumentResponse';
 export * from './saveDocumentResponseData';
 export * from './saveDocumentResponseDataPresignedUrl';
+export * from './searchContactsParams';
+export * from './searchContactsResponse';
 export * from './sessionDeletedMetadata';
 export * from './sessionIdentity';
 export * from './sessionIdentityOrigin';
