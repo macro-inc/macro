@@ -210,7 +210,10 @@ export function DatabaseBoard(props: DatabaseBoardProps) {
   });
   props.controlsRef?.({
     addCard: () => {
-      const lane = disposed || !props.canEdit ? undefined : lanes()[0];
+      const lane =
+        disposed || !props.canEdit || !props.groupColumn.writable
+          ? undefined
+          : lanes()[0];
       if (!lane) return false;
       startDraft(lane.key);
       return true;
@@ -280,7 +283,7 @@ export function DatabaseBoard(props: DatabaseBoardProps) {
                 drafts={laneDrafts(group().key)}
                 canSetTitle={canSetTitle()}
                 titlePlaceholder={titleField()?.name ?? 'Record title'}
-                acceptsRecords={props.canEdit}
+                acceptsRecords={props.canEdit && props.groupColumn.writable}
                 canMove={canMove()}
                 isSaving={isSaving}
                 onStartDraft={() => startDraft(group().key)}

@@ -1,5 +1,5 @@
 import type { DatabaseView } from '@service-storage/generated/schemas/databaseView';
-import { errAsync, ok, okAsync, ResultAsync } from 'neverthrow';
+import { errAsync, ok, okAsync, type Result, ResultAsync } from 'neverthrow';
 import { createRoot } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import { createViewCreation } from './view-creation';
@@ -21,7 +21,7 @@ describe('optimistic view creation', () => {
       controller: createViewCreation(),
       dispose,
     }));
-    let finish!: (result: ReturnType<typeof ok<DatabaseView>>) => void;
+    let finish!: (result: Result<DatabaseView, never>) => void;
     const request = new ResultAsync<DatabaseView, never>(
       new Promise((resolve) => {
         finish = resolve;
@@ -35,7 +35,7 @@ describe('optimistic view creation', () => {
     });
     controller.retry(view.id);
     expect(save).toHaveBeenCalledOnce();
-    finish(ok(view));
+    finish(ok<DatabaseView, never>(view));
     await request;
     await Promise.resolve();
     expect(controller.drafts()).toEqual([]);
