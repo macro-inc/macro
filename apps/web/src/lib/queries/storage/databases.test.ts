@@ -1,3 +1,4 @@
+import type { DatabaseOp } from '@core/database-sql/generated/types';
 import { queryClient } from '@queries/client';
 import type { DatabaseDetail } from '@service-storage/generated/schemas/databaseDetail';
 import { errAsync, okAsync } from 'neverthrow';
@@ -462,4 +463,84 @@ it('returns and announces schema commits without waiting for a slow refresh', as
     unsubscribe();
     invalidation.mockRestore();
   }
+});
+
+it.each<DatabaseOp>([
+  {
+    kind: 'column',
+    table: 'tasks',
+    column: 'status',
+    change: {
+      kind: 'create',
+      definition: {
+        source: 'new',
+        name: 'Status',
+        type: { type: 'select', multi: false },
+      },
+    },
+  },
+  {
+    kind: 'column',
+    table: 'tasks',
+    column: 'status',
+    change: { kind: 'add_options', options: [{ id: 'done', label: 'Done' }] },
+  },
+])(
+  'loads created column data before a caller can cancel its refresh: %j',
+  async (op) => {
+    let release!: (value: DatabaseDetail) => void;
+    const refreshed = {
+      ...detail,
+      tables: [{ ...detail.tables[0], sql_name: 'refreshed schema' }],
+    };
+    const read = vi
+      .fn()
+      .mockResolvedValueOnce(detail)
+      .mockImplementationOnce(
+        () =>
+          new Promise<DatabaseDetail>((resolve) => {
+            release = resolve;
+          })
+      );
+    // An inactive but previously loaded catalog must also be reconciled.
+    await queryClient.fetchQuery({ queryKey: key, queryFn: read });
+    mock.applyOps.mockReturnValue(okAsync({ results: [], changes: [] }));
+    let continued = false;
+    const write = applyDatabaseOps('db', [op]).map(async () => {
+      // View patches cancel pending reads. This used to discard the only read
+      // containing the newly created Status column.
+      continued = true;
+      await queryClient.cancelQueries({ queryKey: key, exact: true });
+      expect(queryClient.getQueryData(key)).toEqual(refreshed);
+    });
+    await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(2));
+    expect(continued).toBe(false);
+    release(refreshed);
+    expect((await write).isOk()).toBe(true);
+    expect(continued).toBe(true);
+  }
+);
+
+it('keeps a column creation successful when its catalog refresh fails', async () => {
+  const read = vi
+    .fn()
+    .mockResolvedValueOnce(detail)
+    .mockRejectedValueOnce(new Error('Offline'));
+  await queryClient.fetchQuery({ queryKey: key, queryFn: read });
+  mock.applyOps.mockReturnValue(okAsync({ results: [], changes: [] }));
+  const result = await applyDatabaseOps('db', [
+    {
+      kind: 'column',
+      table: 'tasks',
+      column: 'status',
+      change: {
+        kind: 'create',
+        definition: { source: 'new', name: 'Status', type: { type: 'text' } },
+      },
+    },
+  ]);
+  expect(read).toHaveBeenCalledTimes(2);
+  expect(result.isOk()).toBe(true);
+  expect(mock.applyOps).toHaveBeenCalledOnce();
+  expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true);
 });

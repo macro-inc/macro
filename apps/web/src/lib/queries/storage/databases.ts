@@ -165,7 +165,7 @@ export function applyDatabaseOps(
         id: databaseId,
         request: baseVersions ? { ops, baseVersions } : { ops },
       })
-      .map((response) => {
+      .map(async (response) => {
         const tableVersions = committedTableVersions(
           response.results,
           response.changes
@@ -178,18 +178,31 @@ export function applyDatabaseOps(
             tableVersions,
           });
         applyDatabaseTableVersions(databaseId, tableVersions);
-        // Schema reads reconcile in the background; committing a write never waits on them.
+        // Newly created columns/options must exist before callers focus a header,
+        // select an option, or patch a board (which cancels pending detail reads).
+        const createsColumnData = ops.some(
+          (op) =>
+            op.kind === 'column' &&
+            (op.change.kind === 'create' || op.change.kind === 'add_options')
+        );
         if (ops.some((op) => op.kind !== 'rows')) {
           const global = ops.some(
             (op) =>
               op.kind === 'table' &&
               ['rename', 'delete'].includes(op.change.kind)
           );
-          void queryClient.invalidateQueries({
-            queryKey: global
-              ? databasesKeys.detail._def
-              : databasesKeys.detail(databaseId).queryKey,
-          });
+          const refresh = queryClient.invalidateQueries(
+            {
+              queryKey: global
+                ? databasesKeys.detail._def
+                : databasesKeys.detail(databaseId).queryKey,
+              refetchType: createsColumnData ? 'all' : 'active',
+            },
+            // A failed read must not report an already committed write as failed.
+            { throwOnError: false }
+          );
+          if (createsColumnData) await refresh;
+          else void refresh;
         }
         return response.results;
       })
