@@ -4,12 +4,13 @@ import { fromValue, mergeMap, pipe } from 'wonka';
 import { MarkEmailThreadSeenDocument } from '../../service-clients/service-storage/graphql/generated/graphql';
 import { executeOptimisticMutation, optimisticContextOf } from './optimistic';
 import {
+  type OptimisticResolver,
   optimisticResolver,
   optimisticResolversExchange,
 } from './optimistic-resolvers';
 
 describe('automatic local mutation resolvers', () => {
-  function setup() {
+  function setup(resolvers?: readonly OptimisticResolver[]) {
     const forwarded: Operation[] = [];
     const capture: Exchange = () => (source) =>
       pipe(
@@ -29,19 +30,88 @@ describe('automatic local mutation resolvers', () => {
       ({ input }) => {
         if (input.threadId === 'invalid')
           throw new Error('Invalid local prediction');
-        return {
-          response: {
-            markEmailThreadSeen: { id: String(input.threadId), isRead: true },
-          },
-        };
+        return { id: String(input.threadId), isRead: true };
       }
     );
     const client = createClient({
       url: 'http://test.invalid',
-      exchanges: [optimisticResolversExchange([resolver]), capture],
+      exchanges: [
+        optimisticResolversExchange(resolvers ?? [resolver]),
+        capture,
+      ],
     });
     return { client, forwarded, resolver };
   }
+
+  it('uses the selected response alias without requiring a response envelope', async () => {
+    const document = gql<
+      { __typename: 'Mutation'; changed: { id: string; isRead: boolean } },
+      { id: string }
+    >`
+      mutation Seen($id: ID!) {
+        __typename
+        changed: markEmailThreadSeen(input: { threadId: $id }) {
+          id
+          isRead
+        }
+      }
+    `;
+    const resolver = optimisticResolver(document, ({ id }) => ({
+      id,
+      isRead: true,
+    }));
+    const { client, forwarded } = setup([resolver]);
+    await client.mutation(document, { id: 'thread' }).toPromise();
+    expect(optimisticContextOf(forwarded[0])?.optimisticResponse).toEqual({
+      changed: { id: 'thread', isRead: true },
+    });
+  });
+
+  it('combines variable-dependent resolver options with caller options', async () => {
+    const lookup = gql`query Thread($id: ID!) { thread(id: $id) { id } }`;
+    const resolver = optimisticResolver(
+      MarkEmailThreadSeenDocument,
+      ({ input }) => ({ id: String(input.threadId), isRead: true }),
+      ({ input }) => ({
+        revalidations: [
+          { document: lookup, variables: { id: input.threadId } },
+        ],
+      })
+    );
+    const { client, forwarded } = setup([resolver]);
+    await client
+      .mutation(
+        MarkEmailThreadSeenDocument,
+        { input: { threadId: 'thread' } },
+        {
+          optimisticMutation: {
+            revalidations: [{ document: lookup, variables: { id: 'other' } }],
+          },
+        }
+      )
+      .toPromise();
+    expect(
+      optimisticContextOf(forwarded[0])?.revalidations.map(
+        (entry) => JSON.parse(entry.variablesJson).id
+      )
+    ).toEqual(['thread', 'other']);
+  });
+
+  it.each([false, null, undefined])(
+    'only skips undefined predictions, including for %s',
+    async (value) => {
+      const document = gql<{
+        applied: boolean | null;
+      }>`mutation Apply { applied }`;
+      const { client, forwarded } = setup([
+        optimisticResolver(document, () => value),
+      ]);
+      await client.mutation(document, {}).toPromise();
+      expect(optimisticContextOf(forwarded[0])?.optimisticResponse).toEqual(
+        value === undefined ? undefined : { applied: value }
+      );
+    }
+  );
 
   it('supports explicit opt-out and leaves unregistered operations alone', async () => {
     const { client, forwarded } = setup();
@@ -89,7 +159,19 @@ describe('automatic local mutation resolvers', () => {
       'Duplicate'
     );
     expect(() =>
-      optimisticResolver(gql`query Read { id }`, () => ({ response: {} }))
+      optimisticResolver(gql`query Read { id }`, () => undefined)
     ).toThrow('mutation');
+  });
+
+  it.each([
+    gql`mutation Both { first { id } second { id } }`,
+    gql`mutation Conditional($skip: Boolean!) { first @skip(if: $skip) { id } }`,
+    gql`mutation Spread { ...Root } fragment Root on Mutation { first { id } }`,
+    gql`mutation Metadata { renamed: __typename }`,
+    gql`mutation ExtraMetadata { renamed: __typename first { id } }`,
+  ])('rejects roots that cannot be wrapped unambiguously', (document) => {
+    expect(() => optimisticResolver(document, () => undefined)).toThrow(
+      'one unconditional top-level mutation field'
+    );
   });
 });

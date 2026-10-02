@@ -5,7 +5,7 @@ import {
   makeOperation,
   stringifyDocument,
 } from '@urql/core';
-import { getOperationAST } from 'graphql';
+import { getOperationAST, Kind } from 'graphql';
 import {
   type OptimisticCallOptions,
   type OptimisticPatch,
@@ -14,28 +14,66 @@ import {
 } from './optimistic';
 import { prepareOptimisticExchange } from './prepare-optimistic';
 
-type LocalMutation<T> = {
-  response: OptimisticPatch<T>;
+type LocalMutation = {
+  response: unknown;
   options?: OptimisticCallOptions;
 };
 
+type MutationValue<TData> = TData[Exclude<keyof TData, '__typename'>];
+
 export type OptimisticResolver = {
   document: string;
-  resolve: (variables: AnyVariables) => LocalMutation<unknown> | undefined;
+  resolve: (variables: AnyVariables) => LocalMutation | undefined;
 };
 
-/** Define local semantics once; every ordinary execution of this document uses them. */
-export function optimisticResolver<TData, TVariables extends AnyVariables>(
+/**
+ * Predict the value of one unconditional top-level mutation field. The document
+ * supplies its response key (including aliases); return undefined to skip the
+ * prediction. Define optional queue/link behavior separately from field values.
+ */
+export function optimisticResolver<
+  TData,
+  TVariables extends AnyVariables,
+  const TPatch extends OptimisticPatch<NoInfer<MutationValue<TData>>>,
+>(
   document: TypedDocumentNode<TData, TVariables>,
-  resolve: (variables: TVariables) => LocalMutation<NoInfer<TData>> | undefined
+  resolve: (variables: TVariables) => TPatch | undefined,
+  options?: (variables: TVariables) => OptimisticCallOptions
 ): OptimisticResolver {
-  if (getOperationAST(document)?.operation !== 'mutation') {
+  const operation = getOperationAST(document);
+  if (operation?.operation !== 'mutation') {
     throw new TypeError('An optimistic resolver requires one mutation');
   }
+  const fields = operation.selectionSet.selections.filter(
+    (selection) =>
+      selection.kind !== Kind.FIELD ||
+      selection.name.value !== '__typename' ||
+      selection.alias !== undefined
+  );
+  const [field] = fields;
+  if (
+    fields.length !== 1 ||
+    field.kind !== Kind.FIELD ||
+    field.name.value === '__typename' ||
+    field.directives?.length
+  ) {
+    throw new TypeError(
+      'An optimistic resolver requires one unconditional top-level mutation field'
+    );
+  }
+  const responseKey = field.alias?.value ?? field.name.value;
   return {
     document: stringifyDocument(document),
     // Type erasure is private to the document/variables binding above.
-    resolve: (variables) => resolve(variables as TVariables),
+    resolve: (variables) => {
+      const typedVariables = variables as TVariables;
+      const value = resolve(typedVariables);
+      if (value === undefined) return undefined;
+      return {
+        response: { [responseKey]: value },
+        options: options?.(typedVariables),
+      };
+    },
   };
 }
 

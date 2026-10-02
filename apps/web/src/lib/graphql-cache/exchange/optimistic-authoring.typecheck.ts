@@ -7,24 +7,20 @@ export function checkOptimisticMutationTypes() {
     // @ts-expect-error Variables must come from the generated mutation.
     variables.threadId;
     return {
-      response: {
-        markEmailThreadSeen: {
-          id: String(variables.input.threadId),
-          isRead: true,
-        },
-      },
+      id: String(variables.input.threadId),
+      isRead: true,
     };
   });
+  // @ts-expect-error Changed records must retain their normalized identity.
+  optimisticResolver(MarkEmailThreadSeenDocument, () => ({ isRead: true }));
   optimisticResolver(MarkEmailThreadSeenDocument, () => ({
-    // @ts-expect-error Changed records must retain their normalized identity.
-    response: { markEmailThreadSeen: { isRead: true } },
-  }));
-  optimisticResolver(MarkEmailThreadSeenDocument, () => ({
+    id: 'thread',
     // @ts-expect-error Generated scalar types cannot be replaced by strings.
-    response: { markEmailThreadSeen: { id: 'thread', isRead: 'yes' } },
+    isRead: 'yes',
   }));
   optimisticResolver(MarkEmailThreadSeenDocument, () => ({
-    // @ts-expect-error The mutation cannot write another response root.
-    response: { other: { id: 'thread' } },
+    id: 'thread',
+    // @ts-expect-error Entity types must match the generated mutation field.
+    __typename: 'GraphqlNotification',
   }));
 }
