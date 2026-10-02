@@ -12,6 +12,9 @@ pub mod delivery;
 pub mod effects;
 /// Transport-independent committed message facts.
 pub mod events;
+/// Bounded historical writes, isolated from live message effects.
+#[cfg(feature = "ports")]
+pub mod historical;
 /// Parent-independent mention identities.
 pub mod mentions;
 /// Shared message and thread models.

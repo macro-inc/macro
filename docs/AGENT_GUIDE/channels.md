@@ -10,6 +10,37 @@
 Team channels are always discoverable to the team. Private channels can only be viewed or joined by invitation. A DM is a channel between two users.
 An external email can be selected as a channel participant. For an unregistered recipient, clicking `Add` sends an email invite.
 
+## Imported Slack history
+
+Import starts in **Settings → Team → Connections → Import from Slack**, not the
+channel composer. Only explicitly selected Slack IDs create work. Slack public
+channels become Team channels with automatic team joining off; private channels
+and group DMs become Private. Two-person DMs keep exactly their mapped pair and
+never gain the importing admin as a third participant. Existing names, roles,
+leavers and newer activity are preserved. Imported history keeps source dates and
+does not produce live message notifications, invitations or bot invocations.
+Unknown authors display their Slack name through the system bot. Attachments and
+attachment-only messages are not imported. Cancellation keeps committed history;
+repeating an archive deduplicates source messages rather than applying later edits.
+
+For verification, use synthetic local history with a root, replies and reactions.
+Search for an imported author name absent from the body. Verify the result for a
+participant and its absence for an unrelated viewer after indexing has caught up.
+Job completion means required search publication finished, not immediate index
+refresh. Test existing channel live activity is not moved backward.
+
+Hover and click imported external links, channel mentions, root-message and reply
+references in the actual message body. Check destination channel/message/root
+UUIDs and that the correct message is revealed, including offscreen replies.
+Forward references must work regardless of conversation processing order. Prior
+same-source imports can resolve without being selected again; unselected targets
+must not be auto-created. Unknown Slack domains remain external links. Missing,
+skipped, deleted and inaccessible targets retain safe source-only fallbacks, and
+another viewer must not gain access through a rendered mention. Code examples
+remain literal; source-controlled tags must not inject entities. Test live edits
+and deletion before deferred reconciliation: neither may be overwritten or revived.
+See the [rollout/recovery gates](../SLACK_ARCHIVE_IMPORT_RUNBOOK.md).
+
 ## Collapsed reply chains
 
 Collapsed threads show the first three complete message groups. Consecutive

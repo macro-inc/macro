@@ -112,6 +112,7 @@
         "@standard-schema/spec": "^1.1.0",
         "@tailwindcss/vite": "^4.2.4",
         "@tanstack/pacer": "^0.17.3",
+        "@tanstack/query-core": "5.90.2",
         "@tanstack/solid-query": "5.90.3",
         "@tanstack/solid-table": "9.2.4",
         "@tanstack/solid-virtual": "3.13.37",

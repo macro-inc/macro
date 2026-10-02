@@ -173,6 +173,28 @@ services:
       start_period: 10s
 
   # ============================================================================
+  # slack_import_worker (portless, opt-in profile: slack-import)
+  # Build separately; never part of the default or run-dev bundle.
+  # ============================================================================
+  slack_import_worker:
+    <<: *common-env
+    profiles:
+      - slack-import
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        SERVICE_NAME: slack_import_worker
+    stop_grace_period: 120s
+    depends_on:
+      - postgres
+      - search_processing_service
+      - connection_gateway
+    networks:
+      - databases
+      - services
+
+  # ============================================================================
   # document_upload_finalizer (local worker)
   # LocalStack S3 ObjectCreated -> SQS consumer for document upload finalization.
   # Production uses the document_upload_finalizer_handler Lambda.

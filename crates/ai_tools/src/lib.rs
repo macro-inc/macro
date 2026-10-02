@@ -10,6 +10,7 @@ mod test;
 pub mod ai_operations;
 mod build_context;
 mod display_results;
+mod import_channels;
 mod mcp_app_catalog;
 mod schemas;
 pub mod search;

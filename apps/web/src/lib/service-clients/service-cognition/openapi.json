@@ -3864,7 +3864,7 @@
       "Initiator": {
         "type": "string",
         "description": "Where an import entity was first staged from. Provenance only — never a\nvisibility filter.",
-        "enum": ["onboarding", "chat"]
+        "enum": ["onboarding", "chat", "archive"]
       },
       "JwtPayload": {
         "type": "object",

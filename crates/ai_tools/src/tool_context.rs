@@ -1486,48 +1486,19 @@ impl import::domain::ports::EntityCreator for ToolEntityCreator {
         &self,
         user: &MacroUserIdStr<'static>,
         name: &str,
-        team_id: Option<uuid::Uuid>,
+        target: &import::domain::models::ImportTargetReservation,
         participant_emails: &[String],
-    ) -> anyhow::Result<String> {
-        use channels::domain::ports::ChannelService as _;
-        // Teammates who were in the source channel join the Macro one; emails
-        // with no roster match (external collaborators, bots) are skipped.
+    ) -> anyhow::Result<uuid::Uuid> {
         let (_, roster) = self.team_roster(user).await;
-        let mut participants: std::collections::HashSet<MacroUserIdStr<'static>> =
-            std::iter::once(user.clone()).collect();
-        for email in participant_emails {
-            if let Some(member) = roster
-                .iter()
-                .find(|member| member.email_str().eq_ignore_ascii_case(email))
-            {
-                participants.insert(member.clone());
-            }
-        }
-        let request = channels::domain::models::CreateChannelRequest {
-            name: Some(name.to_string()),
-            channel_type: if team_id.is_some() {
-                channels::domain::models::ChannelType::Team
-            } else {
-                channels::domain::models::ChannelType::Public
-            },
-            team_id,
-            // The creator is always included (the service requires a
-            // non-empty participant list and the repo filters out the
-            // owner), plus any teammates matched by email above. Explicit
-            // membership mirrors the source channel — never the whole team.
-            auto_join_team: false,
-            participants,
-        };
-        let response = self
-            .channel_service
-            .create_channel(
-                channels::domain::models::Sender::new_from_user(user.clone()),
-                None,
-                request,
-            )
-            .await
-            .map_err(|e| anyhow::anyhow!("failed to create channel: {e:?}"))?;
-        Ok(response.id)
+        crate::import_channels::create_channel(
+            self.channel_service.as_ref(),
+            user,
+            name,
+            target,
+            participant_emails,
+            &roster,
+        )
+        .await
     }
 }
 

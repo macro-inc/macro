@@ -130,6 +130,13 @@ export const PROD_MODE_ENV = import.meta.env.MODE === 'production';
 
 const onInDev = DEV_MODE_ENV || undefined;
 
+// Leave the production PostHog flag disabled until archive-import rollout.
+export const enableSlackArchiveImport = defineFlag({
+  key: 'enable-slack-archive-import',
+  env: 'ENABLE_SLACK_ARCHIVE_IMPORT',
+  default: onInDev,
+});
+
 /** Shows the Reviews shortcut in Tasks; copied Reviews links remain accessible. */
 export const enableTasksReviews = defineFlag({
   key: 'enable-tasks-reviews',

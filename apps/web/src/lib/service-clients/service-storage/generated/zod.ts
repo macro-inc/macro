@@ -41466,6 +41466,2589 @@ export const patchViewHandlerBody = zod.object({
   name: zod.string().nullish(),
 });
 
+/**
+ * @summary List this administrator's team receipts, effective server limits and source binding.
+ */
+export const listSlackImportsQueryParams = zod.object({
+  before: zod.uuid().optional(),
+});
+
+export const listSlackImportsResponseJobsItemConversationsItemCountersDuplicatesMin = 0;
+
+export const listSlackImportsResponseJobsItemConversationsItemCountersImportedMin = 0;
+
+export const listSlackImportsResponseJobsItemConversationsItemCountersProcessedMin = 0;
+
+export const listSlackImportsResponseJobsItemConversationsItemCountersReactionsMin = 0;
+
+export const listSlackImportsResponseJobsItemConversationsItemCountersSkippedMin = 0;
+
+export const listSlackImportsResponseJobsItemConversationsItemPartCountMin = 0;
+
+export const listSlackImportsResponseJobsItemConversationsItemVerifiedPartsMin = 0;
+
+export const listSlackImportsResponseJobsItemLimitsConversationsMin = 0;
+
+export const listSlackImportsResponseJobsItemLimitsDatabaseBatchBytesMin = 0;
+
+export const listSlackImportsResponseJobsItemLimitsDatabaseBatchMessagesMin = 0;
+
+export const listSlackImportsResponseJobsItemLimitsJsonBytesMin = 0;
+
+export const listSlackImportsResponseJobsItemLimitsPartBytesMin = 0;
+
+export const listSlackImportsResponseJobsItemLimitsPartRecordsMin = 0;
+
+export const listSlackImportsResponseJobsItemLimitsRecordBytesMin = 0;
+
+export const listSlackImportsResponseJobsItemLimitsRegistrationBatchMin = 0;
+
+export const listSlackImportsResponseJobsItemLimitsSelectedBytesMin = 0;
+
+export const listSlackImportsResponseJobsItemLimitsZipEntriesMin = 0;
+
+export const listSlackImportsResponseJobsItemRevisionMin = 0;
+
+export const listSlackImportsResponseLimitsConversationsMin = 0;
+
+export const listSlackImportsResponseLimitsDatabaseBatchBytesMin = 0;
+
+export const listSlackImportsResponseLimitsDatabaseBatchMessagesMin = 0;
+
+export const listSlackImportsResponseLimitsJsonBytesMin = 0;
+
+export const listSlackImportsResponseLimitsPartBytesMin = 0;
+
+export const listSlackImportsResponseLimitsPartRecordsMin = 0;
+
+export const listSlackImportsResponseLimitsRecordBytesMin = 0;
+
+export const listSlackImportsResponseLimitsRegistrationBatchMin = 0;
+
+export const listSlackImportsResponseLimitsSelectedBytesMin = 0;
+
+export const listSlackImportsResponseLimitsZipEntriesMin = 0;
+
+export const listSlackImportsResponse = zod
+  .object({
+    jobs: zod
+      .array(
+        zod
+          .object({
+            conversations: zod
+              .array(
+                zod
+                  .object({
+                    archived: zod
+                      .boolean()
+                      .describe(
+                        'Whether the selected source conversation was archived.'
+                      ),
+                    channelId: zod
+                      .uuid()
+                      .nullish()
+                      .describe(
+                        'Authorized target only; absent for inaccessible reused targets.'
+                      ),
+                    counters: zod
+                      .object({
+                        duplicates: zod
+                          .number()
+                          .min(
+                            listSlackImportsResponseJobsItemConversationsItemCountersDuplicatesMin
+                          )
+                          .describe('Previously committed source identities.'),
+                        imported: zod
+                          .number()
+                          .min(
+                            listSlackImportsResponseJobsItemConversationsItemCountersImportedMin
+                          )
+                          .describe('Newly persisted messages.'),
+                        processed: zod
+                          .number()
+                          .min(
+                            listSlackImportsResponseJobsItemConversationsItemCountersProcessedMin
+                          )
+                          .describe(
+                            'Source records examined through the committed checkpoint.'
+                          ),
+                        reactions: zod
+                          .number()
+                          .min(
+                            listSlackImportsResponseJobsItemConversationsItemCountersReactionsMin
+                          )
+                          .describe('Newly persisted reactions.'),
+                        skipped: zod
+                          .number()
+                          .min(
+                            listSlackImportsResponseJobsItemConversationsItemCountersSkippedMin
+                          )
+                          .describe(
+                            'Unsupported, empty or otherwise deliberately skipped records.'
+                          ),
+                      })
+                      .describe(
+                        'Committed counters, never optimistic browser or uncommitted worker counts.'
+                      ),
+                    error: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum([
+                            'disabled',
+                            'invalid_input',
+                            'limit_exceeded',
+                            'unavailable',
+                            'admin_required',
+                            'source_mismatch',
+                            'conflict',
+                            'upload_mismatch',
+                            'lease_lost',
+                            'retryable',
+                            'internal',
+                          ])
+                          .describe(
+                            'Public error codes; never carry raw provider errors, keys, emails or source text.'
+                          ),
+                      ])
+                      .optional(),
+                    kind: zod
+                      .enum([
+                        'public_channel',
+                        'private_channel',
+                        'direct_message',
+                        'group_direct_message',
+                      ])
+                      .describe(
+                        'Slack conversation kind. Public Slack channels map to Macro Team, never Public.'
+                      ),
+                    name: zod
+                      .string()
+                      .describe(
+                        "Persisted source display name, never the reused Macro target's name."
+                      ),
+                    partCount: zod
+                      .number()
+                      .min(
+                        listSlackImportsResponseJobsItemConversationsItemPartCountMin
+                      )
+                      .nullish()
+                      .describe(
+                        'Null until sealed; zero is a valid sealed empty manifest.'
+                      ),
+                    search: zod
+                      .union([
+                        zod
+                          .object({
+                            status: zod.enum(['not_needed']),
+                          })
+                          .describe('No committed history requires indexing.'),
+                        zod
+                          .object({
+                            status: zod.enum(['pending']),
+                          })
+                          .describe(
+                            'Committed history requires an outbox-backed scoped submission.'
+                          ),
+                        zod
+                          .object({
+                            receiptId: zod
+                              .uuid()
+                              .describe('Receipt from the search service.'),
+                            status: zod.enum(['submitted']),
+                          })
+                          .describe(
+                            'Search service accepted the request, but has not completed it.'
+                          ),
+                        zod
+                          .object({
+                            status: zod.enum(['completed']),
+                          })
+                          .describe(
+                            'Search service durably published the scope; eventual indexing is separate.'
+                          ),
+                        zod
+                          .object({
+                            status: zod.enum(['failed']),
+                          })
+                          .describe(
+                            'Publication failed; retained history must be retried independently.'
+                          ),
+                      ])
+                      .describe(
+                        'Search publication\/receipt state. Acceptance is not completed publication;\neven completed publication still awaits consumer indexing and refresh.'
+                      ),
+                    slackChannelId: zod
+                      .string()
+                      .describe(
+                        'Source Slack conversation ID (C, G or D prefix); unique only within a source.'
+                      ),
+                    status: zod
+                      .enum([
+                        'awaiting_uploads',
+                        'queued',
+                        'importing',
+                        'completed',
+                        'skipped',
+                        'failed',
+                      ])
+                      .describe('Durable per-conversation lifecycle.'),
+                    verifiedParts: zod
+                      .number()
+                      .min(
+                        listSlackImportsResponseJobsItemConversationsItemVerifiedPartsMin
+                      )
+                      .describe(
+                        'Number of parts whose object identity has been verified.'
+                      ),
+                    warnings: zod
+                      .array(
+                        zod
+                          .enum([
+                            'creation_time_from_message',
+                            'creation_time_from_job',
+                            'unresolvable_direct_message',
+                            'target_unavailable',
+                            'uploads_incomplete',
+                          ])
+                          .describe(
+                            'Non-fatal, sanitized explanations displayed in admin progress.'
+                          )
+                      )
+                      .describe('Non-fatal metadata\/skip explanations.'),
+                  })
+                  .describe(
+                    'Admin-visible progress for one selected conversation.'
+                  )
+              )
+              .describe(
+                'All selected conversations, bounded by the create limit.'
+              ),
+            createdAt: zod.iso
+              .datetime({})
+              .describe(
+                'Persisted creation time, also the final historical-time fallback.'
+              ),
+            includeMessageHistory: zod
+              .boolean()
+              .describe(
+                'Immutable history option confirmed when creating this job.'
+              ),
+            jobId: zod
+              .uuid()
+              .describe(
+                'Import job identity. Generate UUIDv7 in application code.'
+              ),
+            limits: zod
+              .object({
+                conversations: zod
+                  .number()
+                  .min(listSlackImportsResponseJobsItemLimitsConversationsMin)
+                  .describe('Maximum selected conversations.'),
+                databaseBatchBytes: zod
+                  .number()
+                  .min(
+                    listSlackImportsResponseJobsItemLimitsDatabaseBatchBytesMin
+                  )
+                  .describe('Maximum historical batch payload bytes.'),
+                databaseBatchMessages: zod
+                  .number()
+                  .min(
+                    listSlackImportsResponseJobsItemLimitsDatabaseBatchMessagesMin
+                  )
+                  .describe('Maximum messages in a historical batch.'),
+                jsonBytes: zod
+                  .number()
+                  .min(listSlackImportsResponseJobsItemLimitsJsonBytesMin)
+                  .describe(
+                    'Maximum users, root metadata or individual day JSON bytes.'
+                  ),
+                partBytes: zod
+                  .number()
+                  .min(listSlackImportsResponseJobsItemLimitsPartBytesMin)
+                  .describe('Maximum NDJSON part bytes.'),
+                partRecords: zod
+                  .number()
+                  .min(listSlackImportsResponseJobsItemLimitsPartRecordsMin)
+                  .describe('Maximum records per part.'),
+                recordBytes: zod
+                  .number()
+                  .min(listSlackImportsResponseJobsItemLimitsRecordBytesMin)
+                  .describe(
+                    'Maximum bytes per NDJSON record, including newline.'
+                  ),
+                registrationBatch: zod
+                  .number()
+                  .min(
+                    listSlackImportsResponseJobsItemLimitsRegistrationBatchMin
+                  )
+                  .describe(
+                    'Maximum descriptors or completion identities per call.'
+                  ),
+                selectedBytes: zod
+                  .number()
+                  .min(listSlackImportsResponseJobsItemLimitsSelectedBytesMin)
+                  .describe(
+                    'Maximum selected temporary data bytes across all uploads.'
+                  ),
+                zipEntries: zod
+                  .number()
+                  .min(listSlackImportsResponseJobsItemLimitsZipEntriesMin)
+                  .describe('Maximum ZIP entries scanned by the browser.'),
+              })
+              .describe(
+                'Configurable bounds shared with browser staging and enforced again by the worker.'
+              ),
+            registrationClosedAt: zod.iso
+              .datetime({})
+              .nullish()
+              .describe(
+                'Registration closure time; cancellation also closes registration.'
+              ),
+            revision: zod
+              .number()
+              .min(listSlackImportsResponseJobsItemRevisionMin)
+              .describe(
+                'Monotonic job revision for polling\/websocket invalidation.'
+              ),
+            source: zod
+              .union([
+                zod
+                  .object({
+                    kind: zod.enum(['known']),
+                    sourceId: zod
+                      .string()
+                      .describe(
+                        'Known Slack workspace identity (T prefix); an enterprise ID alone is insufficient.'
+                      ),
+                  })
+                  .describe(
+                    'Archive names its Slack workspace; reject a conflicting team binding.'
+                  ),
+                zod
+                  .object({
+                    kind: zod.enum(['confirmed_unknown']),
+                  })
+                  .describe(
+                    "Explicit confirmation that an unidentified archive belongs to this team's source.\nChoosing this variant is affirmative confirmation, not an inferred default."
+                  ),
+              ])
+              .describe(
+                'Source identity supplied when creating a job. One binding per Macro team in v1.'
+              ),
+            status: zod
+              .enum([
+                'uploading',
+                'processing',
+                'completed',
+                'completed_with_errors',
+                'failed',
+                'cancelling',
+                'cancelled',
+              ])
+              .describe(
+                'Job lifecycle. Cancellation remains in progress while any lease is active.'
+              ),
+            updatedAt: zod.iso
+              .datetime({})
+              .describe('Last durable lifecycle\/progress update.'),
+            usersVerified: zod
+              .boolean()
+              .describe('Whether users metadata is verified and pinned.'),
+          })
+          .describe(
+            'Common receipt returned by create, completion, finalize, cancel and progress.'
+          )
+      )
+      .describe('At most 50 job receipts, newest first.'),
+    limits: zod
+      .object({
+        conversations: zod
+          .number()
+          .min(listSlackImportsResponseLimitsConversationsMin)
+          .describe('Maximum selected conversations.'),
+        databaseBatchBytes: zod
+          .number()
+          .min(listSlackImportsResponseLimitsDatabaseBatchBytesMin)
+          .describe('Maximum historical batch payload bytes.'),
+        databaseBatchMessages: zod
+          .number()
+          .min(listSlackImportsResponseLimitsDatabaseBatchMessagesMin)
+          .describe('Maximum messages in a historical batch.'),
+        jsonBytes: zod
+          .number()
+          .min(listSlackImportsResponseLimitsJsonBytesMin)
+          .describe(
+            'Maximum users, root metadata or individual day JSON bytes.'
+          ),
+        partBytes: zod
+          .number()
+          .min(listSlackImportsResponseLimitsPartBytesMin)
+          .describe('Maximum NDJSON part bytes.'),
+        partRecords: zod
+          .number()
+          .min(listSlackImportsResponseLimitsPartRecordsMin)
+          .describe('Maximum records per part.'),
+        recordBytes: zod
+          .number()
+          .min(listSlackImportsResponseLimitsRecordBytesMin)
+          .describe('Maximum bytes per NDJSON record, including newline.'),
+        registrationBatch: zod
+          .number()
+          .min(listSlackImportsResponseLimitsRegistrationBatchMin)
+          .describe('Maximum descriptors or completion identities per call.'),
+        selectedBytes: zod
+          .number()
+          .min(listSlackImportsResponseLimitsSelectedBytesMin)
+          .describe(
+            'Maximum selected temporary data bytes across all uploads.'
+          ),
+        zipEntries: zod
+          .number()
+          .min(listSlackImportsResponseLimitsZipEntriesMin)
+          .describe('Maximum ZIP entries scanned by the browser.'),
+      })
+      .describe(
+        'Configurable bounds shared with browser staging and enforced again by the worker.'
+      ),
+    nextCursor: zod
+      .union([
+        zod.null(),
+        zod
+          .uuid()
+          .describe(
+            'Import job identity. Generate UUIDv7 in application code.'
+          ),
+      ])
+      .optional(),
+    sourceBinding: zod
+      .union([
+        zod
+          .object({
+            kind: zod.enum(['unbound']),
+          })
+          .describe('No import has bound this team yet.'),
+        zod
+          .object({
+            kind: zod.enum(['confirmed_unknown']),
+          })
+          .describe(
+            'Legacy\/onboarding or explicitly confirmed unidentified source.'
+          ),
+        zod
+          .object({
+            kind: zod.enum(['known']),
+            sourceId: zod
+              .string()
+              .describe(
+                'Known Slack workspace identity (T prefix); an enterprise ID alone is insufficient.'
+              ),
+          })
+          .describe('Known Slack workspace; reject mismatches.'),
+      ])
+      .describe(
+        "Team's durable single-source binding, including confirmed unidentified archives."
+      ),
+  })
+  .describe(
+    'Admin list result, also supplying upload limits before a job exists.'
+  );
+
+/**
+ * @summary Create or replay a job using a scoped idempotency token and full selected metadata.
+Missing creation timestamps and unknown message counts are represented as null.
+ */
+export const createSlackImportBodyConversationsItemMessageCountMin = 0;
+
+export const createSlackImportBodyConversationsMax = 2000;
+
+export const createSlackImportBody = zod
+  .object({
+    conversations: zod
+      .array(
+        zod
+          .object({
+            archived: zod
+              .boolean()
+              .describe(
+                'Source archived flag (does not silently archive a reused Macro target).'
+              ),
+            createdAt: zod
+              .union([
+                zod.null(),
+                zod
+                  .string()
+                  .describe(
+                    'Slack time represented exactly as nonnegative Unix microseconds.\nJSON is a string with six fractional digits, never a floating-point number.'
+                  ),
+              ])
+              .optional(),
+            creatorId: zod
+              .union([
+                zod.null(),
+                zod
+                  .string()
+                  .describe(
+                    'Slack member identity (U or W prefix), including USLACKBOT.'
+                  ),
+              ])
+              .optional(),
+            folder: zod
+              .string()
+              .describe(
+                'Single safe source folder\/key segment; never a path or authorization proof.'
+              ),
+            kind: zod
+              .enum([
+                'public_channel',
+                'private_channel',
+                'direct_message',
+                'group_direct_message',
+              ])
+              .describe(
+                'Slack conversation kind. Public Slack channels map to Macro Team, never Public.'
+              ),
+            memberIds: zod
+              .array(
+                zod
+                  .string()
+                  .describe(
+                    'Slack member identity (U or W prefix), including USLACKBOT.'
+                  )
+              )
+              .describe(
+                'Complete source member list, including members unknown to Macro.'
+              ),
+            messageCount: zod
+              .number()
+              .min(createSlackImportBodyConversationsItemMessageCountMin)
+              .nullish()
+              .describe('Advisory only; null means not yet counted, not zero.'),
+            name: zod
+              .string()
+              .describe('Original display name; not a storage key.'),
+            slackChannelId: zod
+              .string()
+              .describe(
+                'Source Slack conversation ID (C, G or D prefix); unique only within a source.'
+              ),
+          })
+          .describe(
+            'Full selected conversation metadata, persisted before granting any uploads.'
+          )
+      )
+      .min(1)
+      .max(createSlackImportBodyConversationsMax)
+      .describe(
+        'Full, unique selected conversations (at most the configured bound).'
+      ),
+    idempotencyToken: zod
+      .uuid()
+      .describe(
+        'Client-generated create idempotency token, scoped to team and administrator.'
+      ),
+    includeMessageHistory: zod
+      .boolean()
+      .describe(
+        'Default true at the client; false still requires users and zero-part seals.'
+      ),
+    source: zod
+      .union([
+        zod
+          .object({
+            kind: zod.enum(['known']),
+            sourceId: zod
+              .string()
+              .describe(
+                'Known Slack workspace identity (T prefix); an enterprise ID alone is insufficient.'
+              ),
+          })
+          .describe(
+            'Archive names its Slack workspace; reject a conflicting team binding.'
+          ),
+        zod
+          .object({
+            kind: zod.enum(['confirmed_unknown']),
+          })
+          .describe(
+            "Explicit confirmation that an unidentified archive belongs to this team's source.\nChoosing this variant is affirmative confirmation, not an inferred default."
+          ),
+      ])
+      .describe(
+        'Source identity supplied when creating a job. One binding per Macro team in v1.'
+      ),
+  })
+  .describe('Create command. Team identity is deliberately absent.');
+
+export const createSlackImportResponseConversationsItemCountersDuplicatesMin = 0;
+
+export const createSlackImportResponseConversationsItemCountersImportedMin = 0;
+
+export const createSlackImportResponseConversationsItemCountersProcessedMin = 0;
+
+export const createSlackImportResponseConversationsItemCountersReactionsMin = 0;
+
+export const createSlackImportResponseConversationsItemCountersSkippedMin = 0;
+
+export const createSlackImportResponseConversationsItemPartCountMin = 0;
+
+export const createSlackImportResponseConversationsItemVerifiedPartsMin = 0;
+
+export const createSlackImportResponseLimitsConversationsMin = 0;
+
+export const createSlackImportResponseLimitsDatabaseBatchBytesMin = 0;
+
+export const createSlackImportResponseLimitsDatabaseBatchMessagesMin = 0;
+
+export const createSlackImportResponseLimitsJsonBytesMin = 0;
+
+export const createSlackImportResponseLimitsPartBytesMin = 0;
+
+export const createSlackImportResponseLimitsPartRecordsMin = 0;
+
+export const createSlackImportResponseLimitsRecordBytesMin = 0;
+
+export const createSlackImportResponseLimitsRegistrationBatchMin = 0;
+
+export const createSlackImportResponseLimitsSelectedBytesMin = 0;
+
+export const createSlackImportResponseLimitsZipEntriesMin = 0;
+
+export const createSlackImportResponseRevisionMin = 0;
+
+export const createSlackImportResponse = zod
+  .object({
+    conversations: zod
+      .array(
+        zod
+          .object({
+            archived: zod
+              .boolean()
+              .describe(
+                'Whether the selected source conversation was archived.'
+              ),
+            channelId: zod
+              .uuid()
+              .nullish()
+              .describe(
+                'Authorized target only; absent for inaccessible reused targets.'
+              ),
+            counters: zod
+              .object({
+                duplicates: zod
+                  .number()
+                  .min(
+                    createSlackImportResponseConversationsItemCountersDuplicatesMin
+                  )
+                  .describe('Previously committed source identities.'),
+                imported: zod
+                  .number()
+                  .min(
+                    createSlackImportResponseConversationsItemCountersImportedMin
+                  )
+                  .describe('Newly persisted messages.'),
+                processed: zod
+                  .number()
+                  .min(
+                    createSlackImportResponseConversationsItemCountersProcessedMin
+                  )
+                  .describe(
+                    'Source records examined through the committed checkpoint.'
+                  ),
+                reactions: zod
+                  .number()
+                  .min(
+                    createSlackImportResponseConversationsItemCountersReactionsMin
+                  )
+                  .describe('Newly persisted reactions.'),
+                skipped: zod
+                  .number()
+                  .min(
+                    createSlackImportResponseConversationsItemCountersSkippedMin
+                  )
+                  .describe(
+                    'Unsupported, empty or otherwise deliberately skipped records.'
+                  ),
+              })
+              .describe(
+                'Committed counters, never optimistic browser or uncommitted worker counts.'
+              ),
+            error: zod
+              .union([
+                zod.null(),
+                zod
+                  .enum([
+                    'disabled',
+                    'invalid_input',
+                    'limit_exceeded',
+                    'unavailable',
+                    'admin_required',
+                    'source_mismatch',
+                    'conflict',
+                    'upload_mismatch',
+                    'lease_lost',
+                    'retryable',
+                    'internal',
+                  ])
+                  .describe(
+                    'Public error codes; never carry raw provider errors, keys, emails or source text.'
+                  ),
+              ])
+              .optional(),
+            kind: zod
+              .enum([
+                'public_channel',
+                'private_channel',
+                'direct_message',
+                'group_direct_message',
+              ])
+              .describe(
+                'Slack conversation kind. Public Slack channels map to Macro Team, never Public.'
+              ),
+            name: zod
+              .string()
+              .describe(
+                "Persisted source display name, never the reused Macro target's name."
+              ),
+            partCount: zod
+              .number()
+              .min(createSlackImportResponseConversationsItemPartCountMin)
+              .nullish()
+              .describe(
+                'Null until sealed; zero is a valid sealed empty manifest.'
+              ),
+            search: zod
+              .union([
+                zod
+                  .object({
+                    status: zod.enum(['not_needed']),
+                  })
+                  .describe('No committed history requires indexing.'),
+                zod
+                  .object({
+                    status: zod.enum(['pending']),
+                  })
+                  .describe(
+                    'Committed history requires an outbox-backed scoped submission.'
+                  ),
+                zod
+                  .object({
+                    receiptId: zod
+                      .uuid()
+                      .describe('Receipt from the search service.'),
+                    status: zod.enum(['submitted']),
+                  })
+                  .describe(
+                    'Search service accepted the request, but has not completed it.'
+                  ),
+                zod
+                  .object({
+                    status: zod.enum(['completed']),
+                  })
+                  .describe(
+                    'Search service durably published the scope; eventual indexing is separate.'
+                  ),
+                zod
+                  .object({
+                    status: zod.enum(['failed']),
+                  })
+                  .describe(
+                    'Publication failed; retained history must be retried independently.'
+                  ),
+              ])
+              .describe(
+                'Search publication\/receipt state. Acceptance is not completed publication;\neven completed publication still awaits consumer indexing and refresh.'
+              ),
+            slackChannelId: zod
+              .string()
+              .describe(
+                'Source Slack conversation ID (C, G or D prefix); unique only within a source.'
+              ),
+            status: zod
+              .enum([
+                'awaiting_uploads',
+                'queued',
+                'importing',
+                'completed',
+                'skipped',
+                'failed',
+              ])
+              .describe('Durable per-conversation lifecycle.'),
+            verifiedParts: zod
+              .number()
+              .min(createSlackImportResponseConversationsItemVerifiedPartsMin)
+              .describe(
+                'Number of parts whose object identity has been verified.'
+              ),
+            warnings: zod
+              .array(
+                zod
+                  .enum([
+                    'creation_time_from_message',
+                    'creation_time_from_job',
+                    'unresolvable_direct_message',
+                    'target_unavailable',
+                    'uploads_incomplete',
+                  ])
+                  .describe(
+                    'Non-fatal, sanitized explanations displayed in admin progress.'
+                  )
+              )
+              .describe('Non-fatal metadata\/skip explanations.'),
+          })
+          .describe('Admin-visible progress for one selected conversation.')
+      )
+      .describe('All selected conversations, bounded by the create limit.'),
+    createdAt: zod.iso
+      .datetime({})
+      .describe(
+        'Persisted creation time, also the final historical-time fallback.'
+      ),
+    includeMessageHistory: zod
+      .boolean()
+      .describe('Immutable history option confirmed when creating this job.'),
+    jobId: zod
+      .uuid()
+      .describe('Import job identity. Generate UUIDv7 in application code.'),
+    limits: zod
+      .object({
+        conversations: zod
+          .number()
+          .min(createSlackImportResponseLimitsConversationsMin)
+          .describe('Maximum selected conversations.'),
+        databaseBatchBytes: zod
+          .number()
+          .min(createSlackImportResponseLimitsDatabaseBatchBytesMin)
+          .describe('Maximum historical batch payload bytes.'),
+        databaseBatchMessages: zod
+          .number()
+          .min(createSlackImportResponseLimitsDatabaseBatchMessagesMin)
+          .describe('Maximum messages in a historical batch.'),
+        jsonBytes: zod
+          .number()
+          .min(createSlackImportResponseLimitsJsonBytesMin)
+          .describe(
+            'Maximum users, root metadata or individual day JSON bytes.'
+          ),
+        partBytes: zod
+          .number()
+          .min(createSlackImportResponseLimitsPartBytesMin)
+          .describe('Maximum NDJSON part bytes.'),
+        partRecords: zod
+          .number()
+          .min(createSlackImportResponseLimitsPartRecordsMin)
+          .describe('Maximum records per part.'),
+        recordBytes: zod
+          .number()
+          .min(createSlackImportResponseLimitsRecordBytesMin)
+          .describe('Maximum bytes per NDJSON record, including newline.'),
+        registrationBatch: zod
+          .number()
+          .min(createSlackImportResponseLimitsRegistrationBatchMin)
+          .describe('Maximum descriptors or completion identities per call.'),
+        selectedBytes: zod
+          .number()
+          .min(createSlackImportResponseLimitsSelectedBytesMin)
+          .describe(
+            'Maximum selected temporary data bytes across all uploads.'
+          ),
+        zipEntries: zod
+          .number()
+          .min(createSlackImportResponseLimitsZipEntriesMin)
+          .describe('Maximum ZIP entries scanned by the browser.'),
+      })
+      .describe(
+        'Configurable bounds shared with browser staging and enforced again by the worker.'
+      ),
+    registrationClosedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe(
+        'Registration closure time; cancellation also closes registration.'
+      ),
+    revision: zod
+      .number()
+      .min(createSlackImportResponseRevisionMin)
+      .describe('Monotonic job revision for polling\/websocket invalidation.'),
+    source: zod
+      .union([
+        zod
+          .object({
+            kind: zod.enum(['known']),
+            sourceId: zod
+              .string()
+              .describe(
+                'Known Slack workspace identity (T prefix); an enterprise ID alone is insufficient.'
+              ),
+          })
+          .describe(
+            'Archive names its Slack workspace; reject a conflicting team binding.'
+          ),
+        zod
+          .object({
+            kind: zod.enum(['confirmed_unknown']),
+          })
+          .describe(
+            "Explicit confirmation that an unidentified archive belongs to this team's source.\nChoosing this variant is affirmative confirmation, not an inferred default."
+          ),
+      ])
+      .describe(
+        'Source identity supplied when creating a job. One binding per Macro team in v1.'
+      ),
+    status: zod
+      .enum([
+        'uploading',
+        'processing',
+        'completed',
+        'completed_with_errors',
+        'failed',
+        'cancelling',
+        'cancelled',
+      ])
+      .describe(
+        'Job lifecycle. Cancellation remains in progress while any lease is active.'
+      ),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('Last durable lifecycle\/progress update.'),
+    usersVerified: zod
+      .boolean()
+      .describe('Whether users metadata is verified and pinned.'),
+  })
+  .describe(
+    'Common receipt returned by create, completion, finalize, cancel and progress.'
+  );
+
+/**
+ * @summary Read sanitized progress; foreign jobs are indistinguishable from missing jobs.
+ */
+export const getSlackImportParams = zod.object({
+  job_id: zod.uuid(),
+});
+
+export const getSlackImportResponseConversationsItemCountersDuplicatesMin = 0;
+
+export const getSlackImportResponseConversationsItemCountersImportedMin = 0;
+
+export const getSlackImportResponseConversationsItemCountersProcessedMin = 0;
+
+export const getSlackImportResponseConversationsItemCountersReactionsMin = 0;
+
+export const getSlackImportResponseConversationsItemCountersSkippedMin = 0;
+
+export const getSlackImportResponseConversationsItemPartCountMin = 0;
+
+export const getSlackImportResponseConversationsItemVerifiedPartsMin = 0;
+
+export const getSlackImportResponseLimitsConversationsMin = 0;
+
+export const getSlackImportResponseLimitsDatabaseBatchBytesMin = 0;
+
+export const getSlackImportResponseLimitsDatabaseBatchMessagesMin = 0;
+
+export const getSlackImportResponseLimitsJsonBytesMin = 0;
+
+export const getSlackImportResponseLimitsPartBytesMin = 0;
+
+export const getSlackImportResponseLimitsPartRecordsMin = 0;
+
+export const getSlackImportResponseLimitsRecordBytesMin = 0;
+
+export const getSlackImportResponseLimitsRegistrationBatchMin = 0;
+
+export const getSlackImportResponseLimitsSelectedBytesMin = 0;
+
+export const getSlackImportResponseLimitsZipEntriesMin = 0;
+
+export const getSlackImportResponseRevisionMin = 0;
+
+export const getSlackImportResponse = zod
+  .object({
+    conversations: zod
+      .array(
+        zod
+          .object({
+            archived: zod
+              .boolean()
+              .describe(
+                'Whether the selected source conversation was archived.'
+              ),
+            channelId: zod
+              .uuid()
+              .nullish()
+              .describe(
+                'Authorized target only; absent for inaccessible reused targets.'
+              ),
+            counters: zod
+              .object({
+                duplicates: zod
+                  .number()
+                  .min(
+                    getSlackImportResponseConversationsItemCountersDuplicatesMin
+                  )
+                  .describe('Previously committed source identities.'),
+                imported: zod
+                  .number()
+                  .min(
+                    getSlackImportResponseConversationsItemCountersImportedMin
+                  )
+                  .describe('Newly persisted messages.'),
+                processed: zod
+                  .number()
+                  .min(
+                    getSlackImportResponseConversationsItemCountersProcessedMin
+                  )
+                  .describe(
+                    'Source records examined through the committed checkpoint.'
+                  ),
+                reactions: zod
+                  .number()
+                  .min(
+                    getSlackImportResponseConversationsItemCountersReactionsMin
+                  )
+                  .describe('Newly persisted reactions.'),
+                skipped: zod
+                  .number()
+                  .min(
+                    getSlackImportResponseConversationsItemCountersSkippedMin
+                  )
+                  .describe(
+                    'Unsupported, empty or otherwise deliberately skipped records.'
+                  ),
+              })
+              .describe(
+                'Committed counters, never optimistic browser or uncommitted worker counts.'
+              ),
+            error: zod
+              .union([
+                zod.null(),
+                zod
+                  .enum([
+                    'disabled',
+                    'invalid_input',
+                    'limit_exceeded',
+                    'unavailable',
+                    'admin_required',
+                    'source_mismatch',
+                    'conflict',
+                    'upload_mismatch',
+                    'lease_lost',
+                    'retryable',
+                    'internal',
+                  ])
+                  .describe(
+                    'Public error codes; never carry raw provider errors, keys, emails or source text.'
+                  ),
+              ])
+              .optional(),
+            kind: zod
+              .enum([
+                'public_channel',
+                'private_channel',
+                'direct_message',
+                'group_direct_message',
+              ])
+              .describe(
+                'Slack conversation kind. Public Slack channels map to Macro Team, never Public.'
+              ),
+            name: zod
+              .string()
+              .describe(
+                "Persisted source display name, never the reused Macro target's name."
+              ),
+            partCount: zod
+              .number()
+              .min(getSlackImportResponseConversationsItemPartCountMin)
+              .nullish()
+              .describe(
+                'Null until sealed; zero is a valid sealed empty manifest.'
+              ),
+            search: zod
+              .union([
+                zod
+                  .object({
+                    status: zod.enum(['not_needed']),
+                  })
+                  .describe('No committed history requires indexing.'),
+                zod
+                  .object({
+                    status: zod.enum(['pending']),
+                  })
+                  .describe(
+                    'Committed history requires an outbox-backed scoped submission.'
+                  ),
+                zod
+                  .object({
+                    receiptId: zod
+                      .uuid()
+                      .describe('Receipt from the search service.'),
+                    status: zod.enum(['submitted']),
+                  })
+                  .describe(
+                    'Search service accepted the request, but has not completed it.'
+                  ),
+                zod
+                  .object({
+                    status: zod.enum(['completed']),
+                  })
+                  .describe(
+                    'Search service durably published the scope; eventual indexing is separate.'
+                  ),
+                zod
+                  .object({
+                    status: zod.enum(['failed']),
+                  })
+                  .describe(
+                    'Publication failed; retained history must be retried independently.'
+                  ),
+              ])
+              .describe(
+                'Search publication\/receipt state. Acceptance is not completed publication;\neven completed publication still awaits consumer indexing and refresh.'
+              ),
+            slackChannelId: zod
+              .string()
+              .describe(
+                'Source Slack conversation ID (C, G or D prefix); unique only within a source.'
+              ),
+            status: zod
+              .enum([
+                'awaiting_uploads',
+                'queued',
+                'importing',
+                'completed',
+                'skipped',
+                'failed',
+              ])
+              .describe('Durable per-conversation lifecycle.'),
+            verifiedParts: zod
+              .number()
+              .min(getSlackImportResponseConversationsItemVerifiedPartsMin)
+              .describe(
+                'Number of parts whose object identity has been verified.'
+              ),
+            warnings: zod
+              .array(
+                zod
+                  .enum([
+                    'creation_time_from_message',
+                    'creation_time_from_job',
+                    'unresolvable_direct_message',
+                    'target_unavailable',
+                    'uploads_incomplete',
+                  ])
+                  .describe(
+                    'Non-fatal, sanitized explanations displayed in admin progress.'
+                  )
+              )
+              .describe('Non-fatal metadata\/skip explanations.'),
+          })
+          .describe('Admin-visible progress for one selected conversation.')
+      )
+      .describe('All selected conversations, bounded by the create limit.'),
+    createdAt: zod.iso
+      .datetime({})
+      .describe(
+        'Persisted creation time, also the final historical-time fallback.'
+      ),
+    includeMessageHistory: zod
+      .boolean()
+      .describe('Immutable history option confirmed when creating this job.'),
+    jobId: zod
+      .uuid()
+      .describe('Import job identity. Generate UUIDv7 in application code.'),
+    limits: zod
+      .object({
+        conversations: zod
+          .number()
+          .min(getSlackImportResponseLimitsConversationsMin)
+          .describe('Maximum selected conversations.'),
+        databaseBatchBytes: zod
+          .number()
+          .min(getSlackImportResponseLimitsDatabaseBatchBytesMin)
+          .describe('Maximum historical batch payload bytes.'),
+        databaseBatchMessages: zod
+          .number()
+          .min(getSlackImportResponseLimitsDatabaseBatchMessagesMin)
+          .describe('Maximum messages in a historical batch.'),
+        jsonBytes: zod
+          .number()
+          .min(getSlackImportResponseLimitsJsonBytesMin)
+          .describe(
+            'Maximum users, root metadata or individual day JSON bytes.'
+          ),
+        partBytes: zod
+          .number()
+          .min(getSlackImportResponseLimitsPartBytesMin)
+          .describe('Maximum NDJSON part bytes.'),
+        partRecords: zod
+          .number()
+          .min(getSlackImportResponseLimitsPartRecordsMin)
+          .describe('Maximum records per part.'),
+        recordBytes: zod
+          .number()
+          .min(getSlackImportResponseLimitsRecordBytesMin)
+          .describe('Maximum bytes per NDJSON record, including newline.'),
+        registrationBatch: zod
+          .number()
+          .min(getSlackImportResponseLimitsRegistrationBatchMin)
+          .describe('Maximum descriptors or completion identities per call.'),
+        selectedBytes: zod
+          .number()
+          .min(getSlackImportResponseLimitsSelectedBytesMin)
+          .describe(
+            'Maximum selected temporary data bytes across all uploads.'
+          ),
+        zipEntries: zod
+          .number()
+          .min(getSlackImportResponseLimitsZipEntriesMin)
+          .describe('Maximum ZIP entries scanned by the browser.'),
+      })
+      .describe(
+        'Configurable bounds shared with browser staging and enforced again by the worker.'
+      ),
+    registrationClosedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe(
+        'Registration closure time; cancellation also closes registration.'
+      ),
+    revision: zod
+      .number()
+      .min(getSlackImportResponseRevisionMin)
+      .describe('Monotonic job revision for polling\/websocket invalidation.'),
+    source: zod
+      .union([
+        zod
+          .object({
+            kind: zod.enum(['known']),
+            sourceId: zod
+              .string()
+              .describe(
+                'Known Slack workspace identity (T prefix); an enterprise ID alone is insufficient.'
+              ),
+          })
+          .describe(
+            'Archive names its Slack workspace; reject a conflicting team binding.'
+          ),
+        zod
+          .object({
+            kind: zod.enum(['confirmed_unknown']),
+          })
+          .describe(
+            "Explicit confirmation that an unidentified archive belongs to this team's source.\nChoosing this variant is affirmative confirmation, not an inferred default."
+          ),
+      ])
+      .describe(
+        'Source identity supplied when creating a job. One binding per Macro team in v1.'
+      ),
+    status: zod
+      .enum([
+        'uploading',
+        'processing',
+        'completed',
+        'completed_with_errors',
+        'failed',
+        'cancelling',
+        'cancelled',
+      ])
+      .describe(
+        'Job lifecycle. Cancellation remains in progress while any lease is active.'
+      ),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('Last durable lifecycle\/progress update.'),
+    usersVerified: zod
+      .boolean()
+      .describe('Whether users metadata is verified and pinned.'),
+  })
+  .describe(
+    'Common receipt returned by create, completion, finalize, cancel and progress.'
+  );
+
+/**
+ * @summary Stop unclaimed work. Active leases may settle; cancellation does not roll back history.
+ */
+export const cancelSlackImportParams = zod.object({
+  job_id: zod.uuid(),
+});
+
+export const cancelSlackImportResponseConversationsItemCountersDuplicatesMin = 0;
+
+export const cancelSlackImportResponseConversationsItemCountersImportedMin = 0;
+
+export const cancelSlackImportResponseConversationsItemCountersProcessedMin = 0;
+
+export const cancelSlackImportResponseConversationsItemCountersReactionsMin = 0;
+
+export const cancelSlackImportResponseConversationsItemCountersSkippedMin = 0;
+
+export const cancelSlackImportResponseConversationsItemPartCountMin = 0;
+
+export const cancelSlackImportResponseConversationsItemVerifiedPartsMin = 0;
+
+export const cancelSlackImportResponseLimitsConversationsMin = 0;
+
+export const cancelSlackImportResponseLimitsDatabaseBatchBytesMin = 0;
+
+export const cancelSlackImportResponseLimitsDatabaseBatchMessagesMin = 0;
+
+export const cancelSlackImportResponseLimitsJsonBytesMin = 0;
+
+export const cancelSlackImportResponseLimitsPartBytesMin = 0;
+
+export const cancelSlackImportResponseLimitsPartRecordsMin = 0;
+
+export const cancelSlackImportResponseLimitsRecordBytesMin = 0;
+
+export const cancelSlackImportResponseLimitsRegistrationBatchMin = 0;
+
+export const cancelSlackImportResponseLimitsSelectedBytesMin = 0;
+
+export const cancelSlackImportResponseLimitsZipEntriesMin = 0;
+
+export const cancelSlackImportResponseRevisionMin = 0;
+
+export const cancelSlackImportResponse = zod
+  .object({
+    conversations: zod
+      .array(
+        zod
+          .object({
+            archived: zod
+              .boolean()
+              .describe(
+                'Whether the selected source conversation was archived.'
+              ),
+            channelId: zod
+              .uuid()
+              .nullish()
+              .describe(
+                'Authorized target only; absent for inaccessible reused targets.'
+              ),
+            counters: zod
+              .object({
+                duplicates: zod
+                  .number()
+                  .min(
+                    cancelSlackImportResponseConversationsItemCountersDuplicatesMin
+                  )
+                  .describe('Previously committed source identities.'),
+                imported: zod
+                  .number()
+                  .min(
+                    cancelSlackImportResponseConversationsItemCountersImportedMin
+                  )
+                  .describe('Newly persisted messages.'),
+                processed: zod
+                  .number()
+                  .min(
+                    cancelSlackImportResponseConversationsItemCountersProcessedMin
+                  )
+                  .describe(
+                    'Source records examined through the committed checkpoint.'
+                  ),
+                reactions: zod
+                  .number()
+                  .min(
+                    cancelSlackImportResponseConversationsItemCountersReactionsMin
+                  )
+                  .describe('Newly persisted reactions.'),
+                skipped: zod
+                  .number()
+                  .min(
+                    cancelSlackImportResponseConversationsItemCountersSkippedMin
+                  )
+                  .describe(
+                    'Unsupported, empty or otherwise deliberately skipped records.'
+                  ),
+              })
+              .describe(
+                'Committed counters, never optimistic browser or uncommitted worker counts.'
+              ),
+            error: zod
+              .union([
+                zod.null(),
+                zod
+                  .enum([
+                    'disabled',
+                    'invalid_input',
+                    'limit_exceeded',
+                    'unavailable',
+                    'admin_required',
+                    'source_mismatch',
+                    'conflict',
+                    'upload_mismatch',
+                    'lease_lost',
+                    'retryable',
+                    'internal',
+                  ])
+                  .describe(
+                    'Public error codes; never carry raw provider errors, keys, emails or source text.'
+                  ),
+              ])
+              .optional(),
+            kind: zod
+              .enum([
+                'public_channel',
+                'private_channel',
+                'direct_message',
+                'group_direct_message',
+              ])
+              .describe(
+                'Slack conversation kind. Public Slack channels map to Macro Team, never Public.'
+              ),
+            name: zod
+              .string()
+              .describe(
+                "Persisted source display name, never the reused Macro target's name."
+              ),
+            partCount: zod
+              .number()
+              .min(cancelSlackImportResponseConversationsItemPartCountMin)
+              .nullish()
+              .describe(
+                'Null until sealed; zero is a valid sealed empty manifest.'
+              ),
+            search: zod
+              .union([
+                zod
+                  .object({
+                    status: zod.enum(['not_needed']),
+                  })
+                  .describe('No committed history requires indexing.'),
+                zod
+                  .object({
+                    status: zod.enum(['pending']),
+                  })
+                  .describe(
+                    'Committed history requires an outbox-backed scoped submission.'
+                  ),
+                zod
+                  .object({
+                    receiptId: zod
+                      .uuid()
+                      .describe('Receipt from the search service.'),
+                    status: zod.enum(['submitted']),
+                  })
+                  .describe(
+                    'Search service accepted the request, but has not completed it.'
+                  ),
+                zod
+                  .object({
+                    status: zod.enum(['completed']),
+                  })
+                  .describe(
+                    'Search service durably published the scope; eventual indexing is separate.'
+                  ),
+                zod
+                  .object({
+                    status: zod.enum(['failed']),
+                  })
+                  .describe(
+                    'Publication failed; retained history must be retried independently.'
+                  ),
+              ])
+              .describe(
+                'Search publication\/receipt state. Acceptance is not completed publication;\neven completed publication still awaits consumer indexing and refresh.'
+              ),
+            slackChannelId: zod
+              .string()
+              .describe(
+                'Source Slack conversation ID (C, G or D prefix); unique only within a source.'
+              ),
+            status: zod
+              .enum([
+                'awaiting_uploads',
+                'queued',
+                'importing',
+                'completed',
+                'skipped',
+                'failed',
+              ])
+              .describe('Durable per-conversation lifecycle.'),
+            verifiedParts: zod
+              .number()
+              .min(cancelSlackImportResponseConversationsItemVerifiedPartsMin)
+              .describe(
+                'Number of parts whose object identity has been verified.'
+              ),
+            warnings: zod
+              .array(
+                zod
+                  .enum([
+                    'creation_time_from_message',
+                    'creation_time_from_job',
+                    'unresolvable_direct_message',
+                    'target_unavailable',
+                    'uploads_incomplete',
+                  ])
+                  .describe(
+                    'Non-fatal, sanitized explanations displayed in admin progress.'
+                  )
+              )
+              .describe('Non-fatal metadata\/skip explanations.'),
+          })
+          .describe('Admin-visible progress for one selected conversation.')
+      )
+      .describe('All selected conversations, bounded by the create limit.'),
+    createdAt: zod.iso
+      .datetime({})
+      .describe(
+        'Persisted creation time, also the final historical-time fallback.'
+      ),
+    includeMessageHistory: zod
+      .boolean()
+      .describe('Immutable history option confirmed when creating this job.'),
+    jobId: zod
+      .uuid()
+      .describe('Import job identity. Generate UUIDv7 in application code.'),
+    limits: zod
+      .object({
+        conversations: zod
+          .number()
+          .min(cancelSlackImportResponseLimitsConversationsMin)
+          .describe('Maximum selected conversations.'),
+        databaseBatchBytes: zod
+          .number()
+          .min(cancelSlackImportResponseLimitsDatabaseBatchBytesMin)
+          .describe('Maximum historical batch payload bytes.'),
+        databaseBatchMessages: zod
+          .number()
+          .min(cancelSlackImportResponseLimitsDatabaseBatchMessagesMin)
+          .describe('Maximum messages in a historical batch.'),
+        jsonBytes: zod
+          .number()
+          .min(cancelSlackImportResponseLimitsJsonBytesMin)
+          .describe(
+            'Maximum users, root metadata or individual day JSON bytes.'
+          ),
+        partBytes: zod
+          .number()
+          .min(cancelSlackImportResponseLimitsPartBytesMin)
+          .describe('Maximum NDJSON part bytes.'),
+        partRecords: zod
+          .number()
+          .min(cancelSlackImportResponseLimitsPartRecordsMin)
+          .describe('Maximum records per part.'),
+        recordBytes: zod
+          .number()
+          .min(cancelSlackImportResponseLimitsRecordBytesMin)
+          .describe('Maximum bytes per NDJSON record, including newline.'),
+        registrationBatch: zod
+          .number()
+          .min(cancelSlackImportResponseLimitsRegistrationBatchMin)
+          .describe('Maximum descriptors or completion identities per call.'),
+        selectedBytes: zod
+          .number()
+          .min(cancelSlackImportResponseLimitsSelectedBytesMin)
+          .describe(
+            'Maximum selected temporary data bytes across all uploads.'
+          ),
+        zipEntries: zod
+          .number()
+          .min(cancelSlackImportResponseLimitsZipEntriesMin)
+          .describe('Maximum ZIP entries scanned by the browser.'),
+      })
+      .describe(
+        'Configurable bounds shared with browser staging and enforced again by the worker.'
+      ),
+    registrationClosedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe(
+        'Registration closure time; cancellation also closes registration.'
+      ),
+    revision: zod
+      .number()
+      .min(cancelSlackImportResponseRevisionMin)
+      .describe('Monotonic job revision for polling\/websocket invalidation.'),
+    source: zod
+      .union([
+        zod
+          .object({
+            kind: zod.enum(['known']),
+            sourceId: zod
+              .string()
+              .describe(
+                'Known Slack workspace identity (T prefix); an enterprise ID alone is insufficient.'
+              ),
+          })
+          .describe(
+            'Archive names its Slack workspace; reject a conflicting team binding.'
+          ),
+        zod
+          .object({
+            kind: zod.enum(['confirmed_unknown']),
+          })
+          .describe(
+            "Explicit confirmation that an unidentified archive belongs to this team's source.\nChoosing this variant is affirmative confirmation, not an inferred default."
+          ),
+      ])
+      .describe(
+        'Source identity supplied when creating a job. One binding per Macro team in v1.'
+      ),
+    status: zod
+      .enum([
+        'uploading',
+        'processing',
+        'completed',
+        'completed_with_errors',
+        'failed',
+        'cancelling',
+        'cancelled',
+      ])
+      .describe(
+        'Job lifecycle. Cancellation remains in progress while any lease is active.'
+      ),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('Last durable lifecycle\/progress update.'),
+    usersVerified: zod
+      .boolean()
+      .describe('Whether users metadata is verified and pinned.'),
+  })
+  .describe(
+    'Common receipt returned by create, completion, finalize, cancel and progress.'
+  );
+
+/**
+ * @summary Close registration idempotently; never-ready conversations are skipped, not queued work.
+ */
+export const finalizeSlackImportParams = zod.object({
+  job_id: zod.uuid(),
+});
+
+export const finalizeSlackImportResponseConversationsItemCountersDuplicatesMin = 0;
+
+export const finalizeSlackImportResponseConversationsItemCountersImportedMin = 0;
+
+export const finalizeSlackImportResponseConversationsItemCountersProcessedMin = 0;
+
+export const finalizeSlackImportResponseConversationsItemCountersReactionsMin = 0;
+
+export const finalizeSlackImportResponseConversationsItemCountersSkippedMin = 0;
+
+export const finalizeSlackImportResponseConversationsItemPartCountMin = 0;
+
+export const finalizeSlackImportResponseConversationsItemVerifiedPartsMin = 0;
+
+export const finalizeSlackImportResponseLimitsConversationsMin = 0;
+
+export const finalizeSlackImportResponseLimitsDatabaseBatchBytesMin = 0;
+
+export const finalizeSlackImportResponseLimitsDatabaseBatchMessagesMin = 0;
+
+export const finalizeSlackImportResponseLimitsJsonBytesMin = 0;
+
+export const finalizeSlackImportResponseLimitsPartBytesMin = 0;
+
+export const finalizeSlackImportResponseLimitsPartRecordsMin = 0;
+
+export const finalizeSlackImportResponseLimitsRecordBytesMin = 0;
+
+export const finalizeSlackImportResponseLimitsRegistrationBatchMin = 0;
+
+export const finalizeSlackImportResponseLimitsSelectedBytesMin = 0;
+
+export const finalizeSlackImportResponseLimitsZipEntriesMin = 0;
+
+export const finalizeSlackImportResponseRevisionMin = 0;
+
+export const finalizeSlackImportResponse = zod
+  .object({
+    conversations: zod
+      .array(
+        zod
+          .object({
+            archived: zod
+              .boolean()
+              .describe(
+                'Whether the selected source conversation was archived.'
+              ),
+            channelId: zod
+              .uuid()
+              .nullish()
+              .describe(
+                'Authorized target only; absent for inaccessible reused targets.'
+              ),
+            counters: zod
+              .object({
+                duplicates: zod
+                  .number()
+                  .min(
+                    finalizeSlackImportResponseConversationsItemCountersDuplicatesMin
+                  )
+                  .describe('Previously committed source identities.'),
+                imported: zod
+                  .number()
+                  .min(
+                    finalizeSlackImportResponseConversationsItemCountersImportedMin
+                  )
+                  .describe('Newly persisted messages.'),
+                processed: zod
+                  .number()
+                  .min(
+                    finalizeSlackImportResponseConversationsItemCountersProcessedMin
+                  )
+                  .describe(
+                    'Source records examined through the committed checkpoint.'
+                  ),
+                reactions: zod
+                  .number()
+                  .min(
+                    finalizeSlackImportResponseConversationsItemCountersReactionsMin
+                  )
+                  .describe('Newly persisted reactions.'),
+                skipped: zod
+                  .number()
+                  .min(
+                    finalizeSlackImportResponseConversationsItemCountersSkippedMin
+                  )
+                  .describe(
+                    'Unsupported, empty or otherwise deliberately skipped records.'
+                  ),
+              })
+              .describe(
+                'Committed counters, never optimistic browser or uncommitted worker counts.'
+              ),
+            error: zod
+              .union([
+                zod.null(),
+                zod
+                  .enum([
+                    'disabled',
+                    'invalid_input',
+                    'limit_exceeded',
+                    'unavailable',
+                    'admin_required',
+                    'source_mismatch',
+                    'conflict',
+                    'upload_mismatch',
+                    'lease_lost',
+                    'retryable',
+                    'internal',
+                  ])
+                  .describe(
+                    'Public error codes; never carry raw provider errors, keys, emails or source text.'
+                  ),
+              ])
+              .optional(),
+            kind: zod
+              .enum([
+                'public_channel',
+                'private_channel',
+                'direct_message',
+                'group_direct_message',
+              ])
+              .describe(
+                'Slack conversation kind. Public Slack channels map to Macro Team, never Public.'
+              ),
+            name: zod
+              .string()
+              .describe(
+                "Persisted source display name, never the reused Macro target's name."
+              ),
+            partCount: zod
+              .number()
+              .min(finalizeSlackImportResponseConversationsItemPartCountMin)
+              .nullish()
+              .describe(
+                'Null until sealed; zero is a valid sealed empty manifest.'
+              ),
+            search: zod
+              .union([
+                zod
+                  .object({
+                    status: zod.enum(['not_needed']),
+                  })
+                  .describe('No committed history requires indexing.'),
+                zod
+                  .object({
+                    status: zod.enum(['pending']),
+                  })
+                  .describe(
+                    'Committed history requires an outbox-backed scoped submission.'
+                  ),
+                zod
+                  .object({
+                    receiptId: zod
+                      .uuid()
+                      .describe('Receipt from the search service.'),
+                    status: zod.enum(['submitted']),
+                  })
+                  .describe(
+                    'Search service accepted the request, but has not completed it.'
+                  ),
+                zod
+                  .object({
+                    status: zod.enum(['completed']),
+                  })
+                  .describe(
+                    'Search service durably published the scope; eventual indexing is separate.'
+                  ),
+                zod
+                  .object({
+                    status: zod.enum(['failed']),
+                  })
+                  .describe(
+                    'Publication failed; retained history must be retried independently.'
+                  ),
+              ])
+              .describe(
+                'Search publication\/receipt state. Acceptance is not completed publication;\neven completed publication still awaits consumer indexing and refresh.'
+              ),
+            slackChannelId: zod
+              .string()
+              .describe(
+                'Source Slack conversation ID (C, G or D prefix); unique only within a source.'
+              ),
+            status: zod
+              .enum([
+                'awaiting_uploads',
+                'queued',
+                'importing',
+                'completed',
+                'skipped',
+                'failed',
+              ])
+              .describe('Durable per-conversation lifecycle.'),
+            verifiedParts: zod
+              .number()
+              .min(finalizeSlackImportResponseConversationsItemVerifiedPartsMin)
+              .describe(
+                'Number of parts whose object identity has been verified.'
+              ),
+            warnings: zod
+              .array(
+                zod
+                  .enum([
+                    'creation_time_from_message',
+                    'creation_time_from_job',
+                    'unresolvable_direct_message',
+                    'target_unavailable',
+                    'uploads_incomplete',
+                  ])
+                  .describe(
+                    'Non-fatal, sanitized explanations displayed in admin progress.'
+                  )
+              )
+              .describe('Non-fatal metadata\/skip explanations.'),
+          })
+          .describe('Admin-visible progress for one selected conversation.')
+      )
+      .describe('All selected conversations, bounded by the create limit.'),
+    createdAt: zod.iso
+      .datetime({})
+      .describe(
+        'Persisted creation time, also the final historical-time fallback.'
+      ),
+    includeMessageHistory: zod
+      .boolean()
+      .describe('Immutable history option confirmed when creating this job.'),
+    jobId: zod
+      .uuid()
+      .describe('Import job identity. Generate UUIDv7 in application code.'),
+    limits: zod
+      .object({
+        conversations: zod
+          .number()
+          .min(finalizeSlackImportResponseLimitsConversationsMin)
+          .describe('Maximum selected conversations.'),
+        databaseBatchBytes: zod
+          .number()
+          .min(finalizeSlackImportResponseLimitsDatabaseBatchBytesMin)
+          .describe('Maximum historical batch payload bytes.'),
+        databaseBatchMessages: zod
+          .number()
+          .min(finalizeSlackImportResponseLimitsDatabaseBatchMessagesMin)
+          .describe('Maximum messages in a historical batch.'),
+        jsonBytes: zod
+          .number()
+          .min(finalizeSlackImportResponseLimitsJsonBytesMin)
+          .describe(
+            'Maximum users, root metadata or individual day JSON bytes.'
+          ),
+        partBytes: zod
+          .number()
+          .min(finalizeSlackImportResponseLimitsPartBytesMin)
+          .describe('Maximum NDJSON part bytes.'),
+        partRecords: zod
+          .number()
+          .min(finalizeSlackImportResponseLimitsPartRecordsMin)
+          .describe('Maximum records per part.'),
+        recordBytes: zod
+          .number()
+          .min(finalizeSlackImportResponseLimitsRecordBytesMin)
+          .describe('Maximum bytes per NDJSON record, including newline.'),
+        registrationBatch: zod
+          .number()
+          .min(finalizeSlackImportResponseLimitsRegistrationBatchMin)
+          .describe('Maximum descriptors or completion identities per call.'),
+        selectedBytes: zod
+          .number()
+          .min(finalizeSlackImportResponseLimitsSelectedBytesMin)
+          .describe(
+            'Maximum selected temporary data bytes across all uploads.'
+          ),
+        zipEntries: zod
+          .number()
+          .min(finalizeSlackImportResponseLimitsZipEntriesMin)
+          .describe('Maximum ZIP entries scanned by the browser.'),
+      })
+      .describe(
+        'Configurable bounds shared with browser staging and enforced again by the worker.'
+      ),
+    registrationClosedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe(
+        'Registration closure time; cancellation also closes registration.'
+      ),
+    revision: zod
+      .number()
+      .min(finalizeSlackImportResponseRevisionMin)
+      .describe('Monotonic job revision for polling\/websocket invalidation.'),
+    source: zod
+      .union([
+        zod
+          .object({
+            kind: zod.enum(['known']),
+            sourceId: zod
+              .string()
+              .describe(
+                'Known Slack workspace identity (T prefix); an enterprise ID alone is insufficient.'
+              ),
+          })
+          .describe(
+            'Archive names its Slack workspace; reject a conflicting team binding.'
+          ),
+        zod
+          .object({
+            kind: zod.enum(['confirmed_unknown']),
+          })
+          .describe(
+            "Explicit confirmation that an unidentified archive belongs to this team's source.\nChoosing this variant is affirmative confirmation, not an inferred default."
+          ),
+      ])
+      .describe(
+        'Source identity supplied when creating a job. One binding per Macro team in v1.'
+      ),
+    status: zod
+      .enum([
+        'uploading',
+        'processing',
+        'completed',
+        'completed_with_errors',
+        'failed',
+        'cancelling',
+        'cancelled',
+      ])
+      .describe(
+        'Job lifecycle. Cancellation remains in progress while any lease is active.'
+      ),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('Last durable lifecycle\/progress update.'),
+    usersVerified: zod
+      .boolean()
+      .describe('Whether users metadata is verified and pinned.'),
+  })
+  .describe(
+    'Common receipt returned by create, completion, finalize, cancel and progress.'
+  );
+
+/**
+ * @summary Issue short-lived, checksum/length-bound, create-only PUT grants. Do not log or persist URLs.
+Retry a PUT returning 412 by completing/verifying the existing object, not overwriting it.
+ */
+export const registerSlackImportUploadsParams = zod.object({
+  job_id: zod.uuid(),
+});
+
+export const registerSlackImportUploadsBodyDescriptorsItemByteLengthMin = 0;
+
+export const registerSlackImportUploadsBodyDescriptorsItemRecordCountMin = 0;
+
+export const registerSlackImportUploadsBodyDescriptorsItemUploadPartIndexMin = 0;
+
+export const registerSlackImportUploadsBodyDescriptorsMax = 50;
+
+export const registerSlackImportUploadsBody = zod
+  .object({
+    descriptors: zod
+      .array(
+        zod
+          .object({
+            byteLength: zod
+              .number()
+              .min(registerSlackImportUploadsBodyDescriptorsItemByteLengthMin)
+              .describe('Exact byte length including delimiters.'),
+            recordCount: zod
+              .number()
+              .min(registerSlackImportUploadsBodyDescriptorsItemRecordCountMin)
+              .nullish()
+              .describe(
+                'Exact NDJSON record count; null for the users JSON payload.'
+              ),
+            sha256: zod
+              .string()
+              .describe(
+                'SHA-256 encoded as exactly 64 lowercase hexadecimal characters.'
+              ),
+            upload: zod
+              .union([
+                zod
+                  .object({
+                    kind: zod.enum(['users']),
+                  })
+                  .describe(
+                    'One normalized users payload from users.json and\/or org_users.json.'
+                  ),
+                zod
+                  .object({
+                    kind: zod.enum(['conversation_part']),
+                    partIndex: zod
+                      .number()
+                      .min(
+                        registerSlackImportUploadsBodyDescriptorsItemUploadPartIndexMin
+                      )
+                      .describe(
+                        'Zero-based part index; sealed manifests must be contiguous.'
+                      ),
+                    slackChannelId: zod
+                      .string()
+                      .describe(
+                        'Source Slack conversation ID (C, G or D prefix); unique only within a source.'
+                      ),
+                  })
+                  .describe('One NDJSON part in a selected conversation.'),
+              ])
+              .describe(
+                "Identity in a job's persisted manifest. No user-supplied object keys."
+              ),
+          })
+          .describe(
+            'Immutable expected object properties, registered before signing an upload.'
+          )
+      )
+      .max(registerSlackImportUploadsBodyDescriptorsMax)
+      .describe('At most 50 descriptors; no duplicate identities in a call.'),
+  })
+  .describe(
+    "Batched registration, also used to renew an unchanged descriptor's grant."
+  );
+
+export const registerSlackImportUploadsResponseDescriptorByteLengthMin = 0;
+
+export const registerSlackImportUploadsResponseDescriptorRecordCountMin = 0;
+
+export const registerSlackImportUploadsResponseDescriptorUploadPartIndexMin = 0;
+
+export const registerSlackImportUploadsResponseItem = zod
+  .object({
+    descriptor: zod
+      .object({
+        byteLength: zod
+          .number()
+          .min(registerSlackImportUploadsResponseDescriptorByteLengthMin)
+          .describe('Exact byte length including delimiters.'),
+        recordCount: zod
+          .number()
+          .min(registerSlackImportUploadsResponseDescriptorRecordCountMin)
+          .nullish()
+          .describe(
+            'Exact NDJSON record count; null for the users JSON payload.'
+          ),
+        sha256: zod
+          .string()
+          .describe(
+            'SHA-256 encoded as exactly 64 lowercase hexadecimal characters.'
+          ),
+        upload: zod
+          .union([
+            zod
+              .object({
+                kind: zod.enum(['users']),
+              })
+              .describe(
+                'One normalized users payload from users.json and\/or org_users.json.'
+              ),
+            zod
+              .object({
+                kind: zod.enum(['conversation_part']),
+                partIndex: zod
+                  .number()
+                  .min(
+                    registerSlackImportUploadsResponseDescriptorUploadPartIndexMin
+                  )
+                  .describe(
+                    'Zero-based part index; sealed manifests must be contiguous.'
+                  ),
+                slackChannelId: zod
+                  .string()
+                  .describe(
+                    'Source Slack conversation ID (C, G or D prefix); unique only within a source.'
+                  ),
+              })
+              .describe('One NDJSON part in a selected conversation.'),
+          ])
+          .describe(
+            "Identity in a job's persisted manifest. No user-supplied object keys."
+          ),
+      })
+      .describe(
+        'Immutable expected object properties, registered before signing an upload.'
+      ),
+    expiresAt: zod.iso
+      .datetime({})
+      .describe(
+        'Grant expiry; callers renew by re-registering the identical descriptor.'
+      ),
+    requiredHeaders: zod
+      .record(zod.string(), zod.string())
+      .describe(
+        'Required signed upload headers (including checksum, content type and create-only\ncondition). Browser-forbidden Content-Length is derived from the exact Blob bytes.'
+      ),
+    url: zod
+      .string()
+      .describe('Short-lived signed destination; must not be logged.'),
+  })
+  .describe(
+    'Signed upload permission returned just before PUT; never persisted as an identity.'
+  );
+export const registerSlackImportUploadsResponse = zod.array(
+  registerSlackImportUploadsResponseItem
+);
+
+/**
+ * @summary Verify storage checksums and lengths for registered objects. A seal fixes the ENTIRE
+descriptor set (contiguous indices, sizes and hashes), not just this completion batch.
+Empty uploads with a zero-part seal support shape-only or empty-history imports.
+Work becomes ready only after verified users metadata, a seal and every required part.
+ */
+export const completeSlackImportUploadsParams = zod.object({
+  job_id: zod.uuid(),
+});
+
+export const completeSlackImportUploadsBodySealPartCountMin = 0;
+
+export const completeSlackImportUploadsBodyUploadsItemPartIndexMin = 0;
+
+export const completeSlackImportUploadsBodyUploadsMax = 50;
+
+export const completeSlackImportUploadsBody = zod
+  .object({
+    seal: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            manifestSha256: zod
+              .string()
+              .describe(
+                'SHA-256 encoded as exactly 64 lowercase hexadecimal characters.'
+              ),
+            partCount: zod
+              .number()
+              .min(completeSlackImportUploadsBodySealPartCountMin)
+              .describe(
+                'Exact number of registered parts, starting at index zero.'
+              ),
+            slackChannelId: zod
+              .string()
+              .describe(
+                'Source Slack conversation ID (C, G or D prefix); unique only within a source.'
+              ),
+          })
+          .describe(
+            'Complete immutable expected part set for one conversation, including zero parts.'
+          ),
+      ])
+      .optional(),
+    uploads: zod
+      .array(
+        zod
+          .union([
+            zod
+              .object({
+                kind: zod.enum(['users']),
+              })
+              .describe(
+                'One normalized users payload from users.json and\/or org_users.json.'
+              ),
+            zod
+              .object({
+                kind: zod.enum(['conversation_part']),
+                partIndex: zod
+                  .number()
+                  .min(completeSlackImportUploadsBodyUploadsItemPartIndexMin)
+                  .describe(
+                    'Zero-based part index; sealed manifests must be contiguous.'
+                  ),
+                slackChannelId: zod
+                  .string()
+                  .describe(
+                    'Source Slack conversation ID (C, G or D prefix); unique only within a source.'
+                  ),
+              })
+              .describe('One NDJSON part in a selected conversation.'),
+          ])
+          .describe(
+            "Identity in a job's persisted manifest. No user-supplied object keys."
+          )
+      )
+      .max(completeSlackImportUploadsBodyUploadsMax)
+      .describe(
+        'Registered identities to verify against storage (at most 50).'
+      ),
+  })
+  .describe(
+    'Explicit upload completion; a seal can be submitted separately with an empty list.'
+  );
+
+export const completeSlackImportUploadsResponseConversationsItemCountersDuplicatesMin = 0;
+
+export const completeSlackImportUploadsResponseConversationsItemCountersImportedMin = 0;
+
+export const completeSlackImportUploadsResponseConversationsItemCountersProcessedMin = 0;
+
+export const completeSlackImportUploadsResponseConversationsItemCountersReactionsMin = 0;
+
+export const completeSlackImportUploadsResponseConversationsItemCountersSkippedMin = 0;
+
+export const completeSlackImportUploadsResponseConversationsItemPartCountMin = 0;
+
+export const completeSlackImportUploadsResponseConversationsItemVerifiedPartsMin = 0;
+
+export const completeSlackImportUploadsResponseLimitsConversationsMin = 0;
+
+export const completeSlackImportUploadsResponseLimitsDatabaseBatchBytesMin = 0;
+
+export const completeSlackImportUploadsResponseLimitsDatabaseBatchMessagesMin = 0;
+
+export const completeSlackImportUploadsResponseLimitsJsonBytesMin = 0;
+
+export const completeSlackImportUploadsResponseLimitsPartBytesMin = 0;
+
+export const completeSlackImportUploadsResponseLimitsPartRecordsMin = 0;
+
+export const completeSlackImportUploadsResponseLimitsRecordBytesMin = 0;
+
+export const completeSlackImportUploadsResponseLimitsRegistrationBatchMin = 0;
+
+export const completeSlackImportUploadsResponseLimitsSelectedBytesMin = 0;
+
+export const completeSlackImportUploadsResponseLimitsZipEntriesMin = 0;
+
+export const completeSlackImportUploadsResponseRevisionMin = 0;
+
+export const completeSlackImportUploadsResponse = zod
+  .object({
+    conversations: zod
+      .array(
+        zod
+          .object({
+            archived: zod
+              .boolean()
+              .describe(
+                'Whether the selected source conversation was archived.'
+              ),
+            channelId: zod
+              .uuid()
+              .nullish()
+              .describe(
+                'Authorized target only; absent for inaccessible reused targets.'
+              ),
+            counters: zod
+              .object({
+                duplicates: zod
+                  .number()
+                  .min(
+                    completeSlackImportUploadsResponseConversationsItemCountersDuplicatesMin
+                  )
+                  .describe('Previously committed source identities.'),
+                imported: zod
+                  .number()
+                  .min(
+                    completeSlackImportUploadsResponseConversationsItemCountersImportedMin
+                  )
+                  .describe('Newly persisted messages.'),
+                processed: zod
+                  .number()
+                  .min(
+                    completeSlackImportUploadsResponseConversationsItemCountersProcessedMin
+                  )
+                  .describe(
+                    'Source records examined through the committed checkpoint.'
+                  ),
+                reactions: zod
+                  .number()
+                  .min(
+                    completeSlackImportUploadsResponseConversationsItemCountersReactionsMin
+                  )
+                  .describe('Newly persisted reactions.'),
+                skipped: zod
+                  .number()
+                  .min(
+                    completeSlackImportUploadsResponseConversationsItemCountersSkippedMin
+                  )
+                  .describe(
+                    'Unsupported, empty or otherwise deliberately skipped records.'
+                  ),
+              })
+              .describe(
+                'Committed counters, never optimistic browser or uncommitted worker counts.'
+              ),
+            error: zod
+              .union([
+                zod.null(),
+                zod
+                  .enum([
+                    'disabled',
+                    'invalid_input',
+                    'limit_exceeded',
+                    'unavailable',
+                    'admin_required',
+                    'source_mismatch',
+                    'conflict',
+                    'upload_mismatch',
+                    'lease_lost',
+                    'retryable',
+                    'internal',
+                  ])
+                  .describe(
+                    'Public error codes; never carry raw provider errors, keys, emails or source text.'
+                  ),
+              ])
+              .optional(),
+            kind: zod
+              .enum([
+                'public_channel',
+                'private_channel',
+                'direct_message',
+                'group_direct_message',
+              ])
+              .describe(
+                'Slack conversation kind. Public Slack channels map to Macro Team, never Public.'
+              ),
+            name: zod
+              .string()
+              .describe(
+                "Persisted source display name, never the reused Macro target's name."
+              ),
+            partCount: zod
+              .number()
+              .min(
+                completeSlackImportUploadsResponseConversationsItemPartCountMin
+              )
+              .nullish()
+              .describe(
+                'Null until sealed; zero is a valid sealed empty manifest.'
+              ),
+            search: zod
+              .union([
+                zod
+                  .object({
+                    status: zod.enum(['not_needed']),
+                  })
+                  .describe('No committed history requires indexing.'),
+                zod
+                  .object({
+                    status: zod.enum(['pending']),
+                  })
+                  .describe(
+                    'Committed history requires an outbox-backed scoped submission.'
+                  ),
+                zod
+                  .object({
+                    receiptId: zod
+                      .uuid()
+                      .describe('Receipt from the search service.'),
+                    status: zod.enum(['submitted']),
+                  })
+                  .describe(
+                    'Search service accepted the request, but has not completed it.'
+                  ),
+                zod
+                  .object({
+                    status: zod.enum(['completed']),
+                  })
+                  .describe(
+                    'Search service durably published the scope; eventual indexing is separate.'
+                  ),
+                zod
+                  .object({
+                    status: zod.enum(['failed']),
+                  })
+                  .describe(
+                    'Publication failed; retained history must be retried independently.'
+                  ),
+              ])
+              .describe(
+                'Search publication\/receipt state. Acceptance is not completed publication;\neven completed publication still awaits consumer indexing and refresh.'
+              ),
+            slackChannelId: zod
+              .string()
+              .describe(
+                'Source Slack conversation ID (C, G or D prefix); unique only within a source.'
+              ),
+            status: zod
+              .enum([
+                'awaiting_uploads',
+                'queued',
+                'importing',
+                'completed',
+                'skipped',
+                'failed',
+              ])
+              .describe('Durable per-conversation lifecycle.'),
+            verifiedParts: zod
+              .number()
+              .min(
+                completeSlackImportUploadsResponseConversationsItemVerifiedPartsMin
+              )
+              .describe(
+                'Number of parts whose object identity has been verified.'
+              ),
+            warnings: zod
+              .array(
+                zod
+                  .enum([
+                    'creation_time_from_message',
+                    'creation_time_from_job',
+                    'unresolvable_direct_message',
+                    'target_unavailable',
+                    'uploads_incomplete',
+                  ])
+                  .describe(
+                    'Non-fatal, sanitized explanations displayed in admin progress.'
+                  )
+              )
+              .describe('Non-fatal metadata\/skip explanations.'),
+          })
+          .describe('Admin-visible progress for one selected conversation.')
+      )
+      .describe('All selected conversations, bounded by the create limit.'),
+    createdAt: zod.iso
+      .datetime({})
+      .describe(
+        'Persisted creation time, also the final historical-time fallback.'
+      ),
+    includeMessageHistory: zod
+      .boolean()
+      .describe('Immutable history option confirmed when creating this job.'),
+    jobId: zod
+      .uuid()
+      .describe('Import job identity. Generate UUIDv7 in application code.'),
+    limits: zod
+      .object({
+        conversations: zod
+          .number()
+          .min(completeSlackImportUploadsResponseLimitsConversationsMin)
+          .describe('Maximum selected conversations.'),
+        databaseBatchBytes: zod
+          .number()
+          .min(completeSlackImportUploadsResponseLimitsDatabaseBatchBytesMin)
+          .describe('Maximum historical batch payload bytes.'),
+        databaseBatchMessages: zod
+          .number()
+          .min(completeSlackImportUploadsResponseLimitsDatabaseBatchMessagesMin)
+          .describe('Maximum messages in a historical batch.'),
+        jsonBytes: zod
+          .number()
+          .min(completeSlackImportUploadsResponseLimitsJsonBytesMin)
+          .describe(
+            'Maximum users, root metadata or individual day JSON bytes.'
+          ),
+        partBytes: zod
+          .number()
+          .min(completeSlackImportUploadsResponseLimitsPartBytesMin)
+          .describe('Maximum NDJSON part bytes.'),
+        partRecords: zod
+          .number()
+          .min(completeSlackImportUploadsResponseLimitsPartRecordsMin)
+          .describe('Maximum records per part.'),
+        recordBytes: zod
+          .number()
+          .min(completeSlackImportUploadsResponseLimitsRecordBytesMin)
+          .describe('Maximum bytes per NDJSON record, including newline.'),
+        registrationBatch: zod
+          .number()
+          .min(completeSlackImportUploadsResponseLimitsRegistrationBatchMin)
+          .describe('Maximum descriptors or completion identities per call.'),
+        selectedBytes: zod
+          .number()
+          .min(completeSlackImportUploadsResponseLimitsSelectedBytesMin)
+          .describe(
+            'Maximum selected temporary data bytes across all uploads.'
+          ),
+        zipEntries: zod
+          .number()
+          .min(completeSlackImportUploadsResponseLimitsZipEntriesMin)
+          .describe('Maximum ZIP entries scanned by the browser.'),
+      })
+      .describe(
+        'Configurable bounds shared with browser staging and enforced again by the worker.'
+      ),
+    registrationClosedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe(
+        'Registration closure time; cancellation also closes registration.'
+      ),
+    revision: zod
+      .number()
+      .min(completeSlackImportUploadsResponseRevisionMin)
+      .describe('Monotonic job revision for polling\/websocket invalidation.'),
+    source: zod
+      .union([
+        zod
+          .object({
+            kind: zod.enum(['known']),
+            sourceId: zod
+              .string()
+              .describe(
+                'Known Slack workspace identity (T prefix); an enterprise ID alone is insufficient.'
+              ),
+          })
+          .describe(
+            'Archive names its Slack workspace; reject a conflicting team binding.'
+          ),
+        zod
+          .object({
+            kind: zod.enum(['confirmed_unknown']),
+          })
+          .describe(
+            "Explicit confirmation that an unidentified archive belongs to this team's source.\nChoosing this variant is affirmative confirmation, not an inferred default."
+          ),
+      ])
+      .describe(
+        'Source identity supplied when creating a job. One binding per Macro team in v1.'
+      ),
+    status: zod
+      .enum([
+        'uploading',
+        'processing',
+        'completed',
+        'completed_with_errors',
+        'failed',
+        'cancelling',
+        'cancelled',
+      ])
+      .describe(
+        'Job lifecycle. Cancellation remains in progress while any lease is active.'
+      ),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('Last durable lifecycle\/progress update.'),
+    usersVerified: zod
+      .boolean()
+      .describe('Whether users metadata is verified and pinned.'),
+  })
+  .describe(
+    'Common receipt returned by create, completion, finalize, cancel and progress.'
+  );
+
 export const bulkWakeupSyncServiceDocumentsBody = zod.object({
   document_ids: zod.array(zod.string()),
 });

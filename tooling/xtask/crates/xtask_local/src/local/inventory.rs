@@ -92,6 +92,18 @@ impl RustService {
 /// The full service inventory of the local service binaries.
 pub const RUST_SERVICES: &[RustService] = &[
     RustService {
+        compose_name: "slack_import_worker",
+        cargo_bin: "slack_import_worker",
+        package: "slack_import_worker",
+        host_port: None,
+        path_prefix: None,
+        is_websocket: false,
+        // Explicit local Compose profile only; never consume shared-dev queues.
+        modes: &[],
+        opt_in: true,
+        no_default_features: false,
+    },
+    RustService {
         compose_name: "preview_gateway",
         cargo_bin: "preview_gateway",
         package: "preview_gateway",

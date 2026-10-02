@@ -20,6 +20,10 @@ files:
   - apps/web/src/features/crm/components/**
   - apps/web/src/features/crm/views/**
   - apps/web/src/features/crm/context/**
+  - apps/web/src/features/slack-import/queries/**
+  - apps/web/src/features/slack-import/primitives/**
+  - apps/web/src/features/slack-import/components/**
+  - apps/web/src/features/slack-import/views/**
   - apps/web/src/features/channels-view/queries/channel-detail-source*
   - apps/web/src/features/channels-view/primitives/create-channel-detail*
   - apps/web/src/features/channels-view/context/channel-detail-source*
