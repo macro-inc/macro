@@ -52,10 +52,10 @@ fn database<'a>(
     }
 }
 fn table<'a>(
-    catalog: &'a ViewerCatalog,
+    catalog: &'a database_sql::catalog::Catalog,
     name: &TableName,
 ) -> Result<&'a database_sql::catalog::Table, SqlError> {
-    database_sql::resolve::named_table(catalog.catalog(), name)
+    database_sql::resolve::named_table(catalog, name)
         .map_err(|error| SqlError::Compile(CompileError::Resolve(error)))
 }
 fn column(table: &database_sql::catalog::Table, name: &Identifier) -> Result<ColumnId, SqlError> {
@@ -63,7 +63,10 @@ fn column(table: &database_sql::catalog::Table, name: &Identifier) -> Result<Col
         .map(|column| column.placement)
         .map_err(|error| SqlError::Compile(CompileError::Resolve(error)))
 }
-fn kind(catalog: &ViewerCatalog, value: &SchemaColumnKind) -> Result<ColumnKind, SqlError> {
+fn kind(
+    catalog: &database_sql::catalog::Catalog,
+    value: &SchemaColumnKind,
+) -> Result<ColumnKind, SqlError> {
     Ok(match value {
         SchemaColumnKind::Value(kind) => *kind,
         SchemaColumnKind::Relation(name) => {
@@ -76,7 +79,7 @@ fn kind(catalog: &ViewerCatalog, value: &SchemaColumnKind) -> Result<ColumnKind,
     })
 }
 fn create_column(
-    catalog: &ViewerCatalog,
+    catalog: &database_sql::catalog::Catalog,
     table: TableId,
     definition: &ColumnDefinition,
 ) -> Result<DatabaseOp, SqlError> {
@@ -183,7 +186,7 @@ impl<
                     .iter()
                     .map(|name| {
                         table(
-                            &selected,
+                            selected.catalog(),
                             &TableName {
                                 database: Some(Identifier(database.database.name.clone())),
                                 table: name.clone(),
@@ -207,8 +210,30 @@ impl<
                         name: name.table.0.clone(),
                     },
                 });
-                for definition in &columns {
-                    ops.push(create_column(&catalog, table, definition)?);
+                // Resolve against the schema being created so self-relations bind
+                // to this table, including when another database has its name.
+                let mut schema = crate::catalog::schema(&catalog.databases);
+                if let Some(selected) = schema
+                    .databases
+                    .iter_mut()
+                    .find(|candidate| candidate.id == database.database.id)
+                {
+                    selected.tables.push(database_sql::catalog::TableSchema {
+                        id: table,
+                        name: name.table.0.clone(),
+                        columns: Vec::new(),
+                    });
+                }
+                let creating = database_sql::catalog::build(&schema, Some(database.database.id));
+                for mut definition in columns {
+                    if let SchemaColumnKind::Relation(target) = &mut definition.kind {
+                        if target.database.is_none()
+                            && target.table.0.eq_ignore_ascii_case(&name.table.0)
+                        {
+                            target.database = Some(Identifier(database.database.name.clone()));
+                        }
+                    }
+                    ops.push(create_column(&creating, table, &definition)?);
                 }
                 (
                     database.database.id,
@@ -220,7 +245,7 @@ impl<
                 )
             }
             SchemaStatement::DropTable(name) => {
-                let table = table(&catalog, &name)?;
+                let table = table(catalog.catalog(), &name)?;
                 ops.push(DatabaseOp::Table {
                     table: table.id,
                     change: TableChange::Delete,
@@ -235,7 +260,7 @@ impl<
                 table: name,
                 change,
             } => {
-                let table = table(&catalog, &name)?;
+                let table = table(catalog.catalog(), &name)?;
                 let op = match change {
                     SchemaChange::Rename(name) => DatabaseOp::Table {
                         table: table.id,
@@ -245,7 +270,7 @@ impl<
                         },
                     },
                     SchemaChange::AddColumn(definition) => {
-                        create_column(&catalog, table.id, &definition)?
+                        create_column(catalog.catalog(), table.id, &definition)?
                     }
                     SchemaChange::DropColumn(name) => DatabaseOp::Column {
                         table: table.id,
@@ -302,7 +327,7 @@ impl<
                         table: table.id,
                         column: column(table, &name)?,
                         change: ColumnChange::ChangeType {
-                            to: kind(&catalog, &to)?,
+                            to: kind(catalog.catalog(), &to)?,
                         },
                     },
                 };
@@ -348,12 +373,24 @@ impl<
                 })
             })
             .collect();
+        let conflict_table = ops.iter().find_map(|op| match op {
+            DatabaseOp::ReorderTables { .. } => None,
+            other => other.table(),
+        });
         let written: Vec<_> = ops.iter().map(DatabaseOp::table).collect();
         let results = self
             .databases
             .apply_ops(receipt, viewer, OpBatch { ops, base_versions })
             .await
-            .map_err(schema_error)?;
+            .map_err(|error| match (error, conflict_table) {
+                (DatabaseError::VersionConflict, Some(table_id)) => {
+                    SqlError::VersionConflict { table_id }
+                }
+                (DatabaseError::VersionConflict, None) => {
+                    SqlError::SchemaVersionConflict { database_id }
+                }
+                (other, _) => schema_error(other),
+            })?;
         let mut versions = HashMap::new();
         for (table, result) in written.into_iter().zip(&results) {
             if let models_databases::OpResult::ReorderTables { tables } = result {

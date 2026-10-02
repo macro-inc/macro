@@ -123,6 +123,12 @@ pub enum SqlError {
         /// The table.
         table_id: TableId,
     },
+    /// One of the tables in a schema batch moved past the caller's version.
+    #[error("database {database_id} changed since its schema was read")]
+    SchemaVersionConflict {
+        /// The database whose schema should be refreshed.
+        database_id: DatabaseId,
+    },
     /// The statement is longer than any statement is allowed to be.
     #[error("the statement is too long")]
     TooLong,

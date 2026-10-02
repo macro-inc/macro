@@ -1183,3 +1183,87 @@ async fn schema_reorder_resolves_tables_only_in_the_selected_database() {
         );
     }
 }
+
+#[tokio::test]
+async fn create_table_resolves_relations_against_its_destination_schema() {
+    for target in ["Tasks", "Offsite.Tasks", "Venues.Tasks"] {
+        let world = world();
+        {
+            let mut held = world.lock().unwrap();
+            held.databases[1].tables[0].table.name = "Tasks".into();
+            held.op_answers.push_back(Ok(Vec::new()));
+        }
+        sql(&world)
+            .execute(
+                agent_for(OWNER),
+                SqlRequest {
+                    sql: format!("CREATE TABLE Offsite.Tasks (Parent relation({target}))"),
+                    scope: None,
+                    base_versions: HashMap::new(),
+                },
+            )
+            .await
+            .unwrap();
+        let held = world.lock().unwrap();
+        let batch = &held.applied[0];
+        let created = batch.ops[0].table().unwrap();
+        let (expected_database, expected_table) = if target == "Venues.Tasks" {
+            (
+                held.databases[1].database.id,
+                held.databases[1].tables[0].table.id,
+            )
+        } else {
+            (OFFSITE, created)
+        };
+        assert!(matches!(
+            &batch.ops[1],
+            DatabaseOp::Column {
+                change: models_databases::ColumnChange::Create {
+                    definition: models_databases::NewColumn::New {
+                        kind: models_databases::ColumnKind::Relation { database, table },
+                        ..
+                    },
+                    ..
+                },
+                ..
+            } if *database == expected_database && *table == expected_table
+        ));
+    }
+}
+
+#[tokio::test]
+async fn schema_version_conflicts_keep_the_retry_signal() {
+    for statement in [
+        "ALTER TABLE Offsite.Guests RENAME COLUMN Name TO FullName",
+        "ALTER DATABASE Offsite REORDER TABLES (Guests)",
+    ] {
+        let world = world();
+        world
+            .lock()
+            .unwrap()
+            .op_answers
+            .push_back(Err(DatabaseError::VersionConflict));
+        let error = sql(&world)
+            .execute(
+                agent_for(OWNER),
+                SqlRequest {
+                    sql: statement.into(),
+                    scope: None,
+                    base_versions: HashMap::from([(GUESTS, TableVersion(1))]),
+                },
+            )
+            .await
+            .unwrap_err();
+        if statement.starts_with("ALTER DATABASE") {
+            assert!(
+                matches!(error, SqlError::SchemaVersionConflict { database_id } if database_id == OFFSITE),
+                "{error:?}"
+            );
+        } else {
+            assert!(
+                matches!(error, SqlError::VersionConflict { table_id } if table_id == GUESTS),
+                "{error:?}"
+            );
+        }
+    }
+}
