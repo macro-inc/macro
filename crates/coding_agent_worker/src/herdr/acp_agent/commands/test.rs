@@ -6,10 +6,10 @@ use agent_fold::domain::ports::FoldMachine as _;
 #[test]
 fn advertised_commands_reach_macro_metadata_for_each_provider() {
     for (kind, expected) in [
-        (TuiAgent::Claude, vec!["compact", "init", "fast"]),
+        (TuiAgent::Claude, vec!["compact", "init", "fast", "effort"]),
         (
             TuiAgent::Codex,
-            vec!["compact", "init", "fast", "ultrafast"],
+            vec!["compact", "init", "fast", "ultrafast", "model"],
         ),
     ] {
         let mut fold = FoldMachineImpl::new();
@@ -39,13 +39,22 @@ fn advertised_commands_reach_macro_metadata_for_each_provider() {
 }
 
 #[test]
-fn only_standalone_provider_speed_controls_complete_on_delivery() {
+fn only_standalone_provider_controls_complete_on_delivery() {
     for (kind, text) in [
         (TuiAgent::Claude, "/fast"),
         (TuiAgent::Claude, " /fast on "),
         (TuiAgent::Claude, "/fast off"),
         (TuiAgent::Codex, "/fast"),
         (TuiAgent::Codex, "/ultrafast"),
+        (TuiAgent::Claude, "/effort"),
+        (TuiAgent::Claude, "/effort low"),
+        (TuiAgent::Claude, "/effort medium"),
+        (TuiAgent::Claude, "/effort high"),
+        (TuiAgent::Claude, "/effort xhigh"),
+        (TuiAgent::Claude, "/effort max"),
+        (TuiAgent::Claude, "/effort auto"),
+        (TuiAgent::Claude, "/effort status"),
+        (TuiAgent::Codex, "/model"),
     ] {
         assert_eq!(native_control(kind, text), Some(text.trim()));
     }
@@ -61,6 +70,9 @@ fn only_standalone_provider_speed_controls_complete_on_delivery() {
             "/fast explain this",
             "/fast\nfix the bug",
             "/fast\roff",
+            "/effort high explain this",
+            "/effort\nfix the bug",
+            "/effortful",
         ] {
             assert_eq!(native_control(kind, text), None, "{kind:?}: {text:?}");
         }
@@ -68,4 +80,7 @@ fn only_standalone_provider_speed_controls_complete_on_delivery() {
     assert_eq!(native_control(TuiAgent::Claude, "/ultrafast"), None);
     assert_eq!(native_control(TuiAgent::Claude, "/fast on extra"), None);
     assert_eq!(native_control(TuiAgent::Codex, "/fast on"), None);
+    assert_eq!(native_control(TuiAgent::Claude, "/effort invalid"), None);
+    assert_eq!(native_control(TuiAgent::Codex, "/effort high"), None);
+    assert_eq!(native_control(TuiAgent::Codex, "/model extra"), None);
 }

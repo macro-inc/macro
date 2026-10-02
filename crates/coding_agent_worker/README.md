@@ -40,8 +40,15 @@ the native TUI. Macro acknowledges delivery without claiming the setting
 changed: check the response in Herdr, including any confirmation or unavailable
 mode message. Claude accepts `/fast on` and `/fast off`; bare `/fast` opens its
 native controls. Codex's speed commands toggle tiers available to its current
-model and account. These controls need not generate an assistant turn, so they
-do not wait for transcript output. Ordinary prompts still require confirmation.
+model and account. Claude also advertises `/effort`, with an optional level,
+`auto`, or `status`. Codex advertises `/model`, which opens its native model and
+reasoning effort picker; choose the level in Herdr. These controls need not
+generate an assistant turn, so they do not wait for transcript output. Ordinary
+prompts still require confirmation.
+
+Effort choices are validated by the native agent. Macro's model dropdown only
+projects the ACP model option; it does not currently expose a separate effort
+selector or mirror effort changes made inside Herdr.
 
 Herdr does not provide command discovery; this is a curated built-in list, not
 the full set of native commands or installed skills. Session-switching commands
