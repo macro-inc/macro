@@ -226,12 +226,11 @@ impl<
                 }
                 let creating = database_sql::catalog::build(&schema, Some(database.database.id));
                 for mut definition in columns {
-                    if let SchemaColumnKind::Relation(target) = &mut definition.kind {
-                        if target.database.is_none()
-                            && target.table.0.eq_ignore_ascii_case(&name.table.0)
-                        {
-                            target.database = Some(Identifier(database.database.name.clone()));
-                        }
+                    if let SchemaColumnKind::Relation(target) = &mut definition.kind
+                        && target.database.is_none()
+                        && target.table.0.eq_ignore_ascii_case(&name.table.0)
+                    {
+                        target.database = Some(Identifier(database.database.name.clone()));
                     }
                     ops.push(create_column(&creating, table, &definition)?);
                 }
