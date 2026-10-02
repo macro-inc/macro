@@ -450,3 +450,10 @@ a SQL statement however many rows it touches, or a schema change such as a new
 table or column. Consecutive edits by one person fold into `made N edits`. Changes an
 AI agent made read as the agent acting for the user who asked. The same entries
 appear on `/app/component/activity`; clicking one opens the database.
+
+Database awareness identifies each mounted client with a random peer ID while the
+server supplies its authenticated user. Open the same database in two tabs signed
+in as the same user: each should show the other tab's selection and name. Moving
+or leaving one peer must not overwrite or remove another peer's selection.
+Refresh failures emit a `database.rows.read_refresh` span with the database ID,
+table ID, and failure kind, plus a `database rows could not be refreshed` log.

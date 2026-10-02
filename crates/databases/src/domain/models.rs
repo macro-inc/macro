@@ -973,6 +973,11 @@ pub fn grant_writes(grant: AccessLevel) -> bool {
 #[derive(utoipa::ToSchema, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Awareness {
+    /// This mounted client's random peer id, distinct from its authenticated user.
+    /// Older clients omit it and remain visible as one peer per user.
+    #[schema(value_type = Option<Uuid>, nullable = false)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub peer_id: Option<Uuid>,
     /// The table the viewer is looking at.
     #[schema(value_type = Uuid)]
     pub table_id: TableId,

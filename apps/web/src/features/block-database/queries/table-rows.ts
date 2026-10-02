@@ -323,12 +323,33 @@ export function createDatabaseRowsSource(props: {
     const failed = rowsQuery.error();
     const schema =
       failed && isStaleSchema(failed) ? refreshSchema() : okAsync(undefined);
-    return schema.andThen(() => {
-      const table = currentTable();
-      return table
-        ? readAgain(table.table.version)
-        : errAsync<void, DatabaseReadFailure>(TABLE_UNAVAILABLE);
-    });
+    const span = Telemetry.span('database.rows.read_refresh');
+    span.setAttr('database.id', props.databaseId);
+    span.setAttr('database.table_id', tableId);
+    const reading = span.run(() =>
+      schema.andThen(() => {
+        const table = currentTable();
+        return table
+          ? readAgain(table.table.version)
+          : errAsync<void, DatabaseReadFailure>(TABLE_UNAVAILABLE);
+      })
+    );
+    return reading
+      .andTee(() => {
+        span.setAttr('database.outcome', 'success');
+        span.end();
+      })
+      .orTee((failure) => {
+        span.setAttr('database.outcome', 'error');
+        span.setAttr('database.error_kind', failure.kind);
+        span.error(JSON.stringify(failure));
+        Telemetry.warn('database rows could not be refreshed', {
+          databaseId: props.databaseId,
+          tableId,
+          failure: JSON.stringify(failure),
+        });
+        span.end();
+      });
   }
   /** Read these rows again by id, through the engine, into the cache the view reads. */
   function readRows(rowIds: string[]): ResultAsync<void, DatabaseReadFailure> {
