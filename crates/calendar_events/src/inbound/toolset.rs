@@ -23,11 +23,15 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::domain::{
+    meeting_links::{CreateEventWithMacroCallError, MeetingLinkError},
     models::{
         CalendarAttendeeInput, CalendarEvent, EventReminderOverride, EventReminders, EventTime,
         OutOfOfficeAutoDeclineMode, OutOfOfficeProperties,
     },
-    ports::{CalendarMutationError, CalendarMutationService, CalendarOccurrenceService},
+    ports::{
+        CalendarMutationError, CalendarMutationService, CalendarOccurrenceService,
+        MeetingLinkProvider,
+    },
 };
 
 pub use create_calendar_event::CreateCalendarEvent;
@@ -43,66 +47,76 @@ pub use update_calendar_event::{
 };
 
 /// Service context for calendar AI tools.
-pub struct CalendarToolContext<M, O>
+pub struct CalendarToolContext<M, O, L>
 where
     M: CalendarMutationService,
     O: CalendarOccurrenceService,
+    L: MeetingLinkProvider,
 {
     /// Write path: user-initiated mutations, written through to the provider.
     pub mutations: Arc<M>,
     /// Read path: bounded occurrence viewport queries.
     pub occurrences: Arc<O>,
+    /// Macro meetings minted for events that carry a Macro call.
+    pub meeting_links: Arc<L>,
 }
 
-impl<M, O> Clone for CalendarToolContext<M, O>
+impl<M, O, L> Clone for CalendarToolContext<M, O, L>
 where
     M: CalendarMutationService,
     O: CalendarOccurrenceService,
+    L: MeetingLinkProvider,
 {
     fn clone(&self) -> Self {
         Self {
             mutations: Arc::clone(&self.mutations),
             occurrences: Arc::clone(&self.occurrences),
+            meeting_links: Arc::clone(&self.meeting_links),
         }
     }
 }
 
-impl<M, O> CalendarToolContext<M, O>
+impl<M, O, L> CalendarToolContext<M, O, L>
 where
     M: CalendarMutationService,
     O: CalendarOccurrenceService,
+    L: MeetingLinkProvider,
 {
-    /// Create a calendar tool context from its two ports.
-    pub fn new(mutations: Arc<M>, occurrences: Arc<O>) -> Self {
+    /// Create a calendar tool context from its ports. Hosts without a call
+    /// service pass [`crate::domain::ports::UnavailableMeetingLinks`].
+    pub fn new(mutations: Arc<M>, occurrences: Arc<O>, meeting_links: Arc<L>) -> Self {
         Self {
             mutations,
             occurrences,
+            meeting_links,
         }
     }
 }
 
-fn shared_calendar_toolset<M, O>() -> AsyncToolCollection<CalendarToolContext<M, O>>
+fn shared_calendar_toolset<M, O, L>() -> AsyncToolCollection<CalendarToolContext<M, O, L>>
 where
     M: CalendarMutationService,
     O: CalendarOccurrenceService,
+    L: MeetingLinkProvider,
 {
     AsyncToolCollection::new()
-        .add_tool::<ListCalendarEvents, CalendarToolContext<M, O>>()
-        .add_tool::<ListCalendars, CalendarToolContext<M, O>>()
-        .add_tool::<UpdateCalendarEvent, CalendarToolContext<M, O>>()
-        .add_tool::<DeleteCalendarEvent, CalendarToolContext<M, O>>()
+        .add_tool::<ListCalendarEvents, CalendarToolContext<M, O, L>>()
+        .add_tool::<ListCalendars, CalendarToolContext<M, O, L>>()
+        .add_tool::<UpdateCalendarEvent, CalendarToolContext<M, O, L>>()
+        .add_tool::<DeleteCalendarEvent, CalendarToolContext<M, O, L>>()
 }
 
 /// Create the AI chat calendar toolset.
 ///
 /// Event creation is deferred until the user reviews and executes the pending
 /// call. Reads, updates, and deletions continue to execute in the agent loop.
-pub fn calendar_toolset<M, O>() -> AsyncToolCollection<CalendarToolContext<M, O>>
+pub fn calendar_toolset<M, O, L>() -> AsyncToolCollection<CalendarToolContext<M, O, L>>
 where
     M: CalendarMutationService,
     O: CalendarOccurrenceService,
+    L: MeetingLinkProvider,
 {
-    shared_calendar_toolset().add_user_tool::<CreateCalendarEvent, CalendarToolContext<M, O>>()
+    shared_calendar_toolset().add_user_tool::<CreateCalendarEvent, CalendarToolContext<M, O, L>>()
 }
 
 /// Create the calendar toolset for hosts without a composer — the MCP server
@@ -111,12 +125,13 @@ where
 /// These hosts receive the real create tool and apply their own confirmation
 /// policy from its annotations rather than the chat-specific deferred flow,
 /// which only the chat frontend can finish.
-pub fn mcp_toolset<M, O>() -> AsyncToolCollection<CalendarToolContext<M, O>>
+pub fn mcp_toolset<M, O, L>() -> AsyncToolCollection<CalendarToolContext<M, O, L>>
 where
     M: CalendarMutationService,
     O: CalendarOccurrenceService,
+    L: MeetingLinkProvider,
 {
-    shared_calendar_toolset().add_tool::<CreateCalendarEvent, CalendarToolContext<M, O>>()
+    shared_calendar_toolset().add_tool::<CreateCalendarEvent, CalendarToolContext<M, O, L>>()
 }
 
 /// The mutually exclusive time shape supplied to calendar tools.
@@ -464,5 +479,37 @@ fn mutation_tool_error(action: &str, error: CalendarMutationError) -> ToolCallEr
     ToolCallError {
         description: format!("Failed to {action}: {description}"),
         internal_error: error.into(),
+    }
+}
+
+/// Map a failure creating an event with a Macro call to an agent-readable
+/// tool error. Calendar failures read exactly like a plain create; meeting
+/// failures say that nothing reached the calendar.
+fn macro_call_create_tool_error(error: CreateEventWithMacroCallError) -> ToolCallError {
+    match error {
+        CreateEventWithMacroCallError::Calendar(error) => {
+            mutation_tool_error("create the calendar event", error)
+        }
+        CreateEventWithMacroCallError::MeetingLink(error) => {
+            let description = match &error {
+                MeetingLinkError::InvalidInput(message) => {
+                    format!("The Macro call could not be created: {message}")
+                }
+                MeetingLinkError::Unavailable => {
+                    "Macro calls cannot be created from here. Retry with `addMacroCall` false, \
+                     or use `addGoogleMeet` for video conferencing."
+                        .to_string()
+                }
+                MeetingLinkError::Failed(_) => {
+                    "The Macro call could not be created right now. Nothing was added to the \
+                     calendar; try again shortly."
+                        .to_string()
+                }
+            };
+            ToolCallError {
+                description: format!("Failed to create the calendar event: {description}"),
+                internal_error: error.into(),
+            }
+        }
     }
 }

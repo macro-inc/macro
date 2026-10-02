@@ -428,17 +428,30 @@ pub type ToolCalendarReadService = calendar_events::domain::service::CalendarSer
 pub type ToolCalendarMutationService =
     calendar_events::outbound::calendar_service_mutations::CalendarServiceMutations;
 
+/// Type alias for the meeting-link provider used by AI tools. Macro calls
+/// attached to events are minted through the same call service the call
+/// tools run on, owned by the requesting user.
+pub type ToolCalendarMeetingLinks =
+    calendar_events::outbound::call_meeting_links::CallServiceMeetingLinks<ToolCallService>;
+
 /// Type alias for the calendar AI tool context.
-pub type ToolCalendarToolContext =
-    CalendarToolContext<ToolCalendarMutationService, ToolCalendarReadService>;
+pub type ToolCalendarToolContext = CalendarToolContext<
+    ToolCalendarMutationService,
+    ToolCalendarReadService,
+    ToolCalendarMeetingLinks,
+>;
 
 /// Build the calendar AI tool context: reads query the local occurrence
 /// projections from `pool`; mutations call the calendar service at
-/// `calendar_service_url` with the shared internal API key.
+/// `calendar_service_url` with the shared internal API key; Macro calls
+/// attached to new events are minted through `call_service` and linked on
+/// `app_url`, the browser origin users open meetings on.
 pub fn build_calendar_tool_context(
     pool: sqlx::PgPool,
     calendar_service_url: macro_service_urls::CalendarServiceUrl,
     internal_api_key: String,
+    call_service: Arc<ToolCallService>,
+    app_url: macro_service_urls::AppServiceUrl,
 ) -> ToolCalendarToolContext {
     CalendarToolContext::new(
         Arc::new(
@@ -450,6 +463,12 @@ pub fn build_calendar_tool_context(
         Arc::new(calendar_events::domain::service::CalendarService::new(
             calendar_events::outbound::pg::PgCalendarRepository::new(pool),
         )),
+        Arc::new(
+            calendar_events::outbound::call_meeting_links::CallServiceMeetingLinks::new(
+                call_service,
+                app_url.as_str(),
+            ),
+        ),
     )
 }
 

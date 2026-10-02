@@ -39,8 +39,8 @@ use lexical_client::LexicalClient;
 use macro_env::Environment;
 use macro_env_var::{env_var, maybe_env_var};
 use macro_service_urls::{
-    AiEditingWorkerUrl, CalendarServiceUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl,
-    EmailServiceUrl, LexicalServiceUrl, SyncServiceUrl,
+    AiEditingWorkerUrl, AppServiceUrl, CalendarServiceUrl, ConnectionGatewayUrl,
+    DocumentStorageServiceUrl, EmailServiceUrl, LexicalServiceUrl, SyncServiceUrl,
 };
 use notification::domain::service::{NotificationReaderService, PlatformArnConfig};
 use notification::outbound::queue::SqsQueue;
@@ -391,6 +391,8 @@ pub async fn build_tool_service_context_from_env(
         pool.clone(),
         calendar_service_url,
         env.internal_api_key.to_string(),
+        call_tool_context.service.clone(),
+        AppServiceUrl::new()?,
     );
 
     let notification_reader_service = NotificationReaderService {

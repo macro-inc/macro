@@ -32,8 +32,8 @@ use frecency::domain::services::FrecencyQueryServiceImpl;
 use frecency::outbound::postgres::FrecencyPgStorage;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_service_urls::{
-    AiEditingWorkerUrl, CalendarServiceUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl,
-    EmailServiceUrl, LexicalServiceUrl, SyncServiceUrl,
+    AiEditingWorkerUrl, AppServiceUrl, CalendarServiceUrl, ConnectionGatewayUrl,
+    DocumentStorageServiceUrl, EmailServiceUrl, LexicalServiceUrl, SyncServiceUrl,
 };
 use mcp_auth_proxy::{
     domain::service::McpAuthProxyServiceImpl,
@@ -394,6 +394,14 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         side_effect_clients.macro_event_broker,
     );
 
+    let calendar_tool_context = ai_tools::build_calendar_tool_context(
+        db.clone(),
+        CalendarServiceUrl::new()?,
+        config.internal_api_key.to_string(),
+        call_tool_context.service.clone(),
+        AppServiceUrl::new()?,
+    );
+
     let tool_context = ToolServiceContext {
         email_service_client: Arc::new(EmailServiceClientExternal::new(
             email_service_client.url().to_owned(),
@@ -414,11 +422,7 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         properties_tool_context,
         email_tool_context,
         call_tool_context,
-        calendar_tool_context: ai_tools::build_calendar_tool_context(
-            db.clone(),
-            CalendarServiceUrl::new()?,
-            config.internal_api_key.to_string(),
-        ),
+        calendar_tool_context,
         notification_tool_context,
         reminders_tool_context: ai_tools::build_reminders_tool_context(
             db.clone(),

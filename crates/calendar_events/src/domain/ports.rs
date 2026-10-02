@@ -6,6 +6,7 @@ use chrono::{DateTime, Utc};
 use rootcause::Report;
 use uuid::Uuid;
 
+use super::meeting_links::{MeetingLink, MeetingLinkError, MeetingLinkRequest};
 use super::models::{
     ActorInboxes, AppliedGoogleGrant, AttendeeResponseStatus, CalendarAttendee,
     CalendarBackfillClaim, CalendarBackfillFailureDisposition, CalendarBackfillFailureOutcome,
@@ -714,6 +715,52 @@ pub trait CalendarMutationService: Send + Sync + 'static {
         requester_id: &str,
         email_link_id: Uuid,
     ) -> impl Future<Output = Result<(), CalendarMutationError>> + Send;
+}
+
+/// Outbound port minting Macro meetings for calendar events.
+///
+/// Implementations act as the requester: the meeting is owned by the user
+/// whose event carries it, so only they can later edit or cancel it.
+pub trait MeetingLinkProvider: Send + Sync + 'static {
+    /// Mint a meeting the requester owns and return its join link.
+    fn create_meeting_link(
+        &self,
+        requester_id: &str,
+        request: MeetingLinkRequest,
+    ) -> impl Future<Output = Result<MeetingLink, MeetingLinkError>> + Send;
+
+    /// Cancel a meeting the requester owns. Used to roll back a meeting
+    /// whose event never got written.
+    fn cancel_meeting_link(
+        &self,
+        requester_id: &str,
+        meeting_id: Uuid,
+    ) -> impl Future<Output = Result<(), MeetingLinkError>> + Send;
+}
+
+/// Unwired meeting-link port for hosts that expose calendar operations but
+/// have no call service. Every method fails with
+/// [`MeetingLinkError::Unavailable`], so an event asking for a Macro call
+/// is refused before anything reaches the calendar.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct UnavailableMeetingLinks;
+
+impl MeetingLinkProvider for UnavailableMeetingLinks {
+    async fn create_meeting_link(
+        &self,
+        _requester_id: &str,
+        _request: MeetingLinkRequest,
+    ) -> Result<MeetingLink, MeetingLinkError> {
+        Err(MeetingLinkError::Unavailable)
+    }
+
+    async fn cancel_meeting_link(
+        &self,
+        _requester_id: &str,
+        _meeting_id: Uuid,
+    ) -> Result<(), MeetingLinkError> {
+        Err(MeetingLinkError::Unavailable)
+    }
 }
 
 /// Use-case failures surfaced by calendar mutations.

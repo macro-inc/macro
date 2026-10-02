@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{CalendarToolContext, mutation_tool_error};
 use crate::domain::ports::{
-    CalendarDeletionScope, CalendarMutationService, CalendarOccurrenceService,
+    CalendarDeletionScope, CalendarMutationService, CalendarOccurrenceService, MeetingLinkProvider,
 };
 
 /// How much of a recurring series a deletion removes.
@@ -89,17 +89,18 @@ impl ToolAnnotated for DeleteCalendarEvent {
 }
 
 #[async_trait]
-impl<M, O> AsyncTool<CalendarToolContext<M, O>> for DeleteCalendarEvent
+impl<M, O, L> AsyncTool<CalendarToolContext<M, O, L>> for DeleteCalendarEvent
 where
     M: CalendarMutationService,
     O: CalendarOccurrenceService,
+    L: MeetingLinkProvider,
 {
     type Output = DeleteCalendarEventResponse;
 
     #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id), err)]
     async fn call(
         &self,
-        service_context: ServiceContext<CalendarToolContext<M, O>>,
+        service_context: ServiceContext<CalendarToolContext<M, O, L>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         tracing::info!(params=?self, "Delete calendar event");

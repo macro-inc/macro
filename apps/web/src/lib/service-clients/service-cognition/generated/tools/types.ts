@@ -2815,7 +2815,9 @@ export interface BotWebhook {
  *
  * The event lands on the user's primary calendar unless `calendarId` (from ListCalendars) targets another one. For recurring events pass RFC 5545 lines in `recurrenceLines`, e.g. ["RRULE:FREQ=WEEKLY;BYDAY=MO"]. Returns the created event with its `eventId` for later updates or deletion. Fails if the user has no writable calendar connected.
  *
- * Set `eventType` to "out_of_office" to mark the user as out of office (e.g. "mark me out of office Thursday"). Out-of-office events must land on the user's primary calendar (omit `calendarId`), must be timed rather than all-day, and take no attendees or Google Meet (leave `addGoogleMeet` false); use `outOfOffice` to control whether conflicting meetings are auto-declined. The type cannot be changed afterward.
+ * For video conferencing pick at most one of `addMacroCall` (a Macro meeting link, the default choice for a Macro user's meeting) or `addGoogleMeet` (a Google Meet conference). A Macro call is created for the user, scheduled to the event's times, and its join link is written into the event's location and description so every attendee's invitation carries it; the returned event's `location` holds the link.
+ *
+ * Set `eventType` to "out_of_office" to mark the user as out of office (e.g. "mark me out of office Thursday"). Out-of-office events must land on the user's primary calendar (omit `calendarId`), must be timed rather than all-day, and take no attendees or video conferencing (leave `addMacroCall` and `addGoogleMeet` false); use `outOfOffice` to control whether conflicting meetings are auto-declined. The type cannot be changed afterward.
  */
 export interface CreateCalendarEvent {
   /**
@@ -2848,7 +2850,11 @@ export interface CreateCalendarEvent {
    */
   reminders?: EventRemindersInput | null;
   /**
-   * Attach a freshly generated Google Meet video conference to the event.
+   * Attach a freshly created Macro call to the event: a Macro meeting link scheduled to the event's times, written into the event's location and description. Mutually exclusive with `addGoogleMeet`.
+   */
+  addMacroCall?: boolean;
+  /**
+   * Attach a freshly generated Google Meet video conference to the event. Mutually exclusive with `addMacroCall`.
    */
   addGoogleMeet?: boolean;
   eventType?: CalendarEventTypeInput;
