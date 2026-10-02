@@ -277,6 +277,12 @@ impl InfraEnv {
             "OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL".into(),
             "http://document-storage-service:8080".into(),
         );
+        // Historical indexing calls the processing service's scoped backfill API,
+        // not the search query service. Both run on the local Compose network.
+        env.insert(
+            "OVERRIDE_SEARCH_PROCESSING_SERVICE_URL".into(),
+            "http://search-processing-service:8080".into(),
+        );
         // Account deletion awaits both owning services from the auth container.
         env.insert(
             "OVERRIDE_AGENT_HARNESS_SERVICE_URL".into(),
@@ -648,6 +654,9 @@ struct BootStubEnv;
 
 impl BootStubEnv {
     fn write(&self, env: &mut BTreeMap<String, String>) {
+        // The worker is opt-in and ships paused; an explicit env-file can enable it.
+        env.insert("SLACK_IMPORT_ENABLED".into(), "false".into());
+        env.insert("SLACK_IMPORT_CONCURRENCY".into(), "1".into());
         // connection_gateway config reads `REDIS_HOST` (a Redis URL, not a
         // hostname — see `redis::Client::open`).
         env.insert("REDIS_HOST".into(), "redis://redis:6379".into());
