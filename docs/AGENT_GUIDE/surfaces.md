@@ -102,11 +102,35 @@ other entity partitions, and notified-at sorting still use the network path.
 The Mark done action (`e`, row menu) hides its rows at once from GraphQL lists that
 exclude done items, such as Email Important/Noise and Home Signal, without waiting
 for the server. Email All keeps the row and flips its done indicator immediately.
-Undo restores a previously admitted row even after the cache has removed it,
+GraphQL Undo is offered as soon as Done applies locally, even while its initial
+write is pending. Undo restores the row and focus immediately; its server write
+waits for the initial outcomes and uses only acknowledged notification IDs.
+A late Done reply must not settle or overwrite the newer Undo display intent.
+Undo also restores a previously admitted row after the cache has removed it,
 without waiting for the reversal's server reply; changing filters/sort clears
 those view-local restoration snapshots. Home's separate recent-activity inclusion
 rules are unchanged. Test Done/Undo/Redo with delayed replies and verify both flat
 and grouped rows/counts. A failure must roll back only its own local intent.
+Test mixed committed/queued/rejected archives, notification writes, and reminder
+completions, including an archive that fails while its notifications succeed
+(and vice versa). Accepted writes retain Undo; rejected siblings must neither
+reappear in its request nor be retried by Redo. Partial feedback keeps an Undo
+action. A reply with no matching notification IDs must release that target's
+optimistic hide and notification overrides immediately, even if Undo was never
+clicked and mounted readers remain stale. Do not wait for acknowledgement or a
+timer when there is no receipt. Accepted siblings keep their own display intent;
+a no-op target cannot borrow their IDs to restore its row. Mixed accepted/no-op
+results replace the optimistic full-count toast with the actual completed count
+and retain Undo for accepted writes. An empty notification receipt alone must not
+make a successfully archived email or completed reminder look partially failed.
+Partial Undo/Redo failures retry only the failed writes.
+If every initial write fails, retire its pending Undo/Redo entry and unwind both
+Done and any early Undo overrides. Disposal or clearing history while a reversal
+is pending must not resurrect that entry when its response arrives. Also delay
+Redo, then perform a new action: the late Redo's success or failure must not
+repopulate either history stack or show its stale completion toast. The next Undo
+must still target the newer action; already-dispatched network writes are not
+cancelled by this history fence.
 Newer in-scope activity can re-admit a row, but loading an older notification or
 activity in a separate channel thread must not. Redo targets the original exact
 notification IDs, not notifications received since the original action. A newer
@@ -118,6 +142,14 @@ Login/logout retires old buckets; even same-account native reauthentication must
 not let old overlay Undo/Redo handles or a late refresh republish old intent.
 Verify account changes with overlapping entity IDs and a pending/failed refresh.
 After a successful Done, verify that the row stays gone after a reload.
+Test GraphQL list optimism independently of REST: block REST Soup, email-thread,
+and user-notification data endpoints before page initialization, then confirm
+GraphQL alone populates the list. Hold GraphQL mutation replies while testing
+Done/Undo/Redo and rejection: row feedback must not depend on REST cache reads,
+patches, cancellation, or invalidation. Auth/account metadata is outside this
+row-data boundary. Test the REST path separately, not as a GraphQL fallback.
+Reminders retain their dedicated completion API; GraphQL Soup readers reconcile
+that completion through GraphQL, not the REST Soup normalizer.
 In Tasks, Email, Home and Drive, rows keep their DOM when the list updates. A
 property edit or a rename updates the edited row in place instead of rebuilding
 every visible row. To verify, watch the row nodes with a `MutationObserver` while

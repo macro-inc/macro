@@ -21,11 +21,17 @@ import {
   type NotificationEntityRef,
   toNotificationEntityRef,
 } from '@queries/notification/entity-mutations';
-import { type UndoHandle, useUndoableMutation } from '@queries/undo';
+import { type UndoHandle, useMutationUndoContext } from '@queries/undo';
+import { useMutation } from '@tanstack/solid-query';
 import type {
   EntityActionListState,
   EntityActionNavigationHandler,
 } from './entity-action-context';
+import {
+  createGraphqlDoneOperation,
+  type DoneEntityKey,
+  doneEntityKey,
+} from './graphql-done-operation';
 
 // Valid list views where the mark done should be allowed to run
 const VALID_MARK_DONE_LIST_VIEWS: `${ListView}-${string}`[] = [
@@ -57,6 +63,9 @@ const isMarkDoneTarget = (e: EntityData) =>
   !(e.type === 'email' && e.done === true) &&
   !(e.type === 'reminder' && e.completedAt != null);
 
+const isEmailFollowupReminder = (entity: EntityData) =>
+  entity.type === 'reminder' && Boolean(entity.emailFollowup);
+
 type MakeMarkDoneOptions = {
   userId?: () => string | undefined;
   notificationSource: () => NotificationSource;
@@ -66,10 +75,14 @@ type MakeMarkDoneOptions = {
 };
 
 type MarkDoneVariables = {
+  /** Snapshot the transport when this action starts, not when its reply lands. */
+  earlyUndo: boolean;
+  operation?: ReturnType<typeof createGraphqlDoneOperation>;
   entities: EntityData[];
   emailIds: string[];
   /** Locally known IDs used only for the immediate optimistic cache patch. */
   optimisticNotificationIds: string[];
+  notificationIdsByEntity: ReadonlyMap<DoneEntityKey, string[]>;
   scopeChannelThreads: boolean;
   /** Exact IDs used by undo/redo; entity mutation results are appended here. */
   exactNotificationIds: { current: string[] };
@@ -98,6 +111,30 @@ type MarkDoneExecuteWithSoupOpts = MarkDoneExecuteOpts & {
   nextEntityId?: string;
 };
 
+type PendingDoneUndo = {
+  requested: boolean;
+  result: Promise<boolean>;
+  finish: (accepted: boolean) => void;
+};
+
+function createPendingDoneUndo(): PendingDoneUndo {
+  let finish!: PendingDoneUndo['finish'];
+  const result = new Promise<boolean>((resolve) => {
+    finish = resolve;
+  });
+  return { requested: false, result, finish };
+}
+
+type MarkDoneContext = MarkEntitiesDoneContext & {
+  operation?: ReturnType<typeof createGraphqlDoneOperation>;
+  pendingUndo?: PendingDoneUndo;
+  registration?: {
+    handle: UndoHandle;
+    dismiss: () => void;
+    showToast: () => void;
+  };
+};
+
 /** Must be invoked inside a component tree that provides MutationUndoProvider. */
 export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
   const splitPanel = useSplitPanel();
@@ -114,128 +151,210 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     splitPanel?.handle.referredFrom() === 'home';
 
   const { notificationSource, hotkeyGroup } = options;
-  const mutation = useUndoableMutation<
-    void,
-    Error,
-    MarkDoneVariables,
-    MarkEntitiesDoneContext
-  >(() => ({
-    hotkeyGroup,
-    onMutate: (variables) =>
-      applyEntitiesDoneOptimistic({
-        entityIds: variables.entities.map((entity) => entity.id),
-        emailIds: variables.emailIds,
-        notificationIds: variables.optimisticNotificationIds,
-        reminderIds: variables.reminderIds,
-        scopeChannelThreads: variables.scopeChannelThreads,
-      }),
-    mutationFn: async (variables) => {
-      const authoritativeNotificationIds = await executeMarkEntitiesDone({
-        emailIds: variables.emailIds,
-        notificationIds: variables.exactNotificationIds.current,
-        notificationEntities: variables.notificationEntities,
-        reminderIds: variables.reminderIds,
-      });
-      variables.exactNotificationIds.current = [
-        ...new Set([
-          ...variables.exactNotificationIds.current,
-          ...authoritativeNotificationIds,
-        ]),
-      ];
-    },
-    onSuccess: (_data, variables, context) => {
-      context?.settle(variables.exactNotificationIds.current);
-    },
-    onError: (_err, _variables, context) => {
-      context?.rollback();
-      toast.failure('Failed to mark as done');
-    },
-    undoFn: async (variables, context) => {
-      context?.applyUndone();
-      try {
-        await executeMarkEntitiesUndone({
-          emailIds: variables.emailIds,
-          notificationIds: variables.exactNotificationIds.current,
-          reminderIds: variables.reminderIds,
-        });
-        context?.settle(variables.exactNotificationIds.current);
-      } catch (err) {
-        context?.reapply();
-        context?.releaseGraphql();
-        throw err;
-      }
-    },
-    redoFn: async (variables, context) => {
-      context?.reapply();
-      try {
-        await executeMarkEntitiesDone({
-          emailIds: variables.emailIds,
-          notificationIds: variables.exactNotificationIds.current,
-          reminderIds: variables.reminderIds,
-        });
-        context?.settle(variables.exactNotificationIds.current);
-      } catch (err) {
-        context?.applyUndone();
-        context?.releaseGraphql();
-        throw err;
-      }
-    },
-    undoLabel: 'Mark Done',
-    onPushed: (handle, variables) => {
-      // Email follow-up mirrors deliberately reject completed:false. Reopening
-      // requires a new time through their owning composer, not generic Undo.
-      if (
-        variables.entities.some(
-          (entity) => entity.type === 'reminder' && entity.emailFollowup
-        )
-      ) {
-        handle.dispose();
-        if (!variables.silent)
+  const { pushUndo } = useMutationUndoContext();
+
+  const registerUndo = (
+    variables: MarkDoneVariables,
+    context: MarkDoneContext
+  ) => {
+    // Workflow mirrors can only be reopened with a new time in their composer.
+    // Never publish a generic Undo handle, including during the pending write.
+    if (variables.entities.some(isEmailFollowupReminder)) {
+      if (!variables.silent) {
+        if (context.operation?.hasFailures())
+          toast.alert('Some changes could not be saved.');
+        else
           toast.success(
             'Marked as done. Use Remind me to schedule the email again.'
           );
-        return;
       }
-      variables.onUndoHandle?.(handle);
-      const firstEntityId = variables.entities[0]?.id;
-      const count = variables.entities.length;
-      const message =
-        count > 1 ? `Marked ${count} items as done` : 'Marked as done';
-      let toastId: number | undefined;
-
-      const showToast = () => {
-        if (variables.silent) return;
-        toastId = toast.success(message, {
-          actions: [
-            {
-              label: 'Undo',
-              icon: ArrowCounterClockwise,
-              onClick: () => {
-                handle.undo({
-                  onError: () => toast.failure('Failed to undo'),
-                });
-              },
+      return;
+    }
+    const firstEntityId = variables.entities[0]?.id;
+    let toastId: number | undefined;
+    let disposed = false;
+    const dismiss = () => {
+      if (toastId !== undefined) toast.dismiss(toastId);
+    };
+    const restoreFocus = () => {
+      dismiss();
+      variables.restoreFocus?.();
+      void restoreSoupFocus(firstEntityId);
+      variables.navigateBack?.();
+    };
+    const showToast = () => {
+      if (variables.silent || disposed) return;
+      const total = variables.entities.length;
+      const failed = context.operation?.hasFailures();
+      const partial = failed || context.operation?.hasNoopRows();
+      const message = partial
+        ? `Marked ${context.operation?.completedCount()} of ${total} items as done${failed ? '. Some changes could not be saved.' : ''}`
+        : total > 1
+          ? `Marked ${total} items as done`
+          : 'Marked as done';
+      toastId = (partial ? toast.alert : toast.success)(message, {
+        actions: [
+          {
+            label: 'Undo',
+            icon: ArrowCounterClockwise,
+            onClick: () => {
+              void handle.undo({
+                onError: () => toast.failure('Failed to undo'),
+              });
             },
-          ],
-          duration: 3_000,
-          stack: true,
-          hideOnMobile: true,
+          },
+        ],
+        duration: 3_000,
+        stack: true,
+        hideOnMobile: true,
+      });
+    };
+    const stackHandle = pushUndo({
+      label: 'Mark Done',
+      undo: async () => {
+        if (context.pendingUndo) context.pendingUndo.requested = true;
+        context.applyUndone();
+        if (context.pendingUndo) {
+          // Display and focus reverse now; the write must wait for exact IDs.
+          restoreFocus();
+          if (!(await context.pendingUndo.result)) return;
+        }
+        try {
+          if (context.operation) await context.operation.undo();
+          else {
+            await executeMarkEntitiesUndone({
+              emailIds: variables.emailIds,
+              notificationIds: variables.exactNotificationIds.current,
+              reminderIds: variables.reminderIds,
+            });
+            context.settle(variables.exactNotificationIds.current);
+          }
+        } catch (err) {
+          if (!context.operation) {
+            context.reapply();
+            context.releaseGraphql();
+          }
+          throw err;
+        }
+      },
+      redo: async () => {
+        context.reapply();
+        try {
+          if (context.operation) await context.operation.redo();
+          else {
+            await executeMarkEntitiesDone({
+              emailIds: variables.emailIds,
+              notificationIds: variables.exactNotificationIds.current,
+              reminderIds: variables.reminderIds,
+            });
+            context.settle(variables.exactNotificationIds.current);
+          }
+        } catch (err) {
+          if (!context.operation) {
+            context.applyUndone();
+            context.releaseGraphql();
+          }
+          throw err;
+        }
+      },
+      onUndone: context.pendingUndo ? undefined : restoreFocus,
+      onRedone: showToast,
+    });
+    const handle: UndoHandle = {
+      ...stackHandle,
+      dispose: () => {
+        disposed = true;
+        stackHandle.dispose();
+        dismiss();
+      },
+    };
+    context.registration = { handle, dismiss, showToast };
+    hotkeyGroup?.addDisposer(handle.dispose);
+    showToast();
+    variables.onUndoHandle?.(handle);
+  };
+
+  const mutation = useMutation<void, Error, MarkDoneVariables, MarkDoneContext>(
+    () => ({
+      onMutate: (variables) => {
+        const operation = variables.earlyUndo
+          ? createGraphqlDoneOperation({
+              ...variables,
+              notificationIds: variables.exactNotificationIds.current,
+            })
+          : undefined;
+        variables.operation = operation;
+        const context: MarkDoneContext = {
+          ...(operation ??
+            applyEntitiesDoneOptimistic({
+              entityIds: variables.entities.map((entity) => entity.id),
+              emailIds: variables.emailIds,
+              notificationIds: variables.optimisticNotificationIds,
+              reminderIds: variables.reminderIds,
+              scopeChannelThreads: variables.scopeChannelThreads,
+            })),
+          operation,
+          pendingUndo:
+            variables.earlyUndo &&
+            !variables.entities.some(isEmailFollowupReminder)
+              ? createPendingDoneUndo()
+              : undefined,
+        };
+        if (context.pendingUndo) registerUndo(variables, context);
+        return context;
+      },
+      mutationFn: async (variables) => {
+        if (variables.operation) return variables.operation.execute();
+        const authoritativeNotificationIds = await executeMarkEntitiesDone({
+          emailIds: variables.emailIds,
+          notificationIds: variables.exactNotificationIds.current,
+          notificationEntities: variables.notificationEntities,
+          reminderIds: variables.reminderIds,
         });
-      };
-
-      showToast();
-
-      return {
-        onUndone: () => {
-          if (toastId !== undefined) toast.dismiss(toastId);
-          variables.restoreFocus?.();
-          restoreSoupFocus(firstEntityId);
-          variables.navigateBack?.();
-        },
-        onRedone: showToast,
-      };
-    },
-  }));
+        variables.exactNotificationIds.current = [
+          ...new Set([
+            ...variables.exactNotificationIds.current,
+            ...authoritativeNotificationIds,
+          ]),
+        ];
+      },
+      onSuccess: (_data, variables, context) => {
+        if (!context) return;
+        // A late Done acknowledgement must not settle the newer Undo display
+        // intent before its reversal has written anything.
+        if (!context.pendingUndo?.requested) {
+          context.settle(variables.exactNotificationIds.current);
+        }
+        if (context.pendingUndo) {
+          const accepted = context.operation?.hasAccepted() ?? false;
+          if (!accepted) {
+            context.registration?.handle.dispose();
+            context.registration?.dismiss();
+          } else if (
+            context.operation?.hasFailures() ||
+            context.operation?.hasNoopRows()
+          ) {
+            context.registration?.dismiss();
+            if (!context.pendingUndo.requested)
+              context.registration?.showToast();
+            else if (context.operation?.hasFailures()) {
+              toast.alert(
+                'Some changes could not be saved. Undo will reverse the accepted changes.'
+              );
+            }
+          }
+          context.pendingUndo.finish(accepted);
+        } else registerUndo(variables, context);
+      },
+      onError: (_err, _variables, context) => {
+        context?.registration?.handle.dispose();
+        context?.registration?.dismiss();
+        context?.rollback();
+        context?.pendingUndo?.finish(false);
+        toast.failure('Failed to mark as done');
+      },
+    })
+  );
 
   const canExecute = (entity: EntityData): boolean => {
     if (entity.type === 'channel_message') {
@@ -275,14 +394,20 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
   ): Promise<void> => {
     // Skip already-done emails so a mixed selection (e.g. done + not-done rows
     // in mail "All") doesn't re-archive the done ones or overcount the toast.
-    const targets = entities.filter(isMarkDoneTarget);
+    const useEntityMutations = isFeatureEnabled(enableGraphqlSoup);
+    const eligible = entities.filter(isMarkDoneTarget);
+    const targets = useEntityMutations
+      ? [
+          ...new Map(
+            eligible.map((entity) => [doneEntityKey(entity), entity])
+          ).values(),
+        ]
+      : eligible;
     if (targets.length === 0) return;
 
     // Only workflow mirrors lack generic undo. Keep reversible selections in
     // their own transaction so a mixed selection retains its normal Undo.
-    const mirrors = targets.filter(
-      (entity) => entity.type === 'reminder' && entity.emailFollowup
-    );
+    const mirrors = targets.filter(isEmailFollowupReminder);
     if (mirrors.length > 0 && mirrors.length < targets.length) {
       let failure: { reason: unknown } | undefined;
       // Settle mirrors first so their non-undoable entry cannot overwrite the
@@ -315,7 +440,6 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
       scopeChannelNotificationsToEntity: scopeChannelNotifications,
     });
 
-    const useEntityMutations = isFeatureEnabled(enableGraphqlSoup);
     // A whole-channel row in the new inbox intentionally excludes notification
     // stacks rendered as separate thread rows. The entity endpoint cannot
     // express "channel except its threads", so only that selective case keeps
@@ -347,10 +471,26 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
       ? selectiveChannelIds
       : resolved.notificationIds;
 
+    const notificationIdsByEntity = new Map<DoneEntityKey, string[]>();
+    if (useEntityMutations) {
+      for (const entity of targets) {
+        notificationIdsByEntity.set(
+          doneEntityKey(entity),
+          resolveMarkEntitiesDoneVariables({
+            entities: [entity],
+            notificationSource: source,
+            scopeChannelNotificationsToEntity: scopeChannelNotifications,
+          }).notificationIds
+        );
+      }
+    }
+
     await mutation.mutateAsync({
+      earlyUndo: useEntityMutations,
       entities: targets,
       emailIds: resolved.emailIds,
       optimisticNotificationIds: resolved.notificationIds,
+      notificationIdsByEntity,
       scopeChannelThreads: scopeChannelNotifications,
       exactNotificationIds: { current: exactNotificationIds },
       notificationEntities,
