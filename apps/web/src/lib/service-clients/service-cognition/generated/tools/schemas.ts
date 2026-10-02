@@ -5908,6 +5908,7 @@ export const SetEntityProperty = z.object({
           'call',
           'user',
           'company',
+          'contact',
         ]),
         entityId: z.string(),
       }),
@@ -5929,6 +5930,7 @@ export const SetEntityProperty = z.object({
             'call',
             'user',
             'company',
+            'contact',
           ]),
           entityId: z.string(),
         })

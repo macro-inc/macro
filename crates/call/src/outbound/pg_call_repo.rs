@@ -31,9 +31,10 @@ use crate::domain::meetings::{
 };
 use crate::domain::models::{
     ActiveCallSummary, AddParticipantError, ArchivedCall, Call, CallError, CallParticipant,
-    CallRecord, CallRecordGuest, CallRecordParticipant, CallRecordPreview, CallRecordPreviewData,
-    CallRecordTranscriptSegment, CustomSpeakerAssignment, DeletedCallRecordStorageKeys,
-    EditCallRecordRepoArgs, EnrichedCallTranscript, TranscriptSegmentRequest, WithCallId,
+    CallPeople, CallRecord, CallRecordGuest, CallRecordParticipant, CallRecordPreview,
+    CallRecordPreviewData, CallRecordTranscriptSegment, CustomSpeakerAssignment,
+    DeletedCallRecordStorageKeys, EditCallRecordRepoArgs, EnrichedCallTranscript,
+    TranscriptSegmentRequest, WithCallId,
 };
 use crate::domain::ports::CallRepository;
 
@@ -849,6 +850,91 @@ impl CallRepository for PgCallRepo {
                 MacroUserIdStr::try_from(row.user_id).map_err(|e| sqlx::Error::Decode(Box::new(e)))
             })
             .collect()
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_call_record_people(&self, call_record_id: &Uuid) -> Result<CallPeople, Self::Err> {
+        let user_ids = sqlx::query_scalar!(
+            r#"
+            SELECT p.user_id AS "user_id!"
+            FROM call_record_participants p
+            WHERE p.call_record_id = $1
+            UNION
+            SELECT m.user_id
+            FROM call_records cr
+            JOIN call_meetings m ON m.id = cr.meeting_id
+            WHERE cr.id = $1
+            "#,
+            call_record_id,
+        )
+        .fetch_all(&self.pool)
+        .await?
+        .into_iter()
+        // A malformed stored id names nobody we can match, so skip it rather
+        // than failing the whole lookup for the people who do parse.
+        .filter_map(|user_id| match MacroUserIdStr::try_from(user_id.clone()) {
+            Ok(user_id) => Some(user_id),
+            Err(error) => {
+                tracing::warn!(%call_record_id, user_id, error = ?error, "skipping unparsable call participant id");
+                None
+            }
+        })
+        .collect();
+
+        // A meeting link lives in the location, description or conference url
+        // of the owner's calendar event; its token is unique, so a substring
+        // match on the owner's events finds it.
+        let invitee_emails = sqlx::query_scalar!(
+            r#"
+            SELECT DISTINCT LOWER(a.email) AS "email!"
+            FROM call_records cr
+            JOIN call_meetings m ON m.id = cr.meeting_id
+            JOIN calendar_events e ON e.owner_id = m.user_id
+            JOIN calendar_event_attendees a ON a.event_id = e.id
+            WHERE cr.id = $1
+              AND (
+                  STRPOS(e.location, m.share_token) > 0
+                  OR STRPOS(e.description, m.share_token) > 0
+                  OR STRPOS(e.conference_url, m.share_token) > 0
+              )
+              -- Meeting links are reused, so only the event the call took
+              -- place in counts: it, or one of its occurrences, overlaps the
+              -- call. All-day dates are local to the event, so they match
+              -- calls within a day either side.
+              AND (
+                  (e.starts_at IS NOT NULL
+                      AND tstzrange(e.starts_at, e.ends_at) && tstzrange(cr.started_at, cr.ended_at))
+                  OR (e.start_date IS NOT NULL
+                      AND daterange(e.start_date, e.end_date) && daterange(
+                          (cr.started_at - interval '1 day')::date,
+                          (cr.ended_at + interval '1 day')::date,
+                          '[]'
+                      ))
+                  OR EXISTS (
+                      SELECT 1 FROM calendar_event_occurrences o
+                      WHERE o.event_id = e.id
+                        AND o.owner_id = e.owner_id
+                        AND NOT o.is_cancelled
+                        AND (
+                            o.timed_span && tstzrange(cr.started_at, cr.ended_at)
+                            OR o.day_span && daterange(
+                                (cr.started_at - interval '1 day')::date,
+                                (cr.ended_at + interval '1 day')::date,
+                                '[]'
+                            )
+                        )
+                  )
+              )
+            "#,
+            call_record_id,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(CallPeople {
+            user_ids,
+            invitee_emails,
+        })
     }
 
     #[tracing::instrument(err, skip(self))]

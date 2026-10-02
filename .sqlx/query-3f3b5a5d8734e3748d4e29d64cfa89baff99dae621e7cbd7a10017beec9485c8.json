@@ -26,7 +26,8 @@
                 "TASK",
                 "CALL_RECORD",
                 "CALENDAR_EVENT",
-                "INITIATIVE"
+                "INITIATIVE",
+                "CONTACT"
               ]
             }
           }
