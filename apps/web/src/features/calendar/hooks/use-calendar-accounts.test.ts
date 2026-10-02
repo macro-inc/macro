@@ -15,6 +15,13 @@ const link = (id: string, overrides: Partial<EmailLink> = {}): EmailLink =>
   }) as unknown as EmailLink;
 
 describe('toCalendarAccounts', () => {
+  it('offers reconnect when an expired Google grant still has stored calendar scopes', () => {
+    expect(
+      toCalendarAccounts([link('a', { needs_reauth: true })], 'macro|self')[0]
+        ?.action
+    ).toBe('reconnect');
+  });
+
   it('offers turn-off for an inbox that already has calendar', () => {
     expect(toCalendarAccounts([link('a')], 'macro|self')).toEqual([
       { linkId: 'a', emailAddress: 'a@example.com', action: 'turnOff' },

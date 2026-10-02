@@ -35,6 +35,7 @@ import { Header } from './Header';
 import { Page } from './Page';
 import { SelectedEventDetails } from './SelectedEventDetails';
 import { SetupStatus } from './SetupStatus';
+import { SyncStatus } from './SyncStatus';
 
 const CALENDAR_SWIPE_EDGE_INSET = 40;
 
@@ -73,6 +74,9 @@ function CalendarPages() {
   return (
     <Layer depth={2}>
       <div class="flex min-w-0 min-h-0 flex-1 flex-col">
+        <SyncStatus
+          syncing={calendarPager.activeData()?.isSyncing() ?? false}
+        />
         <RangeUnavailableBanner
           class={isMobile() ? 'order-last' : undefined}
           fullWidth={isMobile()}

@@ -1065,7 +1065,10 @@ Quick loads skip the skeletons. Real events lay out underneath during the brief
 minimum display, then fade in as the skeletons fade out. Changing period during a
 load carries feedback into the new cells without restarting the appearance delay.
 Background refreshes retain current events without skeletons or a transient loading
-pill. Provider sync and errors still show their own states. Verify delayed occurrence
+pill. Provider backfill shows a persistent `Syncing your calendar…` banner above the
+grid, explaining that events will appear automatically and Macro remains usable.
+The banner stays visible as partial results arrive and disappears when sync finishes.
+Errors retain the separate retry state. Verify delayed occurrence
 responses: switch Month/Week/Day rapidly and navigate without blanking the grid.
 Confirm mixed event shapes, stable positions, clean handoff, and an uncovered Retry.
 Reduced-motion mode disables pulses and transitions. The page stays busy until the
@@ -1219,9 +1222,23 @@ Working locations (such as `Office` or `Home`) stay on the calendar grid but are
 excluded from Upcoming events, including both all-day and hourly locations.
 Events require connecting a Google account (`Connect calendar`). The
 `Calendar settings` (gear) menu has an `Accounts`
-section listing each connected account with a per-account `Enable` (grant calendar) or
-`Turn off` action, plus `Connect another account` to connect a new Google account
+section listing each connected account with a per-account `Enable` (grant calendar),
+`Reconnect` (expired Google authorization), or `Turn off` action, plus
+`Connect another account` to connect a new Google account
 (email + calendar).
+
+`Turn off` keeps its confirmation open with `Turning off…` until removal finishes;
+re-enabling is not offered while the old calendar is still being deleted. Reconnecting
+an inbox that used calendar requests email and calendar together, while an explicit
+calendar opt-out remains off during an email-only reconnect. Per-inbox actions
+preselect that Google account. The consent callback explains that it is finishing
+the connection, provides `Back to app`, and restores the previous layout on completion.
+It applies the grant even if the old inbox list is still loading.
+
+An AI event draft defaults to the primary inbox's primary calendar. If that calendar
+is disconnected or still syncing, the draft offers reconnection or an explicit
+calendar choice and disables submission until a usable calendar is selected. It
+does not silently send the invitation from another connected inbox.
 
 `New event` opens the compact composer with All day in the date/time fields.
 The meeting-link selector lists `Macro call`, `Google Meet`, then `No meeting link`
