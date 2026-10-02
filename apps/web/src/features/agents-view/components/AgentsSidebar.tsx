@@ -228,39 +228,40 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
           </ViewSidebar.Header>
         </Show>
 
-        <div class="px-(--sidebar-gutter) pt-2">
-          <SidebarCreateButton
-            label="New conversation"
-            onCreate={props.onNewConversation}
-            ref={tourTarget(AGENTS_TOUR.newChat)}
-          />
-        </div>
+        <Show when={!isTouchDevice()}>
+          <div class="px-(--sidebar-gutter) pt-2">
+            <SidebarCreateButton
+              label="New conversation"
+              onCreate={props.onNewConversation}
+              ref={tourTarget(AGENTS_TOUR.newChat)}
+            />
+          </div>
+        </Show>
 
         <ViewSidebar.Content class="gap-2 overflow-hidden pt-2">
-          <ViewSidebar.Nav
-            aria-label="Agent tools"
-            class="touch:flex-row touch:[&>button]:flex-1"
-          >
-            <ViewSidebar.Item
-              active={props.activePage === 'agents'}
-              onClick={() => props.onOpenPage('agents')}
-              ref={tourTarget(AGENTS_TOUR.rosterNav)}
-            >
-              <ViewSidebar.Icon>
-                <AgentIcon />
-              </ViewSidebar.Icon>
-              <span>Agents</span>
-            </ViewSidebar.Item>
-            <ViewSidebar.Item
-              active={props.activePage === 'connections'}
-              onClick={() => props.onOpenPage('connections')}
-            >
-              <ViewSidebar.Icon>
-                <PlugIcon />
-              </ViewSidebar.Icon>
-              <span>Connections</span>
-            </ViewSidebar.Item>
-          </ViewSidebar.Nav>
+          <Show when={!isTouchDevice()}>
+            <ViewSidebar.Nav aria-label="Agent tools">
+              <ViewSidebar.Item
+                active={props.activePage === 'agents'}
+                onClick={() => props.onOpenPage('agents')}
+                ref={tourTarget(AGENTS_TOUR.rosterNav)}
+              >
+                <ViewSidebar.Icon>
+                  <AgentIcon />
+                </ViewSidebar.Icon>
+                <span>Agents</span>
+              </ViewSidebar.Item>
+              <ViewSidebar.Item
+                active={props.activePage === 'connections'}
+                onClick={() => props.onOpenPage('connections')}
+              >
+                <ViewSidebar.Icon>
+                  <PlugIcon />
+                </ViewSidebar.Icon>
+                <span>Connections</span>
+              </ViewSidebar.Item>
+            </ViewSidebar.Nav>
+          </Show>
           <CollapsibleSection.Root
             open={conversationsOpen()}
             onOpenChange={setConversationsOpen}

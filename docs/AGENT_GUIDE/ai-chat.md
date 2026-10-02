@@ -27,11 +27,13 @@ the header back button returns to the previous screen, or Agents for a direct li
 Portrait and landscape touch layouts have no conversation side panel. **Changes** opens a full-width,
 unified diff with **Back to conversation**; returning preserves the unsent draft.
 
-**New conversation** opens the phone composer. Returning to the list and reopening
-it preserves the draft, attachments, agent, model, repository, and branch. Tap the
+The mobile conversation list omits the desktop **New conversation**, **Agents**,
+and **Connections** controls. Use the Home composer or global create menu to start
+a conversation. Returning to the list and reopening the composer preserves the
+draft, attachments, agent, model, repository, and branch. Tap the
 agent/model control to open a searchable bottom sheet. Tap an agent to use its
 default model, or its model arrow to choose a model; **Create agent** opens the
-roster. **Agents** and **Connections** remain reachable from the list.
+roster. Desktop navigation remains unchanged.
 
 The mobile Home composer is a filled, rounded input with no placeholder or
 rotating tips. Its collapsed height matches the New button, with the model
