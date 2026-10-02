@@ -1,5 +1,6 @@
 import { databaseSqlSchema } from '@core/database-sql/catalog';
 import type { DatabaseOp } from '@core/database-sql/generated/types';
+import type { DatabaseSqlReadReason } from '@core/database-sql/trace';
 import { type ResultError, thrownResultErrorHasCode } from '@core/util/result';
 import { Telemetry } from '@macro-inc/observability';
 import {
@@ -308,32 +309,42 @@ export function createDatabaseRowsSource(props: {
    * Read from the network again; what comes back is at least `version`. A
    * read a later one replaced shows nothing, so it leaves the version alone.
    */
-  function readAgain(version: number): ResultAsync<void, DatabaseReadFailure> {
+  function readAgain(
+    version: number,
+    reason: DatabaseSqlReadReason
+  ): ResultAsync<void, DatabaseReadFailure> {
     return ResultAsync.combine([
-      rowsQuery.refresh(),
+      rowsQuery.refresh(reason),
       retainedRowIds().length
-        ? retainedQuery.refresh()
+        ? retainedQuery.refresh(reason)
         : okAsync<DatabaseSqlRun>({ landed: true }),
     ]).map(([rows, retained]) => {
       if (rows.landed && retained.landed)
         setReadVersion((previous) => Math.max(previous, version));
     });
   }
-  function refresh(): ResultAsync<void, DatabaseReadFailure> {
-    const failed = rowsQuery.error();
-    const schema =
-      failed && isStaleSchema(failed) ? refreshSchema() : okAsync(undefined);
+  function refresh(
+    reason: 'after-write' | 'refresh' = 'refresh'
+  ): ResultAsync<void, DatabaseReadFailure> {
     const span = Telemetry.span('database.rows.read_refresh');
     span.setAttr('database.id', props.databaseId);
     span.setAttr('database.table_id', tableId);
-    const reading = span.run(() =>
-      schema.andThen(() => {
+    span.setAttr('database.read_reason', reason);
+    const reading = span.run(() => {
+      const failed = rowsQuery.error();
+      const staleSchema = failed && isStaleSchema(failed);
+      const schema = staleSchema ? refreshSchema() : okAsync(undefined);
+      span.setAttr('database.refresh_schema', Boolean(staleSchema));
+      return schema.andThen(() => {
         const table = currentTable();
         return table
-          ? readAgain(table.table.version)
+          ? readAgain(
+              table.table.version,
+              staleSchema ? 'schema-change' : reason
+            )
           : errAsync<void, DatabaseReadFailure>(TABLE_UNAVAILABLE);
-      })
-    );
+      });
+    });
     return reading
       .andTee(() => {
         span.setAttr('database.outcome', 'success');
@@ -342,15 +353,19 @@ export function createDatabaseRowsSource(props: {
       .orTee((failure) => {
         span.setAttr('database.outcome', 'error');
         span.setAttr('database.error_kind', failure.kind);
-        span.error(JSON.stringify(failure));
-        Telemetry.warn('database rows could not be refreshed', {
-          databaseId: props.databaseId,
-          tableId,
-          failure: JSON.stringify(failure),
-        });
+        span.error(failure.kind);
+        span.run(() =>
+          Telemetry.warn('database rows could not be refreshed', {
+            databaseId: props.databaseId,
+            tableId,
+            reason,
+            failureKind: failure.kind,
+          })
+        );
         span.end();
       });
   }
+
   /** Read these rows again by id, through the engine, into the cache the view reads. */
   function readRows(rowIds: string[]): ResultAsync<void, DatabaseReadFailure> {
     const detail = cachedDetail();
@@ -362,7 +377,8 @@ export function createDatabaseRowsSource(props: {
         scope: props.databaseId,
         sql: rowsByIdStatement(table.sql_name, rowIds),
       },
-      props.read
+      props.read,
+      'websocket'
     ).map(() => undefined);
   }
   /** Answer the open reads from the cache rows were read into; at least `version` once they land. */
@@ -384,7 +400,7 @@ export function createDatabaseRowsSource(props: {
   props.onTableChanged((version) => {
     if (version <= Math.max(readVersion(), writtenVersion)) return;
     const target = Math.max(version, currentTable()?.table.version ?? version);
-    const fullRead = () => readAgain(target);
+    const fullRead = () => readAgain(target, 'websocket');
     refreshInBackground({
       // Rows read by id reach the view only through a local cache; without one, read whole.
       refresh: () =>
