@@ -1,0 +1,27 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (SELECT 1 FROM slack_import_conversation WHERE job_id = $1 AND slack_channel_id = $2\n           AND status = 'importing' AND event_generation = $3 AND lease_owner = $4 AND lease_token = $5\n           AND lease_generation = $6 AND lease_expires_at > clock_timestamp()) AS \"valid!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "valid!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int8",
+        "Uuid",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "25dff15deca6673982c8bd6428baab25419ff50cd37f77936294c7822afe7e01"
+}

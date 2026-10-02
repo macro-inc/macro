@@ -2620,6 +2620,17 @@ export type CommandRejectedMetadata = {
 };
 
 /**
+ * Explicit upload completion; a seal can be submitted separately with an empty list.
+ */
+export type CompleteUploads = {
+    seal?: null | ConversationSeal;
+    /**
+     * Registered identities to verify against storage (at most 50).
+     */
+    uploads: Array<UploadId>;
+};
+
+/**
  * The conferencing system backing an event's join URL.
  *
  * Macro generates only Google Meet conferences, so this distinguishes one it
@@ -2634,6 +2645,126 @@ export type CommandRejectedMetadata = {
  * so an unrelated edit never disturbs it.
  */
 export type ConferenceProvider = 'google_meet' | 'other';
+
+/**
+ * Source Slack conversation ID (C, G or D prefix); unique only within a source.
+ */
+export type ConversationId = string;
+
+/**
+ * Slack conversation kind. Public Slack channels map to Macro Team, never Public.
+ */
+export type ConversationKind = 'public_channel' | 'private_channel' | 'direct_message' | 'group_direct_message';
+
+/**
+ * Full selected conversation metadata, persisted before granting any uploads.
+ */
+export type ConversationMetadata = {
+    /**
+     * Source archived flag (does not silently archive a reused Macro target).
+     */
+    archived: boolean;
+    createdAt?: null | SlackTimestamp;
+    creatorId?: null | SlackUserId;
+    /**
+     * Single archive folder name, not a backend object key.
+     */
+    folder: KeySegment;
+    /**
+     * Source conversation kind.
+     */
+    kind: ConversationKind;
+    /**
+     * Complete source member list, including members unknown to Macro.
+     */
+    memberIds: Array<SlackUserId>;
+    /**
+     * Advisory only; null means not yet counted, not zero.
+     */
+    messageCount?: number | null;
+    /**
+     * Original display name; not a storage key.
+     */
+    name: string;
+    /**
+     * Stable Slack identity.
+     */
+    slackChannelId: ConversationId;
+};
+
+/**
+ * Admin-visible progress for one selected conversation.
+ */
+export type ConversationProgress = {
+    /**
+     * Whether the selected source conversation was archived.
+     */
+    archived: boolean;
+    /**
+     * Authorized target only; absent for inaccessible reused targets.
+     */
+    channelId?: string | null;
+    /**
+     * Durably committed record counts.
+     */
+    counters: ImportCounters;
+    error?: null | ImportError;
+    /**
+     * Persisted source kind.
+     */
+    kind: ConversationKind;
+    /**
+     * Persisted source display name, never the reused Macro target's name.
+     */
+    name: string;
+    /**
+     * Null until sealed; zero is a valid sealed empty manifest.
+     */
+    partCount?: number | null;
+    /**
+     * Independent indexing state.
+     */
+    search: SearchState;
+    /**
+     * Source identity (always visible to the importing team's administrator).
+     */
+    slackChannelId: ConversationId;
+    /**
+     * Durable state.
+     */
+    status: ConversationStatus;
+    /**
+     * Number of parts whose object identity has been verified.
+     */
+    verifiedParts: number;
+    /**
+     * Non-fatal metadata/skip explanations.
+     */
+    warnings: Array<ImportWarning>;
+};
+
+/**
+ * Complete immutable expected part set for one conversation, including zero parts.
+ */
+export type ConversationSeal = {
+    /**
+     * SHA-256 of canonical descriptor lines; zero parts hash the empty byte string.
+     */
+    manifestSha256: Sha256Digest;
+    /**
+     * Exact number of registered parts, starting at index zero.
+     */
+    partCount: number;
+    /**
+     * Selected source conversation.
+     */
+    slackChannelId: ConversationId;
+};
+
+/**
+ * Durable per-conversation lifecycle.
+ */
+export type ConversationStatus = 'awaiting_uploads' | 'queued' | 'importing' | 'completed' | 'skipped' | 'failed';
 
 /**
  * Query parameters for the copy document endpoint.
@@ -3067,6 +3198,28 @@ export type CreateEntityMentionResponse = {
 };
 
 /**
+ * Create command. Team identity is deliberately absent.
+ */
+export type CreateImport = {
+    /**
+     * Full, unique selected conversations (at most the configured bound).
+     */
+    conversations: Array<ConversationMetadata>;
+    /**
+     * Replay with the same semantic payload returns the original job; changes conflict.
+     */
+    idempotencyToken: CreateToken;
+    /**
+     * Default true at the client; false still requires users and zero-part seals.
+     */
+    includeMessageHistory: boolean;
+    /**
+     * Binding or explicit unknown-source confirmation.
+     */
+    source: SourceIdentity;
+};
+
+/**
  * Create-initiative HTTP body.
  */
 export type CreateInitiativeRequest = {
@@ -3347,6 +3500,11 @@ export type CreateTaskResponse = {
      */
     token: string;
 };
+
+/**
+ * Client-generated create idempotency token, scoped to team and administrator.
+ */
+export type CreateToken = string;
 
 export type CreateUnthreadedAnchorRequest = CreateUnthreadedPdfAnchorRequest & {
     fileType: 'pdf';
@@ -5985,6 +6143,157 @@ export type HashMap = {
 export type HighlightType = 1 | 2 | 3;
 
 /**
+ * Committed counters, never optimistic browser or uncommitted worker counts.
+ */
+export type ImportCounters = {
+    /**
+     * Previously committed source identities.
+     */
+    duplicates: number;
+    /**
+     * Newly persisted messages.
+     */
+    imported: number;
+    /**
+     * Source records examined through the committed checkpoint.
+     */
+    processed: number;
+    /**
+     * Newly persisted reactions.
+     */
+    reactions: number;
+    /**
+     * Unsupported, empty or otherwise deliberately skipped records.
+     */
+    skipped: number;
+};
+
+/**
+ * Public error codes; never carry raw provider errors, keys, emails or source text.
+ */
+export type ImportError = 'disabled' | 'invalid_input' | 'limit_exceeded' | 'unavailable' | 'admin_required' | 'source_mismatch' | 'conflict' | 'upload_mismatch' | 'lease_lost' | 'retryable' | 'internal';
+
+/**
+ * Configurable bounds shared with browser staging and enforced again by the worker.
+ */
+export type ImportLimits = {
+    /**
+     * Maximum selected conversations.
+     */
+    conversations: number;
+    /**
+     * Maximum historical batch payload bytes.
+     */
+    databaseBatchBytes: number;
+    /**
+     * Maximum messages in a historical batch.
+     */
+    databaseBatchMessages: number;
+    /**
+     * Maximum users, root metadata or individual day JSON bytes.
+     */
+    jsonBytes: number;
+    /**
+     * Maximum NDJSON part bytes.
+     */
+    partBytes: number;
+    /**
+     * Maximum records per part.
+     */
+    partRecords: number;
+    /**
+     * Maximum bytes per NDJSON record, including newline.
+     */
+    recordBytes: number;
+    /**
+     * Maximum descriptors or completion identities per call.
+     */
+    registrationBatch: number;
+    /**
+     * Maximum selected temporary data bytes across all uploads.
+     */
+    selectedBytes: number;
+    /**
+     * Maximum ZIP entries scanned by the browser.
+     */
+    zipEntries: number;
+};
+
+/**
+ * Admin list result, also supplying upload limits before a job exists.
+ */
+export type ImportPage = {
+    /**
+     * At most 50 job receipts, newest first.
+     */
+    jobs: Array<ImportProgress>;
+    /**
+     * Effective server limits.
+     */
+    limits: ImportLimits;
+    nextCursor?: null | JobId;
+    /**
+     * Binding summary used by the picker confirmation.
+     */
+    sourceBinding: SourceBinding;
+};
+
+/**
+ * Common receipt returned by create, completion, finalize, cancel and progress.
+ */
+export type ImportProgress = {
+    /**
+     * All selected conversations, bounded by the create limit.
+     */
+    conversations: Array<ConversationProgress>;
+    /**
+     * Persisted creation time, also the final historical-time fallback.
+     */
+    createdAt: string;
+    /**
+     * Immutable history option confirmed when creating this job.
+     */
+    includeMessageHistory: boolean;
+    /**
+     * Stable job identity.
+     */
+    jobId: JobId;
+    /**
+     * Server bounds for staging and registration.
+     */
+    limits: ImportLimits;
+    /**
+     * Registration closure time; cancellation also closes registration.
+     */
+    registrationClosedAt?: string | null;
+    /**
+     * Monotonic job revision for polling/websocket invalidation.
+     */
+    revision: number;
+    /**
+     * Immutable source confirmation from this job, not the current team binding.
+     */
+    source: SourceIdentity;
+    /**
+     * Durable job lifecycle.
+     */
+    status: JobStatus;
+    /**
+     * Last durable lifecycle/progress update.
+     */
+    updatedAt: string;
+    /**
+     * Whether users metadata is verified and pinned.
+     */
+    usersVerified: boolean;
+};
+
+/**
+ * Non-fatal, sanitized explanations displayed in admin progress.
+ */
+export type ImportWarning = 'creation_time_from_message' | 'creation_time_from_job' | 'unresolvable_direct_message' | 'target_unavailable' | 'uploads_incomplete';
+
+/**
  * Display attribution for a comment imported from an external document.
  */
 export type ImportedAuthor = {
@@ -6199,6 +6508,21 @@ export type ItemWithUserAccessLevel = {
     item: Item;
     userAccessLevel: AccessLevel;
 };
+
+/**
+ * Import job identity. Generate UUIDv7 in application code.
+ */
+export type JobId = string;
+
+/**
+ * Job lifecycle. Cancellation remains in progress while any lease is active.
+ */
+export type JobStatus = 'uploading' | 'processing' | 'completed' | 'completed_with_errors' | 'failed' | 'cancelling' | 'cancelled';
+
+/**
+ * Single safe source folder/key segment; never a path or authorization proof.
+ */
+export type KeySegment = string;
 
 /**
  * Latest-message bundle for soup payloads.
@@ -6803,6 +7127,12 @@ export type MessageParent = {
      */
     id: string;
     type: 'crm_contact';
+} | {
+    /**
+     * A video call and its persistent chat thread.
+     */
+    id: string;
+    type: 'call';
 };
 
 /**
@@ -7773,6 +8103,16 @@ export type RecentlyDeletedResponseData = {
 };
 
 /**
+ * Batched registration, also used to renew an unchanged descriptor's grant.
+ */
+export type RegisterUploads = {
+    /**
+     * At most 50 descriptors; no duplicate identities in a call.
+     */
+    descriptors: Array<UploadDescriptor>;
+};
+
+/**
  * A reminder belonging to a user.
  *
  * `user_id` is deliberately absent: a reminder is only ever read by its owner,
@@ -7823,6 +8163,32 @@ export type Reminder = {
 };
 
 /**
+ * One continuous collection, including completed recurring reminders that still fire.
+ */
+export type ReminderCollectionPage = {
+    /**
+     * Rows in server order.
+     */
+    items: Array<ReminderCollectionRow>;
+    /**
+     * Absent only on the final page.
+     */
+    nextCursor?: string | null;
+};
+
+/**
+ * A native reminder row with its source and workflow capabilities resolved in bulk.
+ */
+export type ReminderCollectionRow = {
+    emailFollowup?: null | EmailFollowup;
+    reference?: null | ReminderReference;
+    /**
+     * The caller's private reminder.
+     */
+    reminder: Reminder;
+};
+
+/**
  * Filters for reminders.
  */
 export type ReminderFilters = {
@@ -7854,6 +8220,29 @@ export type ReminderFilters = {
      * specific `ids` or `entities` also opts in.
      */
     include?: boolean;
+};
+
+/**
+ * Display details of the entity a reminder is about, resolved alongside the
+ * reminder itself.
+ *
+ * A reminder has no block of its own — it opens, and is iconed as, whatever it
+ * references. Which block that is depends on the referenced document's file
+ * type, so resolving it client-side would mean a second fetch per row against
+ * a synchronous icon path. Reading it here keeps Soup to one round trip.
+ *
+ * Only documents populate these; every other entity type is identified by its
+ * [`EntityType`] alone.
+ */
+export type ReminderReference = {
+    /**
+     * The referenced document's file type, e.g. `md` or `pdf`.
+     */
+    fileType?: string | null;
+    /**
+     * The referenced document's sub type, e.g. `task` or `snippet`.
+     */
+    subType?: string | null;
 };
 
 /**
@@ -8042,6 +8431,26 @@ export type SearchContactsResponse = {
      * Matching contacts, most recently interacted first.
      */
     contacts: Array<CrmContactResponse>;
+};
+
+/**
+ * Search publication/receipt state. Acceptance is not completed publication;
+ * even completed publication still awaits consumer indexing and refresh.
+ */
+export type SearchState = {
+    status: 'not_needed';
+} | {
+    status: 'pending';
+} | {
+    /**
+     * Receipt from the search service.
+     */
+    receiptId: string;
+    status: 'submitted';
+} | {
+    status: 'completed';
+} | {
+    status: 'failed';
 };
 
 /**
@@ -8304,6 +8713,11 @@ export type SetPropertyValue = {
     urls: Array<string>;
 };
 
+/**
+ * SHA-256 encoded as exactly 64 lowercase hexadecimal characters.
+ */
+export type Sha256Digest = string;
+
 export type SharePermissionV2 = {
     /**
      * The channel share permissions for the item
@@ -8350,6 +8764,32 @@ export type SimpleMention = {
      */
     entity_type: string;
 };
+
+/**
+ * At most fifty registered identities to verify and an optional immutable conversation seal.
+ */
+export type SlackCompleteRequest = CompleteUploads;
+
+/**
+ * Bounded full-metadata create payload. Domain validation applies effective limits again.
+ */
+export type SlackCreateRequest = CreateImport;
+
+/**
+ * At most fifty immutable upload descriptors, without client-supplied storage keys.
+ */
+export type SlackRegisterRequest = RegisterUploads;
+
+/**
+ * Slack time represented exactly as nonnegative Unix microseconds.
+ * JSON is a string with six fractional digits, never a floating-point number.
+ */
+export type SlackTimestamp = string;
+
+/**
+ * Slack member identity (U or W prefix), including USLACKBOT.
+ */
+export type SlackUserId = string;
 
 /**
  * A channel visible to the caller that matches a smart tag rule.
@@ -9619,7 +10059,7 @@ export type SoupReminderSoupPropertiesField = {
     properties: Array<SoupProperty>;
 } & {
     /**
-     * Set once a one-shot reminder has fired.
+     * When the owner acknowledged the occurrence; independent of future scheduling.
      */
     completedAt?: string | null;
     /**
@@ -9711,6 +10151,39 @@ export type SoupThreadReply = {
      * Update timestamp.
      */
     updated_at: string;
+};
+
+/**
+ * Team's durable single-source binding, including confirmed unidentified archives.
+ */
+export type SourceBinding = {
+    kind: 'unbound';
+} | {
+    kind: 'confirmed_unknown';
+} | {
+    kind: 'known';
+    /**
+     * Bound source identity.
+     */
+    sourceId: SourceId;
+};
+
+/**
+ * Known Slack workspace identity (T prefix); an enterprise ID alone is insufficient.
+ */
+export type SourceId = string;
+
+/**
+ * Source identity supplied when creating a job. One binding per Macro team in v1.
+ */
+export type SourceIdentity = {
+    kind: 'known';
+    /**
+     * Workspace identifier in the archive.
+     */
+    sourceId: SourceId;
+} | {
+    kind: 'confirmed_unknown';
 };
 
 /**
@@ -10331,6 +10804,28 @@ export type UpdateSharePermissionRequestV2 = {
 };
 
 /**
+ * Immutable expected object properties, registered before signing an upload.
+ */
+export type UploadDescriptor = {
+    /**
+     * Exact byte length including delimiters.
+     */
+    byteLength: number;
+    /**
+     * Exact NDJSON record count; null for the users JSON payload.
+     */
+    recordCount?: number | null;
+    /**
+     * SHA-256 of the exact uploaded bytes, not the ETag.
+     */
+    sha256: Sha256Digest;
+    /**
+     * Manifest identity within this job.
+     */
+    upload: UploadId;
+};
+
+/**
  * The upload status of the document
  */
 export type UploadDocumentStatus = 'pending' | 'completed' | 'failed' | 'unknown';
@@ -10360,6 +10855,48 @@ export type UploadFolderRequest = {
      * The upload request id
      */
     uploadRequestId: string;
+};
+
+/**
+ * Signed upload permission returned just before PUT; never persisted as an identity.
+ */
+export type UploadGrant = {
+    /**
+     * Exact immutable descriptor being signed.
+     */
+    descriptor: UploadDescriptor;
+    /**
+     * Grant expiry; callers renew by re-registering the identical descriptor.
+     */
+    expiresAt: string;
+    /**
+     * Required signed upload headers (including checksum, content type and create-only
+     * condition). Browser-forbidden Content-Length is derived from the exact Blob bytes.
+     */
+    requiredHeaders: {
+        [key: string]: string;
+    };
+    /**
+     * Short-lived signed destination; must not be logged.
+     */
+    url: string;
+};
+
+/**
+ * Identity in a job's persisted manifest. No user-supplied object keys.
+ */
+export type UploadId = {
+    kind: 'users';
+} | {
+    kind: 'conversation_part';
+    /**
+     * Zero-based part index; sealed manifests must be contiguous.
+     */
+    partIndex: number;
+    /**
+     * Selected Slack conversation.
+     */
+    slackChannelId: ConversationId;
 };
 
 export type UpsertUserDocumentViewLocationRequest = {
@@ -15918,6 +16455,40 @@ export type CreateReminderResponses = {
 
 export type CreateReminderResponse = CreateReminderResponses[keyof CreateReminderResponses];
 
+export type ListReminderCollectionData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Omit to include both done and not-done occurrences.
+         */
+        completed?: boolean;
+        /**
+         * Page size, bounded to 1–500.
+         */
+        limit?: number;
+        /**
+         * Position returned by the previous page.
+         */
+        cursor?: string;
+    };
+    url: '/reminders/collection';
+};
+
+export type ListReminderCollectionErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListReminderCollectionError = ListReminderCollectionErrors[keyof ListReminderCollectionErrors];
+
+export type ListReminderCollectionResponses = {
+    200: ReminderCollectionPage;
+};
+
+export type ListReminderCollectionResponse = ListReminderCollectionResponses[keyof ListReminderCollectionResponses];
+
 export type GetEmailFollowupData = {
     body?: never;
     path: {
@@ -16161,6 +16732,187 @@ export type PatchViewHandlerError = PatchViewHandlerErrors[keyof PatchViewHandle
 export type PatchViewHandlerResponses = {
     200: unknown;
 };
+
+export type ListSlackImportsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        before?: JobId;
+    };
+    url: '/slack/imports';
+};
+
+export type ListSlackImportsResponses = {
+    200: ImportPage;
+};
+
+export type ListSlackImportsResponse = ListSlackImportsResponses[keyof ListSlackImportsResponses];
+
+export type CreateSlackImportData = {
+    body: SlackCreateRequest;
+    path?: never;
+    query?: never;
+    url: '/slack/imports';
+};
+
+export type CreateSlackImportErrors = {
+    /**
+     * Authentication or team administrator access required
+     */
+    401: unknown;
+    /**
+     * Team administrator required
+     */
+    403: unknown;
+    /**
+     * Metadata limit exceeded
+     */
+    413: unknown;
+    /**
+     * Slack imports disabled or temporarily unavailable
+     */
+    503: unknown;
+};
+
+export type CreateSlackImportResponses = {
+    200: ImportProgress;
+};
+
+export type CreateSlackImportResponse = CreateSlackImportResponses[keyof CreateSlackImportResponses];
+
+export type GetSlackImportData = {
+    body?: never;
+    path: {
+        job_id: JobId;
+    };
+    query?: never;
+    url: '/slack/imports/{job_id}';
+};
+
+export type GetSlackImportErrors = {
+    /**
+     * Unknown or inaccessible job
+     */
+    404: unknown;
+};
+
+export type GetSlackImportResponses = {
+    200: ImportProgress;
+};
+
+export type GetSlackImportResponse = GetSlackImportResponses[keyof GetSlackImportResponses];
+
+export type CancelSlackImportData = {
+    body?: never;
+    path: {
+        job_id: JobId;
+    };
+    query?: never;
+    url: '/slack/imports/{job_id}/cancel';
+};
+
+export type CancelSlackImportErrors = {
+    /**
+     * Unknown or inaccessible job
+     */
+    404: unknown;
+};
+
+export type CancelSlackImportResponses = {
+    200: ImportProgress;
+};
+
+export type CancelSlackImportResponse = CancelSlackImportResponses[keyof CancelSlackImportResponses];
+
+export type FinalizeSlackImportData = {
+    body?: never;
+    path: {
+        job_id: JobId;
+    };
+    query?: never;
+    url: '/slack/imports/{job_id}/finalize';
+};
+
+export type FinalizeSlackImportErrors = {
+    /**
+     * Unknown or inaccessible job
+     */
+    404: unknown;
+};
+
+export type FinalizeSlackImportResponses = {
+    200: ImportProgress;
+};
+
+export type FinalizeSlackImportResponse = FinalizeSlackImportResponses[keyof FinalizeSlackImportResponses];
+
+export type RegisterSlackImportUploadsData = {
+    body: SlackRegisterRequest;
+    path: {
+        job_id: JobId;
+    };
+    query?: never;
+    url: '/slack/imports/{job_id}/uploads';
+};
+
+export type RegisterSlackImportUploadsErrors = {
+    /**
+     * Unknown or inaccessible job
+     */
+    404: unknown;
+    /**
+     * Body limit exceeded
+     */
+    413: unknown;
+    /**
+     * Slack imports disabled
+     */
+    503: unknown;
+};
+
+export type RegisterSlackImportUploadsResponses = {
+    200: Array<UploadGrant>;
+};
+
+export type RegisterSlackImportUploadsResponse = RegisterSlackImportUploadsResponses[keyof RegisterSlackImportUploadsResponses];
+
+export type CompleteSlackImportUploadsData = {
+    body: SlackCompleteRequest;
+    path: {
+        job_id: JobId;
+    };
+    query?: never;
+    url: '/slack/imports/{job_id}/uploads/complete';
+};
+
+export type CompleteSlackImportUploadsErrors = {
+    /**
+     * Unknown or inaccessible job
+     */
+    404: unknown;
+    /**
+     * Immutable manifest conflict
+     */
+    409: unknown;
+    /**
+     * Body limit exceeded
+     */
+    413: unknown;
+    /**
+     * Object verification failed
+     */
+    422: unknown;
+    /**
+     * Slack imports disabled
+     */
+    503: unknown;
+};
+
+export type CompleteSlackImportUploadsResponses = {
+    200: ImportProgress;
+};
+
+export type CompleteSlackImportUploadsResponse = CompleteSlackImportUploadsResponses[keyof CompleteSlackImportUploadsResponses];
 
 export type BulkWakeupSyncServiceDocumentsData = {
     body: BulkWakeupRequest;

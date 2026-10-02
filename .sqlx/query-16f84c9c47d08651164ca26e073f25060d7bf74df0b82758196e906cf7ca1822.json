@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT j.user_id, c.kind, c.channel_id, c.checkpoint_part, c.checkpoint_record\n           FROM slack_import_job j JOIN slack_import_conversation c ON c.job_id = j.id\n           WHERE j.id = $1 AND c.slack_channel_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "channel_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "checkpoint_part",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "checkpoint_record",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "16f84c9c47d08651164ca26e073f25060d7bf74df0b82758196e906cf7ca1822"
+}

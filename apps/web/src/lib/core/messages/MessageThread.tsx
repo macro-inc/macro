@@ -23,7 +23,7 @@ import type {
   MessageThread as ThreadData,
 } from '@service-storage/messages';
 import { createSignal, Show } from 'solid-js';
-import type { MessageData } from './types';
+import type { MessageActionHandler, MessageData } from './types';
 
 export function threadListItem(thread: ThreadData): MessageListItem {
   return {
@@ -44,10 +44,15 @@ type ThreadOptions = {
   canModerate?: boolean;
   buildLink?: (message: MessageData) => string;
   targetId?: string | null;
+  /** Change this key to navigate to the same target again. */
+  targetRequestKey?: string | number;
   /** Releases the highlight on `targetId`; called when the linked message is clicked. */
   onClearTarget?: () => void;
   expanded?: boolean;
   hideReplyInput?: boolean;
+  /** Reply through a composer owned by the enclosing surface. */
+  onReply?: MessageActionHandler;
+  hideRail?: boolean;
   onEditingChange?: (id: string, editing: boolean) => void;
   monorail?: boolean;
 };
@@ -89,7 +94,8 @@ export function MessageThread(
       editor.start(message);
       props.onEditingChange?.(message.id, true);
     },
-    onReply: () => {
+    onReply: (context) => {
+      if (props.onReply) return props.onReply(context);
       setExpanded(true);
       setReplying(true);
       focus.request();
@@ -108,14 +114,16 @@ export function MessageThread(
           parent={() => props.data.parent}
           getMessageActions={(message) => {
             const value = actions(message);
-            return props.hideReplyInput
+            return props.hideReplyInput && !props.onReply
               ? { ...value, onReply: undefined }
               : value;
           }}
           messageEditor={props.canWrite ? editor : undefined}
           isExpanded={() => expanded() || !!props.targetId}
           setIsExpanded={setExpanded}
-          isReplying={() => props.canWrite && replying()}
+          isReplying={() =>
+            props.canWrite && !props.hideReplyInput && replying()
+          }
           setIsReplying={setReplying}
           replyInputState={draft}
           setReplyInputState={setDraft}
@@ -124,9 +132,11 @@ export function MessageThread(
           replyInputFocusRequest={focus}
           isFindBarOpen={() => false}
           monorail={props.monorail}
+          hideRail={props.hideRail}
           messageListScopeId={scopeId}
           selectedMessageId={() => (props.targetId ? props.data.id : undefined)}
           targetNavigation={{
+            requestKey: () => props.targetRequestKey,
             targetThreadId: () => (props.targetId ? props.data.id : undefined),
             targetMessageId: () => props.targetId ?? undefined,
             targetReplyId: () =>

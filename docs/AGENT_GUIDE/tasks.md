@@ -197,6 +197,19 @@ Assigning a person to a project also adds them as a collaborator with edit acces
 Clearing the assignee leaves that access in place; the owner can remove it through
 Manage collaborators in Share. Removing a collaborator does not clear assignees.
 
+Project Assignees also offers the same agents as task Assignees. Choose an agent
+in the project composer, Overview property pills, project list, or Properties
+side panel; dismiss the picker to save. The picker explains that assigned agents
+automatically take on tasks created in or moved into the project. People and
+agents can remain assigned together. Existing agent permissions still apply:
+private agents run for their owner, and shared team agents run for team members.
+Assigning an agent to the project does not start work on tasks already in it.
+Removing the project agent stops assignment to future tasks; it does not cancel
+sessions already started for its tasks.
+For verification, create a task from the project's Tasks tab, then move another
+task into the project through `Set project…`; both should start the assigned
+agent's normal task session and show its message in the task's Discussion.
+
 Overview's Description uses the shared collaborative Markdown editor and saves
 automatically to the existing backing document. Edit/owner access allows typing;
 view/comment access is read-only. The description is part of the native project
@@ -281,8 +294,14 @@ name or handle to find one. Built-in session agents follow the same availability
 as message mentions, alongside your own and team agents.
 Select an agent in the task composer, then create the task to start its session.
 For an existing task, add an agent to Assignees and dismiss the picker to save and
-start the session. Discussion gains one message from the assigned agent, which
-updates with its session or answer. The assignment instructions and task details
+start the session. Discussion gains one message linking to the assigned agent's
+session; progress and final answers stay in that session. The agent retains the
+original task reference in its session instructions and updates the task's
+description or status as appropriate. It must not post or edit discussion messages
+unless explicitly asked. This also applies to task assignments inherited from a
+project. When the task belongs to a project the assigning user can view, the
+startup prompt links that project and tells the agent to read its current
+description before starting work. The assignment instructions and task details
 are private startup context; no message is posted as you. People and agents
 can remain assigned together. Removing an agent and saving, then assigning it
 again starts a new session; saving an unchanged assignment does not restart it.

@@ -137,13 +137,13 @@ function SharingSectionContent(props: { record: CallRecord }) {
 
   const description = () => {
     if (record().isActive) {
-      return "Lets everyone on the creator's team view and search this call's transcript and AI summary once it ends.";
+      return "Lets everyone on the creator's team view this call's chat, transcript, and AI summary once it ends.";
     }
     if (canEdit()) {
-      return "Lets everyone on your team view and search this call's transcript and AI summary.";
+      return "Lets everyone on your team view this call's chat, transcript, and AI summary.";
     }
     return isShared()
-      ? "Everyone on the creator's team can view and search this call's transcript and AI summary."
+      ? "Everyone on the creator's team can view this call's chat, transcript, and AI summary."
       : "Only the call's creator can share it with their team.";
   };
 

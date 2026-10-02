@@ -10,7 +10,7 @@ import { useChannelParticipants } from './use-channel-participants';
 
 /**
  * The people a composer on `parent` offers in the `@`-mention typeahead: a
- * channel's participants; on a document or project, the workspace contacts the
+ * channel's participants; on a document, project, or call, the workspace contacts the
  * legacy comment input suggested; on a CRM record, the team that owns it, the only
  * people who can read its discussion. Mirrors `useMessageBotMentionUsers` so
  * that every composer on a parent — root, reply, and edit — suggests the same
@@ -39,7 +39,7 @@ export function useMessageParticipants(
   return createMemo(() =>
     match(parent().type)
       .with('channel', () => channelParticipants.users())
-      .with(P.union('document', 'initiative'), () => contacts())
+      .with(P.union('document', 'initiative', 'call'), () => contacts())
       .with(P.union('crm_company', 'crm_contact'), () => teamMembers())
       .exhaustive()
   );

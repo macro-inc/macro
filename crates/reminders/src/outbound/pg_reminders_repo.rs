@@ -1,5 +1,6 @@
 //! PostgreSQL implementation of the [`RemindersRepo`] port.
 
+mod collection;
 mod email_followup;
 #[cfg(test)]
 mod test;
@@ -248,6 +249,15 @@ fn schedule_columns(
 }
 
 impl RemindersRepo for PgRemindersRepo {
+    async fn list_collection(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        query: &crate::domain::collection::CollectionQuery,
+        as_of: DateTime<Utc>,
+        limit: i64,
+    ) -> Result<crate::domain::collection::CollectionBatch, Self::Err> {
+        self.read_collection(user, query, as_of, limit).await
+    }
     type Err = RemindersRepoErr;
 
     #[tracing::instrument(err, skip(self, user_id, new))]

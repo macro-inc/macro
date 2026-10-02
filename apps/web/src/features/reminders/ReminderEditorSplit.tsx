@@ -80,6 +80,7 @@ function referenceMention(
  */
 export type ReminderDetailsProps = {
   reminderId: string | undefined;
+  isEmailFollowup?: boolean;
   onClose: VoidFunction;
 };
 
@@ -107,7 +108,11 @@ export function ReminderDetails(props: ReminderDetailsProps) {
   return (
     <Show when={props.reminderId} keyed fallback={<ReminderUnavailable />}>
       {(reminderId) => (
-        <ReminderDetailsForId reminderId={reminderId} onClose={props.onClose} />
+        <ReminderDetailsForId
+          reminderId={reminderId}
+          onClose={props.onClose}
+          isEmailFollowup={props.isEmailFollowup}
+        />
       )}
     </Show>
   );
@@ -115,6 +120,7 @@ export function ReminderDetails(props: ReminderDetailsProps) {
 
 /** One keyed editor lifecycle, recreated whenever the selected reminder changes. */
 function ReminderDetailsForId(props: {
+  isEmailFollowup?: boolean;
   reminderId: string;
   onClose: VoidFunction;
 }) {
@@ -195,7 +201,7 @@ function ReminderDetailsForId(props: {
       });
       if (!active || props.reminderId !== submittedReminderId) return;
       toast.success(
-        `Reminder updated · ${describeReminderConfirmation(updated.schedule)}`
+        `Reminder updated · ${describeReminderConfirmation(updated.schedule, updated.nextRunAt)}`
       );
       props.onClose();
     } catch {
@@ -221,7 +227,11 @@ function ReminderDetailsForId(props: {
         <Switch>
           <Match when={query.isSuccess ? query.data : undefined}>
             {(reminder) => (
-              <EmailDetailsGate reminder={reminder()} onClose={props.onClose}>
+              <EmailDetailsGate
+                reminder={reminder()}
+                onClose={props.onClose}
+                isEmailFollowup={props.isEmailFollowup}
+              >
                 <ReminderForm
                   initialDescription={reminder().description}
                   initialSchedule={reminder().schedule}
@@ -313,6 +323,7 @@ export function ReminderEditorSplit(props: { reminderId: string | undefined }) {
 }
 
 function EmailDetailsGate(props: {
+  isEmailFollowup?: boolean;
   reminder: Reminder;
   onClose: () => void;
   children: JSX.Element;
@@ -329,6 +340,7 @@ function EmailDetailsGate(props: {
       {(threadId) => (
         <EmailReminderDetails
           reminder={props.reminder}
+          isEmailFollowup={props.isEmailFollowup}
           threadId={threadId()}
           onClose={props.onClose}
         >

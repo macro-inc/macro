@@ -1,4 +1,5 @@
 import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
+import { CallChatHistory } from '@channel/Call/chat/CallChatHistory';
 import { SidePanel } from '@components/app/side-panel';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { isMobile } from '@core/mobile/isMobile';
@@ -34,6 +35,9 @@ export function CallRecordingBody(props: {
   callId: string;
   transcriptTarget?: CallTranscriptTarget;
   showOverlayHeaderGap?: boolean;
+  messageTarget?: string;
+  messageTargetRequestKey?: string | number;
+  onClearMessageTarget?: () => void;
 }) {
   const record = () => props.record;
   const hasTranscripts = createMemo(() => record().transcript.length > 0);
@@ -156,6 +160,7 @@ export function CallRecordingBody(props: {
         </div>
       </SidePanel.HeaderActions>
       <div
+        data-channel-scroll
         class="h-full min-h-0 overflow-y-auto scrollbar-hidden"
         ref={setScrollRef}
       >
@@ -234,6 +239,12 @@ export function CallRecordingBody(props: {
                 </div>
               </section>
             </Show>
+            <CallChatHistory
+              callId={props.callId}
+              targetId={props.messageTarget}
+              targetRequestKey={props.messageTargetRequestKey}
+              onClearTarget={props.onClearMessageTarget}
+            />
           </div>
         </div>
       </div>

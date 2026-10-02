@@ -3,6 +3,7 @@ use chrono::Utc;
 use entity_access::domain::models::{AccessLevel, EntityAccessAuth};
 use std::sync::{Arc, Mutex};
 
+mod call_retries;
 mod event_posts;
 mod initiative;
 
@@ -18,6 +19,7 @@ struct Repo {
     reaction_changed: bool,
     file_type: Option<String>,
     concurrent_create: bool,
+    client_message_id: Option<Uuid>,
 }
 
 impl Repo {
@@ -75,6 +77,20 @@ impl MessageRepository for Repo {
         }
         Ok(message)
     }
+    async fn get_by_client_message_id(
+        &self,
+        parent: &MessageParent,
+        actor: &ChannelSender<'_>,
+        client_message_id: Uuid,
+    ) -> Result<Option<Message>, MessageError> {
+        if self.client_message_id == Some(client_message_id)
+            && self.message.sender_id.as_ref() == actor.as_ref()
+        {
+            self.get(parent, self.message.id).await
+        } else {
+            Ok(None)
+        }
+    }
     async fn thread(
         &self,
         parent: &MessageParent,
@@ -115,7 +131,9 @@ impl MessageRepository for Repo {
         })
     }
     async fn create(&self, command: CreateMessage) -> Result<Message, MessageError> {
-        if command.input.id == Some(self.message.id) {
+        if command.input.id == Some(self.message.id)
+            || (self.client_message_id.is_some() && command.input.id == self.client_message_id)
+        {
             self.creates.lock().unwrap().push(command);
             return Err(MessageError::Conflict);
         }
@@ -254,6 +272,7 @@ fn fixture() -> Repo {
         reaction_changed: true,
         file_type: Some("md".into()),
         concurrent_create: false,
+        client_message_id: None,
     }
 }
 
@@ -970,6 +989,7 @@ async fn human_can_post_canonical_agent_mentions_on_documents_and_channels() {
         MessageParent::Initiative(Uuid::from_u128(21)),
         MessageParent::CrmCompany(Uuid::from_u128(22)),
         MessageParent::CrmContact(Uuid::from_u128(23)),
+        MessageParent::Call(Uuid::from_u128(24)),
     ] {
         let repo = fixture();
         let events = Events::default();
@@ -980,6 +1000,12 @@ async fn human_can_post_canonical_agent_mentions_on_documents_and_channels() {
             | MessageParent::CrmCompany(_)
             | MessageParent::CrmContact(_) => (
                 parent.access_entity_type(),
+                EntityPermission::AccessLevel {
+                    access_level: AccessLevel::Comment,
+                },
+            ),
+            MessageParent::Call(_) => (
+                EntityType::Call,
                 EntityPermission::AccessLevel {
                     access_level: AccessLevel::Comment,
                 },
@@ -1048,72 +1074,89 @@ impl MessageMentionExtractor for RawBotMentions {
 
 #[tokio::test]
 async fn bot_posts_and_edits_extract_mentions_and_preserve_trusted_attribution_and_policy() {
-    use entity_access::domain::models::BotReceiptScope;
-    let receipt = || {
-        EntityAccessReceipt::try_new_bot(
-            bot_id::MACRO_AI_BOT_ID.into_storage_id(),
-            BotReceiptScope::User {
-                acting_user: "macro|author@example.com".to_string().try_into().unwrap(),
-            },
-            access("macro|author@example.com", "doc", AccessLevel::Comment)
-                .entity()
-                .clone(),
-            EntityPermission::AccessLevel {
-                access_level: AccessLevel::Comment,
-            },
-        )
-        .unwrap()
-    };
-    let mut repo = fixture();
-    repo.message.sender_id = ChannelSender::new_from_bot(bot_id::MACRO_AI_BOT_ID);
-    let events = Events::default();
-    let service =
-        MessageService::new(repo.clone(), events.clone()).with_mention_extractor(RawBotMentions);
-    let mut input = post_input();
-    input.notification_policy = PostMessageNotificationPolicy::Silent;
-    let posted = service.post(receipt(), input.clone()).await.unwrap();
-    assert_eq!(
-        posted.triggered_by.as_deref(),
-        Some("macro|author@example.com")
-    );
-    assert_eq!(posted.mentions.len(), 1);
-    input.attribution = MessageAttribution::Unprompted;
-    assert!(
-        service
-            .post(receipt(), input)
-            .await
+    use entity_access::domain::models::{BotReceiptScope, Entity};
+    for parent in [
+        MessageParent::parse("document", "doc").unwrap(),
+        MessageParent::Call(Uuid::from_u128(1)),
+    ] {
+        let receipt = || {
+            EntityAccessReceipt::try_new_bot(
+                bot_id::MACRO_AI_BOT_ID.into_storage_id(),
+                BotReceiptScope::User {
+                    acting_user: "macro|author@example.com".to_string().try_into().unwrap(),
+                },
+                Entity {
+                    entity_type: parent.access_entity_type(),
+                    entity_id: parent.entity_id(),
+                },
+                EntityPermission::AccessLevel {
+                    access_level: AccessLevel::Comment,
+                },
+            )
             .unwrap()
-            .triggered_by
-            .is_none()
-    );
-    service
-        .patch(
-            receipt(),
-            posted.id,
-            MessagePatch {
+        };
+        let mut repo = fixture();
+        repo.message.sender_id = ChannelSender::new_from_bot(bot_id::MACRO_AI_BOT_ID);
+        repo.message.parent = parent.clone();
+        let events = Events::default();
+        let service = MessageService::new(repo.clone(), events.clone())
+            .with_mention_extractor(RawBotMentions);
+        let mut input = post_input();
+        input.notification_policy = PostMessageNotificationPolicy::Silent;
+        let posted = service.post(receipt(), input.clone()).await.unwrap();
+        assert_eq!(
+            posted.triggered_by.as_deref(),
+            Some("macro|author@example.com")
+        );
+        assert_eq!(posted.mentions.len(), 1);
+        assert_eq!(posted.parent, parent);
+        let canonical_root_id = match parent {
+            MessageParent::Call(id) => Some(id),
+            _ => None,
+        };
+        assert_eq!(
+            repo.creates.lock().unwrap()[0].canonical_root_id,
+            canonical_root_id
+        );
+        input.attribution = MessageAttribution::Unprompted;
+        assert!(
+            service
+                .post(receipt(), input)
+                .await
+                .unwrap()
+                .triggered_by
+                .is_none()
+        );
+        service
+            .patch(
+                receipt(),
+                posted.id,
+                MessagePatch {
+                    notification_policy: PatchMessageNotificationPolicy::NotifyAsPostedMessage,
+                    content: Some("final @mention".into()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(repo.edits.lock().unwrap()[0].mentions.len(), 1);
+        let events = events.0.lock().unwrap();
+        assert!(events.iter().all(|event| event.parent == parent));
+        assert!(matches!(
+            events[0].change,
+            MessageChange::Posted {
+                notification_policy: PostMessageNotificationPolicy::Silent,
+                ..
+            }
+        ));
+        assert!(matches!(
+            events[2].change,
+            MessageChange::Edited {
                 notification_policy: PatchMessageNotificationPolicy::NotifyAsPostedMessage,
-                content: Some("final @mention".into()),
-                ..Default::default()
-            },
-        )
-        .await
-        .unwrap();
-    assert_eq!(repo.edits.lock().unwrap()[0].mentions.len(), 1);
-    let events = events.0.lock().unwrap();
-    assert!(matches!(
-        events[0].change,
-        MessageChange::Posted {
-            notification_policy: PostMessageNotificationPolicy::Silent,
-            ..
-        }
-    ));
-    assert!(matches!(
-        events[2].change,
-        MessageChange::Edited {
-            notification_policy: PatchMessageNotificationPolicy::NotifyAsPostedMessage,
-            ..
-        }
-    ));
+                ..
+            }
+        ));
+    }
 }
 
 #[derive(Clone)]
@@ -1147,6 +1190,16 @@ impl MessageRepository for StrictRepo {
     }
     async fn get(&self, parent: &MessageParent, id: Uuid) -> Result<Option<Message>, MessageError> {
         self.inner.get(parent, id).await
+    }
+    async fn get_by_client_message_id(
+        &self,
+        parent: &MessageParent,
+        actor: &ChannelSender<'_>,
+        client_message_id: Uuid,
+    ) -> Result<Option<Message>, MessageError> {
+        self.inner
+            .get_by_client_message_id(parent, actor, client_message_id)
+            .await
     }
     async fn thread(
         &self,
@@ -1535,4 +1588,134 @@ async fn spreadsheet_anchors_require_a_spreadsheet_root_and_valid_range() {
         range: "A1".into(),
     });
     assert!(validate_post(&MessageParent::parse("document", "doc").unwrap(), &input).is_err());
+}
+
+fn call_receipt<P: RequiredPermission>(
+    user: &str,
+    call_id: Uuid,
+    level: AccessLevel,
+) -> Result<EntityAccessReceipt<P>, entity_access::domain::models::AccessError> {
+    EntityAccessReceipt::try_new_authenticated_user(
+        user.to_owned().try_into().unwrap(),
+        entity_access::domain::models::Entity {
+            entity_id: call_id.to_string(),
+            entity_type: EntityType::Call,
+        },
+        EntityPermission::AccessLevel {
+            access_level: level,
+        },
+    )
+}
+
+#[tokio::test]
+async fn call_posts_use_the_canonical_thread_and_reject_another_root() {
+    let call_id = Uuid::from_u128(10);
+    let repo = fixture();
+    let service = MessageService::new(repo.clone(), Events::default());
+    for thread_id in [None, Some(call_id)] {
+        let mut input = post_input();
+        input.thread_id = thread_id;
+        service
+            .post(
+                call_receipt("macro|author@example.com", call_id, AccessLevel::Comment).unwrap(),
+                input,
+            )
+            .await
+            .unwrap();
+    }
+    let creates = repo.creates.lock().unwrap();
+    assert_eq!(creates.len(), 2);
+    assert!(
+        creates
+            .iter()
+            .all(|command| command.canonical_root_id == Some(call_id))
+    );
+    drop(creates);
+    let mut input = post_input();
+    input.thread_id = Some(Uuid::from_u128(11));
+    assert!(matches!(
+        service
+            .post(
+                call_receipt("macro|author@example.com", call_id, AccessLevel::Comment).unwrap(),
+                input,
+            )
+            .await,
+        Err(MessageError::Invalid(_))
+    ));
+    assert_eq!(repo.creates.lock().unwrap().len(), 2);
+}
+
+#[test]
+fn call_viewers_can_read_but_cannot_post() {
+    let call_id = Uuid::from_u128(10);
+    assert!(
+        call_receipt::<MessageView>("macro|viewer@example.com", call_id, AccessLevel::View).is_ok()
+    );
+    assert!(
+        call_receipt::<MessageWrite>("macro|viewer@example.com", call_id, AccessLevel::View)
+            .is_err()
+    );
+    assert!(
+        call_receipt::<MessageWrite>("macro|member@example.com", call_id, AccessLevel::Comment)
+            .is_ok()
+    );
+}
+
+#[tokio::test]
+async fn call_root_deletion_preserves_chat_and_cannot_delete_other_authors() {
+    let mut repo = fixture();
+    let call_id = repo.message.id;
+    repo.message.parent = MessageParent::Call(call_id);
+    repo.state.anchor = None;
+    let service = MessageService::new(repo.clone(), Events::default());
+    assert!(matches!(
+        service
+            .delete(
+                call_receipt("macro|other@example.com", call_id, AccessLevel::Edit).unwrap(),
+                call_id,
+                None,
+            )
+            .await,
+        Err(MessageError::Forbidden)
+    ));
+    service
+        .delete(
+            call_receipt("macro|author@example.com", call_id, AccessLevel::Comment).unwrap(),
+            call_id,
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(*repo.deletes.lock().unwrap(), vec![call_id]);
+    assert!(repo.thread_deletes.lock().unwrap().is_empty());
+    service
+        .post(
+            call_receipt("macro|author@example.com", call_id, AccessLevel::Comment).unwrap(),
+            post_input(),
+        )
+        .await
+        .unwrap();
+    assert!(matches!(
+        service
+            .delete_thread(
+                call_receipt("macro|author@example.com", call_id, AccessLevel::Owner).unwrap(),
+                call_id,
+                None,
+            )
+            .await,
+        Err(MessageError::Invalid(_))
+    ));
+    assert!(matches!(
+        service
+            .patch_thread(
+                call_receipt("macro|author@example.com", call_id, AccessLevel::Owner).unwrap(),
+                call_id,
+                ThreadPatch {
+                    resolved: Some(true),
+                    ..Default::default()
+                },
+            )
+            .await,
+        Err(MessageError::Invalid(_))
+    ));
 }

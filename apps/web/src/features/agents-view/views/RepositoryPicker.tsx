@@ -38,6 +38,7 @@ type BranchChoice =
 /** Explicit, portaled repository/branch controls shared by Home and Agents. */
 export function RepositoryPicker(props: {
   repoUrl?: string;
+  onOpenChange?: (open: boolean) => void;
   branch: string;
   /** Repositories the signed-in user can hand a coder through Macro's GitHub App. */
   repositories: ReachableRepository[];
@@ -58,8 +59,16 @@ export function RepositoryPicker(props: {
   onSelectBranch: (branch: string) => void;
 }) {
   const listId = createUniqueId();
-  const [repoOpen, setRepoOpen] = createSignal(false);
-  const [branchOpen, setBranchOpen] = createSignal(false);
+  const [repoOpen, updateRepoOpen] = createSignal(false);
+  const [branchOpen, updateBranchOpen] = createSignal(false);
+  const setRepoOpen = (open: boolean) => {
+    updateRepoOpen(open);
+    props.onOpenChange?.(open || branchOpen());
+  };
+  const setBranchOpen = (open: boolean) => {
+    updateBranchOpen(open);
+    props.onOpenChange?.(open || repoOpen());
+  };
   const [search, setSearch] = createSignal('');
   const [branchSearch, setBranchSearch] = createSignal('');
   const [error, setError] = createSignal('');

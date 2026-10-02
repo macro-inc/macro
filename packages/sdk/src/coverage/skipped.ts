@@ -287,6 +287,14 @@ export const staticFilesBacklog =
   [] as const satisfies readonly (keyof StaticFilesSdk)[];
 
 export const storageExcluded = [
+  // Slack archive imports are browser-admin workflows, not SDK surface in v1.
+  'cancelSlackImport',
+  'completeSlackImportUploads',
+  'createSlackImport',
+  'finalizeSlackImport',
+  'getSlackImport',
+  'listSlackImports',
+  'registerSlackImportUploads',
   'bulkWakeupSyncServiceDocuments',
   'callWebhook',
   'checkActiveCall',
@@ -402,6 +410,7 @@ export const storageBacklog = [
   'listInitiatives',
   'listOccurrences',
   'listReminders',
+  'listReminderCollection',
   'listTeamOutOfOffice',
   'listUserApiKeys',
   // Meeting management uses the generated client.

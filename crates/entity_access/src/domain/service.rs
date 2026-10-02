@@ -4,9 +4,9 @@ use std::{collections::HashMap, marker::PhantomData, str::FromStr};
 
 use crate::domain::{
     models::{
-        AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, ChannelRoleResult,
-        CrmEntityAccess, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission,
-        EntityType, RequiredPermission, TeamRole, UserTeamInfo, ViewAccessLevel,
+        AccessError, AccessLevel, AgentSessionParent, BotAccessScope, BotId, CallChannelInfo,
+        ChannelRoleResult, CrmEntityAccess, Entity, EntityAccessAuth, EntityAccessReceipt,
+        EntityPermission, EntityType, RequiredPermission, TeamRole, UserTeamInfo, ViewAccessLevel,
     },
     ports::{AccessRepository, EntityAccessService, ScheduledActionGrants},
 };
@@ -55,17 +55,20 @@ where
                     .repo
                     .get_agent_session_access(entity_id, user_id)
                     .await?;
-                let inherited = if let Some(document) =
-                    self.repo.get_agent_session_document(entity_id).await?
-                {
-                    self.repo
-                        .get_document_access(&document, user_id)
-                        .await?
-                        .map(session_permission_from_document)
-                } else {
-                    None
+                let parent_access = match self.repo.get_agent_session_parent(entity_id).await? {
+                    Some(AgentSessionParent::Document(document)) => {
+                        self.repo.get_document_access(&document, user_id).await?
+                    }
+                    // Call history and chat require sign-in, including public
+                    // call links. Their sessions inherit the same boundary.
+                    Some(AgentSessionParent::Call(call_id)) if user_id.is_some() => {
+                        self.repo
+                            .get_call_access(&call_id.to_string(), user_id)
+                            .await?
+                    }
+                    Some(AgentSessionParent::Call(_)) | None => None,
                 };
-                Ok(direct.max(inherited))
+                Ok(direct.max(parent_access.map(session_permission_from_parent)))
             }
             EntityType::Initiative => self.repo.get_initiative_access(entity_id, user_id).await,
             EntityType::ScheduledAction => {
@@ -173,7 +176,14 @@ where
                 .get_entity_permission(Some(user_id), entity_id, entity_type, user_org_id)
                 .await;
         }
+        self.get_team_permission(user_id, entity_id).await
+    }
 
+    async fn get_team_permission(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+        entity_id: &str,
+    ) -> Result<EntityPermission, AccessError> {
         let requested_team_id = Uuid::parse_str(entity_id)
             .map_err(|_| AccessError::BadRequest("Invalid team ID format"))?;
         let user_team = self
@@ -211,8 +221,9 @@ where
             }
             EntityType::AgentSession => {
                 let direct = self.repo.get_team_entity_access(bot_id, team_id, entity_id, entity_type).await?;
-                let inherited = if let Some(document) = self.repo.get_agent_session_document(entity_id).await? {
-                    self.repo.get_team_entity_access(bot_id, team_id, &document, EntityType::Document).await?.map(session_permission_from_document)
+                let inherited = if let Some(parent) = self.repo.get_agent_session_parent(entity_id).await? {
+                    let parent: Entity = parent.into();
+                    self.repo.get_team_entity_access(bot_id, team_id, &parent.entity_id, parent.entity_type).await?.map(session_permission_from_parent)
                 } else { None };
                 Ok(EntityPermission::AccessLevel { access_level: direct.max(inherited).ok_or(AccessError::Unauthorized)? })
             }
@@ -515,6 +526,10 @@ where
         user_org_id: Option<i64>,
     ) -> Result<EntityPermission, AccessError> {
         match entity_type {
+            EntityType::Team => {
+                let user_id = user_id.ok_or(AccessError::Unauthorized)?;
+                self.get_team_permission(user_id, entity_id).await
+            }
             EntityType::Document
             | EntityType::Chat
             | EntityType::Project
@@ -713,7 +728,7 @@ mod test;
 
 // Commenters can prompt the agent; viewers can inspect the response. Parent
 // ownership never confers session ownership or permission to delete it.
-fn session_permission_from_document(level: AccessLevel) -> AccessLevel {
+fn session_permission_from_parent(level: AccessLevel) -> AccessLevel {
     if level >= AccessLevel::Comment {
         AccessLevel::Edit
     } else {

@@ -54,8 +54,15 @@ describe('agent announcements', () => {
     );
     expect(markdown).not.toContain('m-reply-target');
   });
-  it('announces under the parent the reply lives in', async () => {
-    const parent = { type: 'document' as const, id: 'doc' };
+  it.each([
+    'channel',
+    'document',
+    'initiative',
+    'crm_company',
+    'crm_contact',
+    'call',
+  ])('announces under the %s parent the reply lives in', async (type) => {
+    const parent = { type, id: 'parent-1' };
     const response = await request({
       replyTarget: { parent, ...replyTarget },
       chip,

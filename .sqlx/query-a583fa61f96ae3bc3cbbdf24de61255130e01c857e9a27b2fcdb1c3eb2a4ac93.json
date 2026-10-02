@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE slack_import_outbox SET available_at = clock_timestamp() - interval '1 second' WHERE job_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a583fa61f96ae3bc3cbbdf24de61255130e01c857e9a27b2fcdb1c3eb2a4ac93"
+}

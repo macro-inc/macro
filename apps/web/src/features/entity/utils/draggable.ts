@@ -6,6 +6,7 @@ import {
   createEffect,
   createUniqueId,
   getOwner,
+  mergeProps,
   onCleanup,
   untrack,
 } from 'solid-js';
@@ -22,12 +23,14 @@ export function createEntityDraggable(options: {
   const draggableId = `${options.entity.id}-${options.splitId ?? createUniqueId()}`;
 
   const create = () => {
-    const dragData: EntityDragData = {
-      dragType: 'entity',
+    // Rows now survive entity updates. Keep the payload reactive without
+    // re-registering the draggable (which measures layout). Project the fields
+    // rather than forwarding the source store's internal symbols into DnD's store.
+    const dragData: EntityDragData = mergeProps(() => ({ ...options.entity }), {
+      dragType: 'entity' as const,
       splitId: options.splitId,
-      ...options.entity,
       operation: () => (isAltKey() ? 'copy' : 'move'),
-    };
+    });
     return createDraggable(draggableId, dragData);
   };
 

@@ -54,6 +54,7 @@ export async function executeEmailFollowup(
         ? [refreshActiveGraphqlSoupQueries(), fetchGraphqlEmailThread(threadId)]
         : []),
       queryClient.invalidateQueries({ queryKey: reminderKeys.list._def }),
+      queryClient.invalidateQueries({ queryKey: reminderKeys.collection._def }),
       queryClient.invalidateQueries({
         queryKey: reminderKeys.detail(result.reminderId).queryKey,
       }),

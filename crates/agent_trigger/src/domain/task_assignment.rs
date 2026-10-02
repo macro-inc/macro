@@ -17,6 +17,9 @@ use models_properties::{EntityType, service::property_value::PropertyValue};
 use properties::domain::events::EntityPropertyUpdatedMetadata;
 use system_properties::SystemPropertyKey;
 
+mod project_context;
+pub use project_context::ProjectTaskAssignmentContext;
+
 use super::{
     broker_events::{AgentAssignedToTaskEvent, AgentSessionMacroEvent, NewAgentSessionEvent},
     processing::ProcessMessageEventError,
@@ -36,6 +39,8 @@ pub struct TaskBrief {
     pub title: String,
     /// Current task description in Markdown.
     pub markdown: String,
+    /// Current project, only when the assigning principal can view it.
+    pub project_id: Option<initiative::domain::models::InitiativeId>,
 }
 
 /// Reads the task through its owning service under a verified document capability.
@@ -53,7 +58,7 @@ pub trait TaskAssignmentContext: Send + Sync + 'static {
 pub struct TaskAssignment {
     /// The source event id identifies this assignment, including on replay.
     pub event_id: Uuid,
-    /// Task document whose discussion receives the agent's replies.
+    /// Task document whose discussion receives the agent session link.
     pub parent: MessageParent,
     /// User whose assignment starts the work.
     pub actor: MacroUserIdStr<'static>,
@@ -103,7 +108,7 @@ fn assigned_bots(value: Option<&PropertyValue>) -> HashSet<BotId> {
 }
 
 /// Open a real discussion before publishing a session trigger. The common
-/// harness then announces the session here and routes subsequent replies.
+/// harness then links the session here and routes subsequent user replies.
 pub async fn process_task_assignment<
     Repo,
     Bots,
@@ -198,22 +203,50 @@ fn discussion_id(event_id: Uuid, bot_id: BotId) -> Uuid {
 }
 
 fn assignment_prompt(assignment: &TaskAssignment, brief: &TaskBrief) -> String {
-    // Keep the task ID available to agent runtimes in the private prompt. Escape tag delimiters in user-controlled titles.
+    let mut prompt = format!(
+        "{}\n\n{}",
+        include_str!("task_assignment/prompt.md").trim(),
+        task_reference(&assignment.parent, &brief.title),
+    );
+    if let Some(project_id) = brief.project_id {
+        let project_reference = serde_json::json!({
+            "documentId": project_id,
+            "documentName": "Task project",
+            "blockName": "initiative",
+            "blockParams": {},
+        });
+        prompt.push_str(&format!(
+            "\n\nProject: <m-document-mention>{project_reference}</m-document-mention>"
+        ));
+    }
+    prompt.push_str("\n\n");
+    prompt.push_str(&brief.markdown);
+    prompt
+}
+
+/// Persistent task guidance for session system instructions, without snapshotting
+/// the mutable task description into the system prompt.
+pub fn assignment_instructions(parent: &MessageParent) -> String {
+    format!(
+        "{}\n\n{}",
+        include_str!("task_assignment/prompt.md").trim(),
+        task_reference(parent, "Original assigned task"),
+    )
+}
+
+fn task_reference(parent: &MessageParent, title: &str) -> String {
+    // Escape tag delimiters in user-controlled titles and retain the original
+    // document ID in both the private opening prompt and system instructions.
     let task_reference = serde_json::json!({
-        "documentId": assignment.parent.entity_id(),
-        "documentName": brief.title,
+        "documentId": parent.entity_id(),
+        "documentName": title,
         "blockName": "task",
         "blockParams": {},
     })
     .to_string()
     .replace('<', "\\u003c")
     .replace('>', "\\u003e");
-    format!(
-        "{}\n\n<m-document-mention>{}</m-document-mention>\n\n{}",
-        include_str!("task_assignment/prompt.md").trim(),
-        task_reference,
-        brief.markdown,
-    )
+    format!("<m-document-mention>{task_reference}</m-document-mention>")
 }
 
 async fn assignment_discussion(

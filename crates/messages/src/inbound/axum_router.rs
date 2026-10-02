@@ -161,6 +161,7 @@ async fn receipt<P: RequiredPermission, A: EntityAccessService, Auth: MacroAutho
         MessageParent::Initiative(_) => EntityType::Initiative,
         MessageParent::CrmCompany(_) => EntityType::CrmCompany,
         MessageParent::CrmContact(_) => EntityType::CrmContact,
+        MessageParent::Call(_) => EntityType::Call,
     };
     entity_access::inbound::axum_extractors::principal_entity_access_receipt::<P>(
         access,

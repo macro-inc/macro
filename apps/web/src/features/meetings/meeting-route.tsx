@@ -132,6 +132,7 @@ export function MeetingRouteContent(props: {
         <CallOverlay
           onLeave={onLeave}
           localName={name()}
+          showChat={authenticated() === true}
           showTeamSharing={canShareWithTeam()}
           sharedWithTeam={
             record.isSuccess ? record.data.shareWithTeam : undefined

@@ -4,9 +4,9 @@
 
 use super::models::EntityType;
 use crate::domain::models::{
-    AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, ChannelRoleResult,
-    CrmEntityAccess, EntityAccessReceipt, EntityPermission, RequiredPermission, TeamRole,
-    UserTeamInfo, ViewAccessLevel,
+    AccessError, AccessLevel, AgentSessionParent, BotAccessScope, BotId, CallChannelInfo,
+    ChannelRoleResult, CrmEntityAccess, EntityAccessReceipt, EntityPermission, RequiredPermission,
+    TeamRole, UserTeamInfo, ViewAccessLevel,
 };
 #[cfg(feature = "explain_binary")]
 use crate::domain::models::{AccessExplanation, AccessGrant};
@@ -97,12 +97,12 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         user_id: &MacroUserId<Lowercase<'_>>,
     ) -> impl Future<Output = Result<Vec<Uuid>, AccessError>> + Send;
 
-    /// Document owning an agent session's still-live originating message thread.
+    /// Supported parent owning an agent session's still-live originating message thread.
     /// This is a persisted relationship, not a caller-supplied grant.
-    fn get_agent_session_document(
+    fn get_agent_session_parent(
         &self,
         agent_session_id: &str,
-    ) -> impl Future<Output = Result<Option<String>, AccessError>> + Send;
+    ) -> impl Future<Output = Result<Option<AgentSessionParent>, AccessError>> + Send;
 
     /// Get the access level a user has for a reminder.
     ///

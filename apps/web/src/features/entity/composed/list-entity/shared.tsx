@@ -32,6 +32,8 @@ export interface BaseListEntityProps<E extends EntityData = EntityData> {
   actions?: JSX.Element;
   /** Persistent status/action immediately before the timestamp. */
   leadingAction?: JSX.Element;
+  /** Collection-owned completion of a reminder occurrence. */
+  onToggleReminderDone?: () => Promise<void>;
   hideContentHits?: boolean;
   /** Resolved app display name for a linked GitHub PR author, when available. */
   authorDisplayName?: string;
@@ -62,6 +64,8 @@ const WIDE_BREAKPOINT = 512; // @lg container query = 32rem
 
 export interface LayoutProps {
   entity: WithNotification<EntityData>;
+  /** Persistent schedule metadata, including on touch and notification rows. */
+  scheduleStatus?: JSX.Element;
   actions?: JSX.Element;
   leadingAction?: JSX.Element;
   checked?: boolean;

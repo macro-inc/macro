@@ -368,6 +368,11 @@ export function runCreateAction(
       });
       return;
     case 'chat':
+      if (isFeatureEnabled(enableChatV3Agents)) {
+        setCreateMenuOpen(false, false);
+        openAgentComposer(useSplitLayout(), shouldInsert);
+        return;
+      }
       // On mobile the chat input doesn't autofocus on mount, so arm focus
       // within this gesture (iOS only raises the keyboard for a synchronous
       // focus). The chat mounts asynchronously, so this waits for the input.

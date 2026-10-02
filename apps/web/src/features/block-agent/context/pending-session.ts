@@ -168,7 +168,7 @@ export function startPendingSession(
                   ? { attachments: options.attachments }
                   : {}),
               },
-              { userId: options.userId }
+              { userId: options.userId ?? result.value.session.ownerId }
             );
             if (delivered.isErr()) {
               setError(

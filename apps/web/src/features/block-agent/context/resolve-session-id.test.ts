@@ -9,6 +9,11 @@ import type { AgentAction } from '@service-agent-harness/generated/schemas';
 import { createRoot } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+const refetchSoupEntity = vi.hoisted(() => vi.fn(async () => {}));
+// Session creation refreshes Soup in the background. Keep this unit test at
+// the query boundary so real auth/network work cannot outlive its environment.
+vi.mock('@queries/soup/normalized-cache', () => ({ refetchSoupEntity }));
+
 const create = vi.hoisted(() => ({
   resolve: undefined as ((id?: string) => void) | undefined,
   reject: undefined as (() => void) | undefined,
@@ -16,6 +21,7 @@ const create = vi.hoisted(() => ({
   autoConfirm: true,
   confirm: undefined as ((error?: string) => void) | undefined,
   release: vi.fn(),
+  attribution: vi.fn(),
 }));
 
 vi.mock('@service-agent-harness/client', () => ({
@@ -24,7 +30,10 @@ vi.mock('@service-agent-harness/client', () => ({
       (request: { id: string }) =>
         new Promise((resolve) => {
           create.resolve = (id: string = request.id) =>
-            resolve({ isErr: () => false, value: { session: { id } } });
+            resolve({
+              isErr: () => false,
+              value: { session: { id, ownerId: 'session-owner' } },
+            });
           create.reject = () =>
             resolve({
               isErr: () => true,
@@ -55,7 +64,8 @@ vi.mock('@core/agent-session/AgentSession', () => ({
       };
       return {
         load: async () => {},
-        issue: async (action: AgentAction) => {
+        issue: async (action: AgentAction, options: unknown) => {
+          create.attribution(options);
           const result = await create.control(id, action);
           if (!result.isErr()) {
             requestId = result.value.actionId;
@@ -111,6 +121,7 @@ const { resolveSessionId } = await import('./resolve-session-id');
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 beforeEach(() => {
+  refetchSoupEntity.mockClear();
   create.control.mockReset();
   create.release.mockReset();
   create.autoConfirm = true;
@@ -160,6 +171,11 @@ describe('an id whose create is in flight', () => {
 
       expect(resolved.sessionId()).toBe(placeholder);
       expect(resolved.pending()).toBe(false);
+      expect(refetchSoupEntity).toHaveBeenCalledExactlyOnceWith(
+        placeholder,
+        'agentSession',
+        { created: true }
+      );
       dispose();
     });
   });
@@ -174,6 +190,11 @@ describe('an id whose create is in flight', () => {
       await flush();
       expect(resolved.sessionId()).toBe('server-minted');
       expect(resolved.pending()).toBe(false);
+      expect(refetchSoupEntity).toHaveBeenCalledExactlyOnceWith(
+        'server-minted',
+        'agentSession',
+        { created: true }
+      );
       dispose();
     });
   });
@@ -189,6 +210,7 @@ describe('an id whose create is in flight', () => {
       expect(resolved.pending()).toBe(false);
       expect(resolved.error()).toBe('Connect GitHub to use this repository.');
       expect(resolved.sessionId()).toBeUndefined();
+      expect(refetchSoupEntity).not.toHaveBeenCalled();
       dispose();
     });
   });
@@ -391,6 +413,23 @@ it.each(['Describe this', ''])(
       type: 'prompt',
       prompt,
       attachments,
+    });
+  }
+);
+
+it.each([undefined, 'explicit-user'])(
+  'attributes the first prompt when userId is %s',
+  async (userId) => {
+    create.attribution.mockClear();
+    create.control.mockResolvedValue({
+      isErr: () => false,
+      value: { actionId: 'prompt-id' },
+    });
+    startPendingSession({ prompt: 'Hello', userId });
+    create.resolve?.();
+    await flush();
+    expect(create.attribution).toHaveBeenCalledWith({
+      userId: userId ?? 'session-owner',
     });
   }
 );

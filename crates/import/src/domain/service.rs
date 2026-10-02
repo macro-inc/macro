@@ -13,8 +13,8 @@
 
 use super::models::*;
 use super::ports::{
-    EntityCreator, ImportError, ImportRepo, ImportedDocumentProperties, ImportedDocumentProperty,
-    ImportedDocumentPropertyValue, ImportedTaskProperties, Result,
+    CanonicalImportRepo, EntityCreator, ImportError, ImportRepo, ImportedDocumentProperties,
+    ImportedDocumentProperty, ImportedDocumentPropertyValue, ImportedTaskProperties, Result,
 };
 use crate::inbound::toolset::{
     ImportToolContext, ToolPolicy, gather_toolset, notion_import_toolset,
@@ -34,6 +34,7 @@ use uuid::Uuid;
 
 mod admission;
 mod prompts;
+mod slack;
 
 #[cfg(test)]
 mod test;
@@ -356,7 +357,7 @@ impl<R, S, C> ImportServiceImpl<R, S, C> {
 
 impl<R, S, C> ImportServiceImpl<R, S, C>
 where
-    R: ImportRepo + Clone,
+    R: ImportRepo + CanonicalImportRepo + Clone,
     S: ConnectorSelect,
     C: EntityCreator,
 {
@@ -812,29 +813,23 @@ where
                 }
             }
             ImportSource::Slack => {
-                match serde_json::from_value::<SlackChannelMeta>(row.metadata.clone()) {
-                    Ok(meta) => {
-                        // Channels always associate with the user's team when
-                        // they have one — that is what makes team dedup work.
-                        match self.repo.user_team_id(user).await {
-                            Ok(team_id) => {
-                                // Teammates who were in the Slack channel join
-                                // the Macro one (matched by email downstream).
-                                let emails: Vec<String> = meta
-                                    .participants
-                                    .iter()
-                                    .filter_map(|p| p.email.clone())
-                                    .collect();
-                                self.creator
-                                    .create_channel(user, &meta.name, team_id, &emails)
-                                    .await
-                                    .map(|id| (id, team_id))
-                            }
-                            Err(e) => Err(anyhow::anyhow!("team lookup failed: {e}")),
-                        }
-                    }
-                    Err(e) => Err(anyhow::anyhow!("invalid slack metadata: {e}")),
+                async {
+                    let team_id = self
+                        .repo
+                        .user_team_id(user)
+                        .await?
+                        .ok_or_else(|| anyhow::anyhow!("Slack import requires a team"))?;
+                    let id = slack::ensure_channel(
+                        &self.repo,
+                        self.creator.as_ref(),
+                        user,
+                        row,
+                        team_id,
+                    )
+                    .await?;
+                    Ok((id.to_string(), Some(team_id)))
                 }
+                .await
             }
             // Notion rows go through the agent session, never here.
             ImportSource::Notion => return,
@@ -1014,7 +1009,7 @@ where
 
 impl<R, S, C> ImportService for ImportServiceImpl<R, S, C>
 where
-    R: ImportRepo + Clone,
+    R: ImportRepo + CanonicalImportRepo + Clone,
     S: ConnectorSelect,
     C: EntityCreator,
 {
@@ -1203,7 +1198,7 @@ where
 
 impl<R, S, C> ImportStager for ImportServiceImpl<R, S, C>
 where
-    R: ImportRepo + Clone,
+    R: ImportRepo + CanonicalImportRepo + Clone,
     S: ConnectorSelect,
     C: EntityCreator,
 {
@@ -1346,7 +1341,7 @@ where
 
 impl<R, S, C> NotionPageImporter for ImportServiceImpl<R, S, C>
 where
-    R: ImportRepo + Clone,
+    R: ImportRepo + CanonicalImportRepo + Clone,
     S: ConnectorSelect,
     C: EntityCreator,
 {
@@ -1481,7 +1476,7 @@ where
 
 impl<R, S, C> ImportFinalizer for ImportServiceImpl<R, S, C>
 where
-    R: ImportRepo + Clone,
+    R: ImportRepo + CanonicalImportRepo + Clone,
     S: ConnectorSelect,
     C: EntityCreator,
 {

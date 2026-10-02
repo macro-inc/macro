@@ -183,7 +183,10 @@ function migrateLegacySearch({
     }))
     .with('call-detail', 'drive-call', () => ({
       namespace: 'call-detail',
-      fields: [[CALL_URL_PARAMS.transcriptId, 'transcriptId']] as const,
+      fields: [
+        [CALL_URL_PARAMS.transcriptId, 'transcriptId'],
+        [CALL_URL_PARAMS.messageId, 'messageId'],
+      ] as const,
     }))
     .otherwise(() => undefined);
 

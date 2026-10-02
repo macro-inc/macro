@@ -33,7 +33,9 @@ export async function archiveEmailThread(
       getActiveGraphqlSoupRevalidations()
     );
     if (disposition === 'committed') {
-      await refreshActiveGraphqlSoupQueries();
+      await refreshActiveGraphqlSoupQueries({
+        target: { kind: 'email-archive', threadId: id },
+      });
     }
     return disposition;
   }

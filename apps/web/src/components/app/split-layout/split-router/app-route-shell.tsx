@@ -28,7 +28,10 @@ export function withAuth<P extends object>(View: Component<P>): Component<P> {
   };
 }
 
-export function RedirectSplit(props: { to: SplitContent }) {
+export function RedirectSplit(props: {
+  to: SplitContent;
+  mergeHistory?: boolean;
+}) {
   const panel = useSplitPanelOrThrow();
   const router = useSplitRouter<SplitId>();
   onMount(() => {
@@ -36,6 +39,7 @@ export function RedirectSplit(props: { to: SplitContent }) {
       ? props.to.entryMetadata
       : {};
     panel.handle.replace({
+      mergeHistory: props.mergeHistory,
       next: {
         ...props.to,
         entryMetadata: {
