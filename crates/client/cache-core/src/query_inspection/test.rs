@@ -9,8 +9,10 @@ fn concrete_union_member_outside_selected_fragment_is_absent() {
     // These are selections beneath the GraphqlSoupEntity interface. The cached
     // channel does not match the document-only fragment containing properties.
     let selections = vec![Selection::Fragment {
+        conditions: vec![],
         type_condition: Some("GraphqlSoupDocument".to_string()),
         selection_set: vec![Selection::Field(FieldNode {
+            conditions: vec![],
             response_key: "properties".to_string(),
             name: "properties".to_string(),
             cache_only: false,

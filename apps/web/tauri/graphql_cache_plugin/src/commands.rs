@@ -120,6 +120,29 @@ pub async fn graphql_cache_read(
         .await
 }
 
+/// Incrementally project an ordinary query through cache-core.
+#[tauri::command]
+pub async fn graphql_cache_watch(
+    state: State<'_, CacheState>,
+    op_id: String,
+    query: String,
+    operation_name: Option<String>,
+    variables: Option<Variables>,
+    entity_resolvers: Option<Vec<EntityResolver>>,
+    since: Option<String>,
+) -> Result<cache_core::engine::watch_query::QueryUpdate, String> {
+    engine_handle(&state)?
+        .watch(
+            op_id,
+            query,
+            operation_name,
+            variables.unwrap_or_default(),
+            entity_resolvers.unwrap_or_default(),
+            since,
+        )
+        .await
+}
+
 /// Projects explicit normalized entity keys without scanning storage.
 #[tauri::command]
 pub async fn graphql_cache_read_records_by_keys(

@@ -2,6 +2,10 @@
 
 Status: **draft / pre-implementation**
 
+Implementation note: document-based live projections are implemented on the
+local-resolvers branch; see [Live query API](#8-live-query-api). Earlier sections
+describe the original cache design.
+
 ## 1. Problem
 
 We are migrating data fetching from REST to GraphQL (urql). We need normalized
@@ -529,3 +533,93 @@ These takeaways originally drove the IDB decision. The current §4.2 topology
 requires SharedWorker for browser caching and deliberately falls back to no
 cache when it is unavailable. Firefox/Safari probe runs and the Tauri IPC
 benchmark were **skipped by decision**.
+
+## 8. Live query API
+
+Use a generated document and reactive variables. The normal urql provider can
+supply the client; pass `client` when using a service-specific client.
+
+```ts
+const accountQuery = createLiveQuery(
+  MailAccountsDocument,
+  () => ({}),
+  () => ({ client: getGraphqlSoupClient(), requestPolicy: 'cache-and-network' })
+);
+
+// Access inside a reactive computation or JSX; don't destructure store fields.
+const accounts = () => accountQuery.data?.user.emailLinks ?? [];
+
+const soupPage = createLiveQuery(
+  SoupDocument,
+  () => ({ input: { initial: { limit: 100, sortMethod: 'UPDATED_AT' } } }),
+  () => ({ client: getGraphqlSoupClient() })
+);
+const items = () => soupPage.data?.user.soup.items ?? [];
+```
+
+`undefined` variables pause a query. Changing variables creates a separate cache
+identity. `refetch`, request policies, loading/error state and selection functions
+retain the existing urql-solid contract. Existing `createUrqlQuery` and
+`createUrqlInfiniteQuery` consumers use the same live projection path without
+being rewritten; every loaded infinite-query page stays subscribed.
+
+Mutation predictions are registered once, alongside domain query definitions:
+
+```ts
+optimisticResolver(MarkEmailThreadSeenDocument, ({ input }) => ({
+  __typename: 'GraphqlSoupEmailThread',
+  id: input.threadId,
+  isRead: true,
+}));
+
+// Any caller can then execute the ordinary generated mutation.
+await client.mutation(MarkEmailThreadSeenDocument, {
+  input: { threadId },
+}).toPromise();
+```
+
+The durable optimistic queue owns ordering, retries, commit and rollback. The
+query author supplies no optimistic callbacks, result traversal or cache writes.
+Both the list and a detail query for that thread observe the same effective
+value. Changes to `isRead` preserve row objects and do not notify subscribers to
+unrelated fields.
+
+### Projection contract
+
+Cache-core compiles response paths while reading normalized records. Bindings
+understand response aliases, argument-qualified fields, concrete fragment types,
+variable defaults and `@include`/`@skip`. Identity aliases are supported. A
+subscription retains selected-field bindings rather than another complete
+response. Bindings are bounded by count and estimated retained bytes.
+
+Subsequent reads carry the last accepted engine revision. For scalar, scalar-list
+and opaque-scalar changes, the engine reads only changed dependency records and
+returns response-path patches. The JS adapter preserves immutable urql snapshots
+and applies those paths in one Solid batch. Relationships, embedded-object edits,
+list reordering, invalidation, eviction, cursor mismatch and journal gaps use a
+complete cache read to rebuild bindings. Query teardown and account/engine reset
+discard the corresponding retained state. Unknown directives, schema drift and
+incomplete cached results follow the query's normal network policy; `cache-only`
+never starts a network request.
+
+### Collection semantics and limits
+
+The generic projection reflects cached GraphQL results. It does not infer server
+resolver logic, authorization, aggregates, full-text ranking, or whether an entity
+belongs in an arbitrary filtered/paginated list. Such changes need a declared
+domain collection policy or server revalidation. An explicit Soup page above
+retains its server-provided membership; the existing `createSoupLiveQuery` source
+adds Soup's local membership, ordering, pagination and Mail policy through its
+predicate adapter. That policy remains outside generic cache-core.
+
+Network responses must provide the schema's identity fields (usually `id`, and
+`__typename` for abstract types) for normalization. They are not automatically
+injected. Queries against other schemas, incremental `@defer`/`@stream` delivery
+and arbitrary server-derived mutations are not promises of this API. A mutation
+with no registered prediction still runs normally, and its normalized server
+response updates subscribers. Existing websocket writers provide remote changes;
+this work does not introduce a new server subscription engine.
+
+Background hydration retains its existing opt-in notification contract. Soup's
+local collection source opts in; ordinary foreground queries refresh on their
+normal affected-operation notifications.

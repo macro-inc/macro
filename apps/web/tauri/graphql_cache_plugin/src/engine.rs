@@ -498,6 +498,36 @@ impl EngineHandle {
             .map_err(|e| e.to_string())
     }
 
+    /// Incrementally project a query; operation teardown releases its bindings.
+    pub async fn watch(
+        &self,
+        op_id: String,
+        query: String,
+        operation_name: Option<String>,
+        variables: Variables,
+        entity_resolvers: Vec<EntityResolver>,
+        since: Option<String>,
+    ) -> Result<cache_core::engine::watch_query::QueryUpdate, String> {
+        let since = since
+            .map(|value| value.parse::<CacheRevision>())
+            .transpose()
+            .map_err(|error| error.to_string())?;
+        let mut state = self.inner.lock().await;
+        let EngineState { engine, ops, .. } = &mut *state;
+        let op = ops.intern(&op_id);
+        engine
+            .watch_query(
+                op,
+                &query,
+                operation_name.as_deref(),
+                &variables,
+                &entity_resolvers,
+                since,
+            )
+            .await
+            .map_err(|error| error.to_string())
+    }
+
     /// Projects explicit normalized entity keys without scanning storage.
     pub async fn read_records_by_keys(
         &self,

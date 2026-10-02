@@ -26,6 +26,7 @@ import type {
   MutationSettlement,
   OptimisticLinkPatchWire,
   QueryRevalidationWire,
+  QueryUpdate,
   QueryVariableFilter,
   ReadRecordsByKeysArgs,
   ReadRecordsByKeysResult,
@@ -48,6 +49,11 @@ export interface CacheReadArgs {
   /** Read-only synthetic entity relations compiled by the exchange. */
   entityResolvers?: readonly EntityResolverWire[];
 }
+
+export type CacheWatchArgs = CacheReadArgs & {
+  opKey: number;
+  since?: CacheRevision;
+};
 
 export interface InspectQueryArgs {
   query: string;
@@ -123,6 +129,8 @@ export interface CacheHost {
    * whenever the stored cache is cleared or recreated. */
   currentStorageGeneration(): Promise<string>;
   readQuery(args: CacheReadArgs): Promise<ReadResult>;
+  /** Engine-owned document projection; absent on older/disabled runtimes. */
+  watchQuery?(args: CacheWatchArgs): Promise<QueryUpdate>;
   /** Projects a bounded explicit set of normalized entity keys. */
   readRecordsByKeys(
     args: ReadRecordsByKeysArgs

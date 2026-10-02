@@ -213,7 +213,11 @@ impl LiveQueries {
         }
     }
 
-    fn changes_since(&self, since: CacheRevision, now: CacheRevision) -> Option<Changes> {
+    pub(super) fn changes_since(
+        &self,
+        since: CacheRevision,
+        now: CacheRevision,
+    ) -> Option<Changes> {
         let mut cursor = since;
         let mut changes = Changes::default();
         for (revision, entry) in self

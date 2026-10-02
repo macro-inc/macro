@@ -496,13 +496,20 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
           'variables',
           'priority',
           'entityResolvers',
+          'watch',
         ]) &&
         isOptionalString(value.opId) &&
         isString(value.query) &&
         isOptionalString(value.operationName) &&
         isOptionalRecord(value.variables) &&
         (value.priority === undefined || value.priority === 'user-visible') &&
-        isEntityResolvers(value.entityResolvers)
+        isEntityResolvers(value.entityResolvers) &&
+        (value.watch === undefined ||
+          (isRecord(value.watch) &&
+            isNonEmptyString(value.opId) &&
+            hasOnlyKeys(value.watch, ['since']) &&
+            (value.watch.since === undefined ||
+              isCacheRevision(value.watch.since))))
       );
     case 'write':
       return (

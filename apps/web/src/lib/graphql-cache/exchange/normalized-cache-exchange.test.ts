@@ -676,7 +676,7 @@ describe('normalizedCacheExchange', () => {
     host = makeFakeHost();
   });
 
-  it('updates multiple live queries and selected membership without rereading the worker', async () => {
+  it('keeps live objects reactive through full reads on older cache hosts', async () => {
     type Rows = { rows: { __typename: string; id: string; isRead: boolean }[] };
     const first = gql<Rows>`query First { rows { __typename id isRead } }`;
     const second = gql<Rows>`query Second { rows { __typename id isRead } }`;
@@ -735,20 +735,26 @@ describe('normalizedCacheExchange', () => {
       const keys = host.reads.flatMap((read) =>
         read.opKey === undefined ? [] : [read.opKey]
       );
+      host.scriptRead({
+        kind: 'hit',
+        data: { rows: [{ __typename: 'Thread', id: '17', isRead: true }] },
+      });
       host.pushAffected(keys, [
         { kind: 'fields', key: 'Thread:17', fields: { isRead: true } },
       ]);
+      await vi.waitFor(() => expect(b.data!.rows[0].isRead).toBe(true));
       expect(a.data!.rows[0]).toBe(row);
       expect(b.data!.rows[0].isRead).toBe(true);
       expect(selected.data).toEqual([]);
       expect(snapshot.rows[0].isRead).toBe(false);
+      host.scriptRead({ kind: 'hit', data: snapshot });
       host.pushAffected(keys, [
         { kind: 'fields', key: 'Thread:17', fields: { isRead: false } },
       ]);
-      expect(selected.data).toEqual(['17']);
+      await vi.waitFor(() => expect(selected.data).toEqual(['17']));
       expect(observed).toEqual([false, true, false]);
       await tick();
-      expect(host.reads).toHaveLength(reads);
+      expect(host.reads.length).toBeGreaterThan(reads);
       expect(network).not.toHaveBeenCalled();
 
       // A scalar push arriving before a structural reread must not cancel it.

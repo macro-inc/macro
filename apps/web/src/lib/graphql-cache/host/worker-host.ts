@@ -27,6 +27,7 @@ import {
   OWNER_EPOCH_LOST_ERROR_CODE,
   OWNER_LOCK_UNAVAILABLE_ERROR_CODE,
   parseStorageGeneration,
+  type QueryUpdate,
   type ReadRecordsByKeysArgs,
   type ReadRecordsByKeysResult,
   type ReadResult,
@@ -1188,6 +1189,23 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         },
         args.opKey
       )) as ReadResult;
+    },
+
+    async watchQuery(args): Promise<QueryUpdate> {
+      trackActiveOperation(args.opKey);
+      return (await initializedRequest(
+        {
+          kind: 'read',
+          opId: opId(args.opKey),
+          query: args.query,
+          operationName: args.operationName,
+          variables: args.variables,
+          priority: args.priority,
+          entityResolvers: args.entityResolvers,
+          watch: { since: args.since },
+        },
+        args.opKey
+      )) as QueryUpdate;
     },
 
     async readRecordsByKeys(

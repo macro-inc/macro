@@ -1308,6 +1308,49 @@ impl CacheEngine {
         })
     }
 
+    /// Incrementally projects an ordinary query at one engine revision.
+    #[wasm_bindgen(js_name = watchQuery)]
+    pub fn watch_query(
+        &self,
+        op_id: String,
+        query: String,
+        operation_name: Option<String>,
+        variables: JsValue,
+        entity_resolvers: JsValue,
+        since: Option<String>,
+    ) -> js_sys::Promise {
+        let state = self.state.clone();
+        let ops = self.ops.clone();
+        future_to_promise(async move {
+            let mut state = state.lock().await;
+            state.ensure_callable()?;
+            let variables = parse_variables(variables)?;
+            let entity_resolvers: Vec<EntityResolver> = parse_vec(entity_resolvers)?;
+            let since = since
+                .map(|value| value.parse())
+                .transpose()
+                .map_err(err_js)?;
+            let op = ops.borrow_mut().intern(&op_id);
+            let result = state
+                .engine_mut()?
+                .watch_query(
+                    op,
+                    &query,
+                    operation_name.as_deref(),
+                    &variables,
+                    &entity_resolvers,
+                    since,
+                )
+                .await;
+            let result = state.engine_result(result)?;
+            let data = match &result {
+                cache_core::engine::watch_query::QueryUpdate::Hit { data, .. } => Some(data),
+                _ => None,
+            };
+            read_response_to_js(&result, data)
+        })
+    }
+
     /// Projects explicit normalized entity keys through a named GraphQL
     /// fragment without scanning storage.
     #[wasm_bindgen(js_name = readRecordsByKeys)]

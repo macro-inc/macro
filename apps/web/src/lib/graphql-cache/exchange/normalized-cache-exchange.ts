@@ -78,6 +78,7 @@ import {
   type QueryRevalidationWire,
 } from '../protocol';
 import { createDeferredQueryRereads } from './deferred-query-rereads';
+import { createDocumentQueryReader } from './document-query-reader';
 import {
   compileEntityResolvers,
   type EntityResolverConfig,
@@ -479,6 +480,8 @@ export function normalizedCacheExchange(
   return ({ forward, client }) => {
     /** Operations registered with the host, for push-driven re-execution. */
     const activeOps = new Map<number, Operation>();
+    const documentReader = createDocumentQueryReader(host);
+    let cacheGeneration = 0;
     const liveQueries = new Map<
       number,
       { view: LiveQuery; result: OperationResult }
@@ -533,7 +536,9 @@ export function normalizedCacheExchange(
     const beginCacheRead = (key: number): (() => boolean) => {
       const state = queryState(key);
       const version = ++state.cacheReadVersion;
+      const generation = cacheGeneration;
       return () =>
+        generation === cacheGeneration &&
         activeOps.has(key) &&
         queryStates.get(key) === state &&
         state.cacheReadVersion === version;
@@ -676,8 +681,9 @@ export function normalizedCacheExchange(
       // local/optimistic state, so let it complete even if network persistence
       // finishes first; only teardown/remount may discard that update.
       state.cacheReadVersion += 1;
-      void host
-        .readQuery({
+      const generation = cacheGeneration;
+      void documentReader
+        .read({
           opKey: operation.key,
           query: queryText(operation),
           operationName: operationName(operation),
@@ -687,7 +693,12 @@ export function normalizedCacheExchange(
         })
         .then((read) => {
           const active = activeOps.get(key);
-          if (read.kind !== 'hit' || !active || queryStates.get(key) !== state)
+          if (
+            generation !== cacheGeneration ||
+            read.kind !== 'hit' ||
+            !active ||
+            queryStates.get(key) !== state
+          )
             return;
           // Preserve the authoritative request while immediately surfacing the
           // newer local view. Its eventual result still gets the deferred
@@ -704,6 +715,36 @@ export function normalizedCacheExchange(
         .catch((error) => options.onCacheError?.(error, operation));
     };
 
+    // Deliver cache changes directly. Reexecuting through urql first replays
+    // the previous network result as stale, which can reset collection sources
+    // and replay their persistence acknowledgements during an optimistic edit.
+    const emitWatchedQuery = async (key: number): Promise<void> => {
+      const operation = activeOps.get(key);
+      if (!operation) return;
+      const isCurrent = beginCacheRead(key);
+      try {
+        const read = await documentReader.read({
+          opKey: key,
+          query: queryText(operation),
+          operationName: operationName(operation),
+          variables: operation.variables as Record<string, unknown> | undefined,
+          priority: 'user-visible',
+          entityResolvers,
+        });
+        if (!isCurrent()) return;
+        if (read.kind === 'hit') {
+          emitAffectedResult(
+            cacheResult(operation, read.data, false, 'affected-cache-reread')
+          );
+          return;
+        }
+      } catch (error) {
+        options.onCacheError?.(error, operation);
+        if (!isCurrent()) return;
+      }
+      reexecuteAffected(key);
+    };
+
     const affectedRereads = createDeferredQueryRereads(
       (key, registrationOnly) => {
         if (!activeOps.has(key)) return;
@@ -715,42 +756,25 @@ export function normalizedCacheExchange(
         } else if (state && state.networkBoundQueries > 0) {
           state.deferredAffected = true;
           if (!state.replacementFallback) emitAffectedWhileNetworkBound(key);
+        } else if (
+          host.watchQuery &&
+          !registrationOnly &&
+          liveQueries.has(key) &&
+          !liveQueries.get(key)?.result.error &&
+          !liveQueries.get(key)?.result.hasNext
+        ) {
+          void emitWatchedQuery(key);
         } else {
           reexecuteAffected(key, registrationOnly);
         }
       }
     );
 
-    const unsubscribePush = host.onOpsAffected((opKeys, fieldChanges) =>
+    const unsubscribePush = host.onOpsAffected((opKeys) =>
       batch(() => {
         for (const key of opKeys) {
           if (!activeOps.has(key)) continue;
           const state = queryState(key);
-          const live = liveQueries.get(key);
-          if (
-            fieldChanges &&
-            live &&
-            !live.result.error &&
-            !live.result.hasNext &&
-            state.networkBoundQueries === 0 &&
-            !state.replacementFallback &&
-            !state.retainedReplacementFallback &&
-            !state.completedReplacementFallback &&
-            live.view.apply(fieldChanges)
-          ) {
-            state.cacheReadVersion += 1;
-            affectedRereads.forget(key);
-            emitAffectedResult(
-              withResultMetadata(
-                { ...live.result, data: live.view.snapshot, stale: false },
-                { source: 'normalized-cache-patch' }
-              )
-            );
-            continue;
-          }
-          // A later scalar delta cannot repair a skipped structural change.
-          // Keep rereading until a complete snapshot rebuilds the index.
-          live?.view.invalidate();
           if (state.networkBoundQueries > 0) {
             state.deferredAffected = true;
             if (
@@ -1081,7 +1105,7 @@ export function normalizedCacheExchange(
           op.context[REPLACEMENT_REGISTRATION_ONLY_CONTEXT_KEY] === true;
         let networkForwarded = false;
         try {
-          const pendingRead = host.readQuery({
+          const pendingRead = documentReader.read({
             opKey: op.key,
             query: queryText(op),
             operationName: operationName(op),
@@ -1360,6 +1384,26 @@ export function normalizedCacheExchange(
             const write = await host.writeQuery(writeArgs);
             const deletion = await deleteReportedRecords(result);
             state.networkRegistrationSatisfied = writeArgs.registerDependencies;
+            if (host.watchQuery && isActive()) {
+              const generation = cacheGeneration;
+              void documentReader
+                .read(writeArgs)
+                .then((read) => {
+                  const live = liveQueries.get(op.key);
+                  if (
+                    generation === cacheGeneration &&
+                    read.kind === 'hit' &&
+                    isQueryObject(read.data) &&
+                    isActive() &&
+                    state.networkResultVersion === resultVersion &&
+                    live &&
+                    live.view.snapshot === result.data
+                  ) {
+                    live.view.replace(read.data);
+                  }
+                })
+                .catch(reportError);
+            }
             if (state.retainedReplacementFallback === retained) {
               state.retainedReplacementFallback = undefined;
             }
@@ -1707,6 +1751,7 @@ export function normalizedCacheExchange(
             subscriptionGenerations.delete(op.key);
             activeOps.delete(op.key);
             liveQueries.delete(op.key);
+            documentReader.forget(op.key);
             queryStates.delete(op.key);
             affectedRereads.forget(op.key);
             host.teardown(op.key).catch(() => undefined);
@@ -1726,7 +1771,9 @@ export function normalizedCacheExchange(
         // host gates claims on initialization; durable leases still decide
         // which head is runnable after reconnecting.
         host.onCacheGenerationChanged(() => {
+          cacheGeneration += 1;
           liveQueries.clear();
+          documentReader.clear();
           wakeDrain();
         });
         if (typeof addEventListener === 'function') {
@@ -1748,8 +1795,7 @@ export function normalizedCacheExchange(
             return result;
           }
           const current = liveQueries.get(result.operation.key);
-          const view =
-            current?.view ?? new LiveQuery(result.operation, result.data);
+          const view = current?.view ?? new LiveQuery(result.data);
           if (current) view.replace(result.data);
           const liveResult = withLiveQueryData({ ...result }, view.data);
           liveQueries.set(result.operation.key, { view, result: liveResult });

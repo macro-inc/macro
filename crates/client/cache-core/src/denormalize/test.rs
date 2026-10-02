@@ -110,7 +110,7 @@ fn resumes_only_missing_branches_preserving_aliases_nulls_order_and_dependencies
 }
 
 #[test]
-fn overwritten_duplicate_selection_cannot_patch_later_output() {
+fn duplicate_selections_merge_across_hydration_rounds() {
     let selection = RecordSelection::parse(
         "fragment Thread on GraphqlSoupEmailThread { messages { id subject } ... on GraphqlSoupEmailThread { messages { id } } }",
         "Thread",
@@ -153,7 +153,10 @@ fn overwritten_duplicate_selection_cannot_patch_later_output() {
         panic!("fully resident read completes");
     };
     assert_eq!(data, expected);
-    assert_eq!(data["messages"][2], serde_json::json!({"id": "cold"}));
+    assert_eq!(
+        data["messages"][2],
+        serde_json::json!({"id": "cold", "subject": "Subject cold"})
+    );
     assert!(deps.contains(&key("cold")));
 }
 

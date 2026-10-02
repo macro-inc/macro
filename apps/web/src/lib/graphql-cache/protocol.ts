@@ -23,6 +23,14 @@ import type { EntityResolverWire } from './exchange/entity-resolvers';
 
 export type ReadResult = { kind: 'hit'; data: unknown } | { kind: 'miss' };
 
+/** Paths come from the schema-aware engine projection, including aliases. */
+export type QueryFieldPatch = { path: (string | number)[]; value: unknown };
+export type QueryUpdate =
+  | { kind: 'hit'; data: unknown; revision: CacheRevision }
+  | { kind: 'patch'; patches: QueryFieldPatch[]; revision: CacheRevision }
+  | { kind: 'miss'; revision: CacheRevision }
+  | { kind: 'unsupported' };
+
 /** Opaque in-memory revision of one live cache engine generation. */
 export type CacheRevision = string & {
   readonly __cacheRevision: unique symbol;
@@ -524,6 +532,8 @@ export type CacheRequest = { id: number } & (
   | { kind: 'current-storage-generation' }
   | {
       kind: 'read';
+      /** Incremental projection; requires a namespaced operation id. */
+      watch?: { since?: CacheRevision };
       opId?: string;
       query: string;
       operationName?: string;

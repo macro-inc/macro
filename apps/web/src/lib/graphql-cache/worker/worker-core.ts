@@ -166,6 +166,7 @@ function readSignature(request: CacheRequest): string | undefined {
     request.operationName ?? null,
     request.variables ?? null,
     request.entityResolvers ?? null,
+    request.watch ?? null,
   ]);
 }
 
@@ -466,6 +467,18 @@ export class CacheWorkerCore {
       })
       .with({ kind: 'read' }, async (request) => {
         const engine = this.requireEngine();
+        if (request.watch) {
+          if (!engine.watchQuery || !request.opId)
+            return { kind: 'unsupported' };
+          return await engine.watchQuery(
+            request.opId,
+            request.query,
+            request.operationName,
+            request.variables,
+            request.entityResolvers,
+            request.watch.since
+          );
+        }
         const result: ReadResult = await engine.readQuery(
           request.opId,
           request.query,

@@ -14,6 +14,8 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum NormalizeError {
     #[error(transparent)]
+    Document(#[from] crate::document::DocumentError),
+    #[error(transparent)]
     MissingVariable(#[from] MissingVariable),
     #[error("unknown type `{0}` (schema drift? rebuild after schema changes)")]
     UnknownType(String),
@@ -93,6 +95,8 @@ pub(crate) fn normalize_with_dependencies(
     data: &Json,
     entity_resolvers: &EntityResolverLookup,
 ) -> Result<NormalizeResult, NormalizeError> {
+    let prepared = op.prepare(variables)?;
+    let op = &prepared;
     let root_type = operation_root_type(op)?;
     let Json::Object(data) = data else {
         return Err(NormalizeError::Shape {
@@ -163,7 +167,7 @@ fn project_object_fields(
     type_name: &str,
     data: &serde_json::Map<String, Json>,
 ) -> Result<Option<serde_json::Map<String, Json>>, NormalizeError> {
-    let concrete = match data.get("__typename") {
+    let concrete = match selected_typename(selections, data) {
         Some(Json::String(name)) => name.as_str(),
         _ => type_name,
     };
@@ -266,6 +270,7 @@ fn collect_fields<'a>(
             Selection::Fragment {
                 type_condition,
                 selection_set,
+                ..
             } => {
                 let applies = match type_condition {
                     None => true,
@@ -291,7 +296,7 @@ fn write_object_fields(
     context: &mut WriteContext<'_, '_>,
 ) -> Result<(), NormalizeError> {
     // The concrete type: trust __typename in the response when present.
-    let concrete = match data.get("__typename") {
+    let concrete = match selected_typename(selections, data) {
         Some(Json::String(t)) => t.as_str(),
         _ => type_name,
     };
@@ -356,7 +361,12 @@ fn write_object_fields(
                 _ => context.dependencies.mark_broad(),
             }
         }
-        target.insert(storage_key, cache_value);
+        match target.get_mut(&storage_key) {
+            Some(previous) => merge_selected_value(previous, cache_value),
+            None => {
+                target.insert(storage_key, cache_value);
+            }
+        }
     }
     Ok(())
 }
@@ -424,7 +434,7 @@ fn normalize_object(
     let named_meta = meta::type_meta(named_type)
         .ok_or_else(|| NormalizeError::UnknownType(named_type.to_string()))?;
 
-    let concrete: &str = match obj.get("__typename") {
+    let concrete: &str = match selected_typename(&field.selection_set, obj) {
         Some(Json::String(t)) => t,
         _ if named_meta.kind == TypeKind::Object => named_type,
         _ => {
@@ -440,7 +450,15 @@ fn normalize_object(
         Some(key_fields) => {
             let mut key_values = Vec::with_capacity(key_fields.len());
             for kf in key_fields {
-                let v = match obj.get(*kf) {
+                let mut selected = Vec::new();
+                collect_fields(&field.selection_set, concrete, &mut selected);
+                let key_value = obj.get(*kf).or_else(|| {
+                    selected
+                        .iter()
+                        .find(|field| field.name == *kf)
+                        .and_then(|field| obj.get(&field.response_key))
+                });
+                let v = match key_value {
                     Some(Json::String(s)) => s.clone(),
                     Some(Json::Number(n)) => n.to_string(),
                     _ => {
@@ -480,5 +498,42 @@ fn normalize_object(
             )?;
             Ok(CacheValue::Object(embedded))
         }
+    }
+}
+
+// Identity fields may be selected through aliases, including inside fragments.
+fn selected_typename<'a>(
+    selections: &[Selection],
+    data: &'a serde_json::Map<String, Json>,
+) -> Option<&'a Json> {
+    data.get("__typename").or_else(|| {
+        selections.iter().find_map(|selection| match selection {
+            Selection::Field(field) if field.name == "__typename" => data.get(&field.response_key),
+            Selection::Fragment { selection_set, .. } => selected_typename(selection_set, data),
+            _ => None,
+        })
+    })
+}
+
+// Merge duplicate selections within one response only. Separate network writes
+// still replace embedded values according to the normal record merge policy.
+fn merge_selected_value(target: &mut CacheValue, value: CacheValue) {
+    match (target, value) {
+        (CacheValue::Object(target), CacheValue::Object(values)) => {
+            for (key, value) in values {
+                match target.get_mut(&key) {
+                    Some(previous) => merge_selected_value(previous, value),
+                    None => {
+                        target.insert(key, value);
+                    }
+                }
+            }
+        }
+        (CacheValue::List(target), CacheValue::List(values)) if target.len() == values.len() => {
+            for (target, value) in target.iter_mut().zip(values) {
+                merge_selected_value(target, value);
+            }
+        }
+        (target, value) => *target = value,
     }
 }

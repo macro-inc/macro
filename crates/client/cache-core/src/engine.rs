@@ -6,6 +6,7 @@
 mod test;
 
 pub mod live_query;
+pub mod watch_query;
 
 use crate::denormalize::{DenormalizeError, ReadOutcome, ReadPlans, ReadSession, RecordSource};
 use crate::deps::{
@@ -345,6 +346,7 @@ const DOCUMENT_CACHE_CAPACITY: usize = 128;
 
 pub struct Engine<S: Storage> {
     live_queries: live_query::LiveQueries,
+    query_watches: watch_query::QueryWatches,
     storage: S,
     revision: CacheRevision,
     hot: LruCache<EntityKey<'static>, Record>,
@@ -367,6 +369,7 @@ impl<S: Storage> Engine<S> {
     pub fn with_capacity(storage: S, hot_capacity: usize) -> Self {
         Engine {
             live_queries: live_query::LiveQueries::default(),
+            query_watches: watch_query::QueryWatches::default(),
             storage,
             revision: CacheRevision::ZERO,
             hot: LruCache::new(NonZeroUsize::new(hot_capacity).expect("capacity > 0")),
@@ -744,10 +747,32 @@ impl<S: Storage> Engine<S> {
         variables: &serde_json::Map<String, Json>,
         entity_resolvers: &[EntityResolver],
     ) -> Result<ReadResult, EngineError<S::Error>> {
+        self.read_query_tracked(
+            op_id,
+            query,
+            operation_name,
+            variables,
+            entity_resolvers,
+            false,
+        )
+        .await
+        .map(|(result, _)| result)
+    }
+
+    async fn read_query_tracked(
+        &mut self,
+        op_id: Option<OpId>,
+        query: &str,
+        operation_name: Option<&str>,
+        variables: &serde_json::Map<String, Json>,
+        entity_resolvers: &[EntityResolver],
+        track_projection: bool,
+    ) -> Result<(ReadResult, Option<crate::denormalize::QueryProjection>), EngineError<S::Error>>
+    {
         let entity_resolvers = EntityResolverLookup::compile(entity_resolvers)?;
         self.hydrate_optimistic().await?;
         let doc = Self::document(&mut self.docs, query)?;
-        let op = doc.operation(operation_name)?;
+        let op = doc.operation(operation_name)?.prepare(variables)?;
         if op.kind != OperationKind::Query {
             return Err(EngineError::Document(
                 DocumentError::UnsupportedOperationType(format!(
@@ -783,6 +808,9 @@ impl<S: Storage> Engine<S> {
             crate::meta::QUERY_ROOT_TYPE,
             &op.selection_set,
         );
+        if track_projection {
+            session.projection = Some(Default::default());
+        }
         let outcome = loop {
             let source = EngineSource {
                 hot: &self.hot,
@@ -844,7 +872,7 @@ impl<S: Storage> Engine<S> {
         if let Some(op_id) = op_id {
             self.deps.set_query_deps(op_id, deps);
         }
-        Ok(outcome)
+        Ok((outcome, session.projection))
     }
 
     /// Projects a bounded explicit set of normalized entity keys through a
@@ -1313,6 +1341,7 @@ impl<S: Storage> Engine<S> {
                 IdentityState::Bound(_) => {
                     self.hot.clear();
                     self.live_queries = live_query::LiveQueries::default();
+                    self.query_watches = watch_query::QueryWatches::default();
                     // A different user's session: in-flight optimistic
                     // mutations belong to the old identity — discard them.
                     self.optimistic.clear();
@@ -1478,7 +1507,7 @@ impl<S: Storage> Engine<S> {
                     )),
                 ));
             }
-            project_hydration_response(op, data)?
+            project_hydration_response(&op.prepare(variables)?, data)?
         };
         let (write_result, search_changed_buckets) = self
             .write_network(
@@ -2729,6 +2758,7 @@ impl<S: Storage> Engine<S> {
         self.ensure_revision_can_advance()?;
         self.hot.clear();
         self.live_queries = live_query::LiveQueries::default();
+        self.query_watches = watch_query::QueryWatches::default();
         self.docs.clear();
         self.optimistic.clear();
         self.search_catalogs.clear();
@@ -2744,6 +2774,7 @@ impl<S: Storage> Engine<S> {
     /// Unregisters an active operation (urql teardown).
     pub fn teardown_operation(&mut self, op_id: OpId) {
         self.deps.remove_op(op_id);
+        self.query_watches.remove(op_id);
     }
 
     /// Handles records changed *outside* this engine instance (another tab's
@@ -2806,6 +2837,7 @@ impl<S: Storage> Engine<S> {
         self.ensure_revision_can_advance()?;
         self.hot.clear();
         self.live_queries = live_query::LiveQueries::default();
+        self.query_watches = watch_query::QueryWatches::default();
         self.optimistic.clear();
         self.optimistic_hydrated = true;
         self.search_catalogs.clear();

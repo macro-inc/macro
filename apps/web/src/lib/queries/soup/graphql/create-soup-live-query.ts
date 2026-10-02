@@ -19,7 +19,7 @@ import { querySnapshot } from '../../../graphql-cache/exchange/live-query';
 import { normalizedCacheResultMetadata } from '../../../graphql-cache/exchange/normalized-cache-exchange';
 import { selectRecords } from '../../../graphql-cache/exchange/record-selection';
 import type { CacheRevision } from '../../../graphql-cache/protocol';
-import { createLiveQuery } from '../../../graphql-cache/solid/create-live-query';
+import { createPredicateQuery } from '../../../graphql-cache/solid/create-predicate-query';
 import {
   ChannelListItemFieldsFragmentDoc,
   ChannelListSoupDocument,
@@ -493,7 +493,7 @@ export function createSoupLiveQuery(
       },
     };
   });
-  const live = createLiveQuery<GraphqlSoupItem>({
+  const live = createPredicateQuery<GraphqlSoupItem>({
     host: getGraphqlSoupCacheHost,
     query: () => {
       const definition = localSource();

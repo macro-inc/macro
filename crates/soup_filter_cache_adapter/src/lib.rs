@@ -343,6 +343,7 @@ fn collect_applicable_fields<'a>(
             Selection::Fragment {
                 type_condition,
                 selection_set,
+                ..
             } if type_condition
                 .as_deref()
                 .is_none_or(|condition| meta::type_matches(concrete_type, condition)) =>

@@ -273,6 +273,18 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       });
     },
 
+    async watchQuery(args) {
+      await ready;
+      return await request('graphql_cache_watch', {
+        opId: opId(args.opKey),
+        query: args.query,
+        operationName: args.operationName,
+        variables: args.variables,
+        entityResolvers: args.entityResolvers,
+        since: args.since,
+      });
+    },
+
     async readRecordsByKeys(
       args: ReadRecordsByKeysArgs
     ): Promise<ReadRecordsByKeysResult> {
