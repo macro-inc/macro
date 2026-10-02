@@ -1,6 +1,7 @@
 ---
 title: ChangeColumnType
-description: "Change a column's type, converting every existing value. The column keeps its id and name.  DescribeDatabase lists each column's `safeTypes` (every value converts) and `checkedTypes` (each value is checked first). Any other type is refused while the column holds values; an empty column takes any type. If a value does not fit (\"soon\" as a number), or a multi-valued cell would lose values to a single-valued type, nothing changes and the error counts the misfits and quotes a few: fix them with UPDATE and retry, or add a new column. Clear values only when the user asked for that.  - `entity` needs `specificEntityType`: `USER` makes a person column; `DOCUMENT`, `TASK` and the rest reference other Macro items. - `linkToTableId` (with `dataType: entity`) makes a relation to rows of another table of this database. Relations are always multi-valued, and the column must be empty. - Converting to `select` or `tag` turns the distinct existing values into options; `options` adds labels no row has yet. `tag` columns are always multi-valued.  Requires edit access. The response is the schema after the change."
+description: >-
+  Change a column's type, converting every existing value.
 ---
 
 # ChangeColumnType

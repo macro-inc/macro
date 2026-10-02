@@ -1,6 +1,7 @@
 ---
 title: AddColumn
-description: "Add a column to a table in one of the user's databases. Type it by what its values are, not by how they were typed at you:  - a person (host, owner, assignee, attendee, author): a person column, `entity` then `USER` as below; - a Macro document, task, company, call, channel or project: `entity` with that kind; - a row of another table in this database: a relation, `entity` with `linkToTableId`; - a status, stage or category (\"Going / Maybe / Declined\"): `select`, with `isMultiSelect` or `tag` for several; - money, counts and scores (\"$1,200\"): `number`; dates (\"Aug 13\"): `date`; yes/no: `boolean`; URLs: `link`; - free text only: `text`. Never text for people or Macro items.  `AddColumn` takes `specificEntityType` for an entity column (`USER` for a person column). A relation holds row ids of the target table and is written as a list of them. Select and tag columns accept only the labels in `options`, so list every value the data has; add more later with AddColumnOptions.  Requires edit access. The response is the database's schema after the change, with the new column's exact `sqlName`. If `database` is null, the column was still created: call DescribeDatabase with databaseId before continuing, and do not repeat AddColumn."
+description: >-
+  Add a column to a table in one of the user's databases.
 ---
 
 # AddColumn
