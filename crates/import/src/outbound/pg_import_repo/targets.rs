@@ -32,6 +32,79 @@ impl TryFrom<BindingRow> for ImportSourceBinding {
     }
 }
 
+impl crate::domain::ports::ImportTargetReader for PgImportRepo {
+    async fn lookup_targets(
+        &self,
+        team: Uuid,
+        binding: &ImportSourceBinding,
+        channels: &[crate::domain::models::SlackConversationId],
+    ) -> Result<Vec<crate::domain::models::ImportTargetLookup>> {
+        use crate::domain::models::ImportTargetLookup;
+        if channels.len() > crate::domain::models::MAX_TARGET_LOOKUP {
+            return Err(ImportError::TargetConflict);
+        }
+        let ids: Vec<_> = channels.iter().map(|id| id.as_str()).collect();
+        let workspace = binding.workspace_id.as_ref().map(SlackWorkspaceId::as_str);
+        let rows = sqlx::query!(
+            r#"SELECT s.ordinality AS "position!", r.state AS "state?", c.id AS "id?", c.name AS "name?",
+                      c.channel_type::text AS "kind?"
+               FROM unnest($1::text[]) WITH ORDINALITY AS s(id, ordinality)
+               JOIN import_source_binding b ON b.team_id = $2
+                 AND b.slack_workspace_id IS NOT DISTINCT FROM $3
+                 AND b.confirmed_unknown_at IS NOT DISTINCT FROM $4
+               LEFT JOIN import_target_reservation r
+                 ON r.team_id = $2 AND r.source = 'slack' AND r.foreign_id = s.id
+               LEFT JOIN LATERAL (
+                 SELECT count(*) AS count, min(entity_id) AS id,
+                        bool_and(entity_type = 'channel' AND entity_id IS NOT NULL) AS valid
+                 FROM (SELECT DISTINCT entity_id, entity_type FROM import_entity
+                       WHERE team_id = $2 AND source = 'slack' AND foreign_id = s.id
+                         AND status = 'imported' LIMIT 2) mappings
+               ) legacy ON true
+               LEFT JOIN comms_channels c ON c.id =
+                 CASE WHEN r.state = 'ready' AND r.channel_id = r.candidate_channel_id
+                           AND (legacy.count = 0 OR (legacy.count = 1 AND legacy.valid
+                                AND legacy.id = r.channel_id::text)) THEN r.channel_id
+                      WHEN r.state IS NULL AND legacy.count = 1 AND legacy.valid
+                           AND legacy.id ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+                      THEN legacy.id::uuid END
+                 AND ((c.channel_type = 'team' AND c.team_id = $2)
+                      OR (r.state = 'ready' AND c.channel_type IN ('private', 'direct_message')
+                          AND c.team_id IS NULL))
+                 AND NOT EXISTS (SELECT 1 FROM import_target_reservation other
+                                 WHERE other.channel_id = c.id AND other.team_id <> $2)
+                 AND NOT EXISTS (SELECT 1 FROM import_entity other
+                                 WHERE other.source = 'slack' AND other.status = 'imported'
+                                   AND other.entity_type = 'channel' AND other.entity_id = c.id::text
+                                   AND other.team_id <> $2)
+               ORDER BY s.ordinality"#,
+            &ids as _, team, workspace, binding.confirmed_unknown_at,
+        ).fetch_all(&self.pool).await?;
+        let mut result = vec![ImportTargetLookup::Missing; channels.len()];
+        for row in rows {
+            let outcome = match (row.state.as_deref(), row.id, row.kind.as_deref()) {
+                (Some("pending"), _, _) => ImportTargetLookup::Pending,
+                (_, Some(channel_id), Some(kind)) => {
+                    let kind = match kind {
+                        "team" => ImportTargetKind::Team,
+                        "private" => ImportTargetKind::Private,
+                        "direct_message" => ImportTargetKind::DirectMessage,
+                        _ => continue,
+                    };
+                    ImportTargetLookup::Ready {
+                        channel_id,
+                        kind,
+                        name: row.name.unwrap_or_default(),
+                    }
+                }
+                _ => ImportTargetLookup::Missing,
+            };
+            result[(row.position - 1) as usize] = outcome;
+        }
+        Ok(result)
+    }
+}
+
 struct ReservationRow {
     candidate_channel_id: Uuid,
     state: String,
@@ -167,33 +240,71 @@ impl CanonicalImportRepo for PgImportRepo {
         kind: ImportTargetKind,
     ) -> Result<ImportTargetReservation> {
         let mut tx = self.pool.begin().await?;
-        lock_key(&mut tx, key).await?;
-        let row = reservation(&mut tx, key)
-            .await?
-            .ok_or(ImportError::TargetNotReserved)?;
-        if row.candidate_channel_id != channel_id || row.state == "conflict" {
-            return Err(ImportError::TargetConflict);
-        }
-        validate_channel(&mut tx, key, channel_id, kind).await?;
-        sqlx::query!(
-            r#"
+        let result = complete_target_in(&mut tx, key, channel_id, kind).await?;
+        tx.commit().await?;
+        Ok(result)
+    }
+}
+
+/// Complete a reserved target alongside channel creation in a caller-owned transaction.
+pub async fn complete_target_in(
+    tx: &mut Transaction<'_, Postgres>,
+    key: &ImportTargetKey,
+    channel_id: Uuid,
+    kind: ImportTargetKind,
+) -> Result<ImportTargetReservation> {
+    lock_key(tx, key).await?;
+    let row = reservation(tx, key)
+        .await?
+        .ok_or(ImportError::TargetNotReserved)?;
+    if row.candidate_channel_id != channel_id || row.state == "conflict" {
+        return Err(ImportError::TargetConflict);
+    }
+    validate_channel(tx, key, channel_id, kind).await?;
+    sqlx::query!(
+        r#"
             UPDATE import_target_reservation
             SET state = 'ready', channel_id = $3, updated_at = now()
             WHERE team_id = $1 AND source = 'slack' AND foreign_id = $2 AND state = 'pending'
             "#,
-            key.team_id,
-            key.foreign_id.as_str(),
-            channel_id,
-        )
-        .execute(&mut *tx)
-        .await?;
-        tx.commit().await?;
-        Ok(ImportTargetReservation {
-            key: key.clone(),
-            channel_id,
-            ready: true,
-        })
+        key.team_id,
+        key.foreign_id.as_str(),
+        channel_id,
+    )
+    .execute(&mut **tx)
+    .await?;
+    Ok(ImportTargetReservation {
+        key: key.clone(),
+        channel_id,
+        ready: true,
+    })
+}
+
+/// Lock the canonical source key before channel or message operations. Returns
+/// validated same-team provenance only for a ready, compatible reservation.
+/// A missing reservation is allowed for read-only target discovery.
+pub async fn lock_target_in(
+    tx: &mut Transaction<'_, Postgres>,
+    key: &ImportTargetKey,
+    channel_id: Uuid,
+    kind: ImportTargetKind,
+    required: bool,
+) -> Result<bool> {
+    lock_key(tx, key).await?;
+    let Some(row) = reservation(tx, key).await? else {
+        if required {
+            return Err(ImportError::TargetNotReserved);
+        }
+        return Ok(false);
+    };
+    if row.candidate_channel_id != channel_id || row.state == "conflict" {
+        return Err(ImportError::TargetConflict);
     }
+    if row.state == "ready" {
+        validate_channel(tx, key, channel_id, kind).await?;
+        return Ok(true);
+    }
+    Ok(false)
 }
 
 async fn lock_key(tx: &mut Transaction<'_, Postgres>, key: &ImportTargetKey) -> Result<()> {

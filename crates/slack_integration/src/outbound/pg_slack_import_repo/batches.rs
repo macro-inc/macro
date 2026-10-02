@@ -2,6 +2,7 @@
 //! No helper writes comms tables. The caller must roll back the entire transaction
 //! on any error, including a failed final fence check, and commit only after finish.
 
+use macro_user_id::cowlike::CowLike;
 use sqlx::{Postgres, Transaction};
 
 use super::{
@@ -11,6 +12,73 @@ use super::{
 
 #[cfg(test)]
 mod test;
+
+/// Trusted persisted context read under the execution fence.
+pub struct WriteContext {
+    /// Namespace owning the job.
+    pub team: TeamId,
+    /// Persisted administrator, never supplied by a queue message.
+    pub requester: MacroUserIdStr<'static>,
+    /// Persisted source kind.
+    pub kind: ConversationKind,
+    /// Previously authorized target, if bound.
+    pub channel: Option<Uuid>,
+    /// Current committed restart point.
+    pub checkpoint: Checkpoint,
+}
+
+/// Fence before any owning-crate writes and load their trusted context.
+pub async fn write_context(
+    tx: &mut Transaction<'_, Postgres>,
+    lease: &Lease,
+) -> PortResult<WriteContext> {
+    let team = fence(tx, lease).await?;
+    let row = sqlx::query!(
+        r#"SELECT j.user_id, c.kind, c.channel_id, c.checkpoint_part, c.checkpoint_record
+           FROM slack_import_job j JOIN slack_import_conversation c ON c.job_id = j.id
+           WHERE j.id = $1 AND c.slack_channel_id = $2"#,
+        Uuid::from(lease.event.job_id),
+        lease.event.slack_channel_id.as_str(),
+    )
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(internal)?;
+    Ok(WriteContext {
+        team,
+        requester: MacroUserIdStr::parse_from_str(&row.user_id)
+            .map_err(internal)?
+            .into_owned(),
+        kind: parse_enum(&row.kind)?,
+        channel: row.channel_id,
+        checkpoint: Checkpoint {
+            part_index: row.checkpoint_part as u32,
+            record_index: row.checkpoint_record as u32,
+        },
+    })
+}
+
+/// Persist warnings idempotently under the same fence as target binding.
+pub async fn record_warnings(
+    tx: &mut Transaction<'_, Postgres>,
+    lease: &Lease,
+    warnings: &[ImportWarning],
+) -> PortResult<()> {
+    let team = fence(tx, lease).await?;
+    for warning in warnings {
+        let warning = super::lifecycle::enum_string(warning)?;
+        sqlx::query!(
+            r#"UPDATE slack_import_conversation SET warnings = array_append(warnings, $3)
+               WHERE job_id = $1 AND slack_channel_id = $2 AND NOT ($3 = ANY(warnings))"#,
+            Uuid::from(lease.event.job_id),
+            lease.event.slack_channel_id.as_str(),
+            warning,
+        )
+        .execute(&mut **tx)
+        .await
+        .map_err(internal)?;
+    }
+    bump_revision(tx, team, lease.event.job_id).await
+}
 
 /// A mapping selected by first-commit-wins source identity.
 #[derive(Debug)]
@@ -330,6 +398,124 @@ pub async fn lookup(
         .collect())
 }
 
+impl crate::domain::ports::SourceMessageReader for PgSlackImportRepo {
+    async fn reference_mappings(
+        &self,
+        team: TeamId,
+        sources: &[SourceMessageId],
+    ) -> PortResult<Vec<crate::domain::slack::references::resolve::StoredMessageMapping>> {
+        use crate::domain::slack::references::resolve::StoredMessageMapping;
+        if sources.len()
+            > self
+                .limits
+                .database_batch_messages
+                .min(ImportLimits::default().database_batch_messages) as usize
+            || sources.iter().any(|source| source.team_id != team)
+        {
+            return Err(ImportError::LimitExceeded.into());
+        }
+        let payload = serde_json::Value::Array(
+            sources
+                .iter()
+                .enumerate()
+                .map(|(index, s)| {
+                    serde_json::json!({
+                        "index": index, "channel": s.slack_channel_id, "ts": s.ts.unix_micros(),
+                    })
+                })
+                .collect(),
+        );
+        if serde_json::to_vec(&payload).map_err(internal)?.len() as u64
+            > self.limits.database_batch_bytes
+        {
+            return Err(ImportError::LimitExceeded.into());
+        }
+        let rows = sqlx::query!(
+            r#"SELECT s.index AS "index!", m.message_id, m.channel_id
+               FROM jsonb_to_recordset($1) AS s(index integer, channel text, ts bigint)
+               JOIN slack_import_message_map m ON m.team_id = $2
+                 AND m.slack_channel_id = s.channel AND m.slack_ts = s.ts"#,
+            payload,
+            Uuid::from(team),
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(internal)?;
+        Ok(rows
+            .into_iter()
+            .map(|row| StoredMessageMapping {
+                source: sources[row.index as usize].clone(),
+                channel: row.channel_id,
+                message: row.message_id,
+            })
+            .collect())
+    }
+}
+
+impl PgSlackImportRepo {
+    /// Load source scope and requester only from an explicitly team-owned job.
+    /// Binding and domain evidence are supplied by the owning ledger, not SQL here.
+    pub async fn reference_job(
+        &self,
+        team: TeamId,
+        job: JobId,
+    ) -> PortResult<Option<(MacroUserIdStr<'static>, SourceIdentity)>> {
+        let row = sqlx::query!(
+            "SELECT user_id, source_workspace_id, confirmed_unknown FROM slack_import_job WHERE team_id = $1 AND id = $2",
+            Uuid::from(team), Uuid::from(job),
+        ).fetch_optional(&self.pool).await.map_err(internal)?;
+        row.map(|row| {
+            let source = match row.source_workspace_id {
+                Some(source) => SourceIdentity::Known {
+                    source_id: source.parse().map_err(internal)?,
+                },
+                None if row.confirmed_unknown => SourceIdentity::ConfirmedUnknown,
+                None => return Err(ImportError::Unavailable.into()),
+            };
+            Ok((
+                MacroUserIdStr::parse_from_str(&row.user_id)
+                    .map_err(internal)?
+                    .into_owned(),
+                source,
+            ))
+        })
+        .transpose()
+    }
+
+    /// Bounded selected work with remaining resolution opportunity; no target IDs.
+    pub async fn pending_reference_channels(
+        &self,
+        team: TeamId,
+        job: JobId,
+        channels: &[ConversationId],
+    ) -> PortResult<Vec<ConversationId>> {
+        if channels.len()
+            > self
+                .limits
+                .database_batch_messages
+                .min(ImportLimits::default().database_batch_messages) as usize
+        {
+            return Err(ImportError::LimitExceeded.into());
+        }
+        let ids: Vec<_> = channels.iter().map(ConversationId::as_str).collect();
+        let rows = sqlx::query_scalar!(
+            r#"SELECT c.slack_channel_id FROM slack_import_conversation c
+               JOIN slack_import_job j ON j.id = c.job_id
+               WHERE j.team_id = $1 AND j.id = $2 AND c.slack_channel_id = ANY($3)
+                 AND c.status IN ('awaiting_uploads', 'queued', 'importing')"#,
+            Uuid::from(team),
+            Uuid::from(job),
+            &ids as _,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(internal)?;
+        rows.into_iter()
+            .map(|id| id.parse().map_err(internal))
+            .collect()
+    }
+}
+
 fn position(checkpoint: Checkpoint) -> (u32, u32) {
     (checkpoint.part_index, checkpoint.record_index)
 }
@@ -342,6 +528,8 @@ pub(super) async fn pending_search(pool: &PgPool, limit: u32) -> PortResult<Vec<
              AND o.kind = 'search' AND o.generation = c.search_dirty_generation
            WHERE c.channel_id IS NOT NULL AND c.search_state IN ('pending', 'submitted', 'failed')
              AND o.cancelled_at IS NULL AND o.available_at <= clock_timestamp()
+             AND NOT EXISTS (SELECT 1 FROM slack_import_message_reference r
+                 WHERE r.job_id = c.job_id AND r.completed_at IS NULL)
            ORDER BY c.search_updated_at, c.job_id, c.slack_channel_id LIMIT $1"#, i64::from(limit),
     ).fetch_all(pool).await.map_err(internal)?;
     rows.into_iter()
@@ -418,6 +606,7 @@ pub(super) async fn record_search(
             Uuid::from(request.job_id), &channels, number(request.generation)?, status,
         ).execute(&mut *tx).await.map_err(internal)?;
         bump_revision(&mut tx, team.try_into().map_err(internal)?, request.job_id).await?;
+        super::lifecycle::recompute(&mut tx, request.job_id).await?;
     }
     tx.commit().await.map_err(internal)?;
     Ok(())

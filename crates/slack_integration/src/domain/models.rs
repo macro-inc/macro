@@ -650,7 +650,8 @@ pub struct ImportCounters {
     pub reactions: u64,
 }
 
-/// Search submission/receipt state. Accepted is not completed indexing.
+/// Search publication/receipt state. Acceptance is not completed publication;
+/// even completed publication still awaits consumer indexing and refresh.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(
     tag = "status",
@@ -669,9 +670,9 @@ pub enum SearchState {
         #[serde(rename = "receiptId")]
         receipt_id: Uuid,
     },
-    /// Search service reported successful indexing.
+    /// Search service durably published the scope; eventual indexing is separate.
     Completed,
-    /// Indexing failed; retained history must be retried independently.
+    /// Publication failed; retained history must be retried independently.
     Failed,
 }
 
@@ -905,7 +906,7 @@ pub enum WorkerOutcome {
 }
 
 /// Natural identity of a message, shared by thread lookup and durable dedupe.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
 pub struct SourceMessageId {
     /// Team's single bound Slack source namespace.
     pub team_id: TeamId,
@@ -915,8 +916,18 @@ pub struct SourceMessageId {
     pub ts: SlackTimestamp,
 }
 
+/// Historical attribution distinguishes an email-mapped user from the platform bot.
+/// The composition root resolves `SystemBot` to the canonical `MACRO_SYSTEM_BOT_ID`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub enum HistoricalSender {
+    /// Raw lowercase-email identity, without roster lookup.
+    User(MacroUserIdStr<'static>),
+    /// Fallback for unknown authors, accompanied by `imported_author`.
+    SystemBot,
+}
+
 /// Converted message passed to the atomic historical sink, not the live send path.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct HistoricalMessage {
     /// Caller-generated UUIDv7; existing source mapping wins across jobs.
     pub id: Uuid,
@@ -930,11 +941,16 @@ pub struct HistoricalMessage {
     /// metadata without promising automatic repair when a later archive supplies it.
     pub orphaned_thread_ts: Option<SlackTimestamp>,
     /// Lowercase raw-email identity or the system bot.
-    pub sender: MacroUserIdStr<'static>,
+    pub sender: HistoricalSender,
     /// Slack display name only for system-bot fallback attribution.
     pub imported_author: Option<String>,
     /// Converted, nonempty Macro markdown (attachment bytes are excluded).
     pub content: String,
+    /// Only user identities emitted by conversion outside code; never rediscover
+    /// these by parsing the serialized body.
+    pub user_mentions: Vec<MacroUserIdStr<'static>>,
+    /// Typed occurrences against the safe initial content, never speculative IDs.
+    pub body_references: Vec<super::slack::references::ReferenceIntent>,
     /// Deterministic source ordering for equal-time historical display.
     pub import_order: u64,
     /// Converted, deduplicated reactions with email-bearing actors only.
@@ -942,7 +958,7 @@ pub struct HistoricalMessage {
 }
 
 /// One silent historical reaction; source message time supplies missing reaction time.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct HistoricalReaction {
     /// Raw lowercase email mapped to a Macro identity.
     pub user_id: MacroUserIdStr<'static>,

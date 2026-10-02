@@ -23,12 +23,24 @@ impl PgChannelsRepo {
         channel: &HistoricalChannel,
         live_activity: bool,
     ) -> anyhow::Result<EnsuredChannel> {
+        let mut tx = self.pool.begin().await?;
+        let result = Self::ensure_reserved_channel_in(&mut tx, channel, live_activity).await?;
+        tx.commit().await?;
+        Ok(result)
+    }
+
+    /// Create only the reserved identity in the caller's transaction. No live effects
+    /// are requested by archive callers; existing targets are never modified.
+    pub async fn ensure_reserved_channel_in(
+        tx: &mut Transaction<'_, Postgres>,
+        channel: &HistoricalChannel,
+        live_activity: bool,
+    ) -> anyhow::Result<EnsuredChannel> {
         validate_reserved_id(channel.id)?;
         let (channel_type, team_id) = match channel.kind {
             HistoricalChannelKind::Team(team_id) => (ChannelType::Team, Some(team_id)),
             HistoricalChannelKind::Private => (ChannelType::Private, None),
         };
-        let mut tx = self.pool.begin().await?;
         let inserted = sqlx::query_scalar!(
             r#"
             INSERT INTO comms_channels
@@ -44,15 +56,15 @@ impl PgChannelsRepo {
             team_id,
             channel.created_at,
         )
-        .fetch_optional(&mut *tx)
+        .fetch_optional(&mut **tx)
         .await?;
         let created = inserted.is_some();
         if created {
-            insert_owner(&mut tx, channel.id, &channel.owner, channel.created_at).await?;
+            insert_owner(tx, channel.id, &channel.owner, channel.created_at).await?;
             let participants = channel.participants.iter().cloned().collect::<Vec<_>>();
-            insert_members(&mut tx, channel.id, &participants, channel.created_at).await?;
+            insert_members(tx, channel.id, &participants, channel.created_at).await?;
             if live_activity {
-                create_activity(&mut *tx, channel.id, channel.owner.as_ref()).await?;
+                create_activity(&mut **tx, channel.id, channel.owner.as_ref()).await?;
             }
         } else {
             // An explicit ID is not authority to repurpose a different target.
@@ -61,14 +73,13 @@ impl PgChannelsRepo {
                    FROM comms_channels WHERE id = $1 FOR UPDATE"#,
                 channel.id,
             )
-            .fetch_one(&mut *tx)
+            .fetch_one(&mut **tx)
             .await?;
             anyhow::ensure!(
                 existing.channel_type == channel_type && existing.team_id == team_id,
                 "historical channel reservation conflicts with existing target"
             );
         }
-        tx.commit().await?;
         Ok(EnsuredChannel {
             id: channel.id,
             created,
@@ -153,6 +164,19 @@ pub(super) async fn ensure_dm(
     pair: DmPair,
     creation: DmCreation,
 ) -> anyhow::Result<EnsuredChannel> {
+    let mut tx = repo.pool.begin().await?;
+    let result = ensure_dm_in(&mut tx, pair, creation).await?;
+    tx.commit().await?;
+    Ok(result)
+}
+
+/// Shared pair lock and silent creation inside an import coordinator transaction.
+/// The caller must reject a returned ID different from its canonical reservation.
+pub async fn ensure_dm_in(
+    tx: &mut Transaction<'_, Postgres>,
+    pair: DmPair,
+    creation: DmCreation,
+) -> anyhow::Result<EnsuredChannel> {
     let owner = creation.owner(&pair)?;
     let (id, created_at) = match &creation {
         DmCreation::Live(_) => (macro_uuid::generate_uuid_v7(), None),
@@ -161,7 +185,6 @@ pub(super) async fn ensure_dm(
             (*id, Some(*created_at))
         }
     };
-    let mut tx = repo.pool.begin().await?;
     // Length-prefix the first identity so arbitrary valid email characters cannot
     // make two distinct pairs share a lock key. Hash collisions only serialize work.
     let lock_key = format!(
@@ -174,12 +197,11 @@ pub(super) async fn ensure_dm(
         "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
         lock_key
     )
-    .execute(&mut *tx)
+    .execute(&mut **tx)
     .await?;
     // This must be a separate statement after acquiring the lock: READ COMMITTED
     // then observes a concurrent creator that committed while we were waiting.
-    if let Some(id) = find_dm(&mut tx, &pair).await? {
-        tx.commit().await?;
+    if let Some(id) = find_dm(tx, &pair).await? {
         return Ok(EnsuredChannel { id, created: false });
     }
     let inserted_at = sqlx::query_scalar!(
@@ -194,29 +216,20 @@ pub(super) async fn ensure_dm(
         owner.as_ref(),
         created_at,
     )
-    .fetch_optional(&mut *tx)
+    .fetch_optional(&mut **tx)
     .await?;
     let created_at = inserted_at
         .ok_or_else(|| anyhow::anyhow!("DM reservation conflicts with existing target"))?;
-    insert_owner(&mut tx, id, owner, created_at).await?;
-    insert_members(
-        &mut tx,
-        id,
-        &[pair.lo().clone(), pair.hi().clone()],
-        created_at,
-    )
-    .await?;
+    insert_owner(tx, id, owner, created_at).await?;
+    insert_members(tx, id, &[pair.lo().clone(), pair.hi().clone()], created_at).await?;
     if matches!(creation, DmCreation::Live(_)) {
-        create_activity(&mut *tx, id, owner.as_ref()).await?;
+        create_activity(&mut **tx, id, owner.as_ref()).await?;
     }
-    tx.commit().await?;
     Ok(EnsuredChannel { id, created: true })
 }
 
-pub(super) async fn find_dm(
-    connection: &mut PgConnection,
-    pair: &DmPair,
-) -> anyhow::Result<Option<Uuid>> {
+/// Discover an exact pair without modifying it.
+pub async fn find_dm(connection: &mut PgConnection, pair: &DmPair) -> anyhow::Result<Option<Uuid>> {
     Ok(sqlx::query_scalar!(
         r#"
         SELECT c.id FROM comms_channels c
@@ -254,7 +267,9 @@ async fn insert_owner(
     Ok(())
 }
 
-async fn insert_members(
+/// Insert silent memberships after the caller locks and authorizes a non-DM target.
+/// Existing roles and historical leavers are preserved.
+pub async fn insert_members(
     tx: &mut Transaction<'_, Postgres>,
     channel_id: Uuid,
     participants: &[MacroUserIdStr<'static>],
@@ -275,6 +290,64 @@ async fn insert_members(
     .execute(&mut **tx)
     .await?;
     Ok(())
+}
+
+/// Locked channel facts for import authorization.
+pub struct LockedChannel {
+    /// Persisted visibility.
+    pub kind: ChannelType,
+    /// Team identity (only Team channels may have one).
+    pub team: Option<Uuid>,
+    /// Up to three DM members (three rejects a malformed DM); only the
+    /// requester for other channel kinds.
+    pub participants: Vec<crate::domain::models::ChannelParticipant>,
+}
+
+/// Lock channel identity and the memberships needed for authorization. Taking
+/// the channel lock also blocks new participant FK inserts. Non-DM checks never
+/// load an entire potentially large channel's roster.
+pub async fn inspect_in(
+    tx: &mut Transaction<'_, Postgres>,
+    id: Uuid,
+    requester: Option<&MacroUserIdStr<'_>>,
+) -> anyhow::Result<Option<LockedChannel>> {
+    let row = sqlx::query!(
+        r#"SELECT channel_type AS "channel_type: ChannelType", team_id
+           FROM comms_channels WHERE id = $1 FOR UPDATE"#,
+        id,
+    )
+    .fetch_optional(&mut **tx)
+    .await?;
+    let Some(row) = row else {
+        return Ok(None);
+    };
+    let participants = sqlx::query!(
+        r#"SELECT user_id, role::text AS "role!", joined_at, left_at
+           FROM comms_channel_participants WHERE channel_id = $1
+             AND ($2 OR user_id = $3) ORDER BY user_id LIMIT 3 FOR UPDATE"#,
+        id,
+        row.channel_type == ChannelType::DirectMessage,
+        requester.map(|user| user.as_ref()),
+    )
+    .fetch_all(&mut **tx)
+    .await?;
+    let participants = participants
+        .into_iter()
+        .map(|p| {
+            Ok(crate::domain::models::ChannelParticipant {
+                channel_id: id,
+                user_id: p.user_id,
+                role: p.role.parse().map_err(anyhow::Error::msg)?,
+                joined_at: p.joined_at,
+                left_at: p.left_at,
+            })
+        })
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    Ok(Some(LockedChannel {
+        kind: row.channel_type,
+        team: row.team_id,
+        participants,
+    }))
 }
 
 fn validate_reserved_id(id: Uuid) -> anyhow::Result<()> {

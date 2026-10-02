@@ -151,6 +151,20 @@ async fn long_poll_counts_visibility_and_ack_use_delivery_origin_including_dlq()
     }
 }
 
+#[tokio::test]
+async fn driver_polls_one_delivery_per_available_slot() {
+    let (endpoint, requests) = mock_http(vec![response(json!({"Messages": []}))]);
+    assert!(
+        ImportConsumer::receive(&queue(&endpoint).await, false)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    let poll = request_body(&requests.recv().unwrap());
+    assert_eq!(poll["MaxNumberOfMessages"], 1);
+    assert_eq!(poll["VisibilityTimeout"], 180);
+}
+
 #[test]
 fn missing_receipt_or_receive_count_never_becomes_an_acknowledgeable_delivery() {
     assert!(delivery(QueueSource::Main, Message::builder().body("{}").build()).is_err());
