@@ -115,26 +115,39 @@ export function setSidebarItemVisible(itemId: string, visible: boolean): void {
 }
 
 /**
- * Move `itemId` one step in `direction` within the given order of ids.
- * `orderIds` should be the full list currently shown in the customize menu.
+ * Reorder items by moving the item at `fromIndex` to `toIndex`.
+ * Home stays pinned at index 0 when present.
  */
-export function moveSidebarItem(
-  itemId: string,
-  direction: -1 | 1,
+export function reorderSidebarItems(
+  fromIndex: number,
+  toIndex: number,
   orderIds: readonly string[]
 ): void {
-  if (itemId === 'home') return;
-  const index = orderIds.indexOf(itemId);
-  if (index < 0) return;
-  const target = index + direction;
-  // Home stays first; never swap past it.
-  const minIndex = orderIds[0] === 'home' ? 1 : 0;
-  if (target < minIndex || target >= orderIds.length) return;
+  if (fromIndex === toIndex) return;
+  if (fromIndex < 0 || toIndex < 0) return;
+  if (fromIndex >= orderIds.length || toIndex >= orderIds.length) return;
 
   const nextOrder = [...orderIds];
-  const [removed] = nextOrder.splice(index, 1);
-  nextOrder.splice(target, 0, removed);
+  const [removed] = nextOrder.splice(fromIndex, 1);
+  if (removed === 'home') return;
+  nextOrder.splice(toIndex, 0, removed);
 
+  // Keep Home first if it was in the list.
+  const homeIndex = nextOrder.indexOf('home');
+  if (homeIndex > 0) {
+    nextOrder.splice(homeIndex, 1);
+    nextOrder.unshift('home');
+  }
+
+  updatePrefs((current) => ({ ...current, order: nextOrder }));
+}
+
+/** Replace the full custom order (Home is forced first when present). */
+export function setSidebarOrder(orderIds: readonly string[]): void {
+  const withoutHome = orderIds.filter((id) => id !== 'home');
+  const nextOrder = orderIds.includes('home')
+    ? ['home', ...withoutHome]
+    : [...withoutHome];
   updatePrefs((current) => ({ ...current, order: nextOrder }));
 }
 
