@@ -5,9 +5,8 @@
 //! malformed messages and other call events are committed so they cannot
 //! wedge a partition. A failed link is retried with backoff; one that still
 //! fails is logged and committed, so a bad record never stalls the calls
-//! behind it (the backfill can re-link it). Shutting down mid-retry leaves the
-//! event uncommitted to replay on restart. Links are insert-if-absent, so
-//! replays are harmless.
+//! behind it. Shutting down mid-retry leaves the event uncommitted to replay
+//! on restart. Links are insert-if-absent, so replays are harmless.
 
 use std::{future::Future, time::Duration};
 
