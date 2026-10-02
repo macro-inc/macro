@@ -18,10 +18,12 @@ import {
   isDisplayableSoupItem,
   mapApiSoupItemToEntity,
 } from '@queries/soup/transform-utils';
+import { useDatabasesQuery } from '@queries/storage/databases';
 import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
 import { type Accessor, createMemo } from 'solid-js';
 import type { DriveListSource, DriveSelection } from '../context/drive-source';
 import { DRIVE_FACETS } from '../filters/drive-facets';
+import { selectDriveDatabases } from './drive-databases';
 import { buildDriveQuery } from './drive-query';
 import {
   driveEntityMatchesLocation,
@@ -32,6 +34,7 @@ import { buildDriveSearchRequest } from './drive-search';
 /** Query, local/service search and row assembly owned by Drive. */
 export function createDriveDataSource(options: {
   selection: Accessor<DriveSelection>;
+  databasesEnabled: Accessor<boolean>;
   userId: Accessor<string | undefined>;
   tagSets: Accessor<readonly TagSetResponse[]>;
   tagSetsReady: Accessor<boolean>;
@@ -40,6 +43,20 @@ export function createDriveDataSource(options: {
   const { selection, userId, notificationSource } = options;
 
   const searchContext = useOptionalSearchContext();
+  const databasesQuery = useDatabasesQuery();
+  const includesDatabases = () => {
+    const current = selection();
+    return (
+      options.databasesEnabled() &&
+      current.location.kind === 'tab' &&
+      current.location.tab !== 'recent' &&
+      current.scope !== 'attachments'
+    );
+  };
+  const databaseEntities = () =>
+    includesDatabases() && databasesQuery.isSuccess
+      ? selectDriveDatabases(databasesQuery.data, selection(), userId())
+      : [];
 
   const facetContext = createMemo(() =>
     createTagFacetContext(options.tagSets())
@@ -94,7 +111,7 @@ export function createDriveDataSource(options: {
   );
 
   // Cold REST data suspends; keep the shell and its controls available.
-  const queryData = () => (query.isLoading ? undefined : query.data);
+  const queryData = () => (query.isPending ? undefined : query.data);
 
   const matchesFacets = (entity: EntityData) =>
     testFacets(selection().facets, DRIVE_FACETS, entity, facetContext());
@@ -154,7 +171,10 @@ export function createDriveDataSource(options: {
   const entities = createMemo(() => {
     if (!facetsReady()) return [];
 
-    const matching = rawEntities().filter((entity) => {
+    const matching = [
+      ...rawEntities().filter((entity) => entity.type !== 'database'),
+      ...databaseEntities(),
+    ].filter((entity) => {
       const matchesLocation = driveEntityMatchesLocation(
         entity,
         selection(),
@@ -176,18 +196,33 @@ export function createDriveDataSource(options: {
 
   const isFetching = () => {
     if (search.isSearching())
-      return search.isFetching() || search.isLocalSearchSettling();
+      return (
+        search.isFetching() ||
+        search.isLocalSearchSettling() ||
+        (includesDatabases() && databasesQuery.isFetching)
+      );
 
-    return query.isFetching;
+    return (
+      query.isFetching || (includesDatabases() && databasesQuery.isFetching)
+    );
   };
 
   const hasMore = () =>
     search.isSearching() ? search.hasNextPage() : query.hasNextPage;
 
   const error = () => {
-    if (search.isSearching()) return search.error();
+    if (search.isSearching())
+      return (
+        search.error() ??
+        (includesDatabases() ? databasesQuery.error : undefined) ??
+        undefined
+      );
 
-    return query.error ?? undefined;
+    return (
+      query.error ??
+      (includesDatabases() ? databasesQuery.error : undefined) ??
+      undefined
+    );
   };
 
   return {
@@ -198,7 +233,11 @@ export function createDriveDataSource(options: {
       if (!facetsReady()) return true;
       if (search.isSearching()) return isFetching();
 
-      return query.isLoading || query.isFetching;
+      return (
+        query.isLoading ||
+        query.isFetching ||
+        (includesDatabases() && databasesQuery.isPending)
+      );
     },
 
     isFetching,
@@ -209,7 +248,11 @@ export function createDriveDataSource(options: {
       if (search.isSearching())
         return items().length > 0 || (!isFetching() && !error());
 
-      return queryData() !== undefined && !query.isPlaceholderData;
+      return (
+        items().length > 0 ||
+        (queryData() !== undefined && !query.isPlaceholderData) ||
+        (includesDatabases() && databasesQuery.isSuccess)
+      );
     },
 
     hasMore,
@@ -232,8 +275,10 @@ export function createDriveDataSource(options: {
     },
 
     refresh: async () => {
-      if (search.isSearching()) await search.refresh();
-      else await query.refresh();
+      await Promise.all([
+        search.isSearching() ? search.refresh() : query.refresh(),
+        includesDatabases() ? databasesQuery.refetch() : Promise.resolve(),
+      ]);
     },
 
     featuredIds: search.featuredIds,

@@ -957,6 +957,19 @@ viewer identity is available, document inserts into Shared are rejected.
 Files opens **Drive** using the same shell as Tasks, on desktop and touch
 devices alike.
 
+With `enable-databases` enabled, **My Files** includes owned databases and
+**Shared with me** includes databases shared by other owners. **All files**
+also includes accessible databases owned by others. **Search Drive** matches
+database names and **Filter → Type → Database** narrows the list. **New →
+Database** creates and opens a database from file tabs or the folder overview;
+it is absent inside a folder because databases have no folder membership yet.
+Database rows open their database block, including Enter and Open in new split.
+Use the database block's own actions to rename, share or trash it. The list
+omits unsupported duplicate, delete and move-to-folder actions for databases.
+Databases have no view history and do not appear in **Recent**, folder contents,
+or **Email attachments**. Creation time orders them when the selected sort has
+no corresponding database timestamp.
+
 On touch devices (phones and tablets), the Drive header is a scrollable pill
 strip — **Recent**, **My Files**, **Shared with me**, and **Folders** — with a
 leading filter-drawer button, like Tasks. Touch opens on **Recent** (the first

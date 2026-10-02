@@ -65,6 +65,7 @@ export function DriveList() {
 
   const timestamp = (entity: EntityData) => {
     const { location, sort } = state.value();
+    if (entity.type === 'database') return entity.createdAt;
 
     if (location.kind === 'tab' && location.tab === 'recent')
       return entity.touchedAt;
@@ -299,6 +300,14 @@ export function DriveList() {
                       class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 text-sm text-ink-muted"
                     >
                       <span>{emptyMessage()}</span>
+                      <Show when={source.error()}>
+                        <Button
+                          variant="outline"
+                          onClick={() => void refresh()}
+                        >
+                          Try again
+                        </Button>
+                      </Show>
                       <Show when={hasFilters()}>
                         <Button variant="outline" onClick={state.clearFilters}>
                           Clear filters
@@ -458,7 +467,7 @@ export function DriveList() {
                                 More files couldn’t be loaded.
                                 <Button
                                   variant="outline"
-                                  onClick={() => void loadMore()}
+                                  onClick={() => void refresh()}
                                 >
                                   Try again
                                 </Button>

@@ -6,12 +6,14 @@ import {
   useSoupListNavigationHotkeys,
 } from '@app/features/soup';
 import { ViewTour } from '@app/features/tours/ViewTour';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import {
   useSplitPanelOrThrow,
   withSplitPanelOwner,
 } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
+import { enableDatabases } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import { useTagSets, useTagSetsReady } from '@property/tags/tag-sets-context';
@@ -45,6 +47,7 @@ function DriveComposition(props: { route: DriveRouteState }) {
   const panel = useSplitPanelOrThrow();
   const navigation = useDriveDetailNavigation();
   const userId = useUserId();
+  const databasesFlag = useFeatureFlag(enableDatabases);
   const notificationSource = useGlobalNotificationSource();
   const tagSets = useTagSets();
   const tagSetsReady = useTagSetsReady();
@@ -58,6 +61,7 @@ function DriveComposition(props: { route: DriveRouteState }) {
   const source = withSplitPanelOwner(listOwnedSlotName('data-source'), () =>
     createDriveDataSource({
       selection,
+      databasesEnabled: () => databasesFlag().enabled,
       userId,
       tagSets,
       tagSetsReady,
