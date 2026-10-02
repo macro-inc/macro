@@ -17,11 +17,10 @@ import {
   DatabaseLoadFailure,
   TableSkeleton,
 } from '../components/database-load-state';
-import {
-  type DatabaseCellFocus,
-  type DatabaseCellPresence,
-  DatabaseTable,
-  type DatabaseTableControls,
+import type {
+  DatabaseCellFocus,
+  DatabaseCellPresence,
+  DatabaseTableControls,
 } from '../components/database-table';
 import {
   DraftFailureNotice,
@@ -63,6 +62,7 @@ import { createRecordActions } from '../primitives/record-actions';
 import { createTableController } from '../primitives/table-controller';
 import type { ViewChange } from '../queries/views';
 import { type BoardPositions, DatabaseBoardView } from './database-board-view';
+import { DatabaseTableView } from './database-table-view';
 
 /** What the toolbar and the block can ask of the records on screen. */
 export type DatabaseRecordsActions = {
@@ -469,7 +469,7 @@ export function DatabaseRecordsView(props: {
             />
           </Match>
           <Match when={layoutKind() === 'table'}>
-            <DatabaseTable
+            <DatabaseTableView
               name={props.name}
               rows={gridRows.rows()}
               isUnsavedRow={draftRows.isUnsaved}
@@ -486,7 +486,8 @@ export function DatabaseRecordsView(props: {
               }}
               remoteUsers={props.remoteUsers}
               highlightRowId={records.highlightedRowId()}
-              columns={visibleColumns()}
+              columns={columns()}
+              columnOrder={columnLayout.columnOrder()}
               sort={props.view.query.sort ?? []}
               widths={columnLayout.widths()}
               onResizeColumn={

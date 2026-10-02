@@ -174,6 +174,7 @@ export function createColumnLayout(options: {
       );
   }
   return {
+    columnOrder,
     visibleColumns,
     widths,
     schemaError,

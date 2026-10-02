@@ -3,7 +3,6 @@ import {
   MenuItem,
   MenuSeparator,
 } from '@core/component/ContextMenu';
-import type { SortKey } from '@core/database-sql/generated/types';
 import {
   getDisplayNameParts,
   getInitials,
@@ -45,6 +44,7 @@ import type {
   GridCellEditorOptions,
 } from '../core/grid-cell-editor';
 import { canEditCell, type DatabaseRow } from '../core/table';
+import type { DatabaseTableModel } from '../primitives/table-model';
 import type { DatabaseColumnHeaderProps } from './database-column-header';
 import { DatabaseColumnHeader } from './database-column-header';
 
@@ -75,10 +75,9 @@ const EDITOR_FIELDS =
 /** Portaled editors keep the cell current while they hold focus. */
 const PORTALED_EDITORS = '[role="dialog"], [role="listbox"]';
 
-export function DatabaseTable(props: {
+export type DatabaseTableProps = {
+  model: DatabaseTableModel;
   name: string;
-  rows: DatabaseRow[];
-  columns: DatabaseViewColumn[];
   titleColumnId?: string;
   isUnsavedRow?: (rowId: string) => boolean;
   onRowFocus?: (rowId: string | undefined) => void;
@@ -86,10 +85,7 @@ export function DatabaseTable(props: {
   remoteUsers?: DatabaseCellPresence[];
   /** Scrolled into view and briefly tinted, e.g. the target of a relation. */
   highlightRowId?: string;
-  sort: readonly SortKey[];
-  /** Each column's width in pixels; unset ones take the default. */
-  widths: Record<string, number | null>;
-  onResizeColumn?: (columnId: string, width: number) => void;
+  resizable?: boolean;
   canEdit: boolean;
   pending: boolean;
   addColumn: JSX.Element;
@@ -125,14 +121,17 @@ export function DatabaseTable(props: {
     name: string,
     previousName: string
   ) => DatabaseSchemaChange;
-  onSort: (columnId: string, direction: 'asc' | 'desc' | null) => void;
   onMove?: (columnId: string, direction: 'left' | 'right') => void;
   onInsertColumn?: (columnId: string, side: 'left' | 'right') => void;
-}) {
+};
+
+export function DatabaseTable(props: DatabaseTableProps) {
+  const columns = () => props.model.visibleColumns();
+  const rows = () => props.model.table.getRowModel().rows;
   let scrollContainer!: HTMLDivElement;
   let gridElement!: HTMLDivElement;
   const columnReorder = createHorizontalReorder({
-    order: () => props.columns.map((column) => column.id),
+    order: () => columns().map((column) => column.id),
     getViewport: () => scrollContainer,
     enabled: () => props.canEdit,
     boundaryInViewport: true,
@@ -195,26 +194,30 @@ export function DatabaseTable(props: {
   };
   const navigate = (rowId: string, columnId: string, direction: 1 | -1) => {
     if (!props.canEdit) return false;
-    const columns = props.columns.filter(canEditCell);
-    const rowIndex = props.rows.findIndex((row) => row.rowId === rowId);
-    const columnIndex = columns.findIndex((column) => column.id === columnId);
-    if (rowIndex < 0 || columnIndex < 0 || !columns.length) return false;
-    const nextIndex = rowIndex * columns.length + columnIndex + direction;
-    if (nextIndex < 0 || nextIndex >= props.rows.length * columns.length)
+    const editableColumns = columns().filter(canEditCell);
+    const rowIndex = rows().findIndex((row) => row.id === rowId);
+    const columnIndex = editableColumns.findIndex(
+      (column) => column.id === columnId
+    );
+    if (rowIndex < 0 || columnIndex < 0 || !editableColumns.length)
       return false;
-    const row = props.rows[Math.floor(nextIndex / columns.length)];
-    const column = columns[nextIndex % columns.length];
-    pendingEdit = { rowId: row.rowId, columnId: column.id };
+    const nextIndex =
+      rowIndex * editableColumns.length + columnIndex + direction;
+    if (nextIndex < 0 || nextIndex >= rows().length * editableColumns.length)
+      return false;
+    const row = rows()[Math.floor(nextIndex / editableColumns.length)];
+    const column = editableColumns[nextIndex % editableColumns.length];
+    pendingEdit = { rowId: row.id, columnId: column.id };
     editRequestedCell();
     return true;
   };
   const navigateRow = (rowId: string, columnId: string, direction: 1 | -1) => {
     if (!props.canEdit) return false;
-    const column = props.columns.find((candidate) => candidate.id === columnId);
-    const rowIndex = props.rows.findIndex((row) => row.rowId === rowId);
-    const row = props.rows[rowIndex + direction];
+    const column = columns().find((candidate) => candidate.id === columnId);
+    const rowIndex = rows().findIndex((row) => row.id === rowId);
+    const row = rows()[rowIndex + direction];
     if (rowIndex < 0 || !row || !column || !canEditCell(column)) return false;
-    pendingEdit = { rowId: row.rowId, columnId };
+    pendingEdit = { rowId: row.id, columnId };
     editRequestedCell();
     return true;
   };
@@ -237,7 +240,7 @@ export function DatabaseTable(props: {
     const rowId =
       cell?.closest<HTMLElement>('[data-grid-row-id]')?.dataset.gridRowId;
     if (!cell || !rowId) return undefined;
-    const column = props.columns[Number(cell.dataset.gridColumn) - 1];
+    const column = columns()[Number(cell.dataset.gridColumn) - 1];
     return {
       rowId,
       columnId: column?.id,
@@ -248,20 +251,12 @@ export function DatabaseTable(props: {
     props.remoteUsers?.filter(
       (user) => user.rowId === rowId && user.columnId === columnId
     ) ?? [];
-  const [resizing, setResizing] = createSignal<{
-    columnId: string;
-    width: number;
-  }>();
-  const widthOf = (columnId: string) =>
-    resizing()?.columnId === columnId
-      ? resizing()?.width
-      : (props.widths[columnId] ?? undefined);
   // Every row lays out on this one track list.
   const template = createMemo(
     () =>
-      `2.75rem ${props.columns
+      `2.75rem ${columns()
         .map((column, index) => {
-          const width = widthOf(column.id);
+          const width = props.model.width(column.id);
           if (width !== undefined) return `${width}px`;
           return index === 0
             ? 'min(var(--database-title-column-width, 18rem), max(9rem, calc(100cqw - 11.5rem)))'
@@ -323,10 +318,9 @@ export function DatabaseTable(props: {
     event.preventDefault();
     event.stopPropagation();
     if (!next) return;
-    const row = props.rows[rowIndex];
-    const column = props.columns[columnIndex - 1];
-    const nextControl =
-      row && column ? control(row.rowId, column.id) : undefined;
+    const row = rows()[rowIndex];
+    const column = columns()[columnIndex - 1];
+    const nextControl = row && column ? control(row.id, column.id) : undefined;
     // Stepping down onto the new-record row starts typing there, like a spreadsheet.
     if (
       nextControl &&
@@ -334,7 +328,7 @@ export function DatabaseTable(props: {
       props.canEdit &&
       column &&
       canEditCell(column) &&
-      props.isUnsavedRow?.(row.rowId)
+      props.isUnsavedRow?.(row.id)
     )
       nextControl.edit();
     else if (nextControl) nextControl.focus();
@@ -355,9 +349,9 @@ export function DatabaseTable(props: {
     afterClose = action;
   };
   const contextField = () =>
-    props.columns.find((column) => column.id === contextTarget()?.columnId);
+    columns().find((column) => column.id === contextTarget()?.columnId);
   const renameField = () =>
-    props.columns.find(
+    columns().find(
       (column) => column.id === props.titleColumnId && canEditCell(column)
     );
   /** Note the row and cell a context menu opens for; false when it is not for a row. */
@@ -405,8 +399,8 @@ export function DatabaseTable(props: {
           }}
           role="grid"
           aria-label={props.name}
-          aria-rowcount={props.rows.length + 1}
-          aria-colcount={props.columns.length + 1 + Number(props.canEdit)}
+          aria-rowcount={rows().length + 1}
+          aria-colcount={columns().length + 1 + Number(props.canEdit)}
           data-grid
           class="relative flex min-h-full min-w-fit flex-col"
           onKeyDown={moveFocus}
@@ -450,46 +444,55 @@ export function DatabaseTable(props: {
             >
               #
             </div>
-            <Key each={props.columns} by="id">
-              {(column, index) => (
-                <DraggableColumnHeader
-                  registerRename={(rename) => {
-                    if (rename) headerRenames.set(column().id, rename);
-                    else headerRenames.delete(column().id);
-                    renameRequestedHeader();
-                  }}
-                  canDrag={props.canEdit && !!props.onReorderColumn}
-                  onDragStart={columnReorder.start}
-                  relationTables={props.relationTables}
-                  columnCasts={props.columnCasts}
-                  onChangeType={props.onChangeColumnType}
-                  onConvert={props.onConvertColumn}
-                  onDelete={props.onDeleteColumn}
-                  column={column()}
-                  sortDirection={sortDirection(props.sort, column().id)}
-                  resizeHandle={
-                    props.onResizeColumn ? (
-                      <ColumnResizeHandle
-                        label={`Resize ${column().name}`}
-                        onPreview={(width) =>
-                          setResizing({ columnId: column().id, width })
-                        }
-                        onCommit={(width) => {
-                          setResizing(undefined);
-                          props.onResizeColumn?.(column().id, width);
-                        }}
-                      />
-                    ) : undefined
-                  }
-                  canRename={props.canEdit}
-                  onRename={props.onRenameColumn}
-                  onSort={props.onSort}
-                  onMove={props.onMove}
-                  onInsert={props.onInsertColumn}
-                  canMoveLeft={index() > 0}
-                  canMoveRight={index() < props.columns.length - 1}
-                />
-              )}
+            <Key each={props.model.table.getFlatHeaders()} by="id">
+              {(header) => {
+                const column = () => header().column.columnDef.meta!;
+                return (
+                  <DraggableColumnHeader
+                    registerRename={(rename) => {
+                      if (rename) headerRenames.set(column().id, rename);
+                      else headerRenames.delete(column().id);
+                      renameRequestedHeader();
+                    }}
+                    canDrag={props.canEdit && !!props.onReorderColumn}
+                    onDragStart={columnReorder.start}
+                    relationTables={props.relationTables}
+                    columnCasts={props.columnCasts}
+                    onChangeType={props.onChangeColumnType}
+                    onConvert={props.onConvertColumn}
+                    onDelete={props.onDeleteColumn}
+                    column={column()}
+                    sortDirection={header().column.getIsSorted() || undefined}
+                    resizeHandle={
+                      props.resizable ? (
+                        <div
+                          role="separator"
+                          aria-orientation="vertical"
+                          aria-label={`Resize ${column().name}`}
+                          class="absolute top-0 right-0 z-1 h-full w-1.5 cursor-col-resize touch-none hover:bg-accent/40"
+                          onMouseDown={(event) =>
+                            props.model.resize(header(), event)
+                          }
+                          // Native listeners keep touch hit-testing on this narrow
+                          // handle and let touchstart prevent browser gestures.
+                          on:touchstart={(event) =>
+                            props.model.resize(header(), event)
+                          }
+                          on:click={(event) => event.stopPropagation()}
+                          onDblClick={(event) => event.stopPropagation()}
+                        />
+                      ) : undefined
+                    }
+                    canRename={props.canEdit}
+                    onRename={props.onRenameColumn}
+                    onSort={props.model.sort}
+                    onMove={props.onMove}
+                    onInsert={props.onInsertColumn}
+                    canMoveLeft={!header().column.getIsFirstColumn()}
+                    canMoveRight={!header().column.getIsLastColumn()}
+                  />
+                );
+              }}
             </Key>
             <Show when={props.canEdit}>
               <div
@@ -514,8 +517,10 @@ export function DatabaseTable(props: {
                     captureContext(event.target);
                 }}
               >
-                <Key each={props.rows} by="rowId">
-                  {(row, index) => {
+                {/* Preserve editor identity when TanStack refreshes its row models. */}
+                <Key each={rows()} by="id">
+                  {(tableRow, index) => {
+                    const row = () => tableRow().original;
                     const highlighted = () =>
                       props.highlightRowId === row().rowId;
                     return (
@@ -525,7 +530,7 @@ export function DatabaseTable(props: {
                             on(highlighted, (isHighlighted) => {
                               if (!isHighlighted) return;
                               element.scrollIntoView({ block: 'nearest' });
-                              const first = props.columns[0];
+                              const first = columns()[0];
                               if (first)
                                 control(row().rowId, first.id)?.focus();
                             })
@@ -581,8 +586,9 @@ export function DatabaseTable(props: {
                             </button>
                           </Show>
                         </div>
-                        <Key each={props.columns} by="id">
-                          {(column, columnIndex) => {
+                        <Key each={tableRow().getVisibleCells()} by="id">
+                          {(cell, columnIndex) => {
+                            const column = () => cell().column.columnDef.meta!;
                             const presence = () =>
                               presenceAt(row().rowId, column().id);
                             return (
@@ -742,7 +748,7 @@ export function DatabaseTable(props: {
               </ContextMenuContent>
             </ContextMenu.Portal>
           </ContextMenu>
-          <Show when={props.rows.length === 0}>{props.emptyState}</Show>
+          <Show when={rows().length === 0}>{props.emptyState}</Show>
           <div
             aria-hidden="true"
             class="grid min-h-40 flex-1"
@@ -754,7 +760,7 @@ export function DatabaseTable(props: {
             }}
           >
             <div class="border-r border-edge-muted/40" />
-            <For each={props.columns}>
+            <For each={columns()}>
               {() => <div class="border-r border-edge-muted/40" />}
             </For>
             <Show when={props.canEdit}>
@@ -820,60 +826,6 @@ function PresenceTag(props: { user: DatabaseCellPresence }) {
     >
       {presenceName(props.user.userId)}
     </span>
-  );
-}
-
-function sortDirection(
-  sort: readonly SortKey[],
-  columnId: string
-): 'asc' | 'desc' | undefined {
-  const key = sort.find((entry) => entry.column === columnId);
-  if (!key) return undefined;
-  return key.direction === 'ascending' ? 'asc' : 'desc';
-}
-
-const MIN_COLUMN_WIDTH = 80;
-
-/** A header's right edge: drag it to set the column's width. */
-function ColumnResizeHandle(props: {
-  label: string;
-  onPreview: (width: number) => void;
-  onCommit: (width: number) => void;
-}) {
-  let start: { x: number; width: number } | undefined;
-  const widthAt = (origin: { x: number; width: number }, event: PointerEvent) =>
-    Math.max(
-      MIN_COLUMN_WIDTH,
-      Math.round(origin.width + event.clientX - origin.x)
-    );
-  return (
-    <div
-      role="separator"
-      aria-orientation="vertical"
-      aria-label={props.label}
-      class="absolute top-0 right-0 z-1 h-full w-1.5 cursor-col-resize touch-none hover:bg-accent/40"
-      onPointerDown={(event) => {
-        if (event.button !== 0) return;
-        event.preventDefault();
-        event.stopPropagation();
-        const header = event.currentTarget.parentElement;
-        start = {
-          x: event.clientX,
-          width: header?.getBoundingClientRect().width ?? MIN_COLUMN_WIDTH,
-        };
-        event.currentTarget.setPointerCapture(event.pointerId);
-      }}
-      onPointerMove={(event) => {
-        if (start) props.onPreview(widthAt(start, event));
-      }}
-      onPointerUp={(event) => {
-        if (!start) return;
-        props.onCommit(widthAt(start, event));
-        start = undefined;
-      }}
-      onMouseDown={(event) => event.stopPropagation()}
-      onDblClick={(event) => event.stopPropagation()}
-    />
   );
 }
 

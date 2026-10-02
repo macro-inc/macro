@@ -13,7 +13,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GridCell } from '../component/GridCell';
 import type { DatabaseViewColumn } from '../core/database-view';
 import type { DatabaseRow } from '../core/table';
-import { DatabaseTable, type DatabaseTableControls } from './database-table';
+import { DatabaseTableView as DatabaseTable } from '../views/database-table-view';
+import type { DatabaseTableControls } from './database-table';
 
 // The property utils barrel pulls in live clients, which open sockets under jsdom.
 vi.mock('@property/utils', () => ({
@@ -814,21 +815,19 @@ describe('sort and column widths', () => {
     expect(headerRow.style.gridTemplateColumns).toContain('300px');
 
     const separator = screen.getByRole('separator', { name: 'Resize Name' });
-    // JSDOM has no pointer capture or layout; the header measures 200px wide.
-    separator.setPointerCapture = vi.fn();
-    // JSDOM has no PointerEvent, so the pointer events travel as mouse events.
+    // JSDOM has no layout; the header measures 200px wide.
     separator.dispatchEvent(
-      new MouseEvent('pointerdown', { bubbles: true, button: 0, clientX: 200 })
+      new MouseEvent('mousedown', { bubbles: true, button: 0, clientX: 200 })
     );
     separator.dispatchEvent(
-      new MouseEvent('pointermove', { bubbles: true, clientX: 250 })
+      new MouseEvent('mousemove', { bubbles: true, clientX: 250 })
     );
     expect(headerRow.style.gridTemplateColumns).toMatch(
       /^2\.75rem 250px 300px/
     );
     expect(onResizeColumn).not.toHaveBeenCalled();
     separator.dispatchEvent(
-      new MouseEvent('pointerup', { bubbles: true, clientX: 260 })
+      new MouseEvent('mouseup', { bubbles: true, clientX: 260 })
     );
     expect(onResizeColumn).toHaveBeenCalledExactlyOnceWith('name', 260);
   });

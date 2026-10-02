@@ -245,7 +245,9 @@ from. The term is kept while you switch tables.
 A view's layout, Table or Board, is chosen when the view is created. Columns
 cannot be hidden, and they are added only from **Add column** after the headers or
 a header's **Insert left**/**Insert right**. Dragging a column header's right edge
-sets its width, saved in the view. Header menus offer sorting, **Move left** and
+previews its width as you drag and saves it once you release (mouse or touch).
+Switching views restores that view’s widths and column order.
+Header menus offer sorting, **Move left** and
 **Move right**. On All records, moving a column moves it in the table for everyone;
 a stored view keeps its own column order.
 
