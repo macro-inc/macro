@@ -55,7 +55,7 @@ export function ProjectAssignment(props: {
     >
       <div class="flex flex-col gap-3 p-4">
         <Dialog.Title>
-          Set project
+          Add to project
           {remaining().length > 1 ? ` for ${remaining().length} tasks` : ''}
         </Dialog.Title>
         <SearchBar

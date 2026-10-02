@@ -1,9 +1,11 @@
 import { EntityActivitySectionConditional } from '@app/features/activity/views/entity-activity-section';
 import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
+import { TaskProjectProperty } from '@app/features/projects/task-project-property';
 import {
   EntityPropertiesSection,
   EntityTagsSection,
 } from '@app/features/property/side-panel/properties';
+import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import {
   GithubPullRequestDetailsRows,
@@ -25,6 +27,7 @@ import { Notifications } from '@core/component/Notifications';
 import { References } from '@core/component/References';
 import {
   enableHistoryComponent,
+  enableProjects,
   isFeatureEnabled,
   USE_MACRO_PR_SUMMARY_BLOCK,
 } from '@core/constant/featureFlags';
@@ -130,6 +133,18 @@ export function MarkdownSidePanelSections() {
         defaultOpen
         order={25}
       >
+        <Show when={isTask()}>
+          <ShowFeatureFlag flag={enableProjects}>
+            <SidePanel.Grid>
+              <SidePanel.Row label="Project">
+                <TaskProjectProperty
+                  taskId={documentId()}
+                  canEdit={canEdit()}
+                />
+              </SidePanel.Row>
+            </SidePanel.Grid>
+          </ShowFeatureFlag>
+        </Show>
         <PropertiesSectionContent
           documentId={documentId()}
           isTask={isTask()}

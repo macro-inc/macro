@@ -23,6 +23,7 @@ export type ProjectTasksListProps = Omit<
   'children'
 > & {
   onCreateTask?: () => void;
+  onAddTasks?: () => void;
 };
 
 /** Embeds the actual Tasks list, including its controllers, menus and row editors. */
@@ -82,6 +83,9 @@ function ProjectTasksListBody(props: ProjectTasksListProps) {
         />
         <div class="ml-auto flex shrink-0 items-center gap-3">
           <TasksControls />
+          <Show when={props.onAddTasks}>
+            <Button onClick={props.onAddTasks}>Add existing tasks</Button>
+          </Show>
           <Show when={props.onCreateTask}>
             <Button onClick={props.onCreateTask}>New task</Button>
           </Show>

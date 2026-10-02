@@ -90,6 +90,9 @@ export function InlineTaskProperties() {
             entityType={entityType}
             class="bg-surface-2"
           />
+          <Show when={documentKind === 'task'}>
+            <TaskProjectProperty taskId={blockId} canEdit={canEdit()} />
+          </Show>
           <Show when={documentKind === 'task' && state.editor.md.progressStats}>
             {(progressStats) => (
               <Show when={progressStats().total > 0}>
@@ -103,3 +106,5 @@ export function InlineTaskProperties() {
     </Suspense>
   );
 }
+
+import { TaskProjectProperty } from '@app/features/projects/task-project-property';
