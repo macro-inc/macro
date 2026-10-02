@@ -17,7 +17,9 @@
 
 pub(crate) mod acp_agent;
 pub(crate) mod cli;
+mod controls;
 mod hub;
+mod mcp;
 pub(crate) mod repositories;
 mod store;
 mod tail;

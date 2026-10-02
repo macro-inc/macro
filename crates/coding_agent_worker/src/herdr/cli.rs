@@ -17,6 +17,9 @@ const REPORT_AGENT: &str = "macro";
 /// A failure running a herdr command.
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum HerdrError {
+    /// The Herdr command did not finish within its deadline.
+    #[error("herdr command timed out")]
+    Timeout,
     /// The binary could not be started.
     #[error("could not run herdr")]
     Spawn(#[source] std::io::Error),
@@ -298,13 +301,17 @@ impl HerdrCli {
     }
 
     async fn run<Arg: AsRef<str>>(&self, args: &[Arg]) -> Result<String, HerdrError> {
-        let output = tokio::process::Command::new(&self.bin)
-            .args(args.iter().map(AsRef::as_ref))
-            .stdin(std::process::Stdio::null())
-            .kill_on_drop(true)
-            .output()
-            .await
-            .map_err(HerdrError::Spawn)?;
+        let output = tokio::time::timeout(
+            std::time::Duration::from_secs(150),
+            tokio::process::Command::new(&self.bin)
+                .args(args.iter().map(AsRef::as_ref))
+                .stdin(std::process::Stdio::null())
+                .kill_on_drop(true)
+                .output(),
+        )
+        .await
+        .map_err(|_| HerdrError::Timeout)?
+        .map_err(HerdrError::Spawn)?;
         if !output.status.success() {
             return Err(HerdrError::Refused {
                 command: describe(args),
