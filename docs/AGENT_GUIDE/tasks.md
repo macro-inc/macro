@@ -290,9 +290,13 @@ name or handle to find one. Built-in session agents follow the same availability
 as message mentions, alongside your own and team agents.
 Select an agent in the task composer, then create the task to start its session.
 For an existing task, add an agent to Assignees and dismiss the picker to save and
-start the session. Discussion gains one message from the assigned agent, which
-updates with its session or answer. The assignment instructions and task details
-are private startup context; no message is posted as you. People and agents
+start the session. Discussion gains one message linking to the assigned agent's
+session; progress and final answers stay in that session. The agent retains the
+original task reference in its session instructions and updates the task's
+description or status as appropriate. It must not post or edit discussion messages
+unless explicitly asked. This also applies to task assignments inherited from a
+project. The assignment instructions and task details are private startup context;
+no message is posted as you. People and agents
 can remain assigned together. Removing an agent and saving, then assigning it
 again starts a new session; saving an unchanged assignment does not restart it.
 
