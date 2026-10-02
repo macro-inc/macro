@@ -2,6 +2,10 @@
 //! Browser-staged Slack archive imports, with transport-free lifecycle contracts.
 //!
 //! Models are always available. Enable `ports` for service and adapter contracts.
-//! No adapter or queue consumer is implemented by this package skeleton.
+//! Enable `postgres` for durable job and upload persistence.
 
 pub mod domain;
+#[cfg(any(feature = "inbound", feature = "worker"))]
+pub mod inbound;
+#[cfg(feature = "outbound")]
+pub mod outbound;

@@ -216,6 +216,7 @@ export default defineConfig({
             'src/lib/fullcalendar-solid/**/*.{test,spec}.{ts,tsx}',
             'src/lib/persistence/**/*.{test,spec}.{ts,tsx}',
             'src/lib/utils/**/*.{test,spec}.{ts,tsx}',
+            'src/lib/workers/slack-import/**/*.{test,spec}.{ts,tsx}',
             'src/routes/**/*.{test,spec}.{ts,tsx}',
           ],
           name: 'app',

@@ -26,6 +26,8 @@ import {
 } from './document-upload-finalizer-lambda';
 import { CalendarReminderDispatchQueue } from './calendar-reminder-dispatch-queue';
 import { ReminderDispatchQueue } from './reminder-dispatch-queue';
+import { SlackImportQueue } from './slack-import-queue';
+import { SlackImportWorker } from './slack-import-worker';
 import { WafObservability } from './waf-observability';
 
 const tags = {
@@ -192,6 +194,47 @@ export const bulkUploadLambdaRoleArn = bulkUploadStack
   .getOutput('uploadExtractHandlerLambdaRoleArn')
   .apply((arn) => arn as string);
 
+const bulkUploadBucketName = bulkUploadStack
+  .requireOutput('bulkUploadBucketName')
+  .apply((name) => name as string);
+
+const slackImportQueue = new SlackImportQueue(`slack-import-${stack}`, {
+  stagingBucketArn: pulumi.interpolate`arn:aws:s3:::${bulkUploadBucketName}`,
+  tags,
+});
+
+export const slackImportQueueArn = slackImportQueue.queue.arn;
+export const slackImportQueueName = slackImportQueue.queue.name;
+export const slackImportDlqArn = slackImportQueue.dlq.arn;
+export const slackImportDlqName = slackImportQueue.dlq.name;
+export const slackImportWorkerPolicyArn = slackImportQueue.workerPolicy.arn;
+
+const searchProcessingStack = new pulumi.StackReference(
+  'slack-import-search-processing',
+  { name: `macro-inc/search-processing-service/${stack}` }
+);
+const slackImportWorker = new SlackImportWorker(
+  `slack-import-worker-${stack}`,
+  {
+    ecsClusterArn: cloudStorageClusterArn,
+    vpc: coparse_api_vpc,
+    workerPolicyArn: slackImportQueue.workerPolicy.arn,
+    stagingBucketName: bulkUploadBucketName,
+    queueName: slackImportQueue.queue.name,
+    dlqName: slackImportQueue.dlq.name,
+    gatewayUrl: getServiceUrl(ServiceUrl.CONNECTION_GATEWAY_URL),
+    // This is the processing backfill API, not SearchServiceClient's query API.
+    searchProcessingUrl: searchProcessingStack.requireOutput(
+      'searchProcessingServiceUrl'
+    ),
+    tags,
+  }
+);
+export const slackImportWorkerRoleArn = slackImportWorker.role.arn;
+export const slackImportWorkerServiceName =
+  slackImportWorker.service.service.name;
+export const slackImportWorkerSgId = slackImportWorker.serviceSg.id;
+
 export const docxUploadBucketArn = docxUploadBucket.arn;
 export const docxUploadBucketName = docxUploadBucket.id;
 
@@ -312,6 +355,7 @@ const cloudStorageService = new CloudStorageService(
       calWebhookSecretKeyArn,
       calEventTypeContentNamesKeyArn,
     ],
+    slackImportUploadPolicyArn: slackImportQueue.uploadPolicy.arn,
     callRecordingCrudPolicyArn,
     snsPlatformArns: [snsApnsVoipPlatformArn],
     containerEnvVars: [

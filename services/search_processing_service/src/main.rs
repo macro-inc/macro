@@ -212,10 +212,8 @@ async fn main() -> anyhow::Result<()> {
         return Err(e);
     }
 
-    // Backfills run against the read-replica when available so they don't
-    // contend with writes on the primary. Queue workers always read from the
-    // primary because replica lag would cause them to miss rows they are
-    // meant to index.
+    // Global backfills use the replica when available. Explicit channel scopes
+    // and queue workers use the primary so replica lag cannot hide imports.
     let backfill_db = match resolve_readonly_pool(config.database_url_readonly.clone()).await {
         Some(pool) => {
             tracing::info!("using read-replica pool for backfill reads");
@@ -253,7 +251,7 @@ async fn main() -> anyhow::Result<()> {
     ));
 
     let backfill_service = Arc::new(BackfillOrchestrator::new(
-        PgBackfillSource::new(backfill_db, config.backfill_page_sizes()?),
+        PgBackfillSource::new(backfill_db, db.clone(), config.backfill_page_sizes()?),
         SqsSearchEventPublisher::new(sqs_client.clone()),
         DirectPropertyBackfillIndexer::new(db.clone(), opensearch_client.clone()),
     ));

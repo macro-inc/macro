@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO team (id, name, owner_id) VALUES ($1, 'Atomic history', 'macro|t17@example.com')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7c70af198faef5fdb3bcf374164b855261cb6d68ab105ea540dcda3d19760d9c"
+}

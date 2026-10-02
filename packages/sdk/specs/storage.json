@@ -13352,6 +13352,275 @@
         }
       }
     },
+    "/slack/imports": {
+      "get": {
+        "tags": ["slack"],
+        "summary": "List this administrator's team receipts, effective server limits and source binding.",
+        "operationId": "list_slack_imports",
+        "parameters": [
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/JobId"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportPage"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["slack"],
+        "summary": "Create or replay a job using a scoped idempotency token and full selected metadata.\nMissing creation timestamps and unknown message counts are represented as null.",
+        "operationId": "create_slack_import",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SlackCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportProgress"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication or team administrator access required"
+          },
+          "403": {
+            "description": "Team administrator required"
+          },
+          "413": {
+            "description": "Metadata limit exceeded"
+          },
+          "503": {
+            "description": "Slack imports disabled or temporarily unavailable"
+          }
+        }
+      }
+    },
+    "/slack/imports/{job_id}": {
+      "get": {
+        "tags": ["slack"],
+        "summary": "Read sanitized progress; foreign jobs are indistinguishable from missing jobs.",
+        "operationId": "get_slack_import",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/JobId"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportProgress"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown or inaccessible job"
+          }
+        }
+      }
+    },
+    "/slack/imports/{job_id}/cancel": {
+      "post": {
+        "tags": ["slack"],
+        "summary": "Stop unclaimed work. Active leases may settle; cancellation does not roll back history.",
+        "operationId": "cancel_slack_import",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/JobId"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportProgress"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown or inaccessible job"
+          }
+        }
+      }
+    },
+    "/slack/imports/{job_id}/finalize": {
+      "post": {
+        "tags": ["slack"],
+        "summary": "Close registration idempotently; never-ready conversations are skipped, not queued work.",
+        "operationId": "finalize_slack_import",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/JobId"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportProgress"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown or inaccessible job"
+          }
+        }
+      }
+    },
+    "/slack/imports/{job_id}/uploads": {
+      "post": {
+        "tags": ["slack"],
+        "summary": "Issue short-lived, checksum/length-bound, create-only PUT grants. Do not log or persist URLs.\nRetry a PUT returning 412 by completing/verifying the existing object, not overwriting it.",
+        "operationId": "register_slack_import_uploads",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/JobId"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SlackRegisterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UploadGrant"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown or inaccessible job"
+          },
+          "413": {
+            "description": "Body limit exceeded"
+          },
+          "503": {
+            "description": "Slack imports disabled"
+          }
+        }
+      }
+    },
+    "/slack/imports/{job_id}/uploads/complete": {
+      "post": {
+        "tags": ["slack"],
+        "summary": "Verify storage checksums and lengths for registered objects. A seal fixes the ENTIRE\ndescriptor set (contiguous indices, sizes and hashes), not just this completion batch.\nEmpty uploads with a zero-part seal support shape-only or empty-history imports.\nWork becomes ready only after verified users metadata, a seal and every required part.",
+        "operationId": "complete_slack_import_uploads",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/JobId"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SlackCompleteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportProgress"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown or inaccessible job"
+          },
+          "409": {
+            "description": "Immutable manifest conflict"
+          },
+          "413": {
+            "description": "Body limit exceeded"
+          },
+          "422": {
+            "description": "Object verification failed"
+          },
+          "503": {
+            "description": "Slack imports disabled"
+          }
+        }
+      }
+    },
     "/sync_service/wakeup": {
       "post": {
         "tags": ["sync_service"],
@@ -18086,10 +18355,235 @@
           }
         }
       },
+      "CompleteUploads": {
+        "type": "object",
+        "description": "Explicit upload completion; a seal can be submitted separately with an empty list.",
+        "required": ["uploads"],
+        "properties": {
+          "seal": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ConversationSeal",
+                "description": "Optional immutable expected part set; identical retries are idempotent."
+              }
+            ]
+          },
+          "uploads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UploadId"
+            },
+            "description": "Registered identities to verify against storage (at most 50).",
+            "maxItems": 50
+          }
+        },
+        "additionalProperties": false
+      },
       "ConferenceProvider": {
         "type": "string",
         "description": "The conferencing system backing an event's join URL.\n\nMacro generates only Google Meet conferences, so this distinguishes one it\ncreated from a third party's — Zoom and friends arriving as `addOn`\nconference data, or a legacy classic Hangout. Clients use it to label the\nconference and to tell whether the Meet toggle reflects a Macro-managed\nconference.\n\nIt does not gate mutation. An explicit request replaces or detaches any\nconference, third-party included, exactly as deleting the event would;\nwhat protects a conference is that omitting the field leaves it untouched,\nso an unrelated edit never disturbs it.",
         "enum": ["google_meet", "other"]
+      },
+      "ConversationId": {
+        "type": "string",
+        "description": "Source Slack conversation ID (C, G or D prefix); unique only within a source."
+      },
+      "ConversationKind": {
+        "type": "string",
+        "description": "Slack conversation kind. Public Slack channels map to Macro Team, never Public.",
+        "enum": [
+          "public_channel",
+          "private_channel",
+          "direct_message",
+          "group_direct_message"
+        ]
+      },
+      "ConversationMetadata": {
+        "type": "object",
+        "description": "Full selected conversation metadata, persisted before granting any uploads.",
+        "required": [
+          "slackChannelId",
+          "kind",
+          "name",
+          "folder",
+          "memberIds",
+          "archived"
+        ],
+        "properties": {
+          "archived": {
+            "type": "boolean",
+            "description": "Source archived flag (does not silently archive a reused Macro target)."
+          },
+          "createdAt": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SlackTimestamp",
+                "description": "Missing time is resolved once from earliest message or persisted job time."
+              }
+            ]
+          },
+          "creatorId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SlackUserId",
+                "description": "Source creator when available."
+              }
+            ]
+          },
+          "folder": {
+            "$ref": "#/components/schemas/KeySegment",
+            "description": "Single archive folder name, not a backend object key."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ConversationKind",
+            "description": "Source conversation kind."
+          },
+          "memberIds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SlackUserId"
+            },
+            "description": "Complete source member list, including members unknown to Macro."
+          },
+          "messageCount": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Advisory only; null means not yet counted, not zero.",
+            "minimum": 0
+          },
+          "name": {
+            "type": "string",
+            "description": "Original display name; not a storage key."
+          },
+          "slackChannelId": {
+            "$ref": "#/components/schemas/ConversationId",
+            "description": "Stable Slack identity."
+          }
+        },
+        "additionalProperties": false
+      },
+      "ConversationProgress": {
+        "type": "object",
+        "description": "Admin-visible progress for one selected conversation.",
+        "required": [
+          "slackChannelId",
+          "name",
+          "kind",
+          "archived",
+          "status",
+          "verifiedParts",
+          "counters",
+          "search",
+          "warnings"
+        ],
+        "properties": {
+          "archived": {
+            "type": "boolean",
+            "description": "Whether the selected source conversation was archived."
+          },
+          "channelId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Authorized target only; absent for inaccessible reused targets."
+          },
+          "counters": {
+            "$ref": "#/components/schemas/ImportCounters",
+            "description": "Durably committed record counts."
+          },
+          "error": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ImportError",
+                "description": "Sanitized terminal or retry diagnostic."
+              }
+            ]
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ConversationKind",
+            "description": "Persisted source kind."
+          },
+          "name": {
+            "type": "string",
+            "description": "Persisted source display name, never the reused Macro target's name."
+          },
+          "partCount": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Null until sealed; zero is a valid sealed empty manifest.",
+            "minimum": 0
+          },
+          "search": {
+            "$ref": "#/components/schemas/SearchState",
+            "description": "Independent indexing state."
+          },
+          "slackChannelId": {
+            "$ref": "#/components/schemas/ConversationId",
+            "description": "Source identity (always visible to the importing team's administrator)."
+          },
+          "status": {
+            "$ref": "#/components/schemas/ConversationStatus",
+            "description": "Durable state."
+          },
+          "verifiedParts": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Number of parts whose object identity has been verified.",
+            "minimum": 0
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImportWarning"
+            },
+            "description": "Non-fatal metadata/skip explanations."
+          }
+        }
+      },
+      "ConversationSeal": {
+        "type": "object",
+        "description": "Complete immutable expected part set for one conversation, including zero parts.",
+        "required": ["slackChannelId", "partCount", "manifestSha256"],
+        "properties": {
+          "manifestSha256": {
+            "$ref": "#/components/schemas/Sha256Digest",
+            "description": "SHA-256 of canonical descriptor lines; zero parts hash the empty byte string."
+          },
+          "partCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Exact number of registered parts, starting at index zero.",
+            "minimum": 0
+          },
+          "slackChannelId": {
+            "$ref": "#/components/schemas/ConversationId",
+            "description": "Selected source conversation."
+          }
+        },
+        "additionalProperties": false
+      },
+      "ConversationStatus": {
+        "type": "string",
+        "description": "Durable per-conversation lifecycle.",
+        "enum": [
+          "awaiting_uploads",
+          "queued",
+          "importing",
+          "completed",
+          "skipped",
+          "failed"
+        ]
       },
       "CopyDocumentQueryParams": {
         "type": "object",
@@ -18649,6 +19143,40 @@
           }
         }
       },
+      "CreateImport": {
+        "type": "object",
+        "description": "Create command. Team identity is deliberately absent.",
+        "required": [
+          "idempotencyToken",
+          "source",
+          "includeMessageHistory",
+          "conversations"
+        ],
+        "properties": {
+          "conversations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConversationMetadata"
+            },
+            "description": "Full, unique selected conversations (at most the configured bound).",
+            "maxItems": 2000,
+            "minItems": 1
+          },
+          "idempotencyToken": {
+            "$ref": "#/components/schemas/CreateToken",
+            "description": "Replay with the same semantic payload returns the original job; changes conflict."
+          },
+          "includeMessageHistory": {
+            "type": "boolean",
+            "description": "Default true at the client; false still requires users and zero-part seals."
+          },
+          "source": {
+            "$ref": "#/components/schemas/SourceIdentity",
+            "description": "Binding or explicit unknown-source confirmation."
+          }
+        },
+        "additionalProperties": false
+      },
       "CreateInitiativeRequest": {
         "type": "object",
         "description": "Create-initiative HTTP body.",
@@ -19005,6 +19533,11 @@
             "description": "A pre-generated permission token that you can use for SS"
           }
         }
+      },
+      "CreateToken": {
+        "type": "string",
+        "format": "uuid",
+        "description": "Client-generated create idempotency token, scoped to team and administrator."
       },
       "CreateUnthreadedAnchorRequest": {
         "oneOf": [
@@ -23471,6 +24004,258 @@
         "type": "integer",
         "enum": [1, 2, 3]
       },
+      "ImportCounters": {
+        "type": "object",
+        "description": "Committed counters, never optimistic browser or uncommitted worker counts.",
+        "required": [
+          "processed",
+          "imported",
+          "duplicates",
+          "skipped",
+          "reactions"
+        ],
+        "properties": {
+          "duplicates": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Previously committed source identities.",
+            "minimum": 0
+          },
+          "imported": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Newly persisted messages.",
+            "minimum": 0
+          },
+          "processed": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Source records examined through the committed checkpoint.",
+            "minimum": 0
+          },
+          "reactions": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Newly persisted reactions.",
+            "minimum": 0
+          },
+          "skipped": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Unsupported, empty or otherwise deliberately skipped records.",
+            "minimum": 0
+          }
+        }
+      },
+      "ImportError": {
+        "type": "string",
+        "description": "Public error codes; never carry raw provider errors, keys, emails or source text.",
+        "enum": [
+          "disabled",
+          "invalid_input",
+          "limit_exceeded",
+          "unavailable",
+          "admin_required",
+          "source_mismatch",
+          "conflict",
+          "upload_mismatch",
+          "lease_lost",
+          "retryable",
+          "internal"
+        ]
+      },
+      "ImportLimits": {
+        "type": "object",
+        "description": "Configurable bounds shared with browser staging and enforced again by the worker.",
+        "required": [
+          "partBytes",
+          "partRecords",
+          "recordBytes",
+          "jsonBytes",
+          "selectedBytes",
+          "zipEntries",
+          "conversations",
+          "registrationBatch",
+          "databaseBatchBytes",
+          "databaseBatchMessages"
+        ],
+        "properties": {
+          "conversations": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Maximum selected conversations.",
+            "minimum": 0
+          },
+          "databaseBatchBytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Maximum historical batch payload bytes.",
+            "minimum": 0
+          },
+          "databaseBatchMessages": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Maximum messages in a historical batch.",
+            "minimum": 0
+          },
+          "jsonBytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Maximum users, root metadata or individual day JSON bytes.",
+            "minimum": 0
+          },
+          "partBytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Maximum NDJSON part bytes.",
+            "minimum": 0
+          },
+          "partRecords": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Maximum records per part.",
+            "minimum": 0
+          },
+          "recordBytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Maximum bytes per NDJSON record, including newline.",
+            "minimum": 0
+          },
+          "registrationBatch": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Maximum descriptors or completion identities per call.",
+            "minimum": 0
+          },
+          "selectedBytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Maximum selected temporary data bytes across all uploads.",
+            "minimum": 0
+          },
+          "zipEntries": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Maximum ZIP entries scanned by the browser.",
+            "minimum": 0
+          }
+        }
+      },
+      "ImportPage": {
+        "type": "object",
+        "description": "Admin list result, also supplying upload limits before a job exists.",
+        "required": ["jobs", "limits", "sourceBinding"],
+        "properties": {
+          "jobs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImportProgress"
+            },
+            "description": "At most 50 job receipts, newest first."
+          },
+          "limits": {
+            "$ref": "#/components/schemas/ImportLimits",
+            "description": "Effective server limits."
+          },
+          "nextCursor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JobId",
+                "description": "Exclusive cursor for the next page; null when exhausted."
+              }
+            ]
+          },
+          "sourceBinding": {
+            "$ref": "#/components/schemas/SourceBinding",
+            "description": "Binding summary used by the picker confirmation."
+          }
+        }
+      },
+      "ImportProgress": {
+        "type": "object",
+        "description": "Common receipt returned by create, completion, finalize, cancel and progress.",
+        "required": [
+          "source",
+          "includeMessageHistory",
+          "jobId",
+          "status",
+          "revision",
+          "createdAt",
+          "updatedAt",
+          "usersVerified",
+          "limits",
+          "conversations"
+        ],
+        "properties": {
+          "conversations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConversationProgress"
+            },
+            "description": "All selected conversations, bounded by the create limit."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Persisted creation time, also the final historical-time fallback."
+          },
+          "includeMessageHistory": {
+            "type": "boolean",
+            "description": "Immutable history option confirmed when creating this job."
+          },
+          "jobId": {
+            "$ref": "#/components/schemas/JobId",
+            "description": "Stable job identity."
+          },
+          "limits": {
+            "$ref": "#/components/schemas/ImportLimits",
+            "description": "Server bounds for staging and registration."
+          },
+          "registrationClosedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Registration closure time; cancellation also closes registration."
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Monotonic job revision for polling/websocket invalidation.",
+            "minimum": 0
+          },
+          "source": {
+            "$ref": "#/components/schemas/SourceIdentity",
+            "description": "Immutable source confirmation from this job, not the current team binding."
+          },
+          "status": {
+            "$ref": "#/components/schemas/JobStatus",
+            "description": "Durable job lifecycle."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last durable lifecycle/progress update."
+          },
+          "usersVerified": {
+            "type": "boolean",
+            "description": "Whether users metadata is verified and pinned."
+          }
+        }
+      },
+      "ImportWarning": {
+        "type": "string",
+        "description": "Non-fatal, sanitized explanations displayed in admin progress.",
+        "enum": [
+          "creation_time_from_message",
+          "creation_time_from_job",
+          "unresolvable_direct_message",
+          "target_unavailable",
+          "uploads_incomplete"
+        ]
+      },
       "ImportedAuthor": {
         "type": "object",
         "description": "Display attribution for a comment imported from an external document.",
@@ -23761,6 +24546,28 @@
             "$ref": "#/components/schemas/AccessLevel"
           }
         }
+      },
+      "JobId": {
+        "type": "string",
+        "format": "uuid",
+        "description": "Import job identity. Generate UUIDv7 in application code."
+      },
+      "JobStatus": {
+        "type": "string",
+        "description": "Job lifecycle. Cancellation remains in progress while any lease is active.",
+        "enum": [
+          "uploading",
+          "processing",
+          "completed",
+          "completed_with_errors",
+          "failed",
+          "cancelling",
+          "cancelled"
+        ]
+      },
+      "KeySegment": {
+        "type": "string",
+        "description": "Single safe source folder/key segment; never a path or authorization proof."
       },
       "LatestMessage": {
         "type": "object",
@@ -26543,6 +27350,22 @@
           }
         }
       },
+      "RegisterUploads": {
+        "type": "object",
+        "description": "Batched registration, also used to renew an unchanged descriptor's grant.",
+        "required": ["descriptors"],
+        "properties": {
+          "descriptors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UploadDescriptor"
+            },
+            "description": "At most 50 descriptors; no duplicate identities in a call.",
+            "maxItems": 50
+          }
+        },
+        "additionalProperties": false
+      },
       "Reminder": {
         "type": "object",
         "description": "A reminder belonging to a user.\n\n`user_id` is deliberately absent: a reminder is only ever read by its owner,\nso the field would be redundant on the wire.",
@@ -26978,6 +27801,71 @@
           }
         }
       },
+      "SearchState": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "No committed history requires indexing.",
+            "required": ["status"],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": ["not_needed"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Committed history requires an outbox-backed scoped submission.",
+            "required": ["status"],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": ["pending"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Search service accepted the request, but has not completed it.",
+            "required": ["receiptId", "status"],
+            "properties": {
+              "receiptId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Receipt from the search service."
+              },
+              "status": {
+                "type": "string",
+                "enum": ["submitted"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Search service durably published the scope; eventual indexing is separate.",
+            "required": ["status"],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": ["completed"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Publication failed; retained history must be retried independently.",
+            "required": ["status"],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": ["failed"]
+              }
+            }
+          }
+        ],
+        "description": "Search publication/receipt state. Acceptance is not completed publication;\neven completed publication still awaits consumer indexing and refresh."
+      },
       "SessionDeletedMetadata": {
         "type": "object",
         "description": "The session was deleted.",
@@ -27403,6 +28291,10 @@
         ],
         "description": "Type-safe enum for setting entity property values - provides compile-time validation."
       },
+      "Sha256Digest": {
+        "type": "string",
+        "description": "SHA-256 encoded as exactly 64 lowercase hexadecimal characters."
+      },
       "SharePermissionV2": {
         "type": "object",
         "required": ["id", "owner"],
@@ -27487,6 +28379,26 @@
             "description": "Mentioned entity type."
           }
         }
+      },
+      "SlackCompleteRequest": {
+        "$ref": "#/components/schemas/CompleteUploads",
+        "description": "At most fifty registered identities to verify and an optional immutable conversation seal."
+      },
+      "SlackCreateRequest": {
+        "$ref": "#/components/schemas/CreateImport",
+        "description": "Bounded full-metadata create payload. Domain validation applies effective limits again."
+      },
+      "SlackRegisterRequest": {
+        "$ref": "#/components/schemas/RegisterUploads",
+        "description": "At most fifty immutable upload descriptors, without client-supplied storage keys."
+      },
+      "SlackTimestamp": {
+        "type": "string",
+        "description": "Slack time represented exactly as nonnegative Unix microseconds.\nJSON is a string with six fractional digits, never a floating-point number."
+      },
+      "SlackUserId": {
+        "type": "string",
+        "description": "Slack member identity (U or W prefix), including USLACKBOT."
       },
       "SmartTagChannelMatch": {
         "type": "object",
@@ -29505,6 +30417,83 @@
           }
         }
       },
+      "SourceBinding": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "No import has bound this team yet.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["unbound"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Legacy/onboarding or explicitly confirmed unidentified source.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["confirmed_unknown"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Known Slack workspace; reject mismatches.",
+            "required": ["sourceId", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["known"]
+              },
+              "sourceId": {
+                "$ref": "#/components/schemas/SourceId",
+                "description": "Bound source identity."
+              }
+            }
+          }
+        ],
+        "description": "Team's durable single-source binding, including confirmed unidentified archives."
+      },
+      "SourceId": {
+        "type": "string",
+        "description": "Known Slack workspace identity (T prefix); an enterprise ID alone is insufficient."
+      },
+      "SourceIdentity": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Archive names its Slack workspace; reject a conflicting team binding.",
+            "required": ["sourceId", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["known"]
+              },
+              "sourceId": {
+                "$ref": "#/components/schemas/SourceId",
+                "description": "Workspace identifier in the archive."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Explicit confirmation that an unidentified archive belongs to this team's source.\nChoosing this variant is affirmative confirmation, not an inferred default.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["confirmed_unknown"]
+              }
+            }
+          }
+        ],
+        "description": "Source identity supplied when creating a job. One binding per Macro team in v1."
+      },
       "StarterDocumentsResponse": {
         "type": "object",
         "description": "The deterministic starter document ids for the current user.",
@@ -30375,6 +31364,34 @@
           }
         }
       },
+      "UploadDescriptor": {
+        "type": "object",
+        "description": "Immutable expected object properties, registered before signing an upload.",
+        "required": ["upload", "sha256", "byteLength"],
+        "properties": {
+          "byteLength": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Exact byte length including delimiters.",
+            "minimum": 0
+          },
+          "recordCount": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Exact NDJSON record count; null for the users JSON payload.",
+            "minimum": 0
+          },
+          "sha256": {
+            "$ref": "#/components/schemas/Sha256Digest",
+            "description": "SHA-256 of the exact uploaded bytes, not the ETag."
+          },
+          "upload": {
+            "$ref": "#/components/schemas/UploadId",
+            "description": "Manifest identity within this job."
+          }
+        },
+        "additionalProperties": false
+      },
       "UploadDocumentStatus": {
         "type": "string",
         "description": "The upload status of the document",
@@ -30419,6 +31436,73 @@
             "description": "The upload request id"
           }
         }
+      },
+      "UploadGrant": {
+        "type": "object",
+        "description": "Signed upload permission returned just before PUT; never persisted as an identity.",
+        "required": ["descriptor", "url", "requiredHeaders", "expiresAt"],
+        "properties": {
+          "descriptor": {
+            "$ref": "#/components/schemas/UploadDescriptor",
+            "description": "Exact immutable descriptor being signed."
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Grant expiry; callers renew by re-registering the identical descriptor."
+          },
+          "requiredHeaders": {
+            "type": "object",
+            "description": "Required signed upload headers (including checksum, content type and create-only\ncondition). Browser-forbidden Content-Length is derived from the exact Blob bytes.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "url": {
+            "type": "string",
+            "description": "Short-lived signed destination; must not be logged."
+          }
+        }
+      },
+      "UploadId": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "One normalized users payload from users.json and/or org_users.json.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["users"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "One NDJSON part in a selected conversation.",
+            "required": ["slackChannelId", "partIndex", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["conversation_part"]
+              },
+              "partIndex": {
+                "type": "integer",
+                "format": "int32",
+                "description": "Zero-based part index; sealed manifests must be contiguous.",
+                "minimum": 0
+              },
+              "slackChannelId": {
+                "$ref": "#/components/schemas/ConversationId",
+                "description": "Selected Slack conversation."
+              }
+            }
+          }
+        ],
+        "description": "Identity in a job's persisted manifest. No user-supplied object keys."
       },
       "UpsertUserDocumentViewLocationRequest": {
         "type": "object",

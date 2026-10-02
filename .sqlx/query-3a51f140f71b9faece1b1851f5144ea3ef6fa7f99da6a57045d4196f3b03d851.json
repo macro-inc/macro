@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT pg_advisory_unlock(27001)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pg_advisory_unlock",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "3a51f140f71b9faece1b1851f5144ea3ef6fa7f99da6a57045d4196f3b03d851"
+}

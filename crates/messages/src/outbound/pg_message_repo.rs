@@ -6,6 +6,7 @@ use sqlx::{PgPool, Postgres, Transaction, types::Json};
 use std::collections::HashMap;
 use uuid::Uuid;
 
+mod historical;
 mod timeline;
 
 #[cfg(test)]

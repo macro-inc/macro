@@ -255,6 +255,18 @@ impl ChannelRepo for FakeMutationRepo {
         Ok(())
     }
 
+    async fn ensure_dm(
+        &self,
+        pair: crate::domain::dm::DmPair,
+        creation: crate::domain::historical::DmCreation,
+    ) -> Result<crate::domain::historical::EnsuredChannel, Self::Err> {
+        creation.owner(&pair)?;
+        Ok(crate::domain::historical::EnsuredChannel {
+            id: self.state.lock().unwrap().channel_id,
+            created: true,
+        })
+    }
+
     async fn maybe_get_dm(
         &self,
         _user_id: MacroUserIdStr<'_>,
@@ -814,9 +826,14 @@ async fn ensure_dms_does_not_dispatch_for_existing_channel() {
     let joiner = macro_id("macro|joiner@test.com");
     let teammate = macro_id("macro|teammate@test.com");
     let mut repo = MockChannelRepo::new();
-    repo.expect_maybe_get_dm()
-        .once()
-        .returning(move |_, _| Box::pin(async move { Ok(Some(channel_id)) }));
+    repo.expect_ensure_dm().once().returning(move |_, _| {
+        Box::pin(async move {
+            Ok(crate::domain::historical::EnsuredChannel {
+                id: channel_id,
+                created: false,
+            })
+        })
+    });
     let events = FakeEvents::default();
     let service = ChannelServiceImpl::with_dependencies(
         repo,
@@ -867,9 +884,14 @@ async fn get_or_create_dm_returns_get_for_existing_pair() {
     let actor = macro_id("macro|actor@test.com");
     let recipient = macro_id("macro|recipient@test.com");
     let mut repo = MockChannelRepo::new();
-    repo.expect_maybe_get_dm()
-        .once()
-        .returning(move |_, _| Box::pin(async move { Ok(Some(channel_id)) }));
+    repo.expect_ensure_dm().once().returning(move |_, _| {
+        Box::pin(async move {
+            Ok(crate::domain::historical::EnsuredChannel {
+                id: channel_id,
+                created: false,
+            })
+        })
+    });
     let events = FakeEvents::default();
     let service = ChannelServiceImpl::with_dependencies(
         repo,

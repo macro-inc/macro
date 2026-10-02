@@ -368,6 +368,15 @@ use utoipa::OpenApi;
         user_api_key::inbound::axum_router::list_user_api_keys_handler,
         user_api_key::inbound::axum_router::delete_user_api_key_handler,
 
+        // Slack archive imports
+        slack_integration::inbound::axum_router::create::create,
+        slack_integration::inbound::axum_router::uploads::register,
+        slack_integration::inbound::axum_router::uploads::complete,
+        slack_integration::inbound::axum_router::jobs::list,
+        slack_integration::inbound::axum_router::jobs::progress,
+        slack_integration::inbound::axum_router::jobs::finalize,
+        slack_integration::inbound::axum_router::jobs::cancel,
+
         // reminders
         reminders::inbound::axum_router::get_email_followup_handler,
         reminders::inbound::axum_router::set_email_followup_handler,
@@ -811,3 +820,6 @@ use utoipa::OpenApi;
     )
 )]
 pub struct ApiDoc;
+
+#[cfg(test)]
+mod test;
