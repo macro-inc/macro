@@ -17,6 +17,34 @@ pub const MAX_HISTORICAL_BATCH_BYTES: usize = 4 * 1024 * 1024;
 /// Maximum serialized input bytes for one message, including references and metadata.
 pub const MAX_HISTORICAL_MESSAGE_BYTES: usize = 1024 * 1024;
 
+/// Live persisted channel message identity, without body or author disclosure.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HistoricalMessageTarget {
+    /// Actual message ID.
+    pub message_id: Uuid,
+    /// Actual owning channel, checked against parent ownership.
+    pub channel_id: Uuid,
+    /// Persisted live root (self for roots and orphan-imported replies).
+    pub root_id: Uuid,
+}
+
+/// Compare-and-set body reconciliation, not a live edit. The importer must still
+/// authorize disclosure and atomically persist its checkpoint/search marker.
+pub struct HistoricalBodyPatch {
+    /// Exact first-committed message and owning channel.
+    pub message_id: Uuid,
+    /// Expected channel ownership.
+    pub channel_id: Uuid,
+    /// Job recorded by the original writer, never a later duplicate import.
+    pub job_id: Uuid,
+    /// Original importer schema/body guard.
+    pub importer_version: i16,
+    /// Original fallback body, compared exactly at update time.
+    pub expected_body: String,
+    /// Authorized rendered replacement.
+    pub body: String,
+}
+
 /// A channel already authorized by the importing domain and its bounded messages.
 /// Source deduplication, fencing, mappings and checkpoints belong to the caller.
 #[derive(Debug, Clone, Serialize)]

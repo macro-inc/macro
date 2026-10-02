@@ -5,5 +5,33 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
-slack_integration = { path = "../../crates/slack_integration", features = ["worker"] }
+aws-sdk-sqs = { workspace = true }
+bot_id = { path = "../../crates/bot_id" }
+channel_sender = { path = "../../crates/channel_sender" }
+channels = { path = "../../crates/channels", features = ["outbound"] }
+chrono = { workspace = true }
+database_env_vars = { path = "../../crates/database_env_vars" }
+entity_access = { path = "../../crates/entity_access", default-features = false, features = ["outbound"] }
+import = { path = "../../crates/import" }
+macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3"] }
+macro_config = { path = "../../crates/macro_config" }
+macro_entrypoint = { path = "../../crates/macro_entrypoint" }
+macro_queues = { path = "../../crates/macro_queues" }
+macro_service_urls = { path = "../../crates/macro_service_urls" }
+macro_user_id = { path = "../../crates/macro_user_id" }
+mention_utils = { path = "../../crates/mention_utils" }
+messages = { path = "../../crates/messages", features = ["outbound"] }
+rootcause = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+slack_integration = { path = "../../crates/slack_integration", features = ["postgres", "s3", "sqs", "search", "worker"] }
+sqlx = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+
+[dev-dependencies]
+aws-sdk-s3 = { workspace = true }
+reqwest = { workspace = true }
+sha2 = { workspace = true }

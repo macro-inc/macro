@@ -194,7 +194,7 @@ async fn create_replays_semantic_metadata_and_scopes_tokens(pool: PgPool) {
 
 #[sqlx::test(migrations = "../macro_db_client/migrations")]
 async fn confirmed_selection_is_the_durable_upload_and_work_scope(pool: PgPool) {
-    use crate::domain::ports::{ExecutionRepo, ImportRepo};
+    use crate::domain::ports::{ExecutionRepo, ImportRepo, SourceMessageReader};
 
     let (repo, team, _) = fixture(&pool).await;
     let mut selected = command(true, &["CA", "CC"]);
@@ -298,6 +298,28 @@ async fn confirmed_selection_is_the_durable_upload_and_work_scope(pool: PgPool) 
         ClaimOutcome::Obsolete
     ));
     assert_eq!(outbox_count(&pool, job).await, 0);
+
+    // Looking up a link to B cannot turn it into selected/pending work or invent a message.
+    assert!(
+        repo.pending_reference_channels(team, job, &["CB".parse().unwrap()])
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        repo.reference_mappings(
+            team,
+            &[SourceMessageId {
+                team_id: team,
+                slack_channel_id: "CB".parse().unwrap(),
+                ts: "1700000000.000001".parse().unwrap(),
+            }]
+        )
+        .await
+        .unwrap()
+        .is_empty()
+    );
+    assert_eq!(repo.progress(team, job).await.unwrap().unwrap(), original);
 
     // Empty selected history still requires users. Only A becomes ready; C remains a selected skip.
     let seal =

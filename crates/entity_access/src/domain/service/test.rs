@@ -737,6 +737,59 @@ async fn test_unsupported_entity_type_returns_none() {
 // --- get_entity_permission tests ---
 
 #[tokio::test]
+async fn team_admin_receipt_checks_current_role_and_exact_team() {
+    let repo = MockRepo::new();
+    let service = EntityAccessServiceImpl::new(repo.clone());
+    let user = test_user_id();
+    let team = Uuid::now_v7();
+    let team_id = team.to_string();
+    for role in [TeamRole::Owner, TeamRole::Admin, TeamRole::Member] {
+        *repo.user_team.lock().await = Some(UserTeamInfo {
+            team_id: team,
+            role,
+        });
+        let receipt = service
+            .generate_entity_access_receipt::<AdminTeamRole>(
+                &user.0,
+                None,
+                &team_id,
+                EntityType::Team,
+            )
+            .await;
+        assert_eq!(receipt.is_ok(), role != TeamRole::Member);
+        assert!(
+            service
+                .generate_entity_access_receipt::<AdminTeamRole>(
+                    &user.0,
+                    None,
+                    &Uuid::now_v7().to_string(),
+                    EntityType::Team,
+                )
+                .await
+                .is_err()
+        );
+    }
+    *repo.user_team.lock().await = None;
+    assert!(
+        service
+            .generate_entity_access_receipt::<AdminTeamRole>(
+                &user.0,
+                None,
+                &team_id,
+                EntityType::Team,
+            )
+            .await
+            .is_err()
+    );
+    assert!(
+        service
+            .get_entity_permission(None, &team_id, EntityType::Team, None)
+            .await
+            .is_err()
+    );
+}
+
+#[tokio::test]
 async fn test_get_entity_permission_document_returns_access_level() {
     let repo = MockRepo::new().with_document_access(AccessLevel::Edit);
     let service = EntityAccessServiceImpl::new(repo);

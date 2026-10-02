@@ -91,6 +91,63 @@ impl<R: CanonicalImportRepo> ImportLedger for CanonicalImportLedger<R> {
     }
 }
 
+impl<R: CanonicalImportRepo + import::domain::ports::ImportTargetReader> CanonicalImportLedger<R> {
+    /// Read exact targets without reservation, while fencing against a changed
+    /// binding. Returned labels are internal facts until domain disclosure checks.
+    pub async fn reference_channels(
+        &self,
+        team: TeamId,
+        expected: &SourceBinding,
+        channels: &[ConversationId],
+    ) -> PortResult<Vec<crate::domain::slack::references::resolve::ChannelMapping>> {
+        use crate::domain::slack::references::resolve::ChannelMapping;
+        let Some(binding) = self
+            .repo
+            .source_binding(team.into())
+            .await
+            .map_err(map_error)?
+        else {
+            return Ok(vec![ChannelMapping::Missing; channels.len()]);
+        };
+        let compatible = match (expected, binding.workspace_id.as_ref()) {
+            (SourceBinding::Known { source_id }, Some(bound)) => {
+                source_id.as_str() == bound.as_str()
+            }
+            (SourceBinding::ConfirmedUnknown, None) => binding.confirmed_unknown_at.is_some(),
+            _ => false,
+        };
+        if !compatible {
+            return Ok(vec![ChannelMapping::Missing; channels.len()]);
+        }
+        let ids = channels
+            .iter()
+            .map(|id| {
+                ledger::SlackConversationId::new(id.as_str()).ok_or(ImportError::InvalidInput)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(self
+            .repo
+            .lookup_targets(team.into(), &binding, &ids)
+            .await
+            .map_err(map_error)?
+            .into_iter()
+            .map(|row| match row {
+                ledger::ImportTargetLookup::Missing => ChannelMapping::Missing,
+                ledger::ImportTargetLookup::Pending => ChannelMapping::Pending,
+                ledger::ImportTargetLookup::Ready {
+                    channel_id,
+                    kind,
+                    name,
+                } => ChannelMapping::Ready {
+                    id: channel_id,
+                    name,
+                    team_visible: kind == ledger::ImportTargetKind::Team,
+                },
+            })
+            .collect())
+    }
+}
+
 fn target_key(team: TeamId, conversation: &ConversationId) -> PortResult<ledger::ImportTargetKey> {
     Ok(ledger::ImportTargetKey {
         team_id: team.into(),

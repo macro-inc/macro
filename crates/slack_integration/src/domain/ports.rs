@@ -15,6 +15,13 @@ use super::models::*;
 /// Internal failures retain diagnostic causes without serializing them into progress.
 pub type PortResult<T> = Result<T, rootcause::Report<ImportError>>;
 
+/// Atomic, fenced reconciliation supplied by the worker composition root.
+pub trait ReferenceReconciler: Send + Sync {
+    /// Settle at most this many bounded templates, including cancelled/partial work.
+    /// Each body patch, completion checkpoint and search marker commits together.
+    fn reconcile_references(&self, limit: u32) -> impl Future<Output = PortResult<()>> + Send;
+}
+
 /// Bounded chunks, not a buffered whole object. Adapters cap chunk size and stop at
 /// the descriptor byte limit; consumers additionally enforce NDJSON line/record bounds.
 pub type ByteStream = Pin<Box<dyn Stream<Item = PortResult<Vec<u8>>> + Send>>;
@@ -79,23 +86,24 @@ pub trait ImportService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<ImportPage, ImportError>> + Send;
 }
 
-/// Queue-driven use cases, deliberately separate from the administrator's API.
+/// Claimed-work use cases, separate from administrator and maintenance services.
+/// The split lets the driver start heartbeats before slow storage or database work.
 pub trait ImportWorker: Send + Sync + 'static {
-    /// Load trusted persisted context, revalidate admin/target authorization, claim or
-    /// reclaim with fencing, then process bounded batches. Duplicate/stale events are no-ops.
-    fn process(&self, event: ImportEvent)
-    -> impl Future<Output = PortResult<WorkerOutcome>> + Send;
-
-    /// Reconcile identifiable exhausted work. Acknowledge the DLQ message only after
-    /// terminal persistence and job recomputation; never defeat a newer active lease.
-    fn reconcile_dead_letter(
+    /// Load the durable requester and revalidate authorization before claiming/reclaiming.
+    fn claim(
         &self,
-        event: ImportEvent,
+        event: &ImportEvent,
+        owner: WorkerId,
+    ) -> impl Future<Output = PortResult<ClaimOutcome>> + Send;
+
+    /// Process bounded atomic batches and durably settle permanent outcomes.
+    fn import(
+        &self,
+        context: &ClaimedConversation,
     ) -> impl Future<Output = PortResult<WorkerOutcome>> + Send;
 
-    /// Publish pending outbox work and reconcile expired leases, abandoned uploads,
-    /// cancellation settlement and stale search receipts in bounded pages.
-    fn maintain(&self) -> impl Future<Output = PortResult<()>> + Send;
+    /// Renew the fence using database time. Any failure stops the current attempt.
+    fn heartbeat(&self, lease: &Lease) -> impl Future<Output = PortResult<Lease>> + Send;
 }
 
 /// Team-scoped persistence used by the admin service. All mutations serialize on
@@ -279,6 +287,25 @@ pub trait ImportQueue: Send + Sync + 'static {
     fn publish(&self, event: &ImportEvent) -> impl Future<Output = PortResult<()>> + Send;
 }
 
+/// Delivery controls with opaque adapter-owned receipts. Payloads remain untrusted.
+/// The driver receives only one delivery per available processing slot.
+pub trait ImportConsumer: Send + Sync {
+    /// Opaque acknowledgement capability; never logged or persisted as domain state.
+    type Delivery: Send + Sync;
+
+    /// Long-poll one message from the main queue or its dead-letter queue.
+    fn receive(
+        &self,
+        dead_letter: bool,
+    ) -> impl Future<Output = PortResult<Option<Self::Delivery>>> + Send;
+    /// Strictly decoded identity plus the provider's approximate receive count.
+    fn envelope(delivery: &Self::Delivery) -> (Result<ImportEvent, ImportError>, u32);
+    /// Extend delivery visibility independently of the database fence.
+    fn extend(&self, delivery: &Self::Delivery) -> impl Future<Output = PortResult<()>> + Send;
+    /// Acknowledge only a durable outcome, or an unidentifiable poison envelope.
+    fn delete(&self, delivery: &Self::Delivery) -> impl Future<Output = PortResult<()>> + Send;
+}
+
 /// Separate requester and target authorization, evaluated by domain orchestration.
 pub trait ImportAuthorizer: Send + Sync + 'static {
     /// Revalidate the original requester's current team-admin role before work/reclaim.
@@ -355,6 +382,53 @@ pub trait ImportLedger: Send + Sync + 'static {
         reservation: &TargetReservation,
         kind: ConversationKind,
     ) -> impl Future<Output = PortResult<()>> + Send;
+}
+
+/// Import-owned read-only source-message mapping capability.
+pub trait SourceMessageReader: Send + Sync {
+    /// Explicit team namespace, bounded exact identities; mapping alone proves
+    /// neither message existence nor read access. Reject mixed-team inputs.
+    fn reference_mappings(
+        &self,
+        team: TeamId,
+        sources: &[SourceMessageId],
+    ) -> impl Future<
+        Output = PortResult<Vec<super::slack::references::resolve::StoredMessageMapping>>,
+    > + Send;
+}
+
+/// Batched read-only reference capabilities. Every method is bounded by the
+/// database record/byte ceilings; none may reserve targets or mutate membership.
+/// Context must come from persisted job ownership, not a client-supplied requester.
+pub trait ReferenceLookup: Send + Sync {
+    /// Load canonical channel facts in input order, without authorizing disclosure.
+    fn channels(
+        &self,
+        context: &super::slack::references::resolve::ReferenceContext,
+        channels: &[ConversationId],
+    ) -> impl Future<Output = PortResult<Vec<super::slack::references::resolve::ChannelMapping>>> + Send;
+
+    /// Selected nonterminal conversations in this job which may supply references.
+    fn pending_channels(
+        &self,
+        context: &super::slack::references::resolve::ReferenceContext,
+        channels: &[ConversationId],
+    ) -> impl Future<Output = PortResult<Vec<ConversationId>>> + Send;
+
+    /// Read source mappings and validate actual message ownership/deletion and root
+    /// state through the message owner. Results correspond exactly to input order.
+    fn messages(
+        &self,
+        context: &super::slack::references::resolve::ReferenceContext,
+        sources: &[SourceMessageId],
+    ) -> impl Future<Output = PortResult<Vec<super::slack::references::resolve::MessageMapping>>> + Send;
+
+    /// Current read-access facts, never the import-write provenance shortcut.
+    fn disclosure_access(
+        &self,
+        context: &super::slack::references::resolve::ReferenceContext,
+        channels: &[Uuid],
+    ) -> impl Future<Output = PortResult<super::slack::references::resolve::DisclosureAccess>> + Send;
 }
 
 /// Worker composition-root coordinator for a transaction spanning owning-crate helpers.

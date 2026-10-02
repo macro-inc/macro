@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE comms_channel_participants SET role = 'admin' WHERE channel_id = $1 AND user_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6e165ca672ced9ce1765bd4ac02d0aeac6bd45d0d86b0a8aa5b5f6c24d5f722e"
+}
