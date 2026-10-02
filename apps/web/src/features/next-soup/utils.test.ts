@@ -1825,6 +1825,30 @@ describe('getDocumentCommentTarget', () => {
     });
   });
 
+  it('opens the document itself on touch, where the thread covers it', async () => {
+    vi.mocked(isTouchDevice).mockReturnValue(true);
+    const openWithSplit = vi.fn(() => ({ status: 'unavailable' }));
+    const goToLocationFromParams = vi.fn();
+    const getBlockHandle = vi.fn(async () => ({ goToLocationFromParams }));
+    setGlobalSplitManager({
+      activeSplit: vi.fn(),
+      getOrchestrator: vi.fn(() => ({ getBlockHandle })),
+      getSplitByContent: vi.fn(),
+      openWithSplit,
+    } as unknown as SplitManager);
+
+    await openEntityInSplitFromUnifiedList(
+      documentRow([commentNotification('n1', 'comment-1')]),
+      {}
+    );
+
+    expect(openWithSplit).toHaveBeenCalledWith(
+      { type: 'md', id: 'doc-1', params: undefined },
+      expect.objectContaining({ activate: true })
+    );
+    expect(goToLocationFromParams).not.toHaveBeenCalled();
+  });
+
   it('carries the comment through the Inbox preview route', () => {
     const result = homePreviewNavigation(
       documentRow([commentNotification('n1', 'comment-1')]) as never
