@@ -112,6 +112,9 @@ it('keeps an already mounted chip current through late sync and merge', async ()
   ).toBeTruthy();
   expect(screen.getByLabelText('42 lines added')).toBeTruthy();
   expect(screen.getByLabelText('0 lines deleted')).toBeTruthy();
+  expect(
+    screen.getByRole('button', { name: 'Merge pull request #6369' })
+  ).toBeTruthy();
   await handlePullRequestUpdated({
     ...entity,
     metadata: {
@@ -125,6 +128,9 @@ it('keeps an already mounted chip current through late sync and merge', async ()
   await vi.advanceTimersByTimeAsync(1);
   expect(screen.getByLabelText('48 lines added')).toBeTruthy();
   expect(screen.getByLabelText('2 lines deleted')).toBeTruthy();
+  expect(
+    screen.queryByRole('button', { name: 'Merge pull request #6369' })
+  ).toBeNull();
   screen.getByRole('button', { name: '#6369 · Fix reply state' }).click();
   expect(openWithSplit).toHaveBeenCalledWith(
     { type: 'pr', id: entity.id },

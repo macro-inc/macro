@@ -842,6 +842,105 @@
         }
       }
     },
+    "/github_pull_requests/merge": {
+      "post": {
+        "tags": ["github_pull_requests"],
+        "summary": "Merges a GitHub pull request as the authenticated user, with their own\nGitHub grant. GitHub applies the user's permissions and the repository's\nbranch protections; a refusal is returned with GitHub's message.",
+        "operationId": "merge_github_pull_request",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MergeGithubPullRequestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MergeGithubPullRequestResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user cannot push to the repository",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No GitHub link, or the pull request is not visible to the user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The pull request is not mergeable as it stands, or its head moved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/gtm-invite/links": {
       "get": {
         "tags": ["gtm_invite"],
@@ -5417,6 +5516,11 @@
           }
         }
       },
+      "GithubMergeMethod": {
+        "type": "string",
+        "description": "How GitHub combines a pull request's commits into its base branch.",
+        "enum": ["merge", "squash", "rebase"]
+      },
       "GithubPullRequestCheckRun": {
         "type": "object",
         "description": "A check run associated with a GitHub pull request.",
@@ -5844,6 +5948,64 @@
           "macro_api_token": {
             "type": "string",
             "description": "The newly created macro_api_token"
+          }
+        }
+      },
+      "MergeGithubPullRequestRequest": {
+        "type": "object",
+        "description": "A request to merge one pull request on the user's behalf.",
+        "required": ["owner", "repo", "number"],
+        "properties": {
+          "mergeMethod": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GithubMergeMethod",
+                "description": "The merge method to use. Omitted means the first method the\nrepository allows, in the order merge, squash, rebase."
+              }
+            ]
+          },
+          "number": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The GitHub pull request number.",
+            "minimum": 0
+          },
+          "owner": {
+            "type": "string",
+            "description": "The GitHub repository owner or organization."
+          },
+          "repo": {
+            "type": "string",
+            "description": "The GitHub repository name."
+          }
+        }
+      },
+      "MergeGithubPullRequestResponse": {
+        "type": "object",
+        "description": "Response body for a merged pull request.",
+        "required": ["sha", "message"],
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "GitHub's own summary of the merge."
+          },
+          "pullRequest": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EnrichedGithubPullRequest",
+                "description": "The pull request as GitHub reports it after the merge, when the\nrefresh succeeded."
+              }
+            ]
+          },
+          "sha": {
+            "type": "string",
+            "description": "The merge commit's SHA."
           }
         }
       },

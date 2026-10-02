@@ -1,4 +1,5 @@
 import { throwOnErr } from '@core/util/result';
+import { queryClient } from '@queries/client';
 import type { GithubPullRequestWithDetails } from '@queries/storage/github-pull-requests';
 import { storageServiceClient } from '@service-storage/client';
 import type { ForeignEntity } from '@service-storage/generated/schemas';
@@ -24,6 +25,13 @@ export type PrForeignEntityData = {
 
 export function prForeignEntityQueryKey(id: string): string[] {
   return ['github-pr', 'foreign-entity', id];
+}
+
+/** Refetch one PR detail, e.g. after it was merged from its own header. */
+export function invalidatePrForeignEntity(id: string): void {
+  void queryClient.invalidateQueries({
+    queryKey: prForeignEntityQueryKey(id),
+  });
 }
 
 function metadataRecord(metadata: unknown): Record<string, unknown> {

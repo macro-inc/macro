@@ -2,7 +2,7 @@ import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useRouteParams } from '@app/lib/split-router';
 import { PrStatusIcon } from '@block-pr/component/PrStatus';
-import { prDisplayName, prHtmlUrl } from '@block-pr/util/prKey';
+import { prDisplayName } from '@block-pr/util/prKey';
 import {
   PrDetailActions,
   PrDetailContent,
@@ -66,10 +66,6 @@ export function ReviewsPrDetail(props: { foreignEntityId: string }) {
       (data ? prDisplayName(data.prRef) : 'Pull request')
     );
   };
-  const githubUrl = () => {
-    const data = detail.data();
-    return data ? (data.pullRequest.url ?? prHtmlUrl(data.prRef)) : undefined;
-  };
   onMount(() => {
     analytics.pageView('pr');
     analytics.track('open_entity', {
@@ -84,7 +80,7 @@ export function ReviewsPrDetail(props: { foreignEntityId: string }) {
         <ViewShell.TopBar class="touch:flex">
           <SplitPanel.CloseButton class="hidden shrink-0 touch:flex" />
           <ViewBreadcrumbs.Outlet aria-label="Pull request location" />
-          <PrDetailActions url={githubUrl()} />
+          <PrDetailActions detail={detail.data()} />
         </ViewShell.TopBar>
         <ReviewsPrBreadcrumb
           foreignEntityId={props.foreignEntityId}

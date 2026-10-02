@@ -89,6 +89,7 @@ export const authExcluded = [
   'listCursorModels',
   'listGtmInviteLinks',
   'logout',
+  'mergeGithubPullRequest',
   'oauth2Callback',
   'oauthRedirect',
   'passwordLogin',
