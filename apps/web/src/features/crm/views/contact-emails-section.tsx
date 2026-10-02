@@ -21,6 +21,10 @@ export function ContactEmailsSection(props: { contact?: CrmContactResponse }) {
   const [signalView, setSignalView] = createSignal<EmailSignalView>('all');
   const emailsQuery = useContactEmailsQuery(email, view, signalView);
   const emails = () => emailsQuery.data?.entities ?? [];
+  // An enabled query is loading until its first page is readable, including
+  // paused requests; a disabled one shows the empty state instead.
+  const loading = () =>
+    !props.contact || (emailsQuery.isPending && emailsQuery.isEnabled);
 
   const [listRef, setListRef] = createSignal<HTMLElement>();
   const [sentinelRef, setSentinelRef] = createSignal<HTMLDivElement>();
@@ -56,7 +60,7 @@ export function ContactEmailsSection(props: { contact?: CrmContactResponse }) {
         </div>
       </div>
       <Show
-        when={props.contact && !emailsQuery.isLoading}
+        when={!loading()}
         fallback={
           <div class="p-6 text-center text-sm text-ink-muted">Loading…</div>
         }
