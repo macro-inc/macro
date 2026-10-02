@@ -105,8 +105,17 @@ impl<P: MobilePushOps + Send + Sync + 'static> MobilePushAdapter<P> {
     pub async fn send_voip_push(
         &self,
         endpoint_arn: &str,
+        recipient_id: &macro_user_id::user_id::MacroUserIdStr<'_>,
         payload: &VoipPushPayload,
     ) -> Result<String, Report> {
+        if endpoint_arn.contains(":endpoint/GCM/") {
+            let recipient = recipient_id.to_string();
+            let target: SnsTarget<'_, ()> = SnsTarget::AndroidCall(payload, &recipient);
+            return self
+                .push_service
+                .push_notification(endpoint_arn, &target, HashMap::new())
+                .await;
+        }
         let voip_bundle_id = self.voip_bundle_id.as_deref().ok_or_else(|| {
             rootcause::report!("voip_bundle_id not configured on MobilePushAdapter")
         })?;
@@ -223,8 +232,9 @@ impl<P: MobilePushOps + Send + Sync + 'static> crate::domain::ports::VoipPushDel
     async fn send_voip_push(
         &self,
         endpoint_arn: &str,
+        recipient_id: &macro_user_id::user_id::MacroUserIdStr<'_>,
         payload: &VoipPushPayload,
     ) -> Result<String, Report> {
-        MobilePushAdapter::send_voip_push(self, endpoint_arn, payload).await
+        MobilePushAdapter::send_voip_push(self, endpoint_arn, recipient_id, payload).await
     }
 }

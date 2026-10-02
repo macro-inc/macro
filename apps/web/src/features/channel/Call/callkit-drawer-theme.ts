@@ -39,19 +39,29 @@ export function createCallKitDrawerTheme(): Accessor<CallKitDrawerTheme> {
 export async function setNativeCallKitDrawerTheme(
   theme: CallKitDrawerTheme
 ): Promise<void> {
-  if (!ENABLE_CALLKIT || !isTauri() || !isPlatform('ios')) return;
-  await invoke('plugin:call-kit|set_call_drawer_theme', {
-    drawerBackground: theme.drawerBackground,
-    text: theme.text,
-    messageBackground: theme.messageBackground,
-    overlayBackground: theme.overlayBackground,
-    edgeMuted: theme.edgeMuted,
-    edge: theme.edge,
-    inkMuted: theme.inkMuted,
-    failure: theme.failure,
-    failureInk: theme.failureInk,
-    success: theme.success,
-  }).catch((err) =>
+  if (
+    !ENABLE_CALLKIT ||
+    !isTauri() ||
+    (!isPlatform('ios') && !isPlatform('android'))
+  )
+    return;
+  await invoke(
+    'plugin:call-kit|set_call_drawer_theme',
+    isPlatform('android')
+      ? { theme }
+      : {
+          drawerBackground: theme.drawerBackground,
+          text: theme.text,
+          messageBackground: theme.messageBackground,
+          overlayBackground: theme.overlayBackground,
+          edgeMuted: theme.edgeMuted,
+          edge: theme.edge,
+          inkMuted: theme.inkMuted,
+          failure: theme.failure,
+          failureInk: theme.failureInk,
+          success: theme.success,
+        }
+  ).catch((err) =>
     console.error('[callkit] failed to set native drawer theme', err)
   );
 }

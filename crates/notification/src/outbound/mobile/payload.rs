@@ -16,6 +16,8 @@ pub enum SnsTarget<'a, T> {
     Ios(&'a APNSPushNotification<T>),
     /// iOS VoIP target via APNS_VOIP.
     Voip(&'a VoipPushPayload),
+    /// Data-only, short-lived Android incoming-call push and its recipient.
+    AndroidCall(&'a VoipPushPayload, &'a str),
     /// Android target via FCM.
     Android(&'a FCMMessage<T>),
 }
@@ -45,6 +47,14 @@ pub(crate) enum SnsPayload<'a, T> {
         /// Sandbox APNS VoIP payload.
         #[serde(rename = "APNS_VOIP_SANDBOX", serialize_with = "stringified_json")]
         apns_voip_sandbox: &'a VoipPushPayload,
+    },
+    /// Android incoming-call payload.
+    AndroidCall {
+        /// Default message text.
+        default: String,
+        /// FCM v1 envelope, serialized as an SNS platform string.
+        #[serde(rename = "GCM", serialize_with = "stringified_json")]
+        gcm: serde_json::Value,
     },
     /// Android payload with GCM key.
     Android {
@@ -123,7 +133,9 @@ impl<T> SnsTarget<'_, T> {
                     Alert::Dictionary(alert_dictionary) => alert_dictionary.title.clone(),
                 })
                 .unwrap_or(String::new()),
-            SnsTarget::Voip(payload) => format!("Incoming call in {}", payload.channel_name),
+            SnsTarget::Voip(payload) | SnsTarget::AndroidCall(payload, _) => {
+                format!("Incoming call in {}", payload.channel_name)
+            }
             SnsTarget::Android(fcmmessage) => fcmmessage.title.clone().unwrap_or_default(),
         }
     }
@@ -139,6 +151,14 @@ impl<T> SnsTarget<'_, T> {
                 default: self.default_string(),
                 apns_voip: payload,
                 apns_voip_sandbox: payload,
+            },
+            SnsTarget::AndroidCall(payload, recipient) => SnsPayload::AndroidCall {
+                default: self.default_string(),
+                gcm: serde_json::json!({"fcmV1Message": {"message": {
+                    "android": {"priority": "high", "ttl": "60s"},
+                    "data": {"type": "call", "recipientId": recipient,
+                        "payload": serde_json::to_string(payload).expect("call payload serializes")}
+                }}}),
             },
             SnsTarget::Android(fcmmessage) => SnsPayload::Android {
                 default: self.default_string(),

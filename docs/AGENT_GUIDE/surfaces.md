@@ -2035,6 +2035,20 @@ first message. If startup reports a rejected setting or timeout, the first promp
 has not been sent. See [effort capabilities](../AGENT_EFFORT.md) for the harness
 contracts and test coverage.
 
+### Android native channel calls
+
+Android channel calls use a native call activity rather than browser media.
+After joining, the themed drawer shows a large participant tile and a horizontally
+scrolling participant strip; tap a strip tile to make it primary. Speaker toggles
+speaker mode (hold it for headset/Bluetooth routing), Mute and Video control capture, and **Leave** ends the call.
+The local primary video tile exposes Switch camera. Swipe the drawer handle down,
+tap outside the drawer, or use Back to enter PiP on supported devices; **Open call
+controls** in the web call controls restores the native surface. Leaving the channel does
+not end the call. Incoming calls expose Answer/Decline in the **Calls** notification
+channel, including while locked/backgrounded. PiP is a native, device-dependent
+flow. Browser-only tests cannot validate Telecom, FCM wakeup or background media;
+follow the hardware matrix in [Android development](../ANDROID_DEVELOPMENT.md#native-calling).
+
 ### Email reminders
 
 The global Reminders workspace uses one continuous collection with completion

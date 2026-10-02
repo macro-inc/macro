@@ -91,3 +91,37 @@ fn payload_serialization_errors_are_returned_without_panicking() {
     );
     assert!(SnsTarget::Android(&notification).as_json().is_err());
 }
+
+#[test]
+fn android_call_push_is_short_lived_data_only_and_recipient_scoped() {
+    let payload = VoipPushPayload {
+        aps: Default::default(),
+        call_id: Uuid::new_v4().to_string(),
+        channel_id: "channel-1".into(),
+        channel_name: "General".into(),
+        caller_name: "Alice".into(),
+        livekit_server_url: Some("wss://livekit.example".into()),
+        livekit_token: Some("recipient-token".into()),
+        ring_status_url: Some("https://dev.macro.com/call/ring-status/call-1".into()),
+    };
+    let target: SnsTarget<'_, ()> = SnsTarget::AndroidCall(&payload, "macro|bob@example.com");
+    let sns: Value = serde_json::from_str(&target.as_json().unwrap()).unwrap();
+    assert!(sns.get("APNS_VOIP").is_none());
+    let fcm: Value = serde_json::from_str(sns["GCM"].as_str().unwrap()).unwrap();
+    let message = &fcm["fcmV1Message"]["message"];
+    assert_eq!(message["android"]["priority"], "high");
+    assert_eq!(message["android"]["ttl"], "60s");
+    assert!(message.get("notification").is_none());
+    assert_eq!(message["data"]["type"], "call");
+    assert_eq!(message["data"]["recipientId"], "macro|bob@example.com");
+    assert!(
+        message["data"]
+            .as_object()
+            .unwrap()
+            .values()
+            .all(Value::is_string)
+    );
+    let offer: Value = serde_json::from_str(message["data"]["payload"].as_str().unwrap()).unwrap();
+    assert_eq!(offer["livekitToken"], "recipient-token");
+    assert_eq!(offer["callId"], payload.call_id);
+}

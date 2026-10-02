@@ -3,7 +3,7 @@ import { useCallKitSetup } from '@channel/Call/use-callkit';
 import { useAndroidBack } from '@core/mobile/androidBack';
 import { useAndroidWindowInsets } from '@core/mobile/androidWindowInsets';
 import { NativeAppUpdateRequiredDialog } from '@core/mobile/NativeAppUpdateRequiredDialog';
-import { isPlatform, isTauri } from '@core/util/platform';
+import { isTauri } from '@core/util/platform';
 import { PlatformNotificationProvider } from '@notifications';
 import type { RouteSectionProps } from '@solidjs/router';
 import { invoke } from '@tauri-apps/api/core';
@@ -94,7 +94,7 @@ function TauriProvider(props: { children: JSX.Element }) {
     setNativeAppUpdateRequiredDialogOpen(true);
   });
 
-  if (isTauri() && isPlatform('ios')) useCallKitSetup();
+  useCallKitSetup();
 
   const value: TauriContextValue = {
     os: osType(),

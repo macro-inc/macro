@@ -337,14 +337,16 @@ async fn dispatches_to_ios_voip_endpoint() {
 }
 
 #[tokio::test]
-async fn skips_non_voip_endpoints() {
+async fn targets_android_calls_but_skips_regular_ios_endpoints() {
     let (push, calls) = tracked_push();
     let svc = make_service(
         MockRepo::with_endpoints(HashMap::from([(
             user("bob@example.com"),
             vec![
                 DeviceEndpoint::Ios("arn:apns-bob".to_string()),
-                DeviceEndpoint::Android("arn:fcm-bob".to_string()),
+                DeviceEndpoint::Android(
+                    "arn:aws:sns:us-east-1:123:endpoint/GCM/macro/bob".to_string(),
+                ),
             ],
         )])),
         push,
@@ -355,8 +357,16 @@ async fn skips_non_voip_endpoints() {
         .await
         .unwrap();
 
-    assert!(targets.is_empty());
-    assert!(calls.lock().unwrap().is_empty());
+    assert_eq!(targets.len(), 1);
+    assert_eq!(
+        targets[0].endpoint_arns,
+        vec!["arn:aws:sns:us-east-1:123:endpoint/GCM/macro/bob"]
+    );
+    let delivered = svc
+        .send_voip_pushes(vec![(targets[0].clone(), payload())])
+        .await;
+    assert_eq!(delivered, HashSet::from([user("bob@example.com")]));
+    assert_eq!(calls.lock().unwrap().len(), 1);
 }
 
 #[tokio::test]
