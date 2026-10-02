@@ -37,6 +37,7 @@ export function CallChatPanel(props: {
     >
       <div
         ref={viewport}
+        data-channel-scroll
         class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4"
         onScroll={() => {
           if (!props.open) return;

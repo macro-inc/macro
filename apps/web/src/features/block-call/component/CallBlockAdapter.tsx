@@ -49,7 +49,13 @@ export function CallBlockAdapter(props: CallBlockProps) {
     const fromSearch = searchParams[URL_PARAMS.messageId];
     return typeof fromSearch === 'string' ? fromSearch : undefined;
   })();
-  const [messageTarget, setMessageTarget] = createSignal(initialMessageId);
+  const [messageTarget, setMessageTarget] = createSignal<
+    { id: string; requestKey: number } | undefined
+  >(initialMessageId ? { id: initialMessageId, requestKey: 0 } : undefined);
+  const requestMessageTarget = (id: string | undefined) =>
+    setMessageTarget((previous) =>
+      id ? { id, requestKey: (previous?.requestKey ?? 0) + 1 } : undefined
+    );
   let routeOwnsMessageTarget = Boolean(routeSearch.messageId);
   createEffect(
     on(
@@ -63,7 +69,7 @@ export function CallBlockAdapter(props: CallBlockProps) {
           return;
         }
         routeOwnsMessageTarget = true;
-        setMessageTarget(routeSearch.messageId);
+        requestMessageTarget(routeSearch.messageId);
       },
       { defer: true }
     )
@@ -102,7 +108,7 @@ export function CallBlockAdapter(props: CallBlockProps) {
     goToLocationFromParams: async (params: CallBlockProps) => {
       const messageId = params[URL_PARAMS.messageId];
       routeOwnsMessageTarget = false;
-      setMessageTarget(messageId || undefined);
+      requestMessageTarget(messageId);
       const next = params[URL_PARAMS.transcriptId];
       if (!next) return;
       routeOwnsTarget = false;
@@ -130,7 +136,8 @@ export function CallBlockAdapter(props: CallBlockProps) {
                   record={data()}
                   callId={callId}
                   transcriptTarget={transcriptTarget()}
-                  messageTarget={messageTarget()}
+                  messageTarget={messageTarget()?.id}
+                  messageTargetRequestKey={messageTarget()?.requestKey}
                   onClearMessageTarget={clearMessageTarget}
                   showOverlayHeaderGap
                 />

@@ -66,9 +66,13 @@ vi.mock('../component/sidepanel/CallSidePanelSections', () => ({
 vi.mock('../component/CallRecording/CallRecordingBody', () => ({
   CallRecordingBody: (props: {
     messageTarget?: string;
+    messageTargetRequestKey?: string | number;
     onClearMessageTarget?: () => void;
   }) => (
-    <button onClick={props.onClearMessageTarget}>
+    <button
+      data-request-key={props.messageTargetRequestKey}
+      onClick={props.onClearMessageTarget}
+    >
       Target: {props.messageTarget || 'none'}
     </button>
   ),
@@ -102,6 +106,12 @@ it('clears the route message target through the shared recording content', () =>
     );
   });
 
+  const target = screen.getByRole('button', { name: 'Target: reply-id' });
+  expect(target.getAttribute('data-request-key')).toBe('seek-token');
+  setSearch('seek', 'repeat-seek');
+  expect(screen.getByRole('button', { name: 'Target: reply-id' })).toBe(target);
+  expect(target.getAttribute('data-request-key')).toBe('repeat-seek');
+
   fireEvent.click(screen.getByRole('button', { name: 'Target: reply-id' }));
 
   expect(mocks.setSearch).toHaveBeenCalledWith(
@@ -110,5 +120,5 @@ it('clears the route message target through the shared recording content', () =>
   );
   expect(screen.getByRole('button', { name: 'Target: none' })).toBeTruthy();
   expect(search.transcriptId).toBe('transcript-id');
-  expect(search.seek).toBe('seek-token');
+  expect(search.seek).toBe('repeat-seek');
 });

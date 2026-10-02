@@ -7,7 +7,10 @@ import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, expect, it, vi } from 'vitest';
 import { ReplyTarget } from './ReplyTarget';
 
-const mocks = vi.hoisted(() => ({ open: vi.fn() }));
+const mocks = vi.hoisted(() => ({ open: vi.fn(), openWithSplit: vi.fn() }));
+vi.mock('@components/app/split-layout/layout', () => ({
+  useSplitLayout: () => ({ openWithSplit: mocks.openWithSplit }),
+}));
 vi.mock('@core/block', () => ({
   useMaybeBlockId: () => undefined,
   useMaybeBlockName: () => undefined,
@@ -58,12 +61,6 @@ it.each<{
   params: Record<string, string>;
 }>([
   {
-    parentType: 'call',
-    type: 'call',
-    id: 'parent-id',
-    params: { call_message_id: 'message-id' },
-  },
-  {
     parentType: 'crm_company',
     type: 'crm_company',
     id: 'parent-id',
@@ -113,6 +110,43 @@ it.each<{
   }
 );
 
+it('reissues call quote navigation with a fresh route request each time', () => {
+  render(() => (
+    <ReplyTarget
+      parent={{ type: 'call', id: 'call-id' }}
+      targetMessageId="message-id"
+      targetThreadId="call-id"
+      senderId="user-id"
+      displayText="Quoted text"
+      key="node-key"
+      theme={{}}
+    />
+  ));
+  const button = screen.getByRole('button', { name: 'Quoted message' });
+  fireEvent.click(button);
+  fireEvent.click(button);
+
+  expect(mocks.openWithSplit).toHaveBeenCalledTimes(2);
+  const first = mocks.openWithSplit.mock.calls[0];
+  const second = mocks.openWithSplit.mock.calls[1];
+  expect(first).toEqual([
+    { type: 'call', id: 'call-id' },
+    {
+      preferNewSplit: true,
+      search: {
+        'call-detail': {
+          messageId: ['message-id'],
+          seek: [expect.any(String)],
+        },
+      },
+    },
+  ]);
+  expect(second[1].search['call-detail'].seek).not.toEqual(
+    first[1].search['call-detail'].seek
+  );
+  expect(mocks.open).not.toHaveBeenCalled();
+});
+
 it('lets the active chat handle a quote locally, preserving Shift for opening a split', () => {
   const navigate = vi.fn(() => true);
   render(() => (
@@ -134,11 +168,10 @@ it('lets the active chat handle a quote locally, preserving Shift for opening a 
     expect.objectContaining({ targetMessageId: 'message-id' })
   );
   expect(mocks.open).not.toHaveBeenCalled();
+  expect(mocks.openWithSplit).not.toHaveBeenCalled();
   fireEvent.click(button, { shiftKey: true });
-  expect(mocks.open).toHaveBeenCalledWith(
-    'call',
-    'call-id',
-    { call_message_id: 'message-id' },
-    true
+  expect(mocks.openWithSplit).toHaveBeenCalledWith(
+    { type: 'call', id: 'call-id' },
+    expect.objectContaining({ preferNewSplit: true })
   );
 });

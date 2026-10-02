@@ -58,7 +58,10 @@ function CallChatContent(props: {
   const userId = useUserId();
   const [sendFailed, setSendFailed] = createSignal(false);
   const [input, setInput] = createSignal<InputHandle>();
-  const [targetId, setTargetId] = createSignal<string>();
+  const [messageTarget, setMessageTarget] = createSignal<{
+    id: string;
+    requestKey: number;
+  }>();
   const canSend = createMemo(() => !!chat.thread() || chat.empty());
 
   createEffect(
@@ -95,7 +98,10 @@ function CallChatContent(props: {
       value={(target) => {
         if (target.parent.type !== 'call' || target.parent.id !== props.callId)
           return false;
-        setTargetId(target.targetMessageId);
+        setMessageTarget((previous) => ({
+          id: target.targetMessageId,
+          requestKey: (previous?.requestKey ?? 0) + 1,
+        }));
         return true;
       }}
     >
@@ -155,8 +161,9 @@ function CallChatContent(props: {
                 hideReplyInput
                 monorail
                 hideRail
-                targetId={targetId()}
-                onClearTarget={() => setTargetId(undefined)}
+                targetId={messageTarget()?.id}
+                targetRequestKey={messageTarget()?.requestKey}
+                onClearTarget={() => setMessageTarget(undefined)}
                 onReply={({ message, selectedText, renderedText }) => {
                   const handle = input();
                   if (!handle) return;

@@ -37,6 +37,8 @@ export type MessageEditState = {
 
 /** Reactive contract for positioning and releasing a channel navigation target. */
 export type ThreadTargetNavigation = {
+  /** A new request can revisit the same message without remounting the thread. */
+  requestKey?: Accessor<string | number | undefined>;
   targetThreadId: Accessor<string | undefined>;
   targetMessageId: Accessor<string | undefined>;
   targetReplyId: Accessor<string | undefined>;

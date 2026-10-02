@@ -48,11 +48,17 @@ vi.mock('./CallRecording/CallRecordingBody', () => ({
   CallRecordingBody: (props: {
     transcriptTarget?: { transcriptId: string; gen: number };
     messageTarget?: string;
+    messageTargetRequestKey?: string | number;
     onClearMessageTarget?: () => void;
   }) => (
     <>
       <output>{JSON.stringify(props.transcriptTarget)}</output>
-      <output data-message-target>{props.messageTarget}</output>
+      <output
+        data-message-target
+        data-request-key={props.messageTargetRequestKey}
+      >
+        {props.messageTarget}
+      </output>
       <button onClick={props.onClearMessageTarget}>Clear message target</button>
     </>
   ),
@@ -146,6 +152,31 @@ it('preserves imperative message targets during route cleanup and clears on unta
   expect(target()).toBe('another-message');
   setSearch({ messageId: '', seek: '' });
   expect(target()).toBe('');
+});
+
+it('reissues the same message target for repeated route and imperative navigation', () => {
+  const [search, setSearch] = createStore({
+    transcriptId: '',
+    messageId: 'route-message',
+    seek: 'first',
+  });
+  state.search = search;
+  const view = render(() => <CallBlockAdapter />);
+  const target = view.container.querySelector('[data-message-target]')!;
+  const initialRequest = target.getAttribute('data-request-key');
+
+  setSearch('seek', 'repeat');
+  expect(target.textContent).toBe('route-message');
+  expect(target.getAttribute('data-request-key')).not.toBe(initialRequest);
+  const repeatedRequest = target.getAttribute('data-request-key');
+  state.navigate({ call_message_id: 'route-message' });
+  expect(target.getAttribute('data-request-key')).not.toBe(repeatedRequest);
+  const imperativeRequest = target.getAttribute('data-request-key');
+  setSearch({ messageId: '', seek: '' });
+  expect(target.getAttribute('data-request-key')).toBe(imperativeRequest);
+  state.navigate({ call_message_id: 'route-message' });
+  expect(target.getAttribute('data-request-key')).not.toBe(imperativeRequest);
+  expect(view.container.querySelector('[data-message-target]')).toBe(target);
 });
 
 it('clears the route message target when its highlight is released', () => {

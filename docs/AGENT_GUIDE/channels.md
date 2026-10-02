@@ -786,6 +786,10 @@ Drive recording pages. A transcript search result clears any earlier chat
 target in that pane. In an already-open Home call preview, follow a second
 message link and then open the call without a message target: the highlight
 must move to the second message and then clear without remounting the preview.
+After following a message link, scroll away and follow that same link again:
+the view must return to the message. Check repeated links in Home, Drive, and
+standalone recordings, and repeated quote clicks in live chat; navigation must
+preserve the mounted thread and any unsent draft.
 A new call in the same channel starts a separate thread.
 
 An initial missing thread means the call has no messages yet. If a later chat

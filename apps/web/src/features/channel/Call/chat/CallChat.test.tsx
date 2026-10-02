@@ -58,6 +58,7 @@ vi.mock('@core/messages/MessageThread', () => ({
     data: MessageListItem;
     onReply?: MessageActionHandler;
     targetId?: string;
+    targetRequestKey?: string | number;
   }) => {
     const navigate = useContext(MessageReferenceNavigation);
     return (
@@ -78,7 +79,9 @@ vi.mock('@core/messages/MessageThread', () => ({
         >
           Quoted message
         </button>
-        <span data-testid="target">{props.targetId}</span>
+        <span data-testid="target" data-request-key={props.targetRequestKey}>
+          {props.targetId}
+        </span>
       </>
     );
   },
@@ -125,6 +128,14 @@ it.each(['user-id', 'another-user'])(
     expect(screen.getAllByTestId('call-composer')).toHaveLength(1);
     fireEvent.click(screen.getByRole('button', { name: 'Quoted message' }));
     expect(screen.getByTestId('target').textContent).toBe('call-id');
+    const target = screen.getByTestId('target');
+    const composer = screen.getByTestId('call-composer');
+    const firstRequest = target.getAttribute('data-request-key');
+    fireEvent.click(screen.getByRole('button', { name: 'Quoted message' }));
+    expect(target.getAttribute('data-request-key')).not.toBe(firstRequest);
+    expect(screen.getByTestId('target')).toBe(target);
+    expect(screen.getByTestId('call-composer')).toBe(composer);
+    expect(mocks.restore).toHaveBeenCalledOnce();
     expect(mocks.restore).toHaveBeenCalledWith(
       {
         ...draft,

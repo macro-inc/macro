@@ -211,7 +211,11 @@ export function ChannelThread(props: ThreadProps) {
 
   createEffect(
     on(
-      [() => props.targetNavigation?.targetMessageId(), threadRowElement],
+      [
+        () => props.targetNavigation?.targetMessageId(),
+        threadRowElement,
+        () => props.targetNavigation?.requestKey?.(),
+      ],
       ([targetMessageId]) => {
         if (!targetMessageId || targetMessageId !== props.data().id) {
           targetMessageScroller.cancel();
@@ -256,8 +260,9 @@ export function ChannelThread(props: ThreadProps) {
         replyListHandle,
         canScrollToTargetReply,
         props.isExpanded,
+        () => props.targetNavigation?.requestKey?.(),
       ],
-      ([targetReplyId, handle, canScroll, isExpanded]) => {
+      ([targetReplyId, handle, canScroll, isExpanded, requestKey]) => {
         // Untracked: channel-message reconciles must not re-fire scroll.
         const replies =
           targetReplyId && canScroll && handle
@@ -266,6 +271,7 @@ export function ChannelThread(props: ThreadProps) {
               : untrack(displayReplies)
             : [];
         targetReplyNavigation.update({
+          requestKey,
           targetReplyId,
           handle,
           canScroll,

@@ -113,6 +113,7 @@ function LoadedCallContent(props: {
   record: CallRecord;
   transcriptTarget?: CallTranscriptTarget;
   messageId?: string;
+  seek?: string;
 }) {
   const [, setSearch] = createSearchParams(callDetailSearch);
   onMount(() => {
@@ -130,6 +131,7 @@ function LoadedCallContent(props: {
           callId={props.callId}
           transcriptTarget={props.transcriptTarget}
           messageTarget={props.messageId}
+          messageTargetRequestKey={props.seek}
           onClearMessageTarget={() =>
             setSearch({ messageId: undefined }, { history: 'replace' })
           }
@@ -201,6 +203,7 @@ export function CallDetailContent(props: {
               record={data().record}
               transcriptTarget={transcriptTarget()}
               messageId={props.messageId}
+              seek={props.seek}
             />
           </Suspense>
         )}

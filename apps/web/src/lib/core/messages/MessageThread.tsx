@@ -44,6 +44,8 @@ type ThreadOptions = {
   canModerate?: boolean;
   buildLink?: (message: MessageData) => string;
   targetId?: string | null;
+  /** Change this key to navigate to the same target again. */
+  targetRequestKey?: string | number;
   /** Releases the highlight on `targetId`; called when the linked message is clicked. */
   onClearTarget?: () => void;
   expanded?: boolean;
@@ -134,6 +136,7 @@ export function MessageThread(
           messageListScopeId={scopeId}
           selectedMessageId={() => (props.targetId ? props.data.id : undefined)}
           targetNavigation={{
+            requestKey: () => props.targetRequestKey,
             targetThreadId: () => (props.targetId ? props.data.id : undefined),
             targetMessageId: () => props.targetId ?? undefined,
             targetReplyId: () =>

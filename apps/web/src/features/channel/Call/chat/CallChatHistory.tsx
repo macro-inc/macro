@@ -7,6 +7,7 @@ import { useCallChat } from './queries/use-call-chat';
 type CallChatHistoryProps = {
   callId: string;
   targetId?: string;
+  targetRequestKey?: string | number;
   onClearTarget?: () => void;
 };
 
@@ -61,6 +62,7 @@ function CallChatHistoryContent(props: CallChatHistoryProps) {
               monorail
               hideRail
               targetId={props.targetId}
+              targetRequestKey={props.targetRequestKey}
               onClearTarget={props.onClearTarget}
               buildLink={(message) =>
                 buildCallMessageLink(props.callId, message.id)

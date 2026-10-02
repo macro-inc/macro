@@ -36,6 +36,7 @@ export function CallRecordingBody(props: {
   transcriptTarget?: CallTranscriptTarget;
   showOverlayHeaderGap?: boolean;
   messageTarget?: string;
+  messageTargetRequestKey?: string | number;
   onClearMessageTarget?: () => void;
 }) {
   const record = () => props.record;
@@ -164,6 +165,7 @@ export function CallRecordingBody(props: {
         </div>
       </SidePanel.Section>
       <div
+        data-channel-scroll
         class="h-full min-h-0 overflow-y-auto scrollbar-hidden"
         ref={setScrollRef}
       >
@@ -245,6 +247,7 @@ export function CallRecordingBody(props: {
             <CallChatHistory
               callId={props.callId}
               targetId={props.messageTarget}
+              targetRequestKey={props.messageTargetRequestKey}
               onClearTarget={props.onClearMessageTarget}
             />
           </div>
