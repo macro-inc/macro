@@ -362,11 +362,10 @@ describe('shared ops cache effects', () => {
           {
             kind: 'table',
             table: 'tasks',
-            tableVersion: 6,
             change: { kind: 'deleted' },
           },
         ],
-        changes: [],
+        changes: [{ table: 'tasks', version: 6, change: 1 }],
       })
     );
     await applyDatabaseOps('db', [

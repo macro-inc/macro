@@ -262,7 +262,7 @@ describe('deleting a table', () => {
         results: [
           { kind: 'table', table: 'budget', change: { kind: 'deleted' } },
         ],
-        changes: [],
+        changes: [{ table: 'budget', version: 2, change: 1 }],
       })
     );
     renderTabs();
