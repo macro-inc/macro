@@ -119,11 +119,12 @@ describe('ModelSelector: availability', () => {
     const { container } = render(() => (
       <ModelSelector models={ALL_PAID} onSelect={() => {}} />
     ));
-    for (const retired of ['Fable', 'Haiku', 'Sonnet 5 ', 'Opus 5 ']) {
+    for (const retired of ['Fable', 'Sonnet 5 ', 'Opus 5 ']) {
       expect(container.textContent).not.toContain(retired);
     }
     expect(container.textContent).toContain('Sonnet 5.5');
     expect(container.textContent).toContain('Opus 5.5');
+    expect(container.textContent).toContain('Haiku 4.5');
   });
 
   it.each([
@@ -154,7 +155,7 @@ describe('ModelSelector: availability', () => {
       <ModelSelector models={options} onSelect={() => {}} />
     ));
 
-    const available = itemFor(container, Model.sonnet55);
+    const available = itemFor(container, Model.haiku45);
     expect(available.className).not.toContain('opacity-50');
     expect(available.querySelector('[data-testid="lock-icon"]')).toBeNull();
 
@@ -241,7 +242,7 @@ describe('ModelSelector: what is shown is what is sent', () => {
       available: freeAllowed.includes(id),
     }));
     function FreeHarness() {
-      const [model, setModel] = createSignal<TModel>(Model.sonnet55);
+      const [model, setModel] = createSignal<TModel>(Model.haiku45);
       return (
         <>
           <span data-testid="would-send">{model()}</span>
@@ -258,7 +259,7 @@ describe('ModelSelector: what is shown is what is sent', () => {
 
     fireEvent.click(itemFor(container, Model.opus55)); // locked
     // The would-send value is unchanged; only the paywall fired.
-    expect(getByTestId('would-send').textContent).toBe(Model.sonnet55);
+    expect(getByTestId('would-send').textContent).toBe(Model.haiku45);
     expect(onLocked).toHaveBeenCalledWith(Model.opus55);
   });
 });

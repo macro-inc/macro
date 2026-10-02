@@ -15,8 +15,9 @@ fn free_user_only_has_the_free_model() {
     let svc = ModelAccessServiceImpl;
     assert_eq!(svc.best_model(false), FREE_MODEL);
     assert!(svc.has_access(false, FREE_MODEL));
+    assert!(svc.has_access(false, HAIKU_4_5));
     assert!(!svc.has_access(false, OPUS_5_5));
-    assert!(!svc.has_access(false, HAIKU_4_5));
+    assert!(!svc.has_access(false, SONNET_5_5));
     assert!(!svc.has_access(false, GPT_5_5));
 }
 
@@ -26,6 +27,7 @@ fn professional_user_has_everything() {
     assert_eq!(svc.best_model(true), SONNET_5_5);
     assert!(svc.has_access(true, SONNET_5_5));
     assert!(svc.has_access(true, OPUS_5_5));
+    assert!(svc.has_access(true, HAIKU_4_5));
     assert!(svc.has_access(true, GPT_5_5));
     assert!(svc.has_access(true, GPT_5_MINI));
 }
@@ -37,8 +39,8 @@ fn only_the_current_anthropic_generation_is_offered() {
         .copied()
         .filter(|model| model.starts_with("anthropic/"))
         .collect();
-    assert_eq!(anthropic, [SONNET_5_5, OPUS_5_5]);
-    for retired in [SONNET_5, OPUS_5, FABLE_5_1, HAIKU_4_5] {
+    assert_eq!(anthropic, [SONNET_5_5, OPUS_5_5, HAIKU_4_5]);
+    for retired in [SONNET_5, OPUS_5, FABLE_5_1] {
         assert!(!CHAT_MODELS.contains(&retired), "{retired} is retired");
     }
     assert!(CHAT_MODELS.contains(&PAID_DEFAULT_MODEL));

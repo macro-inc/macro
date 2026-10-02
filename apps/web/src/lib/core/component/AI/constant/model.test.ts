@@ -30,9 +30,10 @@ describe('modelsForPlan / defaultModelForPlan', () => {
   it('gives free users only the free model, defaulted to it', () => {
     const free = modelsForPlan(false);
     expect(free).toEqual([FREE_DEFAULT_MODEL]);
-    expect(FREE_DEFAULT_MODEL).toBe(Model.sonnet55);
+    expect(FREE_DEFAULT_MODEL).toBe(Model.haiku45);
     expect(defaultModelForPlan(false)).toBe(FREE_DEFAULT_MODEL);
     // The premium models are *not* in a free user's selectable set.
+    expect(free).not.toContain(Model.sonnet55);
     expect(free).not.toContain(Model.opus55);
     expect(free).not.toContain(Model.gpt56);
     expect(free).not.toContain(Model.gpt6Astra);
@@ -42,7 +43,7 @@ describe('modelsForPlan / defaultModelForPlan', () => {
     const anthropic = Object.values(Model).filter(
       (id) => MODEL_PROVIDER[id] === 'anthropic'
     );
-    expect(anthropic).toEqual([Model.sonnet55, Model.opus55]);
+    expect(anthropic).toEqual([Model.sonnet55, Model.opus55, Model.haiku45]);
     expect(MODEL_PRETTYNAME[Model.sonnet55]).toBe('Sonnet 5.5');
     expect(MODEL_PRETTYNAME[Model.opus55]).toBe('Opus 5.5');
   });
@@ -64,6 +65,7 @@ describe('modelUsageHint', () => {
     expect(modelUsageHint(Model.gpt56)).toBe('3× usage');
     expect(modelUsageHint(Model.opus55)).toBe('2.5× usage');
     expect(modelUsageHint(Model.sonnet55)).toBeUndefined();
+    expect(modelUsageHint(Model.haiku45)).toBeUndefined();
     expect(modelUsageHint(Model.gpt56Mini)).toBeUndefined();
   });
 });
@@ -79,7 +81,6 @@ describe('parseModel', () => {
     expect(parseModel('anthropic/claude-sonnet-5')).toBeUndefined(); // retired id
     expect(parseModel('anthropic/claude-opus-5')).toBeUndefined(); // retired id
     expect(parseModel('anthropic/claude-fable-5-1')).toBeUndefined(); // retired id
-    expect(parseModel('anthropic/claude-haiku-4-5')).toBeUndefined(); // retired id
     expect(parseModel('gpt-5.6')).toBeUndefined(); // unprefixed / legacy
     expect(parseModel('not-a-model')).toBeUndefined();
     expect(parseModel('')).toBeUndefined();

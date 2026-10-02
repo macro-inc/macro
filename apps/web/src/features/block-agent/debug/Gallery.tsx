@@ -120,6 +120,7 @@ const FIXTURE_MODELS: ModelOption[] = [
 const FIXTURE_INMEM_MODELS: ModelOption[] = [
   'anthropic/claude-sonnet-5-5',
   'anthropic/claude-opus-5-5',
+  'anthropic/claude-haiku-4-5',
   'openai/gpt-5.5',
   'openai/gpt-5-mini',
 ].map((id) => ({ id, name: id, description: null, group: null }));
