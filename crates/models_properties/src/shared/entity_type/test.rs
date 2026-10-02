@@ -45,3 +45,16 @@ fn database_row_spells_as_the_database_row_enum_label() {
         EntityType::DatabaseRow
     );
 }
+
+#[test]
+fn crm_contact_round_trips_through_storage_and_display_spellings() {
+    assert_eq!(
+        serde_json::to_string(&EntityType::Contact).unwrap(),
+        "\"CONTACT\""
+    );
+    assert_eq!(
+        EntityType::from_str("CONTACT").unwrap(),
+        EntityType::Contact
+    );
+    assert_eq!(EntityType::Contact.to_string(), "contact");
+}

@@ -115,6 +115,36 @@ fn compiles_complete_supported_forest_after_eligibility() {
 }
 
 #[test]
+fn crm_document_literals_always_fall_back_to_the_server() {
+    use item_filters::ast::{
+        email::Email,
+        properties::{EntityRefId, PropertiesLiteral, PropertyMatchValue},
+    };
+    for literal in [
+        DocumentLiteral::Property(PropertiesLiteral {
+            property_definition_id: uuid::Uuid::from_u128(0xc),
+            entity_type: None,
+            value: PropertyMatchValue::EntityRef(EntityRefId::new("company".to_string()).unwrap()),
+        }),
+        DocumentLiteral::EmailAttachmentParticipant(Email::Domain("acme.com".to_string())),
+    ] {
+        let mut ast = excluded_deferred_partitions();
+        ast.document_filter = Some(Arc::new(Expr::val(literal)));
+        for outcome in [
+            compile_soup_flat_v1(&ast, request()).unwrap(),
+            compile_soup_flat_v2(&ast, request()).unwrap(),
+            compile_soup_flat_v3(&ast, request()).unwrap(),
+            compile_soup_flat_v4(&ast, request()).unwrap(),
+        ] {
+            assert_eq!(
+                outcome,
+                LocalCompileOutcome::Unsupported(UnsupportedReason::Literal("document"))
+            );
+        }
+    }
+}
+
+#[test]
 fn production_documents_membership_literals_require_and_compile_in_v2() {
     for literal in [
         DocumentLiteral::IsEmailAttachment(false),

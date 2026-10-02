@@ -63,6 +63,9 @@ function toPropertyTargetEntityType(
     // Not a property target yet; surface a real error instead of a bad request.
     throw new Error('calendar events do not support properties');
   }
+  if (entityType === 'CONTACT') {
+    throw new Error('crm contacts do not support properties');
+  }
   return entityType;
 }
 

@@ -488,31 +488,35 @@ export type GraphqlDocumentExpr =
 /** GraphQL input representing the document literal. */
 export type GraphqlDocumentLiteral =
   {   /** The created at option. */
-  createdAt: GraphqlDateLiteral; fileAssoc?: never; fileType?: never; id?: never; importance?: never; includeCbmAtmNc?: never; isEmailAttachment?: never; notificationState?: never; owner?: never; projectId?: never; subType?: never; updatedAt?: never; }
-  |  { createdAt?: never;   /** The file assoc option. */
-  fileAssoc: string; fileType?: never; id?: never; importance?: never; includeCbmAtmNc?: never; isEmailAttachment?: never; notificationState?: never; owner?: never; projectId?: never; subType?: never; updatedAt?: never; }
-  |  { createdAt?: never; fileAssoc?: never;   /** The file type option. */
-  fileType: string; id?: never; importance?: never; includeCbmAtmNc?: never; isEmailAttachment?: never; notificationState?: never; owner?: never; projectId?: never; subType?: never; updatedAt?: never; }
-  |  { createdAt?: never; fileAssoc?: never; fileType?: never;   /** The id option. */
-  id: string | number; importance?: never; includeCbmAtmNc?: never; isEmailAttachment?: never; notificationState?: never; owner?: never; projectId?: never; subType?: never; updatedAt?: never; }
-  |  { createdAt?: never; fileAssoc?: never; fileType?: never; id?: never;   /** The importance option. */
-  importance: boolean; includeCbmAtmNc?: never; isEmailAttachment?: never; notificationState?: never; owner?: never; projectId?: never; subType?: never; updatedAt?: never; }
-  |  { createdAt?: never; fileAssoc?: never; fileType?: never; id?: never; importance?: never;   /** The include cbm atm nc option. */
-  includeCbmAtmNc: boolean; isEmailAttachment?: never; notificationState?: never; owner?: never; projectId?: never; subType?: never; updatedAt?: never; }
-  |  { createdAt?: never; fileAssoc?: never; fileType?: never; id?: never; importance?: never; includeCbmAtmNc?: never;   /** The is email attachment option. */
-  isEmailAttachment: boolean; notificationState?: never; owner?: never; projectId?: never; subType?: never; updatedAt?: never; }
-  |  { createdAt?: never; fileAssoc?: never; fileType?: never; id?: never; importance?: never; includeCbmAtmNc?: never; isEmailAttachment?: never;   /** Exact notification state for the requester. */
-  notificationState: NotificationState; owner?: never; projectId?: never; subType?: never; updatedAt?: never; }
-  |  { createdAt?: never; fileAssoc?: never; fileType?: never; id?: never; importance?: never; includeCbmAtmNc?: never; isEmailAttachment?: never; notificationState?: never;   /**
+  createdAt: GraphqlDateLiteral; emailAttachmentParticipant?: never; fileAssoc?: never; fileType?: never; id?: never; importance?: never; includeCbmAtmNc?: never; isEmailAttachment?: never; notificationState?: never; owner?: never; projectId?: never; property?: never; subType?: never; updatedAt?: never; }
+  |  { createdAt?: never;   /** Uploaded from an email attachment sent by, or to, a matching address. */
+  emailAttachmentParticipant: GraphqlEmailValue; fileAssoc?: never; fileType?: never; id?: never; importance?: never; includeCbmAtmNc?: never; isEmailAttachment?: never; notificationState?: never; owner?: never; projectId?: never; property?: never; subType?: never; updatedAt?: never; }
+  |  { createdAt?: never; emailAttachmentParticipant?: never;   /** The file assoc option. */
+  fileAssoc: string; fileType?: never; id?: never; importance?: never; includeCbmAtmNc?: never; isEmailAttachment?: never; notificationState?: never; owner?: never; projectId?: never; property?: never; subType?: never; updatedAt?: never; }
+  |  { createdAt?: never; emailAttachmentParticipant?: never; fileAssoc?: never;   /** The file type option. */
+  fileType: string; id?: never; importance?: never; includeCbmAtmNc?: never; isEmailAttachment?: never; notificationState?: never; owner?: never; projectId?: never; property?: never; subType?: never; updatedAt?: never; }
+  |  { createdAt?: never; emailAttachmentParticipant?: never; fileAssoc?: never; fileType?: never;   /** The id option. */
+  id: string | number; importance?: never; includeCbmAtmNc?: never; isEmailAttachment?: never; notificationState?: never; owner?: never; projectId?: never; property?: never; subType?: never; updatedAt?: never; }
+  |  { createdAt?: never; emailAttachmentParticipant?: never; fileAssoc?: never; fileType?: never; id?: never;   /** The importance option. */
+  importance: boolean; includeCbmAtmNc?: never; isEmailAttachment?: never; notificationState?: never; owner?: never; projectId?: never; property?: never; subType?: never; updatedAt?: never; }
+  |  { createdAt?: never; emailAttachmentParticipant?: never; fileAssoc?: never; fileType?: never; id?: never; importance?: never;   /** The include cbm atm nc option. */
+  includeCbmAtmNc: boolean; isEmailAttachment?: never; notificationState?: never; owner?: never; projectId?: never; property?: never; subType?: never; updatedAt?: never; }
+  |  { createdAt?: never; emailAttachmentParticipant?: never; fileAssoc?: never; fileType?: never; id?: never; importance?: never; includeCbmAtmNc?: never;   /** The is email attachment option. */
+  isEmailAttachment: boolean; notificationState?: never; owner?: never; projectId?: never; property?: never; subType?: never; updatedAt?: never; }
+  |  { createdAt?: never; emailAttachmentParticipant?: never; fileAssoc?: never; fileType?: never; id?: never; importance?: never; includeCbmAtmNc?: never; isEmailAttachment?: never;   /** Exact notification state for the requester. */
+  notificationState: NotificationState; owner?: never; projectId?: never; property?: never; subType?: never; updatedAt?: never; }
+  |  { createdAt?: never; emailAttachmentParticipant?: never; fileAssoc?: never; fileType?: never; id?: never; importance?: never; includeCbmAtmNc?: never; isEmailAttachment?: never; notificationState?: never;   /**
    * The owner principal option — a user (`macro|<email>`), a bot
    * (`bot|<uuid>`), or a team (a bare hyphenated uuid).
    */
-  owner: string; projectId?: never; subType?: never; updatedAt?: never; }
-  |  { createdAt?: never; fileAssoc?: never; fileType?: never; id?: never; importance?: never; includeCbmAtmNc?: never; isEmailAttachment?: never; notificationState?: never; owner?: never;   /** The project id option. */
-  projectId: string | number; subType?: never; updatedAt?: never; }
-  |  { createdAt?: never; fileAssoc?: never; fileType?: never; id?: never; importance?: never; includeCbmAtmNc?: never; isEmailAttachment?: never; notificationState?: never; owner?: never; projectId?: never;   /** The sub type option. */
+  owner: string; projectId?: never; property?: never; subType?: never; updatedAt?: never; }
+  |  { createdAt?: never; emailAttachmentParticipant?: never; fileAssoc?: never; fileType?: never; id?: never; importance?: never; includeCbmAtmNc?: never; isEmailAttachment?: never; notificationState?: never; owner?: never;   /** The project id option. */
+  projectId: string | number; property?: never; subType?: never; updatedAt?: never; }
+  |  { createdAt?: never; emailAttachmentParticipant?: never; fileAssoc?: never; fileType?: never; id?: never; importance?: never; includeCbmAtmNc?: never; isEmailAttachment?: never; notificationState?: never; owner?: never; projectId?: never;   /** An entity-property condition on the document or task. */
+  property: GraphqlFilterPropertiesLiteral; subType?: never; updatedAt?: never; }
+  |  { createdAt?: never; emailAttachmentParticipant?: never; fileAssoc?: never; fileType?: never; id?: never; importance?: never; includeCbmAtmNc?: never; isEmailAttachment?: never; notificationState?: never; owner?: never; projectId?: never; property?: never;   /** The sub type option. */
   subType: GraphqlDocumentSubType; updatedAt?: never; }
-  |  { createdAt?: never; fileAssoc?: never; fileType?: never; id?: never; importance?: never; includeCbmAtmNc?: never; isEmailAttachment?: never; notificationState?: never; owner?: never; projectId?: never; subType?: never;   /** The updated at option. */
+  |  { createdAt?: never; emailAttachmentParticipant?: never; fileAssoc?: never; fileType?: never; id?: never; importance?: never; includeCbmAtmNc?: never; isEmailAttachment?: never; notificationState?: never; owner?: never; projectId?: never; property?: never; subType?: never;   /** The updated at option. */
   updatedAt: GraphqlDateLiteral; };
 
 /** GraphQL input representing the document sub type. */
@@ -1018,6 +1022,8 @@ export type GraphqlPropertyEntityType =
   | 'CHAT'
   /** Company entity. */
   | 'COMPANY'
+  /** CRM contact entity. */
+  | 'CONTACT'
   /** Database row entity. */
   | 'DATABASE_ROW'
   /** Document entity. */

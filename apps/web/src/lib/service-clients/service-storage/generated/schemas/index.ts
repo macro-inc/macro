@@ -1341,6 +1341,8 @@ export * from './savedQuery';
 export * from './savedQueryCreatedBy';
 export * from './savedQueryDatabaseId';
 export * from './saveQueryRequest';
+export * from './searchContactsParams';
+export * from './searchContactsResponse';
 export * from './sessionDeletedMetadata';
 export * from './sessionIdentity';
 export * from './sessionIdentityOrigin';

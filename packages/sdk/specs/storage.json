@@ -5677,6 +5677,67 @@
         }
       }
     },
+    "/crm/contacts": {
+      "get": {
+        "tags": ["crm::inbound::axum_router::search_contacts"],
+        "summary": "Search the caller's team's CRM contacts by email or name. Any team member\nmay search visible contacts; admin/owner callers also match hidden\ncontacts and contacts under hidden companies.",
+        "operationId": "search_contacts",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "description": "Text the contact's email or name must contain (case-insensitive).\nEmpty lists the most recently interacted contacts.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum contacts to return (1-500, default 20).",
+            "required": false,
+            "schema": {
+              "type": ["integer", "null"],
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchContactsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/crm/contacts/by-email": {
       "get": {
         "tags": ["crm::inbound::axum_router::get_contact_by_email"],
@@ -23912,6 +23973,7 @@
           "CHAT",
           "COMPANY",
           "DATABASE_ROW",
+          "CONTACT",
           "DOCUMENT",
           "INITIATIVE",
           "PROJECT",
@@ -30563,6 +30625,20 @@
             "type": "string",
             "format": "uuid",
             "description": "Identifier."
+          }
+        }
+      },
+      "SearchContactsResponse": {
+        "type": "object",
+        "description": "Response from searching CRM contacts.",
+        "required": ["contacts"],
+        "properties": {
+          "contacts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CrmContactResponse"
+            },
+            "description": "Matching contacts, most recently interacted first."
           }
         }
       },

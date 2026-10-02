@@ -1512,7 +1512,8 @@ export type ToolEntityType2ToolEntityType =
   | 'channel'
   | 'call'
   | 'user'
-  | 'company';
+  | 'company'
+  | 'contact';
 /**
  * Where future mail from this sender lands: `signal`, `noise`, or `block`.
  */
@@ -8040,6 +8041,10 @@ export interface SendEmail {
  * - Owner (00000001-0000-0000-0000-000000000011): entity, single. Use entity_ref with entity_type='user' and entity_id='macro|email@domain.com'.
  * - Revenue (00000001-0000-0000-0000-000000000012): number, single. Use number_value (dollars).
  * Any member of the owning team can edit visible company properties; hidden records remain admin/owner-only.
+ *
+ * Any entity (task, document, call, ...) can be associated with CRM records through these system properties:
+ * - Companies (00000001-0000-0000-0000-00000000000c): entity, multi. Use entity_refs with entity_type='company' and the company UUID.
+ * - Contacts (00000001-0000-0000-0000-000000000013): entity, multi. Use entity_refs with entity_type='contact' and the contact UUID.
  *
  * For non-system or custom properties, call GetEntityProperties first to discover property_definition_id values and options.
  */

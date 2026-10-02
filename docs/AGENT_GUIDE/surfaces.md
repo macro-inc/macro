@@ -1227,6 +1227,16 @@ the copy Macro's alerts fire from and whose guest list and join link Macro recor
 editor only lets them be changed there. Answering an invitation likewise addresses the
 primary copy. The details popover and the editor act on the displayed copy, so editing or
 deleting it targets that calendar's event at Google.
+When changing only a reminder in the event editor, choose `All events` to apply it
+to the recurring series or `This event` for one occurrence. Saving preserves the
+existing dates, time zone, title, location, description, and repeat rule unless those controls
+changed. To verify, open a later occurrence of an event you were invited to,
+change the reminder, and inspect the PATCH: it should include only `reminders`
+plus the calendar and scope identifiers. Also verify that intentional edits to
+the start, end, all-day setting, title, location, description, or repeat rule are still sent.
+Test reminder removal as well as changing its time, including a series whose stored
+rule contains `INTERVAL=1`, `WKST`, differently ordered weekdays, or a precise `UNTIL`:
+an untouched rule must not be reformatted and included in a reminder-only PATCH.
 As in Google Calendar, the guests row of the details popover (a bottom sheet on phones)
 carries `Copy guest emails` and `Email guests` icon buttons. Copying puts every guest's
 address on the clipboard, comma-separated. Emailing opens a new email addressed to every
@@ -1448,7 +1458,7 @@ segment to return with the same filters, layout, and list scroll position. Selec
 another sidebar view or switching Board/List closes the company details.
 Shift-click still opens the company in a separate split. Direct company links use
 the standalone company page.
-Clicking a contact in an embedded company's Contacts section appends a third
+Clicking a contact in an embedded company's Team tab appends a third
 breadcrumb: `<current view or list> > <company> > <contact>`. The CRM sidebar stays
 visible. Click the company breadcrumb or the contact's Company link to return to
 the company; click the first breadcrumb to return directly to the originating
@@ -1457,6 +1467,18 @@ use the standalone contact page.
 Company and contact headers have `Copy link` beside the side-panel toggle.
 It copies the record's direct URL and shows a confirmation toast; this is also
 available in the embedded company and contact breadcrumb header.
+
+A company is laid out like a project. Its top bar (the split header, or the
+embedded breadcrumb header) has `Overview`, `Team`, `Emails`, `Files`, `Tasks`
+and `Calls` tabs, collapsing to icons when narrow. Overview shows the name, pills
+for each domain and `Last interacted`, the generated description and the
+Discussion. Team lists the contacts with `Add contact`. Emails keeps the
+`Signal`/`All` and `Team`/`Me` toggles. Files lists non-task documents whose
+`Companies` property references the company, plus attachments of emails with
+its domains. Tasks is the Tasks list scoped to the `Companies` property; its
+`New task` composer pre-fills the company. Calls lists calls linked to the
+company, including those linked automatically from their participants. The side
+panel keeps Properties and Sharing.
 
 Company and contact pages have a **Discussion** section built from the same
 message conversation as a document's Discussion: threaded replies, reactions,

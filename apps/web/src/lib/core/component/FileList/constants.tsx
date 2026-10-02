@@ -83,4 +83,5 @@ const _fileTypeColors: Record<BlockName | BlockAlias | 'default', string> = {
   automation: 'bg-chat/20 group/item',
   pr: defaultFileColor,
   agent: defaultFileColor,
+  initiative: defaultFileColor,
 };

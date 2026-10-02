@@ -1,4 +1,8 @@
-import type { CrmCompanyEntity } from '@entity';
+import type {
+  CrmCompanyEntity,
+  CrmContactEntity,
+  InitiativeEntity,
+} from '@entity';
 import type {
   CacheChangeListener,
   CacheChangeOptions,
@@ -51,6 +55,8 @@ const mocks = vi.hoisted(() => ({
   onCacheChanged: vi.fn(),
   readRecordsByKeys: vi.fn(),
   companies: [] as CrmCompanyEntity[],
+  crmContacts: [] as CrmContactEntity[],
+  initiatives: [] as InitiativeEntity[],
   crmEnabled: (): boolean => true,
   cacheEnabled: true,
   queries: {} as Partial<
@@ -131,11 +137,23 @@ vi.mock('@queries/history/graphql', () => ({
 vi.mock('@queries/soup/quick-access-agent-sessions', () => ({
   useQuickAccessAgentSessionsQuery: () => ({ query: {}, sessions: () => [] }),
 }));
+vi.mock('@queries/soup/quick-access-initiatives', () => ({
+  useQuickAccessInitiativesQuery: () => ({
+    query: { refetch: vi.fn() },
+    initiatives: () => mocks.initiatives,
+  }),
+}));
 vi.mock('@app/features/crm/crm-search', async () => ({
   ...(await import('@app/features/crm/queries/graphql')),
   useQuickAccessCrmCompaniesQuery: () => ({
     query: {},
     companies: () => mocks.companies,
+  }),
+}));
+vi.mock('@app/features/crm/record-adapter', () => ({
+  useQuickAccessCrmContactsQuery: () => ({
+    query: { refetch: vi.fn() },
+    contacts: () => mocks.crmContacts,
   }),
 }));
 vi.mock('@queries/soup/quick-access-skills', () => ({
@@ -203,6 +221,8 @@ beforeEach(() => {
   mocks.cachedChannels = () => [];
   mocks.projectedChannels = [];
   mocks.companies = [];
+  mocks.crmContacts = [];
+  mocks.initiatives = [];
   mocks.crmEnabled = () => true;
   mocks.cacheEnabled = true;
   mocks.queries = {};
@@ -1054,6 +1074,51 @@ describe('Quick Access source integration', () => {
     ).toEqual(['folder', 'note', 'task']);
   });
 
+  it('lists task projects with document search hits without searching the cache for them', async () => {
+    mocks.initiatives = [
+      {
+        type: 'initiative',
+        id: 'initiative-1',
+        name: 'Roadmap',
+        ownerId: 'owner',
+        descriptionDocumentId: 'description-1',
+        updatedAt: '2025-01-02T00:00:00.000Z',
+      },
+    ];
+    mocks.search.mockResolvedValue({
+      documents: [
+        {
+          profile: 'quick-access-v1',
+          recordKey: 'GraphqlSoupDocument:note-1',
+          bucket: 'note',
+          searchText: 'Roadmap notes',
+          timestampMs: 1,
+          sourceHash: 'hash',
+        },
+      ],
+      nextCursor: null,
+    });
+    const list = setup((source) =>
+      source.useList({
+        buckets: BUCKET_COMBINATIONS.documents,
+        searchTerm: () => 'roadmap',
+      })
+    );
+    await vi.waitFor(() =>
+      expect(list.items().map((item) => item.id)).toEqual(
+        expect.arrayContaining(['note-1', 'initiative-1'])
+      )
+    );
+    expect(
+      list.items().find((item) => item.id === 'initiative-1')
+    ).toMatchObject({ bucket: 'initiative', data: { type: 'initiative' } });
+    expect(mocks.search).toHaveBeenCalledWith(
+      expect.objectContaining({
+        buckets: expect.not.arrayContaining(['initiative']),
+      })
+    );
+  });
+
   it('ignores email hydration and refreshes only the affected open list and source', async () => {
     const lists = setup((source) => ({
       notes: source.useList({ buckets: ['note'] }),
@@ -1184,5 +1249,53 @@ describe('Quick Access source integration', () => {
     expect(list.totalCount()).toBe(81);
     expect(list.hasMore()).toBe(false);
     expect(mocks.search).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe('CRM contacts', () => {
+  const contact: CrmContactEntity = {
+    type: 'crm_contact',
+    id: 'contact-1',
+    name: 'Wile E. Coyote',
+    ownerId: '',
+    companyId: 'company-1',
+    email: 'wile@acme.example',
+    hidden: false,
+    createdAt: '2026-08-01T00:00:00.000Z',
+    updatedAt: '2026-08-03T00:00:00.000Z',
+  };
+
+  it('lists CRM contacts in their own bucket, apart from people', () => {
+    mocks.crmContacts = [contact];
+    const [contacts, people] = setup((source) => [
+      source.useList('crm_contact'),
+      source.useList('person'),
+    ]);
+    expect(contacts.items()).toEqual([
+      expect.objectContaining({
+        id: 'contact-1',
+        bucket: 'crm_contact',
+        searchText: 'Wile E. Coyote | wile@acme.example',
+        data: contact,
+      }),
+    ]);
+    expect(people.items()).toEqual([]);
+  });
+
+  it('searches contacts locally, by name or email', () => {
+    mocks.crmContacts = [contact];
+    const list = setup((source) =>
+      source.useList({ buckets: ['crm_contact'], searchTerm: () => 'wile@' })
+    );
+    expect(list.items().map((item) => item.id)).toEqual(['contact-1']);
+    // Contacts aren't cache records, so the cache is never searched for them.
+    expect(mocks.search).not.toHaveBeenCalled();
+  });
+
+  it('leaves contacts out while the CRM is disabled', () => {
+    mocks.crmEnabled = () => false;
+    mocks.crmContacts = [contact];
+    const list = setup((source) => source.useList('crm_contact'));
+    expect(list.items()).toEqual([]);
   });
 });

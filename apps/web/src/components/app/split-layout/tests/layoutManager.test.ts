@@ -1763,6 +1763,44 @@ describe('layoutManager', () => {
       dispose();
     });
 
+    it('opens a project like a task: in Tasks, under its Projects tab', async () => {
+      const projectId = '019507e8-14a3-7bc1-8610-419f16bd03a9';
+      const { manager, location, router, dispose } = ingressRouter('/search');
+      await router.settled();
+
+      manager.openWithSplit(
+        { type: 'initiative', id: projectId } as SplitContent,
+        { activate: true }
+      );
+      await router.settled();
+
+      expect(location.read().pathname).toBe(
+        `/tasks/projects/${projectId}/overview`
+      );
+      expect(router.search(manager.splits()[0].id, 'tasks')).toMatchObject({
+        tab: ['projects'],
+      });
+      router.dispose();
+      dispose();
+    });
+
+    it('keeps a project block on touch, like tasks', async () => {
+      const projectId = '019507e8-14a3-7bc1-8610-419f16bd03a9';
+      const { manager, location, router, dispose } = ingressRouter(
+        `/initiative/${projectId}`,
+        { touch: true }
+      );
+      await router.settled();
+
+      expect(location.read().pathname).toBe(`/initiative/${projectId}`);
+      expect(manager.splits()[0].content).toMatchObject({
+        type: 'initiative',
+        id: projectId,
+      });
+      router.dispose();
+      dispose();
+    });
+
     it('upgrades the legacy Calendar block URL to the preferred period route', async () => {
       localStorage.setItem(
         CALENDAR_PREFERENCES_KEY,

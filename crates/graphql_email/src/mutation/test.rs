@@ -59,6 +59,7 @@ struct CapturingEmailMutationService {
     delete_reports_missing: std::sync::atomic::AtomicBool,
     attachment_load_fails: bool,
     thread_load_fails: bool,
+    thread_load_missing: bool,
     attachments: Vec<MessageAttachment>,
     attachments_draft: Vec<AttachmentDraft>,
     attachments_forwarded: Vec<AttachmentForwarded>,
@@ -292,11 +293,12 @@ impl EmailThreadMutationOutput for TestEmailThreadOutput {
     ) -> Pin<Box<dyn Future<Output = async_graphql::Result<Option<Self::Thread>>> + Send + 'ctx>>
     {
         Box::pin(async move {
-            if ctx
-                .data::<Arc<CapturingEmailMutationService>>()?
-                .thread_load_fails
-            {
+            let service = ctx.data::<Arc<CapturingEmailMutationService>>()?;
+            if service.thread_load_fails {
                 return Err(async_graphql::Error::new("thread loading failed"));
+            }
+            if service.thread_load_missing {
+                return Ok(None);
             }
             Ok(Some(TestEmailThread {
                 id: ID(thread_id.to_string()),

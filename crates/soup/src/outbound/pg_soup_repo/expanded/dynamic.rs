@@ -26,6 +26,7 @@ use item_filters::ast::{
     chat::ChatLiteral,
     date::DateLiteral,
     document::DocumentLiteral,
+    email::Email,
     project::ProjectLiteral,
     properties::{PropertiesLiteral, PropertyEntityType, PropertyMatchValue},
 };
@@ -914,12 +915,53 @@ pub(in crate::outbound::pg_soup_repo) fn build_document_filter(
         filter_ast::ExprFrame::Literal(DocumentLiteral::UpdatedAt(lit)) => {
             date_predicate(r#"d."updatedAt""#, &lit)
         }
+        filter_ast::ExprFrame::Literal(DocumentLiteral::Property(lit)) => {
+            property_literal_predicate(&lit, "d.id")
+        }
+        filter_ast::ExprFrame::Literal(DocumentLiteral::EmailAttachmentParticipant(email)) => {
+            email_attachment_participant_predicate(&email, "d.id")
+        }
     });
     if formatting.is_empty() {
         String::new()
     } else {
         format!(" AND {}", formatting)
     }
+}
+
+/// Matches documents uploaded from an email attachment whose message was sent
+/// by, or addressed to, an address matching `email`.
+fn email_attachment_participant_predicate(email: &Email, document_id_sql: &str) -> String {
+    let address_predicate = match email {
+        Email::Complete(address) => format!(
+            "LOWER(c.email_address) = {}",
+            sql_string_literal(&address.0.as_ref().to_lowercase())
+        ),
+        Email::Domain(domain) => format!(
+            "LOWER(SPLIT_PART(c.email_address, '@', 2)) = {}",
+            sql_string_literal(&domain.to_lowercase())
+        ),
+        Email::Partial(fragment) => format!(
+            "STRPOS(LOWER(c.email_address), {}) > 0",
+            sql_string_literal(&fragment.to_lowercase())
+        ),
+    };
+    format!(
+        r#"EXISTS (
+            SELECT 1
+            FROM document_email de
+            JOIN email_attachments ea ON ea.id = de.email_attachment_id
+            JOIN email_messages m ON m.id = ea.message_id
+            JOIN LATERAL (
+                SELECT m.from_contact_id AS contact_id
+                UNION ALL
+                SELECT r.contact_id FROM email_message_recipients r WHERE r.message_id = m.id
+            ) participant ON TRUE
+            JOIN email_contacts c ON c.id = participant.contact_id
+            WHERE de.document_id = {document_id_sql}
+            AND {address_predicate}
+        )"#
+    )
 }
 
 /// A single-quoted SQL string literal with embedded quotes doubled. Used for
@@ -1083,34 +1125,8 @@ pub(in crate::outbound::pg_soup_repo) fn build_properties_filter(
         filter_ast::ExprFrame::And(a, b) => format!("({a} AND {b})"),
         filter_ast::ExprFrame::Or(a, b) => format!("({a} OR {b})"),
         filter_ast::ExprFrame::Not(a) => format!("(NOT {a})"),
-        filter_ast::ExprFrame::Literal(PropertiesLiteral {
-            property_definition_id,
-            entity_type,
-            value,
-        }) => {
-            let value_predicate = match value {
-                PropertyMatchValue::SelectOption(option_id) => {
-                    format!("ep_prop.values->'value' ? '{option_id}'")
-                }
-                PropertyMatchValue::EntityRef(entity_id) => {
-                    format!(
-                        "ep_prop.values->'value' @> jsonb_build_array(jsonb_build_object('entity_id', '{entity_id}'))"
-                    )
-                }
-            };
-            let entity_type_clause = match entity_type {
-                Some(et) => format!("AND ep_prop.entity_type = '{et}'"),
-                None => String::new(),
-            };
-            format!(
-                r#"EXISTS (
-                    SELECT 1 FROM entity_properties ep_prop
-                    WHERE ep_prop.entity_id = {entity_id_sql}
-                    {entity_type_clause}
-                    AND ep_prop.property_definition_id = '{property_definition_id}'
-                    AND {value_predicate}
-                )"#
-            )
+        filter_ast::ExprFrame::Literal(literal) => {
+            property_literal_predicate(&literal, entity_id_sql)
         }
     });
     if formatting.is_empty() {
@@ -1118,6 +1134,39 @@ pub(in crate::outbound::pg_soup_repo) fn build_properties_filter(
     } else {
         format!(" AND {}", formatting)
     }
+}
+
+/// An EXISTS check that the entity identified by `entity_id_sql` has a
+/// property value matching `literal`.
+fn property_literal_predicate(literal: &PropertiesLiteral, entity_id_sql: &str) -> String {
+    let PropertiesLiteral {
+        property_definition_id,
+        entity_type,
+        value,
+    } = literal;
+    let value_predicate = match value {
+        PropertyMatchValue::SelectOption(option_id) => {
+            format!("ep_prop.values->'value' ? '{option_id}'")
+        }
+        PropertyMatchValue::EntityRef(entity_id) => {
+            format!(
+                "ep_prop.values->'value' @> jsonb_build_array(jsonb_build_object('entity_id', '{entity_id}'))"
+            )
+        }
+    };
+    let entity_type_clause = match entity_type {
+        Some(et) => format!("AND ep_prop.entity_type = '{et}'"),
+        None => String::new(),
+    };
+    format!(
+        r#"EXISTS (
+            SELECT 1 FROM entity_properties ep_prop
+            WHERE ep_prop.entity_id = {entity_id_sql}
+            {entity_type_clause}
+            AND ep_prop.property_definition_id = '{property_definition_id}'
+            AND {value_predicate}
+        )"#
+    )
 }
 
 pub(in crate::outbound::pg_soup_repo) fn document_filter_needs_task_property_joins(

@@ -4,6 +4,7 @@ mod edit;
 mod lifecycle;
 mod meetings;
 mod preparations;
+mod property_clauses;
 mod team_share;
 
 #[cfg(test)]
@@ -19,7 +20,7 @@ use entity_access::domain::models::AccessLevel;
 use filter_ast::Expr;
 use item_filters::{
     CallStatus,
-    ast::{LiteralTree, call::CallLiteral, properties::PropertyMatchValue},
+    ast::{LiteralTree, call::CallLiteral},
 };
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use models_permissions::share_permission::team_share::TeamShareFacts;
@@ -31,11 +32,13 @@ use crate::domain::meetings::{
 };
 use crate::domain::models::{
     ActiveCallSummary, AddParticipantError, ArchivedCall, Call, CallError, CallParticipant,
-    CallRecord, CallRecordGuest, CallRecordParticipant, CallRecordPreview, CallRecordPreviewData,
-    CallRecordTranscriptSegment, CustomSpeakerAssignment, DeletedCallRecordStorageKeys,
-    EditCallRecordRepoArgs, EnrichedCallTranscript, TranscriptSegmentRequest, WithCallId,
+    CallPeople, CallRecord, CallRecordGuest, CallRecordParticipant, CallRecordPreview,
+    CallRecordPreviewData, CallRecordTranscriptSegment, CustomSpeakerAssignment,
+    DeletedCallRecordStorageKeys, EditCallRecordRepoArgs, EnrichedCallTranscript,
+    TranscriptSegmentRequest, WithCallId,
 };
 use crate::domain::ports::CallRepository;
+use property_clauses::{clause_params, property_clauses};
 
 /// Name of the partial unique index enforcing one active call per user.
 const ACTIVE_CALL_UNIQUE_INDEX: &str = "call_participants_one_active_per_user";
@@ -70,7 +73,7 @@ fn collect_channel_ids(expr: &Expr<CallLiteral>, ids: &mut Vec<Uuid>) {
         Expr::Literal(CallLiteral::Attended(_)) => {}
         // Speaker is transcript-segment-only; soup's call list ignores it.
         Expr::Literal(CallLiteral::Speaker(_)) => {}
-        // Tag/property conditions are handled by `extract_tag_option_ids`.
+        // Tag/property conditions are handled by `property_clauses`.
         Expr::Literal(CallLiteral::Property(_)) => {}
         Expr::And(a, b) | Expr::Or(a, b) => {
             collect_channel_ids(a, ids);
@@ -88,61 +91,6 @@ fn extract_call_ids(filter: &LiteralTree<CallLiteral>) -> Vec<Uuid> {
     let mut ids = Vec::new();
     collect_call_ids(expr, &mut ids);
     ids
-}
-
-/// Extract tag option ids (select-option UUIDs) from `CallLiteral::Property`
-/// literals. Tags are def-less: a call matches if any of its property values
-/// contains one of these option ids, mirroring the search-service tag filter.
-/// Structure (AND/OR/NOT) is flattened — soup only folds in a positive OR of
-/// tag literals, so a flat "any of" match is exact.
-fn extract_tag_option_ids(filter: &LiteralTree<CallLiteral>) -> Vec<String> {
-    let Some(expr) = filter else {
-        return Vec::new();
-    };
-    let mut ids = Vec::new();
-    collect_tag_option_ids(expr, &mut ids);
-    ids
-}
-
-fn collect_tag_option_ids(expr: &Expr<CallLiteral>, ids: &mut Vec<String>) {
-    match expr {
-        Expr::Literal(CallLiteral::Property(lit)) => {
-            if let PropertyMatchValue::SelectOption(option_id) = &lit.value {
-                ids.push(option_id.to_string());
-            }
-        }
-        Expr::Literal(_) => {}
-        Expr::And(a, b) | Expr::Or(a, b) => {
-            collect_tag_option_ids(a, ids);
-            collect_tag_option_ids(b, ids);
-        }
-        Expr::Not(inner) => collect_tag_option_ids(inner, ids),
-    }
-}
-
-/// Whether the tag filter requires ALL of its options rather than ANY. The
-/// tag filter is folded in as an OR of tag literals for ANY and an AND of tag
-/// literals for ALL (matching the search index's `match_all_tags`), so an
-/// `And` joining two tag-bearing branches marks ALL. A single option reads as
-/// ANY, which is equivalent.
-fn tag_filter_requires_all(filter: &LiteralTree<CallLiteral>) -> bool {
-    fn contains_tag(expr: &Expr<CallLiteral>) -> bool {
-        match expr {
-            Expr::Literal(CallLiteral::Property(_)) => true,
-            Expr::Literal(_) => false,
-            Expr::And(a, b) | Expr::Or(a, b) => contains_tag(a) || contains_tag(b),
-            Expr::Not(inner) => contains_tag(inner),
-        }
-    }
-    fn walk(expr: &Expr<CallLiteral>) -> bool {
-        match expr {
-            Expr::And(a, b) => (contains_tag(a) && contains_tag(b)) || walk(a) || walk(b),
-            Expr::Or(a, b) => walk(a) || walk(b),
-            Expr::Not(inner) => walk(inner),
-            Expr::Literal(_) => false,
-        }
-    }
-    filter.as_ref().is_some_and(|expr| walk(expr))
 }
 
 fn collect_call_ids(expr: &Expr<CallLiteral>, ids: &mut Vec<Uuid>) {
@@ -852,6 +800,91 @@ impl CallRepository for PgCallRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
+    async fn get_call_record_people(&self, call_record_id: &Uuid) -> Result<CallPeople, Self::Err> {
+        let user_ids = sqlx::query_scalar!(
+            r#"
+            SELECT p.user_id AS "user_id!"
+            FROM call_record_participants p
+            WHERE p.call_record_id = $1
+            UNION
+            SELECT m.user_id
+            FROM call_records cr
+            JOIN call_meetings m ON m.id = cr.meeting_id
+            WHERE cr.id = $1
+            "#,
+            call_record_id,
+        )
+        .fetch_all(&self.pool)
+        .await?
+        .into_iter()
+        // A malformed stored id names nobody we can match, so skip it rather
+        // than failing the whole lookup for the people who do parse.
+        .filter_map(|user_id| match MacroUserIdStr::try_from(user_id.clone()) {
+            Ok(user_id) => Some(user_id),
+            Err(error) => {
+                tracing::warn!(%call_record_id, user_id, error = ?error, "skipping unparsable call participant id");
+                None
+            }
+        })
+        .collect();
+
+        // A meeting link lives in the location, description or conference url
+        // of the owner's calendar event; its token is unique, so a substring
+        // match on the owner's events finds it.
+        let invitee_emails = sqlx::query_scalar!(
+            r#"
+            SELECT DISTINCT LOWER(a.email) AS "email!"
+            FROM call_records cr
+            JOIN call_meetings m ON m.id = cr.meeting_id
+            JOIN calendar_events e ON e.owner_id = m.user_id
+            JOIN calendar_event_attendees a ON a.event_id = e.id
+            WHERE cr.id = $1
+              AND (
+                  STRPOS(e.location, m.share_token) > 0
+                  OR STRPOS(e.description, m.share_token) > 0
+                  OR STRPOS(e.conference_url, m.share_token) > 0
+              )
+              -- Meeting links are reused, so only the event the call took
+              -- place in counts: it, or one of its occurrences, overlaps the
+              -- call. All-day dates are local to the event, so they match
+              -- calls within a day either side.
+              AND (
+                  (e.starts_at IS NOT NULL
+                      AND tstzrange(e.starts_at, e.ends_at) && tstzrange(cr.started_at, cr.ended_at))
+                  OR (e.start_date IS NOT NULL
+                      AND daterange(e.start_date, e.end_date) && daterange(
+                          (cr.started_at - interval '1 day')::date,
+                          (cr.ended_at + interval '1 day')::date,
+                          '[]'
+                      ))
+                  OR EXISTS (
+                      SELECT 1 FROM calendar_event_occurrences o
+                      WHERE o.event_id = e.id
+                        AND o.owner_id = e.owner_id
+                        AND NOT o.is_cancelled
+                        AND (
+                            o.timed_span && tstzrange(cr.started_at, cr.ended_at)
+                            OR o.day_span && daterange(
+                                (cr.started_at - interval '1 day')::date,
+                                (cr.ended_at + interval '1 day')::date,
+                                '[]'
+                            )
+                        )
+                  )
+              )
+            "#,
+            call_record_id,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(CallPeople {
+            user_ids,
+            invitee_emails,
+        })
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn is_participant(&self, call_id: &Uuid, user_id: &str) -> Result<bool, Self::Err> {
         sqlx::query_scalar!(
             r#"
@@ -1532,9 +1565,7 @@ impl CallRepository for PgCallRepo {
             .map(call_status_sql_value)
             .map(str::to_string)
             .collect();
-        let tag_option_ids = extract_tag_option_ids(filter);
-        let has_tag_filter = !tag_option_ids.is_empty();
-        let match_all_tags = tag_filter_requires_all(filter);
+        let property = clause_params(&property_clauses(filter));
 
         let rows = sqlx::query!(
             r#"
@@ -1591,25 +1622,34 @@ impl CallRepository for PgCallRepo {
                 )
                 AND ($3::bool IS FALSE OR c.channel_id = ANY($4))
                 AND ($5::bool IS FALSE OR c.id = ANY($6))
-                AND ($9::bool IS FALSE OR (
-                    ($11::bool IS FALSE AND EXISTS (
-                        SELECT 1 FROM entity_properties ep
-                        WHERE ep.entity_id = c.id::text
-                          AND ep.entity_type = 'CALL_RECORD'
-                          AND jsonb_typeof(ep.values -> 'value') = 'array'
-                          AND jsonb_exists_any(ep.values -> 'value', $10::text[])
-                    ))
-                    OR ($11::bool IS TRUE AND $10::text[] <@ (
-                        SELECT COALESCE(array_agg(elem), ARRAY[]::text[])
-                        FROM (
-                            SELECT values FROM entity_properties
-                            WHERE entity_id = c.id::text
-                              AND entity_type = 'CALL_RECORD'
-                              AND jsonb_typeof(values -> 'value') = 'array'
-                        ) ep
-                        CROSS JOIN LATERAL jsonb_array_elements_text(ep.values -> 'value') AS elem
-                    ))
-                ))
+                -- Property conditions in conjunctive normal form: every
+                -- clause needs a term the call satisfies. Tags (no
+                -- definition) match any property value; entity references
+                -- match their definition's value.
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM generate_series(0, $9::int - 1) AS clause(idx)
+                    WHERE NOT EXISTS (
+                        SELECT 1
+                        FROM UNNEST($10::int[], $11::bool[], $12::uuid[], $13::text[])
+                            AS term(clause_idx, negated, definition_id, value)
+                        WHERE term.clause_idx = clause.idx
+                          AND term.negated <> EXISTS (
+                              SELECT 1 FROM entity_properties ep
+                              WHERE ep.entity_id = c.id::text
+                                AND ep.entity_type = 'CALL_RECORD'
+                                AND jsonb_typeof(ep.values -> 'value') = 'array'
+                                AND CASE
+                                    WHEN term.definition_id IS NULL
+                                        THEN jsonb_exists(ep.values -> 'value', term.value)
+                                    ELSE ep.property_definition_id = term.definition_id
+                                        AND ep.values -> 'value' @> jsonb_build_array(
+                                            jsonb_build_object('entity_id', term.value)
+                                        )
+                                END
+                          )
+                    )
+                )
                 UNION ALL
                 SELECT
                     cr.id AS call_id,
@@ -1652,25 +1692,34 @@ impl CallRepository for PgCallRepo {
                 )
                 AND ($3::bool IS FALSE OR cr.channel_id = ANY($4))
                 AND ($5::bool IS FALSE OR cr.id = ANY($6))
-                AND ($9::bool IS FALSE OR (
-                    ($11::bool IS FALSE AND EXISTS (
-                        SELECT 1 FROM entity_properties ep
-                        WHERE ep.entity_id = cr.id::text
-                          AND ep.entity_type = 'CALL_RECORD'
-                          AND jsonb_typeof(ep.values -> 'value') = 'array'
-                          AND jsonb_exists_any(ep.values -> 'value', $10::text[])
-                    ))
-                    OR ($11::bool IS TRUE AND $10::text[] <@ (
-                        SELECT COALESCE(array_agg(elem), ARRAY[]::text[])
-                        FROM (
-                            SELECT values FROM entity_properties
-                            WHERE entity_id = cr.id::text
-                              AND entity_type = 'CALL_RECORD'
-                              AND jsonb_typeof(values -> 'value') = 'array'
-                        ) ep
-                        CROSS JOIN LATERAL jsonb_array_elements_text(ep.values -> 'value') AS elem
-                    ))
-                ))
+                -- Property conditions in conjunctive normal form: every
+                -- clause needs a term the call satisfies. Tags (no
+                -- definition) match any property value; entity references
+                -- match their definition's value.
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM generate_series(0, $9::int - 1) AS clause(idx)
+                    WHERE NOT EXISTS (
+                        SELECT 1
+                        FROM UNNEST($10::int[], $11::bool[], $12::uuid[], $13::text[])
+                            AS term(clause_idx, negated, definition_id, value)
+                        WHERE term.clause_idx = clause.idx
+                          AND term.negated <> EXISTS (
+                              SELECT 1 FROM entity_properties ep
+                              WHERE ep.entity_id = cr.id::text
+                                AND ep.entity_type = 'CALL_RECORD'
+                                AND jsonb_typeof(ep.values -> 'value') = 'array'
+                                AND CASE
+                                    WHEN term.definition_id IS NULL
+                                        THEN jsonb_exists(ep.values -> 'value', term.value)
+                                    ELSE ep.property_definition_id = term.definition_id
+                                        AND ep.values -> 'value' @> jsonb_build_array(
+                                            jsonb_build_object('entity_id', term.value)
+                                        )
+                                END
+                          )
+                    )
+                )
             )
             SELECT
                 call_id as "call_id!",
@@ -1703,9 +1752,11 @@ impl CallRepository for PgCallRepo {
             &call_ids,
             has_status_filter,
             &status_filter_values,
-            has_tag_filter,
-            &tag_option_ids,
-            match_all_tags,
+            property.clause_count,
+            &property.clause_indices,
+            &property.negated,
+            &property.definition_ids as &[Option<Uuid>],
+            &property.values,
         )
         .fetch_all(&self.pool)
         .await?;

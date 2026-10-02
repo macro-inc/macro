@@ -528,6 +528,19 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
         include_hidden: bool,
     ) -> impl Future<Output = Result<Option<CrmContact>, CrmError>> + Send;
 
+    /// Searches the team's contacts whose email or name contains `query`
+    /// (case-insensitive), most recently interacted first, at most `limit`
+    /// rows. An empty query lists the most recent contacts. Hidden contacts
+    /// and contacts under hidden companies are excluded unless
+    /// `include_hidden` (admin/owner).
+    fn search_contacts_for_team(
+        &self,
+        team_id: &uuid::Uuid,
+        query: &str,
+        limit: i64,
+        include_hidden: bool,
+    ) -> impl Future<Output = Result<Vec<CrmContact>, CrmError>> + Send;
+
     /// Fetches a single CRM contact by email, scoped to `team_id` via the
     /// contact's company. Email matching is case-insensitive. Returns
     /// `Ok(None)` when the contact doesn't exist, belongs to a different

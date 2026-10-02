@@ -30,6 +30,7 @@ pub fn canonical_entity_type(entity_type: EntityType) -> AccessEntityType {
         EntityType::Channel => AccessEntityType::Channel,
         EntityType::Company => AccessEntityType::CrmCompany,
         EntityType::DatabaseRow => AccessEntityType::DatabaseRow,
+        EntityType::Contact => AccessEntityType::CrmContact,
         EntityType::User => AccessEntityType::User,
     }
 }

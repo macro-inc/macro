@@ -354,7 +354,7 @@ pub fn cast_targets(
 }
 
 /// What a reference column points at, as ops name it; `None` for rows of
-/// another table, which a relation holds.
+/// another table (held by relations) and CRM contacts (not a reference-column kind).
 pub fn entity_kind(entity_type: models_properties::EntityType) -> Option<EntityKind> {
     use models_properties::EntityType as Stored;
     Some(match entity_type {
@@ -369,7 +369,7 @@ pub fn entity_kind(entity_type: models_properties::EntityType) -> Option<EntityK
         Stored::Thread => EntityKind::Thread,
         Stored::CalendarEvent => EntityKind::CalendarEvent,
         Stored::Initiative => EntityKind::Initiative,
-        Stored::DatabaseRow => return None,
+        Stored::DatabaseRow | Stored::Contact => return None,
     })
 }
 

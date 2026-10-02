@@ -1,10 +1,13 @@
 import { useQuickAccessCrmCompaniesQuery } from '@app/features/crm/crm-search';
+import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { toast } from '@core/component/Toast/Toast';
 import { enableCrmLists } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { getInitialsFromName } from '@core/user';
 import { idToEmail } from '@core/user/util';
+import { queryReadyGate } from '@queries/gate';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
@@ -17,7 +20,9 @@ import {
 import { patchTeamCrmSettings } from '@service-auth/crm';
 import { storageServiceClient } from '@service-storage/client';
 import { useQueryClient } from '@tanstack/solid-query';
+import { createMemo, lazy } from 'solid-js';
 import type { CrmContext } from './context/crm-context';
+import type { ItemListSource } from './context/crm-sources';
 import {
   openCreateCompanyModal,
   openCreateContactModal,
@@ -51,6 +56,10 @@ import {
 } from './queries/contacts';
 import { fetchCrmExportCompanies } from './queries/export';
 import { useCrmLists } from './queries/lists';
+import {
+  useRecordCallsQuery,
+  useRecordFilesQuery,
+} from './queries/record-items';
 import { usePersonalCrmViews, useTeamCrmViews } from './queries/saved-views';
 import { usePatchTeamCrmSettingsMutation } from './queries/settings-commands';
 import {
@@ -59,6 +68,50 @@ import {
 } from './queries/stages';
 import { useTeamCrmConfig } from './queries/team-config';
 import { createAppDealStages } from './stage-adapter';
+
+// Loaded on demand: the Tasks list imports soup, which imports CRM entry points.
+const CrmRecordTasks = lazy(async () => ({
+  default: (await import('./record-tasks-adapter')).CrmRecordTasks,
+}));
+
+/**
+ * Soup rows carry raw notification arrays; `ListEntity` reads them through
+ * an accessor bound to the app's notification source, as other lists do.
+ */
+function withRowNotifications(source: ItemListSource): ItemListSource {
+  const notificationSource = useGlobalNotificationSource();
+  // Reading `data` before the first page resolves would suspend the tab.
+  const data = createMemo(() =>
+    queryReadyGate(source)
+      ? {
+          entities: source.data.entities.map((entity) =>
+            withEntityNotifications(entity, notificationSource)
+          ),
+        }
+      : undefined
+  );
+  return {
+    get isPending() {
+      return source.isPending;
+    },
+    get isEnabled() {
+      return source.isEnabled;
+    },
+    get isLoading() {
+      return source.isLoading;
+    },
+    get data() {
+      return data();
+    },
+    get hasNextPage() {
+      return source.hasNextPage;
+    },
+    get isFetchingNextPage() {
+      return source.isFetchingNextPage;
+    },
+    fetchNextPage: () => source.fetchNextPage(),
+  };
+}
 
 /** Only this app-facing adapter constructs production capabilities. */
 export function createAppCrmContext(): CrmContext {
@@ -82,9 +135,18 @@ export function createAppCrmContext(): CrmContext {
       return () => flag().enabled;
     },
     createCompanyEmails: (...args) =>
-      useCompanyEmailsQuery(useSoupAstItemsQuery, ...args),
+      withRowNotifications(
+        useCompanyEmailsQuery(useSoupAstItemsQuery, ...args)
+      ),
     createContactEmails: (...args) =>
-      useContactEmailsQuery(useSoupAstItemsQuery, ...args),
+      withRowNotifications(
+        useContactEmailsQuery(useSoupAstItemsQuery, ...args)
+      ),
+    createRecordFiles: (scope) =>
+      withRowNotifications(useRecordFilesQuery(useSoupAstItemsQuery, scope)),
+    createRecordCalls: (scope) =>
+      withRowNotifications(useRecordCallsQuery(useSoupAstItemsQuery, scope)),
+    RecordTasks: CrmRecordTasks,
     createPropertyCommands: useBulkSaveEntityPropertiesMutation,
     createSettingsCommands: () =>
       usePatchTeamCrmSettingsMutation({

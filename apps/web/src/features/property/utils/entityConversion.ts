@@ -59,8 +59,9 @@ export function entityTypeToItemType(type: EntityType): ItemType | undefined {
     .with('CHAT', () => 'chat')
     .with('CALL_RECORD', () => 'call')
     .with('THREAD', () => 'email')
+    .with('COMPANY', () => 'crm_company')
+    .with('CONTACT', () => 'crm_contact')
     .with(
-      'COMPANY',
       'USER',
       'CALENDAR_EVENT',
       'INITIATIVE',
@@ -86,7 +87,7 @@ export function macroEntityToPropertyEntityType(
     .with({ type: 'call' }, () => EntityType.CALL_RECORD)
     .with({ type: 'crm_company' }, () => EntityType.COMPANY)
     .with({ type: 'crm_contact' }, () => {
-      // No CONTACT in the properties-service EntityType yet.
+      // Contacts are entity-reference values (CONTACT), never property owners.
       throw new Error('crm contacts do not support properties');
     })
     .with({ type: 'agent_session' }, () => {

@@ -1421,6 +1421,7 @@
           "CHAT",
           "COMPANY",
           "DATABASE_ROW",
+          "CONTACT",
           "DOCUMENT",
           "INITIATIVE",
           "PROJECT",
