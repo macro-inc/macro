@@ -403,8 +403,21 @@ export type MutationUpsertKind =
   | { kind: 'replaced-pending'; removedTransactionId: string }
   | { kind: 'appended-after-active'; activeTransactionId: string };
 
+/** Read-only request snapshot; never contains a settlement lease token. */
+export type MutationInspection = Pick<
+  ClaimedMutation,
+  | 'transactionId'
+  | 'uuid'
+  | 'superseded'
+  | 'query'
+  | 'operationName'
+  | 'variables'
+  | 'clientMetadata'
+> & { optimisticData: unknown };
+
 /** Claimed strict queue head, ready to be forwarded through urql. */
 export type ClaimedMutation = {
+  clientMetadata?: Record<string, unknown> | null;
   transactionId: string;
   uuid: string;
   superseded: boolean;
@@ -486,6 +499,7 @@ export type CacheRequest = { id: number } & (
   | { kind: 'init'; scope: string; hotCapacity?: number }
   | { kind: 'current-revision' }
   | { kind: 'current-storage-generation' }
+  | { kind: 'inspect-mutations' }
   | {
       kind: 'read';
       opId?: string;
@@ -535,6 +549,7 @@ export type CacheRequest = { id: number } & (
       data: unknown;
       linkPatches?: OptimisticLinkPatchWire[];
       revalidations?: QueryRevalidationWire[];
+      clientMetadata?: Record<string, unknown>;
       identityBindings?: IdentityBindingWire[];
       createdAtMs: number;
       owner: string;

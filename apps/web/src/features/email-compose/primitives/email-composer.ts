@@ -99,6 +99,8 @@ export type EmailComposerOptions = {
   recipientName(id: string): string;
   host?: EmailComposeHost;
   draft?: EmailMessage;
+  localDraft?: import('../core/local-draft').LocalDraft;
+  localAttachments?: DraftFormAttachment[];
   /** Identity for a composer reopened from a local undo snapshot. */
   draftId?: string;
   draftPersistence?: 'committed' | 'queued';
@@ -140,6 +142,11 @@ export function createEmailComposer(props: EmailComposerOptions) {
     form.setSelectedInbox(props.initialInboxId);
   }
 
+  if (props.localAttachments) {
+    form.attachments.clear();
+    for (const attachment of props.localAttachments)
+      form.attachments.add(attachment);
+  }
   const primaryInboxId = props.accounts.primaryId;
   const link = createMemo(() => {
     const inboxes = props.accounts.inboxes();
@@ -183,6 +190,15 @@ export function createEmailComposer(props: EmailComposerOptions) {
         }
       : undefined
   );
+  if (
+    props.localDraft &&
+    ['failed', 'unconfirmed', 'delete-failed'].includes(props.localDraft.status)
+  )
+    session.dispatch({
+      type: 'rejected',
+      epoch: session.epoch(),
+      code: 'INTERNAL',
+    });
   const currentDraftId = session.draftId;
   const currentThreadId = session.threadId;
   observeDraftIdentity(
@@ -191,7 +207,9 @@ export function createEmailComposer(props: EmailComposerOptions) {
     props.notices,
     () => {
       if (persistencePaused()) return;
-      detachFromObsoleteDraft('Saving your edits as a new draft.');
+      if (props.drafts.retryDraft) {
+        void retryDraft().catch(props.notices.reportError);
+      } else detachFromObsoleteDraft('Saving your edits as a new draft.');
     },
     handleAlreadySent
   );
@@ -207,9 +225,11 @@ export function createEmailComposer(props: EmailComposerOptions) {
   });
 
   const attachmentPersistence = createAttachmentPersistence({
+    confirmRemoval: !!props.drafts.saveLocalDraft,
     services: props.attachmentStorage,
     attachments: form.attachments,
-    draftId: () => (session.serverConfirmed() ? currentDraftId() : undefined),
+    draftId: () =>
+      session.identity().kind === 'server' ? currentDraftId() : undefined,
     inboxId: persistedInboxId,
   });
 
@@ -331,6 +351,7 @@ export function createEmailComposer(props: EmailComposerOptions) {
     session,
     drafts: props.drafts,
     attachments: attachmentPersistence,
+    localDraft: props.localDraft,
     mintThreadHandle: true,
     onAlreadySent: handleAlreadySent,
   });
@@ -345,6 +366,7 @@ export function createEmailComposer(props: EmailComposerOptions) {
     inboxId: string | undefined;
     generation: number;
     revision: number;
+    attachments: readonly DraftFormAttachment[];
   }) {
     if (generation !== identityVersion) return;
     try {
@@ -394,8 +416,22 @@ export function createEmailComposer(props: EmailComposerOptions) {
       inboxId: activeInboxId(),
       generation: identityVersion,
       revision: editVersion,
+      attachments: [...form.attachments.list()],
     }),
     persist: persistDraft,
+    saveLocalSnapshot: async (snapshot) => {
+      if (snapshot.generation !== identityVersion) return;
+      await persistence.saveLocally({
+        draft: snapshot.draft,
+        inboxId: snapshot.inboxId,
+        attachments: snapshot.attachments,
+      });
+    },
+    onLocalError: (error) =>
+      props.notices.feedback.failure(
+        'Draft could not be saved on this device',
+        { subtext: String(error), persistent: true }
+      ),
     paused: persistencePaused,
   });
 
@@ -412,6 +448,7 @@ export function createEmailComposer(props: EmailComposerOptions) {
           inboxId: activeInboxId(),
           generation: identityVersion,
           revision: editVersion,
+          attachments: [...form.attachments.list()],
         })
       );
     } finally {
@@ -464,7 +501,10 @@ export function createEmailComposer(props: EmailComposerOptions) {
 
   const handleAddAttachments = async (attachments: DraftFormAttachment[]) => {
     if (persistencePaused()) return;
-    if (await refuseAttachmentsOffline(props.connectivity, props.notices))
+    if (
+      !props.drafts.saveLocalDraft &&
+      (await refuseAttachmentsOffline(props.connectivity, props.notices))
+    )
       return;
     for (const attachment of attachments) {
       form.attachments.add(attachment);
@@ -472,11 +512,14 @@ export function createEmailComposer(props: EmailComposerOptions) {
     markDirtyAndScheduleSave();
   };
 
-  const handleRemoveAttachment = (attachment: DraftFormAttachment) => {
+  const handleRemoveAttachment = async (attachment: DraftFormAttachment) => {
     if (persistencePaused()) return;
-    editVersion += 1;
-    setDraftDirty(true);
-    attachmentPersistence.remove(attachment);
+    try {
+      if (!(await attachmentPersistence.remove(attachment))) return;
+      markDirtyAndScheduleSave();
+    } catch (error) {
+      props.notices.reportError(error);
+    }
   };
 
   // --- Content change ---
@@ -591,6 +634,7 @@ export function createEmailComposer(props: EmailComposerOptions) {
 
   const onSubmit = async () => {
     if (
+      attachmentPersistence.removing() ||
       schedule.pending() ||
       submitting() ||
       discarding() ||
@@ -755,7 +799,11 @@ export function createEmailComposer(props: EmailComposerOptions) {
 
   const scheduling = schedule.pending;
   const scheduleBlocked = () =>
-    submitting() || discarding() || movingInbox() || completed();
+    attachmentPersistence.removing() ||
+    submitting() ||
+    discarding() ||
+    movingInbox() ||
+    completed();
   const handleSendTimeChange = (date: Date | null) => {
     if (scheduleBlocked()) return false;
     return schedule.select(date);
@@ -786,6 +834,7 @@ export function createEmailComposer(props: EmailComposerOptions) {
       // A first save may still be creating the draft. Delete its returned ID
       // after it settles so discard cannot leave an orphan behind.
       await autosave.settled().catch(() => {});
+      await autosave.flushLocal().catch(props.notices.reportError);
       const draftId = currentDraftId();
       if (draftId) {
         try {
@@ -1108,7 +1157,19 @@ export function createEmailComposer(props: EmailComposerOptions) {
     },
     hasPaidAccess,
   };
+  async function retryDraft() {
+    if (persistencePaused()) return;
+    // Finish this editor's last write before checking the shared revision.
+    await autosave.flushLocal().catch(props.notices.reportError);
+    await persistence.retry();
+    await autosave.save();
+  }
+
   return {
+    draftId: currentDraftId,
+    retryDraft,
+    flushLocal: autosave.flushLocal,
+    localSaveState: autosave.localSaveState,
     context: ctxValue,
     editor,
     previewName,

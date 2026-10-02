@@ -1,3 +1,4 @@
+import type { MutationInspection } from '../protocol';
 /**
  * Browser CacheHost: routes cache RPC through the SharedWorker coordinator to
  * the currently elected dedicated cache engine. Unsupported browsers receive
@@ -1267,6 +1268,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         linkPatches: args.linkPatches,
         revalidations: args.revalidations,
         identityBindings: args.identityBindings,
+        clientMetadata: args.clientMetadata,
         createdAtMs: claim.nowMs,
         owner: claim.owner,
         nowMs: claim.nowMs,
@@ -1297,6 +1299,11 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       })) as CachedQueryInstanceWire[];
     },
 
+    async inspectMutations() {
+      return (await initializedRequest({
+        kind: 'inspect-mutations',
+      })) as MutationInspection[];
+    },
     async claimNextMutation(
       owner: string,
       nowMs: number,

@@ -263,6 +263,10 @@ vi.mock('@core/util/reloadForNewerBuild', () => ({
   reloadForNewerBuild: mocks.reloadForNewerBuild,
 }));
 vi.mock('@core/util/platform', () => ({ isTauri: () => mocks.tauri }));
+// Recovery lifecycle is covered with its real store in local-drafts.test.ts.
+vi.mock('@queries/email/local-drafts', () => ({
+  localDraftQueueLifecycle: () => ({}),
+}));
 vi.mock('@core/util/platformFetch', () => ({
   platformFetch: mocks.platformFetch,
 }));
@@ -914,6 +918,26 @@ describe('GraphQL Soup browser cache session gate', () => {
     expect(readers.enabled()).toBe(false);
     expect(readers.host()).toBeUndefined();
     readers.dispose();
+  });
+
+  it('requests a native update and uses the existing fallback when draft recovery commands are unavailable', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    mocks.tauri = true;
+    const soup = await import('./graphql-soup');
+    const { NativeCacheUpgradeRequiredError } = await import(
+      '@graphql-cache/host/tauri-host'
+    );
+    const cached = soup.getGraphqlSoupClient();
+    mocks.failInitialization(new NativeCacheUpgradeRequiredError());
+    expect(mocks.toastFailure).toHaveBeenCalledWith(
+      'Macro update required',
+      expect.objectContaining({
+        subtext: expect.stringContaining('queued drafts are preserved'),
+      })
+    );
+    expect(soup.graphqlCacheEnabled()).toBe(false);
+    expect(soup.getGraphqlSoupClient()).not.toBe(cached);
+    expect(mocks.host.dispose).toHaveBeenCalledOnce();
   });
 
   it('falls back quietly while another context holds the database', async () => {

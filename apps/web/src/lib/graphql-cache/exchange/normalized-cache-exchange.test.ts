@@ -241,6 +241,7 @@ function makeFakeHost(): FakeHost {
     return {
       transactionId: head.transactionId,
       uuid: head.args.uuid,
+      clientMetadata: head.args.clientMetadata,
       superseded: false,
       requiresConfirmation: false,
       leaseGeneration: String(head.attemptCount),
@@ -2561,8 +2562,183 @@ describe('normalizedCacheExchange', () => {
       expect(host.commits[0]?.transactionId).toBe('restored-1');
     });
 
+    it.each(['rejects', 'hangs'] as const)(
+      'advances after a terminal draft error even when recovery bookkeeping %s',
+      async (failure) => {
+        vi.useFakeTimers();
+        try {
+          const metadata = { kind: 'email-draft', revision: 7 };
+          host.seedQueued({
+            uuid: 'draft-handle',
+            query: stringifyDocument(SaveEmailDraftDocument),
+            operationName: 'SaveEmailDraft',
+            variables: { input: { draftId: 'draft-handle' } },
+            data: optimistic,
+            clientMetadata: metadata,
+          });
+          host.seedQueued({
+            uuid: 'unrelated',
+            query: stringifyDocument(MUTATION),
+            operationName: 'SetEntityProperty',
+            variables: { input: {} },
+            data: optimistic,
+          });
+          const onMutationAttemptResult = vi.fn(
+            async (mutation: ClaimedMutation) => {
+              if (mutation.operationName !== 'SaveEmailDraft') return;
+              if (failure === 'rejects')
+                throw new Error('Recovery disk unavailable');
+              await new Promise<void>(() => {});
+            }
+          );
+          const { forwarded } = harness(
+            host,
+            (op) =>
+              'draftId' in op.variables!.input
+                ? {
+                    data: undefined,
+                    error: new CombinedError({
+                      graphQLErrors: [
+                        {
+                          message: 'Draft rejected',
+                          extensions: { retryable: true },
+                        },
+                      ],
+                    }),
+                  }
+                : { data: { saved: true } },
+            {
+              shouldRetryMutation: shouldRetryGraphqlMutation,
+              onMutationAttemptResult,
+              onCacheError: () => {
+                throw new Error('Diagnostics unavailable');
+              },
+            }
+          );
+          await vi.advanceTimersByTimeAsync(2_010);
+          expect(onMutationAttemptResult).toHaveBeenCalledWith(
+            expect.objectContaining({ clientMetadata: metadata }),
+            expect.anything(),
+            false
+          );
+          expect(host.rollbacks).toEqual(['restored-1']);
+          expect(host.defers).toHaveLength(0);
+          expect(host.commits).toMatchObject([{ transactionId: 'restored-2' }]);
+          expect(forwarded).toHaveLength(2);
+        } finally {
+          vi.useRealTimers();
+        }
+      }
+    );
+
+    it.each(['rejects', 'hangs'] as const)(
+      'replays unrelated mutations when recovery initialization %s',
+      async (failure) => {
+        vi.useFakeTimers();
+        const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        try {
+          host.seedQueued({
+            uuid: 'unrelated',
+            query: stringifyDocument(MUTATION),
+            operationName: 'SetEntityProperty',
+            variables: { input: {} },
+            data: optimistic,
+          });
+          const { forwarded } = harness(host, undefined, {
+            prepareMutationQueue: async () => {
+              if (failure === 'rejects')
+                throw new Error('IndexedDB unavailable');
+              await new Promise<void>(() => {});
+            },
+          });
+          await vi.advanceTimersByTimeAsync(4_010);
+          expect(forwarded).toHaveLength(1);
+          expect(host.commits).toMatchObject([{ transactionId: 'restored-1' }]);
+          expect(warning).toHaveBeenCalled();
+        } finally {
+          warning.mockRestore();
+          vi.useRealTimers();
+        }
+      }
+    );
+
+    it.each([
+      { failure: 'rejects', legacy: false },
+      { failure: 'hangs', legacy: false },
+      { failure: 'rejects', legacy: true },
+      { failure: 'hangs', legacy: true },
+    ])(
+      'releases a draft when admission $failure (legacy=$legacy)',
+      async ({ failure, legacy }) => {
+        vi.useFakeTimers();
+        try {
+          host.seedQueued({
+            uuid: 'draft',
+            query: stringifyDocument(SaveEmailDraftDocument),
+            operationName: 'SaveEmailDraft',
+            variables: { input: { draftId: 'draft' } },
+            data: optimistic,
+            clientMetadata: legacy ? undefined : { kind: 'email-draft' },
+          });
+          host.seedQueued({
+            uuid: 'other',
+            query: stringifyDocument(MUTATION),
+            operationName: 'SetEntityProperty',
+            variables: { input: {} },
+            data: optimistic,
+          });
+          const onMutationAttemptResult = vi.fn(async () => {});
+          const { forwarded } = harness(host, undefined, {
+            beforeMutationAttempt: async (mutation) => {
+              if (mutation.operationName !== 'SaveEmailDraft') return true;
+              if (failure === 'rejects')
+                throw new Error('Recovery storage unavailable');
+              return await new Promise<boolean>(() => {});
+            },
+            onMutationAttemptResult,
+          });
+          await vi.advanceTimersByTimeAsync(2_010);
+          expect(host.rollbacks).toEqual(['restored-1']);
+          expect(host.defers).toHaveLength(0);
+          expect(host.commits).toMatchObject([{ transactionId: 'restored-2' }]);
+          expect(forwarded).toHaveLength(1);
+          expect(onMutationAttemptResult).toHaveBeenCalledWith(
+            expect.objectContaining({ transactionId: 'restored-1' }),
+            expect.objectContaining({
+              error: expect.objectContaining({
+                message: expect.stringContaining('Unable to prepare'),
+              }),
+            }),
+            false
+          );
+        } finally {
+          vi.useRealTimers();
+        }
+      }
+    );
+
+    it('returns a terminal recovery failure to a live caller without sending it', async () => {
+      const { ops, results, forwarded } = harness(host, undefined, {
+        beforeMutationAttempt: async () => {
+          throw new Error('Local storage unavailable');
+        },
+      });
+      ops.next(makeMutationOp(1, optimistic));
+      await vi.waitFor(() => expect(results).toHaveLength(1));
+      expect(forwarded).toHaveLength(0);
+      expect(host.defers).toHaveLength(0);
+      expect(host.rollbacks).toEqual(['txn-1']);
+      expect(optimisticMutationDispositionOf(results[0])).toMatchObject({
+        kind: 'permanently-failed',
+        error: results[0]?.error,
+      });
+      expect(results[0]?.error?.graphQLErrors[0]?.extensions.code).toBe(
+        'LOCAL_RECOVERY_FAILED'
+      );
+    });
+
     it.each([true, false])(
-      'only advances past an unavailable archived thread when its error is terminal (retryable=%s)',
+      'advances past an unavailable archived thread regardless of legacy metadata (retryable=%s)',
       async (retryable) => {
         vi.useFakeTimers();
         try {
@@ -2627,17 +2803,12 @@ describe('normalizedCacheExchange', () => {
             { shouldRetryMutation: shouldRetryGraphqlMutation }
           );
           await vi.advanceTimersByTimeAsync(10);
-          if (retryable) {
-            expect(forwarded).toHaveLength(1);
-            expect(host.defers).toHaveLength(1);
-            expect(host.commits).toHaveLength(0);
-          } else {
-            expect(forwarded).toHaveLength(2);
-            expect(host.rollbacks).toEqual(['restored-1']);
-            expect(host.commits).toMatchObject([
-              { transactionId: 'restored-2', data: readResult },
-            ]);
-          }
+          expect(forwarded).toHaveLength(2);
+          expect(host.defers).toHaveLength(0);
+          expect(host.rollbacks).toEqual(['restored-1']);
+          expect(host.commits).toMatchObject([
+            { transactionId: 'restored-2', data: readResult },
+          ]);
         } finally {
           vi.useRealTimers();
         }
@@ -2676,17 +2847,18 @@ describe('normalizedCacheExchange', () => {
               replacementTransactionId: 'newer-intent',
             });
           }
-          const error = new CombinedError({
-            graphQLErrors: [
-              {
-                message: 'Draft rejected',
-                extensions:
-                  outcome === 'retryable'
-                    ? { code: 'INTERNAL', retryable: true }
-                    : { code: 'DRAFT_ALREADY_SENT' },
-              },
-            ],
-          });
+          const error = new CombinedError(
+            outcome === 'retryable'
+              ? { networkError: new Error('Connection lost') }
+              : {
+                  graphQLErrors: [
+                    {
+                      message: 'Draft rejected',
+                      extensions: { code: 'DRAFT_ALREADY_SENT' },
+                    },
+                  ],
+                }
+          );
           const { client, forwarded } = harness(
             host,
             () => ({ error, data: undefined }),
@@ -4002,7 +4174,7 @@ describe('normalizedCacheExchange', () => {
       });
     });
 
-    it('retries a draft response failure with the same handles and commits after recovery', async () => {
+    it('requires explicit retry after a draft application failure and preserves its handles', async () => {
       vi.useFakeTimers();
       try {
         const variables = {
@@ -4054,30 +4226,37 @@ describe('normalizedCacheExchange', () => {
         await vi.advanceTimersByTimeAsync(0);
 
         expect(attempts).toBe(1);
-        expect(host.rollbacks).toHaveLength(0);
-        expect(host.defers).toEqual([
-          { transactionId: 'txn-1', error: error.message },
-        ]);
-        expect(results[0]?.error).toBeUndefined();
+        expect(host.rollbacks).toEqual(['txn-1']);
+        expect(host.defers).toHaveLength(0);
+        expect(results[0]?.error).toBe(error);
         expect(optimisticMutationDispositionOf(results[0])).toEqual({
-          kind: 'queued',
-          transactionId: 'txn-1',
+          kind: 'permanently-failed',
+          error,
         });
         await vi.advanceTimersByTimeAsync(1_000);
+        expect(attempts).toBe(1);
+        ops.next(
+          makeOperation(
+            'mutation',
+            createRequest(SaveEmailDraftDocument, variables),
+            makeMutationOp(2, saved).context
+          )
+        );
+        await vi.advanceTimersByTimeAsync(0);
 
         expect(attempts).toBe(2);
         expect(forwarded.map((op) => op.variables)).toEqual([
           variables,
           variables,
         ]);
-        expect(host.begins).toHaveLength(1);
+        expect(host.begins).toHaveLength(2);
         expect(host.commits).toEqual([
           expect.objectContaining({
-            transactionId: 'txn-1',
+            transactionId: 'txn-2',
             data: saved,
           }),
         ]);
-        expect(host.rollbacks).toHaveLength(0);
+        expect(host.rollbacks).toEqual(['txn-1']);
       } finally {
         vi.useRealTimers();
       }

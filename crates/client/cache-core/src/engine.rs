@@ -263,6 +263,8 @@ pub enum RollbackOptimisticWriteResult {
 
 /// Borrowed inputs for atomically beginning one optimistic mutation.
 pub struct BeginOptimisticWrite<'a> {
+    /// Opaque durable client correlation, never sent to the server.
+    pub client_metadata: Option<&'a Json>,
     /// Local entities whose IDs must be resolved from the committed response.
     pub identity_bindings: &'a [IdentityBinding],
     /// Caller-supplied RFC UUID used only for safe coalescing.
@@ -1628,6 +1630,7 @@ impl<S: Storage> Engine<S> {
             .map_err(|_| EngineError::InvalidMutationUuid(input.uuid.to_owned()))?;
         self.ensure_revision_can_advance()?;
         let BeginOptimisticWrite {
+            client_metadata,
             uuid: _,
             query,
             operation_name,
@@ -1688,6 +1691,7 @@ impl<S: Storage> Engine<S> {
             IdentityState::NotHydrated | IdentityState::Missing => None,
         };
         let source = OptimisticSource {
+            client_metadata: client_metadata.cloned(),
             identity_bindings: identity_bindings.to_vec(),
             mutation_data: data.clone(),
             link_patches: patches,
@@ -1880,6 +1884,20 @@ impl<S: Storage> Engine<S> {
             write_result: begun.write_result,
             initial_claim,
         })
+    }
+
+    /// Reads durable queue entries without acquiring or changing their leases.
+    pub async fn inspect_mutations(
+        &self,
+    ) -> Result<Vec<crate::queue::MutationInspection>, EngineError<S::Error>> {
+        self.storage
+            .load_mutation_queue()
+            .await
+            .map_err(EngineError::Storage)?
+            .into_iter()
+            .map(crate::queue::MutationInspection::try_from)
+            .collect::<Result<_, _>>()
+            .map_err(EngineError::InvalidOptimisticProjection)
     }
 
     /// Claims the oldest runnable mutation. A leased or backed-off head

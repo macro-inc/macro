@@ -61,6 +61,7 @@ async fn enqueue(
         .begin_optimistic_write(
             None,
             BeginOptimisticWrite {
+                client_metadata: None,
                 uuid: UUID,
                 query: if delete { DELETE } else { SAVE },
                 operation_name: Some(if delete {

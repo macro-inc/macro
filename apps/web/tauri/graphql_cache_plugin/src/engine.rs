@@ -185,6 +185,8 @@ pub enum InitialMutationClaimWire {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ClaimedMutationWire {
+    /// Opaque client correlation restored from the durable source.
+    pub client_metadata: Option<serde_json::Value>,
     /// Durable mutation id.
     pub transaction_id: String,
     /// Caller coalescing UUID.
@@ -291,8 +293,13 @@ impl TryFrom<ClaimedMutation> for ClaimedMutationWire {
 
     fn try_from(claimed: ClaimedMutation) -> Result<Self, Self::Error> {
         let requires_confirmation = claimed.queued.requires_confirmation();
+        let client_metadata = cache_core::queue::decode_optimistic_source(
+            &claimed.queued.optimistic.optimistic_data_json,
+        )?
+        .client_metadata;
         let request = claimed.queued.mutation.request;
         Ok(Self {
+            client_metadata,
             transaction_id: claimed.queued.id.to_string(),
             uuid: claimed.queued.uuid.to_string(),
             superseded: claimed.queued.superseded,
@@ -688,6 +695,7 @@ impl EngineHandle {
         lease_owner: String,
         now_ms: i64,
         lease_expires_at_ms: i64,
+        client_metadata: Option<serde_json::Value>,
     ) -> Result<EnqueueOptimisticMutationResultWire, String> {
         let mut state = self.inner.lock().await;
         let EngineState { engine, ops, .. } = &mut *state;
@@ -705,6 +713,7 @@ impl EngineHandle {
             .enqueue_optimistic_mutation_with_projections(
                 origin,
                 BeginOptimisticWrite {
+                    client_metadata: client_metadata.as_ref(),
                     uuid: &uuid,
                     query: &query,
                     operation_name: operation_name.as_deref(),
@@ -739,6 +748,18 @@ impl EngineHandle {
             result: wire_write_result(ops, result.write_result),
             initial_claim,
         })
+    }
+
+    /// Reads queued operations without acquiring their leases.
+    pub async fn inspect_mutations(
+        &self,
+    ) -> Result<Vec<cache_core::queue::MutationInspection>, String> {
+        let state = self.inner.lock().await;
+        state
+            .engine
+            .inspect_mutations()
+            .await
+            .map_err(|error| error.to_string())
     }
 
     /// Claims the strict mutation queue head when it is runnable.

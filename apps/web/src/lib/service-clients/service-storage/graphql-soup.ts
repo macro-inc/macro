@@ -15,6 +15,7 @@ import {
 } from '@graphql-cache/exchange/normalized-cache-exchange';
 import { CacheNavigationError } from '@graphql-cache/host/navigation-error';
 import { createRetirableCacheHost } from '@graphql-cache/host/retirable-host';
+import { NativeCacheUpgradeRequiredError } from '@graphql-cache/host/tauri-host';
 import type { CacheHost } from '@graphql-cache/host/types';
 import {
   createTauriCacheHost,
@@ -27,6 +28,7 @@ import { getBrowserTursoCacheRolloutDecision } from '@graphql-cache/rollout';
 import { getOrCreateCacheScope } from '@graphql-cache/scope';
 import { Telemetry } from '@macro-inc/observability';
 import { notificationStateFromGraphql } from '@notifications/notification-state';
+import { localDraftQueueLifecycle } from '@queries/email/local-drafts';
 import { getMacroApiToken } from '@service-auth/fetch';
 import type { ApiUserNotification } from '@service-notification/generated/schemas/apiUserNotification';
 import type { ChannelType } from '@service-notification/generated/schemas/channelType';
@@ -496,9 +498,17 @@ export function getGraphqlSoupClient(): Client {
       }
       reportCacheError(error, 'initialization');
       fallbackAfterInitializationFailure();
-      toast.failure('Local cache unavailable', {
-        subtext: 'Macro will continue without local caching for this session.',
-      });
+      toast.failure(
+        error instanceof NativeCacheUpgradeRequiredError
+          ? 'Macro update required'
+          : 'Local cache unavailable',
+        {
+          subtext:
+            error instanceof NativeCacheUpgradeRequiredError
+              ? error.message
+              : 'Macro will continue without local caching for this session.',
+        }
+      );
       console.warn(
         'graphql cache async init failed; using uncached client',
         error
@@ -527,6 +537,7 @@ export function getGraphqlSoupClient(): Client {
         preferGetMethod: false,
         exchanges: [
           normalizedCacheExchange(host, {
+            ...localDraftQueueLifecycle(host),
             deletedRecordKeys: emailCacheDeletionKeys,
             onCacheError: (error, operation) => {
               // Initialization failure already reports before retiring the host;
@@ -548,8 +559,7 @@ export function getGraphqlSoupClient(): Client {
             extractIdentity: (data) =>
               (data as Partial<SoupQuery | GroupSoupQuery> | undefined)?.user
                 ?.id,
-            // Preserve the optimistic layer on transport failures and on
-            // application failures the server explicitly allows us to retry.
+            // Preserve optimistic intent only while transport failures retry.
             shouldRetryMutation: shouldRetryGraphqlMutation,
             delegateRevalidation: delegateChannelNotificationRefresh,
           }),

@@ -84,6 +84,44 @@ describe('useUploadDraftAttachmentsMutation', () => {
     expect(toastFailureMock).not.toHaveBeenCalled();
   });
 
+  it('cleans up a created record when its durable receipt cannot be written', async () => {
+    const attachment = file();
+    const clear = vi.fn();
+    const mutation = mountEmailMutation(useUploadDraftAttachmentsMutation);
+    await expect(
+      mutation.mutateAsync({
+        draftID: 'draft-1',
+        attachments: [attachment],
+        onAttachmentAdded: async () => {
+          throw new Error('Disk full');
+        },
+        onAttachmentUploadFailed: clear,
+      })
+    ).rejects.toThrow('Upload failed');
+    expect(uploadToPresignedUrlMock).not.toHaveBeenCalled();
+    expect(removeDraftAttachmentMock).toHaveBeenCalledWith(
+      { draftID: 'draft-1', attachmentID: 'att-1' },
+      undefined
+    );
+    expect(clear).toHaveBeenCalledWith(attachment);
+  });
+
+  it('retains a successful upload when recording its receipt fails', async () => {
+    uploadToPresignedUrlMock.mockResolvedValue(ok(undefined));
+    const mutation = mountEmailMutation(useUploadDraftAttachmentsMutation);
+    await expect(
+      mutation.mutateAsync({
+        draftID: 'draft-1',
+        attachments: [file()],
+        onAttachmentUploaded: async () => {
+          throw new Error('Disk full');
+        },
+      })
+    ).rejects.toThrow('Disk full');
+    expect(uploadToPresignedUrlMock).toHaveBeenCalledOnce();
+    expect(removeDraftAttachmentMock).not.toHaveBeenCalled();
+  });
+
   it('keeps the id when the record removal fails after a failed upload', async () => {
     uploadToPresignedUrlMock.mockResolvedValue(
       err([{ code: 'SERVER_ERROR', message: 'upload failed' }])

@@ -118,6 +118,14 @@ through the bundle updater, set `MIN_NATIVE_BUILD` to the first native build tha
 includes that command. Older binaries must receive a native update before this
 bundle; they cannot validate a saved hydration cursor against the cache database.
 
+Durable email-draft recovery additionally requires
+`graphql_cache_inspect_mutations` and queued `client_metadata` support. Set
+`MIN_NATIVE_BUILD` to the first full native build containing both before publishing
+this frontend as an OTA bundle. The frontend probes this command before claiming
+or enqueueing mutations. An older binary uses the existing uncached fallback and
+shows an update-required notice; its existing mutation queue stays intact until
+the user installs the native update.
+
 ## Automated offline tests (Linux)
 
 See [native E2E](../../tests/native/README.md) for the isolated WebDriver setup,

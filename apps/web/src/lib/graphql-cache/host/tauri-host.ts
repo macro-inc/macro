@@ -1,3 +1,4 @@
+import type { MutationInspection } from '../protocol';
 /**
  * Tauri CacheHost: talks to the native cache engine living in the Tauri
  * host process (graphql_cache_plugin) over invoke commands. The host
@@ -89,6 +90,17 @@ export interface TauriHostOptions {
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
 const ENTITY_FILTER_COMMAND = 'graphql_cache_entity_filter';
+const INSPECT_MUTATIONS_COMMAND = 'graphql_cache_inspect_mutations';
+
+/** An OTA bundle cannot safely replay drafts using an older native queue API. */
+export class NativeCacheUpgradeRequiredError extends Error {
+  constructor() {
+    super(
+      'Update Macro to sync drafts saved on this device. Your queued drafts are preserved until the app is updated.'
+    );
+    this.name = 'NativeCacheUpgradeRequiredError';
+  }
+}
 
 export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
   const clientId = crypto.randomUUID();
@@ -220,10 +232,25 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     unlisten?.();
   }
 
-  const ready = request<void>('graphql_cache_init', {
-    scope: options.scope,
-    hotCapacity: options.hotCapacity,
-  });
+  const ready = (async () => {
+    await request<void>('graphql_cache_init', {
+      scope: options.scope,
+      hotCapacity: options.hotCapacity,
+    });
+    // Probe before any enqueue/claim. Older binaries silently ignore new
+    // metadata arguments, so waiting until a draft fails would lose correlation.
+    try {
+      await request<MutationInspection[]>(INSPECT_MUTATIONS_COMMAND, {});
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message === `Command ${INSPECT_MUTATIONS_COMMAND} not found`
+      ) {
+        throw new NativeCacheUpgradeRequiredError();
+      }
+      throw error;
+    }
+  })();
   void (async () => {
     try {
       await ready;
@@ -379,6 +406,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
           linkPatches: args.linkPatches,
           revalidations: args.revalidations,
           identityBindings: args.identityBindings,
+          clientMetadata: args.clientMetadata,
           createdAtMs: claim.nowMs,
           owner: claim.owner,
           nowMs: claim.nowMs,
@@ -417,6 +445,10 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       );
     },
 
+    async inspectMutations() {
+      await ready;
+      return await request<MutationInspection[]>(INSPECT_MUTATIONS_COMMAND, {});
+    },
     async claimNextMutation(
       owner: string,
       nowMs: number,

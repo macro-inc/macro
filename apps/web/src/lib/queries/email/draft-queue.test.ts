@@ -1,3 +1,4 @@
+import type { LocalDraft } from '@app/features/email-compose/core/local-draft';
 import { optimisticContextOf } from '@graphql-cache/exchange/optimistic';
 import type { MutationSettlement } from '@graphql-cache/protocol';
 import type {
@@ -7,6 +8,11 @@ import type {
 import { type Client, createClient, type Operation } from '@urql/core';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { map, pipe } from 'wonka';
+import {
+  localDraftMessage,
+  readLocalDraft,
+  restoreLocalAttachments,
+} from './local-drafts';
 
 const mocks = vi.hoisted(() => ({
   readRecordsByKeys: vi.fn(),
@@ -287,4 +293,74 @@ it('retains a sent record mutation handle without returning editable content', a
     persistence: 'committed',
     mutationUuid: handle,
   });
+});
+
+vi.mock('./local-drafts', () => ({
+  readLocalDraft: vi.fn(async () => undefined),
+  localDraftMessage: vi.fn(),
+  restoreLocalAttachments: vi.fn(),
+  beginDraftAttempt: vi.fn(),
+  markDraftAttemptQueued: vi.fn(),
+  draftSyncPaused: vi.fn(),
+  localDraftStore: { subscribe: vi.fn(() => () => {}) },
+}));
+
+const workingCopy = (status: LocalDraft['status']): LocalDraft => ({
+  key: handle,
+  accountId: 'owner',
+  generation: 'generation',
+  revision: 2,
+  acknowledgedRevision: 2,
+  draftId: handle,
+  serverDraftId: serverId,
+  threadId: 'local-thread',
+  serverThreadId: 'server-thread',
+  content: { subject: 'Stale local subject' },
+  attachments: [],
+  status,
+  updatedAt: 1,
+});
+
+it('reads authoritative content once the local working copy is synced', async () => {
+  const { draftResult } = await setup();
+  const cached = draftResult();
+  cached.records[0].record.subject = 'New edit from another device';
+  vi.mocked(readLocalDraft).mockResolvedValue(workingCopy('synced'));
+  mocks.readRecordsByKeys.mockResolvedValue(cached);
+  const result = await readEmailDraft(serverId);
+  expect(result?.draft?.subject).toBe('New edit from another device');
+  expect(restoreLocalAttachments).not.toHaveBeenCalled();
+});
+
+it('keeps a confirmed server identity while attachment receipts are pending', async () => {
+  await setup();
+  const local = workingCopy('dirty');
+  local.attachments = [
+    {
+      type: 'local',
+      id: 'file',
+      name: 'a.txt',
+      mimeType: 'text/plain',
+      size: 1,
+      lastModified: 0,
+      uploaded: false,
+    },
+  ];
+  vi.mocked(readLocalDraft).mockResolvedValue(local);
+  mocks.readRecordsByKeys.mockResolvedValue({ revision: '1', records: [] });
+  expect(await readEmailDraft(serverId)).toMatchObject({
+    persistence: 'committed',
+    local,
+  });
+  expect(localDraftMessage).toHaveBeenCalledWith(local);
+});
+
+it('does not reopen unsynced content over an authoritative sent record', async () => {
+  const { draftResult } = await setup();
+  const cached = draftResult();
+  cached.records[0].record.isDraft = false;
+  vi.mocked(readLocalDraft).mockResolvedValue(workingCopy('failed'));
+  mocks.readRecordsByKeys.mockResolvedValue(cached);
+  expect((await readEmailDraft(serverId))?.draft).toBeUndefined();
+  expect(restoreLocalAttachments).not.toHaveBeenCalled();
 });

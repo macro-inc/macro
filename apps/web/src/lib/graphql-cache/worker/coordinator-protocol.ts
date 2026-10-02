@@ -483,6 +483,7 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
       );
     case 'current-revision':
     case 'current-storage-generation':
+    case 'inspect-mutations':
       return hasOnlyKeys(value, ['id', 'kind']);
     case 'read':
       return (
@@ -555,6 +556,7 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
           'linkPatches',
           'revalidations',
           'identityBindings',
+          'clientMetadata',
           'createdAtMs',
           'owner',
           'nowMs',
@@ -569,6 +571,7 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
         (value.linkPatches === undefined || Array.isArray(value.linkPatches)) &&
         (value.revalidations === undefined ||
           Array.isArray(value.revalidations)) &&
+        isOptionalRecord(value.clientMetadata) &&
         (value.identityBindings === undefined ||
           (Array.isArray(value.identityBindings) &&
             value.identityBindings.length <= 32 &&
