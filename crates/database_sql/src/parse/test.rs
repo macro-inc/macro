@@ -1079,9 +1079,7 @@ fn a_bad_alter_says_what_would_have_been_accepted() {
         (
             "ALTER TABLE deals ALTER COLUMN owner TYPE entity(DATABASE_ROW)",
             49..61,
-            "a relation to another table's rows is made with the ChangeColumnType tool's \
-             linkToTableId, not ALTER COLUMN"
-                .into(),
+            "use relation([database.]table) to reference another table's rows".into(),
         ),
         (
             "ALTER TABLE deals ADD COLUMN notes text",

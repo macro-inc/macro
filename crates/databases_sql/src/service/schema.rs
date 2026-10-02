@@ -177,11 +177,13 @@ impl<
                 tables,
             } => {
                 let database = database(&catalog, Some(&name), request.scope)?;
+                let selected =
+                    ViewerCatalog::new(vec![database.clone()], Some(database.database.id));
                 let order = tables
                     .iter()
                     .map(|name| {
                         table(
-                            &catalog,
+                            &selected,
                             &TableName {
                                 database: Some(Identifier(database.database.name.clone())),
                                 table: name.clone(),
@@ -322,11 +324,9 @@ impl<
         )
         .await
         .map_err(|error| match error {
-            AccessError::Unauthorized | AccessError::UnauthorizedWithMessage(_) => {
-                SqlError::TableReadOnly {
-                    table: database_id.to_string(),
-                }
-            }
+            AccessError::Unauthorized | AccessError::UnauthorizedWithMessage(_) => refused(
+                format!("Database {database_id} is read-only; editing access is required."),
+            ),
             AccessError::NotFound(_) => SqlError::NotFound,
             other => SqlError::Infrastructure(rootcause::Report::new(other).into_dynamic()),
         })?;

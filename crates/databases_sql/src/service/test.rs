@@ -1142,3 +1142,44 @@ async fn sql_database_creation_acknowledges_id_and_actor_without_a_followup_read
     assert_eq!(world.created[0].name, "Planning");
     assert_eq!(world.created[0].acting_bot, agent_for(OWNER).acting_bot);
 }
+
+#[tokio::test]
+async fn schema_reorder_resolves_tables_only_in_the_selected_database() {
+    for (database, other_database, name, other_name, sql_name, scope) in [
+        ("Offsite", "offsite", "Guests", "guests", "GUESTS", None),
+        (
+            "macro",
+            "other",
+            "people",
+            "People",
+            "people",
+            Some(OFFSITE),
+        ),
+    ] {
+        let world = world();
+        {
+            let mut held = world.lock().unwrap();
+            held.databases[0].database.name = database.into();
+            held.databases[0].tables[0].table.name = name.into();
+            held.databases[1].database.name = other_database.into();
+            held.databases[1].tables[0].table.name = other_name.into();
+            held.op_answers.push_back(Ok(Vec::new()));
+        }
+        sql(&world)
+            .execute(
+                agent_for(OWNER),
+                SqlRequest {
+                    sql: format!("ALTER DATABASE {database} REORDER TABLES ({sql_name})"),
+                    scope,
+                    base_versions: HashMap::new(),
+                },
+            )
+            .await
+            .unwrap();
+        let held = world.lock().unwrap();
+        assert_eq!(held.applied[0].database, OFFSITE);
+        assert!(
+            matches!(&held.applied[0].ops[0], DatabaseOp::ReorderTables { order } if order == &[GUESTS])
+        );
+    }
+}
