@@ -38,8 +38,7 @@ use bots::domain::ports::BotRepo;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
 use chrono::{DateTime, Utc};
 use entity_access_db_utils::{
-    AccessLevel, EntityAccessSourceType, EntityType, delete_entity_access_rows,
-    insert_entity_access_row,
+    EntityAccessSourceType, EntityType, delete_entity_access_rows, insert_entity_access_row,
 };
 use entity_registry::BotFacts;
 use entity_registry_db_utils::{
