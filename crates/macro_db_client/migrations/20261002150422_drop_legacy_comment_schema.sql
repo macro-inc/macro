@@ -1,7 +1,8 @@
--- Contract release #6732 is deployed in v2026.10.1.0. Before deployment of
--- this irreversible migration: deploy the PDF threadId-read prerequisite to
--- every consumer, take a production snapshot, and confirm no external SQL
--- readers remain (see docs/comment-schema-drop.md). Merge alone is insufficient.
+-- Contract release #6732 is deployed in v2026.10.1.0. This PR includes the
+-- final PDF threadId query fix; the user accepted old-instance PDF failures
+-- during the same-release rollout. Recovery requires successful service rollout.
+-- Before deployment, verify a production snapshot and external SQL-reader check
+-- (see docs/comment-schema-drop.md). This PR does not authorize deployment.
 SET LOCAL lock_timeout = '5s';
 
 -- Replace the function before removing the column its old body references.

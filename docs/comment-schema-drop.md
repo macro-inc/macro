@@ -1,11 +1,25 @@
 # Comment schema drop release
 
-[Schema-drop PR #7360](https://github.com/macro-inc/macro/pull/7360) removes the
-legacy comment sources after the unified message cutover. It is **not authorized for merge or deployment yet**. Migrations deploy
-before services, and the PDF highlight query in contract commit `f7b3753db2`
-still reads `"PdfHighlightAnchor"."threadId"`. The service-only prerequisite
-[#7358](https://github.com/macro-inc/macro/pull/7358) must be **deployed to every production
-consumer before this drop deploys**; merging that prerequisite is insufficient.
+[Schema-drop PR #7360](https://github.com/macro-inc/macro/pull/7360) includes both
+the final PDF highlight query fix and the legacy schema drop in one release.
+The user explicitly accepted temporary PDF highlight discussion failures on
+October 2, overriding the usual separate-release rule in
+[Database development](DATABASE_DEVELOPMENT.md#safe-database-schema-changes)
+for this change. The separate prerequisite PR #7358 is superseded.
+This PR preparation does not authorize merge or deployment.
+
+Migrations deploy before services. After the drop commits, old service instances
+still executing the `"PdfHighlightAnchor"."threadId"` predicate will fail to
+attach discussions to highlights until the updated service replaces them.
+Recovery depends on a successful rollout; there is no guaranteed 30-minute
+limit. A failed rollout or automatic rollback to the old binary leaves that
+operation broken and requires rolling forward to the compatible code.
+
+In the October 1 release, migrations finished at 22:31:53 UTC and the document
+service deployment job finished at 22:33:12 UTC (79 seconds later). The service
+uses `continueBeforeSteadyState: true`, so job completion does not establish when
+all old instances stopped serving requests. This is context, not an outage SLA.
+The database table rewrite also has its own locking impact, described below.
 
 ## Completed rollout evidence
 
@@ -37,10 +51,10 @@ consumer before this drop deploys**; merging that prerequisite is insufficient.
 
 ## Before deploying the drop
 
-1. Deploy the PDF prerequisite and record its release SHA, release ancestry,
-   and successful deployment of every consumer. Verify PDF highlight discussion
-   creation/reattachment, `/messages`, PDF export, and numeric document links.
-   The older #6732 deployment alone does not close this gate.
+1. Release the query fix and drop together from this PR. Confirm the release
+   includes the removal of the PDF highlight `threadId` predicate and that legacy
+   writes remain frozen. Imports must be complete, with no importer scheduled or
+   running: an old importer could overwrite a newly attached highlight root.
 2. Check external SQL readers, scripts, BI/reporting, and operational jobs for
    both retired `channel_id` columns, PDF `threadId`, and the five source tables.
    Confirm that no retired importer is scheduled or running.
@@ -97,7 +111,9 @@ links, notification deletion, and channel deletion. Monitor database errors
 for retired identifiers and latency/lock changes.
 
 If application rollback is necessary after the schema drop, use only a release
-that no longer references any removed schema (including the PDF prerequisite).
+that no longer references any removed schema, including the PDF highlight
+`threadId` predicate. Confirm service rollout completion separately from the
+deployment job and roll forward if the old binary remains active.
 Rolling back to #6732 or earlier is unsafe. Recovering deleted source tables
 requires the approved snapshot/recovery procedure; do not fabricate an empty
 replacement schema or rerun retired importers.
