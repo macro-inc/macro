@@ -6,6 +6,7 @@ import type { ItemType } from '@service-storage/client';
 import { Button, cn } from '@ui';
 import { type Component, For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { SidePanel } from './side-panel';
 import { HeaderIsland } from './split-layout/components/HeaderIsland';
 import {
   BlockSplitFileMenu,
@@ -143,6 +144,7 @@ export function ResponsiveBlockToolbar(props: BlockToolbarProps) {
         <>
           <SplitHeaderRight>
             <div class="order-[1000] flex items-center gap-1">
+              <SidePanel.HeaderActionsOutlet />
               <For each={headerTools()}>
                 {(tool) => (
                   <Show when={!tool.condition || tool.condition()}>
@@ -187,6 +189,11 @@ export function ResponsiveBlockToolbar(props: BlockToolbarProps) {
         </>
       }
     >
+      <SplitHeaderRight>
+        <HeaderIsland class="has-[[data-side-panel-header-actions]:empty]:hidden">
+          <SidePanel.HeaderActionsOutlet />
+        </HeaderIsland>
+      </SplitHeaderRight>
       <SplitTitleFileMenu>
         <BlockSplitFileMenu
           id={props.id}

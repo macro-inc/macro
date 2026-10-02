@@ -1,3 +1,4 @@
+import { DocumentTitleHoverCard } from '@app/components/entity-detail/DocumentTitleHoverCard';
 import { ViewBreadcrumbs } from '@app/components/view-shell';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
@@ -60,19 +61,26 @@ export function FileDetailBreadcrumbItem(props: {
     >
       {(item) => (
         <div class="flex min-w-0 items-center motion-safe:animate-[dialog-overlay-open_150ms_ease-out]">
-          <ViewBreadcrumbs.Button
-            class="gap-1.5"
-            isActive={item.isActive()}
-            onClick={item.onSelect}
-            tooltip={documentName()}
+          <DocumentTitleHoverCard
+            documentId={documentId()}
+            name={documentName()}
+            ownerId={props.documentMetadata.owner}
+            createdAt={props.documentMetadata.createdAt}
+            updatedAt={props.documentMetadata.updatedAt}
           >
-            <EntityIcon
-              targetType={props.blockType}
-              size="xs"
-              class="shrink-0"
-            />
-            <span class="truncate">{documentName()}</span>
-          </ViewBreadcrumbs.Button>
+            <ViewBreadcrumbs.Button
+              class="gap-1.5"
+              isActive={item.isActive()}
+              onClick={item.onSelect}
+            >
+              <EntityIcon
+                targetType={props.blockType}
+                size="xs"
+                class="shrink-0"
+              />
+              <span class="truncate">{documentName()}</span>
+            </ViewBreadcrumbs.Button>
+          </DocumentTitleHoverCard>
           <div class="shrink-0">
             <SplitFileMenu
               id={documentId()}

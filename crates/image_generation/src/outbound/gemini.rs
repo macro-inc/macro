@@ -224,7 +224,23 @@ impl GenerateContentResponse {
             .decode(data.data.as_bytes())
             .context("Gemini image data is not valid base64")
             .map_err(ImageGenerationError::Provider)?;
+        let (width, height) = image::ImageReader::new(std::io::Cursor::new(&bytes))
+            .with_guessed_format()
+            .context("could not identify generated image format")
+            .and_then(|reader| {
+                reader
+                    .into_dimensions()
+                    .context("could not read generated image dimensions")
+            })
+            .map_err(ImageGenerationError::Provider)?;
+        if width == 0 || height == 0 {
+            return Err(ImageGenerationError::Provider(anyhow::anyhow!(
+                "generated image dimensions must be positive"
+            )));
+        }
         Ok(GeneratedImage {
+            width,
+            height,
             bytes,
             mime_type: data.mime_type,
             note,

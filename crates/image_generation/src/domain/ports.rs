@@ -74,3 +74,15 @@ pub trait ImageGenerationService: Send + Sync {
         image: NewGeneratedImage,
     ) -> impl Future<Output = Result<StoredGeneratedImage, GenerateImageError>> + Send;
 }
+
+/// Composes saved images using the editor's serialization contract.
+#[async_trait::async_trait]
+pub trait ImageMarkdownComposer: Send + Sync {
+    /// Return channel markup that preserves the intrinsic image dimensions.
+    async fn compose_image(
+        &self,
+        image: &StoredImage,
+        width: u32,
+        height: u32,
+    ) -> Result<String, super::models::ComposeImageError>;
+}

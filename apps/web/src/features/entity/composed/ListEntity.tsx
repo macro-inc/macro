@@ -73,6 +73,8 @@ export {
 
 interface ListEntityProps extends BaseListEntityProps {
   showUnrollNotifications?: boolean;
+  /** Collection-owned schedule metadata for the original entity row. */
+  scheduleStatus?: JSX.Element;
 }
 
 export function MaybeEntityRow(props: {
@@ -102,14 +104,17 @@ export function ListEntity(props: ListEntityProps) {
   const rowActions = children(() => props.actions);
   const leadingAction = children(() => props.leadingAction);
   const scheduleStatus = children(() => (
-    <Show when={isReminderEntity(props.entity) && props.entity}>
-      {(entity) => (
-        <ReminderRowSchedule
-          entity={entity()}
-          onToggleDone={props.onToggleReminderDone}
-        />
-      )}
-    </Show>
+    <>
+      {props.scheduleStatus}
+      <Show when={isReminderEntity(props.entity) && props.entity}>
+        {(entity) => (
+          <ReminderRowSchedule
+            entity={entity()}
+            onToggleDone={props.onToggleReminderDone}
+          />
+        )}
+      </Show>
+    </>
   ));
 
   const unread = () => unreadFilterFn(props.entity);

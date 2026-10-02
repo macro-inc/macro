@@ -720,7 +720,7 @@ html[data-theme-light='false'] {
    say), so the flattening stops at an island boundary. */
 @utility header-actions {
   & [data-button]:is([data-variant="ghost"], [data-variant="outline"]):not([data-header-island] *) {
-    @apply glass-none rounded-xl border-0 bg-transparent;
+    @apply glass-none border-0 bg-transparent;
 
     &:not(:hover):not(:active) {
       background-image: none;

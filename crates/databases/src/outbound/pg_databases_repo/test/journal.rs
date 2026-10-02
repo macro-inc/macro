@@ -306,7 +306,7 @@ async fn every_committed_batch_of_the_guest_list_is_journaled_with_its_inverse(p
     wolf_deletes_plus_ones(&pool, &wedding).await;
 
     let changes = sqlx::query!(
-        r#"SELECT id, database_id, table_id, version, actor, acting_bot, ops, inverse
+        r#"SELECT id, database_id, table_id, version, actor, acting_bot, ops, inverse, payload_version
            FROM database_changes ORDER BY id"#
     )
     .fetch_all(&pool)
@@ -315,6 +315,7 @@ async fn every_committed_batch_of_the_guest_list_is_journaled_with_its_inverse(p
     let changes: Vec<_> = changes
         .into_iter()
         .map(|change| {
+            assert_eq!(change.payload_version, 1);
             (
                 change.id,
                 change.database_id,
@@ -775,4 +776,44 @@ async fn applying_each_inverse_newest_first_puts_the_table_back_as_it_was(pool: 
     }
 
     assert_eq!(restored, vec![without_omar, maybe, inserted, empty]);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn unknown_journal_payload_versions_are_refused_by_every_history_reader(pool: PgPool) {
+    let wedding = wedding(&pool).await;
+    let (maria, _) = insert_guests(&pool, &wedding).await;
+    let repo = PgDatabasesRepo::new(pool.clone(), PropertiesPgRepo::new(pool.clone()));
+    let changes = repo
+        .changes_after(wedding.table_id, TableVersion(0))
+        .await
+        .unwrap();
+    let change = changes.last().unwrap().change.id;
+    assert!(
+        !repo
+            .row_history(wedding.database_id, wedding.table_id, maria)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+
+    sqlx::query!(
+        "UPDATE database_changes SET payload_version = 2 WHERE id = $1",
+        change.0
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let errors = [
+        repo.change(wedding.database_id, change).await.unwrap_err(),
+        repo.changes_after(wedding.table_id, TableVersion(0))
+            .await
+            .unwrap_err(),
+        repo.row_history(wedding.database_id, wedding.table_id, maria)
+            .await
+            .unwrap_err(),
+    ];
+    for error in errors {
+        assert!(matches!(error, crate::outbound::pg_databases_repo::PgDatabasesRepoError::UnsupportedJournalPayloadVersion(2)));
+    }
 }

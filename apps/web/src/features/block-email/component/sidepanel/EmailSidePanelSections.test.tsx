@@ -15,7 +15,10 @@ vi.mock('@queries/storage/attachment-references', () => ({
 vi.mock(
   '@app/features/email-thread/context/email-thread-state-context',
   () => ({
-    useEmailThreadState: () => ({ permissions: () => ({ isOwner: true }) }),
+    useEmailThreadState: () => ({
+      permissions: () => ({ isOwner: true }),
+      thread: () => undefined,
+    }),
   })
 );
 vi.mock('@app/features/activity/views/entity-activity-section', () => ({
@@ -42,6 +45,7 @@ vi.mock('@components/app/side-panel', () => ({
       </span>
     ),
     Loading: () => null,
+    Footer: (props: ParentProps) => <footer>{props.children}</footer>,
   },
 }));
 

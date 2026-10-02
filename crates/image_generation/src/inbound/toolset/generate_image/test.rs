@@ -147,6 +147,9 @@ fn response_omits_an_absent_note() {
         url: "https://static.example/file/image".to_string(),
         mime_type: "image/png".to_string(),
         size_bytes: 3,
+        width: Some(1536),
+        height: Some(1024),
+        markdown: None,
         note: None,
     })
     .unwrap();
@@ -156,7 +159,31 @@ fn response_omits_an_absent_note() {
             "staticFileId": "file",
             "url": "https://static.example/file/image",
             "mimeType": "image/png",
-            "sizeBytes": 3
+            "sizeBytes": 3,
+            "width": 1536,
+            "height": 1024
         })
     );
+}
+
+#[test]
+fn response_forwards_markup_from_the_service() {
+    let response = GenerateImageResponse::from(StoredGeneratedImage {
+        static_file: crate::domain::models::StoredImage {
+            id: uuid::Uuid::from_u128(123),
+            url: "https://static.example/file/image".to_string(),
+        },
+        mime_type: "image/png".to_string(),
+        size_bytes: 100,
+        width: 1536,
+        height: 1024,
+        markdown: "markup returned by Lexical".to_string(),
+        note: None,
+    });
+    assert_eq!(
+        response.markdown.as_deref(),
+        Some("markup returned by Lexical")
+    );
+    assert_eq!(response.width, Some(1536));
+    assert_eq!(response.height, Some(1024));
 }

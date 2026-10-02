@@ -11,6 +11,7 @@ export const EMAIL_TABS: EmailTabItem[] = [
   { id: 'favorites', label: 'Favorites' },
   { id: 'sent', label: 'Sent' },
   { id: 'scheduled', label: 'Scheduled' },
+  { id: 'reminders', label: 'Reminders' },
   { id: 'calendar', label: 'Calendar' },
   { id: 'drafts', label: 'Drafts' },
   { id: 'shared', label: 'Shared' },

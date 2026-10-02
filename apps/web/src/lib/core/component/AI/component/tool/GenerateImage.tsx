@@ -1,25 +1,57 @@
+import { constrainImageDimensions } from '@macro-inc/lexical-core/utils/media';
 import LoadingSpinner from '@phosphor/spinner.svg';
 import { createSignal, Show } from 'solid-js';
 import { createToolRenderer, useToolError } from './ToolRenderer';
 
-function GeneratedImage(props: { url: string }) {
+function GeneratedImage(props: {
+  url: string;
+  width?: number | null;
+  height?: number | null;
+}) {
+  const dimensions = () =>
+    constrainImageDimensions(
+      props.width ?? undefined,
+      props.height ?? undefined,
+      undefined,
+      384
+    );
   const [failedUrl, setFailedUrl] = createSignal<string>();
   return (
-    <Show
-      when={failedUrl() !== props.url}
-      fallback={
-        <div role="status" class="text-sm text-ink-muted">
-          Preview unavailable
-        </div>
-      }
+    <div
+      class="relative my-2 max-w-full"
+      style={{
+        width: dimensions() ? `${dimensions()!.width}px` : undefined,
+        'aspect-ratio': dimensions()
+          ? `${dimensions()!.width} / ${dimensions()!.height}`
+          : undefined,
+      }}
     >
-      <img
-        src={props.url}
-        alt="Generated image"
-        class="my-2 block h-auto max-h-96 w-auto max-w-full rounded-xl"
-        onError={() => setFailedUrl(props.url)}
-      />
-    </Show>
+      <Show
+        when={failedUrl() !== props.url}
+        fallback={
+          <div
+            role="status"
+            class="flex h-full items-center justify-center text-sm text-ink-muted"
+          >
+            Preview unavailable
+          </div>
+        }
+      >
+        <img
+          src={props.url}
+          alt="Generated image"
+          width={dimensions()?.width}
+          height={dimensions()?.height}
+          class="block h-auto max-h-96 w-auto max-w-full rounded-xl"
+          style={
+            dimensions()
+              ? { width: '100%', height: '100%', 'object-fit': 'contain' }
+              : undefined
+          }
+          onError={() => setFailedUrl(props.url)}
+        />
+      </Show>
+    </div>
   );
 }
 
@@ -42,7 +74,13 @@ export const generateImageHandler = createToolRenderer({
           </div>
         }
       >
-        {(result) => <GeneratedImage url={result().url} />}
+        {(result) => (
+          <GeneratedImage
+            url={result().url}
+            width={result().width}
+            height={result().height}
+          />
+        )}
       </Show>
     );
   },

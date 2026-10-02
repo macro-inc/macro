@@ -8,6 +8,7 @@ import { EntityPropertiesSection } from './EntityPropertiesSection';
 type PropertiesContext = ReturnType<typeof usePropertiesContext>;
 const mocks = vi.hoisted(() => ({
   properties: [] as Property[],
+  getProperties: undefined as (() => Property[]) | undefined,
   context: undefined as unknown as PropertiesContext,
   add: vi.fn(),
   remove: vi.fn(),
@@ -58,7 +59,7 @@ vi.mock('@property/editor/hooks/useAllProperties', () => ({
 }));
 vi.mock('@property/hooks', () => ({
   useEntityProperties: () => ({
-    properties: () => mocks.properties,
+    properties: () => mocks.getProperties?.() ?? mocks.properties,
     isLoading: () => false,
     error: () => undefined,
     refetch: mocks.refetch,
@@ -83,7 +84,7 @@ vi.mock('@queries/properties/entity', () => ({
   useBulkSaveEntityPropertiesMutation: () => ({ mutateAsync: mocks.save }),
 }));
 vi.mock('@queries/properties/tags', () => ({
-  useTagsQuery: () => ({ data: [] }),
+  useTagsQuery: () => ({ isSuccess: true, data: [] }),
 }));
 vi.mock('@ui', () => ({
   Button: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
@@ -91,6 +92,7 @@ vi.mock('@ui', () => ({
   ),
   Layer: (props: { children: JSX.Element }) => props.children,
   Badge: () => null,
+  badgeTriggerClasses: () => '',
 }));
 
 function field(id: string, value: string | null = null): Property {
@@ -109,6 +111,7 @@ function field(id: string, value: string | null = null): Property {
 
 beforeEach(() => {
   mocks.properties = [];
+  mocks.getProperties = undefined;
   mocks.add.mockReset().mockResolvedValue(undefined);
   mocks.remove.mockReset().mockResolvedValue(undefined);
   mocks.save.mockReset().mockResolvedValue(undefined);
@@ -184,8 +187,50 @@ it('refreshes native projections after successful add, remove, and save, never b
   expect(changed).toHaveBeenCalledTimes(3);
 });
 
-it('pins a definition the entity already carries instead of attaching it again', async () => {
-  const pinned = vi.fn();
+it('keeps unpinned assignments visible in the panel when title pins change', () => {
+  mocks.properties = [field('Pinned', 'first'), field('Unpinned', 'second')];
+  const [pins, setPins] = createSignal(['instance-Pinned']);
+  render(() => (
+    <EntityPropertiesSection
+      entityId="document"
+      entityType="DOCUMENT"
+      canEdit
+      showTags={false}
+      defaultPinnedPropertyIds={() => []}
+      pinnedPropertyIds={pins}
+    />
+  ));
+  expect(screen.getByText('"first"')).toBeTruthy();
+  expect(screen.getByText('"second"')).toBeTruthy();
+  setPins([]);
+  expect(screen.getByText('"first"')).toBeTruthy();
+  expect(screen.getByText('"second"')).toBeTruthy();
+  expect(mocks.context.properties()).toHaveLength(2);
+  expect(mocks.remove).not.toHaveBeenCalled();
+});
+
+it('adds side-panel properties without exposing an automatic pin callback', () => {
+  const pins: string[] = [];
+  const [properties, setProperties] = createSignal<Property[]>([]);
+  mocks.getProperties = properties;
+  render(() => (
+    <EntityPropertiesSection
+      entityId="document"
+      entityType="DOCUMENT"
+      canEdit
+      showTags={false}
+      pinnedPropertyIds={() => pins}
+    />
+  ));
+  mocks.context.onPropertyAdded(['Custom']);
+  setProperties([field('Custom', 'saved value')]);
+  mocks.context.onPropertyAdded(['Custom']);
+  expect(screen.getByText('"saved value"')).toBeTruthy();
+  expect(mocks.context.onPropertyPinned).toBeUndefined();
+  expect(pins).toEqual([]);
+});
+
+it('preserves an existing property without reattaching or pinning it', async () => {
   // Set when the task was created from a CRM record, but never pinned.
   mocks.properties = [field('Companies', 'Acme')];
   render(() => (
@@ -195,14 +240,14 @@ it('pins a definition the entity already carries instead of attaching it again',
       canEdit
       showTags={false}
       pinnedPropertyIds={() => []}
-      onPropertyPinned={pinned}
     />
   ));
-  expect(screen.queryByText('"Acme"')).toBeNull();
+  expect(screen.getByText('"Acme"')).toBeTruthy();
 
   mocks.context.onPropertyAdded(['Companies']);
   await mocks.context.addProperty!('Companies');
 
   expect(mocks.add).not.toHaveBeenCalled();
-  expect(pinned).toHaveBeenCalledWith('instance-Companies');
+  expect(mocks.context.onPropertyPinned).toBeUndefined();
+  expect(screen.getByText('"Acme"')).toBeTruthy();
 });

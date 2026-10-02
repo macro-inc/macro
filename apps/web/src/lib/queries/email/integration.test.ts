@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   archive: vi.fn(),
   mutation: vi.fn(),
   refresh: vi.fn(),
+  reminders: vi.fn(),
   revalidations: vi.fn(() => [] as unknown[]),
 }));
 vi.mock('@core/constant/featureFlags', () => ({
@@ -19,6 +20,9 @@ vi.mock('@service-email/client', () => ({
 vi.mock('@service-storage/client', () => ({ storageServiceClient: {} }));
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: () => ({ mutation: mocks.mutation }),
+}));
+vi.mock('../reminders/email-collection', () => ({
+  invalidateEmailReminderCollection: mocks.reminders,
 }));
 vi.mock('../soup/graphql/active-queries', () => ({
   refreshActiveGraphqlSoupQueries: mocks.refresh,
@@ -78,8 +82,10 @@ describe('GraphQL email archive writes', () => {
       );
       expect(mocks.archive).not.toHaveBeenCalled();
       expect(mocks.refresh).not.toHaveBeenCalled();
+      expect(mocks.reminders).not.toHaveBeenCalled();
       finish();
       await expect(result).resolves.toBe('committed');
+      expect(mocks.reminders).toHaveBeenCalledOnce();
       expect(mocks.refresh).toHaveBeenCalledExactlyOnceWith({
         target: { kind: 'email-archive', threadId: 'thread' },
       });
@@ -138,6 +144,7 @@ describe('GraphQL email archive writes', () => {
       }))
     );
     expect(mocks.refresh).not.toHaveBeenCalled();
+    expect(mocks.reminders).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -159,6 +166,7 @@ describe('GraphQL email archive writes', () => {
         archiveEmailThread({ id: 'thread', value: true })
       ).rejects.toThrow();
       expect(mocks.refresh).not.toHaveBeenCalled();
+      expect(mocks.reminders).not.toHaveBeenCalled();
       expect(mocks.archive).not.toHaveBeenCalled();
     }
   );
@@ -177,6 +185,7 @@ describe('GraphQL email archive writes', () => {
       );
       expect(mocks.mutation).not.toHaveBeenCalled();
       expect(mocks.refresh).not.toHaveBeenCalled();
+      expect(mocks.reminders).toHaveBeenCalledOnce();
     }
   );
 

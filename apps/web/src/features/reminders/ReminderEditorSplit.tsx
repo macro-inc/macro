@@ -331,6 +331,7 @@ function EmailDetailsGate(props: {
   return (
     <Show
       when={
+        props.isEmailFollowup !== false &&
         props.reminder.entityType === 'email_thread'
           ? props.reminder.entityId
           : undefined

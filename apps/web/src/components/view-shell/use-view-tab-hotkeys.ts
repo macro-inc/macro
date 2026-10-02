@@ -8,6 +8,9 @@ export type UseViewTabHotkeysOptions<TTab extends string> = {
   activeId: () => TTab;
   setActiveId: (id: TTab) => void;
   enabled?: () => boolean;
+  shouldHandleSequentialKeyEvent?: (
+    event: KeyboardEvent | undefined
+  ) => boolean;
 };
 
 /** Registers numeric and sequential navigation for a view's tabs. */
@@ -60,7 +63,10 @@ export function useViewTabHotkeys<TTab extends string>(
     scopeId: options.scopeId,
     description: 'Next tab',
     condition: () => isEnabled() && options.ids().length > 1,
-    keyDownHandler: () => move(1),
+    keyDownHandler: (event) =>
+      options.shouldHandleSequentialKeyEvent?.(event) === false
+        ? false
+        : move(1),
   }).withGroup(group);
 
   registerHotkey({
@@ -69,7 +75,10 @@ export function useViewTabHotkeys<TTab extends string>(
     scopeId: options.scopeId,
     description: 'Previous tab',
     condition: () => isEnabled() && options.ids().length > 1,
-    keyDownHandler: () => move(-1),
+    keyDownHandler: (event) =>
+      options.shouldHandleSequentialKeyEvent?.(event) === false
+        ? false
+        : move(-1),
   }).withGroup(group);
 
   onCleanup(() => group.dispose());

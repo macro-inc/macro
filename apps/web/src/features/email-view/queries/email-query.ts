@@ -35,7 +35,7 @@ export const emailViewForTab = (tab: EmailTab): string =>
     // Soup source on drafts so its query shape remains valid while disabled.
     .with('scheduled', () => 'drafts')
     .with('sent', () => 'sent')
-    .with('favorites', 'calendar', 'shared', 'all', () => 'all')
+    .with('favorites', 'calendar', 'shared', 'all', 'reminders', () => 'all')
     .exhaustive();
 
 const anyThread = (): TargetExpr => clause.not(clause.eq('threadId', NIL_UUID));
@@ -77,7 +77,15 @@ function tabClause(context: EmailQueryContext): TargetExpr {
       .with('shared', () => clause.eq('emailShared', 'only'))
       // Sent and Drafts are scoped entirely by `emailView`; the server's sent
       // view already covers every linked inbox, so no sender filter is needed.
-      .with('drafts', 'scheduled', 'sent', 'favorites', 'all', anyThread)
+      .with(
+        'drafts',
+        'scheduled',
+        'sent',
+        'favorites',
+        'all',
+        'reminders',
+        anyThread
+      )
       .exhaustive()
   );
 }

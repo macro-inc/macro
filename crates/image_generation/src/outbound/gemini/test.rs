@@ -3,7 +3,16 @@ use crate::domain::models::{ImageAspectRatio, ReferenceImage};
 use wiremock::matchers::{body_json, header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-const PNG: &[u8] = b"\x89PNG\r\n\x1a\nfake";
+fn image_bytes(format: image::ImageFormat) -> Vec<u8> {
+    let mut bytes = std::io::Cursor::new(Vec::new());
+    image::DynamicImage::new_rgb8(96, 64)
+        .write_to(&mut bytes, format)
+        .unwrap();
+    bytes.into_inner()
+}
+
+static PNG: std::sync::LazyLock<Vec<u8>> =
+    std::sync::LazyLock::new(|| image_bytes(image::ImageFormat::Png));
 
 fn generator(server: &MockServer) -> GeminiImageGenerator {
     GeminiImageGenerator::new("test-key".to_string()).with_base_url(server.uri())
@@ -40,7 +49,7 @@ async fn posts_the_prompt_and_decodes_the_first_inline_image() {
         .respond_with(ResponseTemplate::new(200).set_body_json(image_response(
             serde_json::json!([
                 { "text": "  Here is your lighthouse. " },
-                { "inlineData": { "mimeType": "image/png", "data": base64::engine::general_purpose::STANDARD.encode(PNG) } },
+                { "inlineData": { "mimeType": "image/png", "data": base64::engine::general_purpose::STANDARD.encode(&*PNG) } },
                 { "inlineData": { "mimeType": "image/jpeg", "data": "AAAA" } }
             ]),
         )))
@@ -53,7 +62,8 @@ async fn posts_the_prompt_and_decodes_the_first_inline_image() {
         .await
         .unwrap();
 
-    assert_eq!(image.bytes, PNG);
+    assert_eq!(image.bytes, *PNG);
+    assert_eq!((image.width, image.height), (96, 64));
     assert_eq!(image.mime_type, "image/png");
     assert_eq!(image.note.as_deref(), Some("Here is your lighthouse."));
 }
@@ -74,7 +84,7 @@ async fn posts_ordered_reference_images_with_their_mime_types_and_exact_bytes() 
                     {
                         "inlineData": {
                             "mimeType": "image/png",
-                            "data": base64::engine::general_purpose::STANDARD.encode(PNG),
+                            "data": base64::engine::general_purpose::STANDARD.encode(&*PNG),
                         }
                     },
                     {
@@ -96,7 +106,7 @@ async fn posts_ordered_reference_images_with_their_mime_types_and_exact_bytes() 
                 {
                     "inlineData": {
                         "mimeType": "image/png",
-                        "data": base64::engine::general_purpose::STANDARD.encode(PNG),
+                        "data": base64::engine::general_purpose::STANDARD.encode(&*PNG),
                     }
                 },
             ]))),
@@ -123,7 +133,8 @@ async fn posts_ordered_reference_images_with_their_mime_types_and_exact_bytes() 
         .await
         .unwrap();
 
-    assert_eq!(image.bytes, PNG);
+    assert_eq!(image.bytes, *PNG);
+    assert_eq!((image.width, image.height), (96, 64));
     assert_eq!(image.mime_type, "image/png");
     assert_eq!(image.note.as_deref(), Some("Here is the edited image."));
 }
@@ -133,7 +144,7 @@ async fn omits_image_config_without_an_aspect_ratio() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
         .respond_with(ResponseTemplate::new(200).set_body_json(image_response(
-            serde_json::json!([{ "inlineData": { "mimeType": "image/png", "data": "AAAA" } }]),
+            serde_json::json!([{ "inlineData": { "mimeType": "image/png", "data": base64::engine::general_purpose::STANDARD.encode(&*PNG) } }]),
         )))
         .mount(&server)
         .await;
@@ -243,5 +254,38 @@ async fn invalid_base64_is_a_provider_error() {
             .await
             .unwrap_err(),
         ImageGenerationError::Provider(_)
+    ));
+}
+
+#[test]
+fn reads_actual_dimensions_for_supported_image_formats() {
+    for (format, mime) in [
+        (image::ImageFormat::Png, "image/png"),
+        (image::ImageFormat::Jpeg, "image/jpeg"),
+        (image::ImageFormat::WebP, "image/webp"),
+        (image::ImageFormat::Gif, "image/gif"),
+    ] {
+        let response: GenerateContentResponse =
+            serde_json::from_value(image_response(serde_json::json!([{ "inlineData": {
+                "mimeType": mime,
+                "data": base64::engine::general_purpose::STANDARD.encode(image_bytes(format)),
+            }}])))
+            .unwrap();
+        let image = response.into_image().unwrap();
+        assert_eq!((image.width, image.height), (96, 64), "{mime}");
+    }
+}
+
+#[test]
+fn rejects_image_bytes_without_readable_dimensions() {
+    let response: GenerateContentResponse =
+        serde_json::from_value(image_response(serde_json::json!([{ "inlineData": {
+            "mimeType": "image/png",
+            "data": base64::engine::general_purpose::STANDARD.encode(b"not an image"),
+        }}])))
+        .unwrap();
+    assert!(matches!(
+        response.into_image(),
+        Err(ImageGenerationError::Provider(_))
     ));
 }

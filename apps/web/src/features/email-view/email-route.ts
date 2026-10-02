@@ -11,6 +11,7 @@ export const emailTabSearch = {
       'favorites',
       'sent',
       'scheduled',
+      'reminders',
       'calendar',
       'drafts',
       'shared',

@@ -31,7 +31,6 @@ import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import { Show, Suspense } from 'solid-js';
 import { createMarkdownDocumentState } from '../context/markdown-document-state';
 import type { MarkdownData } from '../definition';
-import { OldOverlay } from '../history/OldOverlay';
 import { createMarkdownRouteNavigation } from '../primitives/create-markdown-route-navigation';
 import { loadMarkdownCachedSnapshot } from '../queries/markdown-document-operations';
 import type { MarkdownDocumentKind, MarkdownDocumentSource } from '../types';
@@ -137,8 +136,7 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
         fallbackName={fallbackName()}
       >
         <ModalsProvider>
-          <OldOverlay />
-          <SidePanel.Layout>
+          <SidePanel.Layout floating>
             <Show when={ENABLE_MARKDOWN_SIDE_PANEL && !isInstructions()}>
               <MarkdownSidePanelSections />
             </Show>

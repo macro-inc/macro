@@ -147,13 +147,8 @@ export function CallRecordingBody(props: {
 
   return (
     <div class="relative flex-1 min-h-0 overflow-hidden">
-      <SidePanel.Section
-        id="call-ai-actions"
-        title="Actions"
-        defaultOpen
-        order={0}
-      >
-        <div class="m-px flex items-center justify-start gap-2">
+      <SidePanel.HeaderActions>
+        <div class="flex shrink-0 items-center gap-1">
           <AskMacroButton
             entity={{
               type: 'document',
@@ -163,7 +158,7 @@ export function CallRecordingBody(props: {
             }}
           />
         </div>
-      </SidePanel.Section>
+      </SidePanel.HeaderActions>
       <div
         data-channel-scroll
         class="h-full min-h-0 overflow-y-auto scrollbar-hidden"

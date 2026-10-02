@@ -36,6 +36,10 @@ function tabCopy(tab: EmailTab): { title: string; description: string } {
       title: 'No scheduled email',
       description: 'Email you schedule to send later will appear here.',
     }))
+    .with('reminders', () => ({
+      title: 'No email reminders',
+      description: 'Use Remind me on an email to return to it later.',
+    }))
     .with('calendar', () => ({
       title: 'No calendar email',
       description: 'Invitations and event updates will appear here.',
@@ -61,7 +65,9 @@ export function EmailEmptyState() {
   const startAddInbox = useAddInboxFlow();
   // Scheduled has no search or filters; text typed on another tab stays behind.
   const searchText = () =>
-    state.tab === 'scheduled' ? '' : state.search.trim();
+    state.tab === 'scheduled' || state.tab === 'reminders'
+      ? ''
+      : state.search.trim();
   const noInboxesSelected = () => state.inboxIds?.length === 0;
   const hasActiveFilters = () =>
     Object.values(state.facets).some((optionIds) => optionIds.length > 0);

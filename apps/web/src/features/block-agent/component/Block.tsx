@@ -13,7 +13,6 @@ import { useNavigatedFromJK } from '@components/app/useNavigatedFromJK';
 import { useBlockId } from '@core/block';
 import { LoadErrorPanel } from '@core/component/EntityLoadGate';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { nativeNetworkStatus } from '@core/mobile/native-network-status';
 import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
@@ -47,22 +46,6 @@ function AgentComposerRegion(props: ParentProps) {
   const content = children(() => props.children);
   return (
     <FloatRegionOrInline region="accessory">{content()}</FloatRegionOrInline>
-  );
-}
-
-function AgentContentLayout(props: ParentProps) {
-  return (
-    <Show
-      when={isTouchDevice()}
-      fallback={
-        <SidePanel.Layout defaultOpen={false}>
-          <AgentSidePanelSections />
-          {props.children}
-        </SidePanel.Layout>
-      }
-    >
-      <div class="flex size-full min-w-0 flex-col">{props.children}</div>
-    </Show>
   );
 }
 
@@ -166,7 +149,8 @@ function AgentBlockContent(props: {
         <div class="size-full overflow-hidden flex">
           {/* Collapsed by default, like the other conversation-shaped blocks —
             the transcript wants the width; `]` or the header button opens it. */}
-          <AgentContentLayout>
+          <SidePanel.Layout defaultOpen={false} floating>
+            <AgentSidePanelSections />
             <AgentSplitHeader
               session={session()}
               title={metadata()?.title ?? undefined}
@@ -207,7 +191,7 @@ function AgentBlockContent(props: {
                 </div>
               </AgentComposerRegion>
             </AgentChangesSplit>
-          </AgentContentLayout>
+          </SidePanel.Layout>
         </div>
       </StaticMarkdownContext>
     </Show>

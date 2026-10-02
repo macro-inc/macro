@@ -4543,7 +4543,7 @@ export interface EditTagResponse {
   summary: string;
 }
 /**
- * Generate or edit an image with Google's Nano Banana image model and save the result in static file service. Use for pictures, illustrations, diagram concepts, logo ideas, mockups, or edits based on reference photos. When the user supplies photos or asks to modify an existing image, pass them in referenceImages; describing a photo in the prompt alone does not send it to the image model. Describe the subject, style, composition, lighting, and any text to render; only the prompt is required. Refer to reference images by their order (image 1, image 2, image 3) when explaining how to use them. Returns the static file ID and image URL. The tool displays the image inline in chat. In channel messages without tool cards, embed the returned URL as a Markdown image. Do not cite it as a document. Generation takes several seconds.
+ * Generate or edit an image with Google's Nano Banana image model and save the result in static file service. Use for pictures, illustrations, diagram concepts, logo ideas, mockups, or edits based on reference photos. When the user supplies photos or asks to modify an existing image, pass them in referenceImages; describing a photo in the prompt alone does not send it to the image model. Describe the subject, style, composition, lighting, and any text to render; only the prompt is required. Refer to reference images by their order (image 1, image 2, image 3) when explaining how to use them. Returns the static file ID and image URL. The tool displays the image inline in chat. In channel messages without tool cards, copy the returned markdown verbatim on its own line; it includes dimensions so the image reserves space before loading. Do not cite it as a document. Generation takes several seconds.
  */
 export interface GenerateImage {
   /**
@@ -4586,6 +4586,18 @@ export interface GenerateImageResponse {
    * Size of the image in bytes.
    */
   sizeBytes: number;
+  /**
+   * Intrinsic pixel width. Absent only in historical tool results.
+   */
+  width?: number | null;
+  /**
+   * Intrinsic pixel height. Absent only in historical tool results.
+   */
+  height?: number | null;
+  /**
+   * Ready-to-send channel image markup with dimensions. Copy verbatim on its own line.
+   */
+  markdown?: string | null;
   /**
    * Commentary the model produced alongside the image, when any.
    */
