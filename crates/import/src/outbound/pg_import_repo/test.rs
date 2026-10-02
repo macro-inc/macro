@@ -7,6 +7,88 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::cowlike::CowLike;
 use sqlx::{Pool, Postgres};
 
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn read_only_targets_are_exact_scoped_and_never_reserve(pool: PgPool) {
+    use crate::domain::{models::ImportTargetLookup, ports::ImportTargetReader};
+    let admin = ledger_actor(&pool, "reader").await;
+    let peer = ledger_actor(&pool, "other-reader").await;
+    let team = ledger_team(&pool, &admin).await;
+    let other_team = ledger_team(&pool, &peer).await;
+    let repo = PgImportRepo::new(pool.clone());
+    let binding = repo
+        .bind_source(team, Some(&SlackWorkspaceId::new("T1").unwrap()), false)
+        .await
+        .unwrap();
+    let other_binding = repo
+        .bind_source(
+            other_team,
+            Some(&SlackWorkspaceId::new("T2").unwrap()),
+            false,
+        )
+        .await
+        .unwrap();
+    let channel = Uuid::now_v7();
+    let other_channel = Uuid::now_v7();
+    ledger_channel(&pool, channel, Some(team), ImportTargetKind::Team).await;
+    ledger_channel(
+        &pool,
+        other_channel,
+        Some(other_team),
+        ImportTargetKind::Team,
+    )
+    .await;
+    legacy_mapping(&repo, &admin, &target_key(team, "C1"), channel).await;
+    legacy_mapping(&repo, &peer, &target_key(other_team, "C1"), other_channel).await;
+    repo.reserve_target(
+        &admin,
+        &target_key(team, "C2"),
+        ImportTargetKind::Team,
+        None,
+    )
+    .await
+    .unwrap();
+    let ids: Vec<_> = ["C1", "C2", "C3"]
+        .map(|id| SlackConversationId::new(id).unwrap())
+        .into();
+    let before = sqlx::query_scalar!("SELECT count(*) FROM import_target_reservation")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let rows = repo.lookup_targets(team, &binding, &ids).await.unwrap();
+    assert!(
+        matches!(&rows[0], ImportTargetLookup::Ready { channel_id, .. } if *channel_id == channel)
+    );
+    assert_eq!(
+        rows[1..],
+        [ImportTargetLookup::Pending, ImportTargetLookup::Missing]
+    );
+    assert!(
+        matches!(&repo.lookup_targets(other_team, &other_binding, &ids).await.unwrap()[0], ImportTargetLookup::Ready { channel_id, .. } if *channel_id == other_channel)
+    );
+    assert_eq!(
+        repo.lookup_targets(team, &other_binding, &ids)
+            .await
+            .unwrap(),
+        vec![ImportTargetLookup::Missing; 3]
+    );
+    assert_eq!(
+        before,
+        sqlx::query_scalar!("SELECT count(*) FROM import_target_reservation")
+            .fetch_one(&pool)
+            .await
+            .unwrap()
+    );
+    // Same-name or ambiguous legacy rows cannot select an arbitrary channel.
+    let conflict = Uuid::now_v7();
+    ledger_channel(&pool, conflict, Some(team), ImportTargetKind::Team).await;
+    let third = ledger_actor(&pool, "conflicting-reader").await;
+    legacy_mapping(&repo, &third, &target_key(team, "C1"), conflict).await;
+    assert_eq!(
+        repo.lookup_targets(team, &binding, &ids).await.unwrap()[0],
+        ImportTargetLookup::Missing
+    );
+}
+
 fn user() -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str("macro|auto-import@example.com").expect("valid user id")
 }

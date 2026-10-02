@@ -16,6 +16,8 @@ use crate::domain::{models::*, ports::PortResult};
 /// Transaction-scoped import mappings, checkpoints and dirty-search persistence.
 pub mod batches;
 mod lifecycle;
+/// Job-scoped body-reference templates and atomic reconciliation checkpoints.
+pub mod references;
 mod uploads;
 
 /// Durable Slack archive repository. Administrator/target authorization remains

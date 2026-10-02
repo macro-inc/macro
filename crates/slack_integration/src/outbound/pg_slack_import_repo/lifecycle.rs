@@ -120,6 +120,26 @@ impl ImportRepo for PgSlackImportRepo {
     async fn progress(&self, team: TeamId, job: JobId) -> PortResult<Option<ImportProgress>> {
         Self::progress(self, team, job).await
     }
+    async fn requested_by(
+        &self,
+        team: TeamId,
+        job: JobId,
+    ) -> PortResult<Option<MacroUserIdStr<'static>>> {
+        sqlx::query_scalar!(
+            "SELECT user_id FROM slack_import_job WHERE team_id = $1 AND id = $2",
+            Uuid::from(team),
+            Uuid::from(job),
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(internal)?
+        .map(|user| {
+            MacroUserIdStr::parse_from_str(&user)
+                .map(CowLike::into_owned)
+                .map_err(internal)
+        })
+        .transpose()
+    }
     async fn list(&self, team: TeamId, before: Option<JobId>) -> PortResult<Vec<ImportProgress>> {
         Self::list(self, team, before).await
     }
@@ -539,18 +559,24 @@ async fn terminal(
     recompute(connection, event.job_id).await
 }
 
-async fn recompute(connection: &mut PgConnection, job: JobId) -> PortResult<()> {
+pub(super) async fn recompute(connection: &mut PgConnection, job: JobId) -> PortResult<()> {
     // Called only under the job lock. Registration, not the presence of work,
     // determines whether the job can settle; empty finalized jobs complete too.
     sqlx::query!(
         r#"WITH result AS (
              SELECT CASE
                WHEN j.cancel_requested_at IS NOT NULL THEN CASE WHEN EXISTS (
-                 SELECT 1 FROM slack_import_conversation WHERE job_id = j.id AND status = 'importing'
-               ) THEN 'cancelling' ELSE 'cancelled' END
+                 SELECT 1 FROM slack_import_conversation WHERE job_id = j.id
+                   AND (status = 'importing' OR search_state IN ('pending', 'submitted', 'failed'))
+               ) OR EXISTS (SELECT 1 FROM slack_import_message_reference
+                   WHERE job_id = j.id AND completed_at IS NULL)
+                 THEN 'cancelling' ELSE 'cancelled' END
                WHEN j.registration_closed_at IS NULL THEN 'uploading'
                WHEN EXISTS (SELECT 1 FROM slack_import_conversation WHERE job_id = j.id
-                    AND status IN ('awaiting_uploads', 'queued', 'importing')) THEN 'processing'
+                    AND (status IN ('awaiting_uploads', 'queued', 'importing')
+                         OR search_state IN ('pending', 'submitted', 'failed'))) THEN 'processing'
+               WHEN EXISTS (SELECT 1 FROM slack_import_message_reference
+                    WHERE job_id = j.id AND completed_at IS NULL) THEN 'processing'
                WHEN NOT EXISTS (SELECT 1 FROM slack_import_conversation WHERE job_id = j.id AND status = 'failed') THEN 'completed'
                WHEN EXISTS (SELECT 1 FROM slack_import_conversation WHERE job_id = j.id AND (status = 'completed' OR imported > 0))
                     THEN 'completed_with_errors'
@@ -559,7 +585,8 @@ async fn recompute(connection: &mut PgConnection, job: JobId) -> PortResult<()> 
            ) UPDATE slack_import_job j SET status = r.status, revision = revision + 1, updated_at = clock_timestamp(),
              settled_at = CASE WHEN r.status IN ('completed', 'completed_with_errors', 'failed', 'cancelled')
                          THEN coalesce(j.settled_at, clock_timestamp()) ELSE NULL END
-             FROM result r WHERE j.id = $1"#, Uuid::from(job),
+             FROM result r WHERE j.id = $1
+               AND j.status NOT IN ('completed', 'completed_with_errors', 'failed', 'cancelled')"#, Uuid::from(job),
     ).execute(connection).await.map_err(internal)?;
     Ok(())
 }

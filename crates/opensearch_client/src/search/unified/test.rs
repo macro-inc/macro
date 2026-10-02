@@ -6,6 +6,40 @@ use models_search_cursor::SearchMethodCursor;
 use opensearch_query_builder::ToOpenSearchJson;
 
 #[test]
+fn author_only_channel_match_without_highlight_keeps_deep_link() {
+    let channel_id = uuid::Uuid::now_v7();
+    let message_id = uuid::Uuid::now_v7();
+    for thread in [None, Some(uuid::Uuid::now_v7())] {
+        let source = UnifiedSearchIndex::from_matched(
+            &["channels".into()],
+            serde_json::json!({
+                "entity_id": channel_id, "message_id": message_id,
+                "thread_id": thread.unwrap_or(message_id), "channel_type": "private",
+                "sender_id": "macro|system@macro.com", "mentions": [],
+                "imported_author": "quartzarchivebot"
+            }),
+        )
+        .unwrap();
+        let hits = expand_hit_into_search_hits(Hit {
+            source,
+            index: "channels_v2".into(),
+            matched_queries: vec!["channels".into()],
+            score: Some(1.0),
+            highlight: None,
+            inner_hits: None,
+        });
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].entity_id, channel_id);
+        let Some(SearchGotoContent::Channels(goto)) = &hits[0].goto else {
+            panic!("channel hit must retain a deep link without highlights");
+        };
+        assert_eq!(goto.channel_message_id, message_id);
+        assert_eq!(goto.thread_id, thread);
+        assert_eq!(goto.sender_id, "macro|system@macro.com");
+    }
+}
+
+#[test]
 fn agent_sessions_expand_and_paginate_as_entities_not_messages() {
     let session_id = uuid::Uuid::from_u128(1);
     let next_id = uuid::Uuid::from_u128(2);

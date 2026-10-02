@@ -139,6 +139,11 @@ pub struct Config {
     #[macro_config_default(false)]
     pub calendar_search_enabled: bool,
 
+    /// Enable Slack import creation and uploads. Existing receipts remain
+    /// readable, finalizable and cancellable when this switch is off.
+    #[macro_config_default(false)]
+    pub slack_import_enabled: bool,
+
     /// Maximum number of SQS messages to receive per poll for the delete document worker
     #[macro_config_default(10)]
     pub queue_max_messages: i32,

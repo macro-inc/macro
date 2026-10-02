@@ -119,6 +119,26 @@ fn assert_error<T>(result: PortResult<T>, expected: ImportError) {
 async fn claim_heartbeat_reclaim_fences_stale_worker(pool: PgPool) {
     let (repo, team, event) = fixture(&pool, Some(3)).await;
     assert_eq!(repo.requester(&event).await.unwrap().unwrap().0, team);
+    assert_eq!(
+        repo.requested_by(team, event.job_id)
+            .await
+            .unwrap()
+            .unwrap()
+            .as_ref(),
+        "macro|lifecycle@example.com",
+    );
+    assert!(
+        repo.requested_by(Uuid::now_v7().try_into().unwrap(), event.job_id)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        repo.requested_by(team, Uuid::now_v7().try_into().unwrap())
+            .await
+            .unwrap()
+            .is_none()
+    );
     let first = claim(&repo, &event).await;
     assert_eq!(first.parts.len(), 1);
     assert_eq!(first.checkpoint, Checkpoint::default());

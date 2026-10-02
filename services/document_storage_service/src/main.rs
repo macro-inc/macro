@@ -1237,6 +1237,38 @@ async fn run() -> anyhow::Result<()> {
             authorization_state.clone(),
         );
 
+    let slack_limits = slack_integration::domain::models::ImportLimits::default();
+    let slack_enabled = config.slack_import_enabled;
+    let slack_service = api::context::SlackService::new(
+        slack_integration::outbound::pg_slack_import_repo::PgSlackImportRepo::new(
+            db.clone(),
+            slack_limits,
+        ),
+        slack_integration::outbound::s3_storage::S3ImportStorage::new(
+            macro_aws_config::s3_client().await,
+            config.upload_staging_bucket.as_ref().to_owned(),
+            slack_limits,
+        )
+        .map_err(|_| anyhow::anyhow!("invalid Slack import storage configuration"))?,
+        slack_integration::outbound::import_ledger::CanonicalImportLedger::new(
+            import::outbound::pg_import_repo::PgImportRepo::new(db.clone()),
+        ),
+        slack_integration::outbound::gateway_notifier::GatewayImportNotifier::new(
+            conn_gateway_client.clone(),
+        ),
+        api::context::SlackAdminAuthorizer(
+            entity_access_service.clone(),
+            entity_access::outbound::PgAccessRepository::new(db.clone()),
+        ),
+        Box::new(move |_| slack_enabled),
+        slack_limits,
+    )?;
+    let slack_state = slack_integration::inbound::axum_router::SlackRouterState {
+        service: Arc::new(slack_service),
+        entity_access_service: entity_access_service.clone(),
+        authorization_state: authorization_state.clone(),
+    };
+
     // Held by value here and behind an `Arc` in the router state: the impl is a
     // pool handle, so cloning is cheap and `SoupImpl` needs an owned service.
     let reminders_service = RemindersServiceImpl::new(PgRemindersRepo::new(db.clone()));
@@ -1647,6 +1679,7 @@ async fn run() -> anyhow::Result<()> {
             user_api_key_service,
             authorization_state.clone(),
         ),
+        slack_state,
         reminders_state: RemindersRouterState::new(
             Arc::new(reminders_service),
             entity_access_service.clone(),
