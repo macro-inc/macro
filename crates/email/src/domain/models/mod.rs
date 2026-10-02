@@ -34,7 +34,8 @@ pub use link::{
     UserEmailLinkSettings, UserProvider,
 };
 pub use mail_projection::{
-    EmailPreview, EmailThreadMailCacheFacts, EmailThreadMailPreviews, EmailThreadMailProjection,
+    EmailDraftAggregate, EmailDraftEntry, EmailPreview, EmailThreadDraftState,
+    EmailThreadMailCacheFacts, EmailThreadMailPreviews, EmailThreadMailProjection,
 };
 pub use message::{Message, MessageRow, SimpleMessage};
 pub use parsed_message::{ParsedLabel, ParsedMessage, ParsedThread};

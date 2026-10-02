@@ -51,6 +51,7 @@ vi.mock('@app/lib/split-router', () => ({
     ),
   },
 }));
+vi.mock('@app/features/tours/ViewTour', () => ({ ViewTour: () => null }));
 vi.mock('@app/components/view-shell', () => ({
   ViewShell: {
     Root: mocks.pass,
@@ -114,6 +115,9 @@ vi.mock('./components/ChannelDetailView', () => ({
     </div>
   ),
 }));
+vi.mock('./components/ChannelThreadsView', () => ({
+  ChannelThreadsView: () => <div data-testid="channel-threads" />,
+}));
 vi.mock('./components/ChannelsMobileView', () => ({
   ChannelsMobileView: (props: {
     source: ChannelsDataSource;
@@ -144,6 +148,7 @@ vi.mock('./channels-view-context', () => ({
       },
       sortBy: { channels: 'updated_at', direct_messages: 'updated_at' },
     },
+    tab: () => 'browse',
     mobileLayout: () => mocks.mobileLayout(),
     selectedChannel: () =>
       mocks.selectedId()

@@ -239,6 +239,37 @@ impl PipedreamConnect for PipedreamClient {
 }
 
 impl ConnectorDirectory for PipedreamClient {
+    #[tracing::instrument(skip(self), err, fields(app = %app_slug))]
+    async fn retrieve(&self, app_slug: &str) -> anyhow::Result<Option<CatalogEntry>> {
+        // The slug is interpolated into the path. Anything outside Pipedream's
+        // app-slug charset is not an app, and is not requested.
+        if !is_app_slug(app_slug) {
+            return Ok(None);
+        }
+
+        let response = self
+            .authed(
+                self.http
+                    .get(self.api(&format!("/connect/apps/{app_slug}"))),
+            )
+            .await?
+            .send()
+            .await
+            .context("retrieving Pipedream app")?;
+        if response.status() == reqwest::StatusCode::NOT_FOUND {
+            return Ok(None);
+        }
+        let response = error_for_status(response).await?;
+
+        let body: serde_json::Value = response
+            .json()
+            .await
+            .context("decoding Pipedream app response")?;
+        let app = body.get("data").unwrap_or(&body).clone();
+        let app: AppResponse = serde_json::from_value(app).context("parsing Pipedream app")?;
+        Ok(connectable_catalog_entry(app_slug, app))
+    }
+
     #[tracing::instrument(skip(self), err)]
     async fn search(
         &self,
@@ -390,6 +421,31 @@ impl McpConnection for PipedreamClient {
     }
 }
 
+/// The charset a Pipedream app slug may use. A segment outside it could never
+/// name an app, and must not be placed in a request path.
+fn is_app_slug(slug: &str) -> bool {
+    !slug.is_empty()
+        && slug
+            .chars()
+            .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '-' || ch == '_')
+}
+
+/// An app the catalog would offer to connect: the slug we asked for, with an
+/// auth flow. Apps with `auth_type: none` have nothing to connect.
+fn connectable_catalog_entry(requested_slug: &str, app: AppResponse) -> Option<CatalogEntry> {
+    if app.auth_type.as_deref() == Some("none") || app.name_slug != requested_slug {
+        return None;
+    }
+    Some(CatalogEntry {
+        app_slug: app.name_slug,
+        display_name: app.name,
+        description: app
+            .description
+            .filter(|description| !description.is_empty()),
+        icon_url: Some(app.img_src).filter(|url| url.starts_with("https://")),
+    })
+}
+
 async fn error_for_status(response: reqwest::Response) -> anyhow::Result<reqwest::Response> {
     let status = response.status();
     if status.is_success() {
@@ -438,6 +494,9 @@ struct AppsResponse {
 struct PageInfo {
     end_cursor: Option<String>,
 }
+
+#[cfg(test)]
+mod test;
 
 #[derive(Deserialize)]
 struct AppResponse {

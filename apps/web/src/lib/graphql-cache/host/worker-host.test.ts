@@ -495,7 +495,7 @@ describe('createWorkerCacheHost', () => {
         query: 'mutation Rename { rename { id } }',
         data: { rename: { id: 'doc-1' } },
       }),
-      host.rollbackOptimisticWrite('2', claim, 'denied'),
+      host.rollbackOptimisticWrite('2', claim, 'denied', 'DRAFT_ALREADY_SENT'),
       host.invalidate(['User:1']),
       host.deleteRecords(['Document:1']),
       host.teardown(7),
@@ -503,6 +503,9 @@ describe('createWorkerCacheHost', () => {
     ]);
 
     const requests = requireAdapter().requests;
+    expect(
+      requests.find((request) => request.kind === 'rollback-optimistic-write')
+    ).toMatchObject({ errorCode: 'DRAFT_ALREADY_SENT', error: 'denied' });
     expect(requests.map(({ id, kind }) => [id, kind])).toEqual([
       [1, 'init'],
       [2, 'read'],

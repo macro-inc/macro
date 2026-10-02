@@ -68,7 +68,7 @@ export function EmailThread(props: EmailThreadProps) {
       contacts().map((contact) => convertContactInfoToEmailRecipient(contact))
     ),
     createCommands: (snapshot) =>
-      createThreadActionAdapter(props.threadId, snapshot),
+      createThreadActionAdapter(source.id, snapshot),
   };
   const viewContext = {
     copySubject: async (subject: string) => {

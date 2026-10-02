@@ -7,12 +7,10 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use super::{EventOutcome, MAX_PROCESSING_ATTEMPTS, PROCESSING_RETRY_BASE_DELAY, retry_processing};
-use crate::process::channel::{process_channel_message_update, process_remove_channel_message};
+use crate::process::channel::process_remove_channel_message;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum ChannelIndexAction {
-    UpsertMessage { channel_id: Uuid, message_id: Uuid },
-    RemoveMessage { channel_id: Uuid, message_id: Uuid },
     RemoveChannel { channel_id: Uuid },
     Ignore,
 }
@@ -43,53 +41,6 @@ pub(super) fn describe_channel_event(event: &ChannelTopicEvent) -> ChannelEventD
             channel_id: metadata.channel_id,
             event_type: "channel.deleted",
         },
-        ChannelTopicEvent::MessagePosted(metadata) => ChannelEventDescription {
-            action: ChannelIndexAction::UpsertMessage {
-                channel_id: metadata.channel_id,
-                message_id: metadata.message_id,
-            },
-            channel_id: metadata.channel_id,
-            event_type: "channel.message_posted",
-        },
-        // Mentions carry no index change beyond the message_posted event
-        // emitted alongside them.
-        ChannelTopicEvent::Mentioned(metadata) => ChannelEventDescription {
-            action: ChannelIndexAction::Ignore,
-            channel_id: metadata.channel_id,
-            event_type: "channel.mentioned",
-        },
-        ChannelTopicEvent::MessagePatched(metadata) => ChannelEventDescription {
-            action: ChannelIndexAction::UpsertMessage {
-                channel_id: metadata.channel_id,
-                message_id: metadata.message_id,
-            },
-            channel_id: metadata.channel_id,
-            event_type: "channel.message_patched",
-        },
-        ChannelTopicEvent::MessageDeleted(metadata) => ChannelEventDescription {
-            action: ChannelIndexAction::RemoveMessage {
-                channel_id: metadata.channel_id,
-                message_id: metadata.message_id,
-            },
-            channel_id: metadata.channel_id,
-            event_type: "channel.message_deleted",
-        },
-        ChannelTopicEvent::MessageAttachmentCreated(metadata) => ChannelEventDescription {
-            action: ChannelIndexAction::UpsertMessage {
-                channel_id: metadata.channel_id,
-                message_id: metadata.message_id,
-            },
-            channel_id: metadata.channel_id,
-            event_type: "channel.message_attachment_created",
-        },
-        ChannelTopicEvent::MessageAttachmentRemoved(metadata) => ChannelEventDescription {
-            action: ChannelIndexAction::UpsertMessage {
-                channel_id: metadata.channel_id,
-                message_id: metadata.message_id,
-            },
-            channel_id: metadata.channel_id,
-            event_type: "channel.message_attachment_removed",
-        },
         ChannelTopicEvent::ParticipantAdded(metadata) => ChannelEventDescription {
             action: ChannelIndexAction::Ignore,
             channel_id: metadata.channel_id,
@@ -104,25 +55,10 @@ pub(super) fn describe_channel_event(event: &ChannelTopicEvent) -> ChannelEventD
 }
 
 async fn process_channel_index_action(
-    db: &PgPool,
     opensearch_client: &OpensearchClient,
     action: ChannelIndexAction,
 ) -> anyhow::Result<()> {
     match action {
-        ChannelIndexAction::UpsertMessage {
-            channel_id,
-            message_id,
-        } => {
-            process_channel_message_update(opensearch_client, db, channel_id, message_id, None)
-                .await
-        }
-        ChannelIndexAction::RemoveMessage {
-            channel_id,
-            message_id,
-        } => {
-            process_remove_channel_message(opensearch_client, channel_id, Some(message_id), None)
-                .await
-        }
         ChannelIndexAction::RemoveChannel { channel_id } => {
             process_remove_channel_message(opensearch_client, channel_id, None, None).await
         }
@@ -131,7 +67,7 @@ async fn process_channel_index_action(
 }
 
 pub(super) async fn process_channel_event(
-    db: &PgPool,
+    _db: &PgPool,
     opensearch_client: &OpensearchClient,
     event: &ChannelMacroEvent,
     partition: i32,
@@ -158,7 +94,7 @@ pub(super) async fn process_channel_event(
             attempt,
             "processing channel search-index event"
         );
-        process_channel_index_action(db, opensearch_client, description.action)
+        process_channel_index_action(opensearch_client, description.action)
             .await
             .inspect_err(|error| {
                 if attempt < MAX_PROCESSING_ATTEMPTS {

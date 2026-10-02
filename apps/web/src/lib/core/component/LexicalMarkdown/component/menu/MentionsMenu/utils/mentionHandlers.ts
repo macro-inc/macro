@@ -86,13 +86,16 @@ async function handleEntityMention(
     const trackType =
       item.bucket === 'channel' || item.bucket === 'dm'
         ? 'channel'
-        : 'document';
+        : item.bucket === 'initiative'
+          ? 'initiative'
+          : 'document';
     mentionId = await trackMention(blockId, trackType, entity.id);
   }
 
   if (item.bucket === 'email') {
     onEmailMention?.(entity as unknown as EmailEntity);
-  } else {
+  } else if (item.bucket !== 'initiative') {
+    // Callers share or attach mentioned files; a project is neither.
     onDocumentMention?.(entity as unknown as any);
   }
 

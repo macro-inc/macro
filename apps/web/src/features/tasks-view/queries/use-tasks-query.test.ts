@@ -2,10 +2,14 @@ import type { TaskEntityWithProperties } from '@entity/types/entity';
 import { createRoot, createSignal } from 'solid-js';
 import { expect, it, vi } from 'vitest';
 
-const fixture = vi.hoisted(() => ({ query: {} as Record<string, unknown> }));
+const fixture = vi.hoisted(() => ({
+  query: {} as Record<string, unknown>,
+  groupQueries: new Map<string, unknown>(),
+}));
 vi.mock('@app/features/soup', async () => ({
   ...(await import('@app/features/soup/filters')),
   ...(await import('@app/features/soup/collection/rows')),
+  ...(await import('@app/features/soup/collection/row-store')),
   ...(await import('@app/features/soup/collection/transforms')),
   useSearchContext: () => ({ entityPool: () => [] }),
   createSearchState: () => ({
@@ -28,7 +32,7 @@ vi.mock('@queries/soup/items', () => ({
   useSoupAstItemsQuery: () => fixture.query,
 }));
 vi.mock('@queries/soup/grouped/create-grouped-soup-queries', () => ({
-  createGroupedSoupQueries: () => ({ map: () => new Map() }),
+  createGroupedSoupQueries: () => ({ map: () => fixture.groupQueries }),
 }));
 
 import { useTasksDataSource } from './use-tasks-query';
@@ -90,6 +94,93 @@ it('retains cached rows during membership changes but filters them by current ac
       expect(source.isLoading()).toBe(false);
     } finally {
       dispose();
+    }
+  });
+});
+
+it('scopes grouped load-more pages to the referenced entity', () => {
+  const companies = 'companies-definition';
+  const task = (id: string, companyId: string) =>
+    ({
+      type: 'document',
+      fileType: 'md',
+      id,
+      name: id,
+      ownerId: 'viewer',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      subType: { type: 'task', is_completed: false },
+      properties: [
+        {
+          definition: { id: companies },
+          value: {
+            type: 'EntityReference',
+            value: [{ entity_type: 'COMPANY', entity_id: companyId }],
+          },
+        },
+      ],
+    }) as unknown as TaskEntityWithProperties;
+  fixture.query = {
+    isLoading: false,
+    isPlaceholderData: false,
+    data: {
+      entities: [],
+      itemsById: {},
+      groups: [
+        {
+          key: 'todo',
+          label: 'To do',
+          displayOrder: 0,
+          totalCount: 2,
+          itemIds: [],
+          nextCursor: 'next',
+        },
+      ],
+    },
+  };
+  // A "Load more" page holding one task that no longer references Acme.
+  fixture.groupQueries = new Map([
+    [
+      'todo',
+      {
+        data: () => ({
+          entities: [task('linked', 'acme'), task('unlinked', 'globex')],
+        }),
+        hasNextPage: () => false,
+        isFetchingNextPage: () => false,
+        fetchNextPage: async () => {},
+      },
+    ],
+  ]);
+  createRoot((dispose) => {
+    try {
+      const source = useTasksDataSource(
+        {
+          tab: 'team-tasks',
+          search: '',
+          facets: {},
+          groupBy: 'status',
+          sort: [],
+        },
+        {
+          userId: () => 'viewer',
+          tagSets: () => [],
+          tagSetsReady: () => true,
+          isGroupExpanded: () => true,
+          reference: () => ({
+            propertyDefinitionId: companies,
+            entityId: 'acme',
+          }),
+        }
+      );
+      expect(
+        source
+          .items()
+          .flatMap((row) => (row.kind === 'entity' ? [row.entity.id] : []))
+      ).toEqual(['linked']);
+    } finally {
+      dispose();
+      fixture.groupQueries = new Map();
     }
   });
 });

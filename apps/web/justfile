@@ -1,6 +1,6 @@
 set positional-arguments
 
-# Android: SDK/JDK setup and optional Firebase config are handled by the launcher.
+# Android: fetch pinned Firebase config and provision missing release signing from Doppler.
 android-dev *ARGS:
     bash scripts/android.sh dev "$@"
 

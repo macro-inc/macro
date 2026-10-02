@@ -27,6 +27,7 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
+import { isMcpToolConnected } from '../core/connectedTools';
 import type { ModuleLogo, ModuleState } from '../Module';
 import { MODULE_LOGOS } from '../moduleLogos';
 import { BrandHandoff, type BrandHandoffSource } from './BrandHandoff';
@@ -289,20 +290,11 @@ function FlowContent() {
   // Live connection state, derived from the flow's queries (no standing
   // bookkeeping): whether an MCP server authenticated, and which tools the
   // user connected. Drives the hero-module states and the build phrases.
-  // Mirrors the backend's stack-selection rule (`mcp_select`): a user with
-  // any Pipedream connectors is served those, so native rows stop counting.
-  const serverAuthed = (name: string) => {
-    const pipedream = pipedreamQuery.data ?? [];
-    if (pipedream.length > 0) {
-      return pipedream.some(
-        (connection) =>
-          connection.server_name.toLowerCase() === name.toLowerCase()
-      );
-    }
-    return (serversQuery.data ?? []).some(
-      (server) => server.server_name === name && server.authenticated
-    );
-  };
+  const serverAuthed = (name: string) =>
+    isMcpToolConnected(name, {
+      pipedream: pipedreamQuery.data ?? [],
+      native: serversQuery.data ?? [],
+    });
   const connectedTools = (): ConnectedTools => ({
     google: (linksQuery.data?.links.length ?? 0) > 0,
     linear: serverAuthed('Linear'),

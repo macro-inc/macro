@@ -14,10 +14,14 @@ import './homepage-email-compose.css';
 
 /** A frozen website composer. Addresses, attachments, edits, and sends stay local. */
 export default function HomepageEmailCompose(
-  props: { appChrome?: boolean } = {}
+  props: {
+    appChrome?: boolean;
+    draft?: { subject: string; to: string; body: string };
+    onSend?: (draft: { subject: string; to: string; body: string }) => void;
+  } = {}
 ) {
   const [subject, setSubject] = createSignal(
-    'Great meeting you — demo follow-up'
+    props.draft?.subject ?? 'Great meeting you — demo follow-up'
   );
   const [showBcc, setShowBcc] = createSignal(false);
   const [showFormat, setShowFormat] = createSignal(false);
@@ -27,6 +31,9 @@ export default function HomepageEmailCompose(
   let root: HTMLDivElement | undefined;
   let body: HTMLDivElement | undefined;
   let fileInput: HTMLInputElement | undefined;
+  const [to, setTo] = createSignal(
+    props.draft?.to ?? 'Dana Whitfield <dana@example.com>'
+  );
   const disposeMentions: Array<() => void> = [];
   onCleanup(() => disposeMentions.forEach((dispose) => dispose()));
 
@@ -68,8 +75,17 @@ export default function HomepageEmailCompose(
       }
     }
   }
-  const generation = createEmailDemoGeneration(() => root, append);
-  const generating = () => generation.phase() !== 'complete';
+  const generation = createEmailDemoGeneration(
+    () => (props.draft ? undefined : root),
+    append
+  );
+  const generating = () => !props.draft && generation.phase() !== 'complete';
+  const send = () => {
+    if (props.onSend) {
+      if (!subject().trim() || !to().trim() || !body?.innerText.trim()) return;
+      props.onSend({ subject: subject(), to: to(), body: body.innerText });
+    } else setSent(true);
+  };
 
   function addAttachments(files: File[]) {
     const bytes = [...attachments(), ...files].reduce(
@@ -104,7 +120,7 @@ export default function HomepageEmailCompose(
           !generating()
         ) {
           event.preventDefault();
-          setSent(true);
+          send();
         }
       }}
     >
@@ -153,11 +169,14 @@ export default function HomepageEmailCompose(
                   aria-label={label}
                   value={
                     label === 'To'
-                      ? 'Dana Whitfield <dana@example.com>'
+                      ? to()
                       : label === 'Cc'
                         ? 'Julia Westphal <julia@macro.com>'
                         : ''
                   }
+                  onInput={(event) => {
+                    if (label === 'To') setTo(event.currentTarget.value);
+                  }}
                   disabled={generating()}
                   placeholder="Email address"
                 />
@@ -184,7 +203,9 @@ export default function HomepageEmailCompose(
             aria-label="Email body"
             aria-multiline="true"
             aria-disabled={generating()}
-          />
+          >
+            {props.draft?.body}
+          </div>
           <For each={attachments()}>
             {(file) => (
               <div class="homepage-email-attachment">
@@ -288,7 +309,7 @@ export default function HomepageEmailCompose(
                   aria-label="Send email"
                   title="Send email"
                   disabled={generating()}
-                  onClick={() => setSent(true)}
+                  onClick={send}
                 >
                   <ArrowUp />
                 </button>
@@ -321,7 +342,7 @@ export default function HomepageEmailCompose(
               appearance="composer"
               aria-label="Send email"
               disabled={generating()}
-              onClick={() => setSent(true)}
+              onClick={send}
             />
           </Show>
         </div>

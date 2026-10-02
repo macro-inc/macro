@@ -21,9 +21,12 @@ default = []
 local_auth = ["macro_authorization/local_auth"]
 
 [dependencies]
+ai_billing = { path = "../../crates/ai_billing" }
+roles_and_permissions = { path = "../../crates/roles_and_permissions", default-features = false, features = ["outbound"] }
+teams = { path = "../../crates/teams", default-features = false, features = ["outbound"] }
 activity = { path = "../../crates/activity", default-features = false }
 agent_runtime_protocol = { path = "../../crates/agent_runtime_protocol", default-features = false }
-agent_session = { path = "../../crates/agent_session", default-features = false }
+agent_session = { path = "../../crates/agent_session", default-features = false, features = ["admission"] }
 bot_id = { path = "../../crates/bot_id" }
 bots = { path = "../../crates/bots", default-features = false, features = ["outbound"] }
 channel_sender = { path = "../../crates/channel_sender" }
@@ -34,6 +37,7 @@ entity_access_db_utils = { path = "../../crates/entity_access_db_utils" }
 kafka_util = { path = "../../crates/kafka_util" }
 macro_event_broker = { path = "../../crates/macro_event_broker", features = ["outbound"] }
 macro_event_topics = { path = "../../crates/macro_event_topics" }
+messages = { path = "../../crates/messages", features = ["broker"] }
 rdkafka = { workspace = true }
 reqwest = { workspace = true }
 rootcause = { workspace = true }

@@ -27,6 +27,9 @@ local_auth = ["macro_authorization/local_auth"]
 location_check = []
 
 [dependencies]
+ai_billing = { path = "../../crates/ai_billing" }
+roles_and_permissions = { path = "../../crates/roles_and_permissions", default-features = false, features = ["outbound"] }
+teams = { path = "../../crates/teams", default-features = false, features = ["outbound"] }
 agent_changes = { path = "../../crates/agent_changes", default-features = false, features = ["outbound"] }
 dictation = { path = "../../crates/dictation", features = ["inbound", "outbound"] }
 initiative_documents = { path = "../../crates/initiative_documents" }
@@ -61,7 +64,7 @@ bzip2 = { workspace = true, default-features = false, features = [
 cal = { path = "../../crates/cal", features = ["axum", "outbound"] }
 call = { path = "../../crates/call" }
 channel_bots = { path = "../../crates/channel_bots" }
-messages = { path = "../../crates/messages", features = ["broker", "delivery", "inbound"] }
+messages = { path = "../../crates/messages", features = ["annotations", "broker", "delivery", "inbound"] }
 channels = { path = "../../crates/channels", features = [
   "entity_mutation",
   "inbound",

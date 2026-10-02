@@ -1,10 +1,15 @@
 import {
+  getCompanyHandler,
+  listCompaniesHandler,
+} from '@app/features/crm/crm-tool-renderers';
+import {
   deserializeToolCall,
   deserializeToolResponse,
   type ToolName,
 } from '@service-cognition/generated/tools/tool';
 import { createMemo } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { configureAgentHandler, listAgentsHandler } from './Agents';
 import { bashCodeExecutionHandler } from './BashCodeExecution';
 import {
   configureBotHandler,
@@ -30,7 +35,6 @@ import {
 import { createDocumentHandler } from './CreateDocument';
 import { createProjectHandler } from './CreateProject';
 import { createTagHandler } from './CreateTag';
-import { getCompanyHandler, listCompaniesHandler } from './Crm';
 import { deleteTagHandler } from './DeleteTag';
 import { displayResultsHandler } from './DisplayResults';
 import {
@@ -48,6 +52,7 @@ import {
   listImportEntitiesHandler,
 } from './ImportTools';
 import { initiativeToolHandlers } from './Initiatives';
+import { LegacyGeneratedImage } from './LegacyGeneratedImage';
 import { listEntitiesHandler } from './ListEntities';
 import { listInboxesHandler } from './ListInboxes';
 import { listLabelsHandler } from './ListLabels';
@@ -117,6 +122,8 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ReadSpreadsheet: readSpreadsheetHandler,
   CalculateSpreadsheet: calculateSpreadsheetHandler,
   EditSpreadsheet: editSpreadsheetHandler,
+  ConfigureAgent: configureAgentHandler,
+  ListAgents: listAgentsHandler,
   ConfigureBot: configureBotHandler,
   CreateChannel: createChannelHandler,
   CreateBot: createBotHandler,
@@ -288,19 +295,26 @@ export function RenderTool(props: ToolProps) {
   });
 
   return (
-    <ToolErrorContext.Provider
-      value={() => (props.isComplete && !response() ? 'failed' : undefined)}
+    <LegacyGeneratedImage
+      name={props.name}
+      response={
+        props.response?.name === props.name ? props.response.json : undefined
+      }
     >
-      <Dynamic
-        component={handler.render}
-        {...context}
-        response={response()}
-        renderContext={{
-          isStreaming: props.renderContext.renderContext.isStreaming,
-          grouped: props.renderContext.renderContext.grouped,
-        }}
-      />
-    </ToolErrorContext.Provider>
+      <ToolErrorContext.Provider
+        value={() => (props.isComplete && !response() ? 'failed' : undefined)}
+      >
+        <Dynamic
+          component={handler.render}
+          {...context}
+          response={response()}
+          renderContext={{
+            isStreaming: props.renderContext.renderContext.isStreaming,
+            grouped: props.renderContext.renderContext.grouped,
+          }}
+        />
+      </ToolErrorContext.Provider>
+    </LegacyGeneratedImage>
   );
 }
 

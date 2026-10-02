@@ -1,7 +1,7 @@
 use super::*;
 use agent_trigger::domain::broker_events::{
-    AgentBotMentionedEvent, AgentMentionedEvent, ChannelEventMetadata, ExistingAgentSessionEvent,
-    NewAgentSessionEvent, ThreadEventMetadata, ThreadMessageKind,
+    AgentAssignedToTaskEvent, AgentBotMentionedEvent, AgentMentionedEvent, ChannelEventMetadata,
+    ExistingAgentSessionEvent, NewAgentSessionEvent, ThreadEventMetadata, ThreadMessageKind,
 };
 use channel_sender::ChannelSender;
 use channels::domain::broker_events::ChannelMessagePostedMetadata;
@@ -84,6 +84,7 @@ fn document_triggers_become_work_on_the_document() {
     assert_eq!(
         trigger_to_work(opened).expect("a document mention is work"),
         TriggerWork::OpenAndPrompt {
+            reuse_origin_message: false,
             bot: bot_id::BotId::TEST_A,
             sender: sender(),
             parent: document(),
@@ -110,11 +111,37 @@ fn document_triggers_become_work_on_the_document() {
 }
 
 #[test]
+fn a_task_assignment_opens_and_prompts_in_the_task_discussion() {
+    let event = AgentTriggerTopicEvent::New(NewAgentSessionEvent::AssignedToTask(
+        AgentAssignedToTaskEvent {
+            bot_id: BotId::TEST_A,
+            parent: document(),
+            discussion_id: Uuid::from_u128(2),
+            actor: sender(),
+            prompt: "Complete the assigned task".to_owned(),
+        },
+    ));
+    assert_eq!(
+        trigger_to_work(event).expect("a task assignment is work"),
+        TriggerWork::OpenAndPrompt {
+            reuse_origin_message: true,
+            bot: BotId::TEST_A,
+            sender: sender(),
+            parent: document(),
+            thread_id: Uuid::from_u128(2),
+            message_id: Uuid::from_u128(2),
+            content: "Complete the assigned task".to_owned(),
+        }
+    );
+}
+
+#[test]
 fn a_mention_becomes_open_and_prompt_rooting_its_own_thread() {
     let work = trigger_to_work(mention("fix the test")).expect("a mention is work");
     assert_eq!(
         work,
         TriggerWork::OpenAndPrompt {
+            reuse_origin_message: false,
             bot: bot_id::BotId::TEST_A,
             sender: sender(),
             parent: messages::domain::models::MessageParent::Channel(Uuid::from_u128(1)),

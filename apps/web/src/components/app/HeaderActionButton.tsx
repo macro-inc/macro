@@ -1,8 +1,9 @@
 import { Button, cn } from '@ui';
-import type { JSX } from 'solid-js';
+import type { JSX, Ref } from 'solid-js';
 
 /** Shared geometry for labeled actions in a block's header. */
 export function HeaderActionButton(props: {
+  ref?: Ref<HTMLButtonElement>;
   label: string;
   icon: JSX.Element;
   onClick: () => void;
@@ -13,6 +14,7 @@ export function HeaderActionButton(props: {
 }) {
   return (
     <Button
+      ref={props.ref}
       variant="ghost"
       size="md"
       aria-label={props.label}

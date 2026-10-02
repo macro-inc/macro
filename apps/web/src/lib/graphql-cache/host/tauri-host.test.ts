@@ -714,6 +714,22 @@ describe('createTauriCacheHost', () => {
         error: 'invalid property',
       }
     );
+    await host.rollbackOptimisticWrite(
+      '2',
+      claim,
+      'already sent',
+      'DRAFT_ALREADY_SENT'
+    );
+    expect(invokeMock).toHaveBeenCalledWith(
+      'graphql_cache_rollback_optimistic_write',
+      {
+        transactionId: '2',
+        leaseOwner: 'runner',
+        leaseGeneration: '2',
+        error: 'already sent',
+        errorCode: 'DRAFT_ALREADY_SENT',
+      }
+    );
   });
 
   it('inspects generated query variants through the native commands', async () => {
@@ -797,23 +813,27 @@ describe('createTauriCacheHost', () => {
     expect(calls).toBe(1);
   });
 
-  it('delivers queued mutation settlements from the broadcast event', async () => {
-    const host = createTauriCacheHost({ scope: 'scope-1' });
-    const seen: unknown[] = [];
-    host.onMutationSettled((settlement) => seen.push(settlement));
-    await Promise.resolve();
+  it.each([undefined, 'DRAFT_ALREADY_SENT'])(
+    'delivers queued mutation settlements with optional code %s',
+    async (errorCode) => {
+      const host = createTauriCacheHost({ scope: 'scope-1' });
+      const seen: unknown[] = [];
+      host.onMutationSettled((settlement) => seen.push(settlement));
+      await Promise.resolve();
 
-    const settlement = {
-      transactionId: '12',
-      status: 'permanently-failed' as const,
-      error: 'invalid property',
-    };
-    eventCallbacks.get('graphql-cache://mutation-settled')?.({
-      payload: settlement,
-    });
+      const settlement = {
+        transactionId: '12',
+        status: 'permanently-failed' as const,
+        error: 'invalid property',
+        ...(errorCode === undefined ? {} : { errorCode }),
+      };
+      eventCallbacks.get('graphql-cache://mutation-settled')?.({
+        payload: settlement,
+      });
 
-    expect(seen).toEqual([settlement]);
-  });
+      expect(seen).toEqual([settlement]);
+    }
+  );
 
   it('normalizes string command errors to Error rejections', async () => {
     const host = createTauriCacheHost({ scope: 'scope-1' });

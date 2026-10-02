@@ -518,21 +518,27 @@ export function createEventEditorState(options: CreateEventEditorStateOptions) {
     const choice = recurrenceChoice();
     if (choice === 'existing') return undefined;
     if (choice === 'none') return [];
-    if (choice === 'custom') {
-      return buildRecurrenceLines(
-        customConfig(),
-        options.state().allDay,
-        options.recurrenceTimeZone
-      );
+    const config =
+      choice === 'custom'
+        ? customConfig()
+        : presets().find((candidate) => candidate.id === choice)?.config;
+    if (!config) return undefined;
+    const originalConfig = initialConfig();
+    if (
+      originalConfig &&
+      options.state().allDay === initialValues().allDay &&
+      recurrenceConfigsEqual(config, originalConfig)
+    ) {
+      // Rebuilding an untouched rule can reorder fields, drop provider details
+      // like WKST, or change UNTIL precision. Preserve it so a private reminder
+      // edit does not accidentally request an organizer-only series update.
+      return initialValues().recurrenceLines;
     }
-    const preset = presets().find((candidate) => candidate.id === choice);
-    return preset
-      ? buildRecurrenceLines(
-          preset.config,
-          options.state().allDay,
-          options.recurrenceTimeZone
-        )
-      : undefined;
+    return buildRecurrenceLines(
+      config,
+      options.state().allDay,
+      options.recurrenceTimeZone
+    );
   };
   const dateRangeError = createMemo(() => {
     const current = options.state();

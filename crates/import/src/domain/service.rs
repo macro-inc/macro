@@ -32,6 +32,7 @@ use std::sync::LazyLock;
 use std::time::Duration;
 use uuid::Uuid;
 
+mod admission;
 mod prompts;
 
 #[cfg(test)]
@@ -94,7 +95,7 @@ fn notion_import_failure_reason(outcome: &anyhow::Result<()>) -> String {
     outcome
         .as_ref()
         .err()
-        .map(ToString::to_string)
+        .map(admission::failure_reason)
         .unwrap_or_else(|| "the import job did not finish this item".to_string())
 }
 
@@ -305,6 +306,7 @@ pub struct ImportServiceImpl<R, S, C> {
     mcp_tools: Arc<S>,
     creator: Arc<C>,
     recorder: Arc<dyn ai_usage::UsageRecorder>,
+    admission: Arc<dyn ai_billing::AiAdmissionService>,
     notifier: Option<ImportNotify>,
 }
 
@@ -315,6 +317,7 @@ impl<R: Clone, S, C> Clone for ImportServiceImpl<R, S, C> {
             mcp_tools: self.mcp_tools.clone(),
             creator: self.creator.clone(),
             recorder: self.recorder.clone(),
+            admission: self.admission.clone(),
             notifier: self.notifier.clone(),
         }
     }
@@ -333,6 +336,7 @@ impl<R, S, C> ImportServiceImpl<R, S, C> {
             mcp_tools,
             creator,
             recorder,
+            admission: Arc::new(ai_billing::DisabledAiAdmissionService),
             notifier: None,
         }
     }
@@ -378,7 +382,12 @@ where
                     tracing::warn!(source = source.as_ref(), error = ?e, "gather session failed");
                     service
                         .repo
-                        .finish_run(&user, source, RunStatus::Failed, Some(&e.to_string()))
+                        .finish_run(
+                            &user,
+                            source,
+                            RunStatus::Failed,
+                            Some(&admission::failure_reason(&e)),
+                        )
                         .await
                 }
             };
@@ -452,14 +461,29 @@ where
         user: &MacroUserIdStr<'static>,
         source: ImportSource,
     ) -> anyhow::Result<()> {
+        // The gather may have waited since it was accepted. Refuse before
+        // loading tools; Slack still gets its deterministic attempt first.
+        self.admit_gather(user, source).await?;
         let mcp_tools = self.connector_tools(user, source).await?;
 
+        self.gather_with_tools(user, source, mcp_tools).await
+    }
+
+    async fn gather_with_tools<M>(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: ImportSource,
+        mcp_tools: Arc<M>,
+    ) -> anyhow::Result<()>
+    where
+        M: ToolSet<()> + ToolSet<ImportToolContext<Self>> + 'static,
+    {
         // Slack discovery is a listing problem, not a language problem:
         // enumerate channels through the connector directly and stage the
         // strongest. The agent session only runs as a fallback, when the
         // connector's tool surface changed under us.
         if source == ImportSource::Slack {
-            match self.gather_slack_direct(user, &mcp_tools).await {
+            match self.gather_slack_direct(user, &*mcp_tools).await {
                 Ok(_) => return Ok(()),
                 Err(e) => {
                     tracing::warn!(error = ?e, "direct slack gather failed; trying the agent");
@@ -475,6 +499,7 @@ where
             .await
         {
             Ok(()) => Ok(()),
+            Err(e) if e.is::<ai_billing::AiAdmissionError>() => Err(e),
             Err(e) => {
                 tracing::warn!(model = GATHER_MODEL, error = ?e, "gather session failed; retrying on the fallback model");
                 self.gather_agent_session(user, source, GATHER_FALLBACK_MODEL, mcp_tools)
@@ -485,12 +510,12 @@ where
 
     /// One agent gather session on a specific model.
     #[tracing::instrument(skip(self, user, mcp_tools), err)]
-    async fn gather_agent_session(
+    async fn gather_agent_session<M: ToolSet<ImportToolContext<Self>> + 'static>(
         &self,
         user: &MacroUserIdStr<'static>,
         source: ImportSource,
         model: &str,
-        mcp_tools: Arc<UserMcpTools>,
+        mcp_tools: Arc<M>,
     ) -> anyhow::Result<()> {
         let native = gather_toolset::<Self>();
         let toolset = NativePlusMcp::new(native, mcp_tools);
@@ -517,10 +542,10 @@ where
     /// handle — routing page content through a model means re-emitting the
     /// whole page as output tokens, which is an order of magnitude slower.
     #[tracing::instrument(skip(self, user, mcp_tools, row), fields(id = %row.id), err)]
-    async fn import_notion_page_direct(
+    async fn import_notion_page_direct<M: ToolSet<()>>(
         &self,
         user: &MacroUserIdStr<'static>,
-        mcp_tools: &UserMcpTools,
+        mcp_tools: &M,
         row: &ImportEntity,
     ) -> anyhow::Result<()> {
         let fetch_tool = notion_fetch_tool_name(mcp_tools)
@@ -574,10 +599,10 @@ where
 
     /// Call one connector tool and surface both dispatch and tool errors as
     /// plain errors.
-    async fn connector_tool_call(
+    async fn connector_tool_call<M: ToolSet<()>>(
         &self,
         user: &MacroUserIdStr<'static>,
-        mcp_tools: &UserMcpTools,
+        mcp_tools: &M,
         tool_name: &str,
         arguments: &serde_json::Value,
     ) -> anyhow::Result<serde_json::Value> {
@@ -601,10 +626,10 @@ where
     /// real error. Staged rows carry no participants — inviting teammates
     /// stays best-effort and must never block discovery.
     #[tracing::instrument(skip(self, user, mcp_tools), err)]
-    async fn gather_slack_direct(
+    async fn gather_slack_direct<M: ToolSet<()>>(
         &self,
         user: &MacroUserIdStr<'static>,
-        mcp_tools: &UserMcpTools,
+        mcp_tools: &M,
     ) -> anyhow::Result<usize> {
         let search_tool = slack_channel_search_tool_name(mcp_tools)
             .ok_or_else(|| anyhow::anyhow!("connector exposes no channel-search tool"))?;
@@ -685,11 +710,11 @@ where
     /// Fallback: run a single-page Haiku session over the shared connector
     /// tools. Rows the agent fails to finalize are handled by the caller.
     #[tracing::instrument(skip(self, user, mcp_tools, rows), fields(pages = rows.len()), err)]
-    async fn run_notion_import_session(
+    async fn run_notion_import_session<M: ToolSet<ImportToolContext<Self>> + 'static>(
         &self,
         user: &MacroUserIdStr<'static>,
         rows: &[ImportEntity],
-        mcp_tools: Arc<UserMcpTools>,
+        mcp_tools: Arc<M>,
     ) -> anyhow::Result<()> {
         let native = notion_import_toolset::<Self>();
         let toolset = NativePlusMcp::new(native, mcp_tools);
@@ -731,17 +756,20 @@ where
     }
 
     /// Run one bounded agent session to completion, discarding the text.
-    #[allow(clippy::too_many_arguments)]
-    async fn drive_session(
+    #[expect(clippy::too_many_arguments, reason = "bounded session configuration")]
+    async fn drive_session<M: ToolSet<ImportToolContext<Self>> + 'static>(
         &self,
         user: &MacroUserIdStr<'static>,
         model: impl ToString,
         max_turns: usize,
-        toolset: NativePlusMcp<ImportToolContext<Self>>,
+        toolset: NativePlusMcp<ImportToolContext<Self>, M>,
         context: ImportToolContext<Self>,
         system_prompt: &str,
         user_prompt: &str,
     ) -> anyhow::Result<()> {
+        // Covers Slack/Notion fallbacks and pages waiting behind the batch's
+        // concurrency limit. Never gate their preceding deterministic work.
+        self.admit_ai(user).await?;
         let usage_ctx = ai_usage::UsageContext::new(ai_usage::AiFeature::Import, user.clone());
         let agent_loop = AgentLoop::new(self.recorder.clone())
             .with_model(model)
@@ -862,15 +890,18 @@ where
 
     /// Run the canonical single-page Notion pipeline for a row that is
     /// already `importing`.
-    async fn process_notion_page(
+    async fn process_notion_page<M>(
         &self,
         user: &MacroUserIdStr<'static>,
-        mcp_tools: Arc<UserMcpTools>,
+        mcp_tools: Arc<M>,
         row: &ImportEntity,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<()>
+    where
+        M: ToolSet<()> + ToolSet<ImportToolContext<Self>> + 'static,
+    {
         let outcome = tokio::time::timeout(NOTION_PAGE_IMPORT_TIMEOUT, async {
             match self
-                .import_notion_page_direct(user, &mcp_tools, row)
+                .import_notion_page_direct(user, &*mcp_tools, row)
                 .await
             {
                 Ok(()) => Ok(()),
@@ -1049,8 +1080,10 @@ where
         source: ImportSource,
         auto_import: bool,
     ) -> Result<bool> {
-        // Wins only when no run row exists — gathers run once per
-        // connection; explicit retry is the only re-entry.
+        if !self.prepare_gather(&user, source, &[]).await? {
+            return Ok(false);
+        }
+        // The CAS still decides the winner if another request raced admission.
         let won = self.repo.start_run(&user, source, &[], auto_import).await?;
         if won {
             self.spawn_gather(user.clone(), source);
@@ -1065,6 +1098,12 @@ where
         user: MacroUserIdStr<'static>,
         source: ImportSource,
     ) -> Result<bool> {
+        if !self
+            .prepare_gather(&user, source, &[RunStatus::Failed, RunStatus::Dismissed])
+            .await?
+        {
+            return Ok(false);
+        }
         let won = self
             .repo
             .start_run(
@@ -1112,6 +1151,9 @@ where
             }
         }
 
+        // Claim deterministic work without quota checks. Even Notion tries a
+        // direct fetch first; only its AI fallback needs admission, and any
+        // refusal releases the row through the usual failure bookkeeping.
         let rows = self.repo.mark_importing(&user, &import_ids).await?;
         let importing = rows.len() as u64;
         self.notify(&user).await;
@@ -1399,6 +1441,11 @@ where
             .process_notion_page(user, mcp_tools, &importing_row)
             .await;
         self.notify(user).await;
+        if let Err(error) = &pipeline_result
+            && let Some(error) = error.downcast_ref::<ai_billing::AiAdmissionError>()
+        {
+            return Err(ImportError::Admission(*error));
+        }
 
         let row = self
             .repo
@@ -1501,7 +1548,7 @@ where
 
 /// The mangled name of the connector's Notion fetch tool. Notion exposes this
 /// as `notion-fetch` generally and as `fetch` on OpenAI-compatible surfaces.
-fn notion_fetch_tool_name(mcp_tools: &UserMcpTools) -> Option<String> {
+fn notion_fetch_tool_name(mcp_tools: &impl ToolSet<()>) -> Option<String> {
     ToolSet::<()>::request_schemas(mcp_tools)?
         .into_iter()
         .map(|schema| schema.name)
@@ -1518,7 +1565,7 @@ fn is_notion_fetch_tool_name(name: &str) -> bool {
 /// The mangled name of the connector's channel-search tool. Slack's hosted
 /// MCP has shipped several tool-name spellings, so this matches the shape —
 /// a search/list over channels — rather than one literal name.
-fn slack_channel_search_tool_name(mcp_tools: &UserMcpTools) -> Option<String> {
+fn slack_channel_search_tool_name(mcp_tools: &impl ToolSet<()>) -> Option<String> {
     ToolSet::<()>::request_schemas(mcp_tools)?
         .into_iter()
         .map(|schema| schema.name)
@@ -2706,14 +2753,14 @@ impl Drop for AbortOnDrop {
 
 /// A toolset combining an in-process collection with the user's connector
 /// MCP tools: native tools win by name, everything else routes to MCP.
-struct NativePlusMcp<Context> {
+struct NativePlusMcp<Context, M> {
     native: ai_toolset::AsyncToolCollection<Context>,
     native_names: HashSet<String>,
-    mcp: Arc<UserMcpTools>,
+    mcp: Arc<M>,
 }
 
-impl<Context: Send + Sync + 'static> NativePlusMcp<Context> {
-    fn new(native: ai_toolset::AsyncToolCollection<Context>, mcp: Arc<UserMcpTools>) -> Self {
+impl<Context: Send + Sync + 'static, M> NativePlusMcp<Context, M> {
+    fn new(native: ai_toolset::AsyncToolCollection<Context>, mcp: Arc<M>) -> Self {
         let native_names = native
             .request_schemas()
             .unwrap_or_default()
@@ -2728,9 +2775,10 @@ impl<Context: Send + Sync + 'static> NativePlusMcp<Context> {
     }
 }
 
-impl<Context> ToolSet<Context> for NativePlusMcp<Context>
+impl<Context, M> ToolSet<Context> for NativePlusMcp<Context, M>
 where
     Context: Clone + Send + Sync + 'static,
+    M: ToolSet<Context>,
 {
     fn dispatch_tool_call<'a>(
         &'a self,

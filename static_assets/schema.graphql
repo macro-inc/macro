@@ -219,6 +219,10 @@ input CreateInitiativeInput {
 	Whether to share with the owner's team, defaulting to true.
 	"""
 	shareWithTeam: Boolean
+	"""
+	Initial property values, set in the same create; a rejected value fails it.
+	"""
+	propertyValues: [InitialPropertyValueInput!]
 }
 
 """
@@ -236,23 +240,29 @@ input DeleteEmailDraftInput {
 }
 
 """
-Result of deleting an email draft.
+Result of deleting an email draft, including its surviving conversation.
 """
 type DeleteEmailDraftPayload {
 	"""
-	The requested draft ID, echoed for client cache bookkeeping.
+	Requested draft identity.
 	"""
 	draftId: ID!
 	"""
-	Whether a draft row was actually deleted. `false` means the ID was
-	already gone and the delete was an idempotent no-op.
+	Whether a row was removed; an absent row is an idempotent success.
 	"""
 	deleted: Boolean!
 	"""
-	Whether deleting the draft emptied its thread and removed the thread
-	too (a discarded compose draft that never gained other messages).
+	Whether the thread was also removed.
 	"""
 	threadDeleted: Boolean!
+	"""
+	Authorized thread identity, including a thread removed by this delete.
+	"""
+	threadId: ID
+	"""
+	Canonical surviving thread, when this delete found a draft.
+	"""
+	thread: GraphqlSoupEmailThread
 }
 
 """
@@ -1458,6 +1468,10 @@ input GraphqlChannelThreadLiteral @oneOf {
 	Exact notification state for the requester.
 	"""
 	notificationState: NotificationState
+	"""
+	Whether the thread has at least one undeleted reply.
+	"""
+	hasReplies: Boolean
 }
 
 """
@@ -1866,6 +1880,14 @@ input GraphqlDocumentLiteral @oneOf {
 	The updated at option.
 	"""
 	updatedAt: GraphqlDateLiteral
+	"""
+	An entity-property condition on the document or task.
+	"""
+	property: GraphqlFilterPropertiesLiteral
+	"""
+	Uploaded from an email attachment sent by, or to, a matching address.
+	"""
+	emailAttachmentParticipant: GraphqlEmailValue
 }
 
 """
@@ -1998,6 +2020,10 @@ input GraphqlEmailFilterAst {
 Enriched email link accessible to the authenticated user.
 """
 type GraphqlEmailLink {
+	"""
+	Whether drafts from this account's own sender are classified as Signal.
+	"""
+	draftIsSignal: Boolean!
 	"""
 	Stable email link identifier.
 	"""
@@ -3435,6 +3461,84 @@ enum GraphqlLinkShare {
 }
 
 """
+Body-free aggregate used to recompute view membership and previews.
+"""
+type GraphqlMailDraftAggregate {
+	"""
+	Count including trashed messages.
+	"""
+	messageCount: Int!
+	"""
+	Any message is inbox-visible.
+	"""
+	inboxVisible: Boolean!
+	"""
+	Every message is read.
+	"""
+	isRead: Boolean!
+	"""
+	Any eligible message is Signal.
+	"""
+	isSignal: Boolean!
+	"""
+	Any message has a calendar attachment.
+	"""
+	hasCalendarAttachment: Boolean!
+	"""
+	Inbound or Macro-draft recency.
+	"""
+	latestInboundMessageTs: String
+	"""
+	Non-spam or Macro-draft recency.
+	"""
+	latestNonSpamMessageTs: String
+	"""
+	Outbound recency.
+	"""
+	latestOutboundMessageTs: String
+	"""
+	Latest eligible preview.
+	"""
+	preview: GraphqlMailPreviewMessage
+	"""
+	Preview ordering timestamp.
+	"""
+	previewTs: String
+}
+
+"""
+One draft's contribution, normalized by message identity.
+"""
+type GraphqlMailDraftEntry {
+	"""
+	Message identity.
+	"""
+	id: ID!
+	"""
+	Whether edits contribute their update time to Mail recency.
+	"""
+	macroDraft: Boolean!
+	"""
+	Aggregate contributed by this message.
+	"""
+	facts: GraphqlMailDraftAggregate!
+}
+
+"""
+Metadata for applying and reversing offline draft edits across Mail views.
+"""
+type GraphqlMailDraftState {
+	"""
+	Complete non-draft contribution, independent of message pagination.
+	"""
+	baseline: GraphqlMailDraftAggregate!
+	"""
+	Independently replaceable draft contributions.
+	"""
+	drafts: [GraphqlMailDraftEntry!]!
+}
+
+"""
 A body-free normalized message snapshot used by canonical Mail preview edges.
 Its ID identifies the same message across ALL, Drafts and Sent references.
 """
@@ -4023,6 +4127,10 @@ enum GraphqlPropertyEntityType {
 	Company entity.
 	"""
 	COMPANY
+	"""
+	CRM contact entity.
+	"""
+	CONTACT
 	"""
 	Document entity.
 	"""
@@ -6076,6 +6184,10 @@ type GraphqlSoupEmailThread implements GraphqlSoupEntity {
 	"""
 	latestInboundMessageTs: String
 	"""
+	Complete body-free metadata for local draft edits and discards.
+	"""
+	mailDraftState: GraphqlMailDraftState
+	"""
 	Latest eligible message for ALL, INBOX, Calendar and Shared, without bodies.
 	"""
 	mailAllPreview: GraphqlMailPreviewMessage
@@ -6799,6 +6911,20 @@ input GroupedSoupInput @oneOf {
 	Continue one bin from a cursor returned by a previous grouped query.
 	"""
 	continuation: GroupedSoupContinuationInput
+}
+
+"""
+One property value set when an initiative is created.
+"""
+input InitialPropertyValueInput {
+	"""
+	Property definition to set.
+	"""
+	propertyDefinitionId: ID!
+	"""
+	Value, in the same shape `setEntityProperty` accepts.
+	"""
+	value: GraphqlSetPropertyValue!
 }
 
 """

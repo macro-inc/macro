@@ -1,7 +1,7 @@
 .startups-page { width:100%; }
 .startups-main { box-sizing:border-box; max-width:1000px; margin:auto; padding:128px 32px 64px; }
 .startups-eyebrow { color:var(--a0); text-transform:uppercase; letter-spacing:.1em; font-size:14px; font-weight:600; margin:0 0 20px; }
-.startups-main h1 { font-family:display; font-size:clamp(40px,5vw,60px); font-weight:420; line-height:1.1; letter-spacing:-.025em; margin:0 0 24px; }
+.startups-main h1 { font-family:display; font-size:clamp(40px,5vw,60px); font-weight: 315; line-height:1.1; letter-spacing:-.025em; margin:0 0 24px; }
 .startups-intro { color:var(--c4); font-size:22px; line-height:1.5; max-width:42ch; }
 .startups-apply { display:inline-flex; align-items:center; gap:24px; min-height:48px; padding:0 26px; margin-top:12px; color:var(--b0); background:var(--a0); border-radius:999px; font-size:18px; font-weight:700; text-decoration:none; }
 .startups-offer { display:grid; grid-template-columns:1fr 1fr; align-items:center; gap:48px; border-block:1px solid var(--b3); margin:56px 0 40px; padding:40px 0; }

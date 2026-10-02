@@ -9,6 +9,7 @@ use soup_filter_projection::{
     MailCacheProjectionFacts, SoupCacheProjectionSupplement, encode_cache_projection_supplement,
 };
 
+mod drafts;
 mod optimistic;
 
 const VIEWER: &str = "macro|mail@example.com";
@@ -316,6 +317,7 @@ async fn lifecycle<S: PredicateIndexStorage>(storage: S) {
                 link_patches: &[],
                 revalidations: &[],
                 created_at_ms: 1,
+                identity_bindings: &[],
             },
             mutations,
         )

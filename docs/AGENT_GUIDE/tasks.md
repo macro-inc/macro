@@ -26,6 +26,11 @@ are pills and the leading sliders button opens one drawer containing Sort, Group
 Filters (including Tags). The mobile bottom dock has the Ask AI input, a separate **+ Task**
 button, and Search.
 
+**Keyboard:** Focus one task and press **H** to set or edit its reminder, even
+inside an expanded group. **←** collapses the focused item or its parent group.
+On a focused group header, **H** collapses only that group; pressing it again
+does nothing. Typing H in a text field remains ordinary input.
+
 New accounts are seeded with three sample tasks (`Intro to tasks`, `Advanced task features`,
 `How we use tasks at Macro`).
 
@@ -153,12 +158,16 @@ previous status catalog remain visible until an editor changes them.
 Submit with
 `Create Project` or Cmd/Ctrl+Enter. `Continue editing in split` preserves the
 name, properties, and sharing choice; `Clear Draft` resets an uncreated draft.
-Leaving a property unset keeps its normal server default. If creation succeeds
-but a property write fails, `Retry saving properties` finishes the existing
-project, including after continuing in a split, without creating a duplicate.
-Closing the popover keeps the underlying view open. Creating from the popover
-opens the project in another split; creating from a full composer replaces that
-composer with the project.
+Leaving a property unset keeps its normal server default.
+Submitting closes the composer at once; a full composer returns its split to
+Projects, and Back skips the submitted composer. One request creates the project
+together with its selected properties: a value the server rejects fails the whole
+create, so no half-configured project is left behind. When the server answers, a
+`Project created` toast offers `Open` and `Open (New Split)` (on touch devices
+both open in place); nothing navigates on its own. The Projects list then
+refreshes in the background to include the new row. If creation fails, the
+composer reopens as a popover with the draft and the error.
+Closing the popover without submitting keeps the underlying view open.
 
 Opening a project keeps the Tasks workspace and its navigation. The top bar
 shows the Projects return breadcrumb and the project name, with the same Share
@@ -261,6 +270,18 @@ mentions and document references also show the same three pills in their hover-c
 including properties that do not have a value yet. Click a preview pill to edit it without
 opening the task; the property picker keeps the preview open while you make a selection.
 Users with view or comment access see the same pills read-only.
+
+The Assignees picker offers people and available agents together. Agent rows show
+their name and an `Agent` label; saved agents also show their `@handle`. Search by
+name or handle to find one. Built-in session agents follow the same availability
+as message mentions, alongside your own and team agents.
+Select an agent in the task composer, then create the task to start its session.
+For an existing task, add an agent to Assignees and dismiss the picker to save and
+start the session. Discussion gains one message from the assigned agent, which
+updates with its session or answer. The assignment instructions and task details
+are private startup context; no message is posted as you. People and agents
+can remain assigned together. Removing an agent and saving, then assigning it
+again starts a new session; saving an unchanged assignment does not restart it.
 
 Selecting Status or Priority dismisses the picker immediately, without waiting
 for the save request. With the GraphQL cache active, the pill updates

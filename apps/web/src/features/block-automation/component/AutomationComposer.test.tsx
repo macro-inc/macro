@@ -114,30 +114,27 @@ vi.mock('../../agents-view/queries/agent-roster-source', () => ({
   }),
 }));
 vi.mock('@queries/agents/models', () => ({
-  useAgentModelsQueries: () => [
-    {
-      get isSuccess() {
-        return catalogState() === 'success';
-      },
-      get isPending() {
-        return catalogState() === 'pending';
-      },
-      get isError() {
-        return catalogState() === 'error';
-      },
-      get data() {
-        if (catalogState() !== 'success')
-          throw new Error('Unsafe catalog read');
-        return {
-          status: 'available',
-          models: [
-            { id: 'claude-sonnet-4-6', name: 'Sonnet' },
-            { id: 'vendor/custom-model', name: 'Custom model' },
-          ],
-        };
-      },
+  useAgentModelsQuery: () => ({
+    get isSuccess() {
+      return catalogState() === 'success';
     },
-  ],
+    get isPending() {
+      return catalogState() === 'pending';
+    },
+    get isError() {
+      return catalogState() === 'error';
+    },
+    get data() {
+      if (catalogState() !== 'success') throw new Error('Unsafe catalog read');
+      return {
+        status: 'available',
+        models: [
+          { id: 'claude-sonnet-4-6', name: 'Sonnet' },
+          { id: 'vendor/custom-model', name: 'Custom model' },
+        ],
+      };
+    },
+  }),
 }));
 
 let styles: HTMLStyleElement;

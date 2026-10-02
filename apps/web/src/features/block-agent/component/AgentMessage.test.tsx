@@ -633,6 +633,26 @@ describe('Message prompt attribution', () => {
     expect(view.queryByTestId('prompt-author')).toBeNull();
     expect(view.getByTestId('bubble')).toBeTruthy();
   });
+
+  it('renders a notification Cursor wrote full-width, not as a prompt', () => {
+    const notification = [
+      '<system_notification source="github" conclusion="success" checks="27" subscriptionType="github:ci:branch">',
+      'All 27 CI checks completed without failures.',
+      '</system_notification>',
+    ].join('\n');
+    const view = render(() => (
+      <Message
+        message={{
+          ...message([text(notification)]),
+          author: { kind: 'user', userId: 'macro|wolf@macro.com' },
+        }}
+        inFlight={false}
+      />
+    ));
+    expect(view.queryByTestId('bubble')).toBeNull();
+    expect(view.queryByTestId('prompt-author')).toBeNull();
+    expect(view.getByTestId('text').textContent).toBe(notification);
+  });
 });
 
 describe('Message failed turns', () => {

@@ -9,7 +9,6 @@ const parts: EmailDemoToken[] = [
   ' and the ',
   { kind: 'md', label: 'Team rollout plan' },
   '.\n',
-  'I’ve cc’d Julia to help with setup. Does Thursday at 9 AM work for a follow-up?\n',
   'Best,\nJacob',
 ];
 const tokens = parts.flatMap((part): EmailDemoToken[] =>
@@ -62,6 +61,8 @@ export function createEmailDemoGeneration(
     );
   };
   onMount(() => {
+    const root = element();
+    if (!root) return;
     reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
     reduced.addEventListener('change', run);
     document.addEventListener('visibilitychange', run);
@@ -72,8 +73,7 @@ export function createEmailDemoGeneration(
       },
       { threshold: 0.2 }
     );
-    const root = element();
-    if (root) observer.observe(root);
+    observer.observe(root);
     run();
     onCleanup(() => {
       stop();

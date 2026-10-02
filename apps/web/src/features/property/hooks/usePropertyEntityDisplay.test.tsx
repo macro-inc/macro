@@ -51,7 +51,11 @@ vi.mock('@core/context/channels', () => ({
 }));
 vi.mock('@core/user', () => ({
   getDisplayName: () => '',
+  getDisplayNameParts: () => ({ fullName: '', firstName: '' }),
   tryMacroId: () => undefined,
+}));
+vi.mock('@queries/bots/profiles', () => ({
+  useBotProfile: () => ({ isPending: true }),
 }));
 vi.mock('@queries/preview', () => ({
   useItemPreview: () => {
@@ -81,7 +85,9 @@ afterEach(() => {
   fixture.projectDisposals = 0;
 });
 
-function setup(type: 'DOCUMENT' | 'CHANNEL' | 'INITIATIVE') {
+function setup(
+  type: 'DOCUMENT' | 'CHANNEL' | 'INITIATIVE' | 'COMPANY' | 'CONTACT'
+) {
   return createRoot((dispose) => {
     disposals.push(dispose);
     return usePropertyEntityDisplay(
@@ -210,4 +216,20 @@ describe('usePropertyEntityDisplay subscription ownership', () => {
     expect(display.name()).toBe('Product design');
     expect(fixture.channelMounts).toBe(1);
   });
+});
+
+describe('usePropertyEntityDisplay CRM references', () => {
+  it.each([
+    ['COMPANY', 'Acme', 'company'],
+    ['CONTACT', 'Ada Lovelace', 'contact'],
+  ] as const)(
+    'names %s references from their preview and links to the record',
+    (type, name, block) => {
+      fixture.preview = () => ({ loading: false, access: 'access', name });
+      const display = setup(type);
+      expect(fixture.previewMounts).toBe(1);
+      expect(display.name()).toBe(name);
+      expect(display.blockOrFileType()).toBe(block);
+    }
+  );
 });

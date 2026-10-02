@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_threads SET latest_inbound_message_ts = NULL, inbox_visible = false WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "08b109922b70a7958250245d2878ae372d8f84a1470c5eab6d1e20b08f2043ea"
+}

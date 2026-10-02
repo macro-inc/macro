@@ -299,6 +299,8 @@ export const storageExcluded = [
   'deleteHistoryHandler',
   'deleteUserDocumentViewLocation',
   'deleteViewHandler',
+  // Old numeric comment links resolve inside the web app only.
+  'entityMessageLegacy',
   'excludeDefaultViewHandler',
   'getAttachmentReferences',
   'getBatchCallRecordPreview',
@@ -306,6 +308,7 @@ export const storageExcluded = [
   'getBatchPreviewHandler',
   'getActiveCalls',
   'getBatchProjectPreview',
+  'getBotOwnerProfiles',
   'getCollabSurface',
   'getDocumentListHandler',
   'getDocumentLocationV3',
@@ -329,18 +332,21 @@ export const storageExcluded = [
   'jobProcessingResultHandler',
   'joinChannelByCode',
   'leaveOrEndCall',
-  // Joining and leaving live meetings are app session flows.
+  // Live meeting admission and participant previews are app session flows.
   'meetingGuestJoin',
+  // Browser setup reserves an empty RTC room before creating a meeting.
+  'meetingPrepare',
+  'meetingCancelPreparation',
+  'meetingGuestParticipants',
   'meetingJoin',
   'meetingLeave',
+  'meetingParticipants',
   'mentionPreviews',
   'patchViewHandler',
-  'postChannelMessages',
   'postItemsSoup',
   'postItemsSoupAst',
   'postItemsSoupAstGrouped',
   'removeBotFromChannelByBot',
-  'resolveChannelMessage',
   // Composer dictation is an app-internal, user-only upload flow.
   'transcribeDictation',
   'uploadExtractFolderHandler',
@@ -350,6 +356,9 @@ export const storageExcluded = [
 ] as const satisfies readonly (keyof StorageSdk)[];
 
 export const storageBacklog = [
+  // Email follow-ups are available through the generated client, like reminders.
+  'getEmailFollowup',
+  'setEmailFollowup',
   'approveHarnessPairing',
   'assignInitiativeTasks',
   'claimHarnessPairing',
@@ -371,16 +380,8 @@ export const storageBacklog = [
   'editAnchor',
   'editCallTranscript',
   'editThreadV2',
-  'entityMessageCreate',
-  'entityMessageDeleteMessage',
   'entityMessageDeleteThread',
-  'entityMessageEdit',
-  'entityMessageGetMessage',
-  'entityMessageGetThread',
-  'entityMessageLegacy',
   'entityMessagePatchThread',
-  'entityMessageReact',
-  'entityMessageTyping',
   'getActivity',
   'getDocumentAnchors',
   'getDocumentByTeamSlug',
@@ -403,7 +404,6 @@ export const storageBacklog = [
   'listReminders',
   'listTeamOutOfOffice',
   'listUserApiKeys',
-  'messageTimeline',
   // Meeting management uses the generated client.
   'meetingCancel',
   'meetingCreate',

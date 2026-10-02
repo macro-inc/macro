@@ -62,6 +62,9 @@ fn default_pipedream_environment() -> String {
 #[derive(macro_config::MacroConfig)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Config {
+    /// Default-off quota admission and prospective usage counting.
+    #[macro_config_default(ai_usage::AiUsageEnforcement::Disabled)]
+    pub enable_ai_usage_enforcement: ai_usage::AiUsageEnforcement,
     /// OAuth encryption key; deployments without a key do not advertise sign-in.
     pub claude_oauth_kms_key_id: ClaudeOauthKmsKeyId,
     /// The environment we are in.
@@ -71,13 +74,6 @@ pub struct Config {
     pub codex_oauth_kms_key_id: CodexOauthKmsKeyId,
     /// Comma-separated Kafka bootstrap servers.
     pub kafka_brokers: KafkaBrokers,
-    /// Which committed-post topic feeds the in-process trigger: `messages`
-    /// (the default, channel and document posts) or `channels` (the
-    /// pre-parent channel event, kept until its producer retires it). Never
-    /// both: every channel post is on both topics, so both would evaluate
-    /// each mention twice.
-    #[macro_config_default(agent_trigger::domain::sources::TriggerEventSource::default())]
-    pub agent_trigger_event_source: agent_trigger::domain::sources::TriggerEventSource,
     /// MacroDB connection string; `agent_sessions` lives here.
     pub database_url: DatabaseUrl,
     /// Shared Redis used for cross-replica command forwarding.
@@ -154,6 +150,8 @@ pub struct Config {
     pub inmem_harness_slug: String,
     /// Key for internal service-to-service calls (the connection gateway).
     pub internal_api_key: String,
+    /// Key required by document storage's internal endpoints.
+    pub document_storage_service_auth_key: String,
     /// Port the control routes are served on.
     #[macro_config_default(8101)]
     pub port: u16,
@@ -237,7 +235,11 @@ impl Config {
 
     /// Load the configuration from the environment.
     pub fn from_env() -> anyhow::Result<Self> {
-        macro_config::ConfigLoader::load::<Config>()
-            .context("failed to load agent harness service config")
+        let enforcement = ai_usage::config::load_ai_usage_enforcement()
+            .map_err(|error| anyhow::anyhow!("{error}"))?;
+        let mut config = macro_config::ConfigLoader::load::<Config>()
+            .context("failed to load agent harness service config")?;
+        config.enable_ai_usage_enforcement = enforcement;
+        Ok(config)
     }
 }

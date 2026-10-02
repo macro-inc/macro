@@ -31,6 +31,7 @@ export type ReminderCreatedHandler = (
 
 type MakeCreateReminderOptions = {
   onCreated?: ReminderCreatedHandler;
+  onEmailSaved?: () => void | Promise<void>;
 };
 
 /**
@@ -59,7 +60,10 @@ export const makeCreateReminderAction = (
     const [entity] = entities;
     if (!entity || !canExecute(entity)) return;
     openReminderComposer(entity, {
-      onCreated: () => options?.onCreated?.(entity),
+      onCreated: () =>
+        entity.type === 'email'
+          ? options?.onEmailSaved?.()
+          : options?.onCreated?.(entity),
     });
   };
 
@@ -74,6 +78,37 @@ export const makeCreateReminderAction = (
   ) => {
     const [entity] = entities;
     if (!entity || !canExecute(entity)) return;
+    if (entity.type === 'email') {
+      const next = [1, -1]
+        .map((direction) =>
+          soup.navigate.peekOffset(direction, {
+            wrapNavigation: false,
+            skipGroupHeaders: true,
+            skipLoadMore: true,
+          })
+        )
+        .find(
+          (candidate) => candidate && candidate.row.original.id !== entity.id
+        )?.row;
+      openReminderComposer(entity, {
+        onCreated: async () => {
+          // A hosted email view owns pagination and its navigation history.
+          if (options?.onEmailSaved) {
+            await options.onEmailSaved();
+            return;
+          }
+          if (opts.advances) {
+            soup.selection.clear();
+            soup.focus.set(next?.id);
+            opts.onNavigate?.({
+              actionId: 'create-reminder',
+              entity: next?.original,
+            });
+          }
+        },
+      });
+      return;
+    }
     // Opening the composer doesn't change the list, so selection and focus are
     // left where they are until the reminder exists — `onCreated` is what moves
     // them, by way of marking the row done.

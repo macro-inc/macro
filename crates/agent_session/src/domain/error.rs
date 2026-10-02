@@ -1,12 +1,19 @@
 use crate::domain::model::AgentSessionId;
 use agent_runtime_protocol::domain::action::ActionError;
 use agent_runtime_protocol::domain::ports::TransportError;
+#[cfg(feature = "admission")]
+pub use ai_billing::AiAdmissionError;
 use model_owner::OwnerType;
 use thiserror::Error;
+
 pub type Result<T, E = AgentSessionError> = std::result::Result<T, E>;
 
 #[derive(Error, Debug)]
 pub enum AgentSessionError {
+    /// New Macro-funded work was refused before execution.
+    #[cfg(feature = "admission")]
+    #[error(transparent)]
+    Admission(#[from] AiAdmissionError),
     /// Invalid link or channel sharing input.
     #[error("{0}")]
     InvalidSharing(&'static str),
@@ -106,6 +113,10 @@ pub enum AgentSessionError {
 
 impl From<rootcause::Report> for AgentSessionError {
     fn from(report: rootcause::Report) -> Self {
+        #[cfg(feature = "admission")]
+        if let Some(error) = report.downcast_current_context::<AiAdmissionError>() {
+            return Self::Admission(*error);
+        }
         Self::Fold(report)
     }
 }

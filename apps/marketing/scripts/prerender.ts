@@ -54,12 +54,12 @@ const BUILD_DATE = new Date().toISOString().slice(0, 10);
 // so an unbuilt route 404s), but they set `noindex` and are kept out of the
 // sitemap — they are steps inside the signup flow, not landing pages.
 const STATIC_ROUTES = [
+  '/demo',
   '/jobs',
   '/terms',
   '/privacy',
   '/dpa',
   '/posts',
-  '/startups',
   '/tasks',
   '/email',
   '/documents',
@@ -69,6 +69,7 @@ const STATIC_ROUTES = [
   '/agents',
   '/github',
   '/pricing',
+  '/tour',
   '/partners',
   '/partners/terms',
   '/migrate',
@@ -80,11 +81,11 @@ const STATIC_ROUTES = [
 // the build manifest so prerendered pages link their stylesheets up front (no
 // flash of unstyled content) and preload their chunks.
 const ROUTE_MODULES: Array<[RegExp, string]> = [
+  [/^\/demo$/, 'src/app/routes/RouteDemo.tsx'],
   [/^\/jobs$/, 'src/app/routes/RouteJobs.tsx'],
   [/^\/terms$/, 'src/app/routes/RouteTerms.tsx'],
   [/^\/privacy$/, 'src/app/routes/RoutePrivacy.tsx'],
   [/^\/dpa$/, 'src/app/routes/RouteDpa.tsx'],
-  [/^\/startups$/, 'src/app/routes/RouteStartups.tsx'],
   [/^\/tasks$/, 'src/app/routes/RouteTasks.tsx'],
   [/^\/email$/, 'src/app/routes/RouteEmail.tsx'],
   [/^\/documents$/, 'src/app/routes/RouteDocuments.tsx'],
@@ -94,6 +95,7 @@ const ROUTE_MODULES: Array<[RegExp, string]> = [
   [/^\/agents$/, 'src/app/routes/RouteAgents.tsx'],
   [/^\/github$/, 'src/app/routes/RouteGithub.tsx'],
   [/^\/pricing$/, 'src/app/routes/RoutePricing.tsx'],
+  [/^\/tour$/, 'src/features/marketing/views/SalesPage.tsx'],
   [/^\/partners$/, 'src/app/routes/RoutePartners.tsx'],
   [/^\/partners\/terms$/, 'src/app/routes/RoutePartnerTerms.tsx'],
   [/^\/migrate$/, 'src/app/routes/RouteMigrate.tsx'],
@@ -137,7 +139,6 @@ const ROUTE_LABELS: Record<string, string> = {
   '/privacy': 'Privacy',
   '/dpa': 'Data Processing Agreement',
   '/posts': 'Blog',
-  '/startups': 'Startups',
   '/tasks': 'Tasks',
   '/email': 'Macro Mail',
   '/documents': 'Documents',
@@ -147,6 +148,7 @@ const ROUTE_LABELS: Record<string, string> = {
   '/agents': 'Agents',
   '/github': 'GitHub',
   '/pricing': 'Pricing',
+  '/tour': 'Macro tour',
   '/partners': 'Partner Program',
   '/partners/terms': 'Partner Program Terms',
   '/migrate': 'Switch your startup to Macro',
@@ -181,8 +183,7 @@ function sitemapHints(route: string): { priority: string; changefreq: string } {
     return { priority: '0.3', changefreq: 'yearly' };
   if (route === '/posts' || /^\/posts\/.+$/.test(route))
     return { priority: '0.6', changefreq: 'weekly' };
-  if (route === '/jobs' || route === '/startups')
-    return { priority: '0.7', changefreq: 'monthly' };
+  if (route === '/jobs') return { priority: '0.7', changefreq: 'monthly' };
   // Product/feature pages and pricing.
   return { priority: '0.8', changefreq: 'monthly' };
 }
@@ -481,9 +482,9 @@ function writeSitemapAndRobots(
 }
 
 const JOURNEY_SEO: PageSeo = {
-  title: 'Macro — One unified interface for all your work.',
+  title: 'Macro — The unified workspace for your company.',
   description:
-    'Your conversations, documents, and tools, together in one workspace. Explore Macro and build a connected home for your team’s work.',
+    'Email, messages, tasks, and agents in one inbox. CRDT documents with live agent edits, workspace search and memory, and a CRM built from your email.',
   path: '/',
 };
 

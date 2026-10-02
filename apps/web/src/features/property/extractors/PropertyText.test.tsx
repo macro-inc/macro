@@ -4,9 +4,10 @@ import { afterEach, expect, it, vi } from 'vitest';
 import type { Property } from '../types';
 import { PropertyText } from './PropertyText';
 
-vi.mock('@core/user', () => ({
-  getDisplayNameParts: () => ({ firstName: 'Sam', fullName: 'Sam Example' }),
-  tryMacroId: (id: string) => id,
+vi.mock('../hooks/usePropertyUserDisplay', () => ({
+  usePropertyUserDisplay: (id: () => string) => ({
+    shortName: () => (id().startsWith('bot|') ? 'Deploy Agent' : 'Sam'),
+  }),
 }));
 vi.mock('../hooks/usePropertyEntityDisplay', () => ({
   usePropertyEntityDisplay: (id: () => string) => ({
@@ -67,4 +68,31 @@ it('keeps explicit text overrides when resolving linked names', () => {
   ));
   expect(screen.getByText('Custom label')).toBeTruthy();
   expect(screen.queryByText('Design brief')).toBeNull();
+});
+
+it('resolves bot assignees while retaining mixed-assignee counts', () => {
+  const [current, setCurrent] = createSignal<Property>({
+    ...property,
+    specificEntityType: 'USER',
+    value: [
+      {
+        entity_id: 'bot|5f0c8a4e-2d1b-4c3a-9e7f-6a5b4c3d2e1f',
+        entity_type: 'USER',
+      },
+    ],
+  });
+  render(() => <PropertyText property={current()} resolveSingleEntity />);
+  expect(screen.getByText('Deploy Agent')).toBeTruthy();
+  setCurrent({
+    ...property,
+    specificEntityType: 'USER',
+    value: [
+      {
+        entity_id: 'bot|5f0c8a4e-2d1b-4c3a-9e7f-6a5b4c3d2e1f',
+        entity_type: 'USER',
+      },
+      { entity_id: 'macro|sam@example.com', entity_type: 'USER' },
+    ],
+  });
+  expect(screen.getByText('2 assignees')).toBeTruthy();
 });

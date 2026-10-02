@@ -10,6 +10,7 @@ export * from './nodes/CommentNode';
 export * from './nodes/CompletionNode';
 export * from './nodes/ConnectAppNode';
 export * from './nodes/ContactMentionNode';
+export * from './nodes/CursorSystemNotificationNode';
 export * from './nodes/CustomCodeNode';
 export * from './nodes/DateMentionNode';
 export * from './nodes/DecoratorBlockNode';

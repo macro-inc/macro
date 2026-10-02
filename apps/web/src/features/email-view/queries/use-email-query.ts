@@ -4,6 +4,7 @@ import {
   buildGroupedSoupRows,
   createSearchState,
   createSoupLoadMoreRow,
+  createSoupRowStore,
   createTagFacetContext,
   type SoupRow,
   soupSearchMatchType,
@@ -346,7 +347,7 @@ export function useEmailDataSource(
     return query.isFetchingNextPage;
   };
 
-  const items = createMemo<EmailDataSourceItem[]>(() => {
+  const builtItems = createMemo<EmailDataSourceItem[]>(() => {
     // Search results keep their relevance order, so only the list page is
     // bucketed by date.
     const result: EmailDataSourceItem[] = search.isSearching()
@@ -364,6 +365,7 @@ export function useEmailDataSource(
 
     return result;
   });
+  const items = createSoupRowStore(builtItems);
 
   const isLoading = () => {
     if (search.isSearching() && showsFavorites() && favorites.isError)

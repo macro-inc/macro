@@ -38,6 +38,7 @@ import {
 import { createGraphqlGroupedSoupQueries } from './graphql/create-graphql-grouped-soup-queries';
 
 type InitialGroupPage = {
+  cachedMail?: boolean;
   items: SoupAstItemsGroupedPage['items'];
   groups: GroupMeta[];
 };

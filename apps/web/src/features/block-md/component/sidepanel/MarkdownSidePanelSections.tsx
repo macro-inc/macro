@@ -56,6 +56,7 @@ export function MarkdownSidePanelSections() {
   const { displayName } = useMarkdownName();
   const isTask = () => kind() === 'task';
   const isSnippet = () => kind() === 'snippet';
+  const canDispatchToAgent = () => isTask() || kind() === 'document';
   const entity = (): Entity => ({
     id: documentId(),
     type: 'document',
@@ -67,7 +68,7 @@ export function MarkdownSidePanelSections() {
     <>
       <SidePanel.HeaderActions>
         <div class="flex shrink-0 items-center gap-1">
-          <Show when={isTask() && !isMobile()}>
+          <Show when={canDispatchToAgent() && !isMobile()}>
             <DispatchAgentButton showPrimaryLabel />
           </Show>
           <AskMacroButton

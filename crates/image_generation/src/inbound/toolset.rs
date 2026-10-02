@@ -4,36 +4,31 @@ mod generate_image;
 use crate::domain::ports::ImageGenerationService;
 use ai_toolset::AsyncToolCollection;
 use bot_id::BotId;
-use entity_access::domain::ports::EntityAccessService;
 use generate_image::GenerateImage;
 use std::sync::Arc;
 
 /// Services and delegated bot identity used by the image-generation tool.
-pub struct ImageGenerationToolContext<Svc, Access> {
+pub struct ImageGenerationToolContext<Svc> {
     /// Image-generation use case.
     pub service: Arc<Svc>,
-    /// Inbound access service for minting destination capabilities.
-    pub entity_access_service: Arc<Access>,
     /// Bot creating images on behalf of the requesting user.
     pub actor: BotId,
 }
 
-impl<Svc, Access> Clone for ImageGenerationToolContext<Svc, Access> {
+impl<Svc> Clone for ImageGenerationToolContext<Svc> {
     fn clone(&self) -> Self {
         Self {
             service: self.service.clone(),
-            entity_access_service: self.entity_access_service.clone(),
             actor: self.actor,
         }
     }
 }
 
-impl<Svc, Access> ImageGenerationToolContext<Svc, Access> {
-    /// Compose the use case, access boundary, and delegated bot identity.
-    pub fn new(service: Svc, entity_access_service: Arc<Access>, actor: BotId) -> Self {
+impl<Svc> ImageGenerationToolContext<Svc> {
+    /// Compose the use case and delegated bot identity.
+    pub fn new(service: Svc, actor: BotId) -> Self {
         Self {
             service: Arc::new(service),
-            entity_access_service,
             actor,
         }
     }
@@ -46,9 +41,7 @@ impl<Svc, Access> ImageGenerationToolContext<Svc, Access> {
 }
 
 /// Image-generation tools shared by chat, agent, and MCP hosts.
-pub fn image_generation_toolset<
-    Svc: ImageGenerationService + 'static,
-    Access: EntityAccessService,
->() -> AsyncToolCollection<ImageGenerationToolContext<Svc, Access>> {
-    AsyncToolCollection::new().add_tool::<GenerateImage, ImageGenerationToolContext<Svc, Access>>()
+pub fn image_generation_toolset<Svc: ImageGenerationService + 'static>()
+-> AsyncToolCollection<ImageGenerationToolContext<Svc>> {
+    AsyncToolCollection::new().add_tool::<GenerateImage, ImageGenerationToolContext<Svc>>()
 }

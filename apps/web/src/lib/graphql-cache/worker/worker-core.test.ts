@@ -9,6 +9,61 @@ import { cacheDatabaseIdentity } from './coordinator-protocol';
 import { CacheWorkerCore } from './worker-core';
 
 describe('CacheWorkerCore', () => {
+  it.each([
+    { errorCode: undefined, superseded: false },
+    { errorCode: 'DRAFT_ALREADY_SENT', superseded: false },
+    { errorCode: 'INTERNAL', superseded: false },
+    { errorCode: 'DRAFT_ALREADY_SENT', superseded: true },
+  ])(
+    'preserves rollback codes only for permanent settlement: %j',
+    async ({ errorCode, superseded }) => {
+      const rollbackOptimisticWrite = vi.fn().mockResolvedValue({
+        kind: superseded ? 'discarded-superseded' : 'rolled-back',
+        ...(superseded ? { replacementTransactionId: '2' } : {}),
+        mutationUuid: 'draft-handle',
+        revision: INITIAL_CACHE_REVISION,
+        changed: [],
+        affectedOps: [],
+        reset: false,
+        revalidations: [],
+      });
+      loadCacheWasmMock.mockResolvedValue({
+        openCache: vi.fn().mockResolvedValue({ rollbackOptimisticWrite }),
+      });
+      const messages: unknown[] = [];
+      const port = {
+        postMessage: (message: unknown) => messages.push(message),
+      };
+      const core = new CacheWorkerCore();
+      core.addPort(port);
+      await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+      await core.handleRequest(port, {
+        id: 2,
+        kind: 'rollback-optimistic-write',
+        transactionId: '1',
+        leaseOwner: 'runner',
+        leaseGeneration: '1',
+        error: 'rejected',
+        errorCode,
+      });
+      expect(rollbackOptimisticWrite).toHaveBeenCalledWith('1', 'runner', '1');
+      expect(messages).toContainEqual({
+        kind: 'mutation-settled',
+        settlement: {
+          transactionId: '1',
+          mutationUuid: 'draft-handle',
+          ...(superseded
+            ? { status: 'superseded', replacementTransactionId: '2' }
+            : {
+                status: 'permanently-failed',
+                error: 'rejected',
+                ...(errorCode === undefined ? {} : { errorCode }),
+              }),
+        },
+      });
+    }
+  );
+
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -128,49 +183,83 @@ describe('CacheWorkerCore', () => {
     expect(messages.at(-1)).toEqual({ id: 2, ok: true, result: page });
   });
 
-  it('reports a successful stale commit as superseded', async () => {
-    const commitOptimisticWrite = vi.fn().mockResolvedValue({
-      kind: 'committed-superseded',
-      replacementTransactionId: '2',
-      revision: INITIAL_CACHE_REVISION,
-      changed: [],
-      affectedOps: [],
-      reset: false,
-      revalidations: [],
-    });
-    loadCacheWasmMock.mockResolvedValue({
-      openCache: vi.fn().mockResolvedValue({ commitOptimisticWrite }),
-    });
-    const messages: unknown[] = [];
-    const port = { postMessage: (message: unknown) => messages.push(message) };
-    const core = new CacheWorkerCore();
-    core.addPort(port);
-    await core.handleRequest(port, {
-      id: 1,
-      kind: 'init',
-      scope: 'scope-1',
-    });
-    messages.length = 0;
-
-    await core.handleRequest(port, {
-      id: 2,
-      kind: 'commit-optimistic-write',
-      transactionId: '1',
-      leaseOwner: 'runner',
-      leaseGeneration: '1',
-      query: 'mutation Update { update }',
-      data: { update: true },
-    });
-
-    expect(messages).toContainEqual({
-      kind: 'mutation-settled',
+  it.each([
+    {
+      outcome: {
+        kind: 'committed',
+        identityErrors: ['missing identity response object'],
+      },
+      settlement: { status: 'committed' },
+    },
+    {
+      outcome: {
+        kind: 'committed-superseded',
+        replacementTransactionId: '2',
+        identityErrors: ['missing identity response object'],
+      },
+      settlement: { status: 'superseded', replacementTransactionId: '2' },
+    },
+    {
+      outcome: { kind: 'failed', error: 'missing identity response id' },
       settlement: {
-        transactionId: '1',
-        status: 'superseded',
+        status: 'permanently-failed',
+        error: 'missing identity response id',
+      },
+    },
+    {
+      outcome: {
+        kind: 'failed',
+        error: 'missing identity response id',
         replacementTransactionId: '2',
       },
-    });
-  });
+      settlement: { status: 'superseded', replacementTransactionId: '2' },
+    },
+  ])(
+    'publishes commit settlement $settlement',
+    async ({ outcome, settlement }) => {
+      const commitOptimisticWrite = vi.fn().mockResolvedValue({
+        ...outcome,
+        revision: INITIAL_CACHE_REVISION,
+        changed: [],
+        affectedOps: [],
+        reset: false,
+        revalidations: [],
+      });
+      loadCacheWasmMock.mockResolvedValue({
+        openCache: vi.fn().mockResolvedValue({ commitOptimisticWrite }),
+      });
+      const messages: unknown[] = [];
+      const port = {
+        postMessage: (message: unknown) => messages.push(message),
+      };
+      const core = new CacheWorkerCore();
+      core.addPort(port);
+      await core.handleRequest(port, {
+        id: 1,
+        kind: 'init',
+        scope: 'scope-1',
+      });
+      messages.length = 0;
+
+      await core.handleRequest(port, {
+        id: 2,
+        kind: 'commit-optimistic-write',
+        transactionId: '1',
+        leaseOwner: 'runner',
+        leaseGeneration: '1',
+        query: 'mutation Update { update }',
+        data: { update: true },
+      });
+
+      expect(messages).toContainEqual({
+        kind: 'mutation-settled',
+        settlement: {
+          transactionId: '1',
+          ...settlement,
+        },
+      });
+    }
+  );
 
   it('finishes the initial claim before pushes or queued reads run', async () => {
     const order: string[] = [];
@@ -280,6 +369,7 @@ describe('CacheWorkerCore', () => {
       settlement: {
         transactionId: '0',
         status: 'superseded',
+        mutationUuid: '00000000-0000-4000-8000-000000000007',
         replacementTransactionId: '1',
       },
     });

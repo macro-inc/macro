@@ -41,6 +41,7 @@ impl WorkExecutor for Dispatcher {
     async fn execute(&self, work: TriggerWork) -> Result<(), DispatchError> {
         match work {
             TriggerWork::OpenAndPrompt {
+                reuse_origin_message,
                 bot,
                 sender,
                 parent,
@@ -65,6 +66,7 @@ impl WorkExecutor for Dispatcher {
                     repo_branch: None,
                     owner: Some(sender.as_ref().to_owned()),
                     thread: Some(CreateSessionThread {
+                        reuse_origin_message,
                         // Keep `channel_id` populated for channel parents so a
                         // pre-parent harness, which ignores `parent` and reads
                         // `channel_id` as a required UUID, still deserializes

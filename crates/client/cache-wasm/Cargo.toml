@@ -2,8 +2,10 @@
 edition = "2024"
 name = "cache-wasm"
 publish = false
-# Rebuild for scoped query-write notifications and viewer-field dependencies.
-version = "0.6.33"
+# Expose identity confirmation on queue claims so superseded draft creates replay.
+# Rebuild with read-path optimizations, scoped invalidation, and bounded filter selection.
+# Rebuild with identity-aware resumable reads after merging the draft changes.
+version = "0.6.37"
 
 [features]
 default = []

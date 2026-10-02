@@ -111,11 +111,11 @@ pub type ToolEmailService = EmailServiceImpl<
 /// graceful shutdown by the hosting process.
 pub type ToolEventBroker = MacroEventBrokerService<KafkaEventPublisher, TaskTracker>;
 
-/// Event broker used by bot tools across hosts that either do or do not have
+/// Event broker used by bot and property tools across hosts that either do or do not have
 /// Kafka lifecycle publishing configured.
 #[derive(Clone)]
 pub enum ToolBotEventBroker {
-    /// Publish bot lifecycle events through the shared Kafka broker.
+    /// Publish lifecycle events through the shared Kafka broker.
     Real(ToolEventBroker),
     /// Drop lifecycle events in hosts that do not configure Kafka.
     NoOp(NoopMacroEventBroker),
@@ -134,7 +134,8 @@ impl MacroEventBroker for ToolBotEventBroker {
 }
 
 /// Concrete bot domain service used by AI tools.
-pub type ToolBotService = BotServiceImpl<PgBotsRepo, ToolBotEventBroker>;
+pub type ToolBotService =
+    BotServiceImpl<PgBotsRepo, ToolBotEventBroker, crate::mcp_app_catalog::PipedreamMcpAppCatalog>;
 
 /// Bot-management AI tool context.
 pub type ToolBotToolContext = BotToolContext<ToolBotService, ToolEntityAccessService>;
@@ -146,9 +147,14 @@ pub fn build_bot_tool_context(
     event_broker: ToolBotEventBroker,
     entity_access_service: Arc<ToolEntityAccessService>,
     document_storage_service_url: String,
+    pipedream: Option<Arc<pipedream_mcp::outbound::api::PipedreamClient>>,
 ) -> ToolBotToolContext {
     BotToolContext {
-        service: Arc::new(BotServiceImpl::new(PgBotsRepo::new(pool), event_broker)),
+        service: Arc::new(
+            BotServiceImpl::new(PgBotsRepo::new(pool), event_broker).with_mcp_apps(
+                crate::mcp_app_catalog::PipedreamMcpAppCatalog::new(pipedream),
+            ),
+        ),
         entity_access_service,
         document_storage_service_url: document_storage_service_url
             .trim_end_matches('/')
@@ -187,7 +193,6 @@ pub type ToolChannelMessagesService = ChannelServiceImpl<
     PgChannelsRepo,
     ToolChannelEventDispatcher,
     NoopChannelReferenceSharePermissions,
-    LexicalMentionExtractor,
 >;
 
 /// Type alias for the channel AI tool context.
@@ -213,7 +218,6 @@ pub fn build_channel_tool_context_without_side_effects(
     build_channel_tool_context_with_dispatcher(
         pool,
         std::sync::Arc::new(NoopChannelEventDispatcher),
-        lexical_client,
         messages,
     )
 }
@@ -294,7 +298,7 @@ pub fn build_channel_tool_context_with_side_effects(
         clients,
         dispatcher.clone(),
     );
-    build_channel_tool_context_with_dispatcher(pool, dispatcher, lexical_client, messages)
+    build_channel_tool_context_with_dispatcher(pool, dispatcher, messages)
 }
 
 /// Build the shared message service with the same delivery as the
@@ -396,8 +400,7 @@ fn message_service_with_side_effects(
 pub fn build_channel_tool_context_with_dispatcher(
     pool: sqlx::PgPool,
     dispatcher: ToolChannelEventDispatcher,
-    lexical_client: Arc<lexical_client::LexicalClient>,
-    messages: Arc<dyn messages::domain::api::MessageCommands>,
+    messages: Arc<dyn messages::domain::api::MessageServiceApi>,
 ) -> ToolChannelToolContext {
     ChannelToolContext::new(
         messages,
@@ -405,8 +408,7 @@ pub fn build_channel_tool_context_with_dispatcher(
             PgChannelsRepo::new(pool.clone()),
             dispatcher,
             NoopChannelReferenceSharePermissions,
-        )
-        .with_mention_extractor(LexicalMentionExtractor::new(lexical_client)),
+        ),
         entity_access::domain::service::EntityAccessServiceImpl::new(
             entity_access::outbound::PgAccessRepository::new(pool),
         ),
@@ -462,6 +464,8 @@ pub fn build_crm_tool_context(pool: sqlx::PgPool) -> ToolCrmToolContext {
             entity_access::outbound::PgAccessRepository::new(pool.clone()),
         ),
     );
+    // This CRM-only context does not assign tasks. Task writes use the host's
+    // shared properties context, which carries its lifecycle event broker.
     let properties = build_properties_service(pool.clone(), entity_access_service.clone());
     CrmToolContext {
         service: Arc::new(crm::domain::service::CrmServiceImpl::new(
@@ -645,6 +649,9 @@ impl ConnectionService for NoOpConnectionService {
 pub struct NoOpCallRtcClient;
 
 impl CallRtcClient for NoOpCallRtcClient {
+    async fn prepare_room(&self, room_name: &str) -> anyhow::Result<()> {
+        self.create_room(room_name).await
+    }
     async fn generate_guest_token(
         &self,
         _room_name: &str,
@@ -694,6 +701,13 @@ impl CallRtcClient for NoOpCallRtcClient {
         _participant_identity: MacroUserIdStr<'a>,
     ) -> anyhow::Result<()> {
         Ok(())
+    }
+
+    async fn list_meeting_participants(
+        &self,
+        _room_name: &str,
+    ) -> anyhow::Result<Option<Vec<call::domain::meetings::MeetingRtcParticipant>>> {
+        Ok(None)
     }
 
     async fn list_participant_identities(
@@ -1034,25 +1048,37 @@ pub type ToolNotificationService = notification::domain::service::NotificationRe
 pub type ToolNotificationToolContext = NotificationToolContext<ToolNotificationService>;
 
 /// Type alias for the reminders service implementation used by AI tools.
-pub type ToolRemindersService = reminders::domain::service::RemindersServiceImpl<
-    reminders::outbound::pg_reminders_repo::PgRemindersRepo,
->;
+pub type ToolRemindersService =
+    reminders::domain::email_followup::reminder_service::EmailRemindersService<
+        reminders::domain::service::RemindersServiceImpl<
+            reminders::outbound::pg_reminders_repo::PgRemindersRepo,
+        >,
+        reminders::outbound::pg_reminders_repo::PgRemindersRepo,
+        ToolUserEmailService,
+        reminders::domain::ports::SystemClock,
+    >;
 
 /// Type alias for the reminders tool context.
 pub type ToolRemindersToolContext =
     RemindersToolContext<ToolRemindersService, ToolEntityAccessService>;
 
-/// Build the reminders tool context from a database pool.
+/// Build the reminders tool context with the same email lifecycle as HTTP.
 ///
 /// The reminder tools go through the same access receipts the HTTP API does,
 /// so this needs the entity access service as well as the repository.
 pub fn build_reminders_tool_context(
     pool: sqlx::PgPool,
+    email_service: Arc<ToolUserEmailService>,
     entity_access_service: Arc<ToolEntityAccessService>,
 ) -> ToolRemindersToolContext {
+    let repo = reminders::outbound::pg_reminders_repo::PgRemindersRepo::new(pool);
     RemindersToolContext::new(
-        reminders::domain::service::RemindersServiceImpl::new(
-            reminders::outbound::pg_reminders_repo::PgRemindersRepo::new(pool),
+        reminders::domain::email_followup::reminder_service::EmailRemindersService::new(
+            reminders::domain::service::RemindersServiceImpl::new(repo.clone()),
+            reminders::domain::email_followup::service::EmailFollowupService::new(
+                repo,
+                (*email_service).clone(),
+            ),
         ),
         entity_access_service,
     )
@@ -1494,6 +1520,7 @@ pub struct ToolServiceContext {
     pub soup_service: Arc<ToolSoupService>,
     pub email_service: Arc<ToolEmailService>,
     pub activity_tool_context: ToolActivityToolContext,
+    #[from_ref(skip)]
     pub document_tool_context: ToolDocumentToolContext,
     pub image_generation_tool_context: ToolImageGenerationToolContext,
     pub properties_tool_context: ToolPropertiesToolContext,
@@ -1521,6 +1548,9 @@ pub struct ToolServiceContext {
     pub schedule_tool_context: NoOpScheduleContext,
     #[from_ref(skip)]
     pub anthropic_tool_context: AnthropicToolContext,
+    /// Shared admission for independently initiated AI work. Hosts must inject
+    /// their configured service; request identity always comes from RequestContext.
+    pub admission: Arc<dyn ai_billing::domain::admission::AiAdmissionService>,
     /// Records token usage / cost for AI calls made with this context.
     pub recorder: std::sync::Arc<dyn ai_usage::UsageRecorder>,
     /// The usage context (feature/user/entity) of the request currently using
@@ -1532,9 +1562,20 @@ pub struct ToolServiceContext {
 impl FromRef<ToolServiceContext> for AnthropicToolContext {
     fn from_ref(context: &ToolServiceContext) -> Self {
         let mut tools = context.anthropic_tool_context.clone();
+        tools.admission = context.admission.clone();
         tools.recorder = context.recorder.clone();
         tools.usage_context = context.usage_context.clone();
         tools
+    }
+}
+
+impl FromRef<ToolServiceContext> for ToolDocumentToolContext {
+    fn from_ref(context: &ToolServiceContext) -> Self {
+        context
+            .document_tool_context
+            .clone()
+            .with_admission(context.admission.clone())
+            .with_recorder(context.recorder.clone())
     }
 }
 

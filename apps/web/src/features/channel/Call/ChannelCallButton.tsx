@@ -7,7 +7,9 @@ import PhoneIcon from '@phosphor/phone-call.svg';
 import { useActiveCallQuery } from '@queries/call/call';
 import { ChannelTypeEnum } from '@service-storage/client';
 import { cn, confirmDialog } from '@ui';
+import { tourTarget } from '@ui/components/Tour';
 import { getOwner, Show } from 'solid-js';
+import { CHANNEL_TOUR } from '../tour';
 import { getCallJoinTab, getCallLeaveTab } from './call-tabs';
 import { useCall } from './use-call';
 
@@ -94,6 +96,7 @@ export function ChannelCallButton(props: { channelId: string }) {
   return (
     <Show when={!call.isInThisChannel()}>
       <HeaderActionButton
+        ref={tourTarget(CHANNEL_TOUR.call)}
         onClick={handleClick}
         tooltip={tooltip()}
         label={label()}

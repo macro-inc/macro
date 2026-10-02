@@ -97,6 +97,21 @@ sent as network revalidations. Callers should supply an explicit targeted query
 for recovery when the parent/field is missing; the exchange can then enqueue
 entity-only optimism and retain that recovery query for eventual commit/replay.
 
+## Text search catalogs
+
+Text search loads compact rows lazily per `(profile, bucket)` through the existing
+`search_documents_browse_idx`. Searching documents does not load cached emails;
+changing categories loads only newly requested buckets, including caching empty
+buckets. Empty bucket selection still means every bucket in the profile.
+
+Ranking borrows catalog and optimistic entries, normalizes the query once, and
+retains at most `limit + 1` references in a heap. Only the final returned rows are
+cloned. Fuzzy/freshness scoring, DM priority, recency/key tie breaks and browse
+cursors are unchanged. Write-through updates remove old bucket membership before
+updating already-loaded buckets; unopened buckets stay lazy. Optimistic shadows
+replace durable hits without mutating the catalogs, so rollback restores them.
+No storage schema, projection version, or database migration changes are needed.
+
 ## Browser OPFS writes
 
 The OPFS adapter coalesces each Turso vectored write into batches of at most
@@ -121,7 +136,18 @@ projection version do not scan the corpus.
 
 ## Local filter execution
 
-Local SQL materializes Boolean result sets once, but enumerates a universe only
+Single-partition queries first probe at most `max(64, 2 * limit)` sort-index
+candidates from each of the authoritative and optimistic tables. Predicates,
+scope, and shadow suppression are evaluated only for that bounded window. A
+result is accepted only when both windows are exhausted or extend strictly past
+the result's cutoff timestamp, proving that record-key ties are complete. Keyset
+cursors seek inclusively to their timestamp; the full predicate handles ties.
+Sparse matches, truncated ties, and multi-partition queries use the original
+set-based plan in the same read transaction. No schema change or migration is
+required. This keeps dense Mail pages independent of mailbox size without
+changing results or optimistic visibility.
+
+The fallback SQL materializes Boolean result sets once, but enumerates a universe only
 within the requested profile and partition. Empty predicates do not enumerate
 cached documents. Conjunctions with an indexable positive term filter one scoped
 candidate set using document-leading fact probes, rather than materializing every

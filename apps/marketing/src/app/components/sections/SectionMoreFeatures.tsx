@@ -187,7 +187,7 @@ export function SectionMoreFeatures(props: {
             class="more-features-kicker"
             style={{
               color: 'var(--c4)',
-              'font-family': 'rajdhani, body',
+              'font-family': 'Inter, body',
               'font-weight': '700',
               'letter-spacing': '0.08em',
               opacity: 0.55,

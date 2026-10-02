@@ -56,6 +56,8 @@ export function EntityConversationComposer(props: {
 export function EntityConversation(props: {
   parent: MessageParent;
   canWrite: boolean;
+  /** Delete comments the caller did not write. Document owners set this. */
+  canModerate?: boolean;
   targetId?: string | null;
   /** The linked view stays around `targetId`, but its message is no longer highlighted. */
   targetCleared?: boolean;
@@ -144,6 +146,7 @@ export function EntityConversation(props: {
                 <MessageThread
                   data={messagesById().get(id)!}
                   canWrite={props.canWrite}
+                  canModerate={props.canModerate}
                   targetId={
                     target.rootId() === id && !props.targetCleared
                       ? target.messageId()

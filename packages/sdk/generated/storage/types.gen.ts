@@ -261,6 +261,12 @@ export type AgentSessionLifecycleEvent = {
      */
     metadata: TurnEndedMetadata;
 } | {
+    event_type: 'agent_session.command_rejected';
+    /**
+     * An accepted command was refused before runtime execution.
+     */
+    metadata: CommandRejectedMetadata;
+} | {
     event_type: 'agent_session.settled';
     /**
      * A turn ended with nothing queued behind it.
@@ -310,22 +316,11 @@ export type AnchorId = PdfAnchorId & {
     fileType: 'pdf';
 };
 
-export type AnchorRequest = PdfAnchorRequest & {
-    fileType: 'pdf';
-};
-
 export type AnchorResponse = {
     data: Array<Anchor>;
 };
 
 export type AnnotationIncrementalUpdate = {
-    payload: {
-        documentId: string;
-        response: CreateCommentResponse;
-        sender: string;
-    };
-    updateType: 'create-comment';
-} | {
     payload: {
         documentId: string;
         response: CreateUnthreadedAnchorResponse;
@@ -335,24 +330,10 @@ export type AnnotationIncrementalUpdate = {
 } | {
     payload: {
         documentId: string;
-        response: EditCommentResponse;
-        sender: string;
-    };
-    updateType: 'edit-comment';
-} | {
-    payload: {
-        documentId: string;
         response: EditAnchorResponse;
         sender: string;
     };
     updateType: 'edit-anchor';
-} | {
-    payload: {
-        documentId: string;
-        response: DeleteCommentResponse;
-        sender: string;
-    };
-    updateType: 'delete-comment';
 } | {
     payload: {
         documentId: string;
@@ -530,56 +511,9 @@ export type ApiChannelAttachmentsPage = {
 };
 
 /**
- * A channel message returned by the message-context endpoint.
- */
-export type ApiChannelContextMessage = {
-    /**
-     * Channel id.
-     */
-    channel_id: string;
-    /**
-     * Message content.
-     */
-    content: string;
-    /**
-     * When the message was created.
-     */
-    created_at: string;
-    /**
-     * When the message was soft-deleted.
-     */
-    deleted_at?: string | null;
-    /**
-     * When the message was edited.
-     */
-    edited_at?: string | null;
-    /**
-     * Message id.
-     */
-    id: string;
-    /**
-     * Structured sender identity.
-     */
-    sender: ApiMessageSender;
-    /**
-     * Sender user id.
-     */
-    sender_id: string;
-    /**
-     * Parent thread id for replies.
-     */
-    thread_id?: string | null;
-    /**
-     * When the message was last updated.
-     */
-    updated_at: string;
-};
-
-/**
- * Channel detail: metadata, active participants, and a recent page of messages.
+ * Channel detail: metadata and active participants.
  *
- * `messages` is the newest-first first page (size controlled by `limit`); use the
- * dedicated `/{channel_id}/messages` endpoint for cursor pagination.
+ * Messages are read through `/messages/channel/{channel_id}`.
  */
 export type ApiChannelDetail = {
     /**
@@ -594,10 +528,6 @@ export type ApiChannelDetail = {
      * Channel type.
      */
     channel_type: ChannelType;
-    /**
-     * Recent messages (newest-first first page).
-     */
-    messages: Array<ApiChannelMessage>;
     /**
      * Active participants.
      */
@@ -688,83 +618,6 @@ export type ApiChannelListParticipant = {
 export type ApiChannelListType = 'public' | 'private' | 'direct_message' | 'team';
 
 /**
- * A top-level channel message with thread info.
- */
-export type ApiChannelMessage = {
-    /**
-     * Attachments on this message.
-     */
-    attachments: Array<ApiMessageAttachment>;
-    /**
-     * Channel id.
-     */
-    channel_id: string;
-    /**
-     * Message content.
-     */
-    content: string;
-    /**
-     * When the message was created.
-     */
-    created_at: string;
-    /**
-     * When the message was soft-deleted.
-     */
-    deleted_at?: string | null;
-    /**
-     * When the message was edited.
-     */
-    edited_at?: string | null;
-    /**
-     * Message id.
-     */
-    id: string;
-    /**
-     * Reactions on this message.
-     */
-    reactions: Array<ApiCountedReaction>;
-    /**
-     * Structured sender identity.
-     */
-    sender: ApiMessageSender;
-    /**
-     * Sender user id.
-     */
-    sender_id: string;
-    /**
-     * Thread metadata and preview.
-     */
-    thread: ApiThreadInfo;
-    /**
-     * When the message was last updated.
-     */
-    updated_at: string;
-};
-
-/**
- * Position of a message in the channel/thread model.
- */
-export type ApiChannelMessageKind = 'topLevelMessage' | 'threadReply';
-
-/**
- * Paginated response of channel messages.
- */
-export type ApiChannelMessagesPage = {
-    /**
-     * Messages on this page.
-     */
-    items: Array<ApiChannelMessage>;
-    /**
-     * Cursor for the next page, null if no more pages.
-     */
-    next_cursor?: string | null;
-    /**
-     * Cursor for the previous page, null if no newer page exists.
-     */
-    previous_cursor?: string | null;
-};
-
-/**
  * A channel participant.
  */
 export type ApiChannelParticipant = {
@@ -848,20 +701,6 @@ export type ApiChannelWithLatest = {
      * Last viewed timestamp for requesting user.
      */
     viewed_at?: string | null;
-};
-
-/**
- * A reaction with emoji and user list.
- */
-export type ApiCountedReaction = {
-    /**
-     * The emoji string.
-     */
-    emoji: string;
-    /**
-     * User ids who added this reaction.
-     */
-    users: Array<string>;
 };
 
 /**
@@ -999,67 +838,6 @@ export type ApiGroupMeta = {
 };
 
 /**
- * An attachment on a message.
- */
-export type ApiMessageAttachment = {
-    /**
-     * When the attachment was created.
-     */
-    created_at: string;
-    /**
-     * Entity id.
-     */
-    entity_id: string;
-    /**
-     * Type of entity.
-     */
-    entity_type: string;
-    /**
-     * Height (for images).
-     */
-    height?: number | null;
-    /**
-     * Attachment id.
-     */
-    id: string;
-    /**
-     * Width (for images).
-     */
-    width?: number | null;
-};
-
-/**
- * Public sender identity for channel messages.
- */
-export type ApiMessageSender = {
-    /**
-     * Avatar URL for bot senders.
-     */
-    avatar_url?: string | null;
-    /**
-     * Sender id without the storage namespace prefix.
-     */
-    id: string;
-    /**
-     * Display name for bot senders.
-     */
-    name?: string | null;
-    /**
-     * For an agent (bot) message, the id of the user who triggered it.
-     */
-    triggered_by?: string | null;
-    /**
-     * Sender type.
-     */
-    type: ApiMessageSenderType;
-};
-
-/**
- * Public sender type.
- */
-export type ApiMessageSenderType = 'user' | 'bot';
-
-/**
  * Participant role in API responses.
  */
 export type ApiParticipantListRole = 'owner' | 'admin' | 'member';
@@ -1073,92 +851,6 @@ export type ApiParticipantRole = 'owner' | 'admin' | 'member';
  * Entity type for property lookups (API representation).
  */
 export type ApiPropertyEntityType = 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DOCUMENT' | 'PROJECT' | 'TASK' | 'THREAD' | 'USER';
-
-/**
- * Resolution metadata for any channel message id.
- */
-export type ApiResolvedChannelMessage = {
-    /**
-     * Channel this message belongs to.
-     */
-    channel_id: string;
-    /**
-     * When the requested message was created.
-     */
-    created_at: string;
-    /**
-     * Whether the message is top-level or a thread reply.
-     */
-    kind: ApiChannelMessageKind;
-    /**
-     * The requested message id.
-     */
-    message_id: string;
-    /**
-     * The top-level parent/thread id. Equals message_id for top-level messages.
-     */
-    thread_id: string;
-};
-
-/**
- * Thread metadata and preview replies.
- */
-export type ApiThreadInfo = {
-    /**
-     * Timestamp of the latest reply.
-     */
-    latest_reply_at?: string | null;
-    /**
-     * Last N replies for thread preview.
-     */
-    preview: Array<ApiThreadReply>;
-    /**
-     * Total reply count.
-     */
-    reply_count: number;
-};
-
-/**
- * A thread reply shown in preview.
- */
-export type ApiThreadReply = {
-    /**
-     * Attachments on this reply.
-     */
-    attachments: Array<ApiMessageAttachment>;
-    /**
-     * Reply content.
-     */
-    content: string;
-    /**
-     * When the reply was created.
-     */
-    created_at: string;
-    /**
-     * When the reply was edited.
-     */
-    edited_at?: string | null;
-    /**
-     * Reply id.
-     */
-    id: string;
-    /**
-     * Reactions on this reply.
-     */
-    reactions: Array<ApiCountedReaction>;
-    /**
-     * Structured sender identity.
-     */
-    sender: ApiMessageSender;
-    /**
-     * Sender user id.
-     */
-    sender_id: string;
-    /**
-     * When the reply was last updated.
-     */
-    updated_at: string;
-};
 
 /**
  * Request to approve a pairing and register the harness.
@@ -1452,6 +1144,32 @@ export type BotOwner = {
      */
     team_id: string;
     type: 'team';
+};
+
+/**
+ * Bot identity for rendering, including the sponsor and soft-delete time.
+ *
+ * `owner` is none only for a registry system bot. A persisted row always has
+ * a sponsor.
+ */
+export type BotOwnerProfile = {
+    /**
+     * Avatar URL. Registry system bots have none.
+     */
+    avatar_url?: string | null;
+    /**
+     * Soft-delete time. Absent for an active bot and for a registry system bot.
+     */
+    deleted_at?: string | null;
+    /**
+     * Bot id.
+     */
+    id: BotId;
+    /**
+     * Display name.
+     */
+    name: string;
+    owner?: null | BotOwner;
 };
 
 /**
@@ -2319,28 +2037,6 @@ export type ChannelDeletedMetadata = {
 };
 
 /**
- * Attachment payload carried by channel wire events.
- */
-export type ChannelEventAttachment = {
-    /**
-     * Attachment id.
-     */
-    attachment_id: string;
-    /**
-     * Creation timestamp of the attachment row.
-     */
-    created_at: string;
-    /**
-     * Attached entity id.
-     */
-    entity_id: string;
-    /**
-     * Attached entity type (e.g. `document`).
-     */
-    entity_type: string;
-};
-
-/**
  * The channel message filters used to filter down what channel messages you search over.
  */
 export type ChannelFilters = {
@@ -2468,46 +2164,6 @@ export type ChannelLabelsList = {
 };
 
 /**
- * Metadata for [`ChannelTopicEvent::Mentioned`].
- */
-export type ChannelMentionedMetadata = {
-    /**
-     * Channel containing the message.
-     */
-    channel_id: string;
-    /**
-     * Type of channel containing the message.
-     */
-    channel_type: ChannelType;
-    /**
-     * Message body.
-     */
-    content: string;
-    /**
-     * Creation timestamp reported by the repository.
-     */
-    created_at: string;
-    /**
-     * The mentioned entity this event is about (`user`, `bot`, `document`, …).
-     *
-     * The message's full mention list travels on `channel.message_posted`.
-     */
-    mentioned: SimpleMention;
-    /**
-     * The id of the message carrying the mention.
-     */
-    message_id: string;
-    /**
-     * Message author; may be a bot.
-     */
-    sender: ChannelSender;
-    /**
-     * Thread parent id when the message is a thread reply.
-     */
-    thread_id?: string | null;
-};
-
-/**
  * Lightweight channel message for soup payloads.
  */
 export type ChannelMessage = {
@@ -2543,198 +2199,6 @@ export type ChannelMessage = {
      * Update timestamp.
      */
     updated_at: string;
-};
-
-/**
- * Metadata for [`ChannelTopicEvent::MessageAttachmentCreated`].
- */
-export type ChannelMessageAttachmentCreatedMetadata = {
-    /**
-     * Actor that added the attachments.
-     */
-    actor: ChannelSender;
-    /**
-     * Attachments created by this mutation.
-     */
-    attachments: Array<ChannelEventAttachment>;
-    /**
-     * Channel containing the message.
-     */
-    channel_id: string;
-    /**
-     * Message the attachments were added to.
-     */
-    message_id: string;
-};
-
-/**
- * Metadata for [`ChannelTopicEvent::MessageAttachmentRemoved`].
- */
-export type ChannelMessageAttachmentRemovedMetadata = {
-    /**
-     * Actor that removed the attachments.
-     */
-    actor: ChannelSender;
-    /**
-     * Attachments removed by this mutation.
-     */
-    attachments: Array<ChannelEventAttachment>;
-    /**
-     * Channel containing the message.
-     */
-    channel_id: string;
-    /**
-     * Message the attachments were removed from.
-     */
-    message_id: string;
-};
-
-/**
- * Metadata for [`ChannelTopicEvent::MessageDeleted`].
- */
-export type ChannelMessageDeletedMetadata = {
-    /**
-     * Actor that deleted the message; not necessarily the author.
-     */
-    actor: ChannelSender;
-    /**
-     * Channel containing the message.
-     */
-    channel_id: string;
-    /**
-     * Deletion (tombstone) timestamp reported by the repository.
-     */
-    deleted_at?: string | null;
-    /**
-     * The id of the deleted message.
-     */
-    message_id: string;
-    /**
-     * Thread parent id when the message is a thread reply.
-     */
-    thread_id?: string | null;
-};
-
-/**
- * Filters for channel message queries.
- */
-export type ChannelMessageFilters = {
-    /**
-     * When set, only return top-level messages with channel activity at or after
-     * this timestamp. Activity means either the message itself was created after
-     * this time, or a thread reply was created after this time.
-     *
-     * Accepts the legacy JSON field `last_activity` for backwards compatibility.
-     */
-    activity_after?: string | null;
-    /**
-     * When set, only return top-level messages with channel activity before this
-     * timestamp. Activity means either the parent message or at least one thread
-     * reply falls in the requested activity window.
-     */
-    activity_before?: string | null;
-    /**
-     * When set, only return top-level messages created at or after this timestamp.
-     */
-    created_after?: string | null;
-    /**
-     * When set, only return top-level messages created strictly after this timestamp.
-     */
-    created_after_exclusive?: string | null;
-    /**
-     * When set, only return top-level messages created before this timestamp.
-     */
-    created_before?: string | null;
-    /**
-     * When non-empty, only return messages with these IDs.
-     */
-    message_ids?: Array<string>;
-    /**
-     * When set, only return top-level messages where the message itself or
-     * any active thread reply has a notification for the requesting user that
-     * matches these notification state constraints.
-     */
-    notification_filters?: NotificationFilters;
-};
-
-/**
- * Metadata for [`ChannelTopicEvent::MessagePatched`].
- */
-export type ChannelMessagePatchedMetadata = {
-    /**
-     * Actor that patched the message.
-     */
-    actor: ChannelSender;
-    /**
-     * Channel containing the message.
-     */
-    channel_id: string;
-    /**
-     * Message body after the patch.
-     */
-    content: string;
-    /**
-     * Edit timestamp, when the patch marked the message edited.
-     */
-    edited_at?: string | null;
-    /**
-     * The id of the patched message.
-     */
-    message_id: string;
-    /**
-     * Thread parent id when the message is a thread reply.
-     */
-    thread_id?: string | null;
-    /**
-     * Update timestamp reported by the repository.
-     */
-    updated_at: string;
-};
-
-/**
- * Metadata for [`ChannelTopicEvent::MessagePosted`].
- */
-export type ChannelMessagePostedMetadata = {
-    /**
-     * Attachments persisted with the message.
-     */
-    attachments: Array<ChannelEventAttachment>;
-    /**
-     * Channel containing the message.
-     */
-    channel_id: string;
-    /**
-     * Type of channel containing the message.
-     */
-    channel_type: ChannelType;
-    /**
-     * Message body.
-     */
-    content: string;
-    /**
-     * Creation timestamp reported by the repository.
-     */
-    created_at: string;
-    /**
-     * Mentions attached to the message.
-     */
-    mentions: Array<SimpleMention>;
-    /**
-     * The id of the posted message.
-     */
-    message_id: string;
-    /**
-     * Message author; may be a bot.
-     */
-    sender: ChannelSender;
-    /**
-     * Thread parent id when the message is a thread reply.
-     */
-    thread_id?: string | null;
-    /**
-     * For an agent (bot) message, the id of the user who triggered it.
-     */
-    triggered_by?: string | null;
 };
 
 /**
@@ -2904,42 +2368,6 @@ export type ChannelTopicEvent = {
      * A channel was deleted.
      */
     metadata: ChannelDeletedMetadata;
-} | {
-    event_type: 'channel.message_posted';
-    /**
-     * A message was posted.
-     */
-    metadata: ChannelMessagePostedMetadata;
-} | {
-    event_type: 'channel.mentioned';
-    /**
-     * An entity (user, bot, document, …) was mentioned in a message.
-     */
-    metadata: ChannelMentionedMetadata;
-} | {
-    event_type: 'channel.message_patched';
-    /**
-     * A message's content was patched.
-     */
-    metadata: ChannelMessagePatchedMetadata;
-} | {
-    event_type: 'channel.message_deleted';
-    /**
-     * A message was soft-deleted.
-     */
-    metadata: ChannelMessageDeletedMetadata;
-} | {
-    event_type: 'channel.message_attachment_created';
-    /**
-     * Attachments were added to a message.
-     */
-    metadata: ChannelMessageAttachmentCreatedMetadata;
-} | {
-    event_type: 'channel.message_attachment_removed';
-    /**
-     * Attachments were removed from a message.
-     */
-    metadata: ChannelMessageAttachmentRemovedMetadata;
 } | {
     event_type: 'channel.participant_added';
     /**
@@ -3150,22 +2578,45 @@ export type CollabSurfaceTokenResponse = {
     token: string;
 };
 
-export type Comment = {
-    commentId: number;
-    createdAt?: string | null;
-    deletedAt?: string | null;
-    metadata?: unknown;
-    order?: number | null;
-    owner: string;
-    sender?: string | null;
-    text: string;
-    threadId: number;
-    updatedAt?: string | null;
+/**
+ * Sanitized public details of a command refused before runtime execution.
+ */
+export type CommandFailure = {
+    /**
+     * Stable public denial or unavailability code.
+     */
+    code: string;
+    /**
+     * Public explanation, never an internal error report.
+     */
+    message: string;
+    /**
+     * Whether retrying later may succeed without a policy change.
+     */
+    retryable: boolean;
 };
 
-export type CommentThread = {
-    comments: Array<Comment>;
-    thread: Thread;
+/**
+ * An accepted command was refused before it could start a runtime turn.
+ */
+export type CommandRejectedMetadata = {
+    /**
+     * The command that will not execute.
+     */
+    action_id: AgentActionId;
+    actor?: null | MacroUserIdStr;
+    /**
+     * The command's thread announcement, when one was created.
+     */
+    announcement_message_id?: string | null;
+    /**
+     * Safe details for clients and downstream consumers.
+     */
+    failure: CommandFailure;
+    /**
+     * The session.
+     */
+    identity: SessionIdentity;
 };
 
 /**
@@ -3451,43 +2902,6 @@ export type CreateChannelScopedBotResponse = {
     token: BotToken;
 };
 
-export type CreateCommentRequest = {
-    anchor?: null | AnchorRequest;
-    mentions?: null | Mentions;
-    metadata?: unknown;
-    text: string;
-    threadId?: number | null;
-    threadMetadata?: unknown;
-};
-
-export type CreateCommentResponse = CommentThread & {
-    anchor?: null | Anchor;
-    documentId: string;
-};
-
-/**
- * Request body for `POST /crm/comments/{entity_type}/{entity_id}`.
- */
-export type CreateCrmCommentRequest = {
-    /**
-     * Ignored: messages keep no client metadata.
-     */
-    metadata?: unknown;
-    /**
-     * The comment body (markdown).
-     */
-    text: string;
-    /**
-     * Existing thread to append to. Omit to start a new thread on the
-     * addressed entity.
-     */
-    threadId?: string | null;
-    /**
-     * Ignored: discussions keep no thread metadata.
-     */
-    threadMetadata?: unknown;
-};
-
 /**
  * Request body for `POST /crm/companies`.
  */
@@ -3670,6 +3084,11 @@ export type CreateInitiativeRequest = {
      */
     name: string;
     /**
+     * Property values set as the owner within the create. A value the properties
+     * service rejects fails the whole create; no initiative is left behind.
+     */
+    propertyValues?: Array<InitialPropertyValue>;
+    /**
      * Share with the owner's team at create time. Defaults to true; users without
      * a team create an unshared initiative. Explicit false skips the team grant.
      */
@@ -3725,6 +3144,10 @@ export type CreateMarkdownDocumentResponse = {
  * Inputs for creating a meeting without starting its RTC room.
  */
 export type CreateMeetingRequest = {
+    /**
+     * Optional unused room reserved by this actor on the setup screen.
+     */
+    preparationId?: string | null;
     /**
      * Optional scheduled end.
      */
@@ -4099,76 +3522,6 @@ export type CreatedUserApiKey = {
 };
 
 /**
- * A single comment within a [`CrmThread`].
- */
-export type CrmComment = {
-    /**
-     * The comment id.
-     */
-    commentId: string;
-    /**
-     * When the comment was created.
-     */
-    createdAt: string;
-    /**
-     * When the comment was soft-deleted, if ever.
-     */
-    deletedAt?: string | null;
-    /**
-     * Arbitrary client metadata.
-     */
-    metadata?: unknown;
-    /**
-     * Optional explicit ordering within the thread; the frontend falls
-     * back to `createdAt` when absent.
-     */
-    order?: number | null;
-    /**
-     * Macro user id of the comment author.
-     */
-    owner: string;
-    /**
-     * Macro user id of the actual sender, when distinct from `owner`.
-     */
-    sender?: string | null;
-    /**
-     * The comment body (markdown).
-     */
-    text: string;
-    /**
-     * The id of the thread this comment belongs to.
-     */
-    threadId: string;
-    /**
-     * When the comment was last updated.
-     */
-    updatedAt: string;
-};
-
-/**
- * Which CRM entity a comment thread is attached to. Serializes to
- * `crm_company` / `crm_contact` — matching the `entityType` the frontend
- * uses elsewhere when building entity URLs — and is parsed from the
- * `{entity_type}` path segment on the comment routes.
- */
-export type CrmCommentEntityType = 'crm_company' | 'crm_contact';
-
-/**
- * A [`CrmThread`] with its comments nested under it — the unit the
- * frontend renders.
- */
-export type CrmCommentThread = {
-    /**
-     * The thread's comments, oldest first.
-     */
-    comments: Array<CrmComment>;
-    /**
-     * The thread.
-     */
-    thread: CrmThread;
-};
-
-/**
  * The crm company filters used to narrow which CRM companies appear in soup.
  */
 export type CrmCompanyFilters = {
@@ -4401,48 +3754,6 @@ export type CrmTeamSettingsResponse = {
 };
 
 /**
- * A CRM comment thread: the parent record one or more comments hang off.
- */
-export type CrmThread = {
-    /**
-     * When the thread was created.
-     */
-    createdAt: string;
-    /**
-     * When the thread was soft-deleted, if ever.
-     */
-    deletedAt?: string | null;
-    /**
-     * The id of the CRM company or contact this thread belongs to.
-     */
-    entityId: string;
-    /**
-     * Which CRM entity kind this thread belongs to.
-     */
-    entityType: CrmCommentEntityType;
-    /**
-     * Arbitrary client metadata.
-     */
-    metadata?: unknown;
-    /**
-     * Macro user id of the thread creator.
-     */
-    owner: string;
-    /**
-     * Whether the thread is resolved.
-     */
-    resolved: boolean;
-    /**
-     * The thread id.
-     */
-    threadId: string;
-    /**
-     * When the thread was last updated.
-     */
-    updatedAt: string;
-};
-
-/**
  * One per-diarized-speaker override, used in [`EditCallTranscriptRequest`].
  *
  * `custom_speaker = None` clears any existing override for this
@@ -4466,41 +3777,6 @@ export type CustomSpeakerAssignment = {
  */
 export type DataType = 'BOOLEAN' | 'DATE' | 'NUMBER' | 'STRING' | 'SELECT_NUMBER' | 'SELECT_STRING' | 'TAG' | 'ENTITY' | 'LINK';
 
-export type DeleteAnchorInfo = AnchorId & {
-    deleted: boolean;
-};
-
-export type DeleteCommentRequest = {
-    removeAnchorThreadOnly?: boolean | null;
-};
-
-export type DeleteCommentResponse = {
-    anchor?: null | DeleteAnchorInfo;
-    commentId: number;
-    documentId: string;
-    thread: DeleteThreadInfo;
-};
-
-/**
- * Outcome of deleting a CRM comment: reports whether its discussion went with
- * it (it does when the deleted comment was the discussion's first).
- */
-export type DeleteCrmCommentResult = {
-    /**
-     * The deleted comment's id.
-     */
-    commentId: string;
-    /**
-     * Whether the whole discussion was deleted because the comment was its
-     * first.
-     */
-    threadDeleted: boolean;
-    /**
-     * The thread the comment belonged to.
-     */
-    threadId: string;
-};
-
 /**
  * Response body for `DELETE /channels/mentions/{mention_id}`.
  */
@@ -4511,28 +3787,16 @@ export type DeleteEntityMentionResponse = {
     deleted: boolean;
 };
 
-/**
- * Query parameters for deleting a message.
- */
-export type DeleteMessageQuery = {
-    /**
-     * Optional optimistic-update nonce.
-     */
-    nonce?: string | null;
-};
-
-export type DeleteThreadInfo = {
-    deleted: boolean;
-    threadId: number;
-};
-
 export type DeleteUnthreadedAnchorRequest = DeleteUnthreadedPdfAnchorRequest & {
     fileType: 'pdf';
 };
 
 export type DeleteUnthreadedAnchorResponse = AnchorId & {
     documentId: string;
-    threadId?: number | null;
+    /**
+     * Root of the discussion that was deleted with the anchor, if it had one.
+     */
+    rootId?: string | null;
 };
 
 export type DeleteUnthreadedPdfAnchorRequest = {
@@ -5249,31 +4513,6 @@ export type EditCallTranscriptRequest = {
     assignments: Array<CustomSpeakerAssignment>;
 };
 
-export type EditCommentRequest = {
-    mentions?: null | Mentions;
-    metadata?: unknown;
-    text?: string | null;
-    threadId: number;
-};
-
-export type EditCommentResponse = Comment & {
-    documentId: string;
-    documentName: string;
-    documentOwner: string;
-    fileType?: string | null;
-    subType?: null | DocumentSubType;
-};
-
-/**
- * Request body for `PATCH /crm/comments/comment/{comment_id}`.
- */
-export type EditCrmCommentRequest = {
-    /**
-     * The new comment body (markdown).
-     */
-    text: string;
-};
-
 /**
  * Edit document response.
  */
@@ -5411,6 +4650,89 @@ export type EmailFilters = {
      */
     shared?: SharedEmailFilter;
 };
+
+/**
+ * Public status shown on email and in the Reminders editor.
+ */
+export type EmailFollowup = {
+    /**
+     * Condition, defaulting to no reply for new follow-ups.
+     */
+    condition: EmailReminderCondition;
+    /**
+     * Canonical owned/delegated inbox.
+     */
+    linkId: string;
+    /**
+     * Confirmed schedule.
+     */
+    remindAt: string;
+    /**
+     * Its ordinary reminder, used by the existing alert/management surfaces.
+     */
+    reminderId: string;
+    /**
+     * Last accepted operation; edits/removal compare this to prevent stale undo.
+     */
+    revision: string;
+    /**
+     * Durable lifecycle progress.
+     */
+    state: FollowupState;
+    /**
+     * Conversation identity.
+     */
+    threadId: string;
+};
+
+/**
+ * Idempotent email command. Reusing an operation ID with different data fails.
+ */
+export type EmailFollowupCommand = {
+    /**
+     * Reply condition.
+     */
+    condition: EmailReminderCondition;
+    /**
+     * None for creation, the current revision for edits.
+     */
+    expectedRevision?: string | null;
+    /**
+     * Unique request identity retained across network retries.
+     */
+    operationId: string;
+    /**
+     * One future instant; conditional recurrence is deliberately absent.
+     */
+    remindAt: string;
+    type: 'set';
+} | {
+    /**
+     * Reject removal if a newer edit has replaced this operation.
+     */
+    expectedRevision: string;
+    /**
+     * Unique request identity.
+     */
+    operationId: string;
+    type: 'remove';
+    /**
+     * Undo restores original visibility; ordinary Remove returns to inbox.
+     */
+    undo?: boolean;
+};
+
+/**
+ * Lookup response, including an email with no follow-up yet.
+ */
+export type EmailFollowupResponse = {
+    followup?: null | EmailFollowup;
+};
+
+/**
+ * When an email follow-up should return the conversation.
+ */
+export type EmailReminderCondition = 'if_no_reply' | 'regardless';
 
 /**
  * Empty response is required due to custom fetch forcing `response.json()`
@@ -5570,7 +4892,7 @@ export type EntityReference = {
 /**
  * Type of entity that can be referenced by entity properties.
  */
-export type EntityType = 'CALENDAR_EVENT' | 'CALL_RECORD' | 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DOCUMENT' | 'INITIATIVE' | 'PROJECT' | 'TASK' | 'THREAD' | 'USER';
+export type EntityType = 'CALENDAR_EVENT' | 'CALL_RECORD' | 'CHANNEL' | 'CHAT' | 'COMPANY' | 'CONTACT' | 'DOCUMENT' | 'INITIATIVE' | 'PROJECT' | 'TASK' | 'THREAD' | 'USER';
 
 /**
  * A plain old json error response for use with axum.
@@ -5823,6 +5145,11 @@ export type FolderItem = {
      */
     sha: string;
 };
+
+/**
+ * Durable progress of an email operation.
+ */
+export type FollowupState = 'archiving' | 'pending' | 'returning' | 'returned' | 'cancelled' | 'removed';
 
 /**
  * A persisted mapping to an entity owned by an external system.
@@ -6141,16 +5468,6 @@ export type GetDocumentsResponse = {
 
 export type GetInstructionsDocumentResponse = {
     documentId: string;
-};
-
-/**
- * Response from the message-context endpoint.
- */
-export type GetMessageWithContextResponse = {
-    /**
-     * Messages around the requested message in chronological order.
-     */
-    messages: Array<ApiChannelContextMessage>;
 };
 
 /**
@@ -6697,6 +6014,20 @@ export type InFlightTurnSummary = {
 };
 
 /**
+ * A property value set on a new initiative as part of its create.
+ */
+export type InitialPropertyValue = {
+    /**
+     * Property definition to set.
+     */
+    propertyDefinitionId: string;
+    /**
+     * Value, validated by the properties service like any other property write.
+     */
+    value: SetPropertyValue;
+};
+
+/**
  * Full initiative returned to a caller, including members, tasks, and share state.
  */
 export type InitiativeDetail = {
@@ -7006,6 +6337,44 @@ export type MeetingInvitePermissions = {
 };
 
 /**
+ * Minimal waiting-room display data, without account identities or call content.
+ */
+export type MeetingParticipant = {
+    /**
+     * Profile image, when available for a Macro member.
+     */
+    avatarUrl?: string | null;
+    /**
+     * Name displayed in the waiting room.
+     */
+    displayName: string;
+};
+
+/**
+ * People currently connected to a meeting's room.
+ */
+export type MeetingParticipants = {
+    /**
+     * Human attendees only; transcription agents are excluded.
+     */
+    participants: Array<MeetingParticipant>;
+};
+
+/**
+ * An empty room reservation, not a started call or an invitation.
+ */
+export type MeetingPreparation = {
+    /**
+     * After this deadline Start falls back to ordinary room creation.
+     */
+    expiresAt: string;
+    /**
+     * Also the reserved RTC room's UUID and prospective call ID.
+     */
+    id: string;
+};
+
+/**
  * A bearer capability that grants access only to a meeting's RTC room.
  */
 export type MeetingToken = string;
@@ -7018,11 +6387,6 @@ export type MeetingsResponse = {
      * Persistent meeting invitations, most recently created first.
      */
     meetings: Array<Meeting>;
-};
-
-export type Mentions = {
-    mentionId: string;
-    users: Array<string>;
 };
 
 /**
@@ -7116,6 +6480,66 @@ export type MessageAttachment = {
 };
 
 /**
+ * Attachments added to a message, on post or by a later edit.
+ */
+export type MessageAttachmentCreatedMetadata = {
+    /**
+     * Actor that added the attachments.
+     */
+    actor: ChannelSender;
+    /**
+     * Attachments created by this mutation.
+     */
+    attachments: Array<MessageEventAttachment>;
+    /**
+     * Message the attachments were added to.
+     */
+    message_id: string;
+    /**
+     * Entity that owns the message.
+     */
+    parent: MessageParent;
+    /**
+     * Stable identity of the conversation.
+     */
+    root_id: string;
+    /**
+     * Root identifier for a reply; absent for a root.
+     */
+    thread_id?: string | null;
+};
+
+/**
+ * Attachments removed from a message by an edit.
+ */
+export type MessageAttachmentRemovedMetadata = {
+    /**
+     * Actor that removed the attachments.
+     */
+    actor: ChannelSender;
+    /**
+     * Attachments removed by this mutation.
+     */
+    attachments: Array<MessageEventAttachment>;
+    /**
+     * Message the attachments were removed from.
+     */
+    message_id: string;
+    /**
+     * Entity that owns the message.
+     */
+    parent: MessageParent;
+    /**
+     * Stable identity of the conversation.
+     */
+    root_id: string;
+    /**
+     * Root identifier for a reply; absent for a root.
+     */
+    thread_id?: string | null;
+};
+
+/**
  * Kind of message change; notification policy only runs for posted messages.
  */
 export type MessageChange = {
@@ -7203,6 +6627,36 @@ export type MessageCursor = {
 };
 
 /**
+ * A committed message tombstone.
+ */
+export type MessageDeletedMetadata = {
+    /**
+     * Actor that deleted the message; not necessarily the author.
+     */
+    actor: ChannelSender;
+    /**
+     * Tombstone timestamp reported by the repository.
+     */
+    deleted_at?: string | null;
+    /**
+     * The id of the deleted message.
+     */
+    message_id: string;
+    /**
+     * Entity that owns the message.
+     */
+    parent: MessageParent;
+    /**
+     * Stable identity of the conversation.
+     */
+    root_id: string;
+    /**
+     * Root identifier for a reply; absent for a root.
+     */
+    thread_id?: string | null;
+};
+
+/**
  * Direction through a parent timeline, retaining channel cursor semantics.
  */
 export type MessageDirection = 'older' | 'newer';
@@ -7230,6 +6684,28 @@ export type MessageEvent = {
 };
 
 /**
+ * An attachment persisted with a message.
+ */
+export type MessageEventAttachment = {
+    /**
+     * Attachment row identifier.
+     */
+    attachment_id: string;
+    /**
+     * Attachment creation timestamp.
+     */
+    created_at: string;
+    /**
+     * Referenced entity identifier.
+     */
+    entity_id: string;
+    /**
+     * Referenced entity type.
+     */
+    entity_type: string;
+};
+
+/**
  * Root message with its small thread preview, independent of its parent type.
  */
 export type MessageListItem = Message & {
@@ -7241,6 +6717,45 @@ export type MessageListItem = Message & {
      * Bounded reply preview; full replies load on expansion.
      */
     thread: MessageThreadPreview;
+};
+
+/**
+ * One mentioned entity in a committed post; the full mention list travels on
+ * the posted fact.
+ */
+export type MessageMentionedMetadata = {
+    /**
+     * Macro Markdown body.
+     */
+    content: string;
+    /**
+     * Message creation timestamp.
+     */
+    created_at: string;
+    /**
+     * The mentioned entity this fact is about (`user`, `bot`, `document`, …).
+     */
+    mentioned: SimpleMention;
+    /**
+     * The id of the message carrying the mention.
+     */
+    message_id: string;
+    /**
+     * Entity that owns the message.
+     */
+    parent: MessageParent;
+    /**
+     * Stable identity of the conversation.
+     */
+    root_id: string;
+    /**
+     * Message author; may be a bot.
+     */
+    sender: ChannelSender;
+    /**
+     * Root identifier for a reply; absent for a root.
+     */
+    thread_id?: string | null;
 };
 
 /**
@@ -7310,6 +6825,90 @@ export type MessagePatch = {
      * Client mutation nonce.
      */
     nonce?: string | null;
+};
+
+/**
+ * A committed content edit.
+ */
+export type MessagePatchedMetadata = {
+    /**
+     * Actor that patched the message.
+     */
+    actor: ChannelSender;
+    /**
+     * Macro Markdown body after the patch.
+     */
+    content: string;
+    /**
+     * Edit timestamp, when the patch marked the message edited.
+     */
+    edited_at?: string | null;
+    /**
+     * The id of the patched message.
+     */
+    message_id: string;
+    /**
+     * Entity that owns the message.
+     */
+    parent: MessageParent;
+    /**
+     * Stable identity of the conversation.
+     */
+    root_id: string;
+    /**
+     * Root identifier for a reply; absent for a root.
+     */
+    thread_id?: string | null;
+    /**
+     * Update timestamp reported by the repository.
+     */
+    updated_at: string;
+};
+
+/**
+ * A committed post, independent of the surface presenting the conversation.
+ */
+export type MessagePostedMetadata = {
+    /**
+     * Persisted attachments available to authorized consumers.
+     */
+    attachments: Array<MessageEventAttachment>;
+    /**
+     * Macro Markdown body.
+     */
+    content: string;
+    /**
+     * Message creation timestamp.
+     */
+    created_at: string;
+    /**
+     * Explicit mentions recorded with the post.
+     */
+    mentions: Array<SimpleMention>;
+    /**
+     * Posted message identifier.
+     */
+    message_id: string;
+    /**
+     * Entity that owns the message and determines access to it.
+     */
+    parent: MessageParent;
+    /**
+     * Stable identity of the conversation, shared by roots and replies.
+     */
+    root_id: string;
+    /**
+     * Author, including bot principals.
+     */
+    sender: ChannelSender;
+    /**
+     * Root identifier for a reply; absent for a new root.
+     */
+    thread_id?: string | null;
+    /**
+     * User whose invocation produced a bot response.
+     */
+    triggered_by?: string | null;
 };
 
 /**
@@ -7388,6 +6987,48 @@ export type MessageTimelineQuery = {
 };
 
 /**
+ * Lifecycle events for the common message service, one per committed fact.
+ * Reactions and typing never reach the topic.
+ */
+export type MessageTopicEvent = {
+    event_type: 'message.posted';
+    /**
+     * A user or bot posted a root or reply.
+     */
+    metadata: MessagePostedMetadata;
+} | {
+    event_type: 'message.patched';
+    /**
+     * A message's content was patched.
+     */
+    metadata: MessagePatchedMetadata;
+} | {
+    event_type: 'message.deleted';
+    /**
+     * A message was tombstoned.
+     */
+    metadata: MessageDeletedMetadata;
+} | {
+    event_type: 'message.mentioned';
+    /**
+     * An entity (user, bot, document, …) was mentioned in a posted message.
+     */
+    metadata: MessageMentionedMetadata;
+} | {
+    event_type: 'message.attachment_created';
+    /**
+     * Attachments were added to a message.
+     */
+    metadata: MessageAttachmentCreatedMetadata;
+} | {
+    event_type: 'message.attachment_removed';
+    /**
+     * Attachments were removed from a message.
+     */
+    metadata: MessageAttachmentRemovedMetadata;
+};
+
+/**
  * An attachment to add to a message.
  */
 export type NewAttachment = {
@@ -7405,28 +7046,6 @@ export type NewAttachment = {
     height?: number | null;
     /**
      * Optional media width.
-     */
-    width?: number | null;
-};
-
-/**
- * New attachment to add to a channel message.
- */
-export type NewChannelAttachment = {
-    /**
-     * Attachment entity id.
-     */
-    entity_id: string;
-    /**
-     * Attachment entity type.
-     */
-    entity_type: string;
-    /**
-     * Optional rendered height.
-     */
-    height?: number | null;
-    /**
-     * Optional rendered width.
      */
     width?: number | null;
 };
@@ -7614,32 +7233,6 @@ export type PatchChannelRequest = {
  */
 export type PatchMessageNotificationPolicy = 'Default' | 'NotifyAsPostedMessage';
 
-/**
- * Request to patch a channel message.
- */
-export type PatchMessageRequest = {
-    /**
-     * Attachment ids to remove.
-     */
-    attachment_ids_to_delete?: Array<string> | null;
-    /**
-     * Attachments to add.
-     */
-    attachments_to_add?: Array<NewChannelAttachment> | null;
-    /**
-     * Optional replacement message body.
-     */
-    content?: string | null;
-    /**
-     * Optional replacement mentions.
-     */
-    mentions?: Array<SimpleMention> | null;
-    /**
-     * Optional optimistic-update nonce.
-     */
-    nonce?: string | null;
-};
-
 export type PatchProjectRequestV2 = {
     /**
      * The new name of the project.
@@ -7692,14 +7285,6 @@ export type PdfAnchorId = {
     uuid: string;
 };
 
-export type PdfAnchorRequest = (PdfPlaceableCommentAnchorRequest & {
-    anchorType: 'free-comment';
-}) | (PdfHighlightAnchorRequest & {
-    anchorType: 'highlight';
-}) | (UnthreadedPdfUuidRequest & {
-    anchorType: 'attachment';
-});
-
 export type PdfHighlightAnchor = {
     alpha: number;
     blue: number;
@@ -7716,7 +7301,6 @@ export type PdfHighlightAnchor = {
     red: number;
     rootId?: string | null;
     text: string;
-    threadId?: number | null;
     updatedAt?: string | null;
     uuid: string;
 };
@@ -7761,24 +7345,7 @@ export type PdfPlaceableCommentAnchor = {
     rootId?: string | null;
     rotation: number;
     shouldLockOnSave: boolean;
-    threadId?: number | null;
     uuid: string;
-    wasDeleted: boolean;
-    wasEdited: boolean;
-    widthPct: number;
-    xPct: number;
-    yPct: number;
-};
-
-export type PdfPlaceableCommentAnchorRequest = {
-    allowableEdits?: unknown;
-    heightPct: number;
-    originalIndex: number;
-    originalPage: number;
-    page: number;
-    rotation: number;
-    shouldLockOnSave: boolean;
-    uuid?: string | null;
     wasDeleted: boolean;
     wasEdited: boolean;
     widthPct: number;
@@ -7889,68 +7456,6 @@ export type PostMessage = {
 export type PostMessageNotificationPolicy = 'Default' | 'MentionsOnly' | 'Silent';
 
 /**
- * Request to send a channel message.
- */
-export type PostMessageRequest = {
-    /**
-     * Attachments to add after message creation.
-     */
-    attachments: Array<NewChannelAttachment>;
-    /**
-     * Message body.
-     */
-    content: string;
-    /**
-     * Message mentions.
-     */
-    mentions: Array<SimpleMention>;
-    /**
-     * Optional optimistic-update nonce.
-     */
-    nonce?: string | null;
-    /**
-     * Optional thread parent id.
-     */
-    thread_id?: string | null;
-};
-
-/**
- * Response returned after sending a message.
- */
-export type PostMessageResponse = {
-    /**
-     * Created message id.
-     */
-    id: string;
-    /**
-     * Optional optimistic-update nonce.
-     */
-    nonce?: string | null;
-};
-
-/**
- * Request to mutate a reaction.
- */
-export type PostReactionRequest = {
-    /**
-     * Reaction action.
-     */
-    action: ReactionAction;
-    /**
-     * Reaction emoji.
-     */
-    emoji: string;
-    /**
-     * Message id to react to.
-     */
-    message_id: string;
-    /**
-     * Optional optimistic-update nonce.
-     */
-    nonce?: string | null;
-};
-
-/**
  * Request body for the AST soup endpoint.
  */
 export type PostSoupAstRequest = ApiEntityFilterAst & Params & {
@@ -7968,24 +7473,6 @@ export type PostSoupRequest = EntityFilters & Params & {
      * the view of specific emails to display
      */
     emailView?: string;
-};
-
-/**
- * Request to emit a typing event.
- */
-export type PostTypingRequest = {
-    /**
-     * Typing action.
-     */
-    action: TypingAction;
-    /**
-     * Optional optimistic-update nonce.
-     */
-    nonce?: string | null;
-    /**
-     * Optional thread id.
-     */
-    thread_id?: string | null;
 };
 
 export type PreSaveDocumentRequest = {
@@ -8259,11 +7746,6 @@ export type PropertyValue = {
      */
     value: Array<string>;
 };
-
-/**
- * Reaction mutation action.
- */
-export type ReactionAction = 'Add' | 'Remove';
 
 /**
  * Reaction mutation for the authenticated user.
@@ -8550,6 +8032,16 @@ export type SaveDocumentResponseData = {
      * If the document is an editable file, we provide a presigned url to save the updated file to.
      */
     presignedUrl?: string | null;
+};
+
+/**
+ * Response from searching CRM contacts.
+ */
+export type SearchContactsResponse = {
+    /**
+     * Matching contacts, most recently interacted first.
+     */
+    contacts: Array<CrmContactResponse>;
 };
 
 /**
@@ -10334,17 +9826,6 @@ export type TeamOutOfOfficeResponse = {
  */
 export type TeamRole = 'member' | 'admin' | 'owner';
 
-export type Thread = {
-    createdAt?: string | null;
-    deletedAt?: string | null;
-    documentId: string;
-    metadata?: unknown;
-    owner: string;
-    resolved: boolean;
-    threadId: number;
-    updatedAt?: string | null;
-};
-
 /**
  * A thread's location within its document. PDF geometry remains annotation-owned.
  */
@@ -10435,10 +9916,6 @@ export type ThreadPatch = {
      * Resolve or reopen the discussion; absent preserves its state.
      */
     resolved?: boolean | null;
-};
-
-export type ThreadResponse = {
-    data: Array<CommentThread>;
 };
 
 /**
@@ -10657,11 +10134,6 @@ export type TypedSuccessResponseGetDocumentResponseData = {
 };
 
 /**
- * Typing indicator action.
- */
-export type TypingAction = 'start' | 'stop';
-
-/**
  * Transient typing update.
  */
 export type TypingInput = {
@@ -10677,11 +10149,6 @@ export type TypingInput = {
      * Root being replied to, absent for the parent composer.
      */
     thread_id?: string | null;
-};
-
-export type UnthreadedPdfUuidRequest = {
-    attachmentType: 'highlight';
-    uuid: string;
 };
 
 /**
@@ -11123,11 +10590,11 @@ export type Webhook = {
  * Any entity event deliverable to a webhook endpoint.
  *
  * Serialized bodies carry an `event_type` tag naming the event (for example
- * `document.created` or `channel.message_posted`) and a `metadata` object
+ * `document.created` or `message.posted`) and a `metadata` object
  * with the event payload. Endpoint validation additionally sends a
  * `WebhookValidationTestEvent`, which is not part of this union.
  */
-export type WebhookEvent = DocumentTopicEvent | ChannelTopicEvent | AgentSessionLifecycleEvent;
+export type WebhookEvent = DocumentTopicEvent | ChannelTopicEvent | MessageTopicEvent | AgentSessionLifecycleEvent;
 
 /**
  * Event and optional entity-id constraints used to match webhook deliveries.
@@ -11366,110 +10833,6 @@ export type CreateAnchorResponses = {
 
 export type CreateAnchorResponse = CreateAnchorResponses[keyof CreateAnchorResponses];
 
-export type DeleteCommentData = {
-    body: DeleteCommentRequest;
-    path: {
-        /**
-         * The comment id
-         */
-        comment_id: number;
-    };
-    query?: never;
-    url: '/annotations/comments/comment/{comment_id}';
-};
-
-export type DeleteCommentErrors = {
-    401: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type DeleteCommentError = DeleteCommentErrors[keyof DeleteCommentErrors];
-
-export type DeleteCommentResponses = {
-    200: DeleteCommentResponse;
-};
-
-export type DeleteCommentResponse2 = DeleteCommentResponses[keyof DeleteCommentResponses];
-
-export type EditCommentData = {
-    body: EditCommentRequest;
-    path: {
-        /**
-         * The comment id
-         */
-        comment_id: number;
-    };
-    query?: never;
-    url: '/annotations/comments/comment/{comment_id}';
-};
-
-export type EditCommentErrors = {
-    401: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type EditCommentError = EditCommentErrors[keyof EditCommentErrors];
-
-export type EditCommentResponses = {
-    200: EditCommentResponse;
-};
-
-export type EditCommentResponse2 = EditCommentResponses[keyof EditCommentResponses];
-
-export type GetDocumentCommentsData = {
-    body?: never;
-    path: {
-        /**
-         * Document ID
-         */
-        document_id: string;
-    };
-    query?: never;
-    url: '/annotations/comments/document/{document_id}';
-};
-
-export type GetDocumentCommentsErrors = {
-    401: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type GetDocumentCommentsError = GetDocumentCommentsErrors[keyof GetDocumentCommentsErrors];
-
-export type GetDocumentCommentsResponses = {
-    200: ThreadResponse;
-};
-
-export type GetDocumentCommentsResponse = GetDocumentCommentsResponses[keyof GetDocumentCommentsResponses];
-
-export type CreateCommentData = {
-    body: CreateCommentRequest;
-    path: {
-        /**
-         * The document id
-         */
-        document_id: string;
-    };
-    query?: never;
-    url: '/annotations/comments/document/{document_id}';
-};
-
-export type CreateCommentErrors = {
-    401: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type CreateCommentError = CreateCommentErrors[keyof CreateCommentErrors];
-
-export type CreateCommentResponses = {
-    200: CreateCommentResponse;
-};
-
-export type CreateCommentResponse2 = CreateCommentResponses[keyof CreateCommentResponses];
-
 export type GetSelfBotData = {
     body?: never;
     path?: never;
@@ -11491,6 +10854,32 @@ export type GetSelfBotResponses = {
 };
 
 export type GetSelfBotResponse = GetSelfBotResponses[keyof GetSelfBotResponses];
+
+export type GetBotOwnerProfilesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Bot ids. Repeat the key: `?ids=<uuid>&ids=<uuid>`.
+         */
+        ids?: Array<BotId>;
+    };
+    url: '/bots/profiles';
+};
+
+export type GetBotOwnerProfilesErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetBotOwnerProfilesError = GetBotOwnerProfilesErrors[keyof GetBotOwnerProfilesErrors];
+
+export type GetBotOwnerProfilesResponses = {
+    200: Array<BotOwnerProfile>;
+};
+
+export type GetBotOwnerProfilesResponse = GetBotOwnerProfilesResponses[keyof GetBotOwnerProfilesResponses];
 
 export type ListBotChannelsData = {
     body?: never;
@@ -11779,6 +11168,28 @@ export type MeetingLeaveResponses = {
 
 export type MeetingLeaveResponse = MeetingLeaveResponses[keyof MeetingLeaveResponses];
 
+export type MeetingGuestParticipantsData = {
+    body?: never;
+    path: {
+        token: string;
+    };
+    query?: never;
+    url: '/call/join/{token}/participants';
+};
+
+export type MeetingGuestParticipantsErrors = {
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingGuestParticipantsError = MeetingGuestParticipantsErrors[keyof MeetingGuestParticipantsErrors];
+
+export type MeetingGuestParticipantsResponses = {
+    200: MeetingParticipants;
+};
+
+export type MeetingGuestParticipantsResponse = MeetingGuestParticipantsResponses[keyof MeetingGuestParticipantsResponses];
+
 export type MeetingListData = {
     body?: never;
     path?: never;
@@ -11933,6 +11344,67 @@ export type MeetingJoinResponses = {
 };
 
 export type MeetingJoinResponse = MeetingJoinResponses[keyof MeetingJoinResponses];
+
+export type MeetingParticipantsData = {
+    body?: never;
+    path: {
+        token: string;
+    };
+    query?: never;
+    url: '/call/meetings/join/{token}/participants';
+};
+
+export type MeetingParticipantsErrors = {
+    404: ErrorResponse;
+};
+
+export type MeetingParticipantsError = MeetingParticipantsErrors[keyof MeetingParticipantsErrors];
+
+export type MeetingParticipantsResponses = {
+    200: MeetingParticipants;
+};
+
+export type MeetingParticipantsResponse = MeetingParticipantsResponses[keyof MeetingParticipantsResponses];
+
+export type MeetingPrepareData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/call/meetings/prepare';
+};
+
+export type MeetingPrepareErrors = {
+    401: ErrorResponse;
+};
+
+export type MeetingPrepareError = MeetingPrepareErrors[keyof MeetingPrepareErrors];
+
+export type MeetingPrepareResponses = {
+    200: MeetingPreparation;
+};
+
+export type MeetingPrepareResponse = MeetingPrepareResponses[keyof MeetingPrepareResponses];
+
+export type MeetingCancelPreparationData = {
+    body?: never;
+    path: {
+        preparation_id: string;
+    };
+    query?: never;
+    url: '/call/meetings/prepare/{preparation_id}';
+};
+
+export type MeetingCancelPreparationErrors = {
+    401: ErrorResponse;
+};
+
+export type MeetingCancelPreparationError = MeetingCancelPreparationErrors[keyof MeetingCancelPreparationErrors];
+
+export type MeetingCancelPreparationResponses = {
+    204: void;
+};
+
+export type MeetingCancelPreparationResponse = MeetingCancelPreparationResponses[keyof MeetingCancelPreparationResponses];
 
 export type MeetingCancelData = {
     body?: never;
@@ -12774,12 +12246,7 @@ export type GetChannelData = {
          */
         channel_id: string;
     };
-    query?: {
-        /**
-         * Recent message page size (1-100, default 50)
-         */
-        limit?: number;
-    };
+    query?: never;
     url: '/channels/{channel_id}';
 };
 
@@ -12970,334 +12437,6 @@ export type LeaveChannelResponses = {
     200: unknown;
 };
 
-export type PostMessageData = {
-    body: PostMessageRequest;
-    path: {
-        /**
-         * Channel ID
-         */
-        channel_id: string;
-    };
-    query?: never;
-    url: '/channels/{channel_id}/message';
-};
-
-export type PostMessageErrors = {
-    400: ErrorResponse;
-    401: ErrorResponse;
-    403: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type PostMessageError = PostMessageErrors[keyof PostMessageErrors];
-
-export type PostMessageResponses = {
-    200: PostMessageResponse;
-};
-
-export type PostMessageResponse2 = PostMessageResponses[keyof PostMessageResponses];
-
-export type DeleteMessageData = {
-    body?: never;
-    path: {
-        /**
-         * Channel ID
-         */
-        channel_id: string;
-        /**
-         * Message ID
-         */
-        message_id: string;
-    };
-    query?: {
-        /**
-         * Optional optimistic-update nonce
-         */
-        nonce?: string;
-    };
-    url: '/channels/{channel_id}/message/{message_id}';
-};
-
-export type DeleteMessageErrors = {
-    400: ErrorResponse;
-    401: ErrorResponse;
-    403: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type DeleteMessageError = DeleteMessageErrors[keyof DeleteMessageErrors];
-
-export type DeleteMessageResponses = {
-    200: string;
-};
-
-export type DeleteMessageResponse = DeleteMessageResponses[keyof DeleteMessageResponses];
-
-export type PatchMessageData = {
-    body: PatchMessageRequest;
-    path: {
-        /**
-         * Channel ID
-         */
-        channel_id: string;
-        /**
-         * Message ID
-         */
-        message_id: string;
-    };
-    query?: never;
-    url: '/channels/{channel_id}/message/{message_id}';
-};
-
-export type PatchMessageErrors = {
-    400: ErrorResponse;
-    401: ErrorResponse;
-    403: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type PatchMessageError = PatchMessageErrors[keyof PatchMessageErrors];
-
-export type PatchMessageResponses = {
-    200: string;
-};
-
-export type PatchMessageResponse = PatchMessageResponses[keyof PatchMessageResponses];
-
-export type GetChannelMessagesData = {
-    body?: never;
-    path: {
-        /**
-         * Channel ID
-         */
-        channel_id: string;
-    };
-    query?: {
-        /**
-         * Page size (1-100, default 50)
-         */
-        limit?: number;
-        /**
-         * Base64 encoded cursor value for older messages
-         */
-        cursor?: string;
-        /**
-         * Base64 encoded cursor value for newer messages
-         */
-        previous_cursor?: string;
-        /**
-         * Return a centered window around this message ID
-         */
-        load_around_message_id?: string;
-    };
-    url: '/channels/{channel_id}/messages';
-};
-
-export type GetChannelMessagesErrors = {
-    400: ErrorResponse;
-    401: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type GetChannelMessagesError = GetChannelMessagesErrors[keyof GetChannelMessagesErrors];
-
-export type GetChannelMessagesResponses = {
-    200: ApiChannelMessagesPage;
-};
-
-export type GetChannelMessagesResponse = GetChannelMessagesResponses[keyof GetChannelMessagesResponses];
-
-export type PostChannelMessagesData = {
-    body: ChannelMessageFilters;
-    path: {
-        /**
-         * Channel ID
-         */
-        channel_id: string;
-    };
-    query?: {
-        /**
-         * Page size (1-100, default 50)
-         */
-        limit?: number;
-        /**
-         * Base64 encoded cursor value for older messages
-         */
-        cursor?: string;
-        /**
-         * Base64 encoded cursor value for newer messages
-         */
-        previous_cursor?: string;
-        /**
-         * Return a centered window around this message ID
-         */
-        load_around_message_id?: string;
-    };
-    url: '/channels/{channel_id}/messages';
-};
-
-export type PostChannelMessagesErrors = {
-    400: ErrorResponse;
-    401: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type PostChannelMessagesError = PostChannelMessagesErrors[keyof PostChannelMessagesErrors];
-
-export type PostChannelMessagesResponses = {
-    200: ApiChannelMessagesPage;
-};
-
-export type PostChannelMessagesResponse = PostChannelMessagesResponses[keyof PostChannelMessagesResponses];
-
-export type GetChannelMessagesCatchUpData = {
-    body?: never;
-    path: {
-        /**
-         * Channel ID
-         */
-        channel_id: string;
-    };
-    query: {
-        /**
-         * Exclusive RFC3339 lower bound. Messages at this instant are omitted.
-         */
-        after: string;
-        /**
-         * Page size (1-100, default 50)
-         */
-        limit?: number;
-        /**
-         * Base64 encoded cursor value for older messages
-         */
-        cursor?: string;
-        /**
-         * Base64 encoded cursor value for newer messages
-         */
-        previous_cursor?: string;
-    };
-    url: '/channels/{channel_id}/messages/catch-up';
-};
-
-export type GetChannelMessagesCatchUpErrors = {
-    400: ErrorResponse;
-    401: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type GetChannelMessagesCatchUpError = GetChannelMessagesCatchUpErrors[keyof GetChannelMessagesCatchUpErrors];
-
-export type GetChannelMessagesCatchUpResponses = {
-    200: ApiChannelMessagesPage;
-};
-
-export type GetChannelMessagesCatchUpResponse = GetChannelMessagesCatchUpResponses[keyof GetChannelMessagesCatchUpResponses];
-
-export type GetMessageWithContextData = {
-    body?: never;
-    path: {
-        /**
-         * Channel ID
-         */
-        channel_id: string;
-        /**
-         * Message ID to get context around
-         */
-        message_id: string;
-    };
-    query?: {
-        /**
-         * Number of older messages to include
-         */
-        before?: number;
-        /**
-         * Number of newer messages to include
-         */
-        after?: number;
-    };
-    url: '/channels/{channel_id}/messages/{message_id}/context';
-};
-
-export type GetMessageWithContextErrors = {
-    401: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type GetMessageWithContextError = GetMessageWithContextErrors[keyof GetMessageWithContextErrors];
-
-export type GetMessageWithContextResponses = {
-    200: GetMessageWithContextResponse;
-};
-
-export type GetMessageWithContextResponse2 = GetMessageWithContextResponses[keyof GetMessageWithContextResponses];
-
-export type GetThreadRepliesData = {
-    body?: never;
-    path: {
-        /**
-         * Channel ID
-         */
-        channel_id: string;
-        /**
-         * Message ID (thread parent or reply id)
-         */
-        message_id: string;
-    };
-    query?: never;
-    url: '/channels/{channel_id}/messages/{message_id}/replies';
-};
-
-export type GetThreadRepliesErrors = {
-    401: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type GetThreadRepliesError = GetThreadRepliesErrors[keyof GetThreadRepliesErrors];
-
-export type GetThreadRepliesResponses = {
-    200: Array<ApiThreadReply>;
-};
-
-export type GetThreadRepliesResponse = GetThreadRepliesResponses[keyof GetThreadRepliesResponses];
-
-export type ResolveChannelMessageData = {
-    body?: never;
-    path: {
-        /**
-         * Channel ID
-         */
-        channel_id: string;
-        /**
-         * Message ID to resolve
-         */
-        message_id: string;
-    };
-    query?: never;
-    url: '/channels/{channel_id}/messages/{message_id}/resolve';
-};
-
-export type ResolveChannelMessageErrors = {
-    401: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type ResolveChannelMessageError = ResolveChannelMessageErrors[keyof ResolveChannelMessageErrors];
-
-export type ResolveChannelMessageResponses = {
-    200: ApiResolvedChannelMessage;
-};
-
-export type ResolveChannelMessageResponse = ResolveChannelMessageResponses[keyof ResolveChannelMessageResponses];
-
 export type RemoveParticipantsData = {
     body: RemoveParticipantsRequest;
     path: {
@@ -13406,62 +12545,6 @@ export type SetChannelPictureResponses = {
 };
 
 export type SetChannelPictureResponse = SetChannelPictureResponses[keyof SetChannelPictureResponses];
-
-export type PostReactionData = {
-    body: PostReactionRequest;
-    path: {
-        /**
-         * Channel ID
-         */
-        channel_id: string;
-    };
-    query?: never;
-    url: '/channels/{channel_id}/reaction';
-};
-
-export type PostReactionErrors = {
-    400: ErrorResponse;
-    401: ErrorResponse;
-    403: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type PostReactionError = PostReactionErrors[keyof PostReactionErrors];
-
-export type PostReactionResponses = {
-    200: string;
-};
-
-export type PostReactionResponse = PostReactionResponses[keyof PostReactionResponses];
-
-export type PostTypingData = {
-    body: PostTypingRequest;
-    path: {
-        /**
-         * Channel ID
-         */
-        channel_id: string;
-    };
-    query?: never;
-    url: '/channels/{channel_id}/typing';
-};
-
-export type PostTypingErrors = {
-    400: ErrorResponse;
-    401: ErrorResponse;
-    403: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type PostTypingError = PostTypingErrors[keyof PostTypingErrors];
-
-export type PostTypingResponses = {
-    200: string;
-};
-
-export type PostTypingResponse = PostTypingResponses[keyof PostTypingResponses];
 
 export type PostChannelBotWebhookData = {
     body: ChannelWebhookRequest;
@@ -13672,118 +12755,6 @@ export type GetChannelsResponses = {
 
 export type GetChannelsResponse = GetChannelsResponses[keyof GetChannelsResponses];
 
-export type DeleteCrmCommentData = {
-    body?: never;
-    path: {
-        /**
-         * The CRM comment to delete
-         */
-        comment_id: string;
-    };
-    query?: never;
-    url: '/crm/comment/{comment_id}';
-};
-
-export type DeleteCrmCommentErrors = {
-    401: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type DeleteCrmCommentError = DeleteCrmCommentErrors[keyof DeleteCrmCommentErrors];
-
-export type DeleteCrmCommentResponses = {
-    200: DeleteCrmCommentResult;
-};
-
-export type DeleteCrmCommentResponse = DeleteCrmCommentResponses[keyof DeleteCrmCommentResponses];
-
-export type EditCrmCommentData = {
-    body: EditCrmCommentRequest;
-    path: {
-        /**
-         * The CRM comment to edit
-         */
-        comment_id: string;
-    };
-    query?: never;
-    url: '/crm/comment/{comment_id}';
-};
-
-export type EditCrmCommentErrors = {
-    401: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type EditCrmCommentError = EditCrmCommentErrors[keyof EditCrmCommentErrors];
-
-export type EditCrmCommentResponses = {
-    200: CrmComment;
-};
-
-export type EditCrmCommentResponse = EditCrmCommentResponses[keyof EditCrmCommentResponses];
-
-export type ListCrmCommentsData = {
-    body?: never;
-    path: {
-        /**
-         * Which CRM entity kind the threads hang off
-         */
-        entity_type: CrmCommentEntityType;
-        /**
-         * The CRM company or contact id
-         */
-        entity_id: string;
-    };
-    query?: never;
-    url: '/crm/comments/{entity_type}/{entity_id}';
-};
-
-export type ListCrmCommentsErrors = {
-    401: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type ListCrmCommentsError = ListCrmCommentsErrors[keyof ListCrmCommentsErrors];
-
-export type ListCrmCommentsResponses = {
-    200: Array<CrmCommentThread>;
-};
-
-export type ListCrmCommentsResponse = ListCrmCommentsResponses[keyof ListCrmCommentsResponses];
-
-export type CreateCrmCommentData = {
-    body: CreateCrmCommentRequest;
-    path: {
-        /**
-         * Which CRM entity kind the thread hangs off
-         */
-        entity_type: CrmCommentEntityType;
-        /**
-         * The CRM company or contact id
-         */
-        entity_id: string;
-    };
-    query?: never;
-    url: '/crm/comments/{entity_type}/{entity_id}';
-};
-
-export type CreateCrmCommentErrors = {
-    401: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type CreateCrmCommentError = CreateCrmCommentErrors[keyof CreateCrmCommentErrors];
-
-export type CreateCrmCommentResponses = {
-    200: CrmCommentThread;
-};
-
-export type CreateCrmCommentResponse = CreateCrmCommentResponses[keyof CreateCrmCommentResponses];
-
 export type CreateCrmCompanyData = {
     body: CreateCrmCompanyRequest;
     path?: never;
@@ -13970,6 +12941,36 @@ export type SetCrmCompanyNameResponses = {
 };
 
 export type SetCrmCompanyNameResponse = SetCrmCompanyNameResponses[keyof SetCrmCompanyNameResponses];
+
+export type SearchContactsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Text the contact's email or name must contain (case-insensitive).
+         * Empty lists the most recently interacted contacts.
+         */
+        query?: string;
+        /**
+         * Maximum contacts to return (1-500, default 20).
+         */
+        limit?: number | null;
+    };
+    url: '/crm/contacts';
+};
+
+export type SearchContactsErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SearchContactsError = SearchContactsErrors[keyof SearchContactsErrors];
+
+export type SearchContactsResponses = {
+    200: SearchContactsResponse;
+};
+
+export type SearchContactsResponse2 = SearchContactsResponses[keyof SearchContactsResponses];
 
 export type GetContactByEmailData = {
     body?: never;
@@ -16916,6 +15917,51 @@ export type CreateReminderResponses = {
 };
 
 export type CreateReminderResponse = CreateReminderResponses[keyof CreateReminderResponses];
+
+export type GetEmailFollowupData = {
+    body?: never;
+    path: {
+        thread_id: string;
+    };
+    query?: never;
+    url: '/reminders/email/{thread_id}';
+};
+
+export type GetEmailFollowupErrors = {
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetEmailFollowupError = GetEmailFollowupErrors[keyof GetEmailFollowupErrors];
+
+export type GetEmailFollowupResponses = {
+    200: EmailFollowupResponse;
+};
+
+export type GetEmailFollowupResponse = GetEmailFollowupResponses[keyof GetEmailFollowupResponses];
+
+export type SetEmailFollowupData = {
+    body: EmailFollowupCommand;
+    path: {
+        thread_id: string;
+    };
+    query?: never;
+    url: '/reminders/email/{thread_id}';
+};
+
+export type SetEmailFollowupErrors = {
+    400: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SetEmailFollowupError = SetEmailFollowupErrors[keyof SetEmailFollowupErrors];
+
+export type SetEmailFollowupResponses = {
+    200: EmailFollowup;
+};
+
+export type SetEmailFollowupResponse = SetEmailFollowupResponses[keyof SetEmailFollowupResponses];
 
 export type DeleteReminderData = {
     body?: never;

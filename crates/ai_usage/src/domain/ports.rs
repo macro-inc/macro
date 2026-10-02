@@ -338,15 +338,19 @@ pub type Result<T> = std::result::Result<T, UsageError>;
 
 /// Outbound storage port.
 pub trait UsageRepo: Send + Sync + 'static {
-    /// Persist a fully-priced completion row.
-    fn insert_usage(&self, usage: &CompletionUsage) -> impl Future<Output = Result<()>> + Send;
+    /// Persist a completion row with its domain-computed quota counting decision.
+    fn insert_usage(
+        &self,
+        usage: &CompletionUsage,
+        count_usage: bool,
+    ) -> impl Future<Output = Result<()>> + Send;
 
     /// Fetch the current rate for a model's billing unit, if any.
     fn get_pricing(&self, model: &str)
     -> impl Future<Output = Result<Option<ModelPricing>>> + Send;
 
     /// Upsert the pricing for a model and recompute the `total` of every
-    /// existing `ai_usage` row for that model.
+    /// existing `ai_usage` row for that model, preserving its `count_usage` decision.
     fn set_pricing(
         &self,
         model: &str,

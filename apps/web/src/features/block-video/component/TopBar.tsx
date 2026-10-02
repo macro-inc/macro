@@ -60,9 +60,9 @@ export function TopBar() {
 
     try {
       const blob = await getBlob({ onProgress: setProgress });
-      downloadFile(blob, fileName);
       toast.dismiss(toastId);
-      toast.success(`Downloaded ${fileName}`);
+      const { saved } = await downloadFile(blob, fileName);
+      if (saved) toast.success(`Downloaded ${fileName}`);
     } catch (e) {
       toast.dismiss(toastId);
       console.error('error downloading file', e);

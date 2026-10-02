@@ -400,7 +400,7 @@ export function AiComposeGraphic(props: { onExpand?: () => void } = {}) {
                     'align-items': 'center',
                     color: 'var(--c4)',
                     display: 'flex',
-                    'font-family': "'rajdhani', body",
+                    'font-family': "'Inter', body",
                     'font-size': '11px',
                     'font-weight': '700',
                     gap: '8px',

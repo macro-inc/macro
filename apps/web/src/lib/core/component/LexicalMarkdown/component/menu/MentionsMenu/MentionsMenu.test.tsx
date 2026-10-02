@@ -3,7 +3,13 @@ import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal, type ParentProps } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { createMenuOperations } from '../../../shared/inlineMenu';
+import { useEmailSearchMention } from './hooks/useEmailSearchMention';
 import { MentionsMenu } from './MentionsMenu';
+
+const mocks = vi.hoisted(() => ({
+  crmEnabled: false,
+  requestedBuckets: [] as string[],
+}));
 
 vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => ({ track: vi.fn() }),
@@ -15,10 +21,29 @@ vi.mock('@core/block', () => ({
 }));
 vi.mock('@core/constant/featureFlags', () => ({
   enableCrm: {},
-  isFeatureEnabled: () => false,
+  isFeatureEnabled: () => mocks.crmEnabled,
 }));
 vi.mock('@core/context/quickAccess', () => ({
-  useQuickAccess: () => ({ useList: () => ({ items: () => [] }) }),
+  useQuickAccess: () => ({
+    usesRecordSelection: () => false,
+    usesSearchProjection: () => false,
+    useList: (...args: unknown[]) => {
+      const [first] = args;
+      if (first && typeof first === 'object') {
+        mocks.requestedBuckets.push(
+          ...(first as { buckets: string[] }).buckets
+        );
+      }
+      return {
+        items: () => [],
+        totalCount: () => 0,
+        hasMore: () => false,
+        isLoading: () => false,
+        isLoadingMore: () => false,
+        loadMore: async () => {},
+      };
+    },
+  }),
 }));
 vi.mock('@core/context/user', () => ({
   useEmail: () => () => 'gab@macro.com',
@@ -55,6 +80,8 @@ vi.mock('@ui', () => ({
 const originalScrollIntoView = Element.prototype.scrollIntoView;
 
 afterEach(() => {
+  mocks.crmEnabled = false;
+  mocks.requestedBuckets = [];
   cleanup();
   vi.useRealTimers();
   vi.restoreAllMocks();
@@ -101,4 +128,27 @@ it('keeps matching category and row nodes mounted across typing and updated peop
     expect.objectContaining({ data: updated })
   );
   expect(menu.isOpen()).toBe(false);
+});
+
+it('offers CRM companies but not CRM contacts', () => {
+  mocks.crmEnabled = true;
+  vi.mocked(useEmailSearchMention).mockReturnValue({
+    emails: () => [],
+    totalCount: () => 0,
+    hasMore: () => false,
+    isLoadingMore: () => false,
+    loadMore: async () => {},
+  } as unknown as ReturnType<typeof useEmailSearchMention>);
+  const menu = createMenuOperations();
+  menu.openMenu();
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      users={() => []}
+      anchor={document.createElement('div')}
+      onPick={vi.fn()}
+    />
+  ));
+  expect(mocks.requestedBuckets).toContain('crm_company');
+  expect(mocks.requestedBuckets).not.toContain('crm_contact');
 });

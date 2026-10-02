@@ -5,7 +5,11 @@ import { useMaybeBlockId, useMaybeBlockName } from '@core/block';
 import { SUPPORTED_CHAT_ATTACHMENT_BLOCKS } from '@core/component/AI/constant/fileType';
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import { enableCrm, isFeatureEnabled } from '@core/constant/featureFlags';
-import { type EntityItem, useQuickAccess } from '@core/context/quickAccess';
+import {
+  type EntityBucket,
+  type EntityItem,
+  useQuickAccess,
+} from '@core/context/quickAccess';
 import clickOutside from '@core/directive/clickOutside';
 import { isMobile } from '@core/mobile/isMobile';
 import type { ChannelWithParticipants, IUser } from '@core/user';
@@ -93,6 +97,17 @@ export function MentionsMenu(props: MentionsMenuProps) {
   );
 }
 
+/** The entity buckets listed under "Documents, Agents, & Tasks". */
+const DOCUMENT_MENTION_BUCKETS: EntityBucket[] = [
+  'note',
+  'task',
+  'snippet',
+  'document',
+  'project',
+  'chat',
+  'initiative',
+];
+
 function MentionsMenuInner(props: MentionsMenuProps) {
   const analytics = useAnalytics();
 
@@ -132,7 +147,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   const customDocs = props.entities
     ? useEntityMentionFromList({
         items: props.entities,
-        buckets: ['note', 'task', 'snippet', 'document', 'project', 'chat'],
+        buckets: DOCUMENT_MENTION_BUCKETS,
         searchTerm,
       })
     : undefined;
@@ -157,7 +172,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   const docsMention =
     customDocs ??
     useEntityMention({
-      buckets: ['note', 'task', 'snippet', 'document', 'project', 'chat'],
+      buckets: DOCUMENT_MENTION_BUCKETS,
       searchTerm: activeSearchTerm,
     });
   const docs = docsMention.entities;

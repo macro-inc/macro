@@ -54,7 +54,7 @@ export function SectionDesyncCaseStudy() {
           <span
             style={{
               color: 'var(--c1)',
-              'font-family': 'rajdhani, body',
+              'font-family': 'Inter, body',
               'font-size': breakpoint() ? '12px' : '16px',
               'font-weight': '700',
               'letter-spacing': '0.1em',
@@ -69,7 +69,7 @@ export function SectionDesyncCaseStudy() {
               color: 'var(--c1)',
               'font-family': 'display',
               'font-size': compact() ? '28px' : '34px',
-              'font-weight': '410',
+              'font-weight': '315',
               'letter-spacing': '-0.01em',
               'line-height': 1.14,
               margin: '0',
@@ -82,7 +82,7 @@ export function SectionDesyncCaseStudy() {
           <div
             style={{
               color: 'var(--c4)',
-              'font-family': 'rajdhani, body',
+              'font-family': 'Inter, body',
               'font-size': compact() ? '13px' : '14px',
               'font-weight': '700',
               'letter-spacing': '0.08em',
@@ -210,7 +210,7 @@ export function SectionDesyncCaseStudy() {
                 <div
                   style={{
                     color: 'var(--c1)',
-                    'font-family': 'rajdhani, body',
+                    'font-family': 'Inter, body',
                     'font-size': compact() ? '14px' : '15px',
                     'font-weight': '700',
                     'letter-spacing': '0.1em',

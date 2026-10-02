@@ -66,11 +66,14 @@ export interface EmailThreadListNavigation {
   canNext: Accessor<boolean>;
   previous(): void;
   next(): void;
+  afterReminderSaved?(): Promise<void>;
   markDone(archiveThread: EmailThreadCommands['archiveThread']): void;
 }
 
 /** Host behavior is optional. A thread can render without a block or router. */
 export interface EmailThreadHost {
+  /** Close an embedded thread without navigating the containing split's history. */
+  returnToList?: () => void;
   listNavigation?: EmailThreadListNavigation;
   isActive?: Accessor<boolean>;
   registerKeyboard?: (handlers: EmailThreadKeyboardHandlers) => void;

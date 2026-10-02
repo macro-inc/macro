@@ -4,6 +4,7 @@ import { useMobileSearchText } from '@app/features/command/mobile/use-mobile-sea
 import { markChannelNotificationsSeenOnOpen } from '@app/features/next-soup/utils';
 import { MaybeSoupEntityActionDrawerManager } from '@app/features/soup';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
+import { ViewTour } from '@app/features/tours/ViewTour';
 import { SplitRouter } from '@app/lib/split-router';
 import { DebugSuspense } from '@channel/DebugSuspense';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
@@ -23,6 +24,7 @@ import {
 import { ChannelsViewProvider, useChannelsView } from './channels-view-context';
 import { ChannelDetailView } from './components/ChannelDetailView';
 import { ChannelsMobileView } from './components/ChannelsMobileView';
+import { ChannelThreadsView } from './components/ChannelThreadsView';
 import { ChannelsRail } from './components/rail/ChannelsRail';
 import { createChannelDetail } from './primitives/create-channel-detail';
 import {
@@ -34,6 +36,7 @@ import {
 } from './queries';
 import { createChannelDetailSource } from './queries/channel-detail-source';
 import { createChannelSearchSource } from './queries/channel-search-source';
+import { channelsTour } from './tour';
 
 const ChannelSourcesContext =
   createContext<ReturnType<typeof useChannelsSources>>();
@@ -89,10 +92,37 @@ function DesktopChannelsRail(props: {
   );
 }
 
+function DesktopChannelThreads(props: { sources: ChannelsSources }) {
+  const { threadsChannelId, setTab, setSelectedChannel } = useChannelsView();
+  const channelsById = createMemo(
+    () =>
+      new Map(
+        deduplicateChannels([
+          props.sources.threads.items(),
+          props.sources.channels.items(),
+          props.sources.direct_messages.items(),
+          props.sources.recents.items(),
+        ]).map((channel) => [channel.id, channel])
+      )
+  );
+
+  return (
+    <ChannelThreadsView
+      channelId={threadsChannelId()}
+      resolveChannel={(channelId) => channelsById().get(channelId)}
+      onOpenThread={(thread) => {
+        setTab('browse');
+        setSelectedChannel(thread);
+      }}
+    />
+  );
+}
+
 function ChannelsViewRoot() {
   const panel = useSplitPanelOrThrow();
-  const { state, mobileLayout, selectedChannel, setAsideWidth } =
+  const { state, tab, mobileLayout, selectedChannel, setAsideWidth } =
     useChannelsView();
+  const threadsTab = () => !mobileLayout() && tab() === 'threads';
   const [railSearchOpen, setRailSearchOpen] = createSignal(false);
 
   const sources = useChannelsSources(
@@ -101,8 +131,9 @@ function ChannelsViewRoot() {
         return scope !== 'search' && state.mobileTab === scope;
       if (railSearchOpen()) return scope === 'search';
       if (scope === 'search') return false;
-      if (scope === 'recents') return state.tab === 'recents';
-      return state.tab === 'browse';
+      if (scope === 'recents') return tab() === 'recents';
+      if (scope === 'threads') return tab() === 'threads';
+      return tab() === 'browse';
     },
     (group) => state.sortBy[group]
   );
@@ -120,7 +151,9 @@ function ChannelsViewRoot() {
                   <ViewShell.Root
                     asidePreferenceKey="channels"
                     // The empty state only points at the rail, so keep it open.
-                    asideRequired={selectedChannel() === undefined}
+                    asideRequired={
+                      threadsTab() || selectedChannel() === undefined
+                    }
                     aside={{
                       width: state.asideWidth,
                       preserveDuringResize: false,
@@ -146,32 +179,42 @@ function ChannelsViewRoot() {
                       </DebugSuspense>
                     </ViewShell.Aside>
                     <ViewShell.Main class="overflow-hidden">
-                      <ChannelSourcesContext.Provider value={sources}>
-                        <DebugSuspense name="ChannelsView.outlet">
-                          <SplitRouter.Outlet
-                            fallback={() => (
-                              <>
-                                <ViewShell.TopBar>
-                                  <span class="text-sm font-semibold">
-                                    Chat
-                                  </span>
-                                </ViewShell.TopBar>
-                                <div class="flex min-h-0 flex-1 items-center justify-center px-6 text-center">
-                                  <div class="flex max-w-sm flex-col gap-2">
-                                    <h2 class="text-base font-semibold text-ink">
-                                      Select a conversation
-                                    </h2>
-                                    <p class="text-sm leading-5 text-ink-muted">
-                                      Choose a channel or person from the
-                                      sidebar to open the conversation here.
-                                    </p>
+                      <ViewTour tour={channelsTour} />
+                      <Show
+                        when={!threadsTab()}
+                        fallback={
+                          <DebugSuspense name="ChannelsView.threads">
+                            <DesktopChannelThreads sources={sources} />
+                          </DebugSuspense>
+                        }
+                      >
+                        <ChannelSourcesContext.Provider value={sources}>
+                          <DebugSuspense name="ChannelsView.outlet">
+                            <SplitRouter.Outlet
+                              fallback={() => (
+                                <>
+                                  <ViewShell.TopBar>
+                                    <span class="text-sm font-semibold">
+                                      Chat
+                                    </span>
+                                  </ViewShell.TopBar>
+                                  <div class="flex min-h-0 flex-1 items-center justify-center px-6 text-center">
+                                    <div class="flex max-w-sm flex-col gap-2">
+                                      <h2 class="text-base font-semibold text-ink">
+                                        Select a conversation
+                                      </h2>
+                                      <p class="text-sm leading-5 text-ink-muted">
+                                        Choose a channel or person from the
+                                        sidebar to open the conversation here.
+                                      </p>
+                                    </div>
                                   </div>
-                                </div>
-                              </>
-                            )}
-                          />
-                        </DebugSuspense>
-                      </ChannelSourcesContext.Provider>
+                                </>
+                              )}
+                            />
+                          </DebugSuspense>
+                        </ChannelSourcesContext.Provider>
+                      </Show>
                     </ViewShell.Main>
                   </ViewShell.Root>
                 </div>

@@ -1,0 +1,132 @@
+.posts-index-shell.posts-index-list {
+  margin-inline: auto;
+  max-width: 1000px;
+  padding: 144px 24px 80px;
+}
+
+.posts-index-list .posts-index-hero {
+  padding-bottom: 72px;
+  text-align: center;
+}
+
+.posts-index-list .posts-index-hero::after {
+  content: none;
+}
+
+.posts-index-list .posts-index-hero h1 {
+  color: var(--post-ink);
+  font: 315 clamp(40px, 5.4vw, 68px)/1.12 'Roboto Slab Variable', display, serif;
+  letter-spacing: -0.035em;
+}
+
+.posts-index-list .posts-index-sub {
+  color: var(--post-muted);
+  font: 400 15px/28px 'Inter Variable', Inter, sans-serif;
+  margin: 24px auto 0;
+  max-width: 380px;
+  text-wrap: balance;
+}
+
+.post-list {
+  border-top: 1px solid var(--post-rule);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.post-list > li {
+  border-bottom: 1px solid var(--post-rule);
+}
+
+.posts-index-list a.post-list-link {
+  align-items: center;
+  color: var(--post-muted);
+  display: flex;
+  gap: 24px;
+  min-height: 80px;
+  padding-block: 24px;
+  text-decoration: none;
+}
+
+.post-list-icon {
+  align-items: center;
+  display: flex;
+  flex: 0 0 28px;
+  justify-content: center;
+}
+
+.post-list-title {
+  color: var(--post-ink);
+  flex: 1;
+  font: 400 17px/28px 'Inter Variable', Inter, sans-serif;
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.post-list-date {
+  color: var(--post-faint);
+  flex: none;
+  font: 400 12px/24px 'Inter Variable', Inter, sans-serif;
+}
+
+.post-list-arrow {
+  color: var(--post-faint);
+  flex: 0 0 20px;
+  height: 20px;
+}
+
+.post-list-link:hover :is(.post-list-title, .post-list-arrow) {
+  color: var(--post-muted);
+}
+
+.post-list-link:focus-visible {
+  border-radius: 2px;
+  outline: 1px solid var(--post-ink);
+  outline-offset: 4px;
+}
+
+@media (max-width: 699px) {
+  .posts-index-shell.posts-index-list {
+    padding: 120px 20px 56px;
+  }
+
+  .posts-index-list .posts-index-hero {
+    padding-bottom: 48px;
+  }
+
+  .posts-index-list .posts-index-sub {
+    font-size: 14px;
+    max-width: 300px;
+  }
+
+  .posts-index-list a.post-list-link {
+    gap: 14px;
+    min-height: 72px;
+    padding-block: 20px;
+  }
+
+  .post-list-title {
+    font-size: 14px;
+    line-height: 24px;
+  }
+
+  .post-list-date {
+    display: none;
+  }
+
+  .post-list-icon {
+    flex-basis: 24px;
+  }
+
+  .post-list-icon svg {
+    max-height: 20px;
+  }
+
+  .post-list-arrow {
+    flex-basis: 16px;
+    height: 16px;
+  }
+}

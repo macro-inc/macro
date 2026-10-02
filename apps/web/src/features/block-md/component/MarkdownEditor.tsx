@@ -1,5 +1,5 @@
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
-import { CommentsProvider } from '@block-md/comments/CommentsProvider';
+import { MessageCommentsProvider } from '@block-md/comments/MessageCommentsProvider';
 import { URL_PARAMS } from '@block-md/constants';
 import { keyNavigationPlugin } from '@block-md/plugins/keyboardNavigation';
 import { SplitBottomPanel } from '@components/app/split-layout/components/SplitBottomPanel';
@@ -999,6 +999,10 @@ export function MarkdownEditor(props: {
             });
           }}
           contentEditable={isContentEditable()}
+          role="textbox"
+          aria-multiline="true"
+          aria-readonly={!isContentEditable()}
+          aria-label="Document content"
           class="ph-no-capture w-full max-w-full min-h-52"
           classList={{
             'select-auto': !canEdit(),
@@ -1147,7 +1151,7 @@ export function MarkdownEditor(props: {
 
         <Show when={ENABLE_MARKDOWN_COMMENTS}>
           <Suspense>
-            <CommentsProvider
+            <MessageCommentsProvider
               activeComment={activeCommentIdParam}
               loroManager={props.loroManager}
             />

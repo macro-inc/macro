@@ -119,10 +119,16 @@ fn reopen_rebuilds_old_search_rows_once_without_replacing_durable_data() {
             storage.try_close().unwrap();
 
             let mut storage = database.open("scope").unwrap();
-            let rows = storage
-                .load_search_documents(SearchProfile::QuickAccessV1)
+            let mut rows = storage
+                .load_search_documents(SearchProfile::QuickAccessV1, "channel")
                 .await
                 .unwrap();
+            rows.extend(
+                storage
+                    .load_search_documents(SearchProfile::QuickAccessV1, "document")
+                    .await
+                    .unwrap(),
+            );
             assert_eq!(rows.len(), 602);
             assert_eq!(rows.iter().filter(|row| row.timestamp_ms == 1).count(), 600);
             assert_eq!(
@@ -185,7 +191,7 @@ fn projection_rebuild_rolls_back_search_rows_and_version_on_failure() {
             vec![],
         );
         let before = storage
-            .load_search_documents(SearchProfile::QuickAccessV1)
+            .load_search_documents(SearchProfile::QuickAccessV1, "channel")
             .await
             .unwrap();
         // Fail after the DELETE has executed; the enclosing transaction must
@@ -197,7 +203,7 @@ fn projection_rebuild_rolls_back_search_rows_and_version_on_failure() {
         );
         assert_eq!(
             storage
-                .load_search_documents(SearchProfile::QuickAccessV1)
+                .load_search_documents(SearchProfile::QuickAccessV1, "channel")
                 .await
                 .unwrap(),
             before
@@ -212,7 +218,7 @@ fn projection_rebuild_rolls_back_search_rows_and_version_on_failure() {
         ensure_search_projection_version(&storage.connection()).unwrap();
         assert_eq!(
             storage
-                .load_search_documents(SearchProfile::QuickAccessV1)
+                .load_search_documents(SearchProfile::QuickAccessV1, "channel")
                 .await
                 .unwrap()[0]
                 .timestamp_ms,

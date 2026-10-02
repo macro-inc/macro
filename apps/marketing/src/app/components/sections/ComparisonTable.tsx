@@ -143,7 +143,7 @@ function PlaceholderLogo(props: { label: string }) {
         'border-radius': '4px',
         color: 'var(--c4)',
         display: 'inline-flex',
-        'font-family': "'cyberreader', body",
+        'font-family': "'Inter', body",
         'font-size': mobile() ? '7px' : '8px',
         height: mobile() ? '13px' : '15px',
         'justify-content': 'center',
@@ -192,7 +192,7 @@ function ComparisonCell(props: {
         <span
           style={{
             color: props.macro ? 'var(--a0)' : 'var(--c2)',
-            'font-family': "'cyberreader', body",
+            'font-family': "'Inter', body",
             'font-size': mobile() ? '10px' : '11px',
             'font-weight': '400',
             'letter-spacing': '0.02em',
@@ -305,7 +305,7 @@ export function ComparisonTable(props: ComparisonTableProps) {
         style={{
           'box-sizing': 'border-box',
           display: 'grid',
-          'font-family': "'cyberreader', body",
+          'font-family': "'Inter', body",
           'grid-template-columns': gridTemplate(),
           'min-width': mobile()
             ? `${props.mobileMinWidth ?? Math.max(480, 132 + columns().length * (props.mobileCellWidth ?? 58))}px`
@@ -336,7 +336,7 @@ export function ComparisonTable(props: ComparisonTableProps) {
                   'border-top': `1px solid ${GRID_LINE}`,
                   color: macro() ? 'var(--a0)' : 'var(--c2)',
                   display: 'flex',
-                  'font-family': "'cyberreader', body",
+                  'font-family': "'Inter', body",
                   'font-size': mobile() ? '9px' : '11px',
                   'font-weight': '400',
                   'justify-content': 'center',
@@ -453,7 +453,7 @@ export function ComparisonLegend() {
       <Show when={mobile()}>
         <span
           style={{
-            'font-family': 'rajdhani, body',
+            'font-family': 'Inter, body',
             'font-size': '11px',
             'letter-spacing': '0.06em',
             opacity: 0.6,

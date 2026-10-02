@@ -29,6 +29,7 @@ import { Dynamic } from 'solid-js/web';
 import type { DemoPage } from '../core/workspace-demo';
 import { createWorkspaceDemo } from '../primitives/createWorkspaceDemo';
 import { NavGlyph, type NavIcon } from './DemoNavGlyph';
+import { HomepageInteractiveDemo } from './HomepageInteractiveDemo';
 
 // Keep the unfinished interactive workspace available for a later polish pass.
 const FULL_DEMO_ENABLED = false;
@@ -156,7 +157,7 @@ const CREATE_ITEMS = [
 ] as const;
 
 /** A static Home breakdown; the retained full demo has local navigation. */
-export function HomepageSidebar() {
+export function HomepageSidebar(props: { showInteractiveDemo?: boolean } = {}) {
   let stage!: HTMLDivElement;
   let measurePointers = () => {};
   const demo = createWorkspaceDemo();
@@ -286,6 +287,7 @@ export function HomepageSidebar() {
           }}
         >
           <span class="homepage-sidebar-line-anchor" aria-hidden="true" />
+          <span class="homepage-sidebar-bottom-anchor" aria-hidden="true" />
           <div class="homepage-sidebar-rail">
             <Show
               when={expanded()}
@@ -518,6 +520,9 @@ export function HomepageSidebar() {
           </For>
         </div>
       </div>
+      <Show when={props.showInteractiveDemo !== false}>
+        <HomepageInteractiveDemo />
+      </Show>
       <Show when={FULL_DEMO_ENABLED}>
         <div
           class="homepage-sidebar-mode"

@@ -20,4 +20,6 @@ targets = [
   # installing it from a CI step would appear to succeed and then fail at link
   # time.
   "aarch64-apple-ios-sim",
+  # Signed Android APKs in the production release workflow.
+  "aarch64-linux-android",
 ]

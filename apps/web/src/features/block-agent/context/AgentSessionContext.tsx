@@ -29,6 +29,8 @@ export type AgentSessionState = {
   /** The session is still being created — everything else is empty because
    *  there is nothing to show yet, not because the load failed. */
   pending: Accessor<boolean>;
+  /** Unsent context from the action that opened this session. */
+  initialInput?: string;
   startupError: Accessor<string | undefined>;
   /** Session metadata, absent until the load resolves. */
   session: Accessor<AgentSessionResponse | undefined>;

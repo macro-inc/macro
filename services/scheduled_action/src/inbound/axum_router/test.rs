@@ -27,6 +27,79 @@ use std::collections::HashMap;
 use tower::ServiceExt;
 use utoipa::OpenApi;
 
+#[tokio::test]
+async fn manual_execution_returns_sanitized_admission_errors_after_authorization() {
+    use crate::domain::service::test::set_admission_error;
+    use ai_billing::{AiAdmissionError, DenyReason};
+
+    for (error, expected_status) in [
+        (
+            AiAdmissionError::Denied(DenyReason::AllowanceExhausted),
+            StatusCode::PAYMENT_REQUIRED,
+        ),
+        (
+            AiAdmissionError::Unavailable,
+            StatusCode::SERVICE_UNAVAILABLE,
+        ),
+    ] {
+        let svc = service(true);
+        set_admission_error(&svc, error);
+        let app = router_with(svc, FakeEntityAccessService::owner_only());
+        let (status, created) =
+            request(&app, "POST", "/scheduled-actions", "owner", legacy()).await;
+        assert_eq!(status, StatusCode::CREATED);
+        let url = format!(
+            "/scheduled-actions/{}/execute",
+            created["id"].as_str().unwrap()
+        );
+        let (status, body) = request(&app, "POST", &url, "owner", Value::Null).await;
+        assert_eq!(status, expected_status);
+        assert_eq!(
+            body,
+            json!({"code": error.code(), "error": error.to_string()})
+        );
+        let (status, body) = request(&app, "POST", &url, "stranger", Value::Null).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+        assert_ne!(body["code"], error.code());
+    }
+}
+
+#[tokio::test]
+async fn remote_session_admission_uses_the_same_public_http_contract() {
+    use ai_billing::{AiAdmissionError, DenyReason};
+    for error in [
+        AiAdmissionError::Denied(DenyReason::OverageLimitReached),
+        AiAdmissionError::Unavailable,
+    ] {
+        let response = ScheduledActionApiError::from(anyhow::Error::new(
+            RoutineSessionError::Admission(error),
+        ))
+        .into_response();
+        assert_eq!(
+            response.status(),
+            ai_billing::inbound::admission::admission_status(error)
+        );
+        let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body: Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(
+            body,
+            json!({"code": error.code(), "error": error.to_string()})
+        );
+    }
+}
+
+#[test]
+fn manual_execution_documents_quota_and_retryable_validation_failures() {
+    let schema = serde_json::to_value(crate::swagger::ApiDoc::openapi()).unwrap();
+    let responses = &schema["paths"]["/scheduled-actions/{id}/execute"]["post"]["responses"];
+    for status in ["402", "503"] {
+        assert_eq!(
+            responses[status]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/AiAdmissionErrorBody"
+        );
+    }
+}
+
 const OTHER: &str = "macro|other@macro.com";
 const VIEWER: &str = "macro|viewer@macro.com";
 const BOT_TOKEN: &str = "team-bot-token";

@@ -627,7 +627,11 @@ export function getEntityIconType(entity: EntityIconData): EntityWithValidIcon {
     .with({ type: 'initiative' }, () => 'initiative')
     .with({ type: 'project' }, () => 'project')
     .with({ type: 'calendar_event' }, () => 'calendar')
-    .with({ type: 'reminder' }, () => 'reminder')
+    .with({ type: 'reminder' }, (e) =>
+      e.referencedEntity
+        ? reminderReferenceIconType(e.referencedEntity)
+        : 'reminder'
+    )
     .with({ type: 'call' }, () => 'call')
     .with({ type: 'automation' }, () => 'automation')
     .with({ type: 'foreign' }, (e) => {
@@ -660,6 +664,8 @@ const UNRESOLVED_ICONS: ReadonlySet<string> = new Set(['default', 'unknown']);
 export function reminderReferenceIconType(
   reference: NonNullable<ReminderEntity['referencedEntity']>
 ): EntityWithValidIcon {
+  if (reference.type === 'crm_company') return 'company';
+  if (reference.type === 'crm_contact') return 'contact';
   const blockName = itemToBlockName(
     {
       type: reference.type,

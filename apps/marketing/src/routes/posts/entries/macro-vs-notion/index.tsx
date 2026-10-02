@@ -8,6 +8,7 @@ import {
   ComparisonTable,
   NotionLogo,
 } from '../../PostComparison';
+import { PostFaqItem } from '../../PostFaq';
 import type { PostMeta } from '../../registry';
 
 const NOTION_VIDEO_ID = 'hyU1XYmxkYM';
@@ -409,57 +410,63 @@ export default function MacroVsNotionPost() {
           work. A unified workspace does.
         </p>
 
-        <h2>FAQ</h2>
-        <div class="mvn-faq">
-          <h3>Should I switch from Notion to Macro?</h3>
-          <p>
-            If your setup is Notion plus Slack plus a mail client plus a CRM,
-            yes — that is four tools that do not share context. Run Macro
-            alongside Notion for a week: move your active docs over, point your
-            mail and chat at Macro, and keep Notion open for the long-tail
-            database stuff while you decide what comes across.
-          </p>
+        <h2 class="post-faq-title">Frequently asked questions</h2>
+        <div class="post-faq">
+          <PostFaqItem question="Should I switch from Notion to Macro?">
+            <p>
+              If your setup is Notion plus Slack plus a mail client plus a CRM,
+              yes — that is four tools that do not share context. Run Macro
+              alongside Notion for a week: move your active docs over, point
+              your mail and chat at Macro, and keep Notion open for the
+              long-tail database stuff while you decide what comes across.
+            </p>
+          </PostFaqItem>
 
-          <h3>When would I keep Notion instead?</h3>
-          <p>
-            When deep, endlessly configurable databases are the core of your
-            work. If everything you do is structured records and custom views,
-            nothing matches Notion's depth yet — including us — and its template
-            ecosystem is enormous. For that, Notion is the right call.
-          </p>
+          <PostFaqItem question="When would I keep Notion instead?">
+            <p>
+              When deep, endlessly configurable databases are the core of your
+              work. If everything you do is structured records and custom views,
+              nothing matches Notion's depth yet — including us — and its
+              template ecosystem is enormous. For that, Notion is the right
+              call.
+            </p>
+          </PostFaqItem>
 
-          <h3>How is Macro's editor different from Notion's?</h3>
-          <p>
-            Notion resolves edits per block, last-write-wins. Macro treats the
-            whole document as one CRDT-backed object, which gives you live
-            collaboration and offline editing without conflicts, and lets an
-            agent edit with a live cursor instead of handing you a diff. It
-            feels like you and your collaborator are on the same machine.
-          </p>
+          <PostFaqItem question="How is Macro's editor different from Notion's?">
+            <p>
+              Notion resolves edits per block, last-write-wins. Macro treats the
+              whole document as one CRDT-backed object, which gives you live
+              collaboration and offline editing without conflicts, and lets an
+              agent edit with a live cursor instead of handing you a diff. It
+              feels like you and your collaborator are on the same machine.
+            </p>
+          </PostFaqItem>
 
-          <h3>Is Macro open source?</h3>
-          <p>
-            Yes, end to end:{' '}
-            <a
-              href="https://github.com/macro-inc/macro"
-              target="_blank"
-              rel="noreferrer"
-            >
-              github.com/macro-inc/macro
-            </a>
-            . Your data stays open and portable and the app is extensible.
-            Notion is closed source.
-          </p>
+          <PostFaqItem question="Is Macro open source?">
+            <p>
+              Yes, end to end:{' '}
+              <a
+                href="https://github.com/macro-inc/macro"
+                target="_blank"
+                rel="noreferrer"
+              >
+                github.com/macro-inc/macro
+              </a>
+              . Your data stays open and portable and the app is extensible.
+              Notion is closed source.
+            </p>
+          </PostFaqItem>
 
-          <h3>Can I import my Notion content?</h3>
-          <p>
-            You can move your docs and notes into Macro and run both side by
-            side while you switch, so there is no big-bang migration and nothing
-            to lose along the way.
-          </p>
+          <PostFaqItem question="Can I import my Notion content?">
+            <p>
+              You can move your docs and notes into Macro and run both side by
+              side while you switch, so there is no big-bang migration and
+              nothing to lose along the way.
+            </p>
+          </PostFaqItem>
         </div>
 
-        <p>
+        <p class="post-footnote">
           For the editor, @mentions, collaboration and shortcuts, see the{' '}
           <a
             href="https://docs.macro.com/product/docs"

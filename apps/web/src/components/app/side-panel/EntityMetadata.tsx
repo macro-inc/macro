@@ -1,5 +1,5 @@
-import { getDisplayName, tryMacroId } from '@core/user';
 import { type DateValue, formatDate } from '@core/util/date';
+import { OwnerLabel } from '@entity/owner/owner-display';
 import { type ParentProps, Show } from 'solid-js';
 
 /** Quiet metadata copy shared by every block information footer. */
@@ -13,7 +13,11 @@ export function EntityMetadata(
   return (
     <div class="flex flex-col gap-1">
       <Show when={props.ownerId}>
-        {(owner) => <div>Owned by {getDisplayName(tryMacroId(owner()))}</div>}
+        {(owner) => (
+          <div class="flex min-w-0 items-center gap-1">
+            Owned by <OwnerLabel ownerId={owner()} textOnly suppressClick />
+          </div>
+        )}
       </Show>
       <Show when={props.createdAt}>
         {(created) => (

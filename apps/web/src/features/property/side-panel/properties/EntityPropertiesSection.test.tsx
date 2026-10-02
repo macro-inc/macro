@@ -229,3 +229,25 @@ it('adds side-panel properties without exposing an automatic pin callback', () =
   expect(mocks.context.onPropertyPinned).toBeUndefined();
   expect(pins).toEqual([]);
 });
+
+it('preserves an existing property without reattaching or pinning it', async () => {
+  // Set when the task was created from a CRM record, but never pinned.
+  mocks.properties = [field('Companies', 'Acme')];
+  render(() => (
+    <EntityPropertiesSection
+      entityId="task"
+      entityType="TASK"
+      canEdit
+      showTags={false}
+      pinnedPropertyIds={() => []}
+    />
+  ));
+  expect(screen.getByText('"Acme"')).toBeTruthy();
+
+  mocks.context.onPropertyAdded(['Companies']);
+  await mocks.context.addProperty!('Companies');
+
+  expect(mocks.add).not.toHaveBeenCalled();
+  expect(mocks.context.onPropertyPinned).toBeUndefined();
+  expect(screen.getByText('"Acme"')).toBeTruthy();
+});

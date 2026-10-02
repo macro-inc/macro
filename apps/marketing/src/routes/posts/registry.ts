@@ -1,6 +1,6 @@
 /**
  * Posts live in `entries/<folder>/index.tsx` — export `postMeta` + default component.
- * Optional `postMeta.tags` (lowercased); filter at `/posts?tag=name`.
+ * Optional `postMeta.tags` are normalized metadata; the index shows every post.
  */
 import type { Component } from 'solid-js';
 

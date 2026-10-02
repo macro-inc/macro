@@ -65,6 +65,7 @@ export function AgentComposer(props: {
     sendNext,
     turn,
     registerQuoteInsert,
+    initialInput,
   } = useAgentSession();
   const changes = useOptionalAgentChanges();
   const readOnly = () => session()?.canEdit === false;
@@ -224,6 +225,7 @@ export function AgentComposer(props: {
         )}
       </For>
       <Input
+        initialInput={initialInput}
         placeholder={
           readOnly()
             ? 'You have view-only access to this agent session'

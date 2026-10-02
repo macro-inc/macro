@@ -429,8 +429,7 @@ export const updateAgentResponse = zod
   .describe('A persisted user- or team-owned AI agent.');
 
 /**
- * @summary Deletes a single unthreaded anchor for a document
-If you need to delete a threaded anchor, see the delete comment handler
+ * @summary Deletes a highlight and any attached discussion under the annotation policy.
  */
 export const deleteAnchorBody = zod
   .object({
@@ -462,7 +461,12 @@ export const deleteAnchorResponse = zod
   .and(
     zod.object({
       documentId: zod.string(),
-      threadId: zod.number().nullish(),
+      rootId: zod
+        .uuid()
+        .nullish()
+        .describe(
+          'Root of the discussion that was deleted with the anchor, if it had one.'
+        ),
     })
   );
 
@@ -510,7 +514,6 @@ export const editAnchorResponse = zod
         rootId: zod.uuid().nullish(),
         rotation: zod.number(),
         shouldLockOnSave: zod.boolean(),
-        threadId: zod.number().nullish(),
         uuid: zod.uuid(),
         wasDeleted: zod.boolean(),
         wasEdited: zod.boolean(),
@@ -552,7 +555,6 @@ export const editAnchorResponse = zod
         red: zod.number(),
         rootId: zod.uuid().nullish(),
         text: zod.string(),
-        threadId: zod.number().nullish(),
         updatedAt: zod.iso.datetime({}).nullish(),
         uuid: zod.uuid(),
       })
@@ -590,7 +592,6 @@ export const getDocumentAnchorsResponse = zod.object({
           rootId: zod.uuid().nullish(),
           rotation: zod.number(),
           shouldLockOnSave: zod.boolean(),
-          threadId: zod.number().nullish(),
           uuid: zod.uuid(),
           wasDeleted: zod.boolean(),
           wasEdited: zod.boolean(),
@@ -632,7 +633,6 @@ export const getDocumentAnchorsResponse = zod.object({
           red: zod.number(),
           rootId: zod.uuid().nullish(),
           text: zod.string(),
-          threadId: zod.number().nullish(),
           updatedAt: zod.iso.datetime({}).nullish(),
           uuid: zod.uuid(),
         })
@@ -647,7 +647,7 @@ export const getDocumentAnchorsResponse = zod.object({
 
 /**
  * @summary Creates an unthreaded anchor for a document
-If you need to create a threaded anchor, see the create comment handler
+Attach a discussion through the shared message API.
  */
 export const createAnchorParams = zod.object({
   document_id: zod.string().describe('The document id'),
@@ -699,7 +699,6 @@ export const createAnchorResponse = zod
         rootId: zod.uuid().nullish(),
         rotation: zod.number(),
         shouldLockOnSave: zod.boolean(),
-        threadId: zod.number().nullish(),
         uuid: zod.uuid(),
         wasDeleted: zod.boolean(),
         wasEdited: zod.boolean(),
@@ -741,7 +740,6 @@ export const createAnchorResponse = zod
         red: zod.number(),
         rootId: zod.uuid().nullish(),
         text: zod.string(),
-        threadId: zod.number().nullish(),
         updatedAt: zod.iso.datetime({}).nullish(),
         uuid: zod.uuid(),
       })
@@ -753,347 +751,6 @@ export const createAnchorResponse = zod
   ])
   .and(
     zod.object({
-      documentId: zod.string(),
-    })
-  );
-
-/**
- * @summary Deletes a single comment for a document
- */
-export const deleteCommentParams = zod.object({
-  comment_id: zod.number().describe('The comment id'),
-});
-
-export const deleteCommentBodyRemoveAnchorThreadOnlyDefault = null;
-
-export const deleteCommentBody = zod.object({
-  removeAnchorThreadOnly: zod.boolean().nullish(),
-});
-
-export const deleteCommentResponse = zod.object({
-  anchor: zod
-    .union([
-      zod.null(),
-      zod
-        .union([
-          zod.object({
-            anchorType: zod.enum(['free-comment']),
-            uuid: zod.uuid(),
-          }),
-          zod.object({
-            anchorType: zod.enum(['highlight']),
-            uuid: zod.uuid(),
-          }),
-        ])
-        .and(
-          zod.object({
-            fileType: zod.enum(['pdf']),
-          })
-        )
-        .and(
-          zod.object({
-            deleted: zod.boolean(),
-          })
-        ),
-    ])
-    .optional(),
-  commentId: zod.number(),
-  documentId: zod.string(),
-  thread: zod.object({
-    deleted: zod.boolean(),
-    threadId: zod.number(),
-  }),
-});
-
-/**
- * @summary Edits a single comment for a document
- */
-export const editCommentParams = zod.object({
-  comment_id: zod.number().describe('The comment id'),
-});
-
-export const editCommentBody = zod.object({
-  mentions: zod
-    .union([
-      zod.null(),
-      zod.object({
-        mentionId: zod.string(),
-        users: zod.array(zod.string()),
-      }),
-    ])
-    .optional(),
-  metadata: zod.unknown().optional(),
-  text: zod.string().nullish(),
-  threadId: zod.number(),
-});
-
-export const editCommentResponse = zod
-  .object({
-    commentId: zod.number(),
-    createdAt: zod.iso.datetime({}).nullish(),
-    deletedAt: zod.iso.datetime({}).nullish(),
-    metadata: zod.unknown().optional(),
-    order: zod.number().nullish(),
-    owner: zod.string(),
-    sender: zod.string().nullish(),
-    text: zod.string(),
-    threadId: zod.number(),
-    updatedAt: zod.iso.datetime({}).nullish(),
-  })
-  .and(
-    zod.object({
-      documentId: zod.string(),
-      documentName: zod.string(),
-      documentOwner: zod.string(),
-      fileType: zod.string().nullish(),
-      subType: zod
-        .union([
-          zod.null(),
-          zod
-            .enum(['task', 'snippet', 'skill', 'initiative_description'])
-            .describe(
-              'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.\n\nWire, database, and `Display` spellings are all `snake_case` so a\nmulti-word variant serializes identically in every system.'
-            ),
-        ])
-        .optional(),
-    })
-  );
-
-/**
- * @summary Gets a set of comment threads for a document
- */
-export const getDocumentCommentsParams = zod.object({
-  document_id: zod.string().describe('Document ID'),
-});
-
-export const getDocumentCommentsResponse = zod.object({
-  data: zod.array(
-    zod.object({
-      comments: zod.array(
-        zod.object({
-          commentId: zod.number(),
-          createdAt: zod.iso.datetime({}).nullish(),
-          deletedAt: zod.iso.datetime({}).nullish(),
-          metadata: zod.unknown().optional(),
-          order: zod.number().nullish(),
-          owner: zod.string(),
-          sender: zod.string().nullish(),
-          text: zod.string(),
-          threadId: zod.number(),
-          updatedAt: zod.iso.datetime({}).nullish(),
-        })
-      ),
-      thread: zod.object({
-        createdAt: zod.iso.datetime({}).nullish(),
-        deletedAt: zod.iso.datetime({}).nullish(),
-        documentId: zod.string(),
-        metadata: zod.unknown().optional(),
-        owner: zod.string(),
-        resolved: zod.boolean(),
-        threadId: zod.number(),
-        updatedAt: zod.iso.datetime({}).nullish(),
-      }),
-    })
-  ),
-});
-
-/**
- * @summary Creates a single comment for a document
-Optionally creates a new thread/anchor if one does not exist
- */
-export const createCommentParams = zod.object({
-  document_id: zod.string().describe('The document id'),
-});
-
-export const createCommentBody = zod.object({
-  anchor: zod
-    .union([
-      zod.null(),
-      zod
-        .union([
-          zod
-            .object({
-              allowableEdits: zod.unknown().optional(),
-              heightPct: zod.number(),
-              originalIndex: zod.number(),
-              originalPage: zod.number(),
-              page: zod.number(),
-              rotation: zod.number(),
-              shouldLockOnSave: zod.boolean(),
-              uuid: zod.uuid().nullish(),
-              wasDeleted: zod.boolean(),
-              wasEdited: zod.boolean(),
-              widthPct: zod.number(),
-              xPct: zod.number(),
-              yPct: zod.number(),
-            })
-            .and(
-              zod.object({
-                anchorType: zod.enum(['free-comment']),
-              })
-            ),
-          zod
-            .object({
-              alpha: zod.number(),
-              blue: zod.number(),
-              green: zod.number(),
-              highlightRects: zod.array(
-                zod.object({
-                  height: zod.number(),
-                  left: zod.number(),
-                  top: zod.number(),
-                  width: zod.number(),
-                })
-              ),
-              highlightType: zod.union([
-                zod.literal(1),
-                zod.literal(2),
-                zod.literal(3),
-              ]),
-              page: zod.number(),
-              pageViewportHeight: zod.number(),
-              pageViewportWidth: zod.number(),
-              red: zod.number(),
-              text: zod.string(),
-              uuid: zod.uuid().nullish(),
-            })
-            .and(
-              zod.object({
-                anchorType: zod.enum(['highlight']),
-              })
-            ),
-          zod
-            .object({
-              attachmentType: zod.enum(['highlight']),
-              uuid: zod.uuid(),
-            })
-            .and(
-              zod.object({
-                anchorType: zod.enum(['attachment']),
-              })
-            ),
-        ])
-        .and(
-          zod.object({
-            fileType: zod.enum(['pdf']),
-          })
-        ),
-    ])
-    .optional(),
-  mentions: zod
-    .union([
-      zod.null(),
-      zod.object({
-        mentionId: zod.string(),
-        users: zod.array(zod.string()),
-      }),
-    ])
-    .optional(),
-  metadata: zod.unknown().optional(),
-  text: zod.string(),
-  threadId: zod.number().nullish(),
-  threadMetadata: zod.unknown().optional(),
-});
-
-export const createCommentResponse = zod
-  .object({
-    comments: zod.array(
-      zod.object({
-        commentId: zod.number(),
-        createdAt: zod.iso.datetime({}).nullish(),
-        deletedAt: zod.iso.datetime({}).nullish(),
-        metadata: zod.unknown().optional(),
-        order: zod.number().nullish(),
-        owner: zod.string(),
-        sender: zod.string().nullish(),
-        text: zod.string(),
-        threadId: zod.number(),
-        updatedAt: zod.iso.datetime({}).nullish(),
-      })
-    ),
-    thread: zod.object({
-      createdAt: zod.iso.datetime({}).nullish(),
-      deletedAt: zod.iso.datetime({}).nullish(),
-      documentId: zod.string(),
-      metadata: zod.unknown().optional(),
-      owner: zod.string(),
-      resolved: zod.boolean(),
-      threadId: zod.number(),
-      updatedAt: zod.iso.datetime({}).nullish(),
-    }),
-  })
-  .and(
-    zod.object({
-      anchor: zod
-        .union([
-          zod.null(),
-          zod.union([
-            zod
-              .object({
-                allowableEdits: zod.unknown().optional(),
-                documentId: zod.string(),
-                heightPct: zod.number(),
-                originalIndex: zod.number(),
-                originalPage: zod.number(),
-                owner: zod.string(),
-                page: zod.number(),
-                rootId: zod.uuid().nullish(),
-                rotation: zod.number(),
-                shouldLockOnSave: zod.boolean(),
-                threadId: zod.number().nullish(),
-                uuid: zod.uuid(),
-                wasDeleted: zod.boolean(),
-                wasEdited: zod.boolean(),
-                widthPct: zod.number(),
-                xPct: zod.number(),
-                yPct: zod.number(),
-              })
-              .and(
-                zod.object({
-                  anchorType: zod.enum(['placeable']),
-                })
-              ),
-            zod
-              .object({
-                alpha: zod.number(),
-                blue: zod.number(),
-                createdAt: zod.iso.datetime({}).nullish(),
-                deletedAt: zod.iso.datetime({}).nullish(),
-                documentId: zod.string(),
-                green: zod.number(),
-                highlightRects: zod.array(
-                  zod.object({
-                    height: zod.number(),
-                    id: zod.number(),
-                    left: zod.number(),
-                    top: zod.number(),
-                    width: zod.number(),
-                  })
-                ),
-                highlightType: zod.union([
-                  zod.literal(1),
-                  zod.literal(2),
-                  zod.literal(3),
-                ]),
-                owner: zod.string(),
-                page: zod.number(),
-                pageViewportHeight: zod.number(),
-                pageViewportWidth: zod.number(),
-                red: zod.number(),
-                rootId: zod.uuid().nullish(),
-                text: zod.string(),
-                threadId: zod.number().nullish(),
-                updatedAt: zod.iso.datetime({}).nullish(),
-                uuid: zod.uuid(),
-              })
-              .and(
-                zod.object({
-                  anchorType: zod.enum(['highlight']),
-                })
-              ),
-          ]),
-        ])
-        .optional(),
       documentId: zod.string(),
     })
   );
@@ -1144,6 +801,62 @@ export const getSelfBotResponse = zod
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
   })
   .describe('Bot row.\n\nClients deserialize this, so both derives are used.');
+
+/**
+ * Returns display fields and the sponsor for each requested bot. Not a
+manageability check: any authenticated user or internal caller may look up
+ids they already have.
+ * @summary Handler for `GET /bots/profiles`.
+ */
+export const getBotOwnerProfilesQueryParams = zod.object({
+  ids: zod
+    .array(zod.string())
+    .optional()
+    .describe('Bot ids. Repeat the key: `?ids=<uuid>&ids=<uuid>`.'),
+});
+
+export const getBotOwnerProfilesResponseItem = zod
+  .object({
+    avatar_url: zod
+      .string()
+      .nullish()
+      .describe('Avatar URL. Registry system bots have none.'),
+    deleted_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe(
+        'Soft-delete time. Absent for an active bot and for a registry system bot.'
+      ),
+    id: zod.string(),
+    name: zod.string().describe('Display name.'),
+    owner: zod
+      .union([
+        zod.null(),
+        zod
+          .union([
+            zod
+              .object({
+                type: zod.enum(['user']),
+                user_id: zod.string().describe('Owner user id.'),
+              })
+              .describe('User-owned bot.'),
+            zod
+              .object({
+                team_id: zod.uuid().describe('Owner team id.'),
+                type: zod.enum(['team']),
+              })
+              .describe('Team-owned bot.'),
+          ])
+          .describe('Bot owner.'),
+      ])
+      .optional(),
+  })
+  .describe(
+    'Bot identity for rendering, including the sponsor and soft-delete time.\n\n`owner` is none only for a registry system bot. A persisted row always has\na sponsor.'
+  );
+export const getBotOwnerProfilesResponse = zod.array(
+  getBotOwnerProfilesResponseItem
+);
 
 /**
  * @summary Handler for `GET /bots/{bot_id}/channels`.
@@ -1923,6 +1636,35 @@ export const meetingLeaveResponse = zod
   .describe('Response for the leave\/end call operation.');
 
 /**
+ * @summary Read a standalone meeting preview without admitting a guest to the room.
+ */
+export const meetingGuestParticipantsParams = zod.object({
+  token: zod.string(),
+});
+
+export const meetingGuestParticipantsResponse = zod
+  .object({
+    participants: zod
+      .array(
+        zod
+          .object({
+            avatarUrl: zod
+              .string()
+              .nullish()
+              .describe('Profile image, when available for a Macro member.'),
+            displayName: zod
+              .string()
+              .describe('Name displayed in the waiting room.'),
+          })
+          .describe(
+            'Minimal waiting-room display data, without account identities or call content.'
+          )
+      )
+      .describe('Human attendees only; transcription agents are excluded.'),
+  })
+  .describe("People currently connected to a meeting's room.");
+
+/**
  * @summary Handle `GET /call/meetings` through the call domain service.
  */
 export const meetingListResponse = zod
@@ -1972,6 +1714,12 @@ export const meetingListResponse = zod
  */
 export const meetingCreateBody = zod
   .object({
+    preparationId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'Optional unused room reserved by this actor on the setup screen.'
+      ),
     scheduledEnd: zod.iso
       .datetime({})
       .nullish()
@@ -2150,6 +1898,58 @@ export const meetingJoinResponse = zod
     token: zod.string().describe('The RTC token for connecting to the room.'),
   })
   .describe('Response returned when creating or joining a call.');
+
+/**
+ * @summary Read the participant preview for an authenticated invitation holder.
+ */
+export const meetingParticipantsParams = zod.object({
+  token: zod.string(),
+});
+
+export const meetingParticipantsResponse = zod
+  .object({
+    participants: zod
+      .array(
+        zod
+          .object({
+            avatarUrl: zod
+              .string()
+              .nullish()
+              .describe('Profile image, when available for a Macro member.'),
+            displayName: zod
+              .string()
+              .describe('Name displayed in the waiting room.'),
+          })
+          .describe(
+            'Minimal waiting-room display data, without account identities or call content.'
+          )
+      )
+      .describe('Human attendees only; transcription agents are excluded.'),
+  })
+  .describe("People currently connected to a meeting's room.");
+
+/**
+ * @summary Reserve a room while the authenticated caller configures a new call.
+ */
+export const meetingPrepareResponse = zod
+  .object({
+    expiresAt: zod.iso
+      .datetime({})
+      .describe(
+        'After this deadline Start falls back to ordinary room creation.'
+      ),
+    id: zod
+      .uuid()
+      .describe("Also the reserved RTC room's UUID and prospective call ID."),
+  })
+  .describe('An empty room reservation, not a started call or an invitation.');
+
+/**
+ * @summary Cancel an unused room; the domain owns ownership and activation checks.
+ */
+export const meetingCancelPreparationParams = zod.object({
+  preparation_id: zod.uuid(),
+});
 
 /**
  * @summary Handle `DELETE /call/meetings/{meeting_id}` through the call domain service.
@@ -3441,16 +3241,6 @@ export const getChannelParams = zod.object({
   channel_id: zod.uuid().describe('Channel ID'),
 });
 
-export const getChannelQueryLimitMin = 0;
-
-export const getChannelQueryParams = zod.object({
-  limit: zod
-    .number()
-    .min(getChannelQueryLimitMin)
-    .optional()
-    .describe('Recent message page size (1-100, default 50)'),
-});
-
 export const getChannelResponse = zod
   .object({
     channel_id: zod.uuid().describe('Channel id.'),
@@ -3460,186 +3250,6 @@ export const getChannelResponse = zod
     channel_type: zod
       .enum(['public', 'private', 'direct_message', 'team'])
       .describe('Type of channel.'),
-    messages: zod
-      .array(
-        zod
-          .object({
-            attachments: zod
-              .array(
-                zod
-                  .object({
-                    created_at: zod.iso
-                      .datetime({})
-                      .describe('When the attachment was created.'),
-                    entity_id: zod.string().describe('Entity id.'),
-                    entity_type: zod.string().describe('Type of entity.'),
-                    height: zod
-                      .number()
-                      .nullish()
-                      .describe('Height (for images).'),
-                    id: zod.uuid().describe('Attachment id.'),
-                    width: zod
-                      .number()
-                      .nullish()
-                      .describe('Width (for images).'),
-                  })
-                  .describe('An attachment on a message.')
-              )
-              .describe('Attachments on this message.'),
-            channel_id: zod.uuid().describe('Channel id.'),
-            content: zod.string().describe('Message content.'),
-            created_at: zod.iso
-              .datetime({})
-              .describe('When the message was created.'),
-            deleted_at: zod.iso
-              .datetime({})
-              .nullish()
-              .describe('When the message was soft-deleted.'),
-            edited_at: zod.iso
-              .datetime({})
-              .nullish()
-              .describe('When the message was edited.'),
-            id: zod.uuid().describe('Message id.'),
-            reactions: zod
-              .array(
-                zod
-                  .object({
-                    emoji: zod.string().describe('The emoji string.'),
-                    users: zod
-                      .array(zod.string())
-                      .describe('User ids who added this reaction.'),
-                  })
-                  .describe('A reaction with emoji and user list.')
-              )
-              .describe('Reactions on this message.'),
-            sender: zod
-              .object({
-                avatar_url: zod
-                  .string()
-                  .nullish()
-                  .describe('Avatar URL for bot senders.'),
-                id: zod
-                  .string()
-                  .describe('Sender id without the storage namespace prefix.'),
-                name: zod
-                  .string()
-                  .nullish()
-                  .describe('Display name for bot senders.'),
-                triggered_by: zod
-                  .string()
-                  .nullish()
-                  .describe(
-                    'For an agent (bot) message, the id of the user who triggered it.'
-                  ),
-                type: zod.enum(['user', 'bot']).describe('Public sender type.'),
-              })
-              .describe('Public sender identity for channel messages.'),
-            sender_id: zod.string().describe('Sender user id.'),
-            thread: zod
-              .object({
-                latest_reply_at: zod.iso
-                  .datetime({})
-                  .nullish()
-                  .describe('Timestamp of the latest reply.'),
-                preview: zod
-                  .array(
-                    zod
-                      .object({
-                        attachments: zod
-                          .array(
-                            zod
-                              .object({
-                                created_at: zod.iso
-                                  .datetime({})
-                                  .describe('When the attachment was created.'),
-                                entity_id: zod.string().describe('Entity id.'),
-                                entity_type: zod
-                                  .string()
-                                  .describe('Type of entity.'),
-                                height: zod
-                                  .number()
-                                  .nullish()
-                                  .describe('Height (for images).'),
-                                id: zod.uuid().describe('Attachment id.'),
-                                width: zod
-                                  .number()
-                                  .nullish()
-                                  .describe('Width (for images).'),
-                              })
-                              .describe('An attachment on a message.')
-                          )
-                          .describe('Attachments on this reply.'),
-                        content: zod.string().describe('Reply content.'),
-                        created_at: zod.iso
-                          .datetime({})
-                          .describe('When the reply was created.'),
-                        edited_at: zod.iso
-                          .datetime({})
-                          .nullish()
-                          .describe('When the reply was edited.'),
-                        id: zod.uuid().describe('Reply id.'),
-                        reactions: zod
-                          .array(
-                            zod
-                              .object({
-                                emoji: zod
-                                  .string()
-                                  .describe('The emoji string.'),
-                                users: zod
-                                  .array(zod.string())
-                                  .describe(
-                                    'User ids who added this reaction.'
-                                  ),
-                              })
-                              .describe('A reaction with emoji and user list.')
-                          )
-                          .describe('Reactions on this reply.'),
-                        sender: zod
-                          .object({
-                            avatar_url: zod
-                              .string()
-                              .nullish()
-                              .describe('Avatar URL for bot senders.'),
-                            id: zod
-                              .string()
-                              .describe(
-                                'Sender id without the storage namespace prefix.'
-                              ),
-                            name: zod
-                              .string()
-                              .nullish()
-                              .describe('Display name for bot senders.'),
-                            triggered_by: zod
-                              .string()
-                              .nullish()
-                              .describe(
-                                'For an agent (bot) message, the id of the user who triggered it.'
-                              ),
-                            type: zod
-                              .enum(['user', 'bot'])
-                              .describe('Public sender type.'),
-                          })
-                          .describe(
-                            'Public sender identity for channel messages.'
-                          ),
-                        sender_id: zod.string().describe('Sender user id.'),
-                        updated_at: zod.iso
-                          .datetime({})
-                          .describe('When the reply was last updated.'),
-                      })
-                      .describe('A thread reply shown in preview.')
-                  )
-                  .describe('Last N replies for thread preview.'),
-                reply_count: zod.number().describe('Total reply count.'),
-              })
-              .describe('Thread metadata and preview replies.'),
-            updated_at: zod.iso
-              .datetime({})
-              .describe('When the message was last updated.'),
-          })
-          .describe('A top-level channel message with thread info.')
-      )
-      .describe('Recent messages (newest-first first page).'),
     participants: zod
       .array(
         zod
@@ -3656,7 +3266,7 @@ export const getChannelResponse = zod
       .describe('Active participants.'),
   })
   .describe(
-    'Channel detail: metadata, active participants, and a recent page of messages.\n\n`messages` is the newest-first first page (size controlled by `limit`); use the\ndedicated `\/{channel_id}\/messages` endpoint for cursor pagination.'
+    'Channel detail: metadata and active participants.\n\nMessages are read through `\/messages\/channel\/{channel_id}`.'
   );
 
 /**
@@ -3808,1015 +3418,6 @@ export const leaveChannelParams = zod.object({
 });
 
 /**
- * @summary Handler for `POST /channels/{channel_id}/message`.
- */
-export const postMessageParams = zod.object({
-  channel_id: zod.uuid().describe('Channel ID'),
-});
-
-export const postMessageBody = zod
-  .object({
-    attachments: zod
-      .array(
-        zod
-          .object({
-            entity_id: zod.string().describe('Attachment entity id.'),
-            entity_type: zod.string().describe('Attachment entity type.'),
-            height: zod
-              .number()
-              .nullish()
-              .describe('Optional rendered height.'),
-            width: zod.number().nullish().describe('Optional rendered width.'),
-          })
-          .describe('New attachment to add to a channel message.')
-      )
-      .describe('Attachments to add after message creation.'),
-    content: zod.string().describe('Message body.'),
-    mentions: zod
-      .array(
-        zod
-          .object({
-            entity_id: zod.string().describe('Mentioned entity identifier.'),
-            entity_type: zod.string().describe('Mentioned entity type.'),
-          })
-          .describe('A mention tracked in a message body.')
-      )
-      .describe('Message mentions.'),
-    nonce: zod.string().nullish().describe('Optional optimistic-update nonce.'),
-    thread_id: zod.uuid().nullish().describe('Optional thread parent id.'),
-  })
-  .describe('Request to send a channel message.');
-
-export const postMessageResponse = zod
-  .object({
-    id: zod.string().describe('Created message id.'),
-    nonce: zod.string().nullish().describe('Optional optimistic-update nonce.'),
-  })
-  .describe('Response returned after sending a message.');
-
-/**
- * @summary Handler for `DELETE /channels/{channel_id}/message/{message_id}`.
- */
-export const deleteMessageParams = zod.object({
-  channel_id: zod.uuid().describe('Channel ID'),
-  message_id: zod.uuid().describe('Message ID'),
-});
-
-export const deleteMessageQueryParams = zod.object({
-  nonce: zod.string().optional().describe('Optional optimistic-update nonce'),
-});
-
-/**
- * @summary Handler for `PATCH /channels/{channel_id}/message/{message_id}`.
- */
-export const patchMessageParams = zod.object({
-  channel_id: zod.uuid().describe('Channel ID'),
-  message_id: zod.uuid().describe('Message ID'),
-});
-
-export const patchMessageBody = zod
-  .object({
-    attachment_ids_to_delete: zod
-      .array(zod.string())
-      .nullish()
-      .describe('Attachment ids to remove.'),
-    attachments_to_add: zod
-      .array(
-        zod
-          .object({
-            entity_id: zod.string().describe('Attachment entity id.'),
-            entity_type: zod.string().describe('Attachment entity type.'),
-            height: zod
-              .number()
-              .nullish()
-              .describe('Optional rendered height.'),
-            width: zod.number().nullish().describe('Optional rendered width.'),
-          })
-          .describe('New attachment to add to a channel message.')
-      )
-      .nullish()
-      .describe('Attachments to add.'),
-    content: zod
-      .string()
-      .nullish()
-      .describe('Optional replacement message body.'),
-    mentions: zod
-      .array(
-        zod
-          .object({
-            entity_id: zod.string().describe('Mentioned entity identifier.'),
-            entity_type: zod.string().describe('Mentioned entity type.'),
-          })
-          .describe('A mention tracked in a message body.')
-      )
-      .nullish()
-      .describe('Optional replacement mentions.'),
-    nonce: zod.string().nullish().describe('Optional optimistic-update nonce.'),
-  })
-  .describe('Request to patch a channel message.');
-
-/**
- * @summary Handler for `GET /channels/{channel_id}/messages`.
- */
-export const getChannelMessagesParams = zod.object({
-  channel_id: zod.uuid().describe('Channel ID'),
-});
-
-export const getChannelMessagesQueryLimitMin = 0;
-
-export const getChannelMessagesQueryParams = zod.object({
-  limit: zod
-    .number()
-    .min(getChannelMessagesQueryLimitMin)
-    .optional()
-    .describe('Page size (1-100, default 50)'),
-  cursor: zod
-    .string()
-    .optional()
-    .describe('Base64 encoded cursor value for older messages'),
-  previous_cursor: zod
-    .string()
-    .optional()
-    .describe('Base64 encoded cursor value for newer messages'),
-  load_around_message_id: zod
-    .uuid()
-    .optional()
-    .describe('Return a centered window around this message ID'),
-});
-
-export const getChannelMessagesResponse = zod
-  .object({
-    items: zod
-      .array(
-        zod
-          .object({
-            attachments: zod
-              .array(
-                zod
-                  .object({
-                    created_at: zod.iso
-                      .datetime({})
-                      .describe('When the attachment was created.'),
-                    entity_id: zod.string().describe('Entity id.'),
-                    entity_type: zod.string().describe('Type of entity.'),
-                    height: zod
-                      .number()
-                      .nullish()
-                      .describe('Height (for images).'),
-                    id: zod.uuid().describe('Attachment id.'),
-                    width: zod
-                      .number()
-                      .nullish()
-                      .describe('Width (for images).'),
-                  })
-                  .describe('An attachment on a message.')
-              )
-              .describe('Attachments on this message.'),
-            channel_id: zod.uuid().describe('Channel id.'),
-            content: zod.string().describe('Message content.'),
-            created_at: zod.iso
-              .datetime({})
-              .describe('When the message was created.'),
-            deleted_at: zod.iso
-              .datetime({})
-              .nullish()
-              .describe('When the message was soft-deleted.'),
-            edited_at: zod.iso
-              .datetime({})
-              .nullish()
-              .describe('When the message was edited.'),
-            id: zod.uuid().describe('Message id.'),
-            reactions: zod
-              .array(
-                zod
-                  .object({
-                    emoji: zod.string().describe('The emoji string.'),
-                    users: zod
-                      .array(zod.string())
-                      .describe('User ids who added this reaction.'),
-                  })
-                  .describe('A reaction with emoji and user list.')
-              )
-              .describe('Reactions on this message.'),
-            sender: zod
-              .object({
-                avatar_url: zod
-                  .string()
-                  .nullish()
-                  .describe('Avatar URL for bot senders.'),
-                id: zod
-                  .string()
-                  .describe('Sender id without the storage namespace prefix.'),
-                name: zod
-                  .string()
-                  .nullish()
-                  .describe('Display name for bot senders.'),
-                triggered_by: zod
-                  .string()
-                  .nullish()
-                  .describe(
-                    'For an agent (bot) message, the id of the user who triggered it.'
-                  ),
-                type: zod.enum(['user', 'bot']).describe('Public sender type.'),
-              })
-              .describe('Public sender identity for channel messages.'),
-            sender_id: zod.string().describe('Sender user id.'),
-            thread: zod
-              .object({
-                latest_reply_at: zod.iso
-                  .datetime({})
-                  .nullish()
-                  .describe('Timestamp of the latest reply.'),
-                preview: zod
-                  .array(
-                    zod
-                      .object({
-                        attachments: zod
-                          .array(
-                            zod
-                              .object({
-                                created_at: zod.iso
-                                  .datetime({})
-                                  .describe('When the attachment was created.'),
-                                entity_id: zod.string().describe('Entity id.'),
-                                entity_type: zod
-                                  .string()
-                                  .describe('Type of entity.'),
-                                height: zod
-                                  .number()
-                                  .nullish()
-                                  .describe('Height (for images).'),
-                                id: zod.uuid().describe('Attachment id.'),
-                                width: zod
-                                  .number()
-                                  .nullish()
-                                  .describe('Width (for images).'),
-                              })
-                              .describe('An attachment on a message.')
-                          )
-                          .describe('Attachments on this reply.'),
-                        content: zod.string().describe('Reply content.'),
-                        created_at: zod.iso
-                          .datetime({})
-                          .describe('When the reply was created.'),
-                        edited_at: zod.iso
-                          .datetime({})
-                          .nullish()
-                          .describe('When the reply was edited.'),
-                        id: zod.uuid().describe('Reply id.'),
-                        reactions: zod
-                          .array(
-                            zod
-                              .object({
-                                emoji: zod
-                                  .string()
-                                  .describe('The emoji string.'),
-                                users: zod
-                                  .array(zod.string())
-                                  .describe(
-                                    'User ids who added this reaction.'
-                                  ),
-                              })
-                              .describe('A reaction with emoji and user list.')
-                          )
-                          .describe('Reactions on this reply.'),
-                        sender: zod
-                          .object({
-                            avatar_url: zod
-                              .string()
-                              .nullish()
-                              .describe('Avatar URL for bot senders.'),
-                            id: zod
-                              .string()
-                              .describe(
-                                'Sender id without the storage namespace prefix.'
-                              ),
-                            name: zod
-                              .string()
-                              .nullish()
-                              .describe('Display name for bot senders.'),
-                            triggered_by: zod
-                              .string()
-                              .nullish()
-                              .describe(
-                                'For an agent (bot) message, the id of the user who triggered it.'
-                              ),
-                            type: zod
-                              .enum(['user', 'bot'])
-                              .describe('Public sender type.'),
-                          })
-                          .describe(
-                            'Public sender identity for channel messages.'
-                          ),
-                        sender_id: zod.string().describe('Sender user id.'),
-                        updated_at: zod.iso
-                          .datetime({})
-                          .describe('When the reply was last updated.'),
-                      })
-                      .describe('A thread reply shown in preview.')
-                  )
-                  .describe('Last N replies for thread preview.'),
-                reply_count: zod.number().describe('Total reply count.'),
-              })
-              .describe('Thread metadata and preview replies.'),
-            updated_at: zod.iso
-              .datetime({})
-              .describe('When the message was last updated.'),
-          })
-          .describe('A top-level channel message with thread info.')
-      )
-      .describe('Messages on this page.'),
-    next_cursor: zod
-      .string()
-      .nullish()
-      .describe('Cursor for the next page, null if no more pages.'),
-    previous_cursor: zod
-      .string()
-      .nullish()
-      .describe('Cursor for the previous page, null if no newer page exists.'),
-  })
-  .describe('Paginated response of channel messages.');
-
-/**
- * @summary Handler for `POST /channels/{channel_id}/messages`.
- */
-export const postChannelMessagesParams = zod.object({
-  channel_id: zod.uuid().describe('Channel ID'),
-});
-
-export const postChannelMessagesQueryLimitMin = 0;
-
-export const postChannelMessagesQueryParams = zod.object({
-  limit: zod
-    .number()
-    .min(postChannelMessagesQueryLimitMin)
-    .optional()
-    .describe('Page size (1-100, default 50)'),
-  cursor: zod
-    .string()
-    .optional()
-    .describe('Base64 encoded cursor value for older messages'),
-  previous_cursor: zod
-    .string()
-    .optional()
-    .describe('Base64 encoded cursor value for newer messages'),
-  load_around_message_id: zod
-    .uuid()
-    .optional()
-    .describe('Return a centered window around this message ID'),
-});
-
-export const postChannelMessagesBody = zod
-  .object({
-    activity_after: zod.iso
-      .datetime({})
-      .nullish()
-      .describe(
-        'When set, only return top-level messages with channel activity at or after\nthis timestamp. Activity means either the message itself was created after\nthis time, or a thread reply was created after this time.\n\nAccepts the legacy JSON field `last_activity` for backwards compatibility.'
-      ),
-    activity_before: zod.iso
-      .datetime({})
-      .nullish()
-      .describe(
-        'When set, only return top-level messages with channel activity before this\ntimestamp. Activity means either the parent message or at least one thread\nreply falls in the requested activity window.'
-      ),
-    created_after: zod.iso
-      .datetime({})
-      .nullish()
-      .describe(
-        'When set, only return top-level messages created at or after this timestamp.'
-      ),
-    created_after_exclusive: zod.iso
-      .datetime({})
-      .nullish()
-      .describe(
-        'When set, only return top-level messages created strictly after this timestamp.'
-      ),
-    created_before: zod.iso
-      .datetime({})
-      .nullish()
-      .describe(
-        'When set, only return top-level messages created before this timestamp.'
-      ),
-    message_ids: zod
-      .array(zod.uuid())
-      .optional()
-      .describe('When non-empty, only return messages with these IDs.'),
-    notification_filters: zod
-      .object({
-        states: zod
-          .array(
-            zod
-              .enum(['unseen', 'seen', 'done'])
-              .describe(
-                "The mutually exclusive lifecycle states of a user's notification."
-              )
-          )
-          .optional()
-          .describe(
-            'Include entities with a non-deleted notification in any of these exact states.\nEmpty means no notification restriction. Active means `[unseen, seen]`.'
-          ),
-      })
-      .optional()
-      .describe('Notification-level filters that apply to an entity type.'),
-  })
-  .describe('Filters for channel message queries.');
-
-export const postChannelMessagesResponse = zod
-  .object({
-    items: zod
-      .array(
-        zod
-          .object({
-            attachments: zod
-              .array(
-                zod
-                  .object({
-                    created_at: zod.iso
-                      .datetime({})
-                      .describe('When the attachment was created.'),
-                    entity_id: zod.string().describe('Entity id.'),
-                    entity_type: zod.string().describe('Type of entity.'),
-                    height: zod
-                      .number()
-                      .nullish()
-                      .describe('Height (for images).'),
-                    id: zod.uuid().describe('Attachment id.'),
-                    width: zod
-                      .number()
-                      .nullish()
-                      .describe('Width (for images).'),
-                  })
-                  .describe('An attachment on a message.')
-              )
-              .describe('Attachments on this message.'),
-            channel_id: zod.uuid().describe('Channel id.'),
-            content: zod.string().describe('Message content.'),
-            created_at: zod.iso
-              .datetime({})
-              .describe('When the message was created.'),
-            deleted_at: zod.iso
-              .datetime({})
-              .nullish()
-              .describe('When the message was soft-deleted.'),
-            edited_at: zod.iso
-              .datetime({})
-              .nullish()
-              .describe('When the message was edited.'),
-            id: zod.uuid().describe('Message id.'),
-            reactions: zod
-              .array(
-                zod
-                  .object({
-                    emoji: zod.string().describe('The emoji string.'),
-                    users: zod
-                      .array(zod.string())
-                      .describe('User ids who added this reaction.'),
-                  })
-                  .describe('A reaction with emoji and user list.')
-              )
-              .describe('Reactions on this message.'),
-            sender: zod
-              .object({
-                avatar_url: zod
-                  .string()
-                  .nullish()
-                  .describe('Avatar URL for bot senders.'),
-                id: zod
-                  .string()
-                  .describe('Sender id without the storage namespace prefix.'),
-                name: zod
-                  .string()
-                  .nullish()
-                  .describe('Display name for bot senders.'),
-                triggered_by: zod
-                  .string()
-                  .nullish()
-                  .describe(
-                    'For an agent (bot) message, the id of the user who triggered it.'
-                  ),
-                type: zod.enum(['user', 'bot']).describe('Public sender type.'),
-              })
-              .describe('Public sender identity for channel messages.'),
-            sender_id: zod.string().describe('Sender user id.'),
-            thread: zod
-              .object({
-                latest_reply_at: zod.iso
-                  .datetime({})
-                  .nullish()
-                  .describe('Timestamp of the latest reply.'),
-                preview: zod
-                  .array(
-                    zod
-                      .object({
-                        attachments: zod
-                          .array(
-                            zod
-                              .object({
-                                created_at: zod.iso
-                                  .datetime({})
-                                  .describe('When the attachment was created.'),
-                                entity_id: zod.string().describe('Entity id.'),
-                                entity_type: zod
-                                  .string()
-                                  .describe('Type of entity.'),
-                                height: zod
-                                  .number()
-                                  .nullish()
-                                  .describe('Height (for images).'),
-                                id: zod.uuid().describe('Attachment id.'),
-                                width: zod
-                                  .number()
-                                  .nullish()
-                                  .describe('Width (for images).'),
-                              })
-                              .describe('An attachment on a message.')
-                          )
-                          .describe('Attachments on this reply.'),
-                        content: zod.string().describe('Reply content.'),
-                        created_at: zod.iso
-                          .datetime({})
-                          .describe('When the reply was created.'),
-                        edited_at: zod.iso
-                          .datetime({})
-                          .nullish()
-                          .describe('When the reply was edited.'),
-                        id: zod.uuid().describe('Reply id.'),
-                        reactions: zod
-                          .array(
-                            zod
-                              .object({
-                                emoji: zod
-                                  .string()
-                                  .describe('The emoji string.'),
-                                users: zod
-                                  .array(zod.string())
-                                  .describe(
-                                    'User ids who added this reaction.'
-                                  ),
-                              })
-                              .describe('A reaction with emoji and user list.')
-                          )
-                          .describe('Reactions on this reply.'),
-                        sender: zod
-                          .object({
-                            avatar_url: zod
-                              .string()
-                              .nullish()
-                              .describe('Avatar URL for bot senders.'),
-                            id: zod
-                              .string()
-                              .describe(
-                                'Sender id without the storage namespace prefix.'
-                              ),
-                            name: zod
-                              .string()
-                              .nullish()
-                              .describe('Display name for bot senders.'),
-                            triggered_by: zod
-                              .string()
-                              .nullish()
-                              .describe(
-                                'For an agent (bot) message, the id of the user who triggered it.'
-                              ),
-                            type: zod
-                              .enum(['user', 'bot'])
-                              .describe('Public sender type.'),
-                          })
-                          .describe(
-                            'Public sender identity for channel messages.'
-                          ),
-                        sender_id: zod.string().describe('Sender user id.'),
-                        updated_at: zod.iso
-                          .datetime({})
-                          .describe('When the reply was last updated.'),
-                      })
-                      .describe('A thread reply shown in preview.')
-                  )
-                  .describe('Last N replies for thread preview.'),
-                reply_count: zod.number().describe('Total reply count.'),
-              })
-              .describe('Thread metadata and preview replies.'),
-            updated_at: zod.iso
-              .datetime({})
-              .describe('When the message was last updated.'),
-          })
-          .describe('A top-level channel message with thread info.')
-      )
-      .describe('Messages on this page.'),
-    next_cursor: zod
-      .string()
-      .nullish()
-      .describe('Cursor for the next page, null if no more pages.'),
-    previous_cursor: zod
-      .string()
-      .nullish()
-      .describe('Cursor for the previous page, null if no newer page exists.'),
-  })
-  .describe('Paginated response of channel messages.');
-
-/**
- * @summary Handler for `GET /channels/{channel_id}/messages/catch-up`.
- */
-export const getChannelMessagesCatchUpParams = zod.object({
-  channel_id: zod.uuid().describe('Channel ID'),
-});
-
-export const getChannelMessagesCatchUpQueryLimitMin = 0;
-
-export const getChannelMessagesCatchUpQueryParams = zod.object({
-  after: zod
-    .string()
-    .describe(
-      'Exclusive RFC3339 lower bound. Messages at this instant are omitted.'
-    ),
-  limit: zod
-    .number()
-    .min(getChannelMessagesCatchUpQueryLimitMin)
-    .optional()
-    .describe('Page size (1-100, default 50)'),
-  cursor: zod
-    .string()
-    .optional()
-    .describe('Base64 encoded cursor value for older messages'),
-  previous_cursor: zod
-    .string()
-    .optional()
-    .describe('Base64 encoded cursor value for newer messages'),
-});
-
-export const getChannelMessagesCatchUpResponse = zod
-  .object({
-    items: zod
-      .array(
-        zod
-          .object({
-            attachments: zod
-              .array(
-                zod
-                  .object({
-                    created_at: zod.iso
-                      .datetime({})
-                      .describe('When the attachment was created.'),
-                    entity_id: zod.string().describe('Entity id.'),
-                    entity_type: zod.string().describe('Type of entity.'),
-                    height: zod
-                      .number()
-                      .nullish()
-                      .describe('Height (for images).'),
-                    id: zod.uuid().describe('Attachment id.'),
-                    width: zod
-                      .number()
-                      .nullish()
-                      .describe('Width (for images).'),
-                  })
-                  .describe('An attachment on a message.')
-              )
-              .describe('Attachments on this message.'),
-            channel_id: zod.uuid().describe('Channel id.'),
-            content: zod.string().describe('Message content.'),
-            created_at: zod.iso
-              .datetime({})
-              .describe('When the message was created.'),
-            deleted_at: zod.iso
-              .datetime({})
-              .nullish()
-              .describe('When the message was soft-deleted.'),
-            edited_at: zod.iso
-              .datetime({})
-              .nullish()
-              .describe('When the message was edited.'),
-            id: zod.uuid().describe('Message id.'),
-            reactions: zod
-              .array(
-                zod
-                  .object({
-                    emoji: zod.string().describe('The emoji string.'),
-                    users: zod
-                      .array(zod.string())
-                      .describe('User ids who added this reaction.'),
-                  })
-                  .describe('A reaction with emoji and user list.')
-              )
-              .describe('Reactions on this message.'),
-            sender: zod
-              .object({
-                avatar_url: zod
-                  .string()
-                  .nullish()
-                  .describe('Avatar URL for bot senders.'),
-                id: zod
-                  .string()
-                  .describe('Sender id without the storage namespace prefix.'),
-                name: zod
-                  .string()
-                  .nullish()
-                  .describe('Display name for bot senders.'),
-                triggered_by: zod
-                  .string()
-                  .nullish()
-                  .describe(
-                    'For an agent (bot) message, the id of the user who triggered it.'
-                  ),
-                type: zod.enum(['user', 'bot']).describe('Public sender type.'),
-              })
-              .describe('Public sender identity for channel messages.'),
-            sender_id: zod.string().describe('Sender user id.'),
-            thread: zod
-              .object({
-                latest_reply_at: zod.iso
-                  .datetime({})
-                  .nullish()
-                  .describe('Timestamp of the latest reply.'),
-                preview: zod
-                  .array(
-                    zod
-                      .object({
-                        attachments: zod
-                          .array(
-                            zod
-                              .object({
-                                created_at: zod.iso
-                                  .datetime({})
-                                  .describe('When the attachment was created.'),
-                                entity_id: zod.string().describe('Entity id.'),
-                                entity_type: zod
-                                  .string()
-                                  .describe('Type of entity.'),
-                                height: zod
-                                  .number()
-                                  .nullish()
-                                  .describe('Height (for images).'),
-                                id: zod.uuid().describe('Attachment id.'),
-                                width: zod
-                                  .number()
-                                  .nullish()
-                                  .describe('Width (for images).'),
-                              })
-                              .describe('An attachment on a message.')
-                          )
-                          .describe('Attachments on this reply.'),
-                        content: zod.string().describe('Reply content.'),
-                        created_at: zod.iso
-                          .datetime({})
-                          .describe('When the reply was created.'),
-                        edited_at: zod.iso
-                          .datetime({})
-                          .nullish()
-                          .describe('When the reply was edited.'),
-                        id: zod.uuid().describe('Reply id.'),
-                        reactions: zod
-                          .array(
-                            zod
-                              .object({
-                                emoji: zod
-                                  .string()
-                                  .describe('The emoji string.'),
-                                users: zod
-                                  .array(zod.string())
-                                  .describe(
-                                    'User ids who added this reaction.'
-                                  ),
-                              })
-                              .describe('A reaction with emoji and user list.')
-                          )
-                          .describe('Reactions on this reply.'),
-                        sender: zod
-                          .object({
-                            avatar_url: zod
-                              .string()
-                              .nullish()
-                              .describe('Avatar URL for bot senders.'),
-                            id: zod
-                              .string()
-                              .describe(
-                                'Sender id without the storage namespace prefix.'
-                              ),
-                            name: zod
-                              .string()
-                              .nullish()
-                              .describe('Display name for bot senders.'),
-                            triggered_by: zod
-                              .string()
-                              .nullish()
-                              .describe(
-                                'For an agent (bot) message, the id of the user who triggered it.'
-                              ),
-                            type: zod
-                              .enum(['user', 'bot'])
-                              .describe('Public sender type.'),
-                          })
-                          .describe(
-                            'Public sender identity for channel messages.'
-                          ),
-                        sender_id: zod.string().describe('Sender user id.'),
-                        updated_at: zod.iso
-                          .datetime({})
-                          .describe('When the reply was last updated.'),
-                      })
-                      .describe('A thread reply shown in preview.')
-                  )
-                  .describe('Last N replies for thread preview.'),
-                reply_count: zod.number().describe('Total reply count.'),
-              })
-              .describe('Thread metadata and preview replies.'),
-            updated_at: zod.iso
-              .datetime({})
-              .describe('When the message was last updated.'),
-          })
-          .describe('A top-level channel message with thread info.')
-      )
-      .describe('Messages on this page.'),
-    next_cursor: zod
-      .string()
-      .nullish()
-      .describe('Cursor for the next page, null if no more pages.'),
-    previous_cursor: zod
-      .string()
-      .nullish()
-      .describe('Cursor for the previous page, null if no newer page exists.'),
-  })
-  .describe('Paginated response of channel messages.');
-
-/**
- * @summary Handler for `GET /channels/{channel_id}/messages/{message_id}/context`.
- */
-export const getMessageWithContextParams = zod.object({
-  channel_id: zod.uuid().describe('Channel ID'),
-  message_id: zod.uuid().describe('Message ID to get context around'),
-});
-
-export const getMessageWithContextQueryParams = zod.object({
-  before: zod
-    .number()
-    .optional()
-    .describe('Number of older messages to include'),
-  after: zod
-    .number()
-    .optional()
-    .describe('Number of newer messages to include'),
-});
-
-export const getMessageWithContextResponse = zod
-  .object({
-    messages: zod
-      .array(
-        zod
-          .object({
-            channel_id: zod.uuid().describe('Channel id.'),
-            content: zod.string().describe('Message content.'),
-            created_at: zod.iso
-              .datetime({})
-              .describe('When the message was created.'),
-            deleted_at: zod.iso
-              .datetime({})
-              .nullish()
-              .describe('When the message was soft-deleted.'),
-            edited_at: zod.iso
-              .datetime({})
-              .nullish()
-              .describe('When the message was edited.'),
-            id: zod.uuid().describe('Message id.'),
-            sender: zod
-              .object({
-                avatar_url: zod
-                  .string()
-                  .nullish()
-                  .describe('Avatar URL for bot senders.'),
-                id: zod
-                  .string()
-                  .describe('Sender id without the storage namespace prefix.'),
-                name: zod
-                  .string()
-                  .nullish()
-                  .describe('Display name for bot senders.'),
-                triggered_by: zod
-                  .string()
-                  .nullish()
-                  .describe(
-                    'For an agent (bot) message, the id of the user who triggered it.'
-                  ),
-                type: zod.enum(['user', 'bot']).describe('Public sender type.'),
-              })
-              .describe('Public sender identity for channel messages.'),
-            sender_id: zod.string().describe('Sender user id.'),
-            thread_id: zod
-              .uuid()
-              .nullish()
-              .describe('Parent thread id for replies.'),
-            updated_at: zod.iso
-              .datetime({})
-              .describe('When the message was last updated.'),
-          })
-          .describe(
-            'A channel message returned by the message-context endpoint.'
-          )
-      )
-      .describe(
-        'Messages around the requested message in chronological order.'
-      ),
-  })
-  .describe('Response from the message-context endpoint.');
-
-/**
- * @summary Handler for `GET /channels/{channel_id}/messages/{message_id}/replies`.
- */
-export const getThreadRepliesParams = zod.object({
-  channel_id: zod.uuid().describe('Channel ID'),
-  message_id: zod.uuid().describe('Message ID (thread parent or reply id)'),
-});
-
-export const getThreadRepliesResponseItem = zod
-  .object({
-    attachments: zod
-      .array(
-        zod
-          .object({
-            created_at: zod.iso
-              .datetime({})
-              .describe('When the attachment was created.'),
-            entity_id: zod.string().describe('Entity id.'),
-            entity_type: zod.string().describe('Type of entity.'),
-            height: zod.number().nullish().describe('Height (for images).'),
-            id: zod.uuid().describe('Attachment id.'),
-            width: zod.number().nullish().describe('Width (for images).'),
-          })
-          .describe('An attachment on a message.')
-      )
-      .describe('Attachments on this reply.'),
-    content: zod.string().describe('Reply content.'),
-    created_at: zod.iso.datetime({}).describe('When the reply was created.'),
-    edited_at: zod.iso
-      .datetime({})
-      .nullish()
-      .describe('When the reply was edited.'),
-    id: zod.uuid().describe('Reply id.'),
-    reactions: zod
-      .array(
-        zod
-          .object({
-            emoji: zod.string().describe('The emoji string.'),
-            users: zod
-              .array(zod.string())
-              .describe('User ids who added this reaction.'),
-          })
-          .describe('A reaction with emoji and user list.')
-      )
-      .describe('Reactions on this reply.'),
-    sender: zod
-      .object({
-        avatar_url: zod
-          .string()
-          .nullish()
-          .describe('Avatar URL for bot senders.'),
-        id: zod
-          .string()
-          .describe('Sender id without the storage namespace prefix.'),
-        name: zod.string().nullish().describe('Display name for bot senders.'),
-        triggered_by: zod
-          .string()
-          .nullish()
-          .describe(
-            'For an agent (bot) message, the id of the user who triggered it.'
-          ),
-        type: zod.enum(['user', 'bot']).describe('Public sender type.'),
-      })
-      .describe('Public sender identity for channel messages.'),
-    sender_id: zod.string().describe('Sender user id.'),
-    updated_at: zod.iso
-      .datetime({})
-      .describe('When the reply was last updated.'),
-  })
-  .describe('A thread reply shown in preview.');
-export const getThreadRepliesResponse = zod.array(getThreadRepliesResponseItem);
-
-/**
- * @summary Handler for `GET /channels/{channel_id}/messages/{message_id}/resolve`.
- */
-export const resolveChannelMessageParams = zod.object({
-  channel_id: zod.uuid().describe('Channel ID'),
-  message_id: zod.uuid().describe('Message ID to resolve'),
-});
-
-export const resolveChannelMessageResponse = zod
-  .object({
-    channel_id: zod.uuid().describe('Channel this message belongs to.'),
-    created_at: zod.iso
-      .datetime({})
-      .describe('When the requested message was created.'),
-    kind: zod
-      .enum(['topLevelMessage', 'threadReply'])
-      .describe('Position of a message in the channel\/thread model.'),
-    message_id: zod.uuid().describe('The requested message id.'),
-    thread_id: zod
-      .uuid()
-      .describe(
-        'The top-level parent\/thread id. Equals message_id for top-level messages.'
-      ),
-  })
-  .describe('Resolution metadata for any channel message id.');
-
-/**
  * @summary Handler for `GET /channels/{channel_id}/participants`.
  */
 export const getChannelParticipantsParams = zod.object({
@@ -4882,37 +3483,6 @@ export const setChannelPictureBody = zod
   .describe(
     "Replace a channel's picture, or remove it by sending a null file id."
   );
-
-/**
- * @summary Handler for `POST /channels/{channel_id}/reaction`.
- */
-export const postReactionParams = zod.object({
-  channel_id: zod.uuid().describe('Channel ID'),
-});
-
-export const postReactionBody = zod
-  .object({
-    action: zod.enum(['Add', 'Remove']).describe('Reaction mutation action.'),
-    emoji: zod.string().describe('Reaction emoji.'),
-    message_id: zod.string().describe('Message id to react to.'),
-    nonce: zod.string().nullish().describe('Optional optimistic-update nonce.'),
-  })
-  .describe('Request to mutate a reaction.');
-
-/**
- * @summary Handler for `POST /channels/{channel_id}/typing`.
- */
-export const postTypingParams = zod.object({
-  channel_id: zod.uuid().describe('Channel ID'),
-});
-
-export const postTypingBody = zod
-  .object({
-    action: zod.enum(['start', 'stop']).describe('Typing indicator action.'),
-    nonce: zod.string().nullish().describe('Optional optimistic-update nonce.'),
-    thread_id: zod.string().nullish().describe('Optional thread id.'),
-  })
-  .describe('Request to emit a typing event.');
 
 /**
  * @summary Handler for `POST /channels/{channel_id}/webhook`.
@@ -5254,289 +3824,6 @@ export const getChannelsResponse = zod
       .describe('Opaque cursor for the next page, if one exists.'),
   })
   .describe('A cursor-paginated channel list response.');
-
-/**
- * @summary Delete a CRM comment, scoped to the requesting user's team. Deleting a
-thread's first comment deletes the whole discussion, as on documents
-(reported via `threadDeleted`).
- */
-export const deleteCrmCommentParams = zod.object({
-  comment_id: zod.uuid().describe('The CRM comment to delete'),
-});
-
-export const deleteCrmCommentResponse = zod
-  .object({
-    commentId: zod.uuid().describe("The deleted comment's id."),
-    threadDeleted: zod
-      .boolean()
-      .describe(
-        'Whether the whole discussion was deleted because the comment was its\nfirst.'
-      ),
-    threadId: zod.uuid().describe('The thread the comment belonged to.'),
-  })
-  .describe(
-    "Outcome of deleting a CRM comment: reports whether its discussion went with\nit (it does when the deleted comment was the discussion's first)."
-  );
-
-/**
- * @summary Edit a CRM comment's text, scoped to the requesting user's team via the
-comment's thread → entity → company. Returns the updated comment.
- */
-export const editCrmCommentParams = zod.object({
-  comment_id: zod.uuid().describe('The CRM comment to edit'),
-});
-
-export const editCrmCommentBody = zod
-  .object({
-    text: zod.string().describe('The new comment body (markdown).'),
-  })
-  .describe('Request body for `PATCH \/crm\/comments\/comment\/{comment_id}`.');
-
-export const editCrmCommentResponse = zod
-  .object({
-    commentId: zod.uuid().describe('The comment id.'),
-    createdAt: zod.iso.datetime({}).describe('When the comment was created.'),
-    deletedAt: zod.iso
-      .datetime({})
-      .nullish()
-      .describe('When the comment was soft-deleted, if ever.'),
-    metadata: zod.unknown().optional().describe('Arbitrary client metadata.'),
-    order: zod
-      .number()
-      .nullish()
-      .describe(
-        'Optional explicit ordering within the thread; the frontend falls\nback to `createdAt` when absent.'
-      ),
-    owner: zod.string().describe('Macro user id of the comment author.'),
-    sender: zod
-      .string()
-      .nullish()
-      .describe(
-        'Macro user id of the actual sender, when distinct from `owner`.'
-      ),
-    text: zod.string().describe('The comment body (markdown).'),
-    threadId: zod
-      .uuid()
-      .describe('The id of the thread this comment belongs to.'),
-    updatedAt: zod.iso
-      .datetime({})
-      .describe('When the comment was last updated.'),
-  })
-  .describe('A single comment within a [`CrmThread`].');
-
-/**
- * @summary List the comment threads on a CRM company or contact. Access is
-enforced by [`EntityPermissionExtractor`] against the path's
-`crm_company`/`crm_contact` entity type — hidden parents are
-invisible to plain members. An accessible entity with no threads
-returns `200 []`.
- */
-export const listCrmCommentsParams = zod.object({
-  entity_type: zod
-    .enum(['crm_company', 'crm_contact'])
-    .describe('Which CRM entity kind the threads hang off'),
-  entity_id: zod.uuid().describe('The CRM company or contact id'),
-});
-
-export const listCrmCommentsResponseItem = zod
-  .object({
-    comments: zod
-      .array(
-        zod
-          .object({
-            commentId: zod.uuid().describe('The comment id.'),
-            createdAt: zod.iso
-              .datetime({})
-              .describe('When the comment was created.'),
-            deletedAt: zod.iso
-              .datetime({})
-              .nullish()
-              .describe('When the comment was soft-deleted, if ever.'),
-            metadata: zod
-              .unknown()
-              .optional()
-              .describe('Arbitrary client metadata.'),
-            order: zod
-              .number()
-              .nullish()
-              .describe(
-                'Optional explicit ordering within the thread; the frontend falls\nback to `createdAt` when absent.'
-              ),
-            owner: zod
-              .string()
-              .describe('Macro user id of the comment author.'),
-            sender: zod
-              .string()
-              .nullish()
-              .describe(
-                'Macro user id of the actual sender, when distinct from `owner`.'
-              ),
-            text: zod.string().describe('The comment body (markdown).'),
-            threadId: zod
-              .uuid()
-              .describe('The id of the thread this comment belongs to.'),
-            updatedAt: zod.iso
-              .datetime({})
-              .describe('When the comment was last updated.'),
-          })
-          .describe('A single comment within a [`CrmThread`].')
-      )
-      .describe("The thread's comments, oldest first."),
-    thread: zod
-      .object({
-        createdAt: zod.iso
-          .datetime({})
-          .describe('When the thread was created.'),
-        deletedAt: zod.iso
-          .datetime({})
-          .nullish()
-          .describe('When the thread was soft-deleted, if ever.'),
-        entityId: zod
-          .uuid()
-          .describe(
-            'The id of the CRM company or contact this thread belongs to.'
-          ),
-        entityType: zod
-          .enum(['crm_company', 'crm_contact'])
-          .describe(
-            'Which CRM entity a comment thread is attached to. Serializes to\n`crm_company` \/ `crm_contact` — matching the `entityType` the frontend\nuses elsewhere when building entity URLs — and is parsed from the\n`{entity_type}` path segment on the comment routes.'
-          ),
-        metadata: zod
-          .unknown()
-          .optional()
-          .describe('Arbitrary client metadata.'),
-        owner: zod.string().describe('Macro user id of the thread creator.'),
-        resolved: zod.boolean().describe('Whether the thread is resolved.'),
-        threadId: zod.uuid().describe('The thread id.'),
-        updatedAt: zod.iso
-          .datetime({})
-          .describe('When the thread was last updated.'),
-      })
-      .describe(
-        'A CRM comment thread: the parent record one or more comments hang off.'
-      ),
-  })
-  .describe(
-    'A [`CrmThread`] with its comments nested under it — the unit the\nfrontend renders.'
-  );
-export const listCrmCommentsResponse = zod.array(listCrmCommentsResponseItem);
-
-/**
- * @summary Create a comment on a CRM company or contact — a new thread, or a reply
-when `threadId` is supplied. Returns the full thread (with all comments)
-after the insert. Team-scoped; 404 when the entity isn't owned by the
-team or `threadId` doesn't belong to it.
- */
-export const createCrmCommentParams = zod.object({
-  entity_type: zod
-    .enum(['crm_company', 'crm_contact'])
-    .describe('Which CRM entity kind the thread hangs off'),
-  entity_id: zod.uuid().describe('The CRM company or contact id'),
-});
-
-export const createCrmCommentBody = zod
-  .object({
-    metadata: zod
-      .unknown()
-      .optional()
-      .describe('Ignored: messages keep no client metadata.'),
-    text: zod.string().describe('The comment body (markdown).'),
-    threadId: zod
-      .uuid()
-      .nullish()
-      .describe(
-        'Existing thread to append to. Omit to start a new thread on the\naddressed entity.'
-      ),
-    threadMetadata: zod
-      .unknown()
-      .optional()
-      .describe('Ignored: discussions keep no thread metadata.'),
-  })
-  .describe(
-    'Request body for `POST \/crm\/comments\/{entity_type}\/{entity_id}`.'
-  );
-
-export const createCrmCommentResponse = zod
-  .object({
-    comments: zod
-      .array(
-        zod
-          .object({
-            commentId: zod.uuid().describe('The comment id.'),
-            createdAt: zod.iso
-              .datetime({})
-              .describe('When the comment was created.'),
-            deletedAt: zod.iso
-              .datetime({})
-              .nullish()
-              .describe('When the comment was soft-deleted, if ever.'),
-            metadata: zod
-              .unknown()
-              .optional()
-              .describe('Arbitrary client metadata.'),
-            order: zod
-              .number()
-              .nullish()
-              .describe(
-                'Optional explicit ordering within the thread; the frontend falls\nback to `createdAt` when absent.'
-              ),
-            owner: zod
-              .string()
-              .describe('Macro user id of the comment author.'),
-            sender: zod
-              .string()
-              .nullish()
-              .describe(
-                'Macro user id of the actual sender, when distinct from `owner`.'
-              ),
-            text: zod.string().describe('The comment body (markdown).'),
-            threadId: zod
-              .uuid()
-              .describe('The id of the thread this comment belongs to.'),
-            updatedAt: zod.iso
-              .datetime({})
-              .describe('When the comment was last updated.'),
-          })
-          .describe('A single comment within a [`CrmThread`].')
-      )
-      .describe("The thread's comments, oldest first."),
-    thread: zod
-      .object({
-        createdAt: zod.iso
-          .datetime({})
-          .describe('When the thread was created.'),
-        deletedAt: zod.iso
-          .datetime({})
-          .nullish()
-          .describe('When the thread was soft-deleted, if ever.'),
-        entityId: zod
-          .uuid()
-          .describe(
-            'The id of the CRM company or contact this thread belongs to.'
-          ),
-        entityType: zod
-          .enum(['crm_company', 'crm_contact'])
-          .describe(
-            'Which CRM entity a comment thread is attached to. Serializes to\n`crm_company` \/ `crm_contact` — matching the `entityType` the frontend\nuses elsewhere when building entity URLs — and is parsed from the\n`{entity_type}` path segment on the comment routes.'
-          ),
-        metadata: zod
-          .unknown()
-          .optional()
-          .describe('Arbitrary client metadata.'),
-        owner: zod.string().describe('Macro user id of the thread creator.'),
-        resolved: zod.boolean().describe('Whether the thread is resolved.'),
-        threadId: zod.uuid().describe('The thread id.'),
-        updatedAt: zod.iso
-          .datetime({})
-          .describe('When the thread was last updated.'),
-      })
-      .describe(
-        'A CRM comment thread: the parent record one or more comments hang off.'
-      ),
-  })
-  .describe(
-    'A [`CrmThread`] with its comments nested under it — the unit the\nfrontend renders.'
-  );
 
 /**
  * @summary Manually create a CRM company for the caller's team. Any team member
@@ -5927,6 +4214,68 @@ export const setCrmCompanyNameBody = zod
       ),
   })
   .describe('Request body for `PUT \/companies\/{company_id}\/name`.');
+
+/**
+ * @summary Search the caller's team's CRM contacts by email or name. Any team member
+may search visible contacts; admin/owner callers also match hidden
+contacts and contacts under hidden companies.
+ */
+export const searchContactsQueryLimitMin = 0;
+
+export const searchContactsQueryParams = zod.object({
+  query: zod
+    .string()
+    .optional()
+    .describe(
+      "Text the contact's email or name must contain (case-insensitive).\nEmpty lists the most recently interacted contacts."
+    ),
+  limit: zod
+    .number()
+    .min(searchContactsQueryLimitMin)
+    .nullish()
+    .describe('Maximum contacts to return (1-500, default 20).'),
+});
+
+export const searchContactsResponse = zod
+  .object({
+    contacts: zod
+      .array(
+        zod
+          .object({
+            companyId: zod
+              .uuid()
+              .describe('The id of the company the contact belongs to.'),
+            createdAt: zod.iso
+              .datetime({})
+              .describe('When the contact record was created.'),
+            email: zod.string().describe("The contact's email address."),
+            firstInteraction: zod.iso
+              .datetime({})
+              .describe('Earliest known interaction with this contact.'),
+            hidden: zod
+              .boolean()
+              .describe(
+                'Whether the contact is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint filters them out); admin\/owner callers see\nhidden contacts so they can render the right toggle state.'
+              ),
+            id: zod.uuid().describe('The id of the contact record.'),
+            lastInteraction: zod.iso
+              .datetime({})
+              .describe('Most recent known interaction with this contact.'),
+            name: zod
+              .string()
+              .nullish()
+              .describe('Display name observed for the contact, if any.'),
+            updatedAt: zod.iso
+              .datetime({})
+              .describe('When the contact record was last updated.'),
+          })
+          .describe(
+            'A CRM contact as returned by `GET \/crm\/companies\/{company_id}\/contacts`.'
+          )
+      )
+      .describe('Matching contacts, most recently interacted first.'),
+  })
+  .describe('Response from searching CRM contacts.');
 
 /**
  * @summary Look up a CRM contact by email in the caller's team. Returns a null
@@ -6870,6 +5219,7 @@ export const createTaskHandlerBody = zod
                             'CHANNEL',
                             'CHAT',
                             'COMPANY',
+                            'CONTACT',
                             'DOCUMENT',
                             'INITIATIVE',
                             'PROJECT',
@@ -6906,6 +5256,7 @@ export const createTaskHandlerBody = zod
                               'CHANNEL',
                               'CHAT',
                               'COMPANY',
+                              'CONTACT',
                               'DOCUMENT',
                               'INITIATIVE',
                               'PROJECT',
@@ -10398,6 +8749,156 @@ export const createInitiativeBody = zod
         'Optional member user ids. Invalid ids fail at the service boundary.'
       ),
     name: zod.string().describe('Display name.'),
+    propertyValues: zod
+      .array(
+        zod
+          .object({
+            propertyDefinitionId: zod
+              .uuid()
+              .describe('Property definition to set.'),
+            value: zod
+              .union([
+                zod
+                  .object({
+                    type: zod.enum(['boolean']),
+                    value: zod.boolean(),
+                  })
+                  .describe('Boolean true\/false value'),
+                zod
+                  .object({
+                    type: zod.enum(['date']),
+                    value: zod.iso.datetime({}),
+                  })
+                  .describe('Date and time value'),
+                zod
+                  .object({
+                    type: zod.enum(['number']),
+                    value: zod.number(),
+                  })
+                  .describe('Numeric value'),
+                zod
+                  .object({
+                    type: zod.enum(['string']),
+                    value: zod.string(),
+                  })
+                  .describe('String\/text value'),
+                zod
+                  .object({
+                    option_id: zod.uuid(),
+                    type: zod.enum(['select_option']),
+                  })
+                  .describe('Select option by ID (for select-type properties)'),
+                zod
+                  .object({
+                    option_ids: zod.array(zod.uuid()),
+                    type: zod.enum(['multi_select_option']),
+                  })
+                  .describe(
+                    'Multiple select options by ID (for multi-select properties)'
+                  ),
+                zod
+                  .object({
+                    reference: zod
+                      .object({
+                        entity_id: zod.string(),
+                        entity_type: zod
+                          .enum([
+                            'CALENDAR_EVENT',
+                            'CALL_RECORD',
+                            'CHANNEL',
+                            'CHAT',
+                            'COMPANY',
+                            'CONTACT',
+                            'DOCUMENT',
+                            'INITIATIVE',
+                            'PROJECT',
+                            'TASK',
+                            'THREAD',
+                            'USER',
+                          ])
+                          .describe(
+                            'Type of entity that can be referenced by entity properties.'
+                          ),
+                        specific_message_id: zod
+                          .uuid()
+                          .nullish()
+                          .describe(
+                            'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread\/channel\/chat.'
+                          ),
+                      })
+                      .describe(
+                        'Entity reference for entity-type property values.'
+                      ),
+                    type: zod.enum(['entity_reference']),
+                  })
+                  .describe('Entity reference'),
+                zod
+                  .object({
+                    references: zod.array(
+                      zod
+                        .object({
+                          entity_id: zod.string(),
+                          entity_type: zod
+                            .enum([
+                              'CALENDAR_EVENT',
+                              'CALL_RECORD',
+                              'CHANNEL',
+                              'CHAT',
+                              'COMPANY',
+                              'CONTACT',
+                              'DOCUMENT',
+                              'INITIATIVE',
+                              'PROJECT',
+                              'TASK',
+                              'THREAD',
+                              'USER',
+                            ])
+                            .describe(
+                              'Type of entity that can be referenced by entity properties.'
+                            ),
+                          specific_message_id: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread\/channel\/chat.'
+                            ),
+                        })
+                        .describe(
+                          'Entity reference for entity-type property values.'
+                        )
+                    ),
+                    type: zod.enum(['multi_entity_reference']),
+                  })
+                  .describe(
+                    'Multiple entity references (for multi-select entity properties)'
+                  ),
+                zod
+                  .object({
+                    type: zod.enum(['link']),
+                    url: zod.string(),
+                  })
+                  .describe('Link value'),
+                zod
+                  .object({
+                    type: zod.enum(['multi_link']),
+                    urls: zod.array(zod.string()),
+                  })
+                  .describe(
+                    'Multiple link values (for multi-select link properties)'
+                  ),
+              ])
+              .describe(
+                'Type-safe enum for setting entity property values - provides compile-time validation.'
+              ),
+          })
+          .describe(
+            'A property value set on a new initiative as part of its create.'
+          )
+      )
+      .optional()
+      .describe(
+        'Property values set as the owner within the create. A value the properties\nservice rejects fails the whole create; no initiative is left behind.'
+      ),
     shareWithTeam: zod
       .boolean()
       .nullish()
@@ -10908,6 +9409,7 @@ export const getItemsSoupResponse = zod
                                       'CHANNEL',
                                       'CHAT',
                                       'COMPANY',
+                                      'CONTACT',
                                       'DOCUMENT',
                                       'INITIATIVE',
                                       'PROJECT',
@@ -11010,6 +9512,7 @@ export const getItemsSoupResponse = zod
                                                   'CHANNEL',
                                                   'CHAT',
                                                   'COMPANY',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -11252,6 +9755,7 @@ export const getItemsSoupResponse = zod
                                       'CHANNEL',
                                       'CHAT',
                                       'COMPANY',
+                                      'CONTACT',
                                       'DOCUMENT',
                                       'INITIATIVE',
                                       'PROJECT',
@@ -11354,6 +9858,7 @@ export const getItemsSoupResponse = zod
                                                   'CHANNEL',
                                                   'CHAT',
                                                   'COMPANY',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -11522,6 +10027,7 @@ export const getItemsSoupResponse = zod
                                       'CHANNEL',
                                       'CHAT',
                                       'COMPANY',
+                                      'CONTACT',
                                       'DOCUMENT',
                                       'INITIATIVE',
                                       'PROJECT',
@@ -11624,6 +10130,7 @@ export const getItemsSoupResponse = zod
                                                   'CHANNEL',
                                                   'CHAT',
                                                   'COMPANY',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -11783,6 +10290,7 @@ export const getItemsSoupResponse = zod
                                       'CHANNEL',
                                       'CHAT',
                                       'COMPANY',
+                                      'CONTACT',
                                       'DOCUMENT',
                                       'INITIATIVE',
                                       'PROJECT',
@@ -11885,6 +10393,7 @@ export const getItemsSoupResponse = zod
                                                   'CHANNEL',
                                                   'CHAT',
                                                   'COMPANY',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -12108,6 +10617,7 @@ export const getItemsSoupResponse = zod
                                           'CHANNEL',
                                           'CHAT',
                                           'COMPANY',
+                                          'CONTACT',
                                           'DOCUMENT',
                                           'INITIATIVE',
                                           'PROJECT',
@@ -12210,6 +10720,7 @@ export const getItemsSoupResponse = zod
                                                       'CHANNEL',
                                                       'CHAT',
                                                       'COMPANY',
+                                                      'CONTACT',
                                                       'DOCUMENT',
                                                       'INITIATIVE',
                                                       'PROJECT',
@@ -12810,6 +11321,7 @@ export const getItemsSoupResponse = zod
                                       'CHANNEL',
                                       'CHAT',
                                       'COMPANY',
+                                      'CONTACT',
                                       'DOCUMENT',
                                       'INITIATIVE',
                                       'PROJECT',
@@ -12912,6 +11424,7 @@ export const getItemsSoupResponse = zod
                                                   'CHANNEL',
                                                   'CHAT',
                                                   'COMPANY',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -13168,6 +11681,7 @@ export const getItemsSoupResponse = zod
                                           'CHANNEL',
                                           'CHAT',
                                           'COMPANY',
+                                          'CONTACT',
                                           'DOCUMENT',
                                           'INITIATIVE',
                                           'PROJECT',
@@ -13270,6 +11784,7 @@ export const getItemsSoupResponse = zod
                                                       'CHANNEL',
                                                       'CHAT',
                                                       'COMPANY',
+                                                      'CONTACT',
                                                       'DOCUMENT',
                                                       'INITIATIVE',
                                                       'PROJECT',
@@ -13474,6 +11989,7 @@ export const getItemsSoupResponse = zod
                                       'CHANNEL',
                                       'CHAT',
                                       'COMPANY',
+                                      'CONTACT',
                                       'DOCUMENT',
                                       'INITIATIVE',
                                       'PROJECT',
@@ -13576,6 +12092,7 @@ export const getItemsSoupResponse = zod
                                                   'CHANNEL',
                                                   'CHAT',
                                                   'COMPANY',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -13825,6 +12342,7 @@ export const getItemsSoupResponse = zod
                                       'CHANNEL',
                                       'CHAT',
                                       'COMPANY',
+                                      'CONTACT',
                                       'DOCUMENT',
                                       'INITIATIVE',
                                       'PROJECT',
@@ -13927,6 +12445,7 @@ export const getItemsSoupResponse = zod
                                                   'CHANNEL',
                                                   'CHAT',
                                                   'COMPANY',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -14174,6 +12693,7 @@ export const getItemsSoupResponse = zod
                                       'CHANNEL',
                                       'CHAT',
                                       'COMPANY',
+                                      'CONTACT',
                                       'DOCUMENT',
                                       'INITIATIVE',
                                       'PROJECT',
@@ -14276,6 +12796,7 @@ export const getItemsSoupResponse = zod
                                                   'CHANNEL',
                                                   'CHAT',
                                                   'COMPANY',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -15286,6 +13807,7 @@ export const postItemsSoupResponse = zod
                                       'CHANNEL',
                                       'CHAT',
                                       'COMPANY',
+                                      'CONTACT',
                                       'DOCUMENT',
                                       'INITIATIVE',
                                       'PROJECT',
@@ -15388,6 +13910,7 @@ export const postItemsSoupResponse = zod
                                                   'CHANNEL',
                                                   'CHAT',
                                                   'COMPANY',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -15630,6 +14153,7 @@ export const postItemsSoupResponse = zod
                                       'CHANNEL',
                                       'CHAT',
                                       'COMPANY',
+                                      'CONTACT',
                                       'DOCUMENT',
                                       'INITIATIVE',
                                       'PROJECT',
@@ -15732,6 +14256,7 @@ export const postItemsSoupResponse = zod
                                                   'CHANNEL',
                                                   'CHAT',
                                                   'COMPANY',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -15900,6 +14425,7 @@ export const postItemsSoupResponse = zod
                                       'CHANNEL',
                                       'CHAT',
                                       'COMPANY',
+                                      'CONTACT',
                                       'DOCUMENT',
                                       'INITIATIVE',
                                       'PROJECT',
@@ -16002,6 +14528,7 @@ export const postItemsSoupResponse = zod
                                                   'CHANNEL',
                                                   'CHAT',
                                                   'COMPANY',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -16161,6 +14688,7 @@ export const postItemsSoupResponse = zod
                                       'CHANNEL',
                                       'CHAT',
                                       'COMPANY',
+                                      'CONTACT',
                                       'DOCUMENT',
                                       'INITIATIVE',
                                       'PROJECT',
@@ -16263,6 +14791,7 @@ export const postItemsSoupResponse = zod
                                                   'CHANNEL',
                                                   'CHAT',
                                                   'COMPANY',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -16486,6 +15015,7 @@ export const postItemsSoupResponse = zod
                                           'CHANNEL',
                                           'CHAT',
                                           'COMPANY',
+                                          'CONTACT',
                                           'DOCUMENT',
                                           'INITIATIVE',
                                           'PROJECT',
@@ -16588,6 +15118,7 @@ export const postItemsSoupResponse = zod
                                                       'CHANNEL',
                                                       'CHAT',
                                                       'COMPANY',
+                                                      'CONTACT',
                                                       'DOCUMENT',
                                                       'INITIATIVE',
                                                       'PROJECT',
@@ -17188,6 +15719,7 @@ export const postItemsSoupResponse = zod
                                       'CHANNEL',
                                       'CHAT',
                                       'COMPANY',
+                                      'CONTACT',
                                       'DOCUMENT',
                                       'INITIATIVE',
                                       'PROJECT',
@@ -17290,6 +15822,7 @@ export const postItemsSoupResponse = zod
                                                   'CHANNEL',
                                                   'CHAT',
                                                   'COMPANY',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -17546,6 +16079,7 @@ export const postItemsSoupResponse = zod
                                           'CHANNEL',
                                           'CHAT',
                                           'COMPANY',
+                                          'CONTACT',
                                           'DOCUMENT',
                                           'INITIATIVE',
                                           'PROJECT',
@@ -17648,6 +16182,7 @@ export const postItemsSoupResponse = zod
                                                       'CHANNEL',
                                                       'CHAT',
                                                       'COMPANY',
+                                                      'CONTACT',
                                                       'DOCUMENT',
                                                       'INITIATIVE',
                                                       'PROJECT',
@@ -17852,6 +16387,7 @@ export const postItemsSoupResponse = zod
                                       'CHANNEL',
                                       'CHAT',
                                       'COMPANY',
+                                      'CONTACT',
                                       'DOCUMENT',
                                       'INITIATIVE',
                                       'PROJECT',
@@ -17954,6 +16490,7 @@ export const postItemsSoupResponse = zod
                                                   'CHANNEL',
                                                   'CHAT',
                                                   'COMPANY',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -18203,6 +16740,7 @@ export const postItemsSoupResponse = zod
                                       'CHANNEL',
                                       'CHAT',
                                       'COMPANY',
+                                      'CONTACT',
                                       'DOCUMENT',
                                       'INITIATIVE',
                                       'PROJECT',
@@ -18305,6 +16843,7 @@ export const postItemsSoupResponse = zod
                                                   'CHANNEL',
                                                   'CHAT',
                                                   'COMPANY',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -18552,6 +17091,7 @@ export const postItemsSoupResponse = zod
                                       'CHANNEL',
                                       'CHAT',
                                       'COMPANY',
+                                      'CONTACT',
                                       'DOCUMENT',
                                       'INITIATIVE',
                                       'PROJECT',
@@ -18654,6 +17194,7 @@ export const postItemsSoupResponse = zod
                                                   'CHANNEL',
                                                   'CHAT',
                                                   'COMPANY',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -19070,6 +17611,7 @@ export const postItemsSoupAstResponse = zod
                                       'CHANNEL',
                                       'CHAT',
                                       'COMPANY',
+                                      'CONTACT',
                                       'DOCUMENT',
                                       'INITIATIVE',
                                       'PROJECT',
@@ -19172,6 +17714,7 @@ export const postItemsSoupAstResponse = zod
                                                   'CHANNEL',
                                                   'CHAT',
                                                   'COMPANY',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -19414,6 +17957,7 @@ export const postItemsSoupAstResponse = zod
                                       'CHANNEL',
                                       'CHAT',
                                       'COMPANY',
+                                      'CONTACT',
                                       'DOCUMENT',
                                       'INITIATIVE',
                                       'PROJECT',
@@ -19516,6 +18060,7 @@ export const postItemsSoupAstResponse = zod
                                                   'CHANNEL',
                                                   'CHAT',
                                                   'COMPANY',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -19684,6 +18229,7 @@ export const postItemsSoupAstResponse = zod
                                       'CHANNEL',
                                       'CHAT',
                                       'COMPANY',
+                                      'CONTACT',
                                       'DOCUMENT',
                                       'INITIATIVE',
                                       'PROJECT',
@@ -19786,6 +18332,7 @@ export const postItemsSoupAstResponse = zod
                                                   'CHANNEL',
                                                   'CHAT',
                                                   'COMPANY',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -19945,6 +18492,7 @@ export const postItemsSoupAstResponse = zod
                                       'CHANNEL',
                                       'CHAT',
                                       'COMPANY',
+                                      'CONTACT',
                                       'DOCUMENT',
                                       'INITIATIVE',
                                       'PROJECT',
@@ -20047,6 +18595,7 @@ export const postItemsSoupAstResponse = zod
                                                   'CHANNEL',
                                                   'CHAT',
                                                   'COMPANY',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -20270,6 +18819,7 @@ export const postItemsSoupAstResponse = zod
                                           'CHANNEL',
                                           'CHAT',
                                           'COMPANY',
+                                          'CONTACT',
                                           'DOCUMENT',
                                           'INITIATIVE',
                                           'PROJECT',
@@ -20372,6 +18922,7 @@ export const postItemsSoupAstResponse = zod
                                                       'CHANNEL',
                                                       'CHAT',
                                                       'COMPANY',
+                                                      'CONTACT',
                                                       'DOCUMENT',
                                                       'INITIATIVE',
                                                       'PROJECT',
@@ -20974,6 +19525,7 @@ export const postItemsSoupAstResponse = zod
                                       'CHANNEL',
                                       'CHAT',
                                       'COMPANY',
+                                      'CONTACT',
                                       'DOCUMENT',
                                       'INITIATIVE',
                                       'PROJECT',
@@ -21076,6 +19628,7 @@ export const postItemsSoupAstResponse = zod
                                                   'CHANNEL',
                                                   'CHAT',
                                                   'COMPANY',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -21332,6 +19885,7 @@ export const postItemsSoupAstResponse = zod
                                           'CHANNEL',
                                           'CHAT',
                                           'COMPANY',
+                                          'CONTACT',
                                           'DOCUMENT',
                                           'INITIATIVE',
                                           'PROJECT',
@@ -21434,6 +19988,7 @@ export const postItemsSoupAstResponse = zod
                                                       'CHANNEL',
                                                       'CHAT',
                                                       'COMPANY',
+                                                      'CONTACT',
                                                       'DOCUMENT',
                                                       'INITIATIVE',
                                                       'PROJECT',
@@ -21638,6 +20193,7 @@ export const postItemsSoupAstResponse = zod
                                       'CHANNEL',
                                       'CHAT',
                                       'COMPANY',
+                                      'CONTACT',
                                       'DOCUMENT',
                                       'INITIATIVE',
                                       'PROJECT',
@@ -21740,6 +20296,7 @@ export const postItemsSoupAstResponse = zod
                                                   'CHANNEL',
                                                   'CHAT',
                                                   'COMPANY',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -21989,6 +20546,7 @@ export const postItemsSoupAstResponse = zod
                                       'CHANNEL',
                                       'CHAT',
                                       'COMPANY',
+                                      'CONTACT',
                                       'DOCUMENT',
                                       'INITIATIVE',
                                       'PROJECT',
@@ -22091,6 +20649,7 @@ export const postItemsSoupAstResponse = zod
                                                   'CHANNEL',
                                                   'CHAT',
                                                   'COMPANY',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -22338,6 +20897,7 @@ export const postItemsSoupAstResponse = zod
                                       'CHANNEL',
                                       'CHAT',
                                       'COMPANY',
+                                      'CONTACT',
                                       'DOCUMENT',
                                       'INITIATIVE',
                                       'PROJECT',
@@ -22440,6 +21000,7 @@ export const postItemsSoupAstResponse = zod
                                                   'CHANNEL',
                                                   'CHAT',
                                                   'COMPANY',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -23118,6 +21679,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                             'CHANNEL',
                                             'CHAT',
                                             'COMPANY',
+                                            'CONTACT',
                                             'DOCUMENT',
                                             'INITIATIVE',
                                             'PROJECT',
@@ -23220,6 +21782,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                                         'CHANNEL',
                                                         'CHAT',
                                                         'COMPANY',
+                                                        'CONTACT',
                                                         'DOCUMENT',
                                                         'INITIATIVE',
                                                         'PROJECT',
@@ -23468,6 +22031,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                             'CHANNEL',
                                             'CHAT',
                                             'COMPANY',
+                                            'CONTACT',
                                             'DOCUMENT',
                                             'INITIATIVE',
                                             'PROJECT',
@@ -23570,6 +22134,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                                         'CHANNEL',
                                                         'CHAT',
                                                         'COMPANY',
+                                                        'CONTACT',
                                                         'DOCUMENT',
                                                         'INITIATIVE',
                                                         'PROJECT',
@@ -23740,6 +22305,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                             'CHANNEL',
                                             'CHAT',
                                             'COMPANY',
+                                            'CONTACT',
                                             'DOCUMENT',
                                             'INITIATIVE',
                                             'PROJECT',
@@ -23842,6 +22408,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                                         'CHANNEL',
                                                         'CHAT',
                                                         'COMPANY',
+                                                        'CONTACT',
                                                         'DOCUMENT',
                                                         'INITIATIVE',
                                                         'PROJECT',
@@ -24005,6 +22572,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                             'CHANNEL',
                                             'CHAT',
                                             'COMPANY',
+                                            'CONTACT',
                                             'DOCUMENT',
                                             'INITIATIVE',
                                             'PROJECT',
@@ -24107,6 +22675,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                                         'CHANNEL',
                                                         'CHAT',
                                                         'COMPANY',
+                                                        'CONTACT',
                                                         'DOCUMENT',
                                                         'INITIATIVE',
                                                         'PROJECT',
@@ -24347,6 +22916,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                                 'CHANNEL',
                                                 'CHAT',
                                                 'COMPANY',
+                                                'CONTACT',
                                                 'DOCUMENT',
                                                 'INITIATIVE',
                                                 'PROJECT',
@@ -24453,6 +23023,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                                             'CHANNEL',
                                                             'CHAT',
                                                             'COMPANY',
+                                                            'CONTACT',
                                                             'DOCUMENT',
                                                             'INITIATIVE',
                                                             'PROJECT',
@@ -25102,6 +23673,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                             'CHANNEL',
                                             'CHAT',
                                             'COMPANY',
+                                            'CONTACT',
                                             'DOCUMENT',
                                             'INITIATIVE',
                                             'PROJECT',
@@ -25204,6 +23776,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                                         'CHANNEL',
                                                         'CHAT',
                                                         'COMPANY',
+                                                        'CONTACT',
                                                         'DOCUMENT',
                                                         'INITIATIVE',
                                                         'PROJECT',
@@ -25472,6 +24045,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                                 'CHANNEL',
                                                 'CHAT',
                                                 'COMPANY',
+                                                'CONTACT',
                                                 'DOCUMENT',
                                                 'INITIATIVE',
                                                 'PROJECT',
@@ -25578,6 +24152,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                                             'CHANNEL',
                                                             'CHAT',
                                                             'COMPANY',
+                                                            'CONTACT',
                                                             'DOCUMENT',
                                                             'INITIATIVE',
                                                             'PROJECT',
@@ -25788,6 +24363,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                             'CHANNEL',
                                             'CHAT',
                                             'COMPANY',
+                                            'CONTACT',
                                             'DOCUMENT',
                                             'INITIATIVE',
                                             'PROJECT',
@@ -25890,6 +24466,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                                         'CHANNEL',
                                                         'CHAT',
                                                         'COMPANY',
+                                                        'CONTACT',
                                                         'DOCUMENT',
                                                         'INITIATIVE',
                                                         'PROJECT',
@@ -26149,6 +24726,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                             'CHANNEL',
                                             'CHAT',
                                             'COMPANY',
+                                            'CONTACT',
                                             'DOCUMENT',
                                             'INITIATIVE',
                                             'PROJECT',
@@ -26251,6 +24829,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                                         'CHANNEL',
                                                         'CHAT',
                                                         'COMPANY',
+                                                        'CONTACT',
                                                         'DOCUMENT',
                                                         'INITIATIVE',
                                                         'PROJECT',
@@ -26500,6 +25079,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                             'CHANNEL',
                                             'CHAT',
                                             'COMPANY',
+                                            'CONTACT',
                                             'DOCUMENT',
                                             'INITIATIVE',
                                             'PROJECT',
@@ -26602,6 +25182,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                                         'CHANNEL',
                                                         'CHAT',
                                                         'COMPANY',
+                                                        'CONTACT',
                                                         'DOCUMENT',
                                                         'INITIATIVE',
                                                         'PROJECT',
@@ -26908,6 +25489,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                             'CHANNEL',
                                             'CHAT',
                                             'COMPANY',
+                                            'CONTACT',
                                             'DOCUMENT',
                                             'INITIATIVE',
                                             'PROJECT',
@@ -27010,6 +25592,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                                         'CHANNEL',
                                                         'CHAT',
                                                         'COMPANY',
+                                                        'CONTACT',
                                                         'DOCUMENT',
                                                         'INITIATIVE',
                                                         'PROJECT',
@@ -27258,6 +25841,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                             'CHANNEL',
                                             'CHAT',
                                             'COMPANY',
+                                            'CONTACT',
                                             'DOCUMENT',
                                             'INITIATIVE',
                                             'PROJECT',
@@ -27360,6 +25944,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                                         'CHANNEL',
                                                         'CHAT',
                                                         'COMPANY',
+                                                        'CONTACT',
                                                         'DOCUMENT',
                                                         'INITIATIVE',
                                                         'PROJECT',
@@ -27530,6 +26115,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                             'CHANNEL',
                                             'CHAT',
                                             'COMPANY',
+                                            'CONTACT',
                                             'DOCUMENT',
                                             'INITIATIVE',
                                             'PROJECT',
@@ -27632,6 +26218,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                                         'CHANNEL',
                                                         'CHAT',
                                                         'COMPANY',
+                                                        'CONTACT',
                                                         'DOCUMENT',
                                                         'INITIATIVE',
                                                         'PROJECT',
@@ -27795,6 +26382,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                             'CHANNEL',
                                             'CHAT',
                                             'COMPANY',
+                                            'CONTACT',
                                             'DOCUMENT',
                                             'INITIATIVE',
                                             'PROJECT',
@@ -27897,6 +26485,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                                         'CHANNEL',
                                                         'CHAT',
                                                         'COMPANY',
+                                                        'CONTACT',
                                                         'DOCUMENT',
                                                         'INITIATIVE',
                                                         'PROJECT',
@@ -28137,6 +26726,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                                 'CHANNEL',
                                                 'CHAT',
                                                 'COMPANY',
+                                                'CONTACT',
                                                 'DOCUMENT',
                                                 'INITIATIVE',
                                                 'PROJECT',
@@ -28243,6 +26833,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                                             'CHANNEL',
                                                             'CHAT',
                                                             'COMPANY',
+                                                            'CONTACT',
                                                             'DOCUMENT',
                                                             'INITIATIVE',
                                                             'PROJECT',
@@ -28892,6 +27483,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                             'CHANNEL',
                                             'CHAT',
                                             'COMPANY',
+                                            'CONTACT',
                                             'DOCUMENT',
                                             'INITIATIVE',
                                             'PROJECT',
@@ -28994,6 +27586,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                                         'CHANNEL',
                                                         'CHAT',
                                                         'COMPANY',
+                                                        'CONTACT',
                                                         'DOCUMENT',
                                                         'INITIATIVE',
                                                         'PROJECT',
@@ -29262,6 +27855,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                                 'CHANNEL',
                                                 'CHAT',
                                                 'COMPANY',
+                                                'CONTACT',
                                                 'DOCUMENT',
                                                 'INITIATIVE',
                                                 'PROJECT',
@@ -29368,6 +27962,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                                             'CHANNEL',
                                                             'CHAT',
                                                             'COMPANY',
+                                                            'CONTACT',
                                                             'DOCUMENT',
                                                             'INITIATIVE',
                                                             'PROJECT',
@@ -29578,6 +28173,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                             'CHANNEL',
                                             'CHAT',
                                             'COMPANY',
+                                            'CONTACT',
                                             'DOCUMENT',
                                             'INITIATIVE',
                                             'PROJECT',
@@ -29680,6 +28276,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                                         'CHANNEL',
                                                         'CHAT',
                                                         'COMPANY',
+                                                        'CONTACT',
                                                         'DOCUMENT',
                                                         'INITIATIVE',
                                                         'PROJECT',
@@ -29939,6 +28536,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                             'CHANNEL',
                                             'CHAT',
                                             'COMPANY',
+                                            'CONTACT',
                                             'DOCUMENT',
                                             'INITIATIVE',
                                             'PROJECT',
@@ -30041,6 +28639,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                                         'CHANNEL',
                                                         'CHAT',
                                                         'COMPANY',
+                                                        'CONTACT',
                                                         'DOCUMENT',
                                                         'INITIATIVE',
                                                         'PROJECT',
@@ -30290,6 +28889,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                             'CHANNEL',
                                             'CHAT',
                                             'COMPANY',
+                                            'CONTACT',
                                             'DOCUMENT',
                                             'INITIATIVE',
                                             'PROJECT',
@@ -30392,6 +28992,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                                         'CHANNEL',
                                                         'CHAT',
                                                         'COMPANY',
+                                                        'CONTACT',
                                                         'DOCUMENT',
                                                         'INITIATIVE',
                                                         'PROJECT',
@@ -35123,6 +33724,143 @@ export const createReminderBody = zod
       .describe('When a reminder fires.'),
   })
   .describe('Request body for creating a reminder.');
+
+/**
+ * @summary Read an email follow-up and reconcile inbound reply cancellation.
+ */
+export const getEmailFollowupParams = zod.object({
+  thread_id: zod.uuid(),
+});
+
+export const getEmailFollowupResponse = zod
+  .object({
+    followup: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            condition: zod
+              .enum(['if_no_reply', 'regardless'])
+              .describe(
+                'When an email follow-up should return the conversation.'
+              ),
+            linkId: zod.uuid().describe('Canonical owned\/delegated inbox.'),
+            remindAt: zod.iso.datetime({}).describe('Confirmed schedule.'),
+            reminderId: zod
+              .uuid()
+              .describe(
+                'Its ordinary reminder, used by the existing alert\/management surfaces.'
+              ),
+            revision: zod
+              .uuid()
+              .describe(
+                'Last accepted operation; edits\/removal compare this to prevent stale undo.'
+              ),
+            state: zod
+              .enum([
+                'archiving',
+                'pending',
+                'returning',
+                'returned',
+                'cancelled',
+                'removed',
+              ])
+              .describe('Durable progress of an email operation.'),
+            threadId: zod.uuid().describe('Conversation identity.'),
+          })
+          .describe(
+            'Public status shown on email and in the Reminders editor.'
+          ),
+      ])
+      .optional(),
+  })
+  .describe('Lookup response, including an email with no follow-up yet.');
+
+/**
+ * @summary Schedule, edit or remove one email follow-up as an idempotent operation.
+ */
+export const setEmailFollowupParams = zod.object({
+  thread_id: zod.uuid(),
+});
+
+export const setEmailFollowupBody = zod
+  .union([
+    zod
+      .object({
+        condition: zod
+          .enum(['if_no_reply', 'regardless'])
+          .describe('When an email follow-up should return the conversation.'),
+        expectedRevision: zod
+          .uuid()
+          .nullish()
+          .describe('None for creation, the current revision for edits.'),
+        operationId: zod
+          .uuid()
+          .describe('Unique request identity retained across network retries.'),
+        remindAt: zod.iso
+          .datetime({})
+          .describe(
+            'One future instant; conditional recurrence is deliberately absent.'
+          ),
+        type: zod.enum(['set']),
+      })
+      .describe(
+        'Create or edit one follow-up. An edit requires the displayed revision.'
+      ),
+    zod
+      .object({
+        expectedRevision: zod
+          .uuid()
+          .describe(
+            'Reject removal if a newer edit has replaced this operation.'
+          ),
+        operationId: zod.uuid().describe('Unique request identity.'),
+        type: zod.enum(['remove']),
+        undo: zod
+          .boolean()
+          .optional()
+          .describe(
+            'Undo restores original visibility; ordinary Remove returns to inbox.'
+          ),
+      })
+      .describe(
+        'Cancel and restore the conversation without leaving a future alert.'
+      ),
+  ])
+  .describe(
+    'Idempotent email command. Reusing an operation ID with different data fails.'
+  );
+
+export const setEmailFollowupResponse = zod
+  .object({
+    condition: zod
+      .enum(['if_no_reply', 'regardless'])
+      .describe('When an email follow-up should return the conversation.'),
+    linkId: zod.uuid().describe('Canonical owned\/delegated inbox.'),
+    remindAt: zod.iso.datetime({}).describe('Confirmed schedule.'),
+    reminderId: zod
+      .uuid()
+      .describe(
+        'Its ordinary reminder, used by the existing alert\/management surfaces.'
+      ),
+    revision: zod
+      .uuid()
+      .describe(
+        'Last accepted operation; edits\/removal compare this to prevent stale undo.'
+      ),
+    state: zod
+      .enum([
+        'archiving',
+        'pending',
+        'returning',
+        'returned',
+        'cancelled',
+        'removed',
+      ])
+      .describe('Durable progress of an email operation.'),
+    threadId: zod.uuid().describe('Conversation identity.'),
+  })
+  .describe('Public status shown on email and in the Reminders editor.');
 
 /**
  * @summary Fetch one of the caller's reminders.

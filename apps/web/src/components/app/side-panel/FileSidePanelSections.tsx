@@ -5,12 +5,11 @@ import {
 import { useBlockId } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
-import { UserIcon } from '@core/component/UserIcon';
 import { useCanEdit } from '@core/signal/permissions';
-import { getDisplayName, tryMacroId } from '@core/user';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { type DateValue, formatDate } from '@core/util/date';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
+import { OwnerLabel } from '@entity/owner/owner-display';
 import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
 import { createCallback } from '@solid-primitives/rootless';
 import { createMemo, Show } from 'solid-js';
@@ -199,12 +198,9 @@ export function FolderLink(props: { projectId: string; projectName: string }) {
 }
 
 export function OwnerValue(props: { ownerId: string }) {
-  const displayName = () => getDisplayName(tryMacroId(props.ownerId));
-
   return (
     <SidePanel.Pill>
-      <UserIcon id={props.ownerId} size="sm" showTooltip suppressClick />
-      <span class="truncate">{displayName()}</span>
+      <OwnerLabel ownerId={props.ownerId} suppressClick />
     </SidePanel.Pill>
   );
 }

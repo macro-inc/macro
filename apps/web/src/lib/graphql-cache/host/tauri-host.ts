@@ -378,6 +378,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
           data: args.data,
           linkPatches: args.linkPatches,
           revalidations: args.revalidations,
+          identityBindings: args.identityBindings,
           createdAtMs: claim.nowMs,
           owner: claim.owner,
           nowMs: claim.nowMs,
@@ -470,7 +471,8 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     async rollbackOptimisticWrite(
       transactionId: string,
       claim: MutationClaim,
-      error: string
+      error: string,
+      errorCode?: string
     ): Promise<RollbackOptimisticWriteResult> {
       await ready;
       return await request<RollbackOptimisticWriteResult>(
@@ -480,6 +482,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
           leaseOwner: claim.owner,
           leaseGeneration: claim.generation,
           error,
+          ...(errorCode === undefined ? {} : { errorCode }),
         }
       );
     },

@@ -143,6 +143,8 @@ impl From<UserEmailLinkSettings> for GraphqlEmailLinkSettings {
 /// Enriched email link accessible to the authenticated user.
 #[derive(SimpleObject)]
 pub struct GraphqlEmailLink {
+    /// Whether drafts from this account's own sender are classified as Signal.
+    draft_is_signal: bool,
     /// Stable email link identifier.
     id: ID,
     /// Macro user that owns the inbox.
@@ -172,6 +174,7 @@ pub struct GraphqlEmailLink {
 impl From<UserEmailLink> for GraphqlEmailLink {
     fn from(link: UserEmailLink) -> Self {
         Self {
+            draft_is_signal: link.draft_is_signal,
             id: ID(link.id.to_string()),
             macro_id: link.macro_id.to_string(),
             email_address: link.email_address.0.as_ref().to_owned(),

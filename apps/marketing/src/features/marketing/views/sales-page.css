@@ -1,0 +1,39 @@
+/* /tour: Instagram ad landing page built from homepage parts. Only spacing the
+   homepage lacks outside its own shell, and the booker frame, live here. */
+.tour-page :is(h1, h2, h3) { margin: 0; }
+/* The homepage hero and constellation sit in OnboardingShell, which uses the
+   site's system font stack; .homepage-sections and .feature-page would
+   otherwise give them slab and Inter. */
+.tour-hero, .tour-constellation .feature-flow, .tour-page .unification-subtext { font-family: -apple-system, BlinkMacSystemFont, "Inter Variable", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"; }
+.feature-page .tour-cta { color: #000; }
+/* Pull the CTA up to the subtitle: 16px instead of the homepage's 36px
+   (24px row gap + 12px margin from homepage-scroll-cue.css). */
+.tour-hero .ob-welcome:has(.homepage-hero-cta) > [data-welcome-copy] > .homepage-hero-action { margin-top: -8px; }
+/* The shared header's "Talk to us" link leaves the page for cal.com; here the
+   booker is inline, so hide it while this page is mounted. */
+body:has(.tour-page) .site-nav-demo { display: none; }
+/* The desktop line break orphans a word on phones; balance the lines instead. */
+@media (max-width: 767px) { .tour-hero h1 { text-wrap: balance; } .tour-hero h1 br { display: none; } }
+/* `.feature-page p` also cancels the hero subtitle's `mx-auto` centering. */
+.feature-page .tour-hero p[data-welcome-copy] { margin-inline: auto; }
+/* `.feature-page p` resets margins; restore homepage-unification.css spacing. */
+.feature-page .tour-page .unification-subtext { margin: 24px 0 0; }
+@media (min-width: 768px) { .feature-page .tour-page .unification-subtext { margin-top: clamp(20px, 3svh, 30px); } }
+/* Later sections reuse the unification heading; it sits above content instead
+   of below the constellation. */
+.unification-copy.tour-heading { margin: 0 auto 48px; }
+/* Here the heading leads into the constellation rather than following it. */
+.tour-constellation .unification-copy { margin: 0 auto 32px; }
+.tour-constellation .feature-flow-expanded { margin-bottom: 0; }
+/* OnboardingShell's hero frame: a centered card in the first viewport. */
+.tour-hero { display: flex; align-items: center; justify-content: center; min-height: 100svh; padding: 96px 0 40px; }
+/* OnboardingShell's tile entrance, which also centers each logo on its point. */
+@keyframes tour-orbit-in { from { opacity: 0; transform: translate(-50%, -40%) scale(.8); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+.tour-hero .ob-orbit-tile { animation: tour-orbit-in 900ms cubic-bezier(.22,1,.36,1) both; }
+@media (prefers-reduced-motion: reduce) { .tour-hero .ob-orbit-tile { animation-duration: .01ms; } }
+/* Linear sits on the inner ring on the homepage; out here it stops competing
+   with the Macro mark. Overrides ContextScene's inline position. */
+.tour-hero [data-constellation-tool=Linear] { left: 88% !important; top: 95% !important; width: calc(44px * var(--welcome-scale, 1)) !important; height: calc(44px * var(--welcome-scale, 1)) !important; }
+.tour-section { scroll-margin-top: 80px; }
+.tour-booking { display: flex; flex-direction: column; align-items: center; padding-bottom: 0; }
+.sales-booking-embed { width: 100%; max-width: 760px; min-height: 560px; overflow: hidden; border-radius: 24px; background: var(--color-panel); }

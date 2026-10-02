@@ -2,6 +2,7 @@ import type { Transformer } from '@lexical/markdown';
 import { I_AGENT_CONTEXT } from './agentContext';
 import { I_AWAIT_NODE } from './await';
 import { HTML_BLOCKQUOTE, I_MACRO_QUOTE } from './classedBlock';
+import { I_CURSOR_SYSTEM_NOTIFICATION } from './cursorSystemNotification';
 import { CUSTOM_TRANSFORMERS } from './customTransformers';
 import { I_HTML_RENDER } from './htmlRender';
 import { I_IMAGE_CONSTRAINED, IMAGE } from './image';
@@ -94,6 +95,7 @@ export const INTERNAL_TRANSFORMERS: Transformer[] = [
   I_CONNECT_APP,
   I_WATERMARK,
   ...CUSTOM_TRANSFORMERS,
+  I_CURSOR_SYSTEM_NOTIFICATION, // After the code fence so a tag quoted in one stays text
   UNKNOWN_MENTION, // Must be last to act as fallback for unrecognized XML tags
 ];
 
@@ -191,5 +193,6 @@ export const ALL_TRANSFORMERS: Transformer[] = [
   E_INLINE_EQUATION_NODE,
   ...HTML_ENTITY_TRANSFORMERS,
   ...CUSTOM_TRANSFORMERS,
+  I_CURSOR_SYSTEM_NOTIFICATION, // After the code fence so a tag quoted in one stays text
   UNKNOWN_MENTION, // Must be last to act as fallback for unrecognized XML tags
 ];

@@ -7,6 +7,7 @@ import {
 } from '@block-channel/utils/link';
 import type {
   OpenSplitResult,
+  SplitContent,
   SplitHandle,
   SplitManager,
 } from '@components/app/split-layout/layoutManager';
@@ -84,7 +85,8 @@ function openSplitIfNotOpen(
     reportApplied();
   } else {
     const result = layoutManager.openWithSplit(
-      { type, id },
+      // A union of more than 25 content types no longer narrows per member.
+      { type, id } as SplitContent,
       {
         activate: true,
         referredFrom: null,

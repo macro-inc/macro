@@ -361,6 +361,51 @@ describe('makeGraphqlSoupInput', () => {
     });
   });
 
+  it('translates CRM association and email attachment literals', () => {
+    const companyId = '0198a1b2-c3d4-7e5f-8061-728394a5b700';
+    expect(
+      makeGraphqlSoupInput({
+        params: { limit: 100, sort_method: 'updated_at' },
+        body: {
+          df: {
+            '|': [
+              {
+                l: {
+                  prop: {
+                    pd: '00000001-0000-0000-0000-00000000000c',
+                    v: { er: companyId },
+                  },
+                },
+              },
+              { l: { eap: { Domain: 'acme.com' } } },
+            ],
+          },
+        } as never,
+      })
+    ).toMatchObject({
+      initial: {
+        filters: {
+          documentFilter: {
+            or: {
+              left: {
+                literal: {
+                  property: {
+                    propertyDefinitionId:
+                      '00000001-0000-0000-0000-00000000000c',
+                    value: { entityRef: companyId },
+                  },
+                },
+              },
+              right: {
+                literal: { emailAttachmentParticipant: { domain: 'acme.com' } },
+              },
+            },
+          },
+        },
+      },
+    });
+  });
+
   it('throws for unsupported calendar literals so callers can fall back', () => {
     expect(() =>
       makeGraphqlSoupInput({

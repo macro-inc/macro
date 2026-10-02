@@ -31,7 +31,8 @@
                 "TASK",
                 "CALL_RECORD",
                 "CALENDAR_EVENT",
-                "INITIATIVE"
+                "INITIATIVE",
+                "CONTACT"
               ]
             }
           }
@@ -117,7 +118,8 @@
                 "TASK",
                 "CALL_RECORD",
                 "CALENDAR_EVENT",
-                "INITIATIVE"
+                "INITIATIVE",
+                "CONTACT"
               ]
             }
           }
@@ -157,7 +159,8 @@
                 "TASK",
                 "CALL_RECORD",
                 "CALENDAR_EVENT",
-                "INITIATIVE"
+                "INITIATIVE",
+                "CONTACT"
               ]
             }
           }

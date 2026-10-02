@@ -203,6 +203,7 @@ where
         let prefill_markdown = normalize_description(request.description)?;
         let owner_id = user_id.clone().into_owned();
         let member_ids = parse_member_ids(request.member_ids.unwrap_or_default(), &owner_id)?;
+        let property_values = validate_initial_properties(request.property_values)?;
         let team_default = self
             .repo
             .get_team_default_link_share(&owner_id)
@@ -242,7 +243,14 @@ where
             .await;
         match created {
             Ok(mut detail) => {
-                if let Err(error) = self.resources.initialize(id).await {
+                if let Err(error) = initialize_properties(
+                    self.resources.as_ref(),
+                    user_id.clone().into_owned(),
+                    id,
+                    property_values,
+                )
+                .await
+                {
                     if self.repo.delete(id).await.inspect_err(|cleanup| {
                         tracing::error!(error=?cleanup, %id, "failed to compensate initiative initialization");
                     }).is_ok() {
@@ -650,6 +658,43 @@ fn parse_member_ids(
         }
     }
     Ok(parsed)
+}
+
+/// More than any project form sends; bounds the writes one create can fan out to.
+const MAX_INITIAL_PROPERTY_VALUES: usize = 32;
+
+/// Rejected before anything is created, so a bad request never needs compensation.
+fn validate_initial_properties(
+    values: Vec<crate::domain::models::InitialPropertyValue>,
+) -> Result<Vec<crate::domain::models::InitialPropertyValue>, InitiativeError> {
+    if values.len() > MAX_INITIAL_PROPERTY_VALUES {
+        return Err(InitiativeError::BadRequest(format!(
+            "at most {MAX_INITIAL_PROPERTY_VALUES} initial property values are allowed"
+        )));
+    }
+    let mut seen = HashSet::new();
+    if let Some(duplicate) = values
+        .iter()
+        .find(|value| !seen.insert(value.property_definition_id))
+    {
+        return Err(InitiativeError::BadRequest(format!(
+            "property {} is set more than once",
+            duplicate.property_definition_id
+        )));
+    }
+    Ok(values)
+}
+
+/// Attach the canonical properties, then set the owner's first values. Either
+/// failing fails the create, which then deletes the initiative.
+async fn initialize_properties(
+    resources: &dyn InitiativeResources,
+    owner: MacroUserIdStr<'static>,
+    id: InitiativeId,
+    values: Vec<crate::domain::models::InitialPropertyValue>,
+) -> Result<(), InitiativeError> {
+    resources.initialize(id).await?;
+    resources.set_initial_properties(owner, id, values).await
 }
 
 fn member_diff(

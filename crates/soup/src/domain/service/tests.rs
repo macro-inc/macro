@@ -182,6 +182,13 @@ impl CallRecordQueryService for NoopCallRecordQueryService {
     ) -> Result<Vec<call::domain::models::CallRecord>, call::domain::models::CallError> {
         Ok(Vec::new())
     }
+
+    async fn get_call_record_people(
+        &self,
+        _call_record_id: Uuid,
+    ) -> Result<call::domain::models::CallPeople, call::domain::models::CallError> {
+        Ok(Default::default())
+    }
 }
 
 #[derive(Clone)]
@@ -210,6 +217,13 @@ impl CallRecordQueryService for RecordingCallRecordQueryService {
     ) -> Result<Vec<call::domain::models::CallRecord>, call::domain::models::CallError> {
         *self.calls.lock().unwrap() += 1;
         Ok(self.records.clone())
+    }
+
+    async fn get_call_record_people(
+        &self,
+        _call_record_id: Uuid,
+    ) -> Result<call::domain::models::CallPeople, call::domain::models::CallError> {
+        Ok(Default::default())
     }
 }
 

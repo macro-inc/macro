@@ -5,13 +5,13 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AgentSessionLifecycleEventOneOfNineEventType } from './agentSessionLifecycleEventOneOfNineEventType';
-import type { WaitingForInputMetadata } from './waitingForInputMetadata';
+import type { SessionSettledMetadata } from './sessionSettledMetadata';
 
 /**
- * The agent is blocked on a question to its owner.
+ * A turn ended with nothing queued behind it.
  */
 export type AgentSessionLifecycleEventOneOfNine = {
   event_type: AgentSessionLifecycleEventOneOfNineEventType;
-  /** The agent is blocked on a question to its owner. */
-  metadata: WaitingForInputMetadata;
+  /** A turn ended with nothing queued behind it. */
+  metadata: SessionSettledMetadata;
 };

@@ -171,7 +171,8 @@ pub struct AgentAnnouncementReplyTarget {
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct AgentAnnouncementRequest<'a> {
-    reply_target: &'a AgentAnnouncementReplyTarget,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reply_target: Option<&'a AgentAnnouncementReplyTarget>,
     chip: &'a AgentAnnouncementChip,
 }
 
@@ -621,7 +622,7 @@ impl LexicalClient {
     #[tracing::instrument(skip(self, reply_target, chip), err)]
     pub async fn compose_agent_announcement(
         &self,
-        reply_target: &AgentAnnouncementReplyTarget,
+        reply_target: Option<&AgentAnnouncementReplyTarget>,
         chip: &AgentAnnouncementChip,
     ) -> Result<String> {
         let url = format!("{}/agent-announcement", self.url);

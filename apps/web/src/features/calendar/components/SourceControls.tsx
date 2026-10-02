@@ -1,8 +1,10 @@
 import { ViewSidebar } from '@app/components/view-shell';
+import { CALENDAR_TOUR } from '@app/features/calendar-view/tour';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import RssIcon from '@phosphor/rss.svg';
 import WarningIcon from '@phosphor/warning.svg';
 import { Checkbox } from '@ui';
+import { tourTarget } from '@ui/components/Tour';
 import { createSignal, For, Show } from 'solid-js';
 import type { CalendarSource } from '../types';
 import { groupCalendarSourcesByAccount } from '../utils/calendar-source-groups';
@@ -35,7 +37,10 @@ export function SourceControls(props: SourceControlsProps) {
     });
 
   return (
-    <ul class="flex min-w-0 flex-col gap-(--sidebar-row-gap)">
+    <ul
+      ref={tourTarget(CALENDAR_TOUR.sources)}
+      class="flex min-w-0 flex-col gap-(--sidebar-row-gap)"
+    >
       <For each={groups()}>
         {(group) => {
           const visibleCount = () =>

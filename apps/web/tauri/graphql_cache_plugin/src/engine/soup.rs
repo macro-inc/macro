@@ -259,6 +259,11 @@ pub(super) async fn optimistic_projections(
             .await
             .map_err(|error| error.to_string())?,
     ));
+    projections.extend(
+        mail::draft_optimistic_updates(engine.storage(), query, operation, variables, data)
+            .await
+            .map_err(|error| error.to_string())?,
+    );
     soup_filter_cache_adapter::properties::augment_optimistic(
         engine.storage(),
         query,

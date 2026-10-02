@@ -148,7 +148,7 @@ impl LinkOperation {
     }
 }
 
-/// A query that should be fetched after a successful mutation settlement.
+/// A query to refresh after terminal mutation settlement, including rejection.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QueryRevalidation {
