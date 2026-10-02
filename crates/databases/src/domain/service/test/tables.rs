@@ -359,6 +359,7 @@ async fn an_order_containing_another_databases_table_is_rejected() {
             name: "Hiring".into(),
             owner_id: user(OWNER),
             acting_bot: None,
+            template: None,
         })
         .await
         .unwrap();

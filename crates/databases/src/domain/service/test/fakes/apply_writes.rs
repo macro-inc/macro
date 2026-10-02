@@ -26,6 +26,29 @@ pub(super) fn apply_in_world(
     world: &mut World,
     writes: &Writes,
 ) -> Result<WritesOutcome, FakeError> {
+    if let Some(new) = &writes.creates {
+        let owner = new.database.owner_id.clone();
+        if new.starter {
+            if world.starters.contains_key(&owner) {
+                return Ok(WritesOutcome::StarterTaken);
+            }
+            let owns_database = world
+                .databases
+                .iter()
+                .any(|database| database.owner_id == owner);
+            world.starters.insert(owner.clone(), None);
+            if owns_database {
+                return Ok(WritesOutcome::StarterTaken);
+            }
+            world.starters.insert(owner.clone(), Some(new.database.id));
+        }
+        world.databases.push(new.database.clone());
+        world
+            .grants
+            .entry(owner)
+            .or_default()
+            .push((new.database.id, AccessLevel::Owner));
+    }
     let created: Vec<TableId> = writes
         .writes
         .iter()

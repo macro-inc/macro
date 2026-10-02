@@ -50,6 +50,7 @@ mod saved_queries;
 mod schema_ops;
 mod sharing;
 mod tables;
+mod templates;
 mod undo;
 mod views;
 
@@ -233,6 +234,7 @@ async fn seeded() -> Seeded {
             name: "Offsite".into(),
             owner_id: user(OWNER),
             acting_bot: None,
+            template: None,
         })
         .await
         .unwrap();

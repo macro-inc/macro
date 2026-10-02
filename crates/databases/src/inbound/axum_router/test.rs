@@ -860,7 +860,7 @@ async fn the_schema_routes_are_gone() {
     let database = Uuid::from_u128(0x0dbb);
     let table = Uuid::from_u128(0x7ab1);
     let column = Uuid::from_u128(0xc01a);
-    let router = fakes::full_router(AccessLevel::Owner);
+    let (router, _) = fakes::full_router(AccessLevel::Owner);
     let send = |method: Method, path: String| {
         let router = router.clone();
         async move {
@@ -988,4 +988,164 @@ async fn a_conversion_request_reaches_the_service_and_answers_the_converted_cell
             ColumnKind::Number
         )]
     );
+}
+
+#[tokio::test]
+async fn creating_from_a_template_reaches_the_service_as_the_caller() {
+    use axum::body::Body;
+    use axum::http::{Request, header};
+    use entity_access::domain::models::AccessLevel;
+    use tower::ServiceExt;
+
+    use crate::domain::templates::TemplateId;
+
+    let create = |authorization: Option<&str>, body: &'static str| {
+        let mut request = Request::post("/").header(header::CONTENT_TYPE, "application/json");
+        if let Some(token) = authorization {
+            request = request.header(header::AUTHORIZATION, format!("Bearer {token}"));
+        }
+        request.body(Body::from(body)).unwrap()
+    };
+
+    let (router, service) = fakes::full_router(AccessLevel::Owner);
+    let response = router
+        .clone()
+        .oneshot(create(
+            Some("valid"),
+            r#"{"name": "Launch", "template": "project_tracker"}"#,
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&body).unwrap(),
+        serde_json::to_value(fakes::created_database()).unwrap()
+    );
+    let response = router
+        .clone()
+        .oneshot(create(Some("valid"), r#"{"name": "Blank"}"#))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let created: Vec<(String, String, Option<TemplateId>)> = service
+        .created
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|command| {
+            (
+                command.name.clone(),
+                command.owner_id.to_string(),
+                command.template,
+            )
+        })
+        .collect();
+    assert_eq!(
+        created,
+        vec![
+            (
+                "Launch".to_owned(),
+                "macro|ops-router@macro.com".to_owned(),
+                Some(TemplateId::ProjectTracker)
+            ),
+            (
+                "Blank".to_owned(),
+                "macro|ops-router@macro.com".to_owned(),
+                None
+            ),
+        ]
+    );
+
+    let unknown = router
+        .clone()
+        .oneshot(create(
+            Some("valid"),
+            r#"{"name": "Launch", "template": "spaceship"}"#,
+        ))
+        .await
+        .unwrap();
+    assert_eq!(unknown.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let anonymous = router
+        .oneshot(create(
+            None,
+            r#"{"name": "Launch", "template": "project_tracker"}"#,
+        ))
+        .await
+        .unwrap();
+    assert_eq!(anonymous.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(service.created.lock().unwrap().len(), 2);
+}
+
+#[tokio::test]
+async fn the_template_list_answers_every_template_to_a_signed_in_caller() {
+    use axum::body::Body;
+    use axum::http::{Request, header};
+    use entity_access::domain::models::AccessLevel;
+    use tower::ServiceExt;
+
+    let (router, _) = fakes::full_router(AccessLevel::Owner);
+    let response = router
+        .clone()
+        .oneshot(
+            Request::get("/templates")
+                .header(header::AUTHORIZATION, "Bearer valid")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&body).unwrap(),
+        serde_json::json!([
+            {
+                "id": "project_tracker",
+                "name": "Project tracker",
+                "description": "Tasks with a status, an owner, a due date and a priority, on a board by status.",
+                "icon": "kanban",
+            },
+            {
+                "id": "crm",
+                "name": "CRM",
+                "description": "Companies, their contacts, and deals on a board by stage.",
+                "icon": "handshake",
+            },
+            {
+                "id": "event_planner",
+                "name": "Event planner",
+                "description": "Parties and their invites, with a board of who is coming.",
+                "icon": "confetti",
+            },
+            {
+                "id": "content_calendar",
+                "name": "Content calendar",
+                "description": "Posts with a channel, an author and a publish date, on a board by status.",
+                "icon": "calendar",
+            },
+            {
+                "id": "reading_list",
+                "name": "Reading list",
+                "description": "Books to read, with their author, a status and a rating.",
+                "icon": "books",
+            },
+            {
+                "id": "getting_started",
+                "name": "Getting started",
+                "description": "A few ideas on a board, to try out tables, cards and views.",
+                "icon": "sparkle",
+            },
+        ])
+    );
+
+    let anonymous = router
+        .oneshot(Request::get("/templates").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(anonymous.status(), StatusCode::UNAUTHORIZED);
 }

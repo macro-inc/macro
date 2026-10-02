@@ -9,9 +9,9 @@ pub mod pg_databases_repo;
 #[cfg(feature = "postgres")]
 pub mod pg_definition_store;
 
-/// Atomic starter database persistence.
+/// The per-user starter claim of the cell store's batches.
 #[cfg(feature = "postgres")]
-pub mod pg_starter;
+pub(crate) mod pg_starter;
 
 #[cfg(feature = "postgres")]
 pub mod pg_cell_store;

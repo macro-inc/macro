@@ -49,6 +49,8 @@ pub(super) struct World {
     pub(super) positions: HashMap<ViewId, Vec<CardPosition>>,
     /// The change journal, oldest first.
     pub(super) journal: Vec<JournaledChange>,
+    /// Each user's starter claim, with the database it became.
+    pub(super) starters: HashMap<String, Option<DatabaseId>>,
 }
 
 /// One change the fake cell store journaled.
@@ -131,6 +133,19 @@ impl DatabasesRepo for FakeRepo {
             .or_default()
             .push((database.id, AccessLevel::Owner));
         Ok(database)
+    }
+    async fn starter_database(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<Option<DatabaseId>, FakeError> {
+        let world = self.0.lock().unwrap();
+        let given = world.starters.get(user_id.as_ref()).copied().flatten();
+        Ok(given.filter(|id| {
+            world
+                .databases
+                .iter()
+                .any(|database| database.id == *id && database.trashed_at.is_none())
+        }))
     }
     async fn get_database(
         &self,
@@ -534,9 +549,16 @@ impl CellStore for FakeCells {
             world.settled.clone(),
             world.views.clone(),
             world.positions.clone(),
+            world.databases.clone(),
+            world.grants.clone(),
+            world.starters.clone(),
         );
         let outcome = apply_in_world(&mut world, writes);
-        if !matches!(outcome, Ok(WritesOutcome::Applied { .. })) {
+        // A starter already given keeps only its claim, as the store commits it.
+        if !matches!(
+            outcome,
+            Ok(WritesOutcome::Applied { .. } | WritesOutcome::StarterTaken)
+        ) {
             (
                 world.tables,
                 world.columns,
@@ -546,6 +568,9 @@ impl CellStore for FakeCells {
                 world.settled,
                 world.views,
                 world.positions,
+                world.databases,
+                world.grants,
+                world.starters,
             ) = before;
         }
         outcome

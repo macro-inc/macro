@@ -89,6 +89,9 @@ use databases::domain::models::{
     Table as DatabaseTable, TableDetail as DatabaseTableDetail,
     TableVersion as DatabaseTableVersion,
 };
+use databases::domain::templates::{
+    DatabaseTemplate, TemplateIcon as DatabaseTemplateIcon, TemplateId as DatabaseTemplateId,
+};
 use databases::inbound::axum_router::history::{
     RowHistoryResponse as DatabaseRowHistoryResponse,
     UndoChangeResponse as DatabaseUndoChangeResponse,
@@ -458,6 +461,7 @@ use utoipa::OpenApi;
         databases::inbound::axum_router::list_databases_handler,
         databases::inbound::starter_router::ensure_starter_handler,
         databases::inbound::axum_router::create_database_handler,
+        databases::inbound::axum_router::list_templates_handler,
         databases::inbound::axum_router::get_database_handler,
         databases::inbound::axum_router::awareness_handler,
         databases::inbound::axum_router::ops::apply_ops_handler,
@@ -662,6 +666,9 @@ use utoipa::OpenApi;
             DatabaseTableDetail,
             DatabaseColumnDetail,
             CreateDatabaseRequest,
+            DatabaseTemplate,
+            DatabaseTemplateId,
+            DatabaseTemplateIcon,
             DatabaseAwareness,
             DatabaseAwarenessRelay,
             DatabaseTableChanged,

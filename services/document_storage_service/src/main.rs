@@ -1840,19 +1840,13 @@ async fn run() -> anyhow::Result<()> {
             entity_access_service.clone(),
             authorization_state.clone(),
         ),
+        database_starter_state: databases::inbound::starter_router::DatabaseStarterRouterState::new(
+            databases_service.clone(),
+            authorization_state.clone(),
+        ),
         databases_state: databases::inbound::axum_router::DatabasesRouterState::new(
             databases_service,
             entity_access_service.clone(),
-            authorization_state.clone(),
-        ),
-        database_starter_state: databases::inbound::starter_router::DatabaseStarterRouterState::new(
-            Arc::new(databases::domain::starter::DatabaseStarterServiceImpl::new(
-                databases::outbound::pg_starter::PgDatabaseStarterRepo::new(
-                    db.clone(),
-                    properties::outbound::properties_pg_repo::PropertiesPgRepo::new(db.clone()),
-                ),
-                macro_event_broker.clone(),
-            )),
             authorization_state.clone(),
         ),
         collab_surface_state: CollabSurfaceRouterState::new(
