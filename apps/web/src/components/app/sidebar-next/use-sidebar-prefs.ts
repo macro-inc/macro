@@ -142,15 +142,6 @@ export function reorderSidebarItems(
   updatePrefs((current) => ({ ...current, order: nextOrder }));
 }
 
-/** Replace the full custom order (Home is forced first when present). */
-export function setSidebarOrder(orderIds: readonly string[]): void {
-  const withoutHome = orderIds.filter((id) => id !== 'home');
-  const nextOrder = orderIds.includes('home')
-    ? ['home', ...withoutHome]
-    : [...withoutHome];
-  updatePrefs((current) => ({ ...current, order: nextOrder }));
-}
-
 /** Whether the item is currently hidden from the rail. */
 export function isSidebarItemHidden(itemId: string): boolean {
   return prefs().hidden.has(itemId);
