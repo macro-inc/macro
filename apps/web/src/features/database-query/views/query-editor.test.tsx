@@ -29,6 +29,47 @@ describe('question editor', () => {
     showDatabaseSql.enabled = false;
   });
 
+  it('handles prompt Enter before a composer shell can send the message', async () => {
+    const send = vi.fn();
+    const generate = vi.fn(() =>
+      okAsync({
+        sql: 'SELECT COUNT(*) FROM projects',
+        explanation: '',
+        displayMode: 'scalar' as const,
+      })
+    );
+    const save = vi.fn();
+    const result = render(() => (
+      <div
+        on:keydown={(event) => {
+          send();
+          event.stopPropagation();
+        }}
+      >
+        <PlainAnswerDisplay>
+          <QueryEditor
+            initial={{
+              sql: '',
+              prompt: 'Count projects',
+              displayMode: 'scalar',
+            }}
+            schema={{ name: 'Projects', databaseId: 'db', tables: [] }}
+            capabilities={{ generate, read: () => okAsync(answer) }}
+            onSave={save}
+          />
+        </PlainAnswerDisplay>
+      </div>
+    ));
+    const input = result.getByRole('textbox', { name: 'Ask your database' });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => expect(generate).toHaveBeenCalledTimes(1));
+    await result.findByRole('button', { name: 'Insert' });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    expect(send).not.toHaveBeenCalled();
+    result.unmount();
+  });
+
   it('regenerates a saved question and saves only its successful current answer', async () => {
     const save = vi.fn();
     const read = vi.fn(() => okAsync(answer));
