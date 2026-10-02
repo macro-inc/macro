@@ -50,6 +50,28 @@ impl FoldState {
         Some(Changed::new(message))
     }
 
+    /// Add an image fetched after the prompt was sent onto that prompt.
+    ///
+    /// The same URI already on the message is left alone: a resource link and
+    /// the image frame fetched from it are one picture.
+    pub(super) fn append_prompt_attachment(&mut self, part: MessagePart) -> Option<Changed> {
+        let turn_id = self.turn.as_ref()?.id;
+        let message = self.messages.iter().position(|message| {
+            message.id == turn_id && matches!(message.author, Author::User { .. })
+        })?;
+        let uri = match &part {
+            MessagePart::Attachment { uri, .. } => uri.clone(),
+            _ => return None,
+        };
+        if self.messages[message].parts.iter().any(|existing| {
+            matches!(existing, MessagePart::Attachment { uri: held, .. } if held == &uri)
+        }) {
+            return None;
+        }
+        self.messages[message].parts.push(part);
+        Some(Changed::updated(message))
+    }
+
     /// Handle a `session/prompt`: emit the user's message, open a turn.
     pub(super) fn begin_turn(
         &mut self,

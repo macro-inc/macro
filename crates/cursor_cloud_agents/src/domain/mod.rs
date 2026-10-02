@@ -23,6 +23,9 @@ pub mod slash_commands;
 /// The capabilities the domain requires from the outside.
 pub mod ports;
 
+/// Pasted links resolved into Cursor prompt images.
+pub mod prompt_image;
+
 /// The session service: prompts in, translated updates out.
 pub mod service;
 

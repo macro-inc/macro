@@ -52,6 +52,23 @@ function staticFileIdFromUri(uri: string): string {
   }
 }
 
+/**
+ * Static-file thumbnails take a `size` query. Any other image URL — a pasted
+ * link, a data URL — is already the bytes to show.
+ */
+function imageSrc(uri: string): string {
+  if (uri.startsWith('data:')) return uri;
+  try {
+    const url = new URL(uri);
+    if (url.pathname.includes('/file/') && url.search === '') {
+      return staticFileSizedUrl(uri, 'medium');
+    }
+  } catch {
+    // Not a URL; show it as given.
+  }
+  return uri;
+}
+
 function mediaItemFromAttachment(
   part: AttachmentPartData
 ): MediaItem | undefined {
@@ -59,7 +76,7 @@ function mediaItemFromAttachment(
   if (kind !== 'image' && kind !== 'video') return undefined;
   return {
     id: staticFileIdFromUri(part.uri),
-    src: kind === 'image' ? staticFileSizedUrl(part.uri, 'medium') : part.uri,
+    src: kind === 'image' ? imageSrc(part.uri) : part.uri,
     fullSrc: part.uri,
     kind,
   };
@@ -85,7 +102,7 @@ export function AttachmentPart(props: { part: AttachmentPartData }) {
           >
             <MediaImage.Root>
               <MediaImage.Image
-                src={staticFileSizedUrl(props.part.uri, 'medium')}
+                src={imageSrc(props.part.uri)}
                 class="max-h-64 max-w-full select-none rounded-lg border border-edge object-contain"
                 loading="lazy"
                 fallback={<MediaImage.Fallback square />}

@@ -25,7 +25,7 @@ use crate::api::wire::{
     AgentSummary, ArchiveAgentResponse, ArtifactDownloadResponse, ConversationResponse,
     CreateAgentRequest, CreateAgentResponse, CreateRunRequest, CreateRunResponse,
     ListAgentsResponse, ListArtifactsResponse, ListModelsResponse, ListRunsResponse,
-    McpServerSelection, MeResponse, ModelSelection, PromptBody, RepoSelection,
+    McpServerSelection, MeResponse, ModelSelection, PromptBody, PromptImage, RepoSelection,
 };
 use crate::domain::artifact::{ArtifactListing, FetchedArtifact};
 use crate::domain::model::{
@@ -35,6 +35,7 @@ use crate::domain::model::{
 use crate::domain::ports::{
     ConnectedStream, CursorAgents, CursorArtifacts, RunStream, StreamConnectError,
 };
+use crate::domain::prompt_image::CursorPromptImage;
 use futures::{Stream, StreamExt as _};
 use sse_core::SseEvent;
 use std::collections::VecDeque;
@@ -60,6 +61,19 @@ pub(crate) const MAX_SSE_PAYLOAD: NonZeroUsize = match NonZeroUsize::new(16 * 10
     Some(limit) => limit,
     None => panic!("the payload limit is a non-zero literal"),
 };
+
+fn prompt_body(text: &str, images: &[CursorPromptImage]) -> PromptBody {
+    PromptBody {
+        text: text.to_owned(),
+        images: images
+            .iter()
+            .map(|image| PromptImage {
+                data: image.data.clone(),
+                mime_type: image.mime_type.clone(),
+            })
+            .collect(),
+    }
+}
 
 /// The one real base url. A [`CursorConfig`] still names its own, because a
 /// test points at a stand-in server, but there is nothing for a deployment to
@@ -656,11 +670,10 @@ impl CursorAgents for CursorClient {
         open_pull_request: bool,
         mcp_servers: &[McpServer],
         model: Option<&ModelChoice>,
+        images: &[CursorPromptImage],
     ) -> Result<(CursorAgentId, CursorRunId), rootcause::Report> {
         let request = CreateAgentRequest {
-            prompt: PromptBody {
-                text: prompt.to_owned(),
-            },
+            prompt: prompt_body(prompt, images),
             repos: repo
                 .map(|repo| {
                     vec![RepoSelection {
@@ -724,11 +737,10 @@ impl CursorAgents for CursorClient {
         agent: &CursorAgentId,
         prompt: &str,
         model: Option<&ModelChoice>,
+        images: &[CursorPromptImage],
     ) -> Result<CursorRunId, rootcause::Report> {
         let request = CreateRunRequest {
-            prompt: PromptBody {
-                text: prompt.to_owned(),
-            },
+            prompt: prompt_body(prompt, images),
             model: model.map(ModelSelection::from),
         };
         let path = format!("/v1/agents/{agent}/runs");

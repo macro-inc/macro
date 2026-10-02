@@ -114,6 +114,20 @@ describe('AttachmentPart', () => {
     );
   });
 
+  it('renders a pasted image link without a static-file size query', () => {
+    const uri = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ&s=10';
+    const { getByTestId } = render(() => (
+      <AttachmentPart
+        part={attachment({
+          uri,
+          name: 'image.jpg',
+          mimeType: 'image/jpeg',
+        })}
+      />
+    ));
+    expect(getByTestId('media-image').getAttribute('src')).toBe(uri);
+  });
+
   it('renders a video as a preview that opens the media viewer', () => {
     const { getByLabelText, getByTestId, container } = render(() => (
       <AttachmentPart

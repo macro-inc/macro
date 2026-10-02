@@ -54,6 +54,7 @@ fn no_mcp_servers_means_no_field() {
     let request = CreateAgentRequest {
         prompt: PromptBody {
             text: "hi".to_owned(),
+            images: Vec::new(),
         },
         repos: Vec::new(),
         model: None,
@@ -71,6 +72,7 @@ fn a_repo_agent_asks_for_a_pull_request() {
     let request = CreateAgentRequest {
         prompt: PromptBody {
             text: "hi".to_owned(),
+            images: Vec::new(),
         },
         repos: vec![RepoSelection {
             url: "https://github.com/macro-inc/macro".to_owned(),
@@ -84,6 +86,37 @@ fn a_repo_agent_asks_for_a_pull_request() {
     assert_eq!(body.get("autoCreatePR"), Some(&serde_json::json!(true)));
 }
 
+/// Prompt images go out as base64 `data` plus `mimeType`, which is the shape
+/// Cursor requires when the bytes are already in hand.
+#[test]
+fn prompt_images_serialize_as_data_and_mime_type() {
+    let body = PromptBody {
+        text: "look".to_owned(),
+        images: vec![PromptImage {
+            data: "aW1n".to_owned(),
+            mime_type: "image/png".to_owned(),
+        }],
+    };
+    assert_eq!(
+        serde_json::to_value(body).expect("serializes"),
+        serde_json::json!({
+            "text": "look",
+            "images": [{ "data": "aW1n", "mimeType": "image/png" }]
+        })
+    );
+}
+
+/// An empty image list is omitted, so a text prompt sends no `images` key.
+#[test]
+fn a_text_prompt_omits_images() {
+    let body = PromptBody {
+        text: "look".to_owned(),
+        images: Vec::new(),
+    };
+    let value = serde_json::to_value(body).expect("serializes");
+    assert!(value.get("images").is_none(), "got {value}");
+}
+
 /// A repo-less agent has nothing to open a pull request against, so the field
 /// is omitted rather than sent as false.
 #[test]
@@ -91,6 +124,7 @@ fn a_repoless_agent_omits_the_pull_request_flag() {
     let request = CreateAgentRequest {
         prompt: PromptBody {
             text: "hi".to_owned(),
+            images: Vec::new(),
         },
         repos: Vec::new(),
         model: None,
