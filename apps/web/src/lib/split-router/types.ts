@@ -461,6 +461,8 @@ export type SplitRouterLayoutEntry<TSplitId> = {
 
 export type SplitRouterLayoutSnapshot<TSplitId> = {
   entries: SplitRouterLayoutEntry<TSplitId>[];
+  /** Mounted background panes; readable by outlets but excluded from the URL. */
+  retainedEntries?: SplitRouterLayoutEntry<TSplitId>[];
 };
 
 export type SplitRouterSettledChange = {

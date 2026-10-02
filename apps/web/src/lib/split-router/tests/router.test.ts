@@ -20,6 +20,8 @@ type Layout = SplitRouterLayout<string> & {
   updateCount(): number;
   activatedSplitId(): string | undefined;
   swapEntries(): void;
+  retainSplit(splitId: string): void;
+  updateRetained(location: SplitLocation | undefined): void;
 };
 
 const driveFolderRoute = defineRoute({
@@ -53,6 +55,7 @@ function createLayout(): Layout {
   let updates = 0;
   let activatedSplitId: string | undefined;
   let entries: SplitRouterLayoutSnapshot<string>['entries'] = [];
+  let retainedEntries: SplitRouterLayoutSnapshot<string>['entries'] = [];
   const listeners = new Set<(change: SplitRouterSettledChange) => void>();
 
   const notify = (history: 'push' | 'replace' = 'push') => {
@@ -62,7 +65,7 @@ function createLayout(): Layout {
   };
 
   return {
-    snapshot: () => ({ entries }),
+    snapshot: () => ({ entries, retainedEntries }),
 
     updateCurrentLocation(splitId, update) {
       updates += 1;
@@ -127,6 +130,17 @@ function createLayout(): Layout {
       entries = entries.toReversed();
       notify();
     },
+    retainSplit(splitId) {
+      retainedEntries = entries.filter((entry) => entry.splitId === splitId);
+      entries = entries.filter((entry) => entry.splitId !== splitId);
+      notify();
+    },
+    updateRetained(location) {
+      retainedEntries = location
+        ? retainedEntries.map((entry) => ({ ...entry, location }))
+        : [];
+      notify();
+    },
   };
 }
 
@@ -135,6 +149,56 @@ const settle = () => new Promise<void>((resolve) => queueMicrotask(resolve));
 afterEach(() => vi.restoreAllMocks());
 
 describe('split router', () => {
+  it('updates and removes retained routes without publishing background changes', async () => {
+    const layout = createLayout();
+    const location = createMemorySplitRouterLocation('/drive');
+    const router = createSplitRouter({ layout, routes, location });
+    try {
+      await router.settled();
+      const source = layout.snapshot().entries[0].splitId;
+      router.navigate(source, '/drive/folder/one', { state: { scroll: 100 } });
+      const entry = router.entry(source);
+      const history = router.history(source);
+      router.navigate(source, '/legacy/foreground', { target: 'new-split' });
+      layout.retainSplit(source);
+      await router.settled();
+      expect(router.entry(source)).toEqual(entry);
+      expect(router.history(source)).toEqual(history);
+      expect(location.read().pathname).toBe('/legacy/foreground');
+      const commit = vi.spyOn(location, 'commit');
+      const changed = vi.fn();
+      router.subscribe(changed);
+
+      router.navigate(source, '/drive/folder/unintended');
+      router.updateSearch(source, 'drive', { sort: ['updated_at'] });
+      await router.settled();
+      expect(router.entry(source)).toEqual(entry);
+      expect(layout.snapshot().entries).toHaveLength(1);
+      expect(commit).not.toHaveBeenCalled();
+
+      layout.updateRetained({
+        route: { matches: [{ id: 'legacy', params: { id: 'background' } }] },
+        search: {},
+      });
+      await router.settled();
+      expect(router.route(source)?.matches[0].params).toEqual({
+        id: 'background',
+      });
+      expect(router.entry(source)?.key).not.toBe(entry?.key);
+      expect(router.entry(source)?.state).toBeUndefined();
+      expect(changed).toHaveBeenCalledWith(source);
+      expect(commit).not.toHaveBeenCalled();
+
+      layout.updateRetained(undefined);
+      await router.settled();
+      expect(router.entry(source)).toBeUndefined();
+      expect(router.history(source)).toBeUndefined();
+      expect(commit).not.toHaveBeenCalled();
+    } finally {
+      router.dispose();
+    }
+  });
+
   it('runs the host opening policy only after acceptance and ignores superseded requests', async () => {
     const gate = Promise.withResolvers<void>();
     const layout = createLayout();

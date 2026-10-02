@@ -647,6 +647,12 @@ without moving focus or showing a toast. Those entries remain in history and
 become reachable again after their owning view releases them. A direction is
 unavailable when no reachable entries remain. Mobile swipe navigation reuses
 an already-mounted conversation without losing the other pane.
+The previous pane keeps its route, selected tab, and loaded list while behind the
+conversation. Open a channel from Channels, then use the header Back button and
+edge swipe repeatedly: the same list and scroll position should return without a
+loading flash. A cancelled swipe should leave both panes intact. First visits can
+show loading; subsequent background updates appear in place, including for an
+already-loaded empty list. Only the foreground pane appears in the mobile URL.
 History controls update when an inline detail claims or releases an entry,
 including when the detail closes.
 Resetting a split clears its previous history and starts at the default view;

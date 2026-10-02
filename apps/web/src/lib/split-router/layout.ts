@@ -13,6 +13,8 @@ export function createLayoutAdapter<TSplitId>(
   const snapshot = () => {
     const value = layout.snapshot();
     for (const entry of value.entries) assertRouteEntry(routes, entry);
+    for (const entry of value.retainedEntries ?? [])
+      assertRouteEntry(routes, entry);
     return value;
   };
   const entries = (): SplitRouterEntry[] =>
@@ -66,23 +68,6 @@ export function createLayoutAdapter<TSplitId>(
         deepEqual(entry.location, candidate.location)
       );
     });
-
-  const changedIds = (
-    before: SplitRouterEntry[],
-    after: SplitRouterEntry[]
-  ): Set<TSplitId> => {
-    const visible = snapshot().entries;
-    const changed = new Set<TSplitId>();
-
-    after.forEach((entry, index) => {
-      if (deepEqual(before[index]?.location, entry.location)) return;
-
-      const splitId = visible[index]?.splitId;
-      if (splitId !== undefined) changed.add(splitId);
-    });
-
-    return changed;
-  };
 
   const reconcile = (
     current: SplitRouterEntry[],
@@ -158,7 +143,6 @@ export function createLayoutAdapter<TSplitId>(
   return {
     activate: (splitId: TSplitId) => layout.activate(splitId),
     apply,
-    changedIds,
     entries,
     entryEquals,
     entryIdentityEquals,

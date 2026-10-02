@@ -137,6 +137,7 @@ export function createSplitRouter<TSplitId>(
   const subscribers = new Set<(splitId: TSplitId | undefined) => void>();
   let accepted: SplitRouterEntry[] = [];
   let acceptedIds: TSplitId[] = [];
+  let retained = new Map<TSplitId, SplitRouterEntry>();
   let expectedLayout: SplitRouterLayoutSnapshot<TSplitId> | undefined;
   let layoutChangeQueued = false;
   let queuedHistory: BrowserHistoryIntent = 'push';
@@ -159,7 +160,10 @@ export function createSplitRouter<TSplitId>(
     mode: 'move' | 'write'
   ) => {
     histories.reconcile(
-      accepted.map((entry, index) => ({ id: acceptedIds[index]!, entry })),
+      [
+        ...accepted.map((entry, index) => ({ id: acceptedIds[index]!, entry })),
+        ...Array.from(retained, ([id, entry]) => ({ id, entry })),
+      ],
       intent,
       mode
     );
@@ -208,7 +212,7 @@ export function createSplitRouter<TSplitId>(
   ) => entries.map((entry, index) => normalizeEntry(entry, previous[index]));
 
   const acceptedById = () => {
-    const entries = new Map<TSplitId, SplitRouterEntry>();
+    const entries = new Map(retained);
     accepted.forEach((entry, index) => {
       entries.set(acceptedIds[index] as TSplitId, entry);
     });
@@ -224,14 +228,32 @@ export function createSplitRouter<TSplitId>(
     });
   };
 
+  const bindRetained = (
+    snapshot: SplitRouterLayoutSnapshot<TSplitId>,
+    previous: ReadonlyMap<TSplitId, SplitRouterEntry>
+  ) => {
+    retained = new Map(
+      (snapshot.retainedEntries ?? []).map(({ splitId, location }) => {
+        const entry = previous.get(splitId);
+        return [
+          splitId,
+          entry && deepEqual(entry.location, location)
+            ? entry
+            : normalizeEntry({ location }),
+        ];
+      })
+    );
+  };
+
   const bindAccepted = (entries: SplitRouterEntry[]) => {
-    const snapshot = layout.snapshot().entries;
-    accepted = snapshot.map(({ location }, index) => {
+    const snapshot = layout.snapshot();
+    bindRetained(snapshot, acceptedById());
+    accepted = snapshot.entries.map(({ location }, index) => {
       const entry = entries[index];
       if (entry && deepEqual(entry.location, location)) return entry;
       return normalizeEntry({ location });
     });
-    acceptedIds = snapshot.map(({ splitId }) => splitId);
+    acceptedIds = snapshot.entries.map(({ splitId }) => splitId);
   };
 
   const validateRedirectedState = (
@@ -266,7 +288,7 @@ export function createSplitRouter<TSplitId>(
     if (pending) return pending;
 
     const index = acceptedIds.findIndex((id) => Object.is(id, splitId));
-    if (index < 0) return;
+    if (index < 0) return retained.get(splitId);
     return accepted[index];
   };
   // A settled destination with the same URL and route state needs no new key,
@@ -313,11 +335,13 @@ export function createSplitRouter<TSplitId>(
   };
 
   const notifyLayoutChanges = (
-    before: SplitRouterEntry[],
-    after: SplitRouterEntry[]
+    before: ReadonlyMap<TSplitId, SplitRouterEntry>,
+    after: ReadonlyMap<TSplitId, SplitRouterEntry>
   ) => {
-    for (const splitId of layout.changedIds(before, after)) {
-      notify(splitId);
+    for (const splitId of new Set([...before.keys(), ...after.keys()])) {
+      if (!layout.entryEquals(before.get(splitId), after.get(splitId))) {
+        notify(splitId);
+      }
     }
   };
 
@@ -437,7 +461,7 @@ export function createSplitRouter<TSplitId>(
     prepared: SplitRouterEntry[],
     history: BrowserHistoryIntent
   ) => {
-    const before = accepted;
+    const before = acceptedById();
 
     reconcileEntries(original, prepared);
     bindAccepted(prepared);
@@ -450,7 +474,7 @@ export function createSplitRouter<TSplitId>(
     const becameReady = !ready;
     ready = true;
     if (becameReady) notify();
-    else notifyLayoutChanges(before, accepted);
+    else notifyLayoutChanges(before, acceptedById());
   };
 
   const onLayoutChange = (history: BrowserHistoryIntent) => {
@@ -460,6 +484,24 @@ export function createSplitRouter<TSplitId>(
     const entries = snapshot.entries.map(
       ({ splitId: _splitId, ...entry }) => entry
     );
+    // Preparing, updating, or discarding a background pane must update its
+    // outlet without publishing that pane to the URL or browser history.
+    if (
+      layout.snapshotsEqual(
+        accepted.map((entry, index) => ({
+          splitId: acceptedIds[index]!,
+          location: entry.location,
+        })),
+        snapshot.entries
+      )
+    ) {
+      const before = acceptedById();
+      bindRetained(snapshot, before);
+      reconcileHistories('replace', 'move');
+      notifyLayoutChanges(before, acceptedById());
+      expectedLayout = undefined;
+      return;
+    }
     if (
       expectedLayout &&
       layout.snapshotsEqual(expectedLayout.entries, snapshot.entries)
@@ -489,15 +531,16 @@ export function createSplitRouter<TSplitId>(
 
     if (result.layoutChanged) expectLayoutEcho();
 
-    const snapshot = layout.snapshot().entries;
-    accepted = snapshot.map(({ splitId, location }) => {
+    const snapshot = layout.snapshot();
+    bindRetained(snapshot, previousById);
+    accepted = snapshot.entries.map(({ splitId, location }) => {
       if (Object.is(result.splitId, splitId)) return config.entry;
 
       const previous = previousById.get(splitId);
       if (previous && deepEqual(previous.location, location)) return previous;
       return normalizeEntry({ location });
     });
-    acceptedIds = snapshot.map(({ splitId }) => splitId);
+    acceptedIds = snapshot.entries.map(({ splitId }) => splitId);
     if (config.recordHistory !== false) {
       reconcileHistories(config.history, 'write');
     }
@@ -770,7 +813,9 @@ export function createSplitRouter<TSplitId>(
       to: SplitNavigateTo,
       navigateOptions: SplitNavigateOptions<TSplitId> = {}
     ) {
-      if (disposed) return;
+      // Retained panes can read route state, but their background effects
+      // must not navigate or acquire a visible destination.
+      if (disposed || !layout.find(splitId)) return;
       const current = findEntry(splitId);
 
       if (!current) return;
@@ -893,6 +938,7 @@ export function createSplitRouter<TSplitId>(
     updateSearch(splitId, namespace, update, updateOptions = {}) {
       if (disposed) return;
       assertSafeSearchName(namespace, 'namespace');
+      if (!layout.find(splitId)) return;
       const entry = findEntry(splitId);
       if (!entry) return;
       assertSearchNamespacesAllowed(routes, entry.location.route, [namespace]);

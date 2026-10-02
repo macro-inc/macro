@@ -120,12 +120,21 @@ export function createAppSplitRouterLayout(
   manager: SplitManager,
   routes: SplitRoutesManifest
 ): AppSplitRouterLayout {
-  const snapshot = (): AppSplitRouterSnapshot => ({
-    entries: manager.getVisibleSplits().map((split) => ({
-      splitId: split.id,
-      location: resolveContentLocation(routes, split.content),
-    })),
-  });
+  const snapshot = (): AppSplitRouterSnapshot => {
+    const visible = new Set(
+      manager.getVisibleSplits().map((split) => split.id)
+    );
+    const entries: AppSplitRouterSnapshot['entries'] = [];
+    const retainedEntries: AppSplitRouterSnapshot['entries'] = [];
+    for (const split of manager.splits()) {
+      const destination = visible.has(split.id) ? entries : retainedEntries;
+      destination.push({
+        splitId: split.id,
+        location: resolveContentLocation(routes, split.content),
+      });
+    }
+    return { entries, retainedEntries };
+  };
 
   return {
     snapshot,
@@ -181,16 +190,26 @@ export function createAppSplitRouterLayout(
 
     subscribe(listener) {
       return createRoot((dispose) => {
-        let previous = snapshot().entries;
+        let previous = snapshot();
         createEffect(
           on(
-            () => manager.getVisibleSplits(),
-            () => {
-              const current = snapshot().entries;
-              if (sameRouterEntries(previous, current)) return;
+            snapshot,
+            (current) => {
+              if (
+                sameRouterEntries(previous.entries, current.entries) &&
+                sameRouterEntries(
+                  previous.retainedEntries ?? [],
+                  current.retainedEntries ?? []
+                )
+              )
+                return;
 
               listener({
-                history: changeHistory(manager, previous, current),
+                history: changeHistory(
+                  manager,
+                  previous.entries,
+                  current.entries
+                ),
               });
               previous = current;
             },

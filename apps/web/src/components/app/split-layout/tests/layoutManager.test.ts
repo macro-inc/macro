@@ -3117,6 +3117,81 @@ describe('layoutManager', () => {
   });
 
   describe('activation invariant', () => {
+    it.each([false, true])(
+      'preserves the Channels route while its mobile pane is in the background (animated: %s)',
+      async (animated) => {
+        const fixture = createRoot((dispose) => {
+          const manager = createSplitLayout(createMockOrchestrator(), [
+            { type: 'component', id: 'channels' },
+          ]);
+          const swipe = createMobileSwipeLayout(manager);
+          if (animated) {
+            swipe.setForwardNavigationTrigger(vi.fn());
+            swipe.setAnimatedTrigger(vi.fn());
+          }
+          const routes = createRoutesManifest(appSplitRoutes);
+          const location = createMemorySplitRouterLocation('/channels');
+          const router = createSplitRouter({
+            routes,
+            layout: createAppSplitRouterLayout(manager, routes),
+            location,
+          });
+          return { dispose, manager, swipe, router, location };
+        });
+        const { manager, swipe, router, location } = fixture;
+        try {
+          await router.settled();
+          const sourceId = manager.activeSplitId()!;
+          router.updateSearch(sourceId, 'channels', {
+            mobileTab: ['direct_messages'],
+          });
+          await router.settled();
+          const entry = router.entry(sourceId);
+          const history = router.history(sourceId);
+
+          for (let attempt = 0; attempt < 2; attempt += 1) {
+            manager.openWithSplit({ type: 'channel', id: 'conversation' });
+            await router.settled();
+            if (animated) {
+              const preparedId = manager
+                .splits()
+                .find((split) => split.id !== sourceId)!.id;
+              expect(router.route(preparedId)?.matches.at(-1)?.params).toEqual({
+                type: 'channel',
+                id: 'conversation',
+              });
+              expect(location.read().pathname).toBe('/channels');
+              swipe.completeNavigateForward();
+              await router.settled();
+            }
+            const detailId = manager.activeSplitId()!;
+            expect(router.entry(sourceId)).toEqual(entry);
+            expect(router.history(sourceId)).toEqual(history);
+            expect(location.read().pathname).toBe('/channel/conversation');
+
+            swipe.swipeBack();
+            if (animated) {
+              // Until completion (including a cancelled gesture), both panes
+              // retain their routes and the detail remains the URL owner.
+              await router.settled();
+              expect(router.entry(sourceId)).toEqual(entry);
+              expect(location.read().pathname).toBe('/channel/conversation');
+              swipe.completeSwipeBack();
+            }
+            await router.settled();
+            expect(manager.activeSplitId()).toBe(sourceId);
+            expect(router.entry(sourceId)).toEqual(entry);
+            expect(router.history(sourceId)).toEqual(history);
+            expect(router.entry(detailId)).toBeUndefined();
+            expect(location.read().pathname).toBe('/channels');
+          }
+        } finally {
+          router.dispose();
+          fixture.dispose();
+        }
+      }
+    );
+
     it('reports direct mobile navigation applied after forward promotion', () => {
       createRoot((dispose) => {
         const manager = createSplitLayout(createMockOrchestrator(), [
