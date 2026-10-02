@@ -118,6 +118,14 @@ Login/logout retires old buckets; even same-account native reauthentication must
 not let old overlay Undo/Redo handles or a late refresh republish old intent.
 Verify account changes with overlapping entity IDs and a pending/failed refresh.
 After a successful Done, verify that the row stays gone after a reload.
+Test GraphQL list optimism independently of REST: block REST Soup, email-thread,
+and user-notification data endpoints before page initialization, then confirm
+GraphQL alone populates the list. Hold GraphQL mutation replies while testing
+Done/Undo/Redo and rejection: row feedback must not depend on REST cache reads,
+patches, cancellation, or invalidation. Auth/account metadata is outside this
+row-data boundary. Test the REST path separately, not as a GraphQL fallback.
+Reminders retain their dedicated completion API; GraphQL Soup readers reconcile
+that completion through GraphQL, not the REST Soup normalizer.
 In Tasks, Email, Home and Drive, rows keep their DOM when the list updates. A
 property edit or a rename updates the edited row in place instead of rebuilding
 every visible row. To verify, watch the row nodes with a `MutationObserver` while
