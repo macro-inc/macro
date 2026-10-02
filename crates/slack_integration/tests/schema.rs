@@ -388,6 +388,10 @@ async fn job_cleanup_preserves_history_and_provenance_channel_cleanup_is_deliber
     execute(&mut tx, &format!(
         "UPDATE import_target_reservation SET state = 'ready', channel_id = '{CHANNEL}';
          INSERT INTO slack_import_outbox (job_id, slack_channel_id, kind, generation) VALUES ('{JOB}', 'C123', 'search', 1);
+         INSERT INTO slack_import_message_reference
+             (job_id, slack_channel_id, message_id, channel_id, importer_version, template)
+         VALUES ('{JOB}', 'C123', '{MESSAGE}', '{CHANNEL}', 1,
+             jsonb_build_object('body', '#source', 'references', jsonb_build_array(jsonb_build_object('kind', 'channel'))));
          DELETE FROM slack_import_job WHERE id = '{JOB}';"
     )).await;
     execute(
@@ -396,6 +400,7 @@ async fn job_cleanup_preserves_history_and_provenance_channel_cleanup_is_deliber
          ASSERT NOT EXISTS (SELECT FROM slack_import_conversation);
          ASSERT NOT EXISTS (SELECT FROM slack_import_upload);
          ASSERT NOT EXISTS (SELECT FROM slack_import_outbox);
+         ASSERT NOT EXISTS (SELECT FROM slack_import_message_reference);
          ASSERT (SELECT count(*) = 1 FROM slack_import_message_map);
          ASSERT (SELECT count(*) = 1 FROM import_source_binding);
          ASSERT (SELECT count(*) = 1 FROM import_target_reservation);
@@ -415,6 +420,44 @@ async fn job_cleanup_preserves_history_and_provenance_channel_cleanup_is_deliber
          ASSERT NOT EXISTS (SELECT FROM import_target_reservation);
          ASSERT (SELECT count(*) = 1 FROM import_source_binding);
          END $$",
+    )
+    .await;
+    tx.commit().await.unwrap();
+}
+
+#[sqlx::test(migrations = "../macro_db_client/migrations")]
+async fn reference_templates_are_bounded_and_completion_releases_payload(pool: PgPool) {
+    let mut tx = fixture(&pool).await;
+    execute(&mut tx, &format!(
+        "INSERT INTO slack_import_message_reference
+             (job_id, slack_channel_id, message_id, channel_id, importer_version, template)
+         VALUES ('{JOB}', 'C123', '{MESSAGE}', '{CHANNEL}', 1,
+             jsonb_build_object('body', '#source', 'references', jsonb_build_array(jsonb_build_object('kind', 'channel'))))"
+    )).await;
+    for change in [
+        "importer_version = 0",
+        "template = NULL",
+        "completed_at = now()",
+        "template = jsonb_build_object('references', '[]'::jsonb)",
+        "template = jsonb_build_object('references', (SELECT jsonb_agg(i) FROM generate_series(1, 257) i))",
+        "template = jsonb_build_object('references', '[1]'::jsonb, 'body', repeat('x', 4194304))",
+    ] {
+        rejects(
+            &mut tx,
+            &format!("UPDATE slack_import_message_reference SET {change}"),
+            "23514",
+        )
+        .await;
+    }
+    execute(
+        &mut tx,
+        "UPDATE slack_import_message_reference SET completed_at = now(), template = NULL",
+    )
+    .await;
+    rejects(
+        &mut tx,
+        "UPDATE slack_import_message_reference SET completed_at = NULL",
+        "23514",
     )
     .await;
     tx.commit().await.unwrap();

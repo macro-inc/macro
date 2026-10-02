@@ -15,6 +15,13 @@ use super::models::*;
 /// Internal failures retain diagnostic causes without serializing them into progress.
 pub type PortResult<T> = Result<T, rootcause::Report<ImportError>>;
 
+/// Atomic, fenced reconciliation supplied by the worker composition root.
+pub trait ReferenceReconciler: Send + Sync {
+    /// Settle at most this many bounded templates, including cancelled/partial work.
+    /// Each body patch, completion checkpoint and search marker commits together.
+    fn reconcile_references(&self, limit: u32) -> impl Future<Output = PortResult<()>> + Send;
+}
+
 /// Bounded chunks, not a buffered whole object. Adapters cap chunk size and stop at
 /// the descriptor byte limit; consumers additionally enforce NDJSON line/record bounds.
 pub type ByteStream = Pin<Box<dyn Stream<Item = PortResult<Vec<u8>>> + Send>>;

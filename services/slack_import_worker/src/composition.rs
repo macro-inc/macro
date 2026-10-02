@@ -2,6 +2,7 @@
 
 pub mod authorizer;
 pub mod channel_sink;
+pub mod reference_reconciliation;
 pub mod references;
 
 #[cfg(test)]

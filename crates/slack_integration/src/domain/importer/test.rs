@@ -581,6 +581,31 @@ async fn admin_revocation_prevents_claim_and_rechecks_already_claimed_work() {
 }
 
 #[tokio::test]
+async fn native_conversion_persists_safe_templates_and_only_active_mentions() {
+    let parts = [concat!(
+        r#"{"ts":"1.000001","text":"<#C1|self> <#C2|forward> <@U1> `<@U1>` https://example.slack.com/archives/C2/p2000001"}"#,
+        "\n",
+    )];
+    let (fake, context) = fixture(ConversationKind::PublicChannel, &parts);
+    importer(&fake, ImportLimits::default())
+        .import(&context)
+        .await
+        .unwrap();
+    let state = fake.0.lock().unwrap();
+    let message = &state.stored[&state.mappings[&source(&context, 1)]];
+    assert_eq!(message.user_mentions, vec![user("alice+raw@example.com")]);
+    assert_eq!(message.body_references.len(), 3);
+    assert!(message.content.contains("<m-link>"));
+    assert!(!message.content.contains("m-document-mention"));
+    let template = crate::domain::slack::references::ConvertedText {
+        body: message.content.clone(),
+        user_mentions: message.user_mentions.clone(),
+        references: message.body_references.clone(),
+    };
+    assert_eq!(template.render(&[]).unwrap(), message.content);
+}
+
+#[tokio::test]
 async fn conversion_threads_skipped_roots_and_source_metadata_survive_bounded_batches() {
     let parts = [
         "{\"ts\":\"1.000001\",\"text\":\"root\",\"user\":\"U1\",\"replies\":[{\"ts\":\"3.000001\"}]}\n{\"ts\":\"2.000001\",\"text\":\"\",\"files\":[{}]}\n",

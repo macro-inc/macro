@@ -49,6 +49,44 @@ impl HistoricalMessageRepository for PgMessageRepository {
 }
 
 impl PgMessageRepository {
+    /// Patch only an unchanged, undeleted importer-written body. Live edits (even
+    /// edit/revert) invalidate the timestamp guard. No timestamp, thread, reaction,
+    /// author or activity is changed and no live-message effects are emitted.
+    pub async fn patch_historical_body_in(
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        patch: &crate::domain::historical::HistoricalBodyPatch,
+    ) -> Result<bool, MessageError> {
+        if patch.body.trim().is_empty()
+            || patch.body.len() > crate::domain::historical::MAX_HISTORICAL_MESSAGE_BYTES
+        {
+            return Err(MessageError::Invalid("invalid historical body patch"));
+        }
+        let guard = serde_json::json!({
+            "slack_import_job": patch.job_id,
+            "body_version": patch.importer_version,
+        });
+        Ok(sqlx::query!(
+            r#"UPDATE comms_messages SET content = $5
+               WHERE id = $1 AND channel_id = $2
+                 AND parent_entity_type = 'channel' AND parent_entity_id = $2::text
+                 AND content = $3 AND content <> $5 AND import_metadata @> $4
+                 AND deleted_at IS NULL AND edited_at IS NULL AND updated_at = created_at
+                 AND NOT EXISTS (SELECT 1 FROM comms_message_threads t
+                     WHERE t.root_id = coalesce(comms_messages.thread_id, comms_messages.id)
+                       AND t.deleted_at IS NOT NULL)"#,
+            patch.message_id,
+            patch.channel_id,
+            patch.expected_body,
+            guard,
+            patch.body,
+        )
+        .execute(&mut **tx)
+        .await
+        .map_err(database_error)?
+        .rows_affected()
+            == 1)
+    }
+
     /// Persist historical channel messages in a caller-owned transaction without
     /// publishing effects or committing that transaction. The composition root
     /// must authorize the channel and atomically persist its source mappings,
