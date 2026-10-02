@@ -12,6 +12,7 @@ export type EmailTab =
   | 'scheduled'
   | 'calendar'
   | 'drafts'
+  | 'spam'
   | 'shared'
   | 'all';
 

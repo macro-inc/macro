@@ -37,7 +37,7 @@ function tabFilters(tab: EmailTab): EmailFilters {
       shared: 'exclude' as const,
     }))
     .with('shared', () => ({ shared: 'only' as const }))
-    .with('favorites', 'drafts', 'scheduled', 'sent', 'all', () => ({}))
+    .with('favorites', 'drafts', 'scheduled', 'sent', 'spam', 'all', () => ({}))
     .exhaustive();
 }
 

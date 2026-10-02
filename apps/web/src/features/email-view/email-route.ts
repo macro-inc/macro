@@ -13,6 +13,7 @@ export const emailTabSearch = {
       'scheduled',
       'calendar',
       'drafts',
+      'spam',
       'shared',
       'all',
     ]),

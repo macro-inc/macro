@@ -36,6 +36,7 @@ pub enum PreviewViewStandardLabel {
     All,
     Important,
     Other,
+    Spam,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, SerializeDisplay, DeserializeFromStr)]

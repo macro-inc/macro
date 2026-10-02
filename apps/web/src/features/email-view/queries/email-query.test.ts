@@ -48,6 +48,7 @@ const TABS: EmailTab[] = [
   'scheduled',
   'calendar',
   'drafts',
+  'spam',
   'shared',
   'all',
 ];
@@ -149,6 +150,7 @@ describe('buildEmailQuery', () => {
       ['scheduled', 'drafts'],
       ['calendar', 'all'],
       ['drafts', 'drafts'],
+      ['spam', 'spam'],
       ['shared', 'all'],
       ['all', 'all'],
     ]);

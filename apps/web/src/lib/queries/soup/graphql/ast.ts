@@ -70,7 +70,7 @@ type AstBody = Partial<Record<TargetAstKey, RestAst>> & {
   /** CRM-address and CRM-domain filters are REST-only today. */
   eca?: string[];
   ecd?: string[];
-  emailView?: 'inbox' | 'drafts' | 'sent' | 'all';
+  emailView?: 'inbox' | 'drafts' | 'sent' | 'all' | 'spam';
 };
 
 type LiteralMapper<TLiteral> = (literal: unknown) => TLiteral;

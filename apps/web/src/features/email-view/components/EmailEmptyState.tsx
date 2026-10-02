@@ -44,6 +44,10 @@ function tabCopy(tab: EmailTab): { title: string; description: string } {
       title: 'No drafts',
       description: "Email you start but haven't sent will appear here.",
     }))
+    .with('spam', () => ({
+      title: 'No spam',
+      description: 'Messages marked as spam will appear here.',
+    }))
     .with('shared', () => ({
       title: 'No shared email',
       description: 'Threads teammates share with you will appear here.',

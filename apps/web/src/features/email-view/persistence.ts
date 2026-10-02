@@ -30,6 +30,7 @@ const emailTabSchema = z
     'scheduled',
     'calendar',
     'drafts',
+    'spam',
     'shared',
     'all',
   ])

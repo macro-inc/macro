@@ -73,6 +73,7 @@ function emailMatchesTab(
       'sent',
       'scheduled',
       'calendar',
+      'spam',
       'all',
       () => true
     )

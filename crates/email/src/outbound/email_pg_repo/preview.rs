@@ -91,6 +91,9 @@ pub(super) async fn previews_for_view_cursor(
             )
             .await?
         }
+        (PreviewView::StandardLabel(PreviewViewStandardLabel::Spam), Either::Left(query)) => {
+            super::preview_views::spam::spam_preview_cursor(pool, &link_ids, limit, &query).await?
+        }
         (PreviewView::UserLabel(label_name), Either::Left(query)) => {
             super::preview_views::user_label::user_label_preview_cursor(
                 pool,

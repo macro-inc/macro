@@ -1,4 +1,4 @@
-export type EmailView = 'inbox' | 'drafts' | 'sent' | 'all';
+export type EmailView = 'inbox' | 'drafts' | 'sent' | 'all' | 'spam';
 
 export type CallStatus = 'ATTENDED' | 'MISSED' | 'UNATTENDED';
 

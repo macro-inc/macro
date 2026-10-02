@@ -1023,6 +1023,7 @@ pub(super) fn build_view_thread_filter(view: &PreviewView) -> SqlFragment {
         | PreviewView::StandardLabel(PreviewViewStandardLabel::Starred)
         | PreviewView::StandardLabel(PreviewViewStandardLabel::All)
         | PreviewView::StandardLabel(PreviewViewStandardLabel::Important)
+        | PreviewView::StandardLabel(PreviewViewStandardLabel::Spam)
         | PreviewView::UserLabel(_) => SqlFragment::empty(),
         PreviewView::StandardLabel(PreviewViewStandardLabel::Other) => {
             SqlFragment::raw(" AND t.inbox_visible = TRUE")
@@ -1062,6 +1063,15 @@ pub(super) fn build_view_message_filter(view: &PreviewView) -> SqlFragment {
                     JOIN email_labels l ON ml.label_id = l.id
                     WHERE ml.message_id = m.id
                     AND l.name IN ('IMPORTANT', 'CATEGORY_PERSONAL')
+                    AND l.link_id = t.link_id
+                )"#,
+        ),
+        PreviewView::StandardLabel(PreviewViewStandardLabel::Spam) => SqlFragment::raw(
+            r#" AND EXISTS (
+                    SELECT 1 FROM email_message_labels ml
+                    JOIN email_labels l ON ml.label_id = l.id
+                    WHERE ml.message_id = m.id
+                    AND l.name = 'SPAM'
                     AND l.link_id = t.link_id
                 )"#,
         ),

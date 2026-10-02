@@ -360,6 +360,8 @@ enum GraphqlEmailView {
     Important,
     /// The other option.
     Other,
+    /// The spam option.
+    Spam,
 }
 
 impl GraphqlEmailView {
@@ -373,6 +375,7 @@ impl GraphqlEmailView {
             Self::Starred => "starred",
             Self::Important => "important",
             Self::Other => "other",
+            Self::Spam => "spam",
         }
     }
 }

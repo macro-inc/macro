@@ -10,6 +10,7 @@ import FileIcon from '@phosphor/file.svg';
 import PaperPlaneTiltIcon from '@phosphor/paper-plane-tilt.svg';
 import StarIcon from '@phosphor/star.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
+import WarningOctagonIcon from '@phosphor/warning-octagon.svg';
 import SignalIcon from '@phosphor/wave-sine.svg';
 import NoiseIcon from '@phosphor/waveform.svg';
 import { SidebarTagsSection } from '@property/tags/SidebarTagsSection';
@@ -32,6 +33,7 @@ const TAB_ICONS: Record<EmailTab, Component<{ class?: string }>> = {
   scheduled: ClockIcon,
   calendar: CalendarBlankIcon,
   drafts: FileIcon,
+  spam: WarningOctagonIcon,
   shared: UsersThreeIcon,
   all: EnvelopeIcon,
 };
