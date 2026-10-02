@@ -79,6 +79,8 @@ impl ImageGenerator for FakeGenerator {
 
 fn png() -> GeneratedImage {
     GeneratedImage {
+        width: 1536,
+        height: 1024,
         bytes: PNG.to_vec(),
         mime_type: "image/png".to_string(),
         note: Some("A calm scene.".to_string()),
@@ -105,6 +107,7 @@ async fn generates_then_uploads_bytes_and_returns_the_static_file() {
     assert_eq!(created.static_file.id, STATIC_FILE_ID);
     assert_eq!(created.static_file.url, "https://static.example/file/image");
     assert_eq!(created.mime_type, "image/png");
+    assert_eq!((created.width, created.height), (1536, 1024));
     assert_eq!(created.size_bytes, PNG.len());
     assert_eq!(created.note.as_deref(), Some("A calm scene."));
     assert_eq!(

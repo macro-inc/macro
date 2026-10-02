@@ -132,6 +132,8 @@ impl<Store: ImageStore, References: ImageReferenceReader> ImageGenerationService
             static_file,
             mime_type: generated.mime_type,
             size_bytes,
+            width: generated.width,
+            height: generated.height,
             note: generated.note,
         })
     }

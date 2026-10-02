@@ -11,6 +11,7 @@ async-trait.workspace = true
 attachment = { path = "../attachment" }
 base64.workspace = true
 bot_id = { path = "../bot_id" }
+image.workspace = true
 model = { path = "../model" }
 model-entity = { path = "../model-entity" }
 model_owner = { path = "../model_owner" }

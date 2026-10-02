@@ -147,6 +147,9 @@ fn response_omits_an_absent_note() {
         url: "https://static.example/file/image".to_string(),
         mime_type: "image/png".to_string(),
         size_bytes: 3,
+        width: Some(1536),
+        height: Some(1024),
+        markdown: None,
         note: None,
     })
     .unwrap();
@@ -156,7 +159,47 @@ fn response_omits_an_absent_note() {
             "staticFileId": "file",
             "url": "https://static.example/file/image",
             "mimeType": "image/png",
-            "sizeBytes": 3
+            "sizeBytes": 3,
+            "width": 1536,
+            "height": 1024
+        })
+    );
+}
+
+#[test]
+fn channel_markup_preserves_the_generated_dimensions_and_static_file() {
+    let id = uuid::Uuid::from_u128(123);
+    let response = GenerateImageResponse::from(StoredGeneratedImage {
+        static_file: crate::domain::models::StoredImage {
+            id,
+            url: "https://static.example/file/image".to_string(),
+        },
+        mime_type: "image/png".to_string(),
+        size_bytes: 100,
+        width: 1536,
+        height: 1024,
+        note: None,
+    });
+    let markdown = response.markdown.unwrap();
+    let data: serde_json::Value = serde_json::from_str(
+        markdown
+            .strip_prefix("<m-image>")
+            .unwrap()
+            .strip_suffix("</m-image>")
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        data,
+        serde_json::json!({
+            "url": response.url,
+            "srcType": "sfs",
+            "id": id,
+            "alt": "Generated image",
+            "width": 1536,
+            "height": 1024,
+            "constrainedWidth": 400,
+            "constrainedHeight": 400,
         })
     );
 }

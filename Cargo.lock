@@ -9444,6 +9444,7 @@ dependencies = [
  "attachment",
  "base64 0.22.1",
  "bot_id",
+ "image",
  "macro_user_id",
  "model",
  "model-entity",

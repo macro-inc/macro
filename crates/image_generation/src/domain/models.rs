@@ -94,6 +94,10 @@ pub struct GeneratedImage {
     pub bytes: Vec<u8>,
     /// IANA media type of `bytes`, e.g. `image/png`.
     pub mime_type: String,
+    /// Intrinsic pixel width of the generated image.
+    pub width: u32,
+    /// Intrinsic pixel height of the generated image.
+    pub height: u32,
     /// Any commentary the model produced alongside the image.
     pub note: Option<String>,
 }
@@ -157,6 +161,10 @@ pub struct StoredGeneratedImage {
     pub mime_type: String,
     /// Number of stored bytes.
     pub size_bytes: usize,
+    /// Intrinsic pixel width of the generated image.
+    pub width: u32,
+    /// Intrinsic pixel height of the generated image.
+    pub height: u32,
     /// Any commentary the model produced alongside the image.
     pub note: Option<String>,
 }

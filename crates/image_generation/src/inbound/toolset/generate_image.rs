@@ -13,7 +13,7 @@ use super::ImageGenerationToolContext;
 use crate::domain::{
     models::{
         GenerateImageError, ImageAspectRatio, ImageGenerationError, ImageReference,
-        NewGeneratedImage, ReadImageError,
+        NewGeneratedImage, ReadImageError, StoredGeneratedImage,
     },
     ports::ImageGenerationService,
 };
@@ -76,7 +76,7 @@ impl From<ImageReferenceInput> for ImageReference {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "GenerateImage",
-    description = "Generate or edit an image with Google's Nano Banana image model and save the result in static file service. Use for pictures, illustrations, diagram concepts, logo ideas, mockups, or edits based on reference photos. When the user supplies photos or asks to modify an existing image, pass them in referenceImages; describing a photo in the prompt alone does not send it to the image model. Describe the subject, style, composition, lighting, and any text to render; only the prompt is required. Refer to reference images by their order (image 1, image 2, image 3) when explaining how to use them. Returns the static file ID and image URL. The tool displays the image inline in chat. In channel messages without tool cards, embed the returned URL as a Markdown image. Do not cite it as a document. Generation takes several seconds."
+    description = "Generate or edit an image with Google's Nano Banana image model and save the result in static file service. Use for pictures, illustrations, diagram concepts, logo ideas, mockups, or edits based on reference photos. When the user supplies photos or asks to modify an existing image, pass them in referenceImages; describing a photo in the prompt alone does not send it to the image model. Describe the subject, style, composition, lighting, and any text to render; only the prompt is required. Refer to reference images by their order (image 1, image 2, image 3) when explaining how to use them. Returns the static file ID and image URL. The tool displays the image inline in chat. In channel messages without tool cards, copy the returned markdown verbatim on its own line; it includes dimensions so the image reserves space before loading. Do not cite it as a document. Generation takes several seconds."
 )]
 /// Generate an image and save it as a static file.
 pub struct GenerateImage {
@@ -109,6 +109,15 @@ pub struct GenerateImageResponse {
     pub mime_type: String,
     /// Size of the image in bytes.
     pub size_bytes: usize,
+    /// Intrinsic pixel width. Absent only in historical tool results.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub width: Option<u32>,
+    /// Intrinsic pixel height. Absent only in historical tool results.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub height: Option<u32>,
+    /// Ready-to-send channel image markup with dimensions. Copy verbatim on its own line.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub markdown: Option<String>,
     /// Commentary the model produced alongside the image, when any.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
@@ -179,12 +188,36 @@ where
             .await
             .map_err(generate_error)?;
 
-        Ok(GenerateImageResponse {
+        Ok(created.into())
+    }
+}
+
+impl From<StoredGeneratedImage> for GenerateImageResponse {
+    fn from(created: StoredGeneratedImage) -> Self {
+        // Match channel attachment bounds while retaining the intrinsic dimensions.
+        const CHANNEL_IMAGE_MAX_SIZE: u32 = 400;
+        let markdown = format!(
+            "<m-image>{}</m-image>",
+            serde_json::json!({
+                "url": created.static_file.url,
+                "srcType": "sfs",
+                "id": created.static_file.id,
+                "alt": "Generated image",
+                "width": created.width,
+                "height": created.height,
+                "constrainedWidth": CHANNEL_IMAGE_MAX_SIZE,
+                "constrainedHeight": CHANNEL_IMAGE_MAX_SIZE,
+            })
+        );
+        Self {
             static_file_id: created.static_file.id.to_string(),
             url: created.static_file.url,
             mime_type: created.mime_type,
             size_bytes: created.size_bytes,
+            width: Some(created.width),
+            height: Some(created.height),
+            markdown: Some(markdown),
             note: created.note,
-        })
+        }
     }
 }
