@@ -117,7 +117,7 @@ Creating tasks in Macro is easy. Where possible, tasks created are bidirectional
 
 We wanted everything in a single markdown editor without switching tools.
 
-- Native markdown compatibility and bulk/import export (see "file over app" paradigm)
+- Native markdown compatibility and bulk import/export (see "file over app" paradigm)
 - Live collaboration with CRDTs and Cloudflare durable objects make it feel like you're editing on the same computer. Edits come in ~instantly instead of ka-chunking like Google Docs
 - Version control: history and forking, with a neat UI for scrubbing history. This is still in v1, there's a lot to do to get it closer to git, or we may eventually add git compatibility.
 - Offline editing and reconciliation.
