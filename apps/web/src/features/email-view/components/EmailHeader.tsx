@@ -75,7 +75,7 @@ export function EmailHeader(props: EmailHeaderProps) {
     enabled: panel.isPanelActive,
     search: {
       description: 'Search email',
-      condition: () => state.tab !== 'scheduled',
+      condition: () => state.tab !== 'scheduled' && state.tab !== 'reminders',
       run: () => {
         searchInput?.focus();
         searchInput?.select();
@@ -112,19 +112,21 @@ export function EmailHeader(props: EmailHeaderProps) {
 
       <Show when={state.tab !== 'scheduled'}>
         <div class="flex min-w-0 items-center justify-between gap-3">
-          <SearchBar
-            ref={(element) => {
-              searchInput = element;
-              searchTarget(element);
-            }}
-            label="Search email"
-            value={state.search}
-            hotkey="cmd+f"
-            onValueChange={(search) => setState('search', search)}
-            onEscape={props.onSearchEscape}
-            placeholder="Search email"
-            class="max-w-md flex-1"
-          />
+          <Show when={state.tab !== 'reminders'}>
+            <SearchBar
+              ref={(element) => {
+                searchInput = element;
+                searchTarget(element);
+              }}
+              label="Search email"
+              value={state.search}
+              hotkey="cmd+f"
+              onValueChange={(search) => setState('search', search)}
+              onEscape={props.onSearchEscape}
+              placeholder="Search email"
+              class="max-w-md flex-1"
+            />
+          </Show>
           <EmailControls
             filterOpen={filterOpen()}
             onFilterOpenChange={setFilterOpen}

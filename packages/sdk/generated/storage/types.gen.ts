@@ -5593,6 +5593,48 @@ export type EmailFollowupResponse = {
 export type EmailReminderCondition = 'if_no_reply' | 'regardless';
 
 /**
+ * A page of original-email identities and private reminder metadata.
+ */
+export type EmailReminderPage = {
+    /**
+     * Coalesced rows in nearest-occurrence order.
+     */
+    items: Array<EmailReminderSummary>;
+    /**
+     * Progress through all examined candidates, absent at exhaustion.
+     */
+    nextCursor?: string | null;
+};
+
+/**
+ * One original thread, coalescing all of its current reminder work.
+ */
+export type EmailReminderSummary = {
+    /**
+     * Number of eligible reminders attached to this thread.
+     */
+    count: number;
+    /**
+     * Nearest eligible occurrence and its owning editor capability.
+     */
+    nearest: ReminderCollectionRow;
+    /**
+     * Original email identity, never a mirror reminder identity.
+     */
+    threadId: string;
+};
+
+/**
+ * One bounded set of original thread IDs.
+ */
+export type EmailReminderSummaryRequest = {
+    /**
+     * At most 100 IDs; absent reminders produce no result.
+     */
+    threadIds: Array<string>;
+};
+
+/**
  * Empty response is required due to custom fetch forcing `response.json()`
  */
 export type EmptyResponse = {
@@ -19034,6 +19076,85 @@ export type ListReminderCollectionResponses = {
 };
 
 export type ListReminderCollectionResponse = ListReminderCollectionResponses[keyof ListReminderCollectionResponses];
+
+export type ListEmailRemindersData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Selected inboxes; omission selects all accessible inboxes.
+         */
+        inboxIds?: Array<string> | null;
+        /**
+         * Explicitly empty inbox selection.
+         */
+        noInboxes?: boolean | null;
+        /**
+         * Email archive filter, independent of reminder completion.
+         */
+        done?: boolean | null;
+        /**
+         * Email read status.
+         */
+        read?: boolean | null;
+        /**
+         * Restrict to calendar mail.
+         */
+        calendar?: boolean | null;
+        /**
+         * Repeated property-definition:select-option UUID pairs.
+         */
+        tags?: Array<string> | null;
+        /**
+         * Repeated attachment categories: pdf, image, document.
+         */
+        attachments?: Array<string> | null;
+        /**
+         * Continuation from the previous page.
+         */
+        cursor?: string | null;
+        /**
+         * Maximum rows (1–100).
+         */
+        limit?: number | null;
+    };
+    url: '/reminders/email/collection';
+};
+
+export type ListEmailRemindersErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListEmailRemindersError = ListEmailRemindersErrors[keyof ListEmailRemindersErrors];
+
+export type ListEmailRemindersResponses = {
+    200: EmailReminderPage;
+};
+
+export type ListEmailRemindersResponse = ListEmailRemindersResponses[keyof ListEmailRemindersResponses];
+
+export type EmailReminderSummariesData = {
+    body: EmailReminderSummaryRequest;
+    path?: never;
+    query?: never;
+    url: '/reminders/email/summaries';
+};
+
+export type EmailReminderSummariesErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type EmailReminderSummariesError = EmailReminderSummariesErrors[keyof EmailReminderSummariesErrors];
+
+export type EmailReminderSummariesResponses = {
+    200: Array<EmailReminderSummary>;
+};
+
+export type EmailReminderSummariesResponse = EmailReminderSummariesResponses[keyof EmailReminderSummariesResponses];
 
 export type GetEmailFollowupData = {
     body?: never;

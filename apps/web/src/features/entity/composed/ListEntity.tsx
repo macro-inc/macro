@@ -1,5 +1,7 @@
 import './ListEntity.css';
 import { useMaybeSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
+import { useEmailRowReminders } from '@app/features/reminders/context/email-row-reminders';
+import { EmailRowSchedule } from '@app/features/reminders/views/email-row-schedule';
 import { ReminderRowSchedule } from '@app/features/reminders/views/reminder-row-schedule';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
@@ -28,6 +30,8 @@ import {
   createSignal,
   type JSX,
   Match,
+  on,
+  onCleanup,
   Show,
   Switch,
   useContext,
@@ -97,19 +101,37 @@ export function MaybeEntityRow(props: {
 }
 
 export function ListEntity(props: ListEntityProps) {
+  const emailReminders = useEmailRowReminders();
+  createEffect(
+    on(
+      () => (isEmailEntity(props.entity) ? props.entity.id : undefined),
+      (id) => {
+        if (id && emailReminders) onCleanup(emailReminders.register(id));
+      }
+    )
+  );
+  const emailSchedule = () =>
+    isEmailEntity(props.entity)
+      ? emailReminders?.get(props.entity.id)
+      : undefined;
   // Legacy Soup callers do not pass row behavior explicitly yet.
   const soupView = useMaybeSoupView();
   const rowActions = children(() => props.actions);
   const leadingAction = children(() => props.leadingAction);
   const scheduleStatus = children(() => (
-    <Show when={isReminderEntity(props.entity) && props.entity}>
-      {(entity) => (
-        <ReminderRowSchedule
-          entity={entity()}
-          onToggleDone={props.onToggleReminderDone}
-        />
-      )}
-    </Show>
+    <>
+      <Show when={emailSchedule()}>
+        {(reminder) => <EmailRowSchedule reminder={reminder()} />}
+      </Show>
+      <Show when={isReminderEntity(props.entity) && props.entity}>
+        {(entity) => (
+          <ReminderRowSchedule
+            entity={entity()}
+            onToggleDone={props.onToggleReminderDone}
+          />
+        )}
+      </Show>
+    </>
   ));
 
   const unread = () => unreadFilterFn(props.entity);

@@ -75,6 +75,31 @@ impl FollowupThread {
 
 /// Email facts and mutations exposed to the reminder domain.
 pub trait EmailFollowupMailbox: Send + Sync + 'static {
+    /// Resolve a bounded set of candidate threads using email-owned access and filters.
+    /// Missing and inaccessible threads are omitted, including revoked shares.
+    fn reminder_threads(
+        &self,
+        user: MacroUserIdStr<'static>,
+        receipts: Vec<
+            entity_access::domain::models::EntityAccessReceipt<
+                entity_access::domain::models::ViewAccessLevel,
+            >,
+        >,
+        filters: &ReminderThreadFilter,
+    ) -> impl Future<Output = Result<Vec<Uuid>, EmailErr>> + Send;
+
+    /// Read existing authorized row identities, including shared mail, without
+    /// imposing Mail collection membership on another view's visible rows.
+    fn reminder_summary_threads(
+        &self,
+        user: MacroUserIdStr<'static>,
+        receipts: Vec<
+            entity_access::domain::models::EntityAccessReceipt<
+                entity_access::domain::models::ViewAccessLevel,
+            >,
+        >,
+    ) -> impl Future<Output = Result<Vec<Uuid>, EmailErr>> + Send;
+
     /// Resolve owned/delegated access and inspect this conversation.
     fn followup_thread(
         &self,
@@ -93,6 +118,23 @@ pub trait EmailFollowupMailbox: Send + Sync + 'static {
         visible: bool,
         returned_at: Option<DateTime<Utc>>,
     ) -> impl Future<Output = Result<(), EmailErr>> + Send;
+}
+
+/// Email facets applied before the reminder collection's public page boundary.
+#[derive(Debug, Clone, Default)]
+pub struct ReminderThreadFilter {
+    /// None selects every accessible inbox; an empty selection matches nothing.
+    pub inbox_ids: Option<Vec<Uuid>>,
+    /// Explicit email archive filter, independent of reminder completion.
+    pub done: Option<bool>,
+    /// Explicit email read filter.
+    pub read: Option<bool>,
+    /// Restrict to threads with calendar attachments.
+    pub calendar: bool,
+    /// Tag select options, ORed together like the ordinary email facet.
+    pub tags: Vec<(Uuid, Uuid)>,
+    /// Attachment categories, ORed together.
+    pub attachments: Vec<ReminderAttachmentKind>,
 }
 
 /// Persistence capabilities specific to the email side of follow-ups.
@@ -123,3 +165,41 @@ pub trait EmailFollowupRepo: Send + Sync + 'static {
 
 #[cfg(test)]
 mod test;
+
+/// The existing email attachment facets.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ReminderAttachmentKind {
+    /// PDF files.
+    Pdf,
+    /// Supported image formats.
+    Image,
+    /// Office documents, text and CSV.
+    Document,
+}
+
+impl ReminderAttachmentKind {
+    /// Match the same MIME prefixes as the ordinary Email view.
+    pub fn matches(self, mime: &str) -> bool {
+        let prefixes: &[&str] = match self {
+            Self::Pdf => &["application/pdf"],
+            Self::Image => &[
+                "image/png",
+                "image/jpeg",
+                "image/gif",
+                "image/webp",
+                "image/svg+xml",
+            ],
+            Self::Document => &[
+                "application/msword",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                "application/vnd.ms-excel",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                "application/vnd.ms-powerpoint",
+                "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                "text/plain",
+                "text/csv",
+            ],
+        };
+        prefixes.iter().any(|prefix| mime.starts_with(prefix))
+    }
+}

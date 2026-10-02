@@ -202,6 +202,16 @@ fn sort_key(reminder: &Reminder) -> (DateTime<Utc>, DateTime<Utc>, Uuid) {
 }
 
 impl RemindersRepo for FakeRemindersRepo {
+    async fn email_candidates(
+        &self,
+        _user: &MacroUserIdStr<'_>,
+        _ids: Option<&[Uuid]>,
+        _cursor: Option<crate::domain::email_collection::EmailReminderCursor>,
+        _as_of: DateTime<Utc>,
+        _limit: u32,
+    ) -> Result<Vec<crate::domain::email_collection::EmailReminderCandidate>, Self::Err> {
+        unreachable!("generic reminder tests do not read email collections")
+    }
     async fn list_collection(
         &self,
         user: &MacroUserIdStr<'_>,

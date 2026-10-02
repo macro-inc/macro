@@ -1,11 +1,13 @@
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
 import { ViewTour } from '@app/features/tours/ViewTour';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { SplitRouter } from '@app/lib/split-router';
 import { type PillTabItem, PillTabs } from '@components/app/mobile/PillTabs';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { enableReminders } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
@@ -99,6 +101,7 @@ const MOBILE_EMAIL_TABS: PillTabItem<EmailTab>[] = EMAIL_TABS.map((tab) => ({
 }));
 
 function EmailMobileLayout(props: ParentProps) {
+  const reminders = useFeatureFlag(enableReminders);
   const { state, setTab } = useEmailView();
 
   return (
@@ -110,7 +113,9 @@ function EmailMobileLayout(props: ParentProps) {
             class="-ml-(--mobile-chrome-gutter) w-[100cqw] max-w-none flex-none"
             contentClass="px-(--mobile-chrome-gutter)"
             leading={<EmailFilterDrawer />}
-            items={MOBILE_EMAIL_TABS}
+            items={MOBILE_EMAIL_TABS.filter(
+              (tab) => tab.value !== 'reminders' || reminders().enabled
+            )}
             value={state.tab}
             onChange={setTab}
           />

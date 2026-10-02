@@ -649,3 +649,16 @@ describe('Email list query transitions', () => {
     expect(source.hasMore()).toBe(false);
   });
 });
+
+vi.mock('./use-reminder-email-source', () => ({
+  useReminderEmailSource: () => ({
+    items: () => [],
+    isLoading: () => false,
+    isFetching: () => false,
+    error: () => undefined,
+    hasMore: () => false,
+    isLoadingMore: () => false,
+    loadMore: async () => {},
+    refresh: async () => {},
+  }),
+}));

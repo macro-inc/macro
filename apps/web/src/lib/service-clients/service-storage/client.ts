@@ -92,6 +92,8 @@ import type { DocumentTeamShareResponse } from './generated/schemas/documentTeam
 import type { EditAnchorResponse } from './generated/schemas/editAnchorResponse';
 import type { EmailFollowup } from './generated/schemas/emailFollowup';
 import type { EmailFollowupCommand } from './generated/schemas/emailFollowupCommand';
+import type { EmailReminderPage } from './generated/schemas/emailReminderPage';
+import type { EmailReminderSummary } from './generated/schemas/emailReminderSummary';
 import type { ExportDocumentResponse } from './generated/schemas/exportDocumentResponse';
 import type { Favorite } from './generated/schemas/favorite';
 import type { FavoritesList } from './generated/schemas/favoritesList';
@@ -122,6 +124,7 @@ import type { ImportPage } from './generated/schemas/importPage';
 import type { ImportProgress } from './generated/schemas/importProgress';
 import type { Item } from './generated/schemas/item';
 import type { JobId } from './generated/schemas/jobId';
+import type { ListEmailRemindersParams } from './generated/schemas/listEmailRemindersParams';
 import type { ListFavoritesParams } from './generated/schemas/listFavoritesParams';
 import type { ListOccurrencesParams } from './generated/schemas/listOccurrencesParams';
 import type { ListReminderCollectionParams } from './generated/schemas/listReminderCollectionParams';
@@ -2504,6 +2507,29 @@ export const storageServiceClient = {
     },
   },
   reminders: {
+    async listEmailReminders(params: ListEmailRemindersParams) {
+      const query = new URLSearchParams();
+      for (const [key, value] of Object.entries(params)) {
+        if (Array.isArray(value)) {
+          for (const item of value) query.append(key, item);
+        } else if (value !== undefined && value !== null) {
+          query.set(key, String(value));
+        }
+      }
+      return await dssFetch<EmailReminderPage>(
+        `/reminders/email/collection?${query}`,
+        { method: 'GET' }
+      );
+    },
+    async emailReminderSummaries(threadIds: string[]) {
+      return await dssFetch<EmailReminderSummary[]>(
+        '/reminders/email/summaries',
+        {
+          method: 'POST',
+          body: JSON.stringify({ threadIds }),
+        }
+      );
+    },
     async listCollection(params: ListReminderCollectionParams) {
       const query = new URLSearchParams();
       if (params.completed !== undefined)

@@ -126,3 +126,13 @@ describe('email view inbox reconciliation', () => {
     expect(mocks.navigate).toHaveBeenCalledOnce();
   });
 });
+
+it('clears persisted text search when entering and leaving Email Reminders', () => {
+  const { view } = mount();
+  view.setState('search', 'prior inbox search');
+  view.setTab('reminders');
+  expect(view.state.search).toBe('');
+  view.setState('search', 'stale restored search');
+  view.setTab('all');
+  expect(view.state.search).toBe('');
+});

@@ -12,19 +12,76 @@ use uuid::Uuid;
 
 /// Application-facing service, composing generic reminders and email behavior.
 #[derive(Clone)]
-pub struct EmailRemindersService<S, R, E, C> {
+pub struct EmailRemindersService<
+    S,
+    R,
+    E,
+    C,
+    A = entity_access::domain::ports::NoOpEntityAccessService,
+> {
     generic: S,
     email: EmailFollowupService<R, E, C>,
+    access: A,
 }
 impl<S, R, E, C> EmailRemindersService<S, R, E, C> {
     /// Wire one shared email workflow into CRUD and dispatch.
     pub fn new(generic: S, email: EmailFollowupService<R, E, C>) -> Self {
-        Self { generic, email }
+        Self {
+            generic,
+            email,
+            access: entity_access::domain::ports::NoOpEntityAccessService,
+        }
     }
 }
-impl<S: RemindersService, R: EmailFollowupRepo, E: EmailFollowupMailbox, C: Clock> RemindersService
-    for EmailRemindersService<S, R, E, C>
+impl<S, R, E, C, A> EmailRemindersService<S, R, E, C, A> {
+    /// Supply the caller-aware access service used by collection and summary reads.
+    pub fn with_entity_access<B>(self, access: B) -> EmailRemindersService<S, R, E, C, B> {
+        EmailRemindersService {
+            generic: self.generic,
+            email: self.email,
+            access,
+        }
+    }
+}
+impl<
+    S: RemindersService,
+    R: EmailFollowupRepo,
+    E: EmailFollowupMailbox,
+    C: Clock,
+    A: entity_access::domain::ports::EntityAccessService,
+> RemindersService for EmailRemindersService<S, R, E, C, A>
 {
+    async fn list_email_reminders(
+        &self,
+        viewer: crate::domain::email_collection::EmailReminderViewer,
+        query: crate::domain::email_collection::EmailReminderQuery,
+    ) -> Result<crate::domain::email_collection::EmailReminderPage, ReminderError> {
+        crate::domain::email_collection::service::list(
+            &self.email.repo,
+            &self.email.mailbox,
+            &self.access,
+            &self.email.clock,
+            viewer,
+            query,
+        )
+        .await
+    }
+
+    async fn email_reminder_summaries(
+        &self,
+        viewer: crate::domain::email_collection::EmailReminderViewer,
+        thread_ids: Vec<Uuid>,
+    ) -> Result<Vec<crate::domain::email_collection::EmailReminderSummary>, ReminderError> {
+        crate::domain::email_collection::service::summaries(
+            &self.email.repo,
+            &self.email.mailbox,
+            &self.access,
+            &self.email.clock,
+            viewer,
+            thread_ids,
+        )
+        .await
+    }
     async fn list_collection(
         &self,
         user: &MacroUserIdStr<'_>,

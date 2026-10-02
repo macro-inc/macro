@@ -129,3 +129,35 @@ ID. Unlike generic creation, retrying the same email request cannot duplicate
 it. For failure verification, intercept that endpoint and verify the time and
 condition remain, no client archive request is sent, and no navigation occurs
 before the server confirms the operation.
+
+## Email → Reminders
+
+With reminders enabled, **Reminders** appears beside **Scheduled** in Email's
+sidebar and mobile view selector. Scheduled still lists outgoing send-later
+messages. Email Reminders lists the original conversations with pending reminder
+work in the selected inboxes, ordered by nearest reminder occurrence. Multiple
+reminders on one conversation produce one email row; **+N** beside its clock
+indicates additional reminders. Opening the row opens its original conversation.
+
+Email archive status does not determine reminder membership. A snoozed email is
+already archived and remains here while its follow-up is pending; returned
+follow-ups remain until their reminder occurrence is dealt with. Cancelled or
+removed follow-ups disappear. Read, Done, Calendar, Tags and attachment filters
+apply to the original conversation before pagination. Text search is unavailable
+in this view; entering or leaving clears its saved text search. Back/forward and
+reload retain the Email tab and selected inbox scope.
+
+Matching email rows in other views, including Shared, show the same persistent
+clock for the signed-in user's private reminders. Sharing an email does not share
+its reminders. The email check still archives/unarchives the email independently
+of its reminder clock. Click, tap or keyboard-activate the clock to open the
+existing reminder editor; Cancel returns focus to that clock when it still exists.
+Returned and in-progress workflow labels describe their current state rather than
+claiming a new future firing.
+
+For verification, use more than 100 reminders, a long prefix excluded by the
+selected inbox/filter, several reminders on one email, and a shared thread with
+private reminders belonging to different users. A sparse page can still have a
+**Load more** continuation. Follow it rather than treating that page as the end.
+Check create/edit/remove/undo, reply cancellation, and due return across the Email
+Reminders list and another matching email view without reloading the app.

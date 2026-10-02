@@ -158,6 +158,8 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
         if (state.tab === tab) return;
         setState(
           produce((draft) => {
+            if (draft.tab === 'reminders' || tab === 'reminders')
+              draft.search = '';
             draft.tab = tab;
             draft.facets = {};
           })
@@ -314,6 +316,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     }
     setState(
       produce((draft) => {
+        if (draft.tab === 'reminders' || tab === 'reminders') draft.search = '';
         draft.tab = tab;
         draft.facets = {};
       })
