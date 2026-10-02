@@ -52,10 +52,10 @@ use super::meetings::{
 };
 use super::models::{
     ActiveCallsResponse, AddParticipantError, ArchivedCall, Call, CallActiveResponse, CallError,
-    CallRecord, CallRecordTranscriptSegment, CallTokenResponse, CallTranscriptCustomSpeakerResult,
-    EgressS3Config, EnrichedCallTranscript, GetBatchCallRecordPreviewRequest,
-    GetBatchCallRecordPreviewResponse, GetCallRecordsRequest, LeaveCallResponse, RingStatus,
-    RingStatusResponse, TranscriptSegmentRequest,
+    CallPeople, CallRecord, CallRecordTranscriptSegment, CallTokenResponse,
+    CallTranscriptCustomSpeakerResult, EgressS3Config, EnrichedCallTranscript,
+    GetBatchCallRecordPreviewRequest, GetBatchCallRecordPreviewResponse, GetCallRecordsRequest,
+    LeaveCallResponse, RingStatus, RingStatusResponse, TranscriptSegmentRequest,
 };
 use super::ports::{
     CallRecordQueryService, CallRepository, CallRtcClient, CallService, CallSummarizer,
@@ -2314,6 +2314,13 @@ impl<R: CallRepository> CallRecordQueryService for CallRecordQueryServiceImpl<R>
         let filter = req.query.filter();
         self.repo
             .get_call_records_by_user(req.user_id.copied(), req.limit, filter)
+            .await
+            .map_err(|e| CallError::Internal(e.into()))
+    }
+    #[tracing::instrument(err, skip(self))]
+    async fn get_call_record_people(&self, call_record_id: Uuid) -> Result<CallPeople, CallError> {
+        self.repo
+            .get_call_record_people(&call_record_id)
             .await
             .map_err(|e| CallError::Internal(e.into()))
     }

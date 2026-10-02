@@ -964,6 +964,52 @@ async fn run() -> anyhow::Result<()> {
         }
     });
 
+    // Links archived calls to the CRM records of the people on them.
+    let crm_call_link_brokers = config.kafka_brokers.as_ref().to_string();
+    consumer_tracker.spawn({
+        let cancellation_token = consumer_cancellation_token.clone();
+        let consumer = crm::inbound::call_archived::CallArchivedConsumer::new(
+            crm::domain::call_links::CallRecordLinker::new(
+                call::domain::service::CallRecordQueryServiceImpl::new(PgCallRepo::new(
+                    db.clone(),
+                )),
+                crm::outbound::call_link::PgCallCrmLinker::new(
+                    db.clone(),
+                    (*system_properties_service).clone(),
+                ),
+            ),
+        );
+        async move {
+            loop {
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                tracing::info!("starting CRM call-link consumer");
+                let result = consumer
+                    .run(&crm_call_link_brokers, cancellation_token.cancelled())
+                    .await;
+
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                match result {
+                    Ok(()) => tracing::error!("CRM call-link consumer exited unexpectedly"),
+                    Err(error) => {
+                        tracing::error!(error = ?error, "CRM call-link consumer exited unexpectedly");
+                    }
+                }
+
+                tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    _ = tokio::time::sleep(Duration::from_secs(5)) => {}
+                }
+            }
+        }
+    });
+
     let call_internal_state = InternalCallRouterState::new(call_service.clone());
 
     // Create the SQS worker for delete document processing before config is moved.

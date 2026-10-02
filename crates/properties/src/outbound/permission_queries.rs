@@ -24,6 +24,7 @@ pub async fn get_owner_and_deleted(
         | EntityType::Initiative
         | EntityType::Channel
         | EntityType::Company
+        | EntityType::Contact
         | EntityType::User
         | EntityType::Thread => {
             anyhow::bail!("unsupported entity type")

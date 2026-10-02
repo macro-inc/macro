@@ -18,7 +18,7 @@ use notification::domain::models::apple::VoipPushPayload;
 use models_permissions::share_permission::team_share::TeamShareFacts;
 
 use crate::domain::models::{
-    CustomSpeakerAssignment, DeletedCallRecordStorageKeys, EditCallRecordRepoArgs,
+    CallPeople, CustomSpeakerAssignment, DeletedCallRecordStorageKeys, EditCallRecordRepoArgs,
     EditCallRecordRequest, EditCallTranscriptRequest,
 };
 
@@ -237,6 +237,14 @@ pub trait CallRepository: Send + Sync + 'static {
         &self,
         call_id: &Uuid,
     ) -> impl Future<Output = Result<Vec<CallParticipant>, Self::Err>> + Send;
+
+    /// The people on an archived call: its Macro participants, the owner of
+    /// its meeting link, and the invitees of the calendar event carrying that
+    /// link.
+    fn get_call_record_people(
+        &self,
+        call_record_id: &Uuid,
+    ) -> impl Future<Output = Result<CallPeople, Self::Err>> + Send;
 
     /// Get the count of active attendees in a call: Macro participants plus
     /// non-account guests. Archival on room-empty keys off this reaching 0.
@@ -1014,6 +1022,14 @@ pub trait CallRecordQueryService: Send + Sync + 'static {
         &self,
         req: GetCallRecordsRequest,
     ) -> impl Future<Output = Result<Vec<CallRecord>, CallError>> + Send;
+
+    /// The people on an archived call record: its Macro participants, the
+    /// owner of its meeting link, and the invitees of the calendar event
+    /// carrying that link. Empty when the record does not exist.
+    fn get_call_record_people(
+        &self,
+        call_record_id: Uuid,
+    ) -> impl Future<Output = Result<CallPeople, CallError>> + Send;
 }
 
 /// No-op implementation of [`CallRecordQueryService`] for services
@@ -1027,6 +1043,11 @@ impl CallRecordQueryService for NoOpCallRecordQueryService {
         _req: GetCallRecordsRequest,
     ) -> Result<Vec<CallRecord>, CallError> {
         Ok(Vec::new())
+    }
+
+    /// Always returns no people.
+    async fn get_call_record_people(&self, _call_record_id: Uuid) -> Result<CallPeople, CallError> {
+        Ok(CallPeople::default())
     }
 }
 

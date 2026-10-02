@@ -377,7 +377,7 @@ async fn get_active_calls_for_user_excludes_left_channel_members(
         "UPDATE comms_channel_participants SET left_at = now() WHERE channel_id = $1 AND user_id = $2",
     )
     .bind(CH1)
-    .bind(USER_C.as_ref())
+    .bind(USER_C.deref().as_ref())
     .execute(&pool)
     .await?;
 
@@ -400,15 +400,22 @@ async fn add_and_check_participant(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = repo(pool);
 
     // user-c is not in the call yet.
-    assert!(!repo.is_participant(&CALL1, &USER_C.as_ref()).await?);
+    assert!(
+        !repo
+            .is_participant(&CALL1, &USER_C.deref().as_ref())
+            .await?
+    );
 
     let participant = repo
         .add_participant(&CALL1, USER_C.deref().copied())
         .await?;
     assert_eq!(participant.call_id, CALL1);
-    assert_eq!(participant.user_id, USER_C.as_ref());
+    assert_eq!(participant.user_id, USER_C.deref().as_ref());
 
-    assert!(repo.is_participant(&CALL1, &USER_C.as_ref()).await?);
+    assert!(
+        repo.is_participant(&CALL1, &USER_C.deref().as_ref())
+            .await?
+    );
     Ok(())
 }
 
@@ -1325,11 +1332,11 @@ async fn get_stable_speaker_voices_for_call_record_returns_all_voices_for_consis
         // USER_C is incomplete: at least one transcript row has no diarized speaker id.
         (
             "missing-c-1",
-            USER_C.as_ref(),
+            USER_C.deref().as_ref(),
             Some("spk-c0"),
             Some(voice_a),
         ),
-        ("missing-c-2", USER_C.as_ref(), None, Some(voice_b)),
+        ("missing-c-2", USER_C.deref().as_ref(), None, Some(voice_b)),
         // Unknown speaker ids are ignored even if their diarized speaker id is stable.
         (
             "unknown-speaker",
@@ -2699,6 +2706,238 @@ async fn get_call_participants_with_team_members_returns_distinct_users(
     Ok(())
 }
 
+// -- get_call_record_people ---------------------------------------------------
+
+/// Inserts an hour-long event starting at `starts_at` and returns its id.
+async fn insert_calendar_event_with_attendees(
+    pool: &Pool<Postgres>,
+    owner_id: &str,
+    location: &str,
+    starts_at: &str,
+    attendees: &[&str],
+) -> anyhow::Result<Uuid> {
+    let link_id = Uuid::now_v7();
+    sqlx::query(
+        r#"
+        INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider)
+        VALUES ($1, $2, $2, $1::text || '@example.com', 'GMAIL')
+        "#,
+    )
+    .bind(link_id)
+    .bind(owner_id)
+    .execute(pool)
+    .await?;
+    let event_id = Uuid::now_v7();
+    sqlx::query(
+        r#"
+        INSERT INTO calendar_events (
+            id, owner_id, source_link_id, ical_uid, title, location,
+            canonical_source_kind, starts_at, ends_at
+        )
+        VALUES (
+            $1, $2, $3, $1::text, 'Intro', $4, 'google',
+            $5::timestamptz, $5::timestamptz + interval '1 hour'
+        )
+        "#,
+    )
+    .bind(event_id)
+    .bind(owner_id)
+    .bind(link_id)
+    .bind(location)
+    .bind(starts_at)
+    .execute(pool)
+    .await?;
+    for email in attendees {
+        sqlx::query("INSERT INTO calendar_event_attendees (event_id, email) VALUES ($1, $2)")
+            .bind(event_id)
+            .bind(email)
+            .execute(pool)
+            .await?;
+    }
+    Ok(event_id)
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_call_record_people_returns_participants_only_without_a_meeting(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let people = repo(pool).get_call_record_people(&CALL_ARCHIVED).await?;
+
+    let mut user_ids: Vec<String> = people.user_ids.iter().map(ToString::to_string).collect();
+    user_ids.sort();
+    assert_eq!(
+        user_ids,
+        vec!["macro|user-a@test.com", "macro|user-b@test.com"]
+    );
+    assert!(people.invitee_emails.is_empty());
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_call_record_people_skips_unparsable_participant_ids(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    sqlx::query(
+        "INSERT INTO call_record_participants (call_record_id, user_id, joined_at) VALUES ($1, 'not-a-user-id', now())",
+    )
+    .bind(CALL_ARCHIVED)
+    .execute(&pool)
+    .await?;
+
+    let people = repo(pool).get_call_record_people(&CALL_ARCHIVED).await?;
+
+    let mut user_ids: Vec<String> = people.user_ids.iter().map(ToString::to_string).collect();
+    user_ids.sort();
+    assert_eq!(
+        user_ids,
+        vec!["macro|user-a@test.com", "macro|user-b@test.com"]
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_call_record_people_includes_meeting_owner_and_calendar_invitees(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    insert_user_mapping(&pool, USER_C.deref(), MACRO_USER_C).await?;
+    insert_user_mapping(&pool, USER_D.deref(), Uuid::now_v7()).await?;
+    let meeting_id = Uuid::now_v7();
+    sqlx::query(
+        "INSERT INTO call_meetings (id, share_token, user_id, title) VALUES ($1, 'tok-crm-link', $2, 'Intro')",
+    )
+    .bind(meeting_id)
+    .bind(USER_C.deref().as_ref())
+    .execute(&pool)
+    .await?;
+    sqlx::query("UPDATE call_records SET meeting_id = $1 WHERE id = $2")
+        .bind(meeting_id)
+        .bind(CALL_ARCHIVED)
+        .execute(&pool)
+        .await?;
+    // The fixture's archived call ran 2024-01-01 10:00-10:05.
+    const LINK: &str = "https://macro.com/app/meet/join/tok-crm-link";
+    insert_calendar_event_with_attendees(
+        &pool,
+        USER_C.deref().as_ref(),
+        LINK,
+        "2024-01-01 10:00:00+00",
+        &["Ext@Acme.com", "user-c@test.com"],
+    )
+    .await?;
+    // A weekly series started earlier, whose occurrence overlaps the call.
+    let series = insert_calendar_event_with_attendees(
+        &pool,
+        USER_C.deref().as_ref(),
+        LINK,
+        "2023-12-04 10:00:00+00",
+        &["weekly@initech.com"],
+    )
+    .await?;
+    sqlx::query(
+        r#"INSERT INTO calendar_event_occurrences (event_id, owner_id, occurrence_key, starts_at, ends_at)
+           VALUES ($1, $2, 'weekly-2024-01-01', '2024-01-01 09:30:00+00', '2024-01-01 10:30:00+00')"#,
+    )
+    .bind(series)
+    .bind(USER_C.deref().as_ref())
+    .execute(&pool)
+    .await?;
+    // An all-day event on the call's day counts; one days later does not.
+    for (date, attendee) in [
+        ("2024-01-01", "allday@hooli.com"),
+        ("2024-01-05", "friday@hooli.com"),
+    ] {
+        let link_id = Uuid::now_v7();
+        sqlx::query(
+            r#"INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider)
+               VALUES ($1, $2, $2, $1::text || '@example.com', 'GMAIL')"#,
+        )
+        .bind(link_id)
+        .bind(USER_C.deref().as_ref())
+        .execute(&pool)
+        .await?;
+        let event_id = Uuid::now_v7();
+        sqlx::query(
+            r#"INSERT INTO calendar_events (
+                   id, owner_id, source_link_id, ical_uid, title, location,
+                   canonical_source_kind, start_date, end_date
+               )
+               VALUES ($1, $2, $3, $1::text, 'Offsite', $4, 'google', $5::date, $5::date + 1)"#,
+        )
+        .bind(event_id)
+        .bind(USER_C.deref().as_ref())
+        .bind(link_id)
+        .bind(LINK)
+        .bind(date)
+        .execute(&pool)
+        .await?;
+        sqlx::query("INSERT INTO calendar_event_attendees (event_id, email) VALUES ($1, $2)")
+            .bind(event_id)
+            .bind(attendee)
+            .execute(&pool)
+            .await?;
+    }
+    // The same reused link at another time, the owner's events without the
+    // link, and other owners' copies are ignored.
+    insert_calendar_event_with_attendees(
+        &pool,
+        USER_C.deref().as_ref(),
+        LINK,
+        "2024-01-08 10:00:00+00",
+        &["later@globex.com"],
+    )
+    .await?;
+    insert_calendar_event_with_attendees(
+        &pool,
+        USER_C.deref().as_ref(),
+        "Room 1",
+        "2024-01-01 10:00:00+00",
+        &["other@acme.com"],
+    )
+    .await?;
+    insert_calendar_event_with_attendees(
+        &pool,
+        USER_D.deref().as_ref(),
+        LINK,
+        "2024-01-01 10:00:00+00",
+        &["stranger@acme.com"],
+    )
+    .await?;
+
+    let people = repo(pool).get_call_record_people(&CALL_ARCHIVED).await?;
+
+    let mut user_ids: Vec<String> = people.user_ids.iter().map(ToString::to_string).collect();
+    user_ids.sort();
+    assert_eq!(
+        user_ids,
+        vec![
+            "macro|user-a@test.com",
+            "macro|user-b@test.com",
+            "macro|user-c@test.com"
+        ]
+    );
+    let mut invitee_emails = people.invitee_emails;
+    invitee_emails.sort();
+    assert_eq!(
+        invitee_emails,
+        vec![
+            "allday@hooli.com",
+            "ext@acme.com",
+            "user-c@test.com",
+            "weekly@initech.com"
+        ]
+    );
+    Ok(())
+}
+
 // -- get_enhanced_call_record_transcripts -------------------------------------
 
 #[sqlx::test(
@@ -3230,7 +3469,7 @@ async fn standalone_call_list_requires_individual_grants_live_and_archived(
     insert_user_mapping(&pool, USER_B.deref(), MACRO_USER_B).await?;
     insert_user_mapping(&pool, USER_D.deref(), Uuid::now_v7()).await?;
     let team_id = Uuid::now_v7();
-    give_user_a_team(&pool, USER_C.as_ref(), &team_id).await?;
+    give_user_a_team(&pool, USER_C.deref().as_ref(), &team_id).await?;
     let repo = repo(pool.clone());
     let meeting = repo.create_meeting(standalone_meeting()).await?;
     let (call, _) = repo

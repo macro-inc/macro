@@ -31,7 +31,9 @@ fn entity_type(property_entity: &PropertyEntityType) -> Option<EntityType> {
         PropertyEntityType::Thread => Some(EntityType::EmailThread),
         PropertyEntityType::CallRecord => Some(EntityType::Call),
         PropertyEntityType::Company => Some(EntityType::CrmCompany),
-        PropertyEntityType::CalendarEvent | PropertyEntityType::User => None,
+        PropertyEntityType::CalendarEvent
+        | PropertyEntityType::Contact
+        | PropertyEntityType::User => None,
     }
 }
 
