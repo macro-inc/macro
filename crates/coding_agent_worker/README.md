@@ -34,6 +34,20 @@ session's model in its native TUI; macrod rejects remote model changes it cannot
 confirm. Unconfirmed prompt submission is reported as an error, never retried by
 pressing Enter. Cancellation sends Escape without a delayed input-clearing key.
 
+New and reloaded sessions advertise `/compact`, `/init`, and `/fast` in Macro;
+Codex also advertises `/ultrafast`. Speed controls are delivered unchanged to
+the native TUI. Macro acknowledges delivery without claiming the setting
+changed: check the response in Herdr, including any confirmation or unavailable
+mode message. Claude accepts `/fast on` and `/fast off`; bare `/fast` opens its
+native controls. Codex's speed commands toggle tiers available to its current
+model and account. These controls need not generate an assistant turn, so they
+do not wait for transcript output. Ordinary prompts still require confirmation.
+
+Herdr does not provide command discovery; this is a curated built-in list, not
+the full set of native commands or installed skills. Session-switching commands
+such as `/resume`, `/new`, and `/fork` are not advertised because Macro tracks a
+specific native session. Automatic recovery still resumes that saved session.
+
 Remote permission answers require a recognized approval shortcut, the same
 visible dialog, and the same Herdr state generation. Sign-in prompts and other
 unknown dialogs require native interaction. Herdr does not offer an atomic

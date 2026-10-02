@@ -374,3 +374,118 @@ fn configured_models_are_advertised_even_when_not_in_the_builtin_catalog() {
             .any(|option| option["value"] == "custom-model")
     );
 }
+
+#[tokio::test]
+async fn commands_are_advertised_after_successful_new_and_load_responses() {
+    let root = tempfile::tempdir().unwrap();
+    let (adapter, mut output) = test_adapter(root.path());
+    adapter
+        .respond_to_request(json!(1), "session/new", json!({"cwd":root.path()}))
+        .await;
+    let response = output.try_recv().unwrap();
+    let id = response["result"]["sessionId"].as_str().unwrap();
+    assert_eq!(response["id"], 1);
+    let commands = output.try_recv().unwrap();
+    assert_eq!(commands["params"]["sessionId"], id);
+    assert_eq!(
+        commands["params"]["update"]["sessionUpdate"],
+        "available_commands_update"
+    );
+    assert!(output.try_recv().is_err());
+
+    adapter
+        .respond_to_request(
+            json!(2),
+            "session/load",
+            json!({"sessionId":id, "cwd":root.path()}),
+        )
+        .await;
+    assert_eq!(output.try_recv().unwrap()["id"], 2);
+    assert_eq!(output.try_recv().unwrap(), commands);
+    assert!(output.try_recv().is_err());
+
+    adapter
+        .respond_to_request(
+            json!(3),
+            "session/load",
+            json!({"sessionId":id, "cwd":"/wrong"}),
+        )
+        .await;
+    assert!(output.try_recv().unwrap().get("error").is_some());
+    assert!(output.try_recv().is_err());
+    adapter.shutdown.cancel();
+}
+
+#[tokio::test]
+async fn speed_controls_submit_once_and_acknowledge_delivery_without_a_model_turn() {
+    for (kind, command) in [
+        (TuiAgent::Claude, "/fast"),
+        (TuiAgent::Claude, "/fast on"),
+        (TuiAgent::Claude, "/fast off"),
+        (TuiAgent::Codex, "/fast"),
+        (TuiAgent::Codex, "/ultrafast"),
+    ] {
+        for reject in [false, true] {
+            check_control_delivery(kind, command, reject).await;
+        }
+    }
+}
+
+async fn check_control_delivery(kind: TuiAgent, command: &str, reject: bool) {
+    use std::os::unix::fs::PermissionsExt as _;
+    let root = tempfile::tempdir().unwrap();
+    let calls = root.path().join("calls");
+    let script = root.path().join("herdr");
+    let exit_code = if reject { 1 } else { 0 };
+    std::fs::write(&script, format!(
+        "#!/bin/sh\nprintf '%s\\n' \"$*\" >> {}\ncase \"$2\" in\n  get) printf '%s\\n' '{{\"result\":{{\"agent\":{{\"agent_status\":\"idle\"}}}}}}';;\n  prompt) exit {exit_code};;\n  *) exit 2;;\nesac\n",
+        shell_words::quote(&calls.to_string_lossy()),
+    )).unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let id = uuid::Uuid::new_v4().to_string();
+    save_transcript(root.path(), &id);
+    let (mut adapter, mut output) = test_adapter(root.path());
+    let adapter_mut = Arc::get_mut(&mut adapter).unwrap();
+    adapter_mut.herdr = Some(HerdrCli::new(script, None));
+    adapter_mut.options.kind = kind;
+    let mut record = adapter.store.load(&id).unwrap();
+    record.kind = kind;
+    adapter.store.save(&record).unwrap();
+    adapter
+        .load_session(&json!({"sessionId":id,"cwd":root.path()}))
+        .await
+        .unwrap();
+    let session = adapter.session(&json!({"sessionId":id})).unwrap();
+    let outcome = tokio::time::timeout(Duration::from_secs(2), adapter.prompt(&session, command))
+        .await
+        .expect("native controls do not wait for transcript output");
+    if reject {
+        assert!(outcome.is_err());
+        assert!(
+            output.try_recv().is_err(),
+            "failed delivery must not be acknowledged"
+        );
+    } else {
+        assert_eq!(outcome.unwrap(), "end_turn");
+        let acknowledgment = output.try_recv().unwrap();
+        assert_eq!(
+            acknowledgment["params"]["update"]["sessionUpdate"],
+            "agent_message_chunk"
+        );
+        assert!(
+            acknowledgment["params"]["update"]["content"]["text"]
+                .as_str()
+                .unwrap()
+                .starts_with(&format!("Sent `{command}`"))
+        );
+        assert!(output.try_recv().is_err());
+    }
+    let name = agent_name(&id);
+    assert_eq!(
+        std::fs::read_to_string(calls).unwrap(),
+        format!("agent get {name}\nagent prompt {name} {command}\n")
+    );
+    assert!(lock(&session.cancel).is_none());
+    assert_eq!(adapter.store.load(&id).unwrap().native_id, Some(id));
+    adapter.shutdown.cancel();
+}

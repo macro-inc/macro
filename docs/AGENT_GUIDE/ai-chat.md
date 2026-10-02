@@ -305,6 +305,12 @@ the shimmer.
   TUI. The session page streams its tool calls and replies, and its permission
   prompts appear as approvals. Other runtimes started inside herdr get a live
   view tab per session that can prompt and interrupt it; approvals stay in Macro.
+  Native Herdr sessions offer `/compact`, `/init`, and `/fast` in the slash menu;
+  Codex also offers `/ultrafast`. Macro confirms delivery of speed commands;
+  check their result and any confirmation in Herdr. For Claude, use `/fast on`
+  or `/fast off`, or bare `/fast` to open its native controls. Available speed
+  tiers depend on the native agent, model, and account. The menu does not list
+  installed native skills or session-switching commands such as `/resume`.
   The agent form retains sharing, name, `@tag`, runtime, default model, connections,
   channels, instructions, and permission policy.
   Runtime and short model lists use styled dropdown buttons: open the field and
