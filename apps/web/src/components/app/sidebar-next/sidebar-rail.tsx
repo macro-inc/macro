@@ -9,6 +9,7 @@ import { For, Show, Suspense } from 'solid-js';
 import { SidebarRailCreateButton } from './create-button';
 import { FooterActions } from './footer-actions';
 import { ListNav, type ListNavProps } from './list-nav';
+import { MoreMenu } from './more-menu';
 import { visibleNavItems } from './nav-items';
 import { useSidebarUnread } from './queries/use-sidebar-unread';
 import { SearchRailButton } from './search-bar-button';
@@ -82,6 +83,8 @@ export const SidebarRail = () => {
           </For>
         </ul>
       </nav>
+
+      <MoreMenu gates={gates()} />
 
       <div class="min-h-0 flex-1" />
 

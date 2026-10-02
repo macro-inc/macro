@@ -8,8 +8,10 @@ import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
 import ChatsCircleIcon from '@phosphor/chats-circle.svg';
 import EnvelopeIcon from '@phosphor/envelope.svg';
 import FolderSimpleIcon from '@phosphor/folder-simple.svg';
+import GitPullRequestIcon from '@phosphor/git-pull-request.svg';
 import HouseIcon from '@phosphor/house.svg';
 import ListChecksIcon from '@phosphor/list-checks.svg';
+import PhoneCallIcon from '@phosphor/phone-call.svg';
 import AgentIcon from '@phosphor/sparkle.svg';
 import BellFillIcon from '@phosphor-fill/bell-fill.svg';
 import BuildingsFillIcon from '@phosphor-fill/buildings-fill.svg';
@@ -17,8 +19,10 @@ import CalendarBlankFillIcon from '@phosphor-fill/calendar-blank-fill.svg';
 import ChatsCircleFillIcon from '@phosphor-fill/chats-circle-fill.svg';
 import EnvelopeFillIcon from '@phosphor-fill/envelope-fill.svg';
 import FolderSimpleFillIcon from '@phosphor-fill/folder-simple-fill.svg';
+import GitPullRequestFillIcon from '@phosphor-fill/git-pull-request-fill.svg';
 import HouseFillIcon from '@phosphor-fill/house-fill.svg';
 import ListChecksFillIcon from '@phosphor-fill/list-checks-fill.svg';
+import PhoneCallFillIcon from '@phosphor-fill/phone-call-fill.svg';
 import AgentFillIcon from '@phosphor-fill/sparkle-fill.svg';
 import type { NavIcon } from './nav-glyph';
 
@@ -126,14 +130,55 @@ const SIDEBAR_NEXT_NAV_ITEMS = [
     hotkey: 'o',
     hotkeyToken: TOKENS.sidebar.goTo.companies,
   },
+  {
+    id: 'calls',
+    label: 'Calls',
+    href: LIST_VIEW_PATHS.calls,
+    icon: PhoneCallIcon,
+    iconActive: PhoneCallFillIcon,
+    hotkey: 'l',
+    hotkeyToken: TOKENS.sidebar.goTo.calls,
+  },
+  {
+    id: 'reviews',
+    label: 'Reviews',
+    href: '/reviews',
+    icon: GitPullRequestIcon,
+    iconActive: GitPullRequestFillIcon,
+    hotkey: 'v',
+    hotkeyToken: TOKENS.sidebar.goTo.reviews,
+  },
 ] satisfies SidebarNextNavItem[];
 
-/** Feature flag gates for the Calendar and Customers buttons. */
+/** Feature flag gates for feature-gated nav buttons. */
 export type NavItemGates = {
   showCalendar: boolean;
   showCustomers: boolean;
   showReminders: boolean;
+  showCalls: boolean;
+  showReviews: boolean;
+  /** User preferences for pinned/unpinned sidebar items. */
+  pinnedItems?: Set<string>;
 };
+
+/**
+ * The items available for the More menu (Calls, Reviews). These are shown
+ * in the More menu by default, but can be pinned to the main sidebar.
+ */
+export const MORE_MENU_ITEM_IDS = ['calls', 'reviews'] as const;
+export type MoreMenuItemId = (typeof MORE_MENU_ITEM_IDS)[number];
+
+/**
+ * Returns the nav items that should appear in the More menu (not pinned).
+ */
+export const moreMenuItems = (gates: NavItemGates): SidebarNextNavItem[] =>
+  SIDEBAR_NEXT_NAV_ITEMS.filter((item) => {
+    if (!MORE_MENU_ITEM_IDS.includes(item.id as MoreMenuItemId)) return false;
+    if (item.id === 'calls' && !gates.showCalls) return false;
+    if (item.id === 'reviews' && !gates.showReviews) return false;
+    if (gates.pinnedItems?.has(item.id)) return false;
+    return true;
+  });
 
 /**
  * The nav buttons on offer right now.
@@ -148,5 +193,9 @@ export const visibleNavItems = (gates: NavItemGates): SidebarNextNavItem[] =>
     if (item.id === 'calendar') return gates.showCalendar;
     if (item.id === 'companies') return gates.showCustomers;
     if (item.id === 'reminders') return gates.showReminders;
+    if (item.id === 'calls')
+      return gates.showCalls && gates.pinnedItems?.has('calls');
+    if (item.id === 'reviews')
+      return gates.showReviews && gates.pinnedItems?.has('reviews');
     return true;
   });
