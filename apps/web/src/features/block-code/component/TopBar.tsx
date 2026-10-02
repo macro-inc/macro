@@ -7,14 +7,12 @@ import {
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
-import { SplitToolbarRight } from '@components/app/split-layout/components/SplitToolbar';
 import { useBlockAliasedName, useBlockId } from '@core/block';
 import {
   getShareDrawerRecipientInput,
   ShareTrigger,
 } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
-import { isMobile } from '@core/mobile/isMobile';
 import { blockMetadataSignal, blockTextSignal } from '@core/signal/load';
 import { useGetPermissions } from '@core/signal/permissions';
 import {
@@ -25,17 +23,9 @@ import { downloadFile } from '@filesystem/download';
 import IconShared from '@icon/share.svg';
 import Download from '@phosphor/download-simple.svg';
 import { createCallback } from '@solid-primitives/rootless';
-import type { Component } from 'solid-js';
-import { Show } from 'solid-js';
-import type { CodeBlockMode } from './CodeContent';
 import { CodeFileTypeChip } from './CodeFileTypeChip';
-import { CodeModeControl } from './CodeModeControl';
 
-export const TopBar: Component<{
-  isHtmlFile: boolean;
-  mode: CodeBlockMode;
-  onModeChange: (mode: CodeBlockMode) => void;
-}> = (props) => {
+export function TopBar() {
   const analytics = useAnalytics();
 
   const blockId = useBlockId();
@@ -94,15 +84,6 @@ export const TopBar: Component<{
 
       <ResponsivePermissionsBadge />
 
-      <Show when={props.isHtmlFile && !isMobile()}>
-        <SplitToolbarRight order={-1}>
-          <CodeModeControl
-            mode={props.mode}
-            onModeChange={props.onModeChange}
-          />
-        </SplitToolbarRight>
-      </Show>
-
       <ResponsiveBlockToolbar
         tools={tools}
         ops={ops}
@@ -112,4 +93,4 @@ export const TopBar: Component<{
       />
     </>
   );
-};
+}

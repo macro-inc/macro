@@ -723,3 +723,10 @@ An edit uses the revision from a fresh read and atomically applies a CRDT delta
 that is broadcast to connected collaborators. A stale revision is rejected:
 reread and reconsider the change instead of blindly retrying. Unsynced edits
 still follow normal CRDT collaboration semantics when they reconnect.
+
+## HTML preview tabs
+
+HTML documents show `Render` and `Code` bubble tabs in a left-aligned row above
+the content, below the header, in both standalone desktop blocks and Drive
+detail views. Switch to Code to inspect or edit the source, then back to Render
+to see the current preview. Other code file types do not show this row.

@@ -32,6 +32,7 @@ import {
   ChannelTabProvider,
   useChannelTab,
 } from '@channel/Channel/ChannelTabContext';
+import { ChannelTabs } from '@channel/Channel/ChannelTabs';
 import { ChannelTopBarLiveIndicators } from '@channel/Channel/ChannelTopBarLiveIndicators';
 import { CHANNEL_TAB_ICONS } from '@channel/Channel/channel-tab-icons';
 import {
@@ -71,6 +72,7 @@ import {
 import { useUserId } from '@core/context/user';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createMethodRegistration } from '@core/orchestrator';
 import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import { blockHandleSignal } from '@core/signal/load';
@@ -199,9 +201,6 @@ function NewTop(props: { channelId: string }) {
         channelType={channelType()!}
         participants={participants() ?? []}
         channelName={channelName() ?? 'New Channel'}
-        tabs={tabs()}
-        activeTab={activeTab()}
-        onTabChange={setActiveTab}
       />
       <SplitTitleFileMenu>
         <BlockSplitFileMenu
@@ -539,6 +538,11 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
               'touch:pt-(--mobile-content-inset-top)'
           )}
         >
+          <Show when={!isTouchDevice()}>
+            <Suspense>
+              <ChannelTabs channelId={channelId} />
+            </Suspense>
+          </Show>
           <Switch>
             <Match when={activeTab() === 'messages'}>
               <ChannelMessages

@@ -4,12 +4,8 @@ import {
   CompanyTabs,
 } from '@app/features/crm/crm-company';
 import { CrmCopyLinkButton } from '@app/features/crm/crm-link';
-import { CollapsibleHeaderItem } from '@components/app/split-layout/components/CollapsibleItem';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
-import {
-  SplitHeaderLeft,
-  SplitHeaderRight,
-} from '@components/app/split-layout/components/SplitHeader';
+import { SplitHeaderRight } from '@components/app/split-layout/components/SplitHeader';
 import { useBlockId } from '@core/block';
 import {
   createParamsState,
@@ -33,38 +29,18 @@ export function CompanyBlockAdapter() {
   });
   return (
     <>
-      <SplitHeaderLeft>
-        <CollapsibleHeaderItem
-          id="company-tabs"
-          priority={1}
-          containerClass="ph-no-capture min-w-0 h-full mx-2"
-        >
-          {(isCollapsed) => (
-            // Labels keep their width so the header collapses them to
-            // icons; the icons scroll once even they no longer fit.
-            <div
-              class={
-                isCollapsed()
-                  ? 'min-w-0 overflow-x-auto scrollbar-hidden'
-                  : 'shrink-0'
-              }
-            >
-              <CompanyTabs
-                value={section()}
-                onChange={setSection}
-                compact={isCollapsed()}
-              />
-            </div>
-          )}
-        </CollapsibleHeaderItem>
-      </SplitHeaderLeft>
       <SplitHeaderRight>
         <HeaderIsland>
           <CrmCopyLinkButton type="company" id={companyId} />
         </HeaderIsland>
       </SplitHeaderRight>
       <ParamsProvider state={params}>
-        <Company companyId={companyId} section={section()} />
+        <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
+          <CompanyTabs value={section()} onChange={setSection} />
+          <div class="relative min-h-0 min-w-0 flex-1">
+            <Company companyId={companyId} section={section()} />
+          </div>
+        </div>
       </ParamsProvider>
     </>
   );

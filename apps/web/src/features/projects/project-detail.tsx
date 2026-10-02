@@ -12,11 +12,10 @@ import {
   useSplitDisplayName,
   useSplitPanelOrThrow,
 } from '@components/app/split-layout/layoutUtils';
-import { TabsInset } from '@core/component/TabsInset';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import StackIcon from '@phosphor/stack.svg';
-import { Button } from '@ui';
+import { Button, Tabs } from '@ui';
 import { Match, Show, Switch } from 'solid-js';
 import {
   type ProjectsContext,
@@ -130,28 +129,27 @@ function ProjectDetailHost(props: ProjectDetailProps) {
       <Show when={props.breadcrumb}>
         {(breadcrumb) => <ProjectBreadcrumbContent {...breadcrumb()} />}
       </Show>
-      <EntityDetailTopBar
-        navigation={
-          <Show when={source.project()}>
-            <TabsInset
-              list={[
-                { value: 'overview', label: 'Overview' },
-                { value: 'tasks', label: 'Tasks' },
-              ]}
-              value={props.route.section}
-              onChange={(value) => section(value as ProjectSection)}
-              aria-label="Project sections"
-              class="shrink-0 whitespace-nowrap"
-            />
-          </Show>
-        }
-      >
+      <EntityDetailTopBar>
         <Show when={source.project()}>
           {(project) => (
             <ProjectShareTrigger project={project()} commands={commands} />
           )}
         </Show>
       </EntityDetailTopBar>
+      <Show when={source.project()}>
+        <div class="min-w-0 shrink-0 overflow-x-auto scrollbar-hidden px-4 py-2">
+          <Tabs
+            list={[
+              { value: 'overview', label: 'Overview' },
+              { value: 'tasks', label: 'Tasks' },
+            ]}
+            value={props.route.section}
+            onChange={(value) => section(value as ProjectSection)}
+            aria-label="Project sections"
+            class="w-max whitespace-nowrap"
+          />
+        </div>
+      </Show>
       <div class="relative min-h-0 min-w-0 flex-1">
         <Switch>
           <Match when={source.loading() && !source.project()}>

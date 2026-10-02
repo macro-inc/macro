@@ -22,7 +22,7 @@ import { useCompanyQuery } from './use-crm';
 
 /**
  * Root of the company detail view, laid out like a project: the host's top
- * bar picks the section, Overview shows the company with its description and
+ * tab row picks the section, Overview shows the company with its description and
  * discussion, and the other sections list its team, emails, files, tasks and
  * calls. Properties and sharing stay in the right-hand SidePanel.
  */

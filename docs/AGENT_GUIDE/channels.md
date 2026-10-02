@@ -844,8 +844,12 @@ This action does not enable team auto-join. Check opening and reopening,
 switching options, keyboard recipient selection, external email chips,
 cancellation, and focus restoration before sending invites.
 
-Radio group at the top of the channel pane: `Messages` / `Attachments` / `Calls` / `Participants`,
-plus `Ask Macro` and `Call` buttons. The `Calls` tab lists recordings for that channel
+Bubble tabs sit in their own row below the channel header:
+`Messages` / `Attachments` / `Calls` / `Participants`.
+`Ask Macro`, `Invite`, and `Call` actions remain in the header. On narrow desktop
+panes, the tab row scrolls horizontally and keeps its text labels. Standalone
+mobile channels keep view selection in the title menu. The `Calls` tab lists
+recordings for that channel
 (same rows as the Calls soup view, filtered to this channel). The live `Call` tab
 appears while a call is in progress. `Ask Macro` opens a new chat pane with the channel
 already @mentioned as context (see ai-chat.md). On mobile it lives in the channel title's
@@ -855,8 +859,9 @@ instead.
 In the Chat workspace — and wherever a channel opens inline inside another
 view's detail stack (a channel mention followed from the email view, say) — the
 conversation renders an inline detail whose top bar holds the channel avatar
-and name, the same tab strip, live viewer avatars, and the `Call` and
-`Ask Macro` buttons. In Chat an ellipsis follows the name and opens the same
+and name, live viewer avatars, and the `Call` and
+`Ask Macro` buttons, with the same bubble tab row below the top bar. In Chat an
+ellipsis follows the name and opens the same
 entity actions as right-clicking the conversation's rail row — `Open in new
 split`, `Rename`, `Favorite`/`Unfavorite`, `Snooze notifications…`, `Mute
 notifications`, `Remind me`, `Copy Link`, `Copy ID` — so a channel can be

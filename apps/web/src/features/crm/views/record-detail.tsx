@@ -135,24 +135,6 @@ export function CrmCompanyDetail(props: {
               aria-label="CRM record location"
               class="min-w-0 shrink"
             />
-            <div class="min-w-0 overflow-x-auto">
-              <Show
-                when={selectedContact()}
-                fallback={
-                  <RecordTabs
-                    sections={COMPANY_SECTIONS}
-                    value={companySection()}
-                    onChange={setCompanySection}
-                  />
-                }
-              >
-                <RecordTabs
-                  sections={CONTACT_SECTIONS}
-                  value={contactSection()}
-                  onChange={setContactSection}
-                />
-              </Show>
-            </div>
             <div class="ml-auto flex shrink-0 items-center gap-2">
               <CrmCopyLinkButton
                 type={selectedContact() ? 'contact' : 'company'}
@@ -161,6 +143,22 @@ export function CrmCompanyDetail(props: {
               <SidePanel.Toggle />
             </div>
           </div>
+          <Show
+            when={selectedContact()}
+            fallback={
+              <RecordTabs
+                sections={COMPANY_SECTIONS}
+                value={companySection()}
+                onChange={setCompanySection}
+              />
+            }
+          >
+            <RecordTabs
+              sections={CONTACT_SECTIONS}
+              value={contactSection()}
+              onChange={setContactSection}
+            />
+          </Show>
           <div class="relative min-h-0 min-w-0 flex-1">
             <Show when={selectedContact()?.id ?? props.company.id} keyed>
               {(_recordId) => (
