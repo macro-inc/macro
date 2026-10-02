@@ -4,7 +4,9 @@
 use super::*;
 use crate::domain::{
     models::{CreateInitiativeRequest, InitialPropertyValue, InitiativeError},
-    ports::{InitiativeService, MockInitiativeDescriptionDocuments},
+    ports::{
+        InitiativeService, MockInitiativeDescriptionDocuments, MockInitiativeDescriptionSurfaces,
+    },
     resources::InitiativeResources,
     service::InitiativeServiceImpl,
 };
@@ -104,8 +106,12 @@ async fn create_persists_initial_values_in_the_same_request(pool: PgPool) -> any
         .expect_create()
         .return_once(move |_| Box::pin(async move { Ok(description) }));
     let harness = harness(&pool);
-    let service =
-        InitiativeServiceImpl::new(repo(pool.clone()), documents, harness.resources.clone());
+    let service = InitiativeServiceImpl::new(
+        repo(pool.clone()),
+        documents,
+        MockInitiativeDescriptionSurfaces::new(),
+        harness.resources.clone(),
+    );
 
     let created = service
         .create(

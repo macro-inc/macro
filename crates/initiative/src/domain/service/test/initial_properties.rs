@@ -106,10 +106,15 @@ fn created_ports() -> (MockInitiativeRepo, MockInitiativeDescriptionDocuments) {
 async fn create_sets_initial_values_as_the_owner_once_properties_are_attached() {
     let (repo, documents) = created_ports();
     let resources = Arc::new(RecordingResources::default());
-    let created = InitiativeServiceImpl::new(repo, documents, resources.clone())
-        .create(&user(OWNER), request(vec![status(1)]))
-        .await
-        .expect("created");
+    let created = InitiativeServiceImpl::new(
+        repo,
+        documents,
+        MockInitiativeDescriptionSurfaces::new(),
+        resources.clone(),
+    )
+    .create(&user(OWNER), request(vec![status(1)]))
+    .await
+    .expect("created");
 
     assert_eq!(
         *resources.steps.lock().unwrap(),
@@ -126,7 +131,7 @@ async fn rejected_initial_values_delete_the_new_project_and_its_description() {
     let (mut repo, mut documents) = created_ports();
     repo.expect_delete()
         .times(1)
-        .return_once(|_| Box::pin(async { Ok(description_document_id()) }));
+        .return_once(|_| Box::pin(async { Ok(description()) }));
     documents
         .expect_purge()
         .withf(|id| *id == description_document_id())
@@ -136,6 +141,8 @@ async fn rejected_initial_values_delete_the_new_project_and_its_description() {
     let svc = InitiativeServiceImpl::new(
         repo,
         documents,
+        // The surface is adopted on first open, so a failed create has none to remove.
+        MockInitiativeDescriptionSurfaces::new(),
         Arc::new(RecordingResources {
             reject_values: true,
             ..Default::default()
@@ -159,6 +166,7 @@ async fn invalid_initial_values_are_rejected_before_anything_is_created() {
     let svc = InitiativeServiceImpl::new(
         MockInitiativeRepo::new(),
         MockInitiativeDescriptionDocuments::new(),
+        MockInitiativeDescriptionSurfaces::new(),
         Arc::new(RecordingResources::default()),
     );
 
