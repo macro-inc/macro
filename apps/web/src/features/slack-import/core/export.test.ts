@@ -155,6 +155,12 @@ describe('paths and day JSON', () => {
     'a//b',
     'a/%2e%2e',
     'C:/users.json',
+    'FC:F100:../users.json',
+    'FC:F100:notes/../users.json',
+    'FC:F100:notes/%2e%2e/users.json',
+    'FC:F100:notes\\users.json',
+    'FC:F100:notes:stream/2020-01-01.json',
+    'FC:not-a-file:notes/2020-01-01.json',
     'a/\u0000b',
     'a/'.repeat(600),
   ])('rejects unsafe path %j', (path) => {
@@ -165,6 +171,10 @@ describe('paths and day JSON', () => {
       validateArchivePath('project café/2020-01-01.json')
     ).not.toThrow();
     expect(() => validateArchivePath('project café/')).not.toThrow();
+    expect(() => validateArchivePath('FC:F100:Project café/')).not.toThrow();
+    expect(() =>
+      validateArchivePath('FC:F100:Project café/2020-01-01.json')
+    ).not.toThrow();
   });
   it.each(['{', '{}', '[null]', '[1]', '[[]]'])(
     'rejects malformed day JSON %s',

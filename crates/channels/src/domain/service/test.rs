@@ -15,7 +15,10 @@ use crate::domain::{
 use chrono::Utc;
 use entity_access::domain::models::ParticipantRole as AccessRole;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::HashSet,
+    sync::{Arc, Mutex},
+};
 
 fn empty_repo() -> MockChannelRepo {
     let mut repo = MockChannelRepo::new();

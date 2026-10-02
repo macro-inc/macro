@@ -1678,6 +1678,8 @@ filters; unchecking it or **Clear visible selection** clears only visible select
 Rows show stable Slack IDs
 so duplicate names remain distinguishable. Counts are advisory when available,
 otherwise “not yet counted.” Discovery moves keyboard focus to the filter.
+Slack file/canvas discussion folders (`FC:<file-id>:<title>`) are ignored, not
+imported as channels; their presence must not prevent channel discovery.
 
 Review email attribution and external membership implications, choose whether to
 include history, and confirm the immutable Slack workspace binding before

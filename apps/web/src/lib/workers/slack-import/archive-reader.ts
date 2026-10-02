@@ -5,6 +5,7 @@ import {
   type ArchiveLimits,
   CONVERSATION_FILES,
   DEFAULT_ARCHIVE_LIMITS,
+  isFileConversationFolder,
   parseDay,
   parseJson,
   resolveExport,
@@ -377,6 +378,9 @@ export class ArchiveReader {
     const roots = new Map<string, unknown>();
     const dayPaths: string[] = [];
     for (const entry of this.entries) {
+      // File/canvas discussions are not channels. Validate their ZIP headers,
+      // but never inflate or upload their content, just like attachments.
+      if (isFileConversationFolder(entry.path.split('/')[0])) continue;
       if (ROOT_FILES.has(entry.path)) {
         const bytes = await readJsonEntry(
           this.blob,

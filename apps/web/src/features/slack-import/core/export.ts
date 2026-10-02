@@ -95,11 +95,25 @@ export function isSafeSegment(value: string): boolean {
   );
 }
 
+/** Slack exports file/canvas discussions separately from channel history. */
+export function isFileConversationFolder(value: string): boolean {
+  const match = /^FC:F[A-Z0-9]+:(.+)$/.exec(value);
+  return (
+    match !== null &&
+    isSafeSegment(match[1]) &&
+    new TextEncoder().encode(value).length <= 255
+  );
+}
+
 export function validateArchivePath(path: string): void {
   const segments = path.replace(/\/$/, '').split('/');
   if (
     new TextEncoder().encode(path).length > 1024 ||
-    !segments.every(isSafeSegment)
+    !segments.every(
+      (segment, index) =>
+        isSafeSegment(segment) ||
+        (index === 0 && isFileConversationFolder(segment))
+    )
   ) {
     throw new ArchiveError('unsafe_path');
   }

@@ -99,7 +99,7 @@ export async function* ndjsonParts(
     seal: {
       slackChannelId,
       partCount: partIndex,
-      manifestSha256: hex(await manifest.digest()),
+      manifestSha256: hex(manifest.digestSync()),
     },
   };
 }

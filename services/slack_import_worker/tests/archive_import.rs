@@ -305,7 +305,7 @@ fn command(history: bool) -> CreateImport {
                 kind: ConversationKind::PublicChannel,
                 name: "duplicate display name".into(),
                 folder: id.parse().unwrap(),
-                member_ids: vec!["U1".parse().unwrap()],
+                member_ids: vec!["U1".parse().unwrap(), "U3".parse().unwrap()],
                 creator_id: None,
                 created_at: Some("1.000001".parse().unwrap()),
                 archived: false,
@@ -357,7 +357,8 @@ async fn upload_job(service: &impl ImportService, team: TeamId, history: bool) -
     );
     let users = serde_json::to_vec(&serde_json::json!([
         {"id":"U1", "name":"admin", "profile":{"email":"T17@Example.com"}},
-        {"id":"U2", "name":"Unknown author"}
+        {"id":"U2", "name":"Unknown author"},
+        {"id":"U3", "name":"External member", "profile":{"email":"external@example.com"}}
     ]))
     .unwrap();
     let users_descriptor = descriptor(UploadId::Users, &users);
@@ -443,7 +444,7 @@ async fn upload_job(service: &impl ImportService, team: TeamId, history: bool) -
         if history {
             let other = if id == "C1" { "C2" } else { "C1" };
             let records = [
-                serde_json::json!({"type":"message", "user":"U2", "ts":"2.000001", "text": format!("See <#{other}|other> and <https://unproven.slack.com/archives/{other}/p0000000002000001|original>")}),
+                serde_json::json!({"type":"message", "user":"U2", "ts":"2.000001", "text": format!("<@U1> <!channel> See <#{other}|other> and <https://unproven.slack.com/archives/{other}/p0000000002000001|original>"), "reactions":[{"name":"thumbsup", "users":["U1"], "count":1}]}),
                 serde_json::json!({"type":"message", "user":"U1", "ts":"3.000001", "thread_ts":"2.000001", "text":"historical reply"}),
             ];
             let bytes = records
@@ -528,6 +529,47 @@ async fn progress(repo: &PgSlackImportRepo, team: TeamId, job: JobId) -> ImportP
     repo.progress(team, job).await.unwrap().unwrap()
 }
 
+/// The historical composition has no live notification/event publisher. Check its
+/// real database effects too: mentions, reactions, external members and replies
+/// must not produce notifications, invitation emails or unread activity.
+async fn assert_backfill_is_silent(pool: &PgPool) {
+    let counts = sqlx::query!(
+        r#"
+        SELECT
+            (SELECT count(*) FROM notification) AS "notifications!",
+            (SELECT count(*) FROM user_notification) AS "user_notifications!",
+            (SELECT count(*) FROM notification_email_sent) AS "emails!",
+            (SELECT count(*) FROM channel_notification_email_sent) AS "channel_emails!",
+            (SELECT count(*) FROM comms_activity) AS "channel_activity!",
+            (SELECT count(*) FROM activity_events) AS "activity_events!"
+        "#
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        counts.notifications, 0,
+        "history must not create notifications"
+    );
+    assert_eq!(
+        counts.user_notifications, 0,
+        "history must not create unread notifications"
+    );
+    assert_eq!(counts.emails, 0, "history must not send emails");
+    assert_eq!(
+        counts.channel_emails, 0,
+        "history must not send channel invitations"
+    );
+    assert_eq!(
+        counts.channel_activity, 0,
+        "history must not create per-user activity"
+    );
+    assert_eq!(
+        counts.activity_events, 0,
+        "history must not create live activity events"
+    );
+}
+
 #[ignore = "requires Docker with localstack/localstack:4 and a local PostgreSQL test role"]
 #[sqlx::test(migrations = "../../crates/macro_db_client/migrations")]
 async fn sealed_uploads_queue_replay_and_search_completion_barrier(pool: PgPool) {
@@ -572,6 +614,7 @@ async fn sealed_uploads_queue_replay_and_search_completion_barrier(pool: PgPool)
         )
         .unwrap(),
     );
+    assert_backfill_is_silent(&pool).await;
     // Shape creation followed by history and an exact repeat reuse the same IDs.
     let mut canonical = None;
     for history in [false, true, true] {
@@ -699,6 +742,7 @@ async fn sealed_uploads_queue_replay_and_search_completion_barrier(pool: PgPool)
             progress(&repo, team, job).await.status,
             JobStatus::Completed
         );
+        assert_backfill_is_silent(&pool).await;
     }
     assert_eq!(
         sqlx::query_scalar!("SELECT count(*) FROM comms_messages")
@@ -800,6 +844,7 @@ async fn sealed_uploads_queue_replay_and_search_completion_barrier(pool: PgPool)
     })
     .await
     .expect("disabled worker did not persist exhausted work as Failed");
+    assert_backfill_is_silent(&pool).await;
     stop.cancel();
     timeout(Duration::from_secs(35), driver)
         .await

@@ -1,4 +1,5 @@
 import { Client } from '@opensearch-project/opensearch';
+import { serve, type Server } from 'bun';
 import { describe, expect, test } from 'bun:test';
 import {
   addImportedAuthor,
@@ -14,11 +15,11 @@ type MappingRequest = { method: string; path: string; body: unknown };
 
 function mappingServer(options: MappingServerOptions = {}): {
   client: Client;
-  server: Bun.Server<undefined>;
+  server: Server<undefined>;
   requests: MappingRequest[];
 } {
   const requests: MappingRequest[] = [];
-  const server = Bun.serve({
+  const server = serve({
     port: 0,
     async fetch(request) {
       const path = new URL(request.url).pathname;

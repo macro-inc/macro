@@ -78,6 +78,27 @@ describe('bounded ZIP reader', () => {
     }
   );
 
+  it('ignores Slack file/canvas discussions without inflating them', async () => {
+    const reader = new ArchiveReader(
+      zipBlob(
+        zipFixture({
+          ...standardEntries(),
+          'FC:F100:Project notes/': '',
+          'FC:F100:Project notes/2023-11-14.json': 'not channel JSON',
+          'file_conversations.json': [{ id: 'F100', name: 'Project notes' }],
+        })
+      )
+    );
+    const discovery = await reader.discover();
+    expect(discovery.conversations.map((item) => item.slackChannelId)).toEqual([
+      'C100',
+    ]);
+    expect(discovery.dayEntries).toHaveLength(1);
+    const days = await collect(reader, ['C100']);
+    expect(days).toHaveLength(1);
+    expect(days[0].records).toEqual([MESSAGE]);
+  });
+
   it('supports streaming ZIP data descriptors and rejects descriptor conflicts', async () => {
     const bytes = streamingZipFixture(standardEntries());
     const reader = new ArchiveReader(zipBlob(bytes));

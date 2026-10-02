@@ -787,7 +787,7 @@ export type ImportStatus = 'staged' | 'importing' | 'imported' | 'discarded';
  * Where an import entity was first staged from. Provenance only — never a
  * visibility filter.
  */
-export type Initiator = 'onboarding' | 'chat';
+export type Initiator = 'onboarding' | 'chat' | 'archive';
 
 export type JwtPayload = {
     token: string;
