@@ -266,17 +266,6 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
               </div>
             </div>
           </div>
-
-          {/* Help text */}
-          <div class="shrink-0 px-2 py-1.5 border-t border-edge-muted">
-            <div class="text-xs text-ink-muted">
-              <span>Use queries like </span>
-              <code class="bg-active px-1">3d</code>,{' '}
-              <code class="bg-active px-1">1w</code>,{' '}
-              <code class="bg-active px-1">feb 17</code>, or{' '}
-              <code class="bg-active px-1">tomorrow</code>
-            </div>
-          </div>
         </Match>
 
         <Match when={mode() === 'calendar'}>

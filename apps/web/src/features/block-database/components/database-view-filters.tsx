@@ -68,11 +68,6 @@ export function FilterPanel(props: {
   };
   return (
     <div class="w-124 max-w-full">
-      <Show when={!draft().conditions.length}>
-        <p class="mb-3 max-w-72 text-xs leading-relaxed text-ink-muted">
-          Choose which records to show.
-        </p>
-      </Show>
       <div class="flex max-h-80 flex-col gap-2 overflow-auto">
         <GroupEditor
           columns={props.columns}

@@ -52,11 +52,6 @@ export function SortPanel(props: {
   };
   return (
     <div class="w-80 max-w-full">
-      <Show when={!sort().length}>
-        <p class="mb-3 text-xs text-ink-muted">
-          Choose the order records appear in.
-        </p>
-      </Show>
       <DragDropProvider
         collisionDetector={reorder.collisionDetector}
         onDragStart={reorder.onDragStart}

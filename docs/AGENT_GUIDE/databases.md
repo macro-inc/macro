@@ -143,6 +143,9 @@ Shift+Tab moves backward, and both wrap between rows. Read-only columns are
 skipped. Select values open the option picker; checkboxes change
 directly. Type on a selected select cell to search its options; Enter chooses a
 match, and Tab chooses the highlighted option or typed match before moving on.
+Number cells display thousands separators (for example, `100,000`); opening an
+editor shows the raw number for editing.
+
 Date cells open Macro's date selector (the one tasks use): type a date or phrase
 such as `tomorrow`, `3d`, or `feb 17` and press Enter, or pick **Custom date...**
 for a calendar. Typing on a selected date cell starts that search; Delete clears
