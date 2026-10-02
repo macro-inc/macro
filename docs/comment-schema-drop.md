@@ -1,7 +1,7 @@
 # Comment schema drop release
 
-This change removes the legacy comment sources after the unified message
-cutover. It is **not authorized for merge or deployment yet**. Migrations deploy
+[Schema-drop PR #7360](https://github.com/macro-inc/macro/pull/7360) removes the
+legacy comment sources after the unified message cutover. It is **not authorized for merge or deployment yet**. Migrations deploy
 before services, and the PDF highlight query in contract commit `f7b3753db2`
 still reads `"PdfHighlightAnchor"."threadId"`. The service-only prerequisite
 [#7358](https://github.com/macro-inc/macro/pull/7358) must be **deployed to every production
