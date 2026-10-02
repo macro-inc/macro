@@ -380,6 +380,8 @@ export const storageBacklog = [
   // Email follow-ups are available through the generated client, like reminders.
   'getEmailFollowup',
   'setEmailFollowup',
+  'listEmailReminders',
+  'emailReminderSummaries',
   'approveHarnessPairing',
   'assignInitiativeTasks',
   'claimHarnessPairing',
