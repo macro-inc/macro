@@ -83,6 +83,9 @@ export const [MutationUndoProvider, useMutationUndoContext] =
     (): MutationUndoContextValue => {
       const [undoStack, setUndoStack] = createSignal<UndoEntry[]>([]);
       const [redoStack, setRedoStack] = createSignal<UndoEntry[]>([]);
+      const disposed = new WeakSet<UndoEntry>();
+      let generation = 0;
+      let redoGeneration = 0;
 
       const runUndo = async (
         entry: UndoEntry,
@@ -94,15 +97,19 @@ export const [MutationUndoProvider, useMutationUndoContext] =
         // cleared by a new pushUndo after redoStack reset).
         if (prevPos < 0) return;
 
+        const startedGeneration = generation;
+        const startedRedoGeneration = redoGeneration;
         setUndoStack(current.filter((e) => e !== entry));
         try {
           await entry.undo();
-          if (entry.redo) {
+          if (disposed.has(entry) || generation !== startedGeneration) return;
+          if (entry.redo && redoGeneration === startedRedoGeneration) {
             setRedoStack((prev) => [...prev, entry]);
           }
           entry.onUndone?.();
           callbacks?.onSuccess?.();
         } catch (err) {
+          if (disposed.has(entry) || generation !== startedGeneration) return;
           // Restore at original position so a non-top undo that fails doesn't
           // reorder the stack.
           setUndoStack((prev) => {
@@ -122,14 +129,17 @@ export const [MutationUndoProvider, useMutationUndoContext] =
         entry: UndoEntry,
         callbacks?: UndoCallbacks
       ): Promise<void> => {
+        const startedGeneration = generation;
         try {
           if (entry.redo) {
             await entry.redo();
           }
+          if (disposed.has(entry) || generation !== startedGeneration) return;
           setUndoStack((prev) => [...prev, entry]);
           entry.onRedone?.();
           callbacks?.onSuccess?.();
         } catch (err) {
+          if (disposed.has(entry) || generation !== startedGeneration) return;
           setRedoStack((prev) => [...prev, entry]);
           callbacks?.onError?.(
             err instanceof Error ? err : new Error(String(err))
@@ -142,12 +152,14 @@ export const [MutationUndoProvider, useMutationUndoContext] =
       return {
         pushUndo: (input) => {
           const entry: UndoEntry = { ...input, id: genId() };
+          redoGeneration += 1;
           setUndoStack((prev) => [...prev, entry]);
           setRedoStack([]);
           return {
             id: entry.id,
             undo: (callbacks) => runUndo(entry, callbacks),
             dispose: () => {
+              disposed.add(entry);
               setUndoStack((prev) => prev.filter((e) => e !== entry));
               setRedoStack((prev) => prev.filter((e) => e !== entry));
             },
@@ -158,6 +170,8 @@ export const [MutationUndoProvider, useMutationUndoContext] =
         canRedo: () => redoStack().length > 0,
 
         clear: () => {
+          generation += 1;
+          redoGeneration += 1;
           setUndoStack([]);
           setRedoStack([]);
         },

@@ -1039,6 +1039,73 @@ describe('mark-done orchestration', () => {
     }
   );
 
+  it('reports every GraphQL write receipt before throwing a sibling failure', async () => {
+    operationMocks.graphql = true;
+    const archiveError = new Error('archive failed');
+    operationMocks.archive
+      .mockResolvedValueOnce('queued')
+      .mockRejectedValueOnce(archiveError);
+    operationMocks.updateNotificationsForEntities.mockResolvedValueOnce([
+      { id: 'server-exact' },
+    ]);
+    const onWriteSettled = vi.fn();
+    await expect(
+      executeMarkEntitiesDone({
+        emailIds: ['queued', 'failed'],
+        notificationIds: ['selected-id'],
+        notificationEntities: [{ type: 'document', id: 'document-1' }],
+        onWriteSettled,
+      })
+    ).rejects.toBe(archiveError);
+    expect(onWriteSettled.mock.calls.map(([outcome]) => outcome)).toEqual([
+      {
+        kind: 'email',
+        id: 'queued',
+        result: { status: 'fulfilled', value: 'queued' },
+      },
+      {
+        kind: 'email',
+        id: 'failed',
+        result: { status: 'rejected', reason: archiveError },
+      },
+      {
+        kind: 'notifications',
+        result: { status: 'fulfilled', value: ['selected-id'] },
+      },
+      {
+        kind: 'entity-notifications',
+        result: { status: 'fulfilled', value: [{ id: 'server-exact' }] },
+      },
+    ]);
+    expect(operationMocks.cancelQueries).not.toHaveBeenCalled();
+    expect(operationMocks.invalidateQueries).not.toHaveBeenCalled();
+  });
+
+  it('reports accepted GraphQL reversals even when notification reversal fails', async () => {
+    operationMocks.graphql = true;
+    const failure = new Error('notification failed');
+    operationMocks.bulkMarkNotificationsAsUndone.mockRejectedValueOnce(failure);
+    const onWriteSettled = vi.fn();
+    await expect(
+      executeMarkEntitiesUndone({
+        emailIds: ['email-1'],
+        notificationIds: ['exact-id'],
+        onWriteSettled,
+      })
+    ).rejects.toBe(failure);
+    expect(onWriteSettled.mock.calls.map(([outcome]) => outcome)).toEqual([
+      {
+        kind: 'email',
+        id: 'email-1',
+        result: { status: 'fulfilled', value: 'committed' },
+      },
+      {
+        kind: 'notifications',
+        result: { status: 'rejected', reason: failure },
+      },
+    ]);
+  });
+
   it('executes entity notification writes directly and returns exact ids', async () => {
     operationMocks.updateNotificationsForEntities.mockResolvedValueOnce([
       { id: 'entity-notification' },
@@ -1107,6 +1174,25 @@ describe('mark-done optimism', () => {
     context.releaseGraphql();
     expect(lease.release).toHaveBeenCalledOnce();
     expect(intent.settle).toHaveBeenCalledWith(['exact-id']);
+    expectNoRestCacheAccess();
+  });
+
+  it('unwinds the initial GraphQL Done lease when the write fails after early Undo', () => {
+    operationMocks.graphql = true;
+    const context = applyEntitiesDoneOptimistic({
+      entityIds: ['document-1'],
+      emailIds: [],
+      notificationIds: ['notification-1'],
+    });
+    const doneLease = operationMocks.doneOverride.mock.results[0].value;
+    context.applyUndone();
+    const undoneLease = operationMocks.doneOverride.mock.results[1].value;
+    context.rollback();
+    expect(undoneLease).toHaveBeenCalledOnce();
+    expect(doneLease).toHaveBeenCalledOnce();
+    expect(undoneLease.mock.invocationCallOrder[0]).toBeLessThan(
+      doneLease.mock.invocationCallOrder[0]
+    );
     expectNoRestCacheAccess();
   });
 

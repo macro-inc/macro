@@ -102,11 +102,24 @@ other entity partitions, and notified-at sorting still use the network path.
 The Mark done action (`e`, row menu) hides its rows at once from GraphQL lists that
 exclude done items, such as Email Important/Noise and Home Signal, without waiting
 for the server. Email All keeps the row and flips its done indicator immediately.
-Undo restores a previously admitted row even after the cache has removed it,
+GraphQL Undo is offered as soon as Done applies locally, even while its initial
+write is pending. Undo restores the row and focus immediately; its server write
+waits for the initial outcomes and uses only acknowledged notification IDs.
+A late Done reply must not settle or overwrite the newer Undo display intent.
+Undo also restores a previously admitted row after the cache has removed it,
 without waiting for the reversal's server reply; changing filters/sort clears
 those view-local restoration snapshots. Home's separate recent-activity inclusion
 rules are unchanged. Test Done/Undo/Redo with delayed replies and verify both flat
 and grouped rows/counts. A failure must roll back only its own local intent.
+Test mixed committed/queued/rejected archives, notification writes, and reminder
+completions, including an archive that fails while its notifications succeed
+(and vice versa). Accepted writes retain Undo; rejected siblings must neither
+reappear in its request nor be retried by Redo. Partial feedback keeps an Undo
+action. A no-op notification target cannot borrow a sibling's returned IDs to
+restore its row. Partial Undo/Redo failures retry only the failed writes.
+If every initial write fails, retire its pending Undo/Redo entry and unwind both
+Done and any early Undo overrides. Disposal or clearing history while a reversal
+is pending must not resurrect that entry when its response arrives.
 Newer in-scope activity can re-admit a row, but loading an older notification or
 activity in a separate channel thread must not. Redo targets the original exact
 notification IDs, not notifications received since the original action. A newer
