@@ -59,22 +59,10 @@ impl Daemon {
             let root = crate::herdr::instance_directory(credentials.harness_id)?;
             let herdr = crate::herdr::HerdrSession::detect()
                 .ok_or_else(|| rootcause::report!("start macrod inside a Herdr pane"))?;
-            let index = config
-                .harness
-                .args
-                .iter()
-                .position(|arg| arg == "--")
-                .unwrap_or(config.harness.args.len());
-            config.harness.args.splice(
-                index..index,
-                [
-                    "--state-dir".to_owned(),
-                    root.to_string_lossy().into_owned(),
-                ],
-            );
+            crate::herdr::configure_launch(&mut config.harness, &config.herdr, &root);
             Some(crate::herdr::repositories::Workspaces::new(
                 config.workspace.path.clone(),
-                root,
+                config.herdr.storage_path.clone().unwrap_or(root),
                 crate::herdr::cli::HerdrCli::new(herdr.bin, herdr.workspace_id),
             ))
         } else {

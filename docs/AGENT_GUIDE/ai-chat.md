@@ -269,6 +269,11 @@ the shimmer.
   agent changes and are sent only to coding agents. Cursor honors the explicit
   repository and branch instead of choosing a repository from the prompt;
   the owner must have access through the connected GitHub App.
+  Paired macrod agents also receive the repository choice. With native Herdr,
+  macrod finds an existing clone or clones it using local Git credentials, then
+  creates a managed worktree from a fresh `origin/main`. **Branch** shows `main`
+  and cannot be changed for local sessions. The native Claude/Codex TUI remains
+  interactive in Herdr, and local turns appear in the Macro transcript.
 - Sending starts a session with the chosen agent's configured default model;
   a model selected from its submenu overrides that default for the next send
   only. Sending or choosing another agent clears the override. This does not
