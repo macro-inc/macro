@@ -34,6 +34,9 @@ impl UserDeletionGateway for FakeGateway {
     async fn delete_profile(&self, user: &MacroUserIdStr<'static>, _: &Uuid) -> Result<(), Report> {
         self.call("profile", user.as_ref())
     }
+    async fn delete_billing_customer(&self, _: &Uuid) -> Result<(), Report> {
+        self.call("customer", "")
+    }
     async fn delete_account(&self, _: &Uuid) -> Result<(), Report> {
         self.call("account", "")
     }
@@ -53,6 +56,7 @@ fn expected_calls() -> Vec<String> {
             expected.push(format!("{step}:{user}"));
         }
     }
+    expected.push("customer:".into());
     expected.push("account:".into());
     expected
 }
@@ -89,5 +93,5 @@ async fn retry_after_profiles_are_gone_still_deletes_the_account() {
     delete_user_data(&gateway, &Uuid::now_v7(), &[])
         .await
         .unwrap();
-    assert_eq!(*gateway.calls.lock().unwrap(), ["account:"]);
+    assert_eq!(*gateway.calls.lock().unwrap(), ["customer:", "account:"]);
 }

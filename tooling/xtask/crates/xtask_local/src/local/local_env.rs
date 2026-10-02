@@ -523,7 +523,6 @@ impl AgentHarnessEnv {
 /// container (services, sync, lexical) agrees. `INTERNAL_API_SECRET_KEY` is the
 /// literal `"local"` to match the FusionAuth webhook's `x-internal-auth-key`.
 struct ServiceAuthEnv {
-    dss_auth: String,
     doc_perm_jwt: String,
     internal_call: String,
     url_signing: String,
@@ -532,7 +531,6 @@ struct ServiceAuthEnv {
 impl ServiceAuthEnv {
     fn for_instance(name: &str) -> Self {
         ServiceAuthEnv {
-            dss_auth: identity::instance_secret("dss-auth", name),
             // Must match sync-service's local DOCUMENT_PERMISSIONS_SECRET
             // ("local") so locally-minted tokens verify. This is ONLY for local
             // dev use obv
@@ -564,15 +562,21 @@ impl ServiceAuthEnv {
             "SYNC_SERVICE_AUTH_KEY".into(),
             identity::INTERNAL_AUTH_KEY.into(),
         );
-        // The key the authentication service presents to document storage on
-        // internal calls (e.g. seeding starter docs at signup). In dev/prod
-        // Doppler points it at the *same* secret as DSS's own auth key
-        // (document-storage-service-auth-key-*), so locally the two must be
-        // one value or DSS 401s every auth-service internal call.
-        env.insert("SERVICE_INTERNAL_AUTH_KEY".into(), self.dss_auth.clone());
+        // The key the authentication service presents on internal calls to
+        // document storage (seeding starter docs at signup), the connection
+        // gateway, the agent harness, and the scheduled-action service
+        // (account deletion). Deployed environments point it at the *same*
+        // secret those services validate, which is also DSS's own auth key
+        // (document-storage-service-auth-key-*). Locally every service
+        // validates the one shared internal key, so this must be that key or
+        // every auth-service internal call 401s.
+        env.insert(
+            "SERVICE_INTERNAL_AUTH_KEY".into(),
+            identity::INTERNAL_AUTH_KEY.into(),
+        );
         env.insert(
             "DOCUMENT_STORAGE_SERVICE_AUTH_KEY".into(),
-            self.dss_auth.clone(),
+            identity::INTERNAL_AUTH_KEY.into(),
         );
         env.insert("DOCUMENT_PERMISSION_JWT".into(), self.doc_perm_jwt.clone());
         env.insert("INTERNAL_CALL_SECRET".into(), self.internal_call.clone());
