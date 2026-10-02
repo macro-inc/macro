@@ -40,7 +40,7 @@ pub trait RemindersRepo: Send + Sync + 'static {
     type Err: std::error::Error + Send + Sync + 'static;
 
     /// Coalesce private eligible email reminders before keyset pagination.
-    /// `thread_ids` restricts summary batches; None discovers the collection.
+    /// `thread_ids` optionally restricts candidates; None discovers the collection.
     fn email_candidates(
         &self,
         user: &MacroUserIdStr<'_>,
@@ -333,20 +333,6 @@ pub trait RemindersService: Send + Sync + 'static {
         }
     }
 
-    /// One bounded read for clocks on existing email rows.
-    fn email_reminder_summaries(
-        &self,
-        _viewer: super::email_collection::EmailReminderViewer,
-        _thread_ids: Vec<Uuid>,
-    ) -> impl Future<
-        Output = Result<Vec<super::email_collection::EmailReminderSummary>, ReminderError>,
-    > + Send {
-        async {
-            Err(ReminderError::BadRequest(
-                "Email reminders are unavailable".into(),
-            ))
-        }
-    }
     /// Paginate the caller's private Reminders collection with native source metadata.
     fn list_collection(
         &self,

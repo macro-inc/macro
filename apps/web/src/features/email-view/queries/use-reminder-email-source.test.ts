@@ -1,4 +1,5 @@
 import type { EmailEntity } from '@entity';
+import type { EmailReminderSummary } from '@service-storage/generated/schemas/emailReminderSummary';
 import { createRoot } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -64,7 +65,7 @@ function mount() {
       error: null as Error | null,
       data: {
         pages: [
-          { items: [] as { threadId: string }[], nextCursor: 'continue' },
+          { items: [] as EmailReminderSummary[], nextCursor: 'continue' },
         ],
       },
       fetchNextPage: vi.fn(async () => {}),
@@ -124,6 +125,52 @@ function email(id: string): EmailEntity {
   };
 }
 
+function item(
+  threadId: string,
+  count = 1,
+  reminderId = `${threadId}-reminder`
+): EmailReminderSummary {
+  return {
+    threadId,
+    count,
+    nearest: {
+      reminder: {
+        id: reminderId,
+        entityId: threadId,
+        entityType: 'email_thread',
+        description: 'Follow up',
+        enabled: true,
+        nextRunAt: '2026-10-05T12:00:00Z',
+        createdAt: '2026-10-01T12:00:00Z',
+        updatedAt: '2026-10-01T12:00:00Z',
+        schedule: { type: 'once', remindAt: '2026-10-05T12:00:00Z' },
+      },
+    },
+  };
+}
+
+it('uses collection clock metadata only for hydrated rows and clears it outside the tab', () => {
+  const { source, setCollection, setHydration, setState } = mount();
+  setCollection('data', 'pages', [
+    { items: [item('first', 2), item('revoked')], nextCursor: '' },
+  ]);
+  setHydration('data', 'entities', [email('first')]);
+  expect(source.reminderForThread?.('first')).toMatchObject({
+    count: 2,
+    nearest: { id: 'first-reminder' },
+  });
+  expect(source.reminderForThread?.('revoked')).toBeUndefined();
+  setCollection('data', 'pages', [
+    { items: [item('first', 1, 'replacement')], nextCursor: '' },
+  ]);
+  expect(source.reminderForThread?.('first')).toMatchObject({
+    count: 1,
+    nearest: { id: 'replacement' },
+  });
+  setState('tab', 'all');
+  expect(source.reminderForThread?.('first')).toBeUndefined();
+});
+
 it('follows an empty budget-limited continuation without reporting an empty collection', async () => {
   const { source, collection } = mount();
   expect(source.items().map((row) => row.kind)).toEqual(['load-more']);
@@ -139,11 +186,7 @@ it('intersects authorized IDs with native hydration and restores schedule order'
   const { source, setCollection, setHydration } = mount();
   setCollection('data', 'pages', [
     {
-      items: [
-        { threadId: 'older' },
-        { threadId: 'newer' },
-        { threadId: 'revoked' },
-      ],
+      items: [item('older'), item('newer'), item('revoked')],
       nextCursor: 'continue',
     },
   ]);
@@ -165,7 +208,7 @@ it('intersects authorized IDs with native hydration and restores schedule order'
 it('surfaces initial hydration failures for retry without fabricating preview rows', () => {
   const { source, setCollection, setHydration } = mount();
   setCollection('data', 'pages', [
-    { items: [{ threadId: 'email' }], nextCursor: 'continue' },
+    { items: [item('email')], nextCursor: 'continue' },
   ]);
   setHydration({ data: undefined, error: new Error('Retry hydration') });
   expect(source.error()).toEqual(new Error('Retry hydration'));
@@ -193,7 +236,7 @@ it('shares the in-flight final-page wait until native hydration publishes the ne
     setLaterHydration,
   } = mount();
   setCollection('data', 'pages', [
-    { items: [{ threadId: 'first' }], nextCursor: 'last' },
+    { items: [item('first')], nextCursor: 'last' },
   ]);
   setHydration('data', { entities: [email('first')] });
   let release!: () => void;
@@ -206,8 +249,8 @@ it('shares the in-flight final-page wait until native hydration publishes the ne
             isFetchingNextPage: false,
             data: {
               pages: [
-                { items: [{ threadId: 'first' }], nextCursor: 'last' },
-                { items: [{ threadId: 'last' }], nextCursor: '' },
+                { items: [item('first')], nextCursor: 'last' },
+                { items: [item('last')], nextCursor: '' },
               ],
             },
           });
@@ -262,8 +305,8 @@ it('retains earlier rows and retries failed final-page hydration without fetchin
     hasNextPage: false,
     data: {
       pages: [
-        { items: [{ threadId: 'first' }], nextCursor: 'last' },
-        { items: [{ threadId: 'last' }], nextCursor: '' },
+        { items: [item('first')], nextCursor: 'last' },
+        { items: [item('last')], nextCursor: '' },
       ],
     },
   });
@@ -294,7 +337,7 @@ it('retains earlier rows and retries failed final-page hydration without fetchin
 it('rejects a pending navigation wait when the selected inbox changes', async () => {
   const { source, setCollection, setState, setHydration } = mount();
   setCollection('data', 'pages', [
-    { items: [{ threadId: 'first' }], nextCursor: 'next' },
+    { items: [item('first')], nextCursor: 'next' },
   ]);
   setHydration({ isPending: true, data: undefined });
   const pending = source.loadMore();
@@ -307,7 +350,7 @@ it('reconciles live non-read facets and refills while keeping read admission sta
   const { source, collection, setCollection, setState, setHydration } = mount();
   setState('facets', { done: ['not-done'], read: ['unread'] });
   setCollection('data', 'pages', [
-    { items: [{ threadId: 'first' }], nextCursor: 'next' },
+    { items: [item('first')], nextCursor: 'next' },
   ]);
   setHydration('data', { entities: [email('first')] });
   expect(source.items().filter((row) => row.kind === 'entity')).toHaveLength(1);

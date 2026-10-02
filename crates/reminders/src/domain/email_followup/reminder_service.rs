@@ -67,21 +67,6 @@ impl<
         .await
     }
 
-    async fn email_reminder_summaries(
-        &self,
-        viewer: crate::domain::email_collection::EmailReminderViewer,
-        thread_ids: Vec<Uuid>,
-    ) -> Result<Vec<crate::domain::email_collection::EmailReminderSummary>, ReminderError> {
-        crate::domain::email_collection::service::summaries(
-            &self.email.repo,
-            &self.email.mailbox,
-            &self.access,
-            &self.email.clock,
-            viewer,
-            thread_ids,
-        )
-        .await
-    }
     async fn list_collection(
         &self,
         user: &MacroUserIdStr<'_>,

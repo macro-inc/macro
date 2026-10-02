@@ -164,7 +164,7 @@ async fn reminder_collection_rechecks_delegation_after_receipt_minting(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_dynamic_query"))
 )]
-async fn reminder_summary_supports_shared_rows_without_widening_mail_collection(
+async fn reminder_collection_excludes_shared_rows_outside_mail_inboxes(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let thread = uuid::uuid!("20000001-0000-0000-0000-000000000001");
@@ -174,12 +174,6 @@ async fn reminder_summary_supports_shared_rows_without_widening_mail_collection(
     sqlx::query!("INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level) VALUES ($1, 'email_thread', $2, 'user', 'view')", thread, user.as_ref()).execute(&pool).await?;
     let mailbox = service(pool.clone());
     assert_eq!(receipts(&pool, &user, &[thread]).await.len(), 1);
-    assert_eq!(
-        mailbox
-            .reminder_summary_threads(user.clone(), receipts(&pool, &user, &[thread]).await)
-            .await?,
-        vec![thread]
-    );
     assert!(
         mailbox
             .reminder_threads(
@@ -198,11 +192,5 @@ async fn reminder_summary_supports_shared_rows_without_widening_mail_collection(
     .execute(&pool)
     .await?;
     assert!(receipts(&pool, &user, &[thread]).await.is_empty());
-    assert!(
-        mailbox
-            .reminder_summary_threads(user.clone(), receipts(&pool, &user, &[thread]).await)
-            .await?
-            .is_empty()
-    );
     Ok(())
 }

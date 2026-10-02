@@ -15,10 +15,6 @@ export const reminderKeys = createQueryKeys('reminders', {
     userId: string | undefined,
     filters: ListEmailRemindersParams
   ) => [userId, filters],
-  emailSummaries: (
-    userId: string | undefined,
-    threadIds: readonly string[]
-  ) => [userId, threadIds],
   collection: (userId: string | undefined, completed?: boolean) => [
     userId,
     { completed },

@@ -381,7 +381,6 @@ export const storageBacklog = [
   'getEmailFollowup',
   'setEmailFollowup',
   'listEmailReminders',
-  'emailReminderSummaries',
   'approveHarnessPairing',
   'assignInitiativeTasks',
   'claimHarnessPairing',

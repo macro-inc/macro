@@ -14385,68 +14385,6 @@
         }
       }
     },
-    "/reminders/email/summaries": {
-      "post": {
-        "tags": ["reminders"],
-        "summary": "Batch clocks for original email rows without one request per row.",
-        "operationId": "email_reminder_summaries",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/EmailReminderSummaryRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/EmailReminderSummary"
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/reminders/email/{thread_id}": {
       "get": {
         "tags": ["reminders"],
@@ -24560,22 +24498,6 @@
             "type": "string",
             "format": "uuid",
             "description": "Original email identity, never a mirror reminder identity."
-          }
-        }
-      },
-      "EmailReminderSummaryRequest": {
-        "type": "object",
-        "description": "One bounded set of original thread IDs.",
-        "required": ["threadIds"],
-        "properties": {
-          "threadIds": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "description": "At most 100 IDs; absent reminders produce no result.",
-            "maxItems": 100
           }
         }
       },

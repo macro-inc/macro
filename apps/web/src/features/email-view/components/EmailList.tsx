@@ -6,6 +6,7 @@ import {
   toEntityActionListState,
   useEntityActionHotkeys,
 } from '@app/features/next-soup/actions';
+import { EmailRowSchedule } from '@app/features/reminders/views/email-row-schedule';
 import {
   createSoupEntityActions,
   MaybeSoupEntityActionDrawerManager,
@@ -576,6 +577,19 @@ export function EmailList(props: EmailListProps) {
                                   <div role="gridcell">
                                     <ListEntity
                                       entity={entityRow().entity}
+                                      scheduleStatus={
+                                        <Show
+                                          when={source.reminderForThread?.(
+                                            entityRow().entity.id
+                                          )}
+                                        >
+                                          {(reminder) => (
+                                            <EmailRowSchedule
+                                              reminder={reminder()}
+                                            />
+                                          )}
+                                        </Show>
+                                      }
                                       leadingAction={
                                         <Show when={!isTouchDevice()}>
                                           <EmailStarAction

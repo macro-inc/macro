@@ -1,7 +1,7 @@
 import { ActionDialogShell, Dialog } from '@ui';
 import { createSignal, Show, Suspense } from 'solid-js';
 import { ReminderScheduleIndicator } from '../components/reminder-schedule-indicator';
-import type { EmailRowReminder } from '../context/email-row-reminders';
+import type { EmailRowReminder } from '../core/email-row-reminder';
 import { emailReminderScheduleLabel } from '../core/row-schedule';
 import { useReminderClock } from '../primitives/reminder-clock';
 import { ReminderDetails } from '../ReminderEditorSplit';
@@ -10,7 +10,7 @@ import { ReminderDetails } from '../ReminderEditorSplit';
 export function EmailRowSchedule(props: { reminder: EmailRowReminder }) {
   const now = useReminderClock();
   const [open, setOpen] = createSignal(false);
-  // Summary polling may choose another nearest reminder while this editor is open.
+  // Collection polling may choose another nearest reminder while this editor is open.
   // The activation, not live row metadata, owns this editor session's identity.
   const [target, setTarget] = createSignal<{
     id: string;

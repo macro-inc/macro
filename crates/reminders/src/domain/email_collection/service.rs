@@ -49,7 +49,7 @@ async fn eligible<E: EmailFollowupMailbox, A: EntityAccessService>(
     access: &A,
     viewer: &EmailReminderViewer,
     candidates: &[EmailReminderCandidate],
-    filters: Option<&ReminderThreadFilter>,
+    filters: &ReminderThreadFilter,
 ) -> Result<HashSet<Uuid>, ReminderError> {
     let ids: Vec<_> = candidates
         .iter()
@@ -82,19 +82,10 @@ async fn eligible<E: EmailFollowupMailbox, A: EntityAccessService>(
     if receipts.is_empty() {
         return Ok(HashSet::new());
     }
-    let ids = match filters {
-        Some(filters) => {
-            mailbox
-                .reminder_threads(viewer.user_id.clone(), receipts, filters)
-                .await
-        }
-        None => {
-            mailbox
-                .reminder_summary_threads(viewer.user_id.clone(), receipts)
-                .await
-        }
-    }
-    .map_err(internal)?;
+    let ids = mailbox
+        .reminder_threads(viewer.user_id.clone(), receipts, filters)
+        .await
+        .map_err(internal)?;
     Ok(ids.into_iter().collect())
 }
 
@@ -131,7 +122,7 @@ pub async fn list<R: RemindersRepo, E: EmailFollowupMailbox, A: EntityAccessServ
             .await
             .map_err(internal)?;
         let short_batch = candidates.len() < BATCH_SIZE as usize;
-        let allowed = eligible(mailbox, access, &viewer, &candidates, Some(&query.filters)).await?;
+        let allowed = eligible(mailbox, access, &viewer, &candidates, &query.filters).await?;
         for candidate in candidates {
             if allowed.contains(&candidate.cursor.thread_id) && candidate.summary.is_some() {
                 // This candidate belongs to the next page. Never move past it.
@@ -161,46 +152,4 @@ pub async fn list<R: RemindersRepo, E: EmailFollowupMailbox, A: EntityAccessServ
             .then(|| cursor.map(|c| format!("{}|{filter_scope}", c.encode())))
             .flatten(),
     })
-}
-
-/// Summaries for the supplied rows only; every result is private and authorized.
-pub async fn summaries<
-    R: RemindersRepo,
-    E: EmailFollowupMailbox,
-    A: EntityAccessService,
-    C: Clock,
->(
-    repo: &R,
-    mailbox: &E,
-    access: &A,
-    clock: &C,
-    viewer: EmailReminderViewer,
-    mut thread_ids: Vec<Uuid>,
-) -> Result<Vec<EmailReminderSummary>, ReminderError> {
-    if thread_ids.len() > BATCH_SIZE as usize {
-        return Err(ReminderError::BadRequest(
-            "At most 100 email threads may be requested".into(),
-        ));
-    }
-    thread_ids.sort_unstable();
-    thread_ids.dedup();
-    if thread_ids.is_empty() {
-        return Ok(Vec::new());
-    }
-    let candidates = repo
-        .email_candidates(
-            &viewer.user_id,
-            Some(&thread_ids),
-            None,
-            clock.now(),
-            BATCH_SIZE,
-        )
-        .await
-        .map_err(internal)?;
-    let allowed = eligible(mailbox, access, &viewer, &candidates, None).await?;
-    Ok(candidates
-        .into_iter()
-        .filter(|c| allowed.contains(&c.cursor.thread_id))
-        .filter_map(|c| c.summary)
-        .collect())
 }

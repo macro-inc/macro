@@ -1,4 +1,3 @@
-import { EmailRowRemindersQueryProvider } from '@app/features/reminders/email-row-reminders-provider';
 import { TagSetsProvider } from '@property/tags/tag-sets-context';
 import type { FlowComponent } from 'solid-js';
 import { useSoupView } from './soup-view-context';
@@ -12,9 +11,7 @@ export const SoupRowMetadataProvider: FlowComponent = (props) => {
 
   return (
     <TagSetsProvider tagSets={tagFilter.tagSets}>
-      <EmailRowRemindersQueryProvider>
-        {props.children}
-      </EmailRowRemindersQueryProvider>
+      {props.children}
     </TagSetsProvider>
   );
 };

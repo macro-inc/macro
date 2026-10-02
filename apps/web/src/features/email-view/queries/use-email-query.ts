@@ -1,4 +1,5 @@
 import type { ListDataSource } from '@app/components/list';
+import type { EmailRowReminder } from '@app/features/reminders/core/email-row-reminder';
 import {
   buildFlatSoupRows,
   buildGroupedSoupRows,
@@ -38,7 +39,9 @@ import { useScheduledEmailSource } from './use-scheduled-email-source';
 
 export type EmailDataSourceItem = SoupRow<WithNotification<EntityData>>;
 
-export type EmailDataSource = ListDataSource<EmailDataSourceItem>;
+export type EmailDataSource = ListDataSource<EmailDataSourceItem> & {
+  reminderForThread?: (threadId: string) => EmailRowReminder | undefined;
+};
 
 export type EmailDataSourceInput = Pick<
   EmailViewState,
@@ -386,6 +389,8 @@ export function useEmailDataSource(
   };
 
   return {
+    reminderForThread: (threadId) =>
+      showsReminders() ? reminders.reminderForThread?.(threadId) : undefined,
     items: () =>
       showsReminders()
         ? reminders.items()

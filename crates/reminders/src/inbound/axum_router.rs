@@ -106,10 +106,6 @@ where
             get(email_collection::list_email_reminders_handler::<S, Eas, Auth>),
         )
         .route(
-            "/email/summaries",
-            post(email_collection::email_reminder_summaries_handler::<S, Eas, Auth>),
-        )
-        .route(
             "/email/{thread_id}",
             get(get_email_followup_handler::<S, Eas, Auth>)
                 .put(set_email_followup_handler::<S, Eas, Auth>),

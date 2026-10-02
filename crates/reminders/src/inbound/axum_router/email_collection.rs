@@ -1,8 +1,6 @@
 //! Authenticated read adapters for original-email reminder surfaces.
 use super::*;
-use crate::domain::email_collection::{
-    EmailReminderPage, EmailReminderQuery, EmailReminderSummary, EmailReminderViewer,
-};
+use crate::domain::email_collection::{EmailReminderPage, EmailReminderQuery, EmailReminderViewer};
 use email::domain::followup::ReminderThreadFilter;
 
 /// Email facets and cursor. Repeated inbox IDs select those inboxes only.
@@ -28,15 +26,6 @@ pub struct EmailReminderParams {
     /// Maximum rows (1–100).
     #[param(minimum = 1, maximum = 100)]
     pub limit: Option<u32>,
-}
-
-/// One bounded set of original thread IDs.
-#[derive(Debug, Deserialize, utoipa::ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct EmailReminderSummaryRequest {
-    /// At most 100 IDs; absent reminders produce no result.
-    #[schema(max_items = 100)]
-    pub thread_ids: Vec<Uuid>,
 }
 
 fn viewer<Auth: MacroAuthorizationService>(
@@ -122,29 +111,6 @@ pub async fn list_email_reminders_handler<
         state
             .service
             .list_email_reminders(viewer(user), query)
-            .await?,
-    ))
-}
-
-/// Batch clocks for original email rows without one request per row.
-#[utoipa::path(post, tag = "reminders", operation_id = "email_reminder_summaries",
-    path = "/reminders/email/summaries", request_body = EmailReminderSummaryRequest,
-    responses((status = 200, body = Vec<EmailReminderSummary>), (status = 400, body = ErrorResponse),
-    (status = 401, body = ErrorResponse), (status = 500, body = ErrorResponse)))]
-#[tracing::instrument(err, skip_all)]
-pub async fn email_reminder_summaries_handler<
-    S: RemindersService,
-    Eas: EntityAccessService,
-    Auth: MacroAuthorizationService,
->(
-    State(state): State<RemindersRouterState<S, Eas, Auth>>,
-    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
-    Json(request): Json<EmailReminderSummaryRequest>,
-) -> Result<Json<Vec<EmailReminderSummary>>, ReminderError> {
-    Ok(Json(
-        state
-            .service
-            .email_reminder_summaries(viewer(user), request.thread_ids)
             .await?,
     ))
 }

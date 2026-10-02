@@ -5625,16 +5625,6 @@ export type EmailReminderSummary = {
 };
 
 /**
- * One bounded set of original thread IDs.
- */
-export type EmailReminderSummaryRequest = {
-    /**
-     * At most 100 IDs; absent reminders produce no result.
-     */
-    threadIds: Array<string>;
-};
-
-/**
  * Empty response is required due to custom fetch forcing `response.json()`
  */
 export type EmptyResponse = {
@@ -19134,27 +19124,6 @@ export type ListEmailRemindersResponses = {
 };
 
 export type ListEmailRemindersResponse = ListEmailRemindersResponses[keyof ListEmailRemindersResponses];
-
-export type EmailReminderSummariesData = {
-    body: EmailReminderSummaryRequest;
-    path?: never;
-    query?: never;
-    url: '/reminders/email/summaries';
-};
-
-export type EmailReminderSummariesErrors = {
-    400: ErrorResponse;
-    401: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type EmailReminderSummariesError = EmailReminderSummariesErrors[keyof EmailReminderSummariesErrors];
-
-export type EmailReminderSummariesResponses = {
-    200: Array<EmailReminderSummary>;
-};
-
-export type EmailReminderSummariesResponse = EmailReminderSummariesResponses[keyof EmailReminderSummariesResponses];
 
 export type GetEmailFollowupData = {
     body?: never;

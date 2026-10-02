@@ -30,10 +30,6 @@ vi.mock('@app/features/projects/project-detail', async () => {
     },
   };
 });
-vi.mock('@app/features/reminders/email-row-reminders-provider', () => ({
-  EmailRowRemindersQueryProvider: (props: { children: JSX.Element }) =>
-    props.children,
-}));
 vi.mock('@queries/properties/tags', () => ({
   useTagsQuery: () => ({ isPending: false, isFetched: true, data: [] }),
 }));

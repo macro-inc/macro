@@ -437,7 +437,6 @@ use utoipa::OpenApi;
         reminders::inbound::axum_router::list_reminders_handler,
         reminders::inbound::axum_router::list_reminder_collection_handler,
         reminders::inbound::axum_router::email_collection::list_email_reminders_handler,
-        reminders::inbound::axum_router::email_collection::email_reminder_summaries_handler,
         reminders::inbound::axum_router::create_reminder_handler,
         reminders::inbound::axum_router::get_reminder_handler,
         reminders::inbound::axum_router::update_reminder_handler,

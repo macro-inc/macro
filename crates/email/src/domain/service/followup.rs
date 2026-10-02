@@ -131,22 +131,6 @@ where
         Ok(ids.into_iter().filter(|id| matching.contains(id)).collect())
     }
 
-    async fn reminder_summary_threads(
-        &self,
-        user: MacroUserIdStr<'static>,
-        receipts: Vec<
-            entity_access::domain::models::EntityAccessReceipt<
-                entity_access::domain::models::ViewAccessLevel,
-            >,
-        >,
-    ) -> Result<Vec<Uuid>, EmailErr> {
-        Ok(self
-            .get_email_thread_mail_projections_impl(user, receipts)
-            .await?
-            .into_keys()
-            .collect())
-    }
-
     async fn followup_thread(
         &self,
         user: MacroUserIdStr<'static>,

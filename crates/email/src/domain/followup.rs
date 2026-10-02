@@ -88,18 +88,6 @@ pub trait EmailFollowupMailbox: Send + Sync + 'static {
         filters: &ReminderThreadFilter,
     ) -> impl Future<Output = Result<Vec<Uuid>, EmailErr>> + Send;
 
-    /// Read existing authorized row identities, including shared mail, without
-    /// imposing Mail collection membership on another view's visible rows.
-    fn reminder_summary_threads(
-        &self,
-        user: MacroUserIdStr<'static>,
-        receipts: Vec<
-            entity_access::domain::models::EntityAccessReceipt<
-                entity_access::domain::models::ViewAccessLevel,
-            >,
-        >,
-    ) -> impl Future<Output = Result<Vec<Uuid>, EmailErr>> + Send;
-
     /// Resolve owned/delegated access and inspect this conversation.
     fn followup_thread(
         &self,

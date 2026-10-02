@@ -1,4 +1,3 @@
-import { EmailRowRemindersQueryProvider } from '@app/features/reminders/email-row-reminders-provider';
 import {
   TagSetsProvider,
   TagSetsQueryProvider,
@@ -30,9 +29,5 @@ export const ListEntityNoopMetadataProvider: FlowComponent = (props) => (
  * Soup lists use their soup-specific metadata provider instead.
  */
 export const ListEntityMetadataQueryProvider: FlowComponent = (props) => (
-  <TagSetsQueryProvider>
-    <EmailRowRemindersQueryProvider>
-      {props.children}
-    </EmailRowRemindersQueryProvider>
-  </TagSetsQueryProvider>
+  <TagSetsQueryProvider>{props.children}</TagSetsQueryProvider>
 );

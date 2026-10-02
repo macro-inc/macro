@@ -93,7 +93,6 @@ import type { EditAnchorResponse } from './generated/schemas/editAnchorResponse'
 import type { EmailFollowup } from './generated/schemas/emailFollowup';
 import type { EmailFollowupCommand } from './generated/schemas/emailFollowupCommand';
 import type { EmailReminderPage } from './generated/schemas/emailReminderPage';
-import type { EmailReminderSummary } from './generated/schemas/emailReminderSummary';
 import type { ExportDocumentResponse } from './generated/schemas/exportDocumentResponse';
 import type { Favorite } from './generated/schemas/favorite';
 import type { FavoritesList } from './generated/schemas/favoritesList';
@@ -2519,15 +2518,6 @@ export const storageServiceClient = {
       return await dssFetch<EmailReminderPage>(
         `/reminders/email/collection?${query}`,
         { method: 'GET' }
-      );
-    },
-    async emailReminderSummaries(threadIds: string[]) {
-      return await dssFetch<EmailReminderSummary[]>(
-        '/reminders/email/summaries',
-        {
-          method: 'POST',
-          body: JSON.stringify({ threadIds }),
-        }
       );
     },
     async listCollection(params: ListReminderCollectionParams) {

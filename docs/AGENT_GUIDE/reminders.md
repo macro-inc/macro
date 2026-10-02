@@ -147,24 +147,24 @@ apply to the original conversation before pagination. Text search is unavailable
 in this view; entering or leaving clears its saved text search. Back/forward and
 reload retain the Email tab and selected inbox scope.
 
-Matching email rows in other views, including Shared, show the same persistent
-clock for the signed-in user's private reminders. Sharing an email does not share
-its reminders. The email check still archives/unarchives the email independently
-of its reminder clock. Click, tap or keyboard-activate the clock to open the
+Clocks in this dedicated tab use the private reminder metadata returned with
+its collection pages; native email hydration supplies the original row content.
+Other Email and Soup views do not add reminder clocks or batch summary requests.
+The email check still archives/unarchives the email independently of its clock. Click, tap or keyboard-activate the clock to open the
 existing reminder editor; Cancel returns focus to that clock when it still exists.
 Returned and in-progress workflow labels describe their current state rather than
 claiming a new future firing.
 
 For verification, use more than 100 reminders, a long prefix excluded by the
-selected inbox/filter, several reminders on one email, and a shared thread with
-private reminders belonging to different users. A sparse page can still have a
+selected inbox/filter, several reminders on one email, and caller/account isolation. A sparse page can still have a
 **Load more** continuation. Follow it rather than treating that page as the end.
 A final page stays loading until its original email rows hydrate. If that page
 fails, earlier rows remain with **Couldn’t load more email. Try again**; retry
 loads the failed page without skipping ahead. In Email, Tab from the grid moves
 through native row controls; Enter on a clock opens its editor without opening
 the email. An open editor keeps the reminder selected at activation even if a
-summary refresh chooses a different nearest reminder.
+collection refresh chooses a different nearest reminder.
 
 Check create/edit/remove/undo, reply cancellation, and due return across the Email
-Reminders list and another matching email view without reloading the app.
+Reminders list without reloading the app. Confirm ordinary Email and Soup views
+issue no reminder collection or summary requests.

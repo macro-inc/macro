@@ -42,18 +42,6 @@ impl EmailFollowupMailbox for Mailbox {
             .filter(|id| !self.rejected.contains(id))
             .collect())
     }
-    async fn reminder_summary_threads(
-        &self,
-        user: MacroUserIdStr<'static>,
-        receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
-    ) -> Result<Vec<Uuid>, EmailErr> {
-        Mailbox {
-            rejected: HashSet::new(),
-            fail: self.fail,
-        }
-        .reminder_threads(user, receipts, &ReminderThreadFilter::default())
-        .await
-    }
     async fn followup_thread(
         &self,
         _: MacroUserIdStr<'static>,
@@ -329,92 +317,18 @@ async fn scan_fails_retryably_on_access_or_hydration_failure(pool: PgPool) {
         Err(ReminderError::Internal(_))
     ));
     access.denial = None;
-    let summaries = service::summaries(
+    let page = service::list(
         &repo,
         &Mailbox::default(),
         &access,
         &FixedClock,
         viewer(),
-        ids.clone(),
+        query(None, 100),
     )
     .await
     .unwrap();
     assert_eq!(
-        summaries.iter().map(|i| i.thread_id).collect::<Vec<_>>(),
+        page.items.iter().map(|i| i.thread_id).collect::<Vec<_>>(),
         vec![ids[0], ids[2]]
-    );
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn summaries_include_shared_rows_but_only_the_callers_private_reminders(pool: PgPool) {
-    let (repo, access, ids) = setup(pool.clone(), 1).await;
-    let other = "macro|other@macro.com";
-    let macro_id = Uuid::now_v7();
-    sqlx::query!(
-        r#"INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ($1,$2,$2,$2)"#,
-        macro_id,
-        other
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    sqlx::query!(
-        r#"INSERT INTO "User" (id,email,macro_user_id) VALUES ($1,$1,$2)"#,
-        other,
-        macro_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    repo.create_reminder(
-        &MacroUserIdStr::parse_from_str(other).unwrap(),
-        &NewReminder {
-            description: "Other user's private reminder".into(),
-            entity: Some(EntityType::EmailThread.with_entity_string(ids[0].to_string())),
-            schedule: ReminderSchedule::Once {
-                remind_at: instant(2, 1),
-            },
-            next_run_at: instant(2, 1),
-        },
-    )
-    .await
-    .unwrap();
-    let mailbox = Mailbox {
-        rejected: ids.iter().copied().collect(),
-        fail: false,
-    };
-    assert!(
-        service::list(
-            &repo,
-            &mailbox,
-            &access,
-            &FixedClock,
-            viewer(),
-            query(None, 100)
-        )
-        .await
-        .unwrap()
-        .items
-        .is_empty()
-    );
-    let summaries =
-        service::summaries(&repo, &mailbox, &access, &FixedClock, viewer(), ids.clone())
-            .await
-            .unwrap();
-    assert_eq!(summaries.len(), 1);
-    assert_eq!(summaries[0].count, 1);
-    assert_eq!(summaries[0].nearest.reminder.description, "private 0");
-    access
-        .allowed_emails
-        .as_ref()
-        .unwrap()
-        .lock()
-        .unwrap()
-        .clear();
-    assert!(
-        service::summaries(&repo, &mailbox, &access, &FixedClock, viewer(), ids)
-            .await
-            .unwrap()
-            .is_empty()
     );
 }
