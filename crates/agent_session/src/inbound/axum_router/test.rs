@@ -1107,6 +1107,8 @@ async fn an_owner_starts_their_macrod_agent_from_the_composer() {
             "id": minted,
             "botId": BotId::TEST_A.as_uuid(),
             "model": "claude-opus-5",
+            "repoUrl": "https://github.com/org/project",
+            "repoBranch": "main",
         })
         .to_string(),
     );
@@ -1127,6 +1129,10 @@ async fn an_owner_starts_their_macrod_agent_from_the_composer() {
         let requested = requests.requested.lock().unwrap();
         assert_eq!(requested.len(), 1);
         assert_eq!(requested[0].bot_id, BotId::TEST_A);
+        assert_eq!(
+            requested[0].repo_url.as_deref(),
+            Some("https://github.com/org/project")
+        );
         assert_eq!(requested[0].owner.as_ref(), OWNER);
         assert_eq!(requested[0].session_id.as_uuid(), minted);
         assert_eq!(requested[0].model.as_deref(), Some("claude-opus-5"));
@@ -1399,4 +1405,27 @@ async fn invalid_repository_branch_is_rejected_before_opening() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
     assert!(opener.managed.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn macrod_rejects_an_unsupported_base_before_dispatch() {
+    let requests = Arc::new(RecordingRequester::default());
+    let response = router_with_requests(
+        Arc::new(RecordingOpener::default()),
+        OneBotDirectory::macrod_agent(),
+        requests.clone(),
+    )
+    .oneshot(as_user(
+        OWNER,
+        serde_json::json!({
+            "botId": BotId::TEST_A.as_uuid(),
+            "repoUrl": "https://github.com/org/project",
+            "repoBranch": "feature/other"
+        })
+        .to_string(),
+    ))
+    .await
+    .unwrap();
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(requests.requested.lock().unwrap().is_empty());
 }

@@ -54,6 +54,33 @@ impl Daemon {
         #[cfg(not(unix))]
         let tap = None;
 
+        #[cfg(unix)]
+        let workspaces = if crate::herdr::drives_herdr(&config.harness) {
+            let root = crate::herdr::instance_directory(credentials.harness_id)?;
+            let herdr = crate::herdr::HerdrSession::detect()
+                .ok_or_else(|| rootcause::report!("start macrod inside a Herdr pane"))?;
+            let index = config
+                .harness
+                .args
+                .iter()
+                .position(|arg| arg == "--")
+                .unwrap_or(config.harness.args.len());
+            config.harness.args.splice(
+                index..index,
+                [
+                    "--state-dir".to_owned(),
+                    root.to_string_lossy().into_owned(),
+                ],
+            );
+            Some(crate::herdr::repositories::Workspaces::new(
+                config.workspace.path.clone(),
+                root,
+                crate::herdr::cli::HerdrCli::new(herdr.bin, herdr.workspace_id),
+            ))
+        } else {
+            None
+        };
+
         let runtime = Runtime::start(
             &config.macro_api,
             &credentials,
@@ -62,6 +89,8 @@ impl Daemon {
             tap,
         );
         let executor = Dispatcher::new(api, runtime, config.workspace.clone());
+        #[cfg(unix)]
+        let executor = executor.with_workspaces(workspaces);
         #[cfg(unix)]
         let executor = match herdr {
             Some(hub) => executor.with_herdr(hub),
@@ -127,9 +156,11 @@ impl Daemon {
 #[cfg(unix)]
 fn start_herdr(config: &mut Config, credentials: &HarnessCredentials) -> Option<crate::herdr::Hub> {
     let herdr = crate::herdr::HerdrSession::detect()?;
-    match std::env::current_dir() {
-        Ok(cwd) => config.workspace.path = cwd,
-        Err(error) => tracing::warn!(error = %error, "could not read the working directory"),
+    if !crate::herdr::drives_herdr(&config.harness) {
+        match std::env::current_dir() {
+            Ok(cwd) => config.workspace.path = cwd,
+            Err(error) => tracing::warn!(error = %error, "could not read the working directory"),
+        }
     }
     if crate::herdr::drives_herdr(&config.harness) {
         tracing::info!("herdr detected; the harness opens a herdr window per session");

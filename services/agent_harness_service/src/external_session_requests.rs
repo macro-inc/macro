@@ -18,7 +18,7 @@ use macro_event_broker::MacroEventBroker;
 /// How long a runtime gets to create the session before the request is
 /// refused. A daemon that is up answers well inside this; one that is down
 /// or too old to know the event never will.
-const RUNTIME_ANSWER_TIMEOUT: Duration = Duration::from_secs(8);
+const RUNTIME_ANSWER_TIMEOUT: Duration = Duration::from_secs(180);
 const POLL_INTERVAL: Duration = Duration::from_millis(250);
 
 /// [`ExternalSessionRequester`] over the trigger topic and the session table.
@@ -46,6 +46,7 @@ where
         let session_id = request.session_id;
         let event = AgentSessionMacroEvent::requested_event(AgentSessionRequestedEvent {
             bot_id: request.bot_id,
+            repo_url: request.repo_url,
             session_id,
             owner: request.owner.as_ref().to_owned(),
         });

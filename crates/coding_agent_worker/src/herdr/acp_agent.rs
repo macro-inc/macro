@@ -118,6 +118,8 @@ impl Transcript {
 /// How `macrod herdr-acp` runs its agents.
 #[derive(Debug, Clone, Default)]
 pub(crate) struct AdapterOptions {
+    /// Private storage shared with the dispatcher's repository preparation.
+    pub state_dir: Option<PathBuf>,
     /// The agent TUI sessions run.
     pub kind: TuiAgent,
     /// Passed to Claude Code as `--permission-mode`.
@@ -438,9 +440,23 @@ impl Adapter {
     ) -> Result<Live, RpcError> {
         let kind = self.options.kind;
         let label = title_from(first_prompt).unwrap_or_else(|| kind.herdr_kind().to_owned());
-        let window = herdr
-            .open_window(&session.cwd, &label, !self.options.no_focus)
-            .await?;
+        let window = if self
+            .options
+            .state_dir
+            .as_ref()
+            .is_some_and(|root| session.cwd.starts_with(root.join("worktrees")))
+        {
+            let source = crate::outbound::git::primary_worktree(&session.cwd)
+                .await
+                .map_err(|error| RpcError::internal(error.to_string()))?;
+            herdr
+                .open_worktree(&source, &session.cwd, &label, !self.options.no_focus)
+                .await?
+        } else {
+            herdr
+                .open_window(&session.cwd, &label, !self.options.no_focus)
+                .await?
+        };
         // The tab's shell must reach its prompt before an agent can start.
         tokio::time::sleep(Duration::from_millis(800)).await;
 
