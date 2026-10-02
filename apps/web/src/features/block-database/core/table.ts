@@ -19,6 +19,7 @@ export type DatabaseRow = {
 };
 
 export type DatabaseRowMutation =
+  | { kind: 'clear'; rowIds: string[]; columnIds: string[] }
   | {
       kind: 'cell';
       rowId: string;
@@ -131,6 +132,14 @@ export function optimisticRows(
   return rows.flatMap((row) => {
     let cells = row.cells;
     for (const mutation of mutations) {
+      if (mutation.kind === 'clear') {
+        if (mutation.rowIds.includes(row.rowId))
+          cells = {
+            ...cells,
+            ...Object.fromEntries(mutation.columnIds.map((id) => [id, null])),
+          };
+        continue;
+      }
       if (mutation.kind === 'create' || mutation.rowId !== row.rowId) continue;
       if (mutation.kind === 'delete') return [];
       cells = { ...cells, [mutation.columnId]: mutation.value };

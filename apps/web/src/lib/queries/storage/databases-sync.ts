@@ -27,6 +27,8 @@ const awarenessSchema: z.ZodType<Awareness> = z.object({
   tableId: z.string(),
   rowId: z.string().optional(),
   columnId: z.string().optional(),
+  endRowId: z.string().optional(),
+  endColumnId: z.string().optional(),
   editing: z.boolean().optional(),
   left: z.boolean().optional(),
 });
@@ -147,6 +149,9 @@ export function useDatabaseAwareness(
     const payload: Awareness = { tableId: state.tableId };
     if (state.rowId !== undefined) payload.rowId = state.rowId;
     if (state.columnId !== undefined) payload.columnId = state.columnId;
+    if (state.endRowId !== undefined) payload.endRowId = state.endRowId;
+    if (state.endColumnId !== undefined)
+      payload.endColumnId = state.endColumnId;
     if (state.rowId !== undefined || state.columnId !== undefined)
       payload.editing = Boolean(state.editing);
     announced = { databaseId: id, state: payload };
@@ -162,6 +167,8 @@ export function useDatabaseAwareness(
           state?.tableId,
           state?.rowId,
           state?.columnId,
+          state?.endRowId,
+          state?.endColumnId,
           state?.editing,
         ]);
       },
@@ -209,6 +216,8 @@ export function useDatabaseAwareness(
       tableId: state.tableId,
       rowId: state.rowId,
       columnId: state.columnId,
+      endRowId: state.endRowId,
+      endColumnId: state.endColumnId,
       editing: Boolean(state.editing),
     }));
   return { remote };

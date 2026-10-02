@@ -2,10 +2,11 @@ import { queryClient } from '@queries/client';
 import { databasesKeys } from '@queries/storage/keys';
 import type { DatabaseDetail } from '@service-storage/generated/schemas/databaseDetail';
 import type { OpResult } from '@service-storage/generated/schemas/opResult';
-import { errAsync, ResultAsync } from 'neverthrow';
+import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createDatabaseView,
+  moveDatabaseCard,
   reorderDatabaseViews,
   updateDatabaseView,
 } from './views';
@@ -335,4 +336,58 @@ describe('changing a view', () => {
       },
     ]);
   });
+});
+
+it('removes the sort before a following card move even while the optimistic cache patch waits', async () => {
+  const view = detail.tables[0].views[0];
+  queryClient.setQueryData(databasesKeys.detail('db').queryKey, detail);
+  let release!: () => void;
+  const waiting = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const cancel = vi
+    .spyOn(queryClient, 'cancelQueries')
+    .mockImplementationOnce(() => waiting);
+  transport.applyDatabaseOps
+    .mockReturnValueOnce(
+      okAsync([
+        {
+          kind: 'view',
+          table: 'invites',
+          view: view.id,
+          tableVersion: 4,
+          change: { kind: 'updated', view },
+        },
+      ])
+    )
+    .mockReturnValueOnce(
+      okAsync([
+        {
+          kind: 'view',
+          table: 'invites',
+          view: view.id,
+          tableVersion: 5,
+          change: { kind: 'card_moved', positions: [] },
+        },
+      ])
+    );
+  const updated = updateDatabaseView(view, {
+    query: { filter: null, sort: [] },
+  });
+  const moved = moveDatabaseCard(view, {
+    row: 'row',
+    lane: { kind: 'none' },
+    before: null,
+    after: null,
+  });
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(transport.applyDatabaseOps).not.toHaveBeenCalled();
+  release();
+  expect((await updated).isOk()).toBe(true);
+  expect((await moved).isOk()).toBe(true);
+  expect(
+    transport.applyDatabaseOps.mock.calls.map((call) => call[1][0].change.kind)
+  ).toEqual(['update', 'move_card']);
+  cancel.mockRestore();
 });

@@ -8,13 +8,18 @@
 /**
  * Where one viewer is inside a database right now: ephemeral, relayed to
 the other viewers and never stored. A missing row or column means the
-viewer is on the table but on no cell.
+viewer is on the table but on no cell. Optional end row and column IDs
+mark the opposite corner of a rectangular cell selection.
  */
 export interface Awareness {
   /** The column placement of the focused cell, if any. */
   columnId?: string;
   /** Whether the cell is open for editing. */
   editing?: boolean;
+  /** The opposite column corner of a selected rectangle, if any. */
+  endColumnId?: string;
+  /** The opposite row corner of a selected rectangle, if any. */
+  endRowId?: string;
   /** Whether the viewer left the database; other viewers drop their state. */
   left?: boolean;
   /** The row of the focused cell, if any. */

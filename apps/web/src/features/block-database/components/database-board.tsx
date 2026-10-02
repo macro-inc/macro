@@ -1,5 +1,6 @@
 import type { Board, LaneKey } from '@core/database-sql/generated/types';
 import { isEditableInput } from '@core/util/isEditableInput';
+import OpenIcon from '@phosphor/arrow-square-out.svg';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
 import GripIcon from '@phosphor/dots-six-vertical.svg';
@@ -48,6 +49,7 @@ import {
   rowValue,
 } from '../core/table';
 import { cardTitleColumn, laneId, laneLabel } from '../core/views';
+import type { DatabaseTableProps } from './database-table';
 import { OptionEditor } from './option-editor';
 import { PropertyIcon } from './property-icon';
 import { SelectPill } from './select-pill';
@@ -72,6 +74,7 @@ type DatabaseBoardProps = {
   columns: DatabaseViewColumn[];
   board: Board;
   layout: BoardLayout;
+  renderCell?: DatabaseTableProps['renderCell'];
   renderTextValue?: (value: string) => JSX.Element;
   renderMentionValue?: (id: string, type: DatabaseEntityType) => JSX.Element;
   groupColumn: DatabaseViewColumn;
@@ -119,7 +122,7 @@ export function DatabaseBoard(props: DatabaseBoardProps) {
   const lanes = createMemo((): BoardGroup[] => {
     const rows = new Map(props.rows.map((row) => [row.rowId, row]));
     return props.board.lanes
-      .filter((lane) => !lane.hidden)
+      .filter((lane) => !lane.hidden && lane.key.kind !== 'none')
       .map((lane) => {
         const key = lane.key;
         const option =
@@ -462,6 +465,7 @@ function BoardLane(
                 columns={props.columns}
                 titleColumn={cardTitleColumn(props.layout, props.columns)}
                 cardFields={props.layout.cardFields}
+                renderCell={props.renderCell}
                 renderTextValue={props.renderTextValue}
                 renderMentionValue={props.renderMentionValue}
                 groupColumn={props.groupColumn}
@@ -676,6 +680,7 @@ function BoardCard(props: {
   titleColumn: DatabaseViewColumn | undefined;
   /** The columns the card shows under its title, in order, when they hold something. */
   cardFields: string[];
+  renderCell?: DatabaseTableProps['renderCell'];
   renderTextValue?: (value: string) => JSX.Element;
   renderMentionValue?: (id: string, type: DatabaseEntityType) => JSX.Element;
   groupColumn: DatabaseViewColumn;
@@ -706,7 +711,7 @@ function BoardCard(props: {
       const column = props.columns.find((entry) => entry.id === id);
       return column &&
         column.id !== props.titleColumn?.id &&
-        rowValue(props.row, column.id) !== null
+        (props.renderCell || rowValue(props.row, column.id) !== null)
         ? [column]
         : [];
     });
@@ -717,66 +722,109 @@ function BoardCard(props: {
       canDrag={props.canEdit}
       pending={props.pending}
     >
-      <button
-        type="button"
-        class="block min-w-0 w-full rounded-lg p-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-ink/50"
-        onClick={() => {
-          if (!props.pending) props.onOpen(props.row.rowId);
-        }}
-        aria-label={`Open ${title()}`}
-        aria-disabled={props.pending}
-      >
-        <span
-          role="heading"
-          aria-level={3}
-          class="block break-words text-sm font-semibold leading-5 text-ink"
-          classList={{ 'pr-10': props.canEdit }}
+      <div class="min-w-0 rounded-lg p-3">
+        <Show
+          when={props.renderCell && props.titleColumn}
+          fallback={
+            <button
+              type="button"
+              class="block w-full text-left"
+              onClick={() => props.onOpen(props.row.rowId)}
+              aria-label={`Open ${title()}`}
+            >
+              <span
+                role="heading"
+                aria-level={3}
+                class="block break-words pr-10 text-sm font-semibold leading-5 text-ink"
+              >
+                {renderedTitle()}
+              </span>
+            </button>
+          }
         >
-          {renderedTitle()}
-        </span>
+          {(column) => (
+            <div
+              class="min-w-0 pr-16 text-sm font-semibold"
+              data-kanban-no-drag
+            >
+              {props.renderCell?.(() => props.row, column)}
+            </div>
+          )}
+        </Show>
         <Show when={metadata().length}>
-          <span class="mt-3 flex flex-col gap-2 border-t border-edge-muted/50 pt-2.5">
+          <div class="mt-3 flex flex-col gap-2 border-t border-edge-muted/50 pt-2.5">
             <For each={metadata()}>
               {(column) => (
-                <span
+                <div
                   class="flex min-w-0 items-center gap-2"
+                  data-card-field
                   title={`${column.name}: ${formatCellValue(column, rowValue(props.row, column.id))}`}
+                  data-kanban-no-drag={props.renderCell ? '' : undefined}
                 >
                   <PropertyIcon
                     type={column.dataType}
                     relation={!!column.relation}
                     class="size-3 shrink-0 text-ink-placeholder"
                   />
-                  <Show
-                    when={isOptionColumn(column)}
-                    fallback={
-                      <span class="truncate text-xs text-ink-muted">
-                        {formatCellValue(
-                          column,
-                          rowValue(props.row, column.id)
-                        )}
-                      </span>
-                    }
-                  >
-                    <span class="flex min-w-0 flex-wrap gap-1">
-                      <For
-                        each={databaseCellValues(
-                          rowValue(props.row, column.id),
-                          column
-                        )}
-                      >
-                        {(value) => (
-                          <SelectPill label={String(value)} column={column} />
-                        )}
-                      </For>
-                    </span>
-                  </Show>
-                </span>
+                  <div class="min-w-0 flex-1" aria-label={column.name}>
+                    <Show
+                      when={props.renderCell}
+                      fallback={
+                        <Show
+                          when={isOptionColumn(column)}
+                          fallback={
+                            <span class="truncate text-xs text-ink-muted">
+                              {formatCellValue(
+                                column,
+                                rowValue(props.row, column.id)
+                              )}
+                            </span>
+                          }
+                        >
+                          <span class="flex min-w-0 flex-wrap gap-1">
+                            <For
+                              each={databaseCellValues(
+                                rowValue(props.row, column.id),
+                                column
+                              )}
+                            >
+                              {(value) => (
+                                <SelectPill
+                                  label={String(value)}
+                                  column={column}
+                                />
+                              )}
+                            </For>
+                          </span>
+                        </Show>
+                      }
+                    >
+                      {(render) =>
+                        render()(
+                          () => props.row,
+                          () => column
+                        )
+                      }
+                    </Show>
+                  </div>
+                </div>
               )}
             </For>
-          </span>
+          </div>
         </Show>
-      </button>
+      </div>
+      <Show when={props.renderCell}>
+        <Button
+          size="icon-xs"
+          label={`Open ${title()}`}
+          tooltipDisabled
+          class="absolute top-3 right-13"
+          data-kanban-no-drag
+          onClick={() => props.onOpen(props.row.rowId)}
+        >
+          <OpenIcon class="size-3.5" />
+        </Button>
+      </Show>
       <Show when={props.canEdit}>
         <div class="absolute top-3 right-2 flex items-start gap-0.5">
           <KanbanHandle label={`Drag ${title()}`}>

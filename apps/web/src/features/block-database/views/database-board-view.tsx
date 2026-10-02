@@ -26,6 +26,7 @@ import {
   BoardSkeleton,
   DatabaseLoadFailure,
 } from '../components/database-load-state';
+import type { DatabaseTableProps } from '../components/database-table';
 import type { DatabaseRowsSource } from '../context/table-source';
 import {
   type CardMove,
@@ -86,6 +87,7 @@ type DatabaseBoardViewProps = {
     columnId: string,
     label: string
   ) => Promise<Result<void, DatabaseOpsError>>;
+  renderCell?: DatabaseTableProps['renderCell'];
   renderTextValue?: (value: string) => JSX.Element;
   renderMentionValue?: (id: string, type: DatabaseEntityType) => JSX.Element;
   controlsRef?: (controls: DatabaseBoardControls) => void;
@@ -330,9 +332,10 @@ function GroupedBoard(
               board={shown()}
               layout={props.layout}
               groupColumn={props.groupColumn}
+              renderCell={props.renderCell}
               renderTextValue={props.renderTextValue}
               renderMentionValue={props.renderMentionValue}
-              canEdit={canEdit()}
+              canEdit={props.canEdit}
               rowPending={props.rowPending}
               createPending={props.createPending}
               createComplete={props.createComplete}

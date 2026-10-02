@@ -48,6 +48,8 @@ export type DatabaseQueryData = {
   title?: string;
   displayMode: DatabaseQueryDisplayMode;
   chart?: DatabaseQueryChart;
+  /** Preferred height of the embedded results viewport, in pixels. */
+  height?: number;
 };
 
 export function isDatabaseQueryChartMode(
@@ -116,12 +118,18 @@ export function parseDatabaseQueryData(
   const { queryId, databaseId, tableId, prompt, displayMode } = record;
   const title = absentIfNull(record.title);
   const chart = absentIfNull(record.chart);
+  const height = absentIfNull(record.height);
   if (
     typeof queryId !== 'string' ||
     typeof prompt !== 'string' ||
     !isOptionalString(databaseId) ||
     !isOptionalString(tableId) ||
     !isOptionalString(title) ||
+    (height !== undefined &&
+      (typeof height !== 'number' ||
+        !Number.isFinite(height) ||
+        height < 96 ||
+        height > 1600)) ||
     !isDatabaseQueryDisplayMode(displayMode)
   )
     return;
@@ -137,5 +145,6 @@ export function parseDatabaseQueryData(
     prompt: decodeHtmlEntities(prompt),
     displayMode,
     ...(parsedChart ? { chart: parsedChart } : {}),
+    ...(typeof height === 'number' ? { height } : {}),
   };
 }

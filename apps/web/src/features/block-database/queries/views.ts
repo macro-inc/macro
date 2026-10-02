@@ -129,6 +129,8 @@ export function createBoardWithStatusColumn(params: {
   name: string;
   query: ViewQuery;
   columns: readonly DatabaseViewColumn[];
+  viewId?: string;
+  status?: MintedStatusColumn;
 }): ResultAsync<DatabaseView, DatabaseOpFailure> {
   return applyColumnAndView(
     params.databaseId,
@@ -136,11 +138,11 @@ export function createBoardWithStatusColumn(params: {
     viewListKey(params.tableId),
     newBoardWithStatusColumn({
       tableId: params.tableId,
-      viewId: uuidv7(),
+      viewId: params.viewId ?? uuidv7(),
       name: params.name,
       query: params.query,
       columns: params.columns,
-      status: mintStatusColumn(),
+      status: params.status ?? mintStatusColumn(),
     })
   );
 }
@@ -175,28 +177,30 @@ export function updateDatabaseView(
   const settle = () => {
     if (isLatest()) latestChanges.delete(view.id);
   };
-  return ResultAsync.fromSafePromise(
+  // Reserve the view's queue position before the asynchronous cache patch.
+  // A following card move must not overtake the sort removal it depends on.
+  const optimistic = ResultAsync.fromSafePromise(
     patchViews(view.databaseId, view.tableId, (views) =>
       views.map((existing) =>
         existing.id === view.id ? { ...existing, ...change } : existing
       )
     )
-  )
-    .andThen(() =>
-      inOrder(view.id, () =>
-        applyOp(
-          view.databaseId,
-          view.tableId,
-          {
-            kind: 'view',
-            table: view.tableId,
-            view: view.id,
-            change: { kind: 'update', ...change },
-          },
-          { kind: 'view', change: 'updated' }
-        )
+  );
+  return inOrder(view.id, () =>
+    optimistic.andThen(() =>
+      applyOp(
+        view.databaseId,
+        view.tableId,
+        {
+          kind: 'view',
+          table: view.tableId,
+          view: view.id,
+          change: { kind: 'update', ...change },
+        },
+        { kind: 'view', change: 'updated' }
       )
     )
+  )
     .map(async ({ change: { view: stored } }) => {
       if (isLatest())
         await patchViews(view.databaseId, view.tableId, (views) =>

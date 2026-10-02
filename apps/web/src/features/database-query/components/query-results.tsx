@@ -18,6 +18,8 @@ import { QueryChart } from './query-chart';
 export function QueryResults(props: {
   answer: QueryAnswer;
   compact?: boolean;
+  /** An enclosing viewport owns scrolling and height. */
+  unbounded?: boolean;
   displayMode: DatabaseQueryDisplayMode;
   chart?: DatabaseQueryChart;
   /** The names the answer references. */
@@ -58,6 +60,7 @@ export function QueryResults(props: {
             }
             fallback={
               <QueryResultTable
+                unbounded={props.unbounded}
                 answer={props.answer}
                 names={props.names}
                 display={props.display}
@@ -91,6 +94,7 @@ export function QueryResults(props: {
               </summary>
               <div class="mt-2">
                 <QueryResultTable
+                  unbounded={props.unbounded}
                   answer={props.answer}
                   names={props.names}
                   display={props.display}
@@ -125,12 +129,16 @@ export function ScalarValue(props: {
 
 function QueryResultTable(props: {
   answer: QueryAnswer;
+  unbounded?: boolean;
   names: ReferenceNames;
   display: AnswerRenderers;
 }) {
   const rows = () => props.answer.rows;
   return (
-    <div class="max-h-80 overflow-auto rounded-lg border border-edge-muted">
+    <div
+      class="overflow-auto rounded-lg border border-edge-muted"
+      classList={{ 'max-h-80': !props.unbounded }}
+    >
       <table class="w-full border-collapse text-left text-xs">
         <thead class="sticky top-0 bg-hover">
           <tr>

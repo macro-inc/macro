@@ -5,6 +5,7 @@ import {
   isDatabaseQueryChartMode,
   isDatabaseQueryDisplayMode,
 } from '@macro-inc/lexical-core/nodes/databaseQueryData';
+import { Telemetry } from '@macro-inc/observability';
 import ArrowClockwiseIcon from '@phosphor/arrow-clockwise.svg';
 import ArrowUpIcon from '@phosphor/arrow-up.svg';
 import CodeIcon from '@phosphor/code.svg';
@@ -51,6 +52,9 @@ export function QueryEditor(props: {
   onSave?: (definition: QueryDefinition) => void;
   saveLabel?: string;
   autoFocus?: boolean;
+  /** Editing a saved document answer commits a successful regeneration directly. */
+  saveOnGenerate?: boolean;
+  saving?: boolean;
 }) {
   const showSql = isFeatureEnabled(showDatabaseSql);
   const display = useAnswerDisplay();
@@ -107,21 +111,37 @@ export function QueryEditor(props: {
   const answer = () =>
     composer.isCurrentPreview() ? composer.preview()?.answer : undefined;
   const names = display.names(() => composer.preview()?.answer);
-  const busy = () => composer.phase() !== 'idle';
+  const busy = () => composer.phase() !== 'idle' || props.saving === true;
   const focusTable = () => queryFocusTable(composer.schema());
   const sourceAvailable = () => props.sourceAvailable !== false;
   const needsGeneration = () =>
-    !composer.sql().trim() || composer.needsGeneration();
+    props.saveOnGenerate ||
+    !composer.sql().trim() ||
+    composer.needsGeneration();
   const canAsk = () =>
     !busy() &&
     sourceAvailable() &&
     !!(needsGeneration() ? composer.prompt().trim() : composer.sql().trim());
-  const ask = () => {
+  const ask = async () => {
     if (!canAsk()) return;
-    void (needsGeneration() ? composer.generate() : composer.run());
+    const span = Telemetry.span('database.query.regenerate');
+    try {
+      await span.run(() =>
+        needsGeneration() ? composer.generate() : composer.run()
+      );
+      span.setAttr('database.outcome', composer.error() ? 'error' : 'success');
+    } finally {
+      span.end();
+    }
+    if (
+      props.saveOnGenerate &&
+      !composer.error() &&
+      composer.isCurrentPreview()
+    )
+      accept();
   };
   // A current answer is accepted with Enter; changing the prompt asks again.
-  const canAccept = () => !!answer() && !!props.onSave;
+  const canAccept = () => !!answer() && !!props.onSave && !props.saveOnGenerate;
   const accept = () => {
     if (!answer() || !props.onSave) return;
     props.onSave({
@@ -159,7 +179,11 @@ export function QueryEditor(props: {
     );
   onMount(() => {
     if (props.autoFocus) promptInput?.focus();
-    if (props.initial.sql.trim() && !composer.needsGeneration())
+    if (
+      !props.saveOnGenerate &&
+      props.initial.sql.trim() &&
+      !composer.needsGeneration()
+    )
       void composer.run();
   });
 
@@ -177,7 +201,7 @@ export function QueryEditor(props: {
       <form
         onSubmit={(event) => {
           event.preventDefault();
-          ask();
+          void ask();
         }}
       >
         <label class="sr-only" for={promptId}>
@@ -199,7 +223,7 @@ export function QueryEditor(props: {
                   event.preventDefault();
                   event.stopPropagation();
                   if (canAccept()) accept();
-                  else ask();
+                  else void ask();
                 }
               }}
             />
@@ -216,16 +240,20 @@ export function QueryEditor(props: {
                   when={busy()}
                   fallback={
                     <>
-                      {composer.preview() && composer.needsGeneration()
-                        ? 'Update answer'
-                        : 'Ask'}{' '}
+                      {props.saveOnGenerate
+                        ? 'Regenerate'
+                        : composer.preview() && composer.needsGeneration()
+                          ? 'Update answer'
+                          : 'Ask'}{' '}
                       <ArrowUpIcon class="size-3.5" />
                     </>
                   }
                 >
-                  {composer.phase() === 'generating'
-                    ? 'Thinking…'
-                    : 'Finding answer…'}
+                  {props.saving
+                    ? 'Saving…'
+                    : composer.phase() === 'generating'
+                      ? 'Thinking…'
+                      : 'Finding answer…'}
                 </Show>
               </Button>
             </div>

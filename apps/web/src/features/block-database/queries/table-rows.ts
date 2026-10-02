@@ -1,6 +1,7 @@
 import { databaseSqlSchema } from '@core/database-sql/catalog';
 import type { DatabaseOp } from '@core/database-sql/generated/types';
 import { type ResultError, thrownResultErrorHasCode } from '@core/util/result';
+import { Telemetry } from '@macro-inc/observability';
 import {
   createDatabaseSqlQuery,
   type DatabaseSqlQuery,
@@ -421,29 +422,37 @@ export function createDatabaseRowsSource(props: {
       ResultError<DatabaseSchemaErrorCode>[]
     >
   > {
-    const inferred = await storageServiceClient.databases.inferColumnType({
-      id: props.databaseId,
-      tableId,
-      columnId,
-      request: {
-        dataType: type.dataType,
-        ...(type.dataType === 'ENTITY'
-          ? { specificEntityType: type.entityType }
-          : {}),
-        baseVersion: base,
-      },
+    return Telemetry.span('database.column.infer_type', async (span) => {
+      span.setAttr('database.column_type', type.dataType);
+      const inferred = await storageServiceClient.databases.inferColumnType({
+        id: props.databaseId,
+        tableId,
+        columnId,
+        request: {
+          dataType: type.dataType,
+          ...(type.dataType === 'ENTITY'
+            ? { specificEntityType: type.entityType }
+            : {}),
+          baseVersion: base,
+        },
+      });
+      if (inferred.isErr()) {
+        span.setAttr('database.outcome', 'error');
+        return err(inferred.error);
+      }
+      span.event('schema_committed');
+      const settled = inferred.value;
+      inferredVersions.set(base, settled.table_version);
+      await patchTableColumn(queryClient, {
+        databaseId: props.databaseId,
+        tableId,
+        columnId,
+        tableVersion: settled.table_version,
+        change: () => settled.column,
+      });
+      span.setAttr('database.outcome', 'success');
+      return ok({ column: settled.column, base: settled.table_version });
     });
-    if (inferred.isErr()) return err(inferred.error);
-    const settled = inferred.value;
-    inferredVersions.set(base, settled.table_version);
-    await patchTableColumn(queryClient, {
-      databaseId: props.databaseId,
-      tableId,
-      columnId,
-      tableVersion: settled.table_version,
-      change: () => settled.column,
-    });
-    return ok({ column: settled.column, base: settled.table_version });
   }
 
   /**
@@ -508,7 +517,8 @@ export function createDatabaseRowsSource(props: {
     mutation: DatabaseRowMutation,
     inferenceBaseVersion: number | undefined
   ): Promise<Result<DatabaseRowMutation, DatabaseWriteFailure>> {
-    if (mutation.kind === 'delete') return ok(mutation);
+    if (mutation.kind === 'delete' || mutation.kind === 'clear')
+      return ok(mutation);
     let base = latestInferenceBase(inferenceBaseVersion);
     const values =
       mutation.kind === 'cell'
@@ -555,7 +565,9 @@ export function createDatabaseRowsSource(props: {
     inferenceBaseVersion: number | undefined,
     createOptions: boolean
   ): Promise<Result<DatabaseWriteResult, DatabaseWriteFailure>> {
-    const prepared = await prepareFirstValues(mutation, inferenceBaseVersion);
+    const prepared = await Telemetry.span('database.rows.prepare', async () =>
+      prepareFirstValues(mutation, inferenceBaseVersion)
+    );
     if (prepared.isErr()) return err(prepared.error);
     // Read the refreshed cache directly; Solid props may notify after fetchQuery resolves.
     const table = currentTable();

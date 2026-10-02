@@ -407,9 +407,7 @@ describe('database filter panel', () => {
     expect(screen.queryAllByRole('button', { name: 'Remove filter' })).toEqual(
       []
     );
-    expect(
-      screen.getByRole('button', { name: 'Add condition', exact: true })
-    ).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Add condition' })).toBeTruthy();
   });
 });
 

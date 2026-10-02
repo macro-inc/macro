@@ -29,6 +29,48 @@ describe('question editor', () => {
     showDatabaseSql.enabled = false;
   });
 
+  it('regenerates a saved question and saves only its successful current answer', async () => {
+    const save = vi.fn();
+    const read = vi.fn(() => okAsync(answer));
+    const generate = vi.fn(() =>
+      okAsync({
+        sql: 'SELECT COUNT(*) FROM projects',
+        explanation: '',
+        displayMode: 'scalar' as const,
+      })
+    );
+    const result = render(() => (
+      <PlainAnswerDisplay>
+        <QueryEditor
+          initial={{
+            sql: 'SELECT 1',
+            prompt: 'Original question',
+            displayMode: 'scalar',
+          }}
+          schema={{ name: 'Projects', databaseId: 'db', tables: [] }}
+          capabilities={{ generate, read }}
+          onSave={save}
+          saveOnGenerate
+        />
+      </PlainAnswerDisplay>
+    ));
+    expect(read).not.toHaveBeenCalled();
+    fireEvent.input(
+      result.getByRole('textbox', { name: 'Ask your database' }),
+      { target: { value: 'Count all projects' } }
+    );
+    fireEvent.click(result.getByRole('button', { name: 'Regenerate' }));
+    await waitFor(() =>
+      expect(save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          prompt: 'Count all projects',
+          sql: 'SELECT COUNT(*) FROM projects',
+        })
+      )
+    );
+    result.unmount();
+  });
+
   it('keeps the source trigger mounted while its reactive source label changes', () => {
     const [schema, setSchema] = createSignal<QuerySchema>({
       name: 'Automatic',

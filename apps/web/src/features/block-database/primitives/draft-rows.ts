@@ -231,7 +231,7 @@ export function createDraftRows(writer: Writer) {
       if (failure.createIntentId && entry(failure.createIntentId))
         return failure.createIntentId;
       const mutation = failure.mutation;
-      return mutation.kind === 'create'
+      return mutation.kind === 'create' || mutation.kind === 'clear'
         ? undefined
         : entries().find((row) => serverId(row.id) === mutation.rowId)?.id;
     },

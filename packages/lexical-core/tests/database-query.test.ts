@@ -49,6 +49,15 @@ function exported(editor: ReturnType<typeof createEditor>) {
     .read(() => $convertToMarkdownString(ALL_TRANSFORMERS));
 }
 describe('database query node', () => {
+  it('keeps an answer height through markdown and JSON', () => {
+    const editor = parse(databaseQueryMarkdown({ ...source, height: 640 }));
+    expect(exported(editor)).toContain('640');
+    expect(JSON.stringify(editor.getEditorState().toJSON())).toContain(
+      '"height":640'
+    );
+    const restored = parse(exported(editor));
+    expect(exported(restored)).toBe(exported(editor));
+  });
   it('persists an independently renamed title through markdown and JSON', () => {
     const titled = { ...source, title: 'Open projects' };
     const editor = parse(databaseQueryMarkdown(titled));

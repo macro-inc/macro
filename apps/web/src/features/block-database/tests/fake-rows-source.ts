@@ -7,7 +7,7 @@ import type {
   DatabaseRowsSource,
 } from '../context/table-source';
 import type { DatabaseViewColumn } from '../core/database-view';
-import type { DatabaseRow } from '../core/table';
+import { type DatabaseRow, optimisticRows } from '../core/table';
 
 /** What the fake table holds, before the view's statement narrows it. */
 export type FakeStoredTable = Omit<DatabaseRowsSnapshot, 'retained'>;
@@ -93,16 +93,7 @@ export function createFakeRowsSource(initial: {
               ...snapshot.rows,
               { rowId: insertedRowIds[0], cells: mutation.values },
             ]
-          : snapshot.rows.flatMap((row) => {
-              if (row.rowId !== mutation.rowId) return [row];
-              if (mutation.kind === 'delete') return [];
-              return [
-                {
-                  ...row,
-                  cells: { ...row.cells, [mutation.columnId]: mutation.value },
-                },
-              ];
-            });
+          : optimisticRows(snapshot.rows, [mutation]);
       setTable({ version, rows });
       return okAsync({ version, insertedRowIds });
     });

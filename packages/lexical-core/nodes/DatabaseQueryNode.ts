@@ -60,6 +60,7 @@ export class DatabaseQueryNode extends DecoratorNode<
   __title?: string;
   __displayMode: DatabaseQueryDisplayMode;
   __chart?: DatabaseQueryChart;
+  __height?: number;
 
   static getType() {
     return 'database-query';
@@ -76,6 +77,7 @@ export class DatabaseQueryNode extends DecoratorNode<
     this.__title = data.title;
     this.__displayMode = data.displayMode;
     this.__chart = data.chart;
+    this.__height = data.height;
   }
   isInline() {
     return this.__displayMode === 'scalar';
@@ -115,6 +117,7 @@ export class DatabaseQueryNode extends DecoratorNode<
       prompt: this.__prompt,
       displayMode: this.__displayMode,
       ...(this.__chart ? { chart: this.__chart } : {}),
+      ...(this.__height !== undefined ? { height: this.__height } : {}),
     };
   }
   setQuery(data: DatabaseQueryData) {
@@ -126,6 +129,7 @@ export class DatabaseQueryNode extends DecoratorNode<
     writable.__title = data.title;
     writable.__displayMode = data.displayMode;
     writable.__chart = data.chart;
+    writable.__height = data.height;
   }
   createDOM(): HTMLElement {
     const element = document.createElement(this.isInline() ? 'span' : 'div');

@@ -6,7 +6,7 @@ import type {
   DatabaseRowsSource,
   DatabaseWriteResult,
 } from '../context/table-source';
-import type { DatabaseRowMutation } from '../core/table';
+import { type DatabaseRowMutation, optimisticRows } from '../core/table';
 import type { DatabaseWriteFailure } from '../core/write-failure';
 
 import { createDraftRows } from './draft-rows';
@@ -50,21 +50,7 @@ function fixture() {
                 ...database.rows,
                 { rowId: insertedRowIds[0], cells: { ...mutation.values } },
               ]
-            : database.rows.flatMap((row) =>
-                row.rowId !== mutation.rowId
-                  ? [row]
-                  : mutation.kind === 'delete'
-                    ? []
-                    : [
-                        {
-                          ...row,
-                          cells: {
-                            ...row.cells,
-                            [mutation.columnId]: mutation.value,
-                          },
-                        },
-                      ]
-              ),
+            : optimisticRows(database.rows, [mutation]),
       };
       return { version: database.version, insertedRowIds };
     };

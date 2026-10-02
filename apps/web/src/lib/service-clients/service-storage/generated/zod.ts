@@ -5342,6 +5342,14 @@ export const shareDatabaseAwarenessBody = zod
       .boolean()
       .optional()
       .describe('Whether the cell is open for editing.'),
+    endColumnId: zod
+      .uuid()
+      .optional()
+      .describe('The opposite column corner of a selected rectangle, if any.'),
+    endRowId: zod
+      .uuid()
+      .optional()
+      .describe('The opposite row corner of a selected rectangle, if any.'),
     left: zod
       .boolean()
       .optional()
@@ -5355,7 +5363,7 @@ export const shareDatabaseAwarenessBody = zod
     tableId: zod.uuid().describe('The table the viewer is looking at.'),
   })
   .describe(
-    'Where one viewer is inside a database right now: ephemeral, relayed to\nthe other viewers and never stored. A missing row or column means the\nviewer is on the table but on no cell.'
+    'Where one viewer is inside a database right now: ephemeral, relayed to\nthe other viewers and never stored. A missing row or column means the\nviewer is on the table but on no cell. Optional end row and column IDs\nmark the opposite corner of a rectangular cell selection.'
   );
 
 /**

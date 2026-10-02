@@ -1,3 +1,4 @@
+import { Telemetry } from '@macro-inc/observability';
 import type { DatabaseOpsError } from '@service-storage/databases';
 import { err, ok, type Result } from 'neverthrow';
 import { batch, createMemo, createSignal, onCleanup } from 'solid-js';
@@ -111,13 +112,24 @@ export function createTableController(
     const completed = createIntentId && completedCreates().get(createIntentId);
     if (completed) return ok(completed);
     const id = ++sequence;
+    const span = Telemetry.span('database.rows.save');
+    const optimisticStarted = performance.now();
+    span.setAttr('database.mutation_kind', mutation.kind);
     setPending((writes) => [...writes, { id, mutation, createIntentId }]);
+    span.setAttr(
+      'database.optimistic_update_ms',
+      performance.now() - optimisticStarted
+    );
+    span.event('optimistic_state_applied');
+    const queued = performance.now();
+    span.event('queued');
     let result: DatabaseSave;
     let didWrite = false;
     try {
-      result = await writes.run(
-        TABLE_WRITES,
-        async (): Promise<DatabaseSave> => {
+      result = await span.run(() =>
+        writes.run(TABLE_WRITES, async (): Promise<DatabaseSave> => {
+          span.setAttr('database.queue_ms', performance.now() - queued);
+          span.event('dequeued');
           // A new table version cannot prove whether this INSERT committed.
           // Keep the same draft blocked even after refresh or banner dismissal.
           const uncertain =
@@ -141,10 +153,8 @@ export function createTableController(
                 ? readVersion
                 : Math.max(readVersion, lastWrittenVersion);
           // A new option is created by the write that first uses it.
-          const written = await source.write(
-            mutation,
-            inferenceBaseVersion,
-            option !== undefined
+          const written = await span.span('database.rows.write', async () =>
+            source.write(mutation, inferenceBaseVersion, option !== undefined)
           );
           if (written.isErr()) {
             const failure = written.error;
@@ -177,6 +187,7 @@ export function createTableController(
             return err(failure);
           }
           didWrite = true;
+          span.event('committed');
           const saved = written.value;
           batch(() => {
             if (createIntentId)
@@ -204,12 +215,19 @@ export function createTableController(
             ]);
           });
           // A failed refresh cannot turn a committed write into a failed edit.
-          await refresh();
+          span.event('committed_state_applied');
+          await span.span('database.rows.refresh', async () => refresh());
+          span.event('refresh_completed');
           return ok(saved);
-        }
+        })
       );
+      span.setAttr('database.outcome', result.isOk() ? 'success' : 'error');
+    } catch (error) {
+      span.setAttr('database.outcome', 'error');
+      throw error;
     } finally {
       setPending((writes) => writes.filter((write) => write.id !== id));
+      span.end();
     }
     if (result.isOk() && didWrite && !disposed)
       onSaved?.(mutation, result.value);
@@ -326,9 +344,10 @@ export function createTableController(
     createResult: (intentId: string) => completedCreates().get(intentId),
     createUncertain: (intentId: string) => uncertainCreates().has(intentId),
     rowPending: (rowId: string) =>
-      pending().some(
-        (write) =>
-          write.mutation.kind !== 'create' && write.mutation.rowId === rowId
+      pending().some((write) =>
+        write.mutation.kind === 'clear'
+          ? write.mutation.rowIds.includes(rowId)
+          : write.mutation.kind !== 'create' && write.mutation.rowId === rowId
       ),
     failure: () => failures()[0],
     refreshWarning,

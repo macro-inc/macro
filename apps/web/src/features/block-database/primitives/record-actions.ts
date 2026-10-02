@@ -116,6 +116,7 @@ export function createRecordActions(options: {
     mutation: DatabaseRowMutation,
     result: DatabaseWriteResult
   ) {
+    if (mutation.kind === 'clear') return;
     const rowId =
       mutation.kind === 'create' ? result.insertedRowIds[0] : mutation.rowId;
     if (!rowId) return;

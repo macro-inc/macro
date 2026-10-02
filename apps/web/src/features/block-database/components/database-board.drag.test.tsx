@@ -23,7 +23,7 @@ beforeEach(() => {
       const lane = this.closest('[data-kanban-lane]');
       const label = lane?.getAttribute('aria-label');
       const x =
-        (label === 'To do lane' ? 300 : label === 'No stage lane' ? 600 : 0) -
+        (label === 'To do lane' ? 300 : label === 'Later lane' ? 600 : 0) -
         scrollOffset;
       const cardIndex = lane
         ? Array.from(lane.querySelectorAll('[data-kanban-card]')).indexOf(this)
@@ -214,7 +214,7 @@ describe('board card drag', () => {
     );
   });
 
-  it('drops a card into the empty lane without an option as null', async () => {
+  it('does not offer the unassigned lane as a drop target', async () => {
     const stage: DatabaseViewColumn = {
       id: 'stage',
       name: 'Stage',
@@ -280,11 +280,9 @@ describe('board card drag', () => {
       { button: 0, clientX: 560, clientY: 80 }
     );
     movePointer(680, 150);
-    expect(marker()?.dataset.laneId).toBe('no-option');
+    expect(marker()).toBeNull();
     dropPointer(680, 150);
-    await waitFor(() =>
-      expect(onMove).toHaveBeenCalledWith('moving', { kind: 'none' }, undefined)
-    );
+    expect(onMove).not.toHaveBeenCalled();
   });
 
   it('reorders a card within its lane and ignores the gap it already sits in', async () => {
@@ -657,6 +655,7 @@ describe('board lane drag', () => {
       options: [
         { id: 'done', label: 'Done', color: null },
         { id: 'todo', label: 'To do', color: null },
+        { id: 'later', label: 'Later', color: null },
       ],
       writable: true,
     };
@@ -679,7 +678,7 @@ describe('board lane drag', () => {
           lanes: [
             { key: { kind: 'option', id: 'done' }, hidden: false, cards: [] },
             { key: { kind: 'option', id: 'todo' }, hidden: false, cards: [] },
-            { key: { kind: 'none' }, hidden: false, cards: [] },
+            { key: { kind: 'option', id: 'later' }, hidden: false, cards: [] },
           ],
         }}
         layout={{
@@ -708,11 +707,11 @@ describe('board lane drag', () => {
     fireEvent.scroll(document.querySelector('.overflow-auto')!);
     expect(
       marker()?.closest('[data-kanban-lane]')?.getAttribute('aria-label')
-    ).toBe('No stage lane');
+    ).toBe('Later lane');
     dropPointer(560, 20);
     expect(onLaneOrderChange).toHaveBeenCalledWith([
       { kind: 'option', id: 'todo' },
-      { kind: 'none' },
+      { kind: 'option', id: 'later' },
       { kind: 'option', id: 'done' },
     ]);
   });

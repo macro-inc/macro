@@ -960,7 +960,8 @@ pub fn grant_writes(grant: AccessLevel) -> bool {
 
 /// Where one viewer is inside a database right now: ephemeral, relayed to
 /// the other viewers and never stored. A missing row or column means the
-/// viewer is on the table but on no cell.
+/// viewer is on the table but on no cell. Optional end row and column IDs
+/// mark the opposite corner of a rectangular cell selection.
 #[derive(utoipa::ToSchema, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Awareness {
@@ -975,6 +976,14 @@ pub struct Awareness {
     #[schema(value_type = Option<Uuid>, nullable = false)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub column_id: Option<ColumnId>,
+    /// The opposite row corner of a selected rectangle, if any.
+    #[schema(value_type = Option<Uuid>, nullable = false)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub end_row_id: Option<RowId>,
+    /// The opposite column corner of a selected rectangle, if any.
+    #[schema(value_type = Option<Uuid>, nullable = false)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub end_column_id: Option<ColumnId>,
     /// Whether the cell is open for editing.
     #[serde(default)]
     pub editing: bool,

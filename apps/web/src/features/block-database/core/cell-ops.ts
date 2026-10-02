@@ -143,6 +143,16 @@ export function mutationOp(
       .map((written): CellWrite => ({ column: columnId, value: written }));
   return match(mutation)
     .returnType<Result<DatabaseOp, DatabaseCellFailure>>()
+    .with({ kind: 'clear' }, ({ rowIds, columnIds }) =>
+      Result.combine(columnIds.map((id) => cell(id, null))).map((cells) => ({
+        kind: 'rows',
+        table: tableId,
+        change: {
+          kind: 'update',
+          changes: { kind: 'uniform', rows: rowIds, cells },
+        },
+      }))
+    )
     .with({ kind: 'cell' }, ({ rowId, columnId, value }) =>
       cell(columnId, value).map((written) => ({
         kind: 'rows',

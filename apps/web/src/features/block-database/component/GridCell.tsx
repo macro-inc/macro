@@ -1,4 +1,8 @@
 import type { CellTextEditorProps } from '@app/components/cell-text-editor/types';
+import {
+  startUiOperation,
+  type UiOperation,
+} from '@app/observability/ui-operation';
 import { Popover } from '@kobalte/core/popover';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import { PropertyDateSelector } from '@property/editors/selectors/PropertyDateSelector';
@@ -81,6 +85,22 @@ type GridCellKind =
 
 /** A presentational cell. Writes, including new options, belong to its table controller. */
 export function GridCell(props: GridCellProps) {
+  const opening = createEditorMeasurement(() => props.column.dataType);
+  const write = async (value: DatabaseCellValue) => {
+    const operation = startUiOperation('database.cell.commit', {
+      attributes: { 'database.column_type': props.column.dataType },
+    });
+    try {
+      const saved = await operation.run(() => props.onWrite(value));
+      operation.mark('write_completed');
+      if (saved) operation.afterPaint();
+      else operation.finish('error');
+      return saved;
+    } catch (error) {
+      operation.finish('error');
+      throw error;
+    }
+  };
   const isEntity = () =>
     props.column.dataType === 'ENTITY' && !props.column.isMultiSelect;
   const editable = () =>
@@ -147,7 +167,7 @@ export function GridCell(props: GridCellProps) {
   let booleanWrapper: HTMLDivElement | undefined;
   let focusEditor: (() => void) | undefined;
   let popupControl: GridCellControl | undefined;
-  const beginEdit = (seed?: string) => {
+  const updateEditor = (seed?: string) => {
     if (!editable()) return;
     setSelectedMention(undefined);
     if (isEntity()) {
@@ -175,6 +195,10 @@ export function GridCell(props: GridCellProps) {
       setMentionSearch(draft().slice(1));
       setMentionOpen(true);
     }
+  };
+  const beginEdit = (seed?: string, event?: Event) => {
+    if (!editable()) return;
+    opening.measure(() => updateEditor(seed), event, !editing());
   };
   const updateDraft = (value: string) => {
     setDraft(value);
@@ -262,7 +286,7 @@ export function GridCell(props: GridCellProps) {
             onDraft={updateDraft}
             mentionOpen={mentionOpen()}
             onMentionClose={closeMention}
-            onWrite={props.onWrite}
+            onWrite={write}
             onClose={finishEdit}
             onEditorReady={(focus) => {
               focusEditor = focus;
@@ -306,12 +330,13 @@ export function GridCell(props: GridCellProps) {
               trigger = element;
             }}
             onNavigate={props.onNavigate}
-            onWrite={props.onWrite}
+            onWrite={write}
           />
         </Match>
         <Match when={cellKind() === 'date'}>
           <DateCell
             {...props}
+            onWrite={write}
             onReady={(control) => {
               popupControl = control;
             }}
@@ -320,6 +345,7 @@ export function GridCell(props: GridCellProps) {
         <Match when={cellKind() === 'select'}>
           <SelectCell
             {...props}
+            onWrite={write}
             onReady={(control) => {
               popupControl = control;
             }}
@@ -356,7 +382,7 @@ export function GridCell(props: GridCellProps) {
             onBeginEdit={beginEdit}
             onClearEntity={() => {
               setSelectedMention(undefined);
-              void props.onWrite(null);
+              void write(null);
             }}
           />
         </Match>
@@ -451,7 +477,7 @@ function TextCell(props: {
   renderMentionValue?: (id: string, type: DatabaseEntityType) => JSX.Element;
   ref: (element: HTMLButtonElement) => void;
   onNavigate?: (direction: 1 | -1) => boolean;
-  onBeginEdit: (seed?: string) => void;
+  onBeginEdit: (seed?: string, event?: Event) => void;
   onClearEntity: () => void;
 }) {
   const formatted = () => formatCellValue(props.column, props.value);
@@ -481,11 +507,11 @@ function TextCell(props: {
         (!props.isEntity && formatted()) ||
         undefined
       }
-      onClick={() => props.editable && props.onBeginEdit()}
+      onClick={(event) => props.editable && props.onBeginEdit(undefined, event)}
       onKeyDown={(event) => {
         if (!props.editable) return;
         if (isComposingKey(event)) {
-          props.onBeginEdit('');
+          props.onBeginEdit('', event);
           return;
         }
         navigateOnTab(event, props.onNavigate);
@@ -506,7 +532,7 @@ function TextCell(props: {
         } else if (event.key === 'Enter' || event.key === 'F2') {
           event.preventDefault();
           event.stopPropagation();
-          props.onBeginEdit();
+          props.onBeginEdit(undefined, event);
         } else if (
           event.key.length === 1 ||
           event.key === 'Backspace' ||
@@ -514,7 +540,7 @@ function TextCell(props: {
         ) {
           event.preventDefault();
           event.stopPropagation();
-          props.onBeginEdit(event.key.length === 1 ? event.key : '');
+          props.onBeginEdit(event.key.length === 1 ? event.key : '', event);
         }
       }}
     >
@@ -724,7 +750,35 @@ function InlineEditor(props: {
   );
 }
 
+/** One pending measurement per mounted editor, with no per-cell observers. */
+function createEditorMeasurement(columnType: () => string) {
+  let pending: UiOperation | undefined;
+  onCleanup(() => pending?.cancel());
+  return {
+    measure(work: () => void, event?: Event, cold = false) {
+      pending?.cancel();
+      const operation = startUiOperation('database.cell.editor.open', {
+        event,
+        attributes: {
+          'database.column_type': columnType(),
+          'ui.cold_mount': cold,
+        },
+      });
+      pending = operation;
+      try {
+        operation.run(work);
+        operation.afterPaint();
+      } catch (error) {
+        operation.finish('error');
+        throw error;
+      }
+    },
+  };
+}
+
 function SelectCell(props: GridCellProps) {
+  const opening = createEditorMeasurement(() => props.column.dataType);
+  let openingEvent: Event | undefined;
   const [open, setOpen] = createSignal(false);
   const [search, setSearch] = createSignal('');
   const [error, setError] = createSignal('');
@@ -750,17 +804,24 @@ function SelectCell(props: GridCellProps) {
   };
   // The picker mounts on first use; until then the cell is a plain button.
   const [mounted, setMounted] = createSignal(false);
-  const edit = (seed?: string) => {
-    setSearch(seed ?? '');
-    setError('');
-    setMounted(true);
-    setOpen(true);
+  const edit = (seed?: string, event?: Event) => {
+    openingEvent = undefined;
+    opening.measure(
+      () => {
+        setSearch(seed ?? '');
+        setError('');
+        setMounted(true);
+        setOpen(true);
+      },
+      event,
+      !mounted()
+    );
   };
   const keys = createPopupCellKeys({
     get onNavigate() {
       return props.onNavigate;
     },
-    edit,
+    edit: (event) => edit(undefined, event),
     close: () => setOpen(false),
   });
   onMount(() => props.onReady?.({ focus: keys.focus, edit }));
@@ -793,6 +854,9 @@ function SelectCell(props: GridCellProps) {
     } else setOpen(false);
   }
   const trigger = {
+    onPointerDown: (event: PointerEvent) => {
+      openingEvent = event;
+    },
     ref: keys.triggerRef,
     class:
       'group flex h-auto min-h-9 w-full min-w-0 items-center justify-between rounded px-2.5 py-1 text-left outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ink/50',
@@ -814,7 +878,7 @@ function SelectCell(props: GridCellProps) {
         event.key !== ' '
       ) {
         event.preventDefault();
-        edit(event.key);
+        edit(event.key, event);
       }
     },
   };
@@ -843,7 +907,7 @@ function SelectCell(props: GridCellProps) {
           type="button"
           {...trigger}
           aria-expanded="false"
-          onClick={() => edit()}
+          onClick={(event) => edit(undefined, event)}
         >
           {shown()}
         </button>
@@ -854,10 +918,11 @@ function SelectCell(props: GridCellProps) {
         onOpenChange={(value) => {
           // A pick closes the picker without passing here; opening starts afresh.
           if (value) {
-            setSearch('');
-            setError('');
+            edit(undefined, openingEvent);
+            openingEvent = undefined;
+          } else {
+            setOpen(false);
           }
-          setOpen(value);
         }}
         placement="bottom-start"
         gutter={4}
@@ -902,26 +967,38 @@ function SelectCell(props: GridCellProps) {
 
 /** Date cells edit through the shared property date selector. */
 function DateCell(props: GridCellProps) {
+  const opening = createEditorMeasurement(() => props.column.dataType);
+  let openingEvent: Event | undefined;
   const [open, setOpen] = createSignal(false);
   const [query, setQuery] = createSignal('');
   const label = () => formatCellValue(props.column, props.value);
   // The selector mounts on first use; until then the cell is a plain button.
   const [mounted, setMounted] = createSignal(false);
-  const edit = (seed?: string) => {
-    setQuery(seed ?? '');
-    setMounted(true);
-    setOpen(true);
+  const edit = (seed?: string, event?: Event) => {
+    openingEvent = undefined;
+    opening.measure(
+      () => {
+        setQuery(seed ?? '');
+        setMounted(true);
+        setOpen(true);
+      },
+      event,
+      !mounted()
+    );
   };
   const keys = createPopupCellKeys({
     get onNavigate() {
       return props.onNavigate;
     },
-    edit,
+    edit: (event) => edit(undefined, event),
     close: () => setOpen(false),
   });
   onMount(() => props.onReady?.({ focus: keys.focus, edit }));
   onCleanup(() => props.onReady?.(undefined));
   const trigger = {
+    onPointerDown: (event: PointerEvent) => {
+      openingEvent = event;
+    },
     ref: keys.triggerRef,
     // A ghost button's look, on a plain button the cell can afford a thousand of.
     class:
@@ -943,7 +1020,7 @@ function DateCell(props: GridCellProps) {
       ) {
         event.preventDefault();
         event.stopPropagation();
-        edit(event.key);
+        edit(event.key, event);
       }
     },
   };
@@ -965,13 +1042,21 @@ function DateCell(props: GridCellProps) {
           {...trigger}
           aria-haspopup="true"
           aria-expanded="false"
-          onClick={() => edit()}
+          onClick={(event) => edit(undefined, event)}
         >
           {shown()}
         </button>
       }
     >
-      <Dropdown open={open()} onOpenChange={setOpen}>
+      <Dropdown
+        open={open()}
+        onOpenChange={(value) => {
+          if (value) {
+            edit(undefined, openingEvent);
+            openingEvent = undefined;
+          } else setOpen(false);
+        }}
+      >
         <Dropdown.Trigger as="button" {...trigger}>
           {shown()}
         </Dropdown.Trigger>

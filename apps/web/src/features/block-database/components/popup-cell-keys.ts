@@ -15,7 +15,7 @@ export function isComposingKey(event: KeyboardEvent): boolean {
  */
 export function createPopupCellKeys(options: {
   readonly onNavigate?: (direction: Direction) => boolean;
-  edit: () => void;
+  edit: (event: KeyboardEvent) => void;
   close: () => void;
 }) {
   let trigger: HTMLElement | undefined;
@@ -35,7 +35,7 @@ export function createPopupCellKeys(options: {
     // Opened through state to skip Kobalte's trigger scroll helper.
     event.preventDefault();
     event.stopImmediatePropagation();
-    options.edit();
+    options.edit(event);
   }
   return {
     triggerRef(element: HTMLElement) {

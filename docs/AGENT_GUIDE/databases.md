@@ -151,6 +151,12 @@ such as `tomorrow`, `3d`, or `feb 17` and press Enter, or pick **Custom date...*
 for a calendar. Typing on a selected date cell starts that search; Delete clears
 the date, and Tab leaves the selector without changing it.
 Invalid numbers remain in the editor for correction.
+Drag across table cells to select a rectangle, or Shift-click another cell to
+extend from the first cell. Delete or Backspace clears editable cells in that
+rectangle as one undoable change; read-only cells are skipped. Escape clears the
+selection. Other participants see the selected range with a colored outline and
+name banner, including when the selection covers several rows and columns.
+
 Arrow keys also move between checkbox and closed select cells without changing
 their values or opening a picker. Enter opens a selected select cell's picker.
 Blank grid lines continue below the editable row to fill the available space.
@@ -245,7 +251,10 @@ and the row is scrolled to and highlighted, or its record opens when the view do
 not show it. Escape closes the search and returns focus to where it was opened
 from. The term is kept while you switch tables.
 
-A view's layout, Table or Board, is chosen when the view is created. Columns
+A view's layout, Table or Board, is chosen when the view is created. Creating a
+view closes the dialog and opens its tab immediately while saving. If saving
+fails, the view shows **Retry** and **Dismiss**; retry checks whether the first
+attempt committed before creating anything again. Columns
 cannot be hidden, and they are added only from **Add column** after the headers or
 a header's **Insert left**/**Insert right**. Dragging a column header's right edge
 previews its width as you drag and saves it once you release (mouse or touch).
@@ -260,14 +269,18 @@ column each card is headed by, the table's first by default), the **Card fields*
 a card shows, **Hide empty lanes**, and **Hidden lanes**, whose **Show …** items
 bring a hidden lane back.
 
-A board has a lane per option plus one for records without one. Drag a card within
+A board has a lane per option (or person). Records without a grouping value are
+currently omitted from the board; they remain available in the table. Drag a card within
 a lane or into another lane; it moves at once, and moving it to another lane also
 sets its Select value. The order is saved for everyone and survives a reload. A
 sorted board keeps the sort's order, so dragging a card asks **Remove sort to
 arrange cards manually?**; **Remove sort** clears the sort and then places the
 card. Drag a lane header to reorder lanes. A lane header shows the option's **⋯**
 editor and a lane menu with **Hide lane** and **Hide empty lanes**. The card's
-**Move …** menu offers the same moves without dragging.
+**Move …** menu offers the same moves without dragging. Click a card’s title or
+field to edit it in place using the same editors as the table. Empty configured
+fields are editable too. Use the card’s **Open** icon to open the full record;
+field controls do not start a card drag.
 
 **+ New** at the bottom of a lane (or the lane header's **+**) puts an empty,
 focused card title in that lane; nothing opens. Enter creates the card with the
@@ -364,10 +377,11 @@ rows without a date are left off that axis with a note saying how many. Missing
 values remain empty, and an unavailable chart falls back to the table with an
 explanation. Charts copied
 into documents stay live: only their query and chart settings are saved, never a
-copy of the reader's results. **Insert answer** saves a new answer; **Save changes** updates an
-existing one. Existing answers retain their resolved source and preview their
-saved query when opened. Changing the question or source preserves the draft but
-requires updating the result before saving. Results refresh
+copy of the reader's results. **Insert answer** saves a new answer. In a document,
+open **Details**, edit the original question or source, and click **Regenerate**
+to replace that answer after the new query succeeds. A failure keeps the previous
+answer. Drag the answer's bottom edge to resize its result viewport; the chosen
+height is saved with the document. The resize handle also accepts Up/Down arrows. Results refresh
 when their source tables change, and each reader sees only data they can access.
 The AI supplies a short answer title independently of the original question.
 Double-click that title (or focus it and press F2) to rename it inline; Enter saves,

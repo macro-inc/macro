@@ -9,6 +9,8 @@ async fn awareness_is_relayed_for_the_viewer() {
         table_id: seeded.table_id,
         row_id: Some(seeded.row_id),
         column_id: Some(seeded.name_column.id),
+        end_row_id: Some(seeded.row_id),
+        end_column_id: Some(seeded.name_column.id),
         editing: true,
         left: false,
     };
@@ -40,6 +42,8 @@ async fn a_refused_relay_is_an_error() {
                 table_id: seeded.table_id,
                 row_id: None,
                 column_id: None,
+                end_row_id: None,
+                end_column_id: None,
                 editing: false,
                 left: true,
             },

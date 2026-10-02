@@ -47,6 +47,7 @@ function tracedFetch(
   const method = (init.method ?? 'GET').toUpperCase();
   const path = redactCallLinkTokens(url.pathname);
   const span = Telemetry.clientSpan(`http ${method} ${path}`);
+  const started = performance.now();
   span.setAttr('http.method', method);
   // Path only: query strings can carry tokens.
   span.setAttr('http.url', `${url.origin}${path}`);
@@ -56,6 +57,8 @@ function tracedFetch(
         span.injectTraceHeaders(init.headers);
       }
       const response = await platformFetch(input, init);
+      span.setAttr('http.response_headers_ms', performance.now() - started);
+      span.setAttr('http.timing_scope', 'until_response_headers');
       span.setAttr('http.status_code', response.status);
       if (!response.ok) {
         const expected = traceOptions?.expectedStatusCodes?.includes(

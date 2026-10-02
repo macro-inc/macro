@@ -44,6 +44,10 @@ import type {
   GridCellEditorOptions,
 } from '../core/grid-cell-editor';
 import { canEditCell, type DatabaseRow } from '../core/table';
+import {
+  cellRangeBounds,
+  createCellSelection,
+} from '../primitives/cell-selection';
 import type { DatabaseTableModel } from '../primitives/table-model';
 import type { DatabaseColumnHeaderProps } from './database-column-header';
 import { DatabaseColumnHeader } from './database-column-header';
@@ -52,6 +56,8 @@ import { DatabaseColumnHeader } from './database-column-header';
 export type DatabaseCellFocus = {
   rowId: string;
   columnId?: string;
+  endRowId?: string;
+  endColumnId?: string;
   editing: boolean;
 };
 
@@ -60,6 +66,8 @@ export type DatabaseCellPresence = {
   userId: string;
   rowId?: string;
   columnId?: string;
+  endRowId?: string;
+  endColumnId?: string;
   editing: boolean;
 };
 
@@ -100,6 +108,7 @@ export type DatabaseTableProps = {
   onOpen: (rowId: string) => void;
   onDuplicate?: (rowId: string) => Promise<boolean>;
   onRequestDelete?: (rowId: string) => void;
+  onClearCells?: (rowIds: string[], columnIds: string[]) => Promise<boolean>;
   relationTables?: { id: string; name: string }[];
   columnCasts?: DatabaseColumnCastsSource;
   onChangeColumnType?: (
@@ -226,6 +235,8 @@ export function DatabaseTable(props: DatabaseTableProps) {
     if (
       cell?.rowId === announcedCell?.rowId &&
       cell?.columnId === announcedCell?.columnId &&
+      cell?.endRowId === announcedCell?.endRowId &&
+      cell?.endColumnId === announcedCell?.endColumnId &&
       cell?.editing === announcedCell?.editing
     )
       return;
@@ -247,10 +258,62 @@ export function DatabaseTable(props: DatabaseTableProps) {
       editing: target.matches(EDITOR_FIELDS),
     };
   };
-  const presenceAt = (rowId: string, columnId: string) =>
-    props.remoteUsers?.filter(
-      (user) => user.rowId === rowId && user.columnId === columnId
-    ) ?? [];
+  const selection = createCellSelection({
+    rows: () => rows().map((row) => row.id),
+    columns: () => columns().map((column) => column.id),
+    cellAt: (target) => {
+      if (!(target instanceof Element) || !gridElement?.contains(target))
+        return;
+      const cell = cellAt(target);
+      return cell?.columnId && !props.isUnsavedRow?.(cell.rowId)
+        ? { rowId: cell.rowId, columnId: cell.columnId }
+        : undefined;
+    },
+    focus: () => gridElement.focus({ preventScroll: true }),
+    onChange: (range) =>
+      announceCell(
+        range
+          ? {
+              ...range.anchor,
+              endRowId: range.focus.rowId,
+              endColumnId: range.focus.columnId,
+              editing: false,
+            }
+          : undefined
+      ),
+    onClear:
+      props.canEdit && props.onClearCells
+        ? (rows, columns) => props.onClearCells!(rows, columns)
+        : undefined,
+  });
+  const remoteRanges = createMemo(() =>
+    (props.remoteUsers ?? []).flatMap((user) => {
+      if (!user.rowId || !user.columnId) return [];
+      const bounds = cellRangeBounds(
+        {
+          anchor: { rowId: user.rowId, columnId: user.columnId },
+          focus: {
+            rowId: user.endRowId ?? user.rowId,
+            columnId: user.endColumnId ?? user.columnId,
+          },
+        },
+        selection.rowIndex(),
+        selection.columnIndex()
+      );
+      return bounds ? [{ user, bounds }] : [];
+    })
+  );
+  const presenceAt = (rowId: string, columnId: string) => {
+    const row = selection.rowIndex().get(rowId)!;
+    const column = selection.columnIndex().get(columnId)!;
+    return remoteRanges().filter(
+      ({ bounds }) =>
+        row >= bounds.top &&
+        row <= bounds.bottom &&
+        column >= bounds.left &&
+        column <= bounds.right
+    );
+  };
   // Every row lays out on this one track list.
   const template = createMemo(
     () =>
@@ -390,14 +453,28 @@ export function DatabaseTable(props: DatabaseTableProps) {
             // Closed select triggers also use arrows. The grid owns those keys
             // until an editor or its menu has opened.
             const navigateArrows = (event: KeyboardEvent) => {
+              selection.keyDown(event);
+              if (event.defaultPrevented) return;
               if (event.key.startsWith('Arrow')) moveFocus(event);
             };
             grid.addEventListener('keydown', navigateArrows, true);
+            grid.addEventListener('pointerdown', selection.pointerDown, true);
+            grid.addEventListener('click', selection.click, true);
+            onCleanup(() => {
+              grid.removeEventListener(
+                'pointerdown',
+                selection.pointerDown,
+                true
+              );
+              grid.removeEventListener('click', selection.click, true);
+            });
             onCleanup(() =>
               grid.removeEventListener('keydown', navigateArrows, true)
             );
           }}
           role="grid"
+          tabIndex={-1}
+          aria-multiselectable="true"
           aria-label={props.name}
           aria-rowcount={rows().length + 1}
           aria-colcount={columns().length + 1 + Number(props.canEdit)}
@@ -411,7 +488,7 @@ export function DatabaseTable(props: DatabaseTableProps) {
                     ?.dataset.gridRowId
                 : undefined;
             if (rowId) props.onRowFocus?.(rowId);
-            announceCell(cellAt(event.target));
+            if (!selection.range()) announceCell(cellAt(event.target));
           }}
           onFocusOut={(event) => {
             const grid = event.currentTarget;
@@ -427,7 +504,10 @@ export function DatabaseTable(props: DatabaseTableProps) {
               props.onRowFocus?.(undefined);
               if (active.closest(PORTALED_EDITORS) && announcedCell)
                 announceCell({ ...announcedCell, editing: true });
-              else announceCell(undefined);
+              else {
+                selection.clear();
+                announceCell(undefined);
+              }
             });
           }}
         >
@@ -594,20 +674,45 @@ export function DatabaseTable(props: DatabaseTableProps) {
                             return (
                               <div
                                 role="gridcell"
+                                aria-selected={selection.contains(
+                                  index(),
+                                  columnIndex()
+                                )}
                                 aria-colindex={columnIndex() + 2}
                                 tabindex={-1}
                                 class="relative min-w-0 border-r border-edge-muted/40 px-0.5 py-0.5 outline-none focus-within:ring-1 focus-within:ring-inset focus-within:ring-ink/40 focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ink/50"
+                                classList={{
+                                  'bg-accent/15 ring-1 ring-inset ring-accent/50':
+                                    selection.contains(index(), columnIndex()),
+                                }}
                                 data-grid-cell
                                 data-grid-row={index()}
                                 data-grid-column={columnIndex() + 1}
                                 data-remote-users={
                                   presence().length
                                     ? presence()
-                                        .map((user) => user.userId)
+                                        .map(({ user }) => user.userId)
                                         .join(' ')
                                     : undefined
                                 }
-                                style={presenceOutline(presence()[0])}
+                                style={presenceOutline(
+                                  presence()[0]?.user,
+                                  presence()[0]
+                                    ? {
+                                        top:
+                                          index() === presence()[0].bounds.top,
+                                        bottom:
+                                          index() ===
+                                          presence()[0].bounds.bottom,
+                                        left:
+                                          columnIndex() ===
+                                          presence()[0].bounds.left,
+                                        right:
+                                          columnIndex() ===
+                                          presence()[0].bounds.right,
+                                      }
+                                    : undefined
+                                )}
                               >
                                 {props.renderCell(row, column, {
                                   onReady: (editor) =>
@@ -626,9 +731,17 @@ export function DatabaseTable(props: DatabaseTableProps) {
                                     ),
                                 })}
                                 <Show when={presence().length}>
-                                  <span class="pointer-events-none absolute -top-px right-0 z-1 flex gap-px">
-                                    <For each={presence()}>
-                                      {(user) => <PresenceTag user={user} />}
+                                  <span class="pointer-events-none absolute top-0 left-0 z-1 flex gap-px">
+                                    <For
+                                      each={presence().filter(
+                                        ({ bounds }) =>
+                                          bounds.top === index() &&
+                                          bounds.left === columnIndex()
+                                      )}
+                                    >
+                                      {({ user }) => (
+                                        <PresenceTag user={user} below />
+                                      )}
                                     </For>
                                   </span>
                                 </Show>
@@ -793,27 +906,42 @@ function presenceColor(userId: string) {
   return `var(--color-${getHashedPaletteColor(userId)}, var(--color-pink))`;
 }
 
+type PresenceEdges = {
+  top: boolean;
+  right: boolean;
+  bottom: boolean;
+  left: boolean;
+};
+
 function presenceOutline(
-  user: DatabaseCellPresence | undefined
+  user: DatabaseCellPresence | undefined,
+  edges: PresenceEdges = { top: true, right: true, bottom: true, left: true }
 ): JSX.CSSProperties | undefined {
   if (!user) return undefined;
+  const color = presenceColor(user.userId);
+  const border = `2px ${user.editing ? 'dashed' : 'solid'} ${color}`;
   return {
-    outline: `2px ${user.editing ? 'dashed' : 'solid'} ${presenceColor(user.userId)}`,
-    'outline-offset': '-2px',
+    'background-color': `color-mix(in srgb, ${color} 8%, transparent)`,
+    'border-top': edges.top ? border : undefined,
+    'border-right': edges.right ? border : undefined,
+    'border-bottom': edges.bottom ? border : undefined,
+    'border-left': edges.left ? border : undefined,
   };
 }
 
-/** First name when known, else initials from the user's email. */
+/** First name when known, else the email name before its first separator. */
 function presenceName(userId: string) {
   const macroId = tryMacroId(userId);
   const { firstName, lastName } = getDisplayNameParts(macroId);
-  return (
-    firstName ||
-    getInitials(firstName, lastName, macroId ? macroIdToEmail(macroId) : userId)
-  );
+  if (firstName) return firstName;
+  const email = macroId ? macroIdToEmail(macroId) : userId;
+  const name = email.split('@')[0]?.split(/[._+-]/)[0];
+  return name
+    ? name[0].toUpperCase() + name.slice(1)
+    : getInitials(firstName, lastName, email);
 }
 
-function PresenceTag(props: { user: DatabaseCellPresence }) {
+function PresenceTag(props: { user: DatabaseCellPresence; below?: boolean }) {
   const label = () =>
     `${presenceName(props.user.userId)} is ${props.user.editing ? 'editing' : 'here'}`;
   return (
@@ -821,7 +949,8 @@ function PresenceTag(props: { user: DatabaseCellPresence }) {
       role="note"
       aria-label={label()}
       title={label()}
-      class="max-w-24 truncate rounded-bl px-1 text-[10px] leading-4 font-medium text-surface"
+      class="max-w-40 truncate px-1.5 py-0.5 text-[11px] font-medium leading-4 text-surface shadow-sm"
+      classList={{ 'rounded-t-sm': !props.below, 'rounded-b-sm': props.below }}
       style={{ 'background-color': presenceColor(props.user.userId) }}
     >
       {presenceName(props.user.userId)}

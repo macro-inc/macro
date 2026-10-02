@@ -78,6 +78,7 @@ export type DatabaseGridProps = {
   /** The view on screen: a stored one, or the table's own All records. */
   view: DatabaseView;
   stored: boolean;
+  preparingView?: boolean;
   onViewChange?: (change: ViewChange) => void;
   onClearConstraints?: () => void;
   actionsRef?: (actions: DatabaseRecordsActions) => void;
@@ -238,6 +239,7 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
   const positions = useCardPositions(databaseId, boardViewId);
   const boardPositions: BoardPositions = {
     state: (): BoardPositionsState => {
+      if (!props.stored) return { kind: 'ready', positions: [] };
       if (positions.isSuccess)
         return { kind: 'ready', positions: positions.data };
       if (positions.isError)
@@ -314,6 +316,7 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
             canEdit={props.canEdit}
             view={props.view}
             stored={props.stored}
+            preparingView={props.preparingView}
             onViewChange={props.onViewChange}
             onClearConstraints={props.onClearConstraints}
             boardPositions={boardPositions}

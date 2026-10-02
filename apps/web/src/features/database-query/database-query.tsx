@@ -31,6 +31,8 @@ import { QueryEditor } from './views/query-editor';
 export function ChooseQuestionSource(props: {
   initial: QueryDefinition;
   onSave: (definition: QueryDefinition) => void;
+  saveOnGenerate?: boolean;
+  saving?: boolean;
 }) {
   const databases = useDatabasesQuery();
   const hasPaidAccess = useHasPaidAccess();
@@ -83,6 +85,8 @@ export function ChooseQuestionSource(props: {
           />
         )}
         onSave={props.onSave}
+        saveOnGenerate={props.saveOnGenerate}
+        saving={props.saving}
         saveLabel={props.initial.sql ? 'Save changes' : 'Insert'}
       />
       <Show when={databaseId() && detail.isError}>
@@ -114,6 +118,7 @@ function SavedQuestionSql(props: { queryId: string }) {
 /** Asks a new question and saves its SQL as a query. */
 function AskQuestion(props: {
   source: SavedQuestion;
+  sql?: string;
   onSave: (source: SavedQuestion) => void;
 }) {
   const [saving, setSaving] = createSignal(false);
@@ -123,7 +128,7 @@ function AskQuestion(props: {
     setSaving(true);
     setError();
     const saved = await saveQuestion({
-      definition: next,
+      definition: { ...next, height: props.source.height },
       save: saveQuestionSql,
     });
     setSaving(false);
@@ -134,8 +139,10 @@ function AskQuestion(props: {
   return (
     <>
       <ChooseQuestionSource
-        initial={{ ...props.source, sql: '' }}
+        initial={{ ...props.source, sql: props.sql ?? '' }}
         onSave={(next) => void save(next)}
+        saveOnGenerate={!!props.source.queryId}
+        saving={saving()}
       />
       <Show when={saving()}>
         <p role="status" class="px-4 pb-3 text-sm text-ink-muted">
@@ -148,6 +155,44 @@ function AskQuestion(props: {
         </p>
       </Show>
     </>
+  );
+}
+
+/** Saved SQL is loaded only when Details mounts the editor. */
+function EditSavedQuestion(props: {
+  source: SavedQuestion;
+  onSave: (source: SavedQuestion) => void;
+}) {
+  const definition = useDatabaseQueryDefinition(() => props.source.queryId);
+  return (
+    <Switch
+      fallback={
+        <p role="status" class="p-4 text-sm text-ink-muted">
+          Loading question…
+        </p>
+      }
+    >
+      <Match when={definition.isSuccess && definition.data}>
+        {(saved) => (
+          <AskQuestion
+            source={props.source}
+            sql={saved().definition.query}
+            onSave={props.onSave}
+          />
+        )}
+      </Match>
+      <Match when={definition.isError}>
+        <div class="p-4 text-sm">
+          <p role="alert">This question could not be loaded.</p>
+          <button
+            class="mt-2 rounded px-2 py-1 hover:bg-hover"
+            onClick={() => void definition.refetch()}
+          >
+            Retry
+          </button>
+        </div>
+      </Match>
+    </Switch>
   );
 }
 
@@ -197,18 +242,36 @@ export function DatabaseLiveQuestion(props: {
             ? (title) => props.onSave?.({ ...props.source, title })
             : undefined
         }
+        onResize={
+          props.onSave
+            ? (height) => props.onSave?.({ ...props.source, height })
+            : undefined
+        }
         sql={() => <SavedQuestionSql queryId={props.source.queryId} />}
         onDiscard={props.onDiscard}
         editor={
           props.onSave
             ? (onClose) => (
-                <AskQuestion
-                  source={props.source}
-                  onSave={(source) => {
-                    props.onSave?.(source);
-                    onClose();
-                  }}
-                />
+                <Show
+                  when={props.source.queryId}
+                  fallback={
+                    <AskQuestion
+                      source={props.source}
+                      onSave={(source) => {
+                        props.onSave?.(source);
+                        onClose();
+                      }}
+                    />
+                  }
+                >
+                  <EditSavedQuestion
+                    source={props.source}
+                    onSave={(source) => {
+                      props.onSave?.(source);
+                      onClose();
+                    }}
+                  />
+                </Show>
               )
             : undefined
         }

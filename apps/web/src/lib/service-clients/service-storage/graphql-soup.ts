@@ -248,21 +248,40 @@ export async function dssGraphqlFetch(
   input: RequestInfo | URL,
   init?: RequestInit
 ): Promise<Response> {
-  const transportInit = graphqlSoupTransportRequest(init);
-  const response = await authorizedDssGraphqlFetch(input, transportInit);
-  const legacyInit = legacyProjectionRequest(transportInit);
-  if (
-    legacyInit === undefined ||
-    !(await isLegacyProjectionValidationError(response))
-  ) {
-    return response;
-  }
+  return Telemetry.span('graphql.transport', async (span) => {
+    const started = performance.now();
+    try {
+      const transportInit = graphqlSoupTransportRequest(init);
+      span.event('request_dispatch');
+      const response = await authorizedDssGraphqlFetch(input, transportInit);
+      span.setAttr('graphql.response_headers_ms', performance.now() - started);
+      span.setAttr('http.response.status_code', response.status);
+      span.event('response_headers');
+      const legacyInit = legacyProjectionRequest(transportInit);
+      if (legacyInit === undefined) return response;
 
-  // A mixed deployment remains network-correct: retry without the additive
-  // metadata field and suppress v2 local authority for this session. Backfill
-  // still refuses to checkpoint missing required Document supplements.
-  soupProjectionServerSupported = false;
-  return await authorizedDssGraphqlFetch(input, legacyInit);
+      // This includes body delivery and JSON parsing, not just validation CPU.
+      const inspectStarted = performance.now();
+      const legacy = await isLegacyProjectionValidationError(response);
+      span.setAttr(
+        'graphql.response_inspection_ms',
+        performance.now() - inspectStarted
+      );
+      span.event('response_inspected');
+      span.setAttr('graphql.legacy_retry', legacy);
+      if (!legacy) return response;
+
+      // A mixed deployment remains network-correct: retry without the additive
+      // metadata field and suppress v2 local authority for this session. Backfill
+      // still refuses to checkpoint missing required Document supplements.
+      soupProjectionServerSupported = false;
+      return await authorizedDssGraphqlFetch(input, legacyInit);
+    } catch (error) {
+      // Transport errors may contain query URLs; record a category only.
+      span.setAttr('graphql.transport_failed', true);
+      throw error;
+    }
+  });
 }
 
 const graphqlSoupClient = createClient({

@@ -72,6 +72,8 @@ it('sends the local state debounced, heartbeats it, and announces leaving on dis
     tableId: 'tasks',
     rowId: 'row-1',
     columnId: 'notes',
+    endRowId: 'row-3',
+    endColumnId: 'status',
     editing: true,
   });
   vi.advanceTimersByTime(150);
@@ -82,6 +84,8 @@ it('sends the local state debounced, heartbeats it, and announces leaving on dis
       tableId: 'tasks',
       rowId: 'row-1',
       columnId: 'notes',
+      endRowId: 'row-3',
+      endColumnId: 'status',
       editing: true,
     },
   });
@@ -93,6 +97,8 @@ it('sends the local state debounced, heartbeats it, and announces leaving on dis
       tableId: 'tasks',
       rowId: 'row-1',
       columnId: 'notes',
+      endRowId: 'row-3',
+      endColumnId: 'status',
       editing: true,
     },
   });
@@ -145,10 +151,22 @@ it('merges remote states per user, drops stale relays, itself, other databases, 
   expect(remote()[0].rowId).toBe('row-1');
   relay(
     'alex',
-    { tableId: 'tasks', rowId: 'row-1', columnId: 'notes', editing: true },
+    {
+      tableId: 'tasks',
+      rowId: 'row-1',
+      columnId: 'notes',
+      endRowId: 'row-3',
+      endColumnId: 'status',
+      editing: true,
+    },
     103
   );
-  expect(remote()[0]).toMatchObject({ columnId: 'notes', editing: true });
+  expect(remote()[0]).toMatchObject({
+    columnId: 'notes',
+    endRowId: 'row-3',
+    endColumnId: 'status',
+    editing: true,
+  });
   relay('sam', { tableId: 'people' }, 104);
   expect(remote().map((user) => user.userId)).toEqual(['alex', 'sam']);
   relay('sam', { tableId: 'people', left: true }, 105);

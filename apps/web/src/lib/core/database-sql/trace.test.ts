@@ -134,6 +134,10 @@ describe('database SQL run traces', () => {
       {
         name: 'database_sql.run',
         attributes: {
+          'database_sql.fetch_count': 2,
+          'database_sql.fetched_rows': 2,
+          'database_sql.fetch_ms': expect.any(Number),
+          'database_sql.fold_ms': expect.any(Number),
           'database_sql.statement_kind': 'sql',
           'database_sql.sql': 'SELECT "Name" FROM "Guests"',
           'database_sql.database_ids': 'party',

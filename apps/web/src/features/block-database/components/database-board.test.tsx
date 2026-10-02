@@ -92,7 +92,7 @@ describe('database board', () => {
       screen
         .getAllByRole('region')
         .map((lane) => lane.getAttribute('aria-label'))
-    ).toEqual(['No owner lane', 'ana@macro.com lane', 'sam@macro.com lane']);
+    ).toEqual(['ana@macro.com lane', 'sam@macro.com lane']);
     expect(screen.queryByRole('button', { name: 'New group' })).toBeNull();
     const trigger = screen.getByRole('button', { name: 'Move Launch project' });
     trigger.focus();
@@ -183,13 +183,10 @@ describe('database board', () => {
       screen
         .getAllByRole('region')
         .map((lane) => lane.getAttribute('aria-label'))
-    ).toEqual(['Done lane', 'To do lane', 'No status lane']);
+    ).toEqual(['Done lane', 'To do lane']);
     expect(
-      within(screen.getByRole('region', { name: 'No status lane' })).getByRole(
-        'button',
-        { name: 'Open Unassigned record' }
-      )
-    ).toBeTruthy();
+      screen.queryByRole('button', { name: 'Open Unassigned record' })
+    ).toBeNull();
     expect(
       screen.queryByRole('button', { name: 'Open Old record' })
     ).toBeNull();
@@ -296,8 +293,9 @@ describe('database board', () => {
     expect(within(card).getByText('Launch project')).toBeTruthy();
     expect(within(card).queryByText('Design')).toBeNull();
     expect(
-      Array.from(card.querySelectorAll('[title]'), (element) =>
-        element.getAttribute('title')
+      Array.from(
+        card.closest('article')!.querySelectorAll('[data-card-field]'),
+        (element) => element.getAttribute('title')
       )
     ).toEqual(['Notes: Bring draft', 'Owner: Ada']);
   });
@@ -381,8 +379,9 @@ describe('database board', () => {
     );
     expect(within(owned).getByTestId('mention')).toBeTruthy();
     expect(
-      Array.from(owned.querySelectorAll('[title]'), (element) =>
-        element.getAttribute('title')
+      Array.from(
+        owned.closest('article')!.querySelectorAll('[data-card-field]'),
+        (element) => element.getAttribute('title')
       )
     ).toEqual(['Name: Launch project']);
     const unowned = screen.getByRole('button', { name: 'Open Unnamed' });
@@ -390,8 +389,9 @@ describe('database board', () => {
       'Unnamed'
     );
     expect(
-      Array.from(unowned.querySelectorAll('[title]'), (element) =>
-        element.getAttribute('title')
+      Array.from(
+        unowned.closest('article')!.querySelectorAll('[data-card-field]'),
+        (element) => element.getAttribute('title')
       )
     ).toEqual(['Name: Tidy backlog']);
   });
@@ -540,17 +540,7 @@ describe('database board', () => {
     );
     trigger.focus();
     fireEvent.keyDown(trigger, { key: 'Enter' });
-    fireEvent.keyDown(
-      await screen.findByRole('menuitem', { name: 'No status' }),
-      { key: 'Enter' }
-    );
-    await waitFor(() =>
-      expect(onMove).toHaveBeenLastCalledWith(
-        'launch',
-        { kind: 'none' },
-        undefined
-      )
-    );
+    expect(screen.queryByRole('menuitem', { name: 'No status' })).toBeNull();
   });
 
   it('hides a lane from its lane menu, the lane without an option as null', async () => {
@@ -613,18 +603,9 @@ describe('database board', () => {
     expect(
       screen.queryByRole('menuitemcheckbox', { name: 'Hide empty lanes' })
     ).toBeNull();
-    const emptyMenu = await screen.findByRole('button', {
-      name: 'No status lane menu',
-    });
-    emptyMenu.focus();
-    fireEvent.keyDown(emptyMenu, { key: 'Enter' });
-    fireEvent.keyDown(
-      await screen.findByRole('menuitem', { name: 'Hide lane' }),
-      { key: 'Enter' }
-    );
-    await waitFor(() =>
-      expect(onHideLane).toHaveBeenLastCalledWith({ kind: 'none' })
-    );
+    expect(
+      screen.queryByRole('button', { name: 'No status lane menu' })
+    ).toBeNull();
   });
 
   it('turns hiding empty lanes on from a lane menu, checked as the layout has it', async () => {
@@ -796,11 +777,7 @@ describe('database board', () => {
         { name: 'Edit To do' }
       )
     ).toBeTruthy();
-    expect(
-      within(
-        screen.getByRole('region', { name: 'No status lane' })
-      ).queryByRole('button', { name: /^Edit / })
-    ).toBeNull();
+    expect(screen.queryByRole('region', { name: 'No status lane' })).toBeNull();
     setCanEdit(false);
     expect(screen.queryByRole('button', { name: 'Edit To do' })).toBeNull();
   });
@@ -1305,19 +1282,10 @@ describe('database board', () => {
         onCreate={onCreate}
       />
     ));
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Add record to No status' })
-    );
-    const input = within(
-      screen.getByRole('region', { name: 'No status lane' })
-    ).getByRole('textbox', { name: 'New record title' });
-    fireEvent.input(input, { target: { value: 'Loose idea' } });
-    fireEvent.keyDown(input, { key: 'Enter' });
-    expect(onCreate).toHaveBeenCalledWith(
-      { kind: 'none' },
-      'Loose idea',
-      expect.any(String)
-    );
+    expect(
+      screen.queryByRole('button', { name: 'Add record to No status' })
+    ).toBeNull();
+    expect(onCreate).not.toHaveBeenCalled();
   });
 
   it('Shift+Enter saves a card and asks to open its record', () => {

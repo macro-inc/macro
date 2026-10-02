@@ -6,6 +6,7 @@ import { createSignal, type JSX, Show } from 'solid-js';
 import { AnswerTitleField } from '../components/answer-title-field';
 import { QueryResults, ScalarValue } from '../components/query-results';
 import { QuestionDetails } from '../components/question-details';
+import { ResizableAnswer } from '../components/resizable-answer';
 import { useAnswerDisplay } from '../context/answer-display';
 import { resultCell, resultCellText } from '../core/answer-cell';
 import {
@@ -23,15 +24,15 @@ export function LiveQuestion(props: {
   error?: QueryFailure;
   onRefresh: () => void;
   onRename?: (title: string) => void;
+  onResize?: (height: number) => void;
   /** The saved SQL, rendered only once the details are opened. */
   sql?: () => JSX.Element;
-  /** The question box for an answer not asked yet; a saved answer is replaced, not edited. */
+  /** Reuses the question composer for drafts and edits to saved answers. */
   editor?: (onClose: () => void) => JSX.Element;
   /** Leaving the editor of an answer that was never saved drops the answer. */
   onDiscard?: () => void;
 }) {
   const [open, setOpen] = createSignal(!props.source.queryId && !!props.editor);
-  const asking = () => !props.source.queryId && !!props.editor;
   let content: HTMLDivElement | undefined;
   const title = () =>
     props.source.title || props.source.chart?.title || 'Database answer';
@@ -173,7 +174,10 @@ export function LiveQuestion(props: {
               Details
             </Popover.Trigger>
           </div>
-          <div class="p-3">
+          <ResizableAnswer
+            height={props.source.height}
+            onResize={props.onResize}
+          >
             <Show
               when={!props.error && props.answer}
               fallback={
@@ -191,12 +195,13 @@ export function LiveQuestion(props: {
                   names={names()}
                   display={display}
                   compact
+                  unbounded
                   displayMode={props.source.displayMode}
                   chart={props.source.chart}
                 />
               )}
             </Show>
-          </div>
+          </ResizableAnswer>
         </div>
       </Show>
       <Popover.Portal>
@@ -205,7 +210,7 @@ export function LiveQuestion(props: {
           class="z-action-menu w-[min(440px,calc(100vw-2rem))] max-h-[min(720px,var(--kb-popper-content-available-height,100dvh),calc(100dvh-1rem))] overflow-auto rounded-xl border border-edge-muted bg-panel text-ink shadow-xl"
           contentEditable={false}
           onOpenAutoFocus={(event) => {
-            if (!asking()) return;
+            if (!props.editor) return;
             const prompt =
               content?.querySelector<HTMLTextAreaElement>('textarea');
             if (prompt) {
@@ -230,7 +235,7 @@ export function LiveQuestion(props: {
             </Popover.CloseButton>
           </div>
           <Show
-            when={asking() && props.editor}
+            when={props.editor}
             fallback={
               <QuestionDetails
                 prompt={props.source.prompt}

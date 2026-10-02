@@ -442,3 +442,28 @@ describe('table controller', () => {
     dispose();
   });
 });
+
+it('clears cells optimistically as one write and restores them after a refused batch', async () => {
+  const { controller, source, dispose } = setup();
+  const waiting = deferred<Result<DatabaseWriteResult, DatabaseWriteFailure>>();
+  vi.mocked(source.write).mockReturnValueOnce(new ResultAsync(waiting.promise));
+  const saving = controller.save({
+    kind: 'clear',
+    rowIds: ['record'],
+    columnIds: ['title', 'status'],
+  });
+  expect(controller.rows()[0].cells).toEqual({ title: null, status: null });
+  waiting.resolve(
+    err({
+      kind: 'ops',
+      error: { code: 'NETWORK_ERROR', message: 'Offline', refusal: null },
+    })
+  );
+  expect((await saving).isErr()).toBe(true);
+  expect(controller.rows()[0].cells).toEqual({
+    status: 'To do',
+    title: 'Plan launch',
+  });
+  expect(source.write).toHaveBeenCalledTimes(1);
+  dispose();
+});

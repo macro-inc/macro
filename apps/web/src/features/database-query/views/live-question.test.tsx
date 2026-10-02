@@ -223,13 +223,13 @@ describe('answer titles', () => {
       </PlainAnswerDisplay>
     ));
     await fireEvent.click(rendered.getByRole('button', { name: 'Details' }));
-    const refresh = await screen.findByRole('button', { name: 'Refresh' });
-    await fireEvent.keyDown(refresh, { key: 'Escape' });
+    const prompt = await screen.findByLabelText('Ask your database');
+    await fireEvent.keyDown(prompt, { key: 'Escape' });
     expect(discard).not.toHaveBeenCalled();
     rendered.unmount();
   });
 
-  it('offers a saved block only its details, never an editor', async () => {
+  it('opens the existing question editor from saved block details', async () => {
     const rendered = render(() => (
       <PlainAnswerDisplay>
         <LiveQuestion
@@ -249,8 +249,8 @@ describe('answer titles', () => {
       rendered.queryByRole('button', { name: 'Edit question' })
     ).toBeNull();
     await fireEvent.click(rendered.getByRole('button', { name: 'Details' }));
-    expect(await screen.findByRole('button', { name: 'Refresh' })).toBeTruthy();
-    expect(screen.queryByLabelText('Ask your database')).toBeNull();
+    expect(await screen.findByLabelText('Ask your database')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Refresh' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Edit question' })).toBeNull();
     rendered.unmount();
   });
@@ -280,9 +280,8 @@ describe('answer titles', () => {
       </PlainAnswerDisplay>
     ));
     await fireEvent.click(rendered.getByRole('button', { name: /RSVPs/ }));
-    expect(await screen.findByRole('button', { name: 'Refresh' })).toBeTruthy();
+    expect(await screen.findByLabelText('Ask your database')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Edit question' })).toBeNull();
-    expect(screen.queryByLabelText('Ask your database')).toBeNull();
     rendered.unmount();
   });
 });

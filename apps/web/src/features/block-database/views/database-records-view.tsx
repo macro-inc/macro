@@ -97,6 +97,7 @@ export function DatabaseRecordsView(props: {
   /** The view on screen: a stored one, or the table's own All records. */
   view: DatabaseView;
   /** Whether the view is stored, so changing it changes it for everyone. */
+  preparingView?: boolean;
   stored: boolean;
   onViewChange?: (change: ViewChange) => void;
   /** Clear the view's filter. */
@@ -434,7 +435,7 @@ export function DatabaseRecordsView(props: {
           )}
         </Show>
         <Switch>
-          <Match when={props.source.loading()}>
+          <Match when={props.source.loading() || props.preparingView}>
             <TableSkeleton />
           </Match>
           <Match when={!controller.snapshot()}>
@@ -455,6 +456,7 @@ export function DatabaseRecordsView(props: {
               onViewChange={
                 !props.stored || props.canEdit ? props.onViewChange : undefined
               }
+              renderCell={renderCell}
               renderTextValue={props.renderTextValue}
               renderMentionValue={props.renderMentionValue}
               rowPending={controller.rowPending}
@@ -470,6 +472,31 @@ export function DatabaseRecordsView(props: {
           </Match>
           <Match when={layoutKind() === 'table'}>
             <DatabaseTableView
+              onClearCells={
+                props.canEdit
+                  ? async (rowIds, columnIds) => {
+                      if (!props.canEdit) return false;
+                      const savedRows = rowIds.filter(
+                        (id) => !draftRows.isUnsaved(id)
+                      );
+                      const writable = columnIds.filter((id) =>
+                        columns().some(
+                          (column) => column.id === id && canEditCell(column)
+                        )
+                      );
+                      if (!savedRows.length || !writable.length) return true;
+                      const result = await controller.save(
+                        {
+                          kind: 'clear',
+                          rowIds: savedRows,
+                          columnIds: writable,
+                        },
+                        { label: 'selected cells' }
+                      );
+                      return result.isOk();
+                    }
+                  : undefined
+              }
               name={props.name}
               rows={gridRows.rows()}
               isUnsavedRow={draftRows.isUnsaved}

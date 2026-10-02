@@ -17,11 +17,9 @@ import { ViewSelect } from './view-select';
 
 type NewViewLayout = 'table' | 'board';
 
-/** A view to create: a table, or a board and what it groups by. */
-export type NewView = { name: string } & (
-  | { layout: 'table' }
-  | { layout: 'board'; groupBy: BoardGrouping }
-);
+import type { NewView } from '../core/view-creation';
+
+export type { NewView } from '../core/view-creation';
 
 /** The grouping choice that creates a Status column; column ids are UUIDs, so it names none. */
 const NEW_STATUS_COLUMN = 'new-status-column';
@@ -209,7 +207,7 @@ export function NewViewDialog(props: {
                 variant="cta"
                 disabled={pending() || incomplete()}
               >
-                {pending() ? 'Creating…' : 'Create view'}
+                Create view
               </Button>
             </div>
           </form>

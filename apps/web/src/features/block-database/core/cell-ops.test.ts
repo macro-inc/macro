@@ -311,3 +311,26 @@ describe('grid edits as ops', () => {
     ).toEqual([{ column: 'tags', labels: ['Blocked'] }]);
   });
 });
+
+it('clears a rectangle in one uniform row operation', () => {
+  const result = mutationOp(
+    'table',
+    { kind: 'clear', rowIds: ['one', 'two'], columnIds: ['name', 'count'] },
+    () => ok(column('STRING'))
+  );
+  expect(result._unsafeUnwrap()).toEqual({
+    kind: 'rows',
+    table: 'table',
+    change: {
+      kind: 'update',
+      changes: {
+        kind: 'uniform',
+        rows: ['one', 'two'],
+        cells: [
+          { column: 'name', value: { type: 'clear' } },
+          { column: 'count', value: { type: 'clear' } },
+        ],
+      },
+    },
+  });
+});

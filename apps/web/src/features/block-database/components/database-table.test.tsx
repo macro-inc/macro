@@ -53,6 +53,8 @@ const rows: DatabaseRow[] = [
 ];
 function setup(canEdit = true) {
   const onOpen = vi.fn();
+  const onClearCells = vi.fn(async () => true);
+  const onCellFocus = vi.fn();
   const onDuplicate = vi.fn(async () => true);
   const onRequestDelete = vi.fn();
   const onReorderColumn = vi.fn(async () => {});
@@ -84,6 +86,8 @@ function setup(canEdit = true) {
       }}
       getRowTitle={(row) => String(row.cells.name)}
       onOpen={onOpen}
+      onClearCells={onClearCells}
+      onCellFocus={onCellFocus}
       onDuplicate={onDuplicate}
       onRequestDelete={onRequestDelete}
       onReorderColumn={onReorderColumn}
@@ -103,6 +107,8 @@ function setup(canEdit = true) {
   ));
   return {
     onOpen,
+    onClearCells,
+    onCellFocus,
     onDuplicate,
     onRequestDelete,
     onReorderColumn,
@@ -734,17 +740,18 @@ describe('presence and reveal', () => {
     expect(alexCell.dataset.gridRow).toBe('1');
     expect(alexCell.dataset.gridColumn).toBe('2');
     expect(alexCell.dataset.remoteUsers).toBe('macro|alex@example.com');
-    expect(alexCell.style.outline).toContain('2px solid');
-    // Sam has no cached name: initials from the email, dashed while editing.
-    const samTag = screen.getByRole('note', { name: 'S is editing' });
+    expect(alexCell.style.borderTop).toContain('2px solid');
+    expect(alexCell.style.backgroundColor).toContain('color-mix');
+    // Sam has no cached profile: the email name is shown, dashed while editing.
+    const samTag = screen.getByRole('note', { name: 'Sam is editing' });
     const samCell = samTag.closest<HTMLElement>('[data-grid-cell]')!;
-    expect(samCell.style.outline).toContain('dashed');
-    expect(samCell.style.outline).not.toBe(alexCell.style.outline);
+    expect(samCell.style.borderTop).toContain('dashed');
+    expect(samCell.style.borderTop).not.toBe(alexCell.style.borderTop);
     // Pat is on the table with no cell: nothing to draw.
     expect(document.querySelectorAll('[data-remote-users]')).toHaveLength(2);
     setRemoteUsers([]);
     expect(screen.queryByRole('note')).toBeNull();
-    expect(alexCell.style.outline).toBe('');
+    expect(alexCell.style.borderTop).toBe('');
 
     const secondNotes = screen
       .getAllByRole('row')[2]
@@ -831,4 +838,41 @@ describe('sort and column widths', () => {
     );
     expect(onResizeColumn).toHaveBeenCalledExactlyOnceWith('name', 260);
   });
+});
+
+it('selects a rectangle with Shift-click, announces both corners and clears the cells together', async () => {
+  const { onClearCells, onCellFocus, onWrite } = setup();
+  const first = document.querySelector<HTMLElement>(
+    '[data-grid-row-id="one"] [data-grid-column="1"]'
+  )!;
+  const last = document.querySelector<HTMLElement>(
+    '[data-grid-row-id="two"] [data-grid-column="3"]'
+  )!;
+  first.dispatchEvent(
+    new MouseEvent('pointerdown', { bubbles: true, button: 0 })
+  );
+  document.dispatchEvent(
+    new MouseEvent('pointerup', { bubbles: true, button: 0 })
+  );
+  last.dispatchEvent(
+    new MouseEvent('pointerdown', { bubbles: true, button: 0, shiftKey: true })
+  );
+  expect(document.querySelectorAll('[aria-selected="true"]')).toHaveLength(6);
+  expect(onCellFocus).toHaveBeenLastCalledWith({
+    rowId: 'one',
+    columnId: 'name',
+    endRowId: 'two',
+    endColumnId: 'notes',
+    editing: false,
+  });
+  fireEvent.keyDown(last, { key: 'Delete' });
+  await waitFor(() =>
+    expect(onClearCells).toHaveBeenCalledExactlyOnceWith(
+      ['one', 'two'],
+      ['name', 'computed', 'notes']
+    )
+  );
+  expect(onWrite).not.toHaveBeenCalled();
+  fireEvent.keyDown(last, { key: 'Escape' });
+  expect(document.querySelectorAll('[aria-selected="true"]')).toHaveLength(0);
 });

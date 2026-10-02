@@ -253,6 +253,19 @@ export function traceDatabaseSqlRun<Failure extends { kind: string }>(
     detail: unknown
   ) => {
     const milliseconds = performance.now() - started;
+    runSpan.setAttr('database_sql.fetch_count', steps.length);
+    runSpan.setAttr(
+      'database_sql.fetched_rows',
+      steps.reduce((total, step) => total + (step.rows ?? 0), 0)
+    );
+    runSpan.setAttr(
+      'database_sql.fetch_ms',
+      steps.reduce((total, step) => total + step.milliseconds, 0)
+    );
+    runSpan.setAttr(
+      'database_sql.fold_ms',
+      steps.reduce((total, step) => total + (step.foldMilliseconds ?? 0), 0)
+    );
     console.groupCollapsed(
       runHeadline(subject, outcome, steps.length, milliseconds)
     );
