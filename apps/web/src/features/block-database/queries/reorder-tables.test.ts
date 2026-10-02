@@ -151,6 +151,6 @@ describe('reordering tables', () => {
       ['venues', 2],
       ['invites', 4],
     ]);
-    expect(queryClient.getQueryState(key)?.isInvalidated).toBe(false);
+    expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true);
   });
 });

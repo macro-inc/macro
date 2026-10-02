@@ -315,7 +315,7 @@ describe('reading every viewer database once', () => {
 });
 
 describe('shared ops cache effects', () => {
-  it('applies repeated schema edits in batch order and advances the version once', async () => {
+  it('publishes versions and refreshes schema without replaying ops into the cache', async () => {
     queryClient.setQueryData(key, detail);
     mock.applyOps.mockReturnValue(
       okAsync({
@@ -350,9 +350,10 @@ describe('shared ops cache effects', () => {
     ]);
     expect(
       queryClient.getQueryData<DatabaseDetail>(key)?.tables[0].table
-    ).toMatchObject({ name: 'Final', version: 6 });
+    ).toMatchObject({ name: 'Tasks', version: 6 });
+    expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true);
   });
-  it('deletes a table and invalidates dependent catalogs for every ops caller', async () => {
+  it('invalidates dependent catalogs for table deletion without replaying it', async () => {
     queryClient.setQueryData(key, detail);
     const other = databasesKeys.detail('other').queryKey;
     queryClient.setQueryData(other, detail);
@@ -375,7 +376,7 @@ describe('shared ops cache effects', () => {
       queryClient
         .getQueryData<DatabaseDetail>(key)
         ?.tables.map(({ table }) => table.id)
-    ).toEqual(['people']);
+    ).toEqual(['tasks', 'people']);
     expect(queryClient.getQueryState(other)?.isInvalidated).toBe(true);
   });
   it('advances ordinary row writes without refetching the schema for each cell', async () => {
@@ -412,7 +413,7 @@ describe('shared ops cache effects', () => {
   });
 });
 
-it('announces a schema commit before its slow refresh and a later row commit', async () => {
+it('returns and announces schema commits without waiting for a slow refresh', async () => {
   const events: number[] = [];
   const unsubscribe = onDatabaseBatchCommitted((batch) =>
     events.push(batch.changes[0].change)
@@ -454,8 +455,8 @@ it('announces a schema commit before its slow refresh and a later row commit', a
       },
     ]);
     expect(events).toEqual([10, 11]);
-    release();
     expect((await schema).isOk()).toBe(true);
+    release();
   } finally {
     release();
     unsubscribe();

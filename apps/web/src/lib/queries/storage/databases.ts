@@ -20,11 +20,6 @@ import { ResultAsync } from 'neverthrow';
 import type { Accessor } from 'solid-js';
 import { match, P } from 'ts-pattern';
 import { queryClient } from '../client';
-import {
-  changesDatabaseSchema,
-  commitDatabaseOps,
-  refreshAfterDatabaseOps,
-} from './database-ops-cache';
 import { databasesKeys } from './keys';
 
 const DATABASE_STALE_TIME = 30 * 1000;
@@ -170,7 +165,7 @@ export function applyDatabaseOps(
         id: databaseId,
         request: baseVersions ? { ops, baseVersions } : { ops },
       })
-      .map(async (response) => {
+      .map((response) => {
         const tableVersions = committedTableVersions(
           response.results,
           response.changes
@@ -182,16 +177,20 @@ export function applyDatabaseOps(
             changes: response.changes,
             tableVersions,
           });
-        await commitDatabaseOps(
-          queryClient,
-          databaseId,
-          ops,
-          response.results,
-          tableVersions
-        );
-        // Publish the commit before a slow schema read can let a later write overtake it.
-        if (ops.some(changesDatabaseSchema))
-          await refreshAfterDatabaseOps(queryClient, databaseId, ops);
+        applyDatabaseTableVersions(databaseId, tableVersions);
+        // Schema reads reconcile in the background; committing a write never waits on them.
+        if (ops.some((op) => op.kind !== 'rows')) {
+          const global = ops.some(
+            (op) =>
+              op.kind === 'table' &&
+              ['rename', 'delete'].includes(op.change.kind)
+          );
+          void queryClient.invalidateQueries({
+            queryKey: global
+              ? databasesKeys.detail._def
+              : databasesKeys.detail(databaseId).queryKey,
+          });
+        }
         return response.results;
       })
       // A refused batch is one error: the first op the service could not apply.

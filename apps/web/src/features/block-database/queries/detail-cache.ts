@@ -7,6 +7,7 @@ import type { ColumnDetail } from '@service-storage/generated/schemas/columnDeta
 import type { DatabaseDetail } from '@service-storage/generated/schemas/databaseDetail';
 import type { DatabaseView } from '@service-storage/generated/schemas/databaseView';
 import type { OpResult } from '@service-storage/generated/schemas/opResult';
+import type { TableDetail } from '@service-storage/generated/schemas/tableDetail';
 import type { QueryClient } from '@tanstack/solid-query';
 import { errAsync, okAsync, type ResultAsync } from 'neverthrow';
 import type { DatabaseOpFailure } from '../core/write-failure';
@@ -19,22 +20,43 @@ import type { DatabaseOpFailure } from '../core/write-failure';
 export async function patchDetail(
   databaseId: string,
   change: (detail: DatabaseDetail) => DatabaseDetail
-): Promise<void> {
+): Promise<() => void> {
   const queryKey = databasesKeys.detail(databaseId).queryKey;
   await queryClient.cancelQueries({ queryKey, exact: true });
-  queryClient.setQueryData(
+  const previous = queryClient.getQueryData<DatabaseDetail>(queryKey);
+  const optimistic = queryClient.setQueryData<DatabaseDetail>(
     queryKey,
-    (previous: DatabaseDetail | undefined) => previous && change(previous)
+    (current) => current && change(current)
   );
+  return () => {
+    // Never restore a snapshot over a newer edit or server read.
+    if (previous && queryClient.getQueryData(queryKey) === optimistic)
+      queryClient.setQueryData(queryKey, previous);
+    void queryClient.invalidateQueries({ queryKey });
+  };
+}
+
+/** Optimistically change one table before sending its operation. */
+export function patchTable(
+  databaseId: string,
+  tableId: string,
+  change: (table: TableDetail) => TableDetail
+): Promise<() => void> {
+  return patchDetail(databaseId, (detail) => ({
+    ...detail,
+    tables: detail.tables.map((table) =>
+      table.table.id === tableId ? change(table) : table
+    ),
+  }));
 }
 
 /** Change one table's cached views. */
-export function patchViews(
+export async function patchViews(
   databaseId: string,
   tableId: string,
   change: (views: DatabaseView[]) => DatabaseView[]
 ): Promise<void> {
-  return patchDetail(databaseId, (detail) => ({
+  await patchDetail(databaseId, (detail) => ({
     ...detail,
     tables: detail.tables.map((table) =>
       table.table.id === tableId

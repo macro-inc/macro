@@ -13,6 +13,7 @@ import {
 } from '@queries/storage/databases-sync';
 import type { DatabaseView } from '@service-storage/generated/schemas/databaseView';
 import type { TableDetail } from '@service-storage/generated/schemas/tableDetail';
+import { ResultAsync } from 'neverthrow';
 import {
   createMemo,
   createSignal,
@@ -49,6 +50,7 @@ import {
 } from '../queries/columns';
 import { createDatabaseRelations } from '../queries/database-relations';
 import { useRelatedDatabaseSync } from '../queries/database-relations-sync';
+import { patchTable } from '../queries/detail-cache';
 import { deleteDatabaseOption, updateDatabaseOption } from '../queries/options';
 import { tableChangesOf } from '../queries/table-changes';
 import { createDatabaseRowsSource, toViewColumn } from '../queries/table-rows';
@@ -358,49 +360,102 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
                 ),
               })
             }
-            onDeleteColumn={(columnId) =>
-              applyDatabaseOps(
-                databaseId,
-                [
-                  {
-                    kind: 'column',
-                    table: props.tableId,
-                    column: columnId,
-                    change: { kind: 'delete' },
-                  },
-                ],
-                { [props.tableId]: table().table.version }
-              ).map(() => undefined)
-            }
-            onReorderColumns={(columnIds) =>
-              applyDatabaseOps(
-                databaseId,
-                [
-                  {
-                    kind: 'table',
-                    table: props.tableId,
-                    change: {
-                      kind: 'reorder_columns',
-                      order: mergeDatabaseColumnOrder(
-                        table().columns.map(({ column }) => column.id),
-                        columnIds
-                      ),
+            onDeleteColumn={(columnId) => {
+              const tableId = props.tableId;
+              const version = table().table.version;
+              return ResultAsync.fromSafePromise(
+                patchTable(databaseId, tableId, (entry) => ({
+                  ...entry,
+                  columns: entry.columns.filter(
+                    ({ column }) => column.id !== columnId
+                  ),
+                }))
+              )
+                .andThen((rollback) =>
+                  applyDatabaseOps(
+                    databaseId,
+                    [
+                      {
+                        kind: 'column',
+                        table: tableId,
+                        column: columnId,
+                        change: { kind: 'delete' },
+                      },
+                    ],
+                    { [tableId]: version }
+                  ).mapErr((error) => {
+                    rollback();
+                    return error;
+                  })
+                )
+                .map(() => undefined);
+            }}
+            onReorderColumns={(columnIds) => {
+              const tableId = props.tableId;
+              const version = table().table.version;
+              const order = mergeDatabaseColumnOrder(
+                table().columns.map(({ column }) => column.id),
+                columnIds
+              );
+              const rank = new Map(order.map((id, i) => [id, i]));
+              return ResultAsync.fromSafePromise(
+                patchTable(databaseId, tableId, (entry) => ({
+                  ...entry,
+                  columns: entry.columns.toSorted(
+                    (a, b) =>
+                      (rank.get(a.column.id) ?? Infinity) -
+                      (rank.get(b.column.id) ?? Infinity)
+                  ),
+                }))
+              )
+                .andThen((rollback) =>
+                  applyDatabaseOps(
+                    databaseId,
+                    [
+                      {
+                        kind: 'table',
+                        table: tableId,
+                        change: { kind: 'reorder_columns', order },
+                      },
+                    ],
+                    { [tableId]: version }
+                  ).mapErr((error) => {
+                    rollback();
+                    return error;
+                  })
+                )
+                .map(() => undefined);
+            }}
+            onRenameColumn={(columnId, name, previousName) => {
+              const tableId = props.tableId;
+              return ResultAsync.fromSafePromise(
+                patchTable(databaseId, tableId, (entry) => ({
+                  ...entry,
+                  columns: entry.columns.map((column) =>
+                    column.column.id === columnId
+                      ? {
+                          ...column,
+                          column: { ...column.column, display_name: name },
+                        }
+                      : column
+                  ),
+                }))
+              )
+                .andThen((rollback) =>
+                  applyDatabaseOps(databaseId, [
+                    {
+                      kind: 'column',
+                      table: tableId,
+                      column: columnId,
+                      change: { kind: 'rename', name, previousName },
                     },
-                  },
-                ],
-                { [props.tableId]: table().table.version }
-              ).map(() => undefined)
-            }
-            onRenameColumn={(columnId, name, previousName) =>
-              applyDatabaseOps(databaseId, [
-                {
-                  kind: 'column',
-                  table: props.tableId,
-                  column: columnId,
-                  change: { kind: 'rename', name, previousName },
-                },
-              ]).map(() => undefined)
-            }
+                  ]).mapErr((error) => {
+                    rollback();
+                    return error;
+                  })
+                )
+                .map(() => undefined);
+            }}
             actionsRef={props.actionsRef}
             renderToolbar={props.renderToolbar}
             createColumn={() =>

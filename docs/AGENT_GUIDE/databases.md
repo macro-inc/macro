@@ -457,3 +457,8 @@ in as the same user: each should show the other tab's selection and name. Moving
 or leaving one peer must not overwrite or remove another peer's selection.
 Refresh failures emit a `database.rows.read_refresh` span with the database ID,
 table ID, and failure kind, plus a `database rows could not be refreshed` log.
+
+Schema edits update their UI optimistically and finish after the write commits;
+they do not wait for the background catalog refresh. A refused edit rolls back
+its optimistic state when no newer cache update has replaced it, then refreshes.
+A slow or failed refresh is not a reason to resend a successful mutation.
