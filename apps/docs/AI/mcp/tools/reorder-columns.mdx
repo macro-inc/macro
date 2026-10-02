@@ -1,0 +1,18 @@
+---
+title: ReorderColumns
+description: "Set the order columns appear in, left to right. Pass every column id of the table exactly once, in the new order; values and names are untouched.  Requires edit access. The response is the schema after the change."
+---
+
+# ReorderColumns
+
+Set the order columns appear in, left to right. Pass every column id of the table exactly once, in the new order; values and names are untouched.
+
+Requires edit access. The response is the schema after the change.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `databaseId` | string | Yes | Id of the database containing the table, from ListDatabases. |
+| `tableId` | string | Yes | Id of the table, from DescribeDatabase. |
+| `columnIds` | string[] | Yes | Every column id of the table, exactly once, in the new left-to-right order. |

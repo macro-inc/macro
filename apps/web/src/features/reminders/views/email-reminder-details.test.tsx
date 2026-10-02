@@ -36,6 +36,26 @@ vi.mock('../components/email-reminder-form', () => ({
 beforeEach(() => vi.resetAllMocks());
 afterEach(cleanup);
 
+it('distinguishes a failed workflow read from a missing reminder and allows retry', () => {
+  const refetch = vi.fn();
+  mocks.query.mockReturnValue({ isSuccess: false, isError: true, refetch });
+  render(() => (
+    <EmailReminderDetails
+      reminder={{ id: 'mirror', description: 'Subject' } as Reminder}
+      isEmailFollowup
+      threadId="thread"
+      onClose={vi.fn()}
+    >
+      <p>Generic editor</p>
+    </EmailReminderDetails>
+  ));
+  expect(screen.getByRole('alert').textContent).toContain('Couldn’t load');
+  expect(screen.queryByText(/no longer available/)).toBeNull();
+  expect(screen.queryByText('Generic editor')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+  expect(refetch).toHaveBeenCalledOnce();
+});
+
 it.each([false, true])(
   'retries against a refetched revision (competing writer: %s)',
   async (competing) => {

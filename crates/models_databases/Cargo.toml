@@ -1,0 +1,28 @@
+[package]
+edition = "2024"
+name = "models_databases"
+publish = false
+version = "0.1.0"
+
+# The write vocabulary of Macro databases, shared by the SQL engine (which
+# also runs in the browser), the HTTP API and the domain port. It stays
+# wasm-safe, so it takes no workspace-hack dependency (see .config/hakari.toml).
+[features]
+# JSON Schemas of the view types, for the agent tool that saves views.
+schema = ["dep:schemars"]
+
+[dependencies]
+chrono = { workspace = true }
+fractional_index = { workspace = true }
+macro_user_id = { path = "../macro_user_id", features = ["schema"] }
+macro_uuid = { path = "../macro_uuid" }
+schemars = { workspace = true, optional = true }
+serde = { workspace = true }
+specta = { workspace = true, features = ["chrono", "uuid"] }
+strum = { workspace = true }
+thiserror = { workspace = true }
+utoipa = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

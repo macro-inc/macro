@@ -25,6 +25,13 @@ impl<S, R, E, C> EmailRemindersService<S, R, E, C> {
 impl<S: RemindersService, R: EmailFollowupRepo, E: EmailFollowupMailbox, C: Clock> RemindersService
     for EmailRemindersService<S, R, E, C>
 {
+    async fn list_collection(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        query: crate::domain::collection::CollectionQuery,
+    ) -> Result<crate::domain::collection::ReminderCollectionPage, ReminderError> {
+        self.generic.list_collection(user, query).await
+    }
     async fn get_email_followup(
         &self,
         user: MacroUserIdStr<'static>,

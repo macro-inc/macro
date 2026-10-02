@@ -21,8 +21,13 @@ BEGIN
                  OR (table_name IN ('PdfPlaceableCommentAnchor', 'PdfHighlightAnchor') AND column_name = 'threadId'))) THEN
         RAISE EXCEPTION 'legacy columns remain';
     END IF;
-    IF EXISTS (SELECT 1 FROM pg_proc WHERE pronamespace = 'public'::regnamespace
-               AND (prosrc LIKE '%NEW.channel_id%' OR prosrc LIKE '%"threadId"%' OR prosrc LIKE '%crm_comment%')) THEN
+    -- NEW.channel_id is valid on unrelated tables such as import_target;
+    -- only message/attachment triggers lose that record field in this drop.
+    IF EXISTS (SELECT 1 FROM pg_proc p WHERE pronamespace = 'public'::regnamespace
+               AND ((prosrc LIKE '%NEW.channel_id%' AND EXISTS (
+                   SELECT 1 FROM pg_trigger t WHERE t.tgfoid = p.oid
+                   AND t.tgrelid IN ('comms_messages'::regclass, 'comms_attachments'::regclass)))
+                   OR prosrc LIKE '%"threadId"%' OR prosrc LIKE '%crm_comment%')) THEN
         RAISE EXCEPTION 'function still depends on retired schema';
     END IF;
     IF to_regclass('idx_comms_messages_parent_timeline') IS NULL

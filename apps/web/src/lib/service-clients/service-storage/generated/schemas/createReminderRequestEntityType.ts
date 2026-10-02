@@ -28,4 +28,6 @@ export type CreateReminderRequestEntityType =
   | 'skill'
   | 'agent_session'
   | 'scheduled_action'
-  | 'initiative';
+  | 'initiative'
+  | 'database'
+  | 'database_row';

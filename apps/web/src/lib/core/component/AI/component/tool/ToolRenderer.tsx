@@ -16,6 +16,8 @@ export type RenderContext = {
   renderContext: {
     isStreaming: boolean;
     grouped?: boolean;
+    /** Whether a later part of the same assistant turn calls this tool. */
+    followedBy: (name: ToolName) => boolean;
   };
 };
 

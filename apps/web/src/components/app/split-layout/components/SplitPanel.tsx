@@ -21,8 +21,6 @@ import {
   createEffect,
   createMemo,
   createSignal,
-  onCleanup,
-  onMount,
   Show,
   Suspense,
 } from 'solid-js';
@@ -123,25 +121,6 @@ export function SplitPanel(props: SplitPanelProps) {
   const headerSize = createElementSize(headerRef);
 
   const [hasToolbarContent, setHasToolbarContent] = createSignal(false);
-  onMount(() => {
-    const checkContent = () => {
-      setHasToolbarContent(
-        Boolean(
-          layoutRefs.toolbarLeft?.hasChildNodes() ||
-            layoutRefs.toolbarRight?.hasChildNodes()
-        )
-      );
-    };
-    checkContent();
-    const observer = new MutationObserver(checkContent);
-    if (layoutRefs.toolbarLeft) {
-      observer.observe(layoutRefs.toolbarLeft, { childList: true });
-    }
-    if (layoutRefs.toolbarRight) {
-      observer.observe(layoutRefs.toolbarRight, { childList: true });
-    }
-    onCleanup(() => observer.disconnect());
-  });
 
   createEffect(() => {
     const safeTop = isTouchDevice() ? getSafeAreaInset('top') : 0;
@@ -346,6 +325,7 @@ export function SplitPanel(props: SplitPanelProps) {
                   <SplitToolbar
                     ref={setToolbarRef}
                     collapseController={toolbarCollapseController}
+                    onContentChange={setHasToolbarContent}
                   />
                 </Panel.Toolbar>
               </Show>

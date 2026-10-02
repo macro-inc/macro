@@ -29,6 +29,7 @@ const CallDetailRouteView = withAuth(() => {
     <StandaloneCallDetail
       callId={params.callId}
       transcriptId={search.transcriptId}
+      messageId={search.messageId}
       seek={search.seek}
     />
   );
@@ -39,7 +40,7 @@ export const callDetailRoute = defineRoute({
   path: 'call/:callId',
   params: z.object({ callId: z.string().min(1) }),
   search: [callDetailSearch.namespace],
-  externalSearch: [URL_PARAMS.transcriptId],
+  externalSearch: [URL_PARAMS.transcriptId, URL_PARAMS.messageId],
   component: CallDetailRouteView,
   remountKey: ({ callId }) => callId,
   claim: ({ callId }) => ({ namespace: 'block', id: `call:${callId}` }),

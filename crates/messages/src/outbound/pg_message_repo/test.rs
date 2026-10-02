@@ -32,6 +32,7 @@ async fn setup(pool: &PgPool) {
 
 fn command(document: &str, root: Option<Uuid>, content: &str) -> CreateMessage {
     CreateMessage {
+        canonical_root_id: None,
         parent: MessageParent::parse("document", document).unwrap(),
         actor: USER.to_owned().try_into().unwrap(),
         triggered_by: None,
@@ -1363,4 +1364,230 @@ async fn spreadsheet_threads_round_trip_resolve_and_delete(pool: PgPool) {
             .items
             .is_empty()
     );
+}
+
+async fn setup_call_chat(pool: &PgPool) -> Uuid {
+    setup(pool).await;
+    let call_id = macro_uuid::generate_uuid_v7();
+    let channel_id = macro_uuid::generate_uuid_v7();
+    let permission_id = macro_uuid::generate_uuid_v7().to_string();
+    sqlx::query!(
+        r#"INSERT INTO comms_channels (id, name, channel_type, owner_id)
+        VALUES ($1, 'Call chat test', 'public', $2)"#,
+        channel_id,
+        USER
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"INSERT INTO "SharePermission" (id) VALUES ($1)"#,
+        permission_id
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"INSERT INTO calls (id, channel_id, room_name, created_by, share_permission_id)
+        VALUES ($1, $2::uuid, $2::uuid::text, $3, $4)"#,
+        call_id,
+        channel_id,
+        USER,
+        permission_id
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    call_id
+}
+
+fn call_message(call_id: Uuid, content: &str) -> CreateMessage {
+    let mut command = command("message-doc-a", None, content);
+    command.parent = MessageParent::Call(call_id);
+    command.canonical_root_id = Some(call_id);
+    command
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn concurrent_first_call_messages_share_one_thread(pool: PgPool) {
+    let call_id = setup_call_chat(&pool).await;
+    let repo = PgMessageRepository::new(pool);
+    let (first, second) = tokio::join!(
+        repo.create(call_message(call_id, "First participant")),
+        repo.create(call_message(call_id, "Second participant")),
+    );
+    let first = first.unwrap();
+    let second = second.unwrap();
+    assert_eq!(first.root_id(), call_id);
+    assert_eq!(second.root_id(), call_id);
+    assert_ne!(first.id, second.id);
+    assert_ne!(first.thread_id.is_none(), second.thread_id.is_none());
+    let parent = MessageParent::Call(call_id);
+    assert_eq!(
+        repo.timeline(&parent, Default::default())
+            .await
+            .unwrap()
+            .items
+            .len(),
+        1
+    );
+    assert_eq!(repo.replies(&parent, call_id).await.unwrap().len(), 1);
+    assert!(
+        repo.get(&MessageParent::Call(Uuid::from_u128(7)), call_id)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    repo.delete(&parent, call_id).await.unwrap();
+    let after_delete = repo
+        .create(call_message(call_id, "After the first message was deleted"))
+        .await
+        .unwrap();
+    assert_eq!(after_delete.thread_id, Some(call_id));
+    assert!(
+        repo.thread(&parent, call_id)
+            .await
+            .unwrap()
+            .unwrap()
+            .deleted_at
+            .is_none()
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn call_chat_survives_archiving_and_is_removed_with_the_record(pool: PgPool) {
+    let call_id = setup_call_chat(&pool).await;
+    verify_call_chat_archive(pool, call_id).await;
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn quick_call_chat_survives_archiving(pool: PgPool) {
+    let call_id = setup_meeting_chat(&pool, false).await;
+    verify_call_chat_archive(pool, call_id).await;
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn scheduled_call_chat_survives_archiving(pool: PgPool) {
+    let call_id = setup_meeting_chat(&pool, true).await;
+    verify_call_chat_archive(pool, call_id).await;
+}
+
+async fn setup_meeting_chat(pool: &PgPool, scheduled: bool) -> Uuid {
+    let call_id = setup_call_chat(pool).await;
+    let meeting_id = macro_uuid::generate_uuid_v7();
+    let start = scheduled.then(chrono::Utc::now);
+    let end = start.map(|start| start + chrono::Duration::hours(1));
+    sqlx::query!(
+        r#"INSERT INTO call_meetings (id, share_token, user_id, title, scheduled_start, scheduled_end, active_call_id)
+        VALUES ($1, $1::uuid::text, $2, 'Standalone chat', $3, $4, $5)"#,
+        meeting_id, USER, start, end, call_id
+    ).execute(pool).await.unwrap();
+    sqlx::query!(
+        "UPDATE calls SET channel_id = NULL, meeting_id = $2 WHERE id = $1",
+        call_id,
+        meeting_id
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    call_id
+}
+
+async fn verify_call_chat_archive(pool: PgPool, call_id: Uuid) {
+    let repo = PgMessageRepository::new(pool.clone());
+    let mut input = call_message(call_id, "Persistent chat");
+    input.input.mentions.push(SimpleMention {
+        entity_type: "user".into(),
+        entity_id: USER.into(),
+    });
+    repo.create(input).await.unwrap();
+    let parent = MessageParent::Call(call_id);
+    let mut tx = pool.begin().await.unwrap();
+    sqlx::query!(r#"INSERT INTO call_records (id, channel_id, room_name, created_by, started_at, duration_ms, share_permission_id, meeting_id)
+        SELECT id, channel_id, room_name, created_by, created_at, 1000, share_permission_id, meeting_id FROM calls WHERE id = $1"#, call_id)
+        .execute(&mut *tx).await.unwrap();
+    sqlx::query!("DELETE FROM calls WHERE id = $1", call_id)
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    assert!(repo.parent_exists(&parent).await.unwrap());
+    assert_eq!(
+        repo.get(&parent, call_id).await.unwrap().unwrap().content,
+        "Persistent chat"
+    );
+    repo.create(call_message(call_id, "Archived reply"))
+        .await
+        .unwrap();
+    sqlx::query!("DELETE FROM call_records WHERE id = $1", call_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(!repo.parent_exists(&parent).await.unwrap());
+    assert!(repo.get(&parent, call_id).await.unwrap().is_none());
+    assert!(repo.thread(&parent, call_id).await.unwrap().is_none());
+    let mention_count = sqlx::query_scalar!(
+        "SELECT count(*) FROM comms_entity_mentions WHERE source_entity_type = 'message' AND source_entity_id = $1",
+        call_id.to_string(),
+    ).fetch_one(&pool).await.unwrap();
+    assert_eq!(mention_count, Some(0));
+    assert!(matches!(
+        repo.create(call_message(call_id, "Deleted parent")).await,
+        Err(MessageError::NotFound)
+    ));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn retrying_first_call_message_cannot_append_it_twice(pool: PgPool) {
+    let call_id = setup_call_chat(&pool).await;
+    let repo = PgMessageRepository::new(pool);
+    let mut input = call_message(call_id, "First message");
+    input.input.id = Some(macro_uuid::generate_uuid_v7());
+    let client_message_id = input.input.id.unwrap();
+    let actor = input.actor.clone();
+    let parent = input.parent.clone();
+    let first = repo.create(input.clone()).await.unwrap();
+    assert_eq!(first.id, call_id);
+    assert!(matches!(
+        repo.create(input).await,
+        Err(MessageError::Conflict)
+    ));
+    assert!(
+        repo.replies(&MessageParent::Call(call_id), call_id)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    let recovered = repo
+        .get_by_client_message_id(&parent, &actor, client_message_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(recovered.id, call_id);
+    assert_eq!(recovered.content, "First message");
+    for (parent, actor) in [
+        (
+            MessageParent::Call(macro_uuid::generate_uuid_v7()),
+            actor.clone(),
+        ),
+        (
+            parent.clone(),
+            "macro|other@example.com".to_owned().try_into().unwrap(),
+        ),
+    ] {
+        assert!(
+            repo.get_by_client_message_id(&parent, &actor, client_message_id)
+                .await
+                .unwrap()
+                .is_none()
+        );
+    }
+    repo.delete(&parent, call_id).await.unwrap();
+    let deleted = repo
+        .get_by_client_message_id(&parent, &actor, client_message_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(deleted.deleted_at.is_some());
+    assert!(deleted.content.is_empty());
 }

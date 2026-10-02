@@ -551,48 +551,14 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       }),
     },
   },
-  // Reminders are the one entity type that is opt-in server-side, so naming
-  // `includeReminders` both surfaces them and — via defineQueryFilters, which
-  // NIL-excludes every target this query does not reference — makes the view
-  // reminders-only. Soup already orders them by when they fire.
+  // One collection: completion and scheduling are independent row state.
   reminders: {
-    default: 'active',
+    default: 'all',
     tabs: {
-      // Fired and waiting on you — an inbox, so newest arrival on top like
-      // every other feed. `reminderFired` is a server filter rather than a
-      // client one for a reason: both this tab and Scheduled would otherwise
-      // share one `comp:false` query, and the page limit would be spent on
-      // whichever end the sort direction favours, so a user with a hundred
-      // future reminders could open Active on an empty list.
-      active: () => ({
-        filters: defineQueryFilters({
-          include: {
-            includeReminders: true,
-            reminderCompleted: false,
-            reminderFired: true,
-          },
-        }),
-        clientFilters: { and: ['reminders-fired'] },
-      }),
-      // Not due yet. Soonest first: "newest first" on a future date means
-      // furthest away first, which puts December above tomorrow.
-      scheduled: () => ({
-        filters: defineQueryFilters({
-          include: {
-            includeReminders: true,
-            reminderCompleted: false,
-            reminderFired: false,
-          },
-        }),
-        clientFilters: { and: ['reminders-scheduled'] },
+      all: () => ({
+        filters: defineQueryFilters({ include: { includeReminders: true } }),
+        clientFilters: { and: ['reminders'] },
         sortDirection: 'asc',
-      }),
-      // Dealt with. Most-recently-due first, like every other archive view.
-      done: () => ({
-        filters: defineQueryFilters({
-          include: { includeReminders: true, reminderCompleted: true },
-        }),
-        clientFilters: { and: ['reminders-done'] },
       }),
     },
   },
@@ -661,7 +627,7 @@ export function getViewPreset(
   const config = VIEW_TAB_PRESETS[view];
   if (!config) return undefined;
 
-  const tabId = tab ?? config.default;
+  const tabId = view === 'reminders' ? 'all' : (tab ?? config.default);
   const resolver = config.tabs[tabId];
   if (!resolver) return undefined;
 

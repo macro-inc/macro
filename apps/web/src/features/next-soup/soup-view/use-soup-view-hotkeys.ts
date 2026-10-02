@@ -158,6 +158,13 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     description: 'Open',
     hide: true,
     keyDownHandler: (event) => {
+      // Native row controls own Enter. The document hotkey runs during capture,
+      // before the reminder button's propagation guards can handle the event.
+      if (
+        event?.target instanceof Element &&
+        event.target.closest('button[data-reminder-action]')
+      )
+        return false;
       const focusedRow = soup.focus.row();
       if (!focusedRow) return false;
 

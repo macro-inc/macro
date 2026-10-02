@@ -2,9 +2,7 @@ import { formatDateAndTime } from '@app/features/entity/utils/timestamp';
 import {
   buildCron,
   type CronParts,
-  describeCron,
   getDefaultTimezone,
-  isCronRepresentable,
   normalizeCron,
   parseCron,
   type ScheduleFrequency,
@@ -12,6 +10,8 @@ import {
 import type { EntityData } from '@entity';
 import type { ReminderSchedule } from '@service-storage/generated/schemas/reminderSchedule';
 import type { UpdateReminderRequest } from '@service-storage/generated/schemas/updateReminderRequest';
+import { describeReminderRecurrence } from './core/recurrence-label';
+import { formatReminderOccurrence } from './core/schedule-instant';
 
 /**
  * The time of day a bare date resolves to.
@@ -126,71 +126,26 @@ export function reminderQuickPresets(now: Date): ReminderQuickPreset[] {
 /** An exact, human-readable instant for previews and save confirmation. */
 export function formatReminderInstant(
   date: Date,
-  timezone: string = getDefaultTimezone(),
-  now: Date = new Date()
+  timezone: string = getDefaultTimezone()
 ): string {
-  const dateParts = (value: Date) =>
-    new Intl.DateTimeFormat('en-CA', {
-      timeZone: timezone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }).format(value);
-  const tomorrow = new Date(now);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-
-  const calendarLabel =
-    dateParts(date) === dateParts(now)
-      ? 'Today'
-      : dateParts(date) === dateParts(tomorrow)
-        ? 'Tomorrow'
-        : new Intl.DateTimeFormat(undefined, {
-            timeZone: timezone,
-            weekday: 'long',
-          }).format(date);
-  const year =
-    new Intl.DateTimeFormat('en-US', {
-      timeZone: timezone,
-      year: 'numeric',
-    }).format(date) ===
-    new Intl.DateTimeFormat('en-US', {
-      timeZone: timezone,
-      year: 'numeric',
-    }).format(now)
-      ? undefined
-      : 'numeric';
-  const exactDate = new Intl.DateTimeFormat(undefined, {
-    timeZone: timezone,
-    month: 'short',
-    day: 'numeric',
-    year,
-  }).format(date);
-  const exactTime = new Intl.DateTimeFormat(undefined, {
-    timeZone: timezone,
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(date);
-  const zone = new Intl.DateTimeFormat(undefined, {
-    timeZone: timezone,
-    timeZoneName: 'short',
-  })
-    .formatToParts(date)
-    .find((part) => part.type === 'timeZoneName')?.value;
-
-  return `${calendarLabel}, ${exactDate} at ${exactTime} (${zone ?? timezone})`;
+  return formatReminderOccurrence(date, timezone) ?? 'Schedule unavailable';
 }
 
 /** The schedule wording shown after persistence succeeds. */
 export function describeReminderConfirmation(
-  schedule: ReminderSchedule
+  schedule: ReminderSchedule,
+  nextRunAt?: string
 ): string {
   if (isRecurring(schedule)) {
-    if (!isCronRepresentable(schedule.cron)) {
-      return `Custom repeating schedule (${schedule.timezone})`;
+    if (nextRunAt) {
+      const instant = formatReminderOccurrence(nextRunAt, schedule.timezone);
+      return instant
+        ? `${instant} · ${describeReminderRecurrence(schedule.cron).cadence}`
+        : 'Schedule unavailable';
     }
     return describeReminderSchedule(schedule) ?? 'Repeating reminder';
   }
-  return formatReminderInstant(new Date(schedule.remindAt));
+  return formatReminderOccurrence(schedule.remindAt) ?? 'Schedule unavailable';
 }
 
 /** A one-shot schedule firing at `date`. */
@@ -282,8 +237,7 @@ export function scheduleFromRow(row: {
  *
  * A recurring reminder reads as its cadence ("Every weekday at 9:00 AM"), which
  * is what says it fires again at all; a one-shot reads as the single instant it
- * fires, date and time together. Both answer "when?" without repeating what the
- * recurrence badge beside them already says.
+ * fires, date and time together. Any seasonal zone is taken from that occurrence.
  */
 export function describeReminderWhen(row: {
   scheduleType: 'once' | 'recurring';
@@ -292,7 +246,7 @@ export function describeReminderWhen(row: {
   nextRunAt: string | Date;
 }): string {
   return (
-    describeReminderSchedule(scheduleFromRow(row)) ??
+    describeReminderSchedule(scheduleFromRow(row), new Date(row.nextRunAt)) ??
     formatDateAndTime(row.nextRunAt)
   );
 }
@@ -325,14 +279,26 @@ export function repeatPartsFromSchedule(schedule: ReminderSchedule): CronParts {
  * in words would just be the same thing twice.
  */
 export function describeReminderSchedule(
-  schedule: ReminderSchedule
+  schedule: ReminderSchedule,
+  occurrence?: Date
 ): string | undefined {
   if (!isRecurring(schedule)) return undefined;
-  // The zone is part of the schedule, not decoration: "every day at 9:00 AM"
-  // means a different instant in Denver than in Berlin, and a reminder built in
-  // one and read in the other has to say which it fires by.
-  const described = describeCron(parseCron(schedule.cron), schedule.timezone);
-  return described.charAt(0).toUpperCase() + described.slice(1);
+  const { cadence, time } = describeReminderRecurrence(schedule.cron);
+  if (!time) return cadence;
+  try {
+    const zone =
+      schedule.timezone === getDefaultTimezone()
+        ? undefined
+        : new Intl.DateTimeFormat(undefined, {
+            timeZone: schedule.timezone,
+            timeZoneName: occurrence ? 'short' : 'longGeneric',
+          })
+            .formatToParts(occurrence ?? new Date())
+            .find((part) => part.type === 'timeZoneName')?.value;
+    return `${cadence} at ${time}${zone ? ` ${zone}` : ''}`;
+  } catch {
+    return 'Schedule unavailable';
+  }
 }
 
 /** Whether two schedules are the same, so an unchanged one is not re-sent. */

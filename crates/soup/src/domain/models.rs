@@ -1285,6 +1285,20 @@ pub struct EnrichedSoupItem {
     pub notified_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
+impl From<SoupItem<SoupPropertiesField>> for EnrichedSoupItem {
+    /// An item enriched with its properties alone, as
+    /// [`SoupService::get_user_soup_with_properties`](super::ports::SoupService::get_user_soup_with_properties)
+    /// answers it.
+    fn from(item: SoupItem<SoupPropertiesField>) -> Self {
+        Self {
+            item,
+            frecency_score: None,
+            touched_at: None,
+            notified_at: None,
+        }
+    }
+}
+
 /// A soup request with optional grouping configuration.
 #[derive(Debug)]
 pub struct GroupedSoupRequest<T> {

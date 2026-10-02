@@ -6,6 +6,13 @@ The user explicitly accepted temporary PDF highlight discussion failures on
 October 2, overriding the usual separate-release rule in
 [Database development](DATABASE_DEVELOPMENT.md#safe-database-schema-changes)
 for this change. The separate prerequisite PR #7358 is superseded.
+The combined change also adapts the historical Slack message writer/reader and
+channel search-backfill query added by #7311 on newer `main` to parent identity.
+If a release containing the older versions of those consumers runs at drop time,
+Slack archive imports and channel search backfills also fail until those consumers
+are replaced. Keep import jobs stopped through rollout and resume only on the
+compatible worker. Channel filtering, stable pagination, and attribution remain
+unchanged.
 This PR preparation does not authorize merge or deployment.
 
 Migrations deploy before services. After the drop commits, old service instances

@@ -982,6 +982,7 @@ describe('createGraphqlEntityPropertiesQuery', () => {
         is_multi_select: false,
         is_system: false,
         is_metadata: false,
+        specific_entity_type: null,
         owner: { scope: 'system' },
         created_at: '',
         updated_at: '',

@@ -227,7 +227,7 @@ registerComponent(
   'agents',
   () => <AgentsRouteView />,
   () =>
-    isFeatureEnabled(enableChatV3Agents) && !isTouchDevice()
+    isFeatureEnabled(enableChatV3Agents)
       ? { splitPanelLayout: 'composable' }
       : undefined
 );

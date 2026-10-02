@@ -33,6 +33,14 @@ const mocks = vi.hoisted(() => ({
   send: vi.fn(),
 }));
 
+// This suite exercises legacy chat model persistence, including the flag-off Soup input.
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: false }),
+}));
+vi.mock('@app/features/agents-view/mobile-agent-composer', () => ({
+  MobileAgentComposer: () => null,
+}));
+
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanelOrThrow: () => ({ handle: { replace: mocks.replace } }),
   useCanAutofocusSplitContent: () => false,

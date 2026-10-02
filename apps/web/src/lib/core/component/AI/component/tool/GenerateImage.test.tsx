@@ -34,7 +34,11 @@ function imageTool(
         message_id="message-1"
         part_index={0}
         isComplete={response || !!failure()}
-        renderContext={{ isStreaming: !response, grouped: false }}
+        renderContext={{
+          isStreaming: !response,
+          grouped: false,
+          followedBy: () => false,
+        }}
       />
     </ToolErrorContext.Provider>
   ));

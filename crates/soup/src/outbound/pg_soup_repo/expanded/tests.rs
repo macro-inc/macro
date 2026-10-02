@@ -5911,6 +5911,7 @@ fn mock_empty_ast() -> EntityFilterAst {
         reminder_filter: None,
         agent_session_filter: None,
         initiative_filter: None,
+        database_row_filter: None,
         properties_filter: None,
         favorites_only: None,
     }

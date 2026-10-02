@@ -1,0 +1,19 @@
+---
+title: RenameColumn
+description: "Rename a column, keeping its id, type, and values. SQL refers to the column by its new name afterwards, so use the refreshed schema in the response for later statements.  Requires edit access to the database. If `database` is null, the rename still succeeded; call DescribeDatabase using databaseId before continuing."
+---
+
+# RenameColumn
+
+Rename a column, keeping its id, type, and values. SQL refers to the column by its new name afterwards, so use the refreshed schema in the response for later statements.
+
+Requires edit access to the database. If `database` is null, the rename still succeeded; call DescribeDatabase using databaseId before continuing.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `databaseId` | string | Yes | Id of the database containing the column, from ListDatabases. |
+| `tableId` | string | Yes | Id of the table containing the column, from DescribeDatabase. |
+| `columnId` | string | Yes | Id of the column to rename, from DescribeDatabase. |
+| `name` | string | Yes | New display name of the column, e.g. "Dietary Needs". |

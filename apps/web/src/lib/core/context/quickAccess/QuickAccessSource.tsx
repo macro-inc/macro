@@ -5,7 +5,7 @@ import {
 import { useQuickAccessCrmContactsQuery } from '@app/features/crm/record-adapter';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { itemToSafeName } from '@core/constant/allBlocks';
-import { enableCrm } from '@core/constant/featureFlags';
+import { enableCrm, enableDatabases } from '@core/constant/featureFlags';
 import {
   useChannelsContext,
   useDmActivityByUserId,
@@ -20,6 +20,7 @@ import type {
   ChannelEntity,
   CrmCompanyEntity,
   CrmContactEntity,
+  DatabaseEntity,
   SkillEntity,
   SnippetEntity,
 } from '@entity';
@@ -32,9 +33,11 @@ import { queryReadyGate } from '@queries/gate';
 import { materializeCachedGraphqlHistoryItems } from '@queries/history/graphql';
 import { type HistoryItem, useHistoryQuery } from '@queries/history/history';
 import { useQuickAccessAgentSessionsQuery } from '@queries/soup/quick-access-agent-sessions';
+import { useQuickAccessInitiativesQuery } from '@queries/soup/quick-access-initiatives';
 import { useQuickAccessSkillsQuery } from '@queries/soup/quick-access-skills';
 import { useQuickAccessSnippetsQuery } from '@queries/soup/quick-access-snippets';
 import { useRecentlyViewedSoupQuery } from '@queries/soup/recently-viewed';
+import { useDatabasesQuery } from '@queries/storage/databases';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import { subscribeToVisibleCacheChanges } from '@queries/subscribe-to-visible-cache-changes';
 import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
@@ -347,6 +350,9 @@ const RECORD_TYPE_BY_BUCKET: Record<Bucket, string> = {
   project: 'GraphqlSoupProject',
   person: 'GraphqlUser',
   agent_session: 'AgentSession',
+  // Databases come from their REST list, not the Soup cache.
+  database: 'Database',
+  initiative: 'GraphqlSoupInitiative',
 };
 
 function compareRecency(a: IndexEntry, b: IndexEntry): number {
@@ -407,6 +413,10 @@ export function createQuickAccessValue(): QuickAccessContextValue {
 
   const { query: agentSessionsQuery, sessions: agentSessionsAccessor } =
     useQuickAccessAgentSessionsQuery();
+  const databasesQuery = useDatabasesQuery();
+  const databasesFlag = useFeatureFlag(enableDatabases);
+  const { query: initiativesQuery, initiatives: initiativesAccessor } =
+    useQuickAccessInitiativesQuery();
 
   // globally hidden ids
   const [hiddenIds, setHiddenIds] = createSignal<Set<string>>(new Set());
@@ -854,6 +864,80 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     return sortIndexEntries(entries);
   });
 
+  // Databases are not Soup entities and have no view history, so creation
+  // time is the only timestamp to sort on.
+  const databaseEntries = createLazyMemo(() => {
+    if (!databasesFlag().enabled) return [];
+    const hidden = hiddenIds();
+    const entries: IndexEntry[] = [];
+    const listed = databasesQuery.isSuccess ? databasesQuery.data : [];
+    for (const { database, grant } of listed) {
+      if (database.trashed_at || hidden.has(database.id)) continue;
+      const sortTimestamp = toTimestamp(database.created_at);
+      const entity: DatabaseEntity = {
+        type: 'database',
+        id: database.id,
+        name: database.name,
+        ownerId: database.owner_id,
+        createdAt: database.created_at,
+        grant,
+      };
+      const version = JSON.stringify(entity);
+      const cached = itemCache.get(database.id);
+      if (!cached || cached.version !== version) {
+        itemCache.set(database.id, {
+          version,
+          item: {
+            kind: 'entity',
+            id: database.id,
+            bucket: 'database',
+            searchText: database.name,
+            sortTimestamp,
+            timestamps: { createdAt: database.created_at },
+            data: entity,
+          },
+        });
+      }
+      entries.push({ id: database.id, bucket: 'database', sortTimestamp });
+    }
+    return sortIndexEntries(entries);
+  });
+
+  const initiativeEntries = createLazyMemo(() => {
+    const viewedAtMap = soupViewedAtMap();
+    const hidden = hiddenIds();
+    const entries: IndexEntry[] = [];
+    for (const initiative of initiativesAccessor()) {
+      if (hidden.has(initiative.id)) continue;
+      const viewedAt = viewedAtMap.get(initiative.id) ?? initiative.viewedAt;
+      const sortTimestamp =
+        toTimestamp(viewedAt) || toTimestamp(initiative.updatedAt);
+      const entity = { ...initiative, viewedAt };
+      const version = JSON.stringify(entity);
+      const cached = itemCache.get(initiative.id);
+      if (!cached || cached.version !== version) {
+        itemCache.set(initiative.id, {
+          version,
+          item: {
+            kind: 'entity',
+            id: initiative.id,
+            bucket: 'initiative',
+            searchText: initiative.name,
+            sortTimestamp,
+            timestamps: {
+              viewedAt,
+              updatedAt: initiative.updatedAt,
+              createdAt: initiative.createdAt,
+            },
+            data: entity,
+          },
+        });
+      }
+      entries.push({ id: initiative.id, bucket: 'initiative', sortTimestamp });
+    }
+    return sortIndexEntries(entries);
+  });
+
   const processedData = createLazyMemo(() => {
     const allEntries = mergeMultipleSortedIndices([
       historyEntries().entries,
@@ -864,6 +948,8 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       snippetEntries(),
       skillEntries(),
       agentSessionEntries(),
+      databaseEntries(),
+      initiativeEntries(),
     ]);
     const seenIds = new Set(allEntries.map((entry) => entry.id));
 
@@ -934,6 +1020,8 @@ export function createQuickAccessValue(): QuickAccessContextValue {
         indices.get('skill') ?? [],
         indices.get('chat') ?? [],
         indices.get('project') ?? [],
+        indices.get('database') ?? [],
+        indices.get('initiative') ?? [],
       ]),
     };
   });
@@ -1168,6 +1256,8 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     snippetsQuery.refetch();
     skillsQuery.refetch();
     void agentSessionsQuery.refetch();
+    if (databasesFlag().enabled) void databasesQuery.refetch();
+    initiativesQuery.refetch();
   };
 
   return {

@@ -1,8 +1,10 @@
 # Legacy comment import (retired)
 
-The document and CRM importers were retired with the schema-drop PR after the
-imports and contract deployment completed. Their source tables no longer exist
-after that migration. Do not run an importer from an older checkout against a
+The document and CRM importers are retired by this schema-drop PR. Their imports
+and the earlier #6732 contract deployment completed before this change. The final
+PDF query fix ships together with the drop, so old instances may fail to attach
+highlight discussions between the migration and successful service replacement.
+Their source tables no longer exist after the migration. Do not run an importer from an older checkout against a
 post-drop database.
 
 See [the schema-drop release instructions](comment-schema-drop.md) for deployment

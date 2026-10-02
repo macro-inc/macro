@@ -36,6 +36,8 @@ pub enum GraphqlPropertyOwnerScope {
     Team,
     /// A system definition.
     System,
+    /// A column of one database.
+    Database,
 }
 
 /// Ownership facts embedded in a property definition.
@@ -57,6 +59,10 @@ impl From<&PropertyOwner> for GraphqlPropertyDefinitionOwner {
                 (GraphqlPropertyOwnerScope::Team, Some(team_id.to_string()))
             }
             PropertyOwner::System => (GraphqlPropertyOwnerScope::System, None),
+            PropertyOwner::Database { database_id } => (
+                GraphqlPropertyOwnerScope::Database,
+                Some(database_id.to_string()),
+            ),
         };
         Self {
             scope,

@@ -1,9 +1,14 @@
 import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives/use-spreadsheet-access';
+import { openChatWithAgent } from '@app/features/chat/ChatWithAgentButton';
 import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { BlockAlias, BlockName } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
+import {
+  enableChatV3Agents,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import { pressedKeys } from '@core/hotkey/state';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import {
@@ -258,6 +263,17 @@ function ProjectCreateDialog(props: {
                   class="flex items-center gap-2 py-1 text-sm hover:bg-hover w-full text-left min-h-11"
                   onClick={() => {
                     props.onClose();
+                    if (
+                      spec.blockName === 'chat' &&
+                      isFeatureEnabled(enableChatV3Agents)
+                    ) {
+                      void openChatWithAgent({
+                        type: 'project',
+                        id: props.projectId,
+                        name: props.name,
+                      });
+                      return;
+                    }
                     createBlock({
                       blockName: spec.blockName,
                       loading: spec.loading,
@@ -291,7 +307,7 @@ function MenuItem(props: MenuItemProps) {
   );
 }
 
-function MenuContent(props: { projectId: string }) {
+function MenuContent(props: { projectId: string; name: string }) {
   const { replaceSplit, insertSplit } = useSplitLayout();
   const createBlock = makeCreateBlock({ replaceSplit, insertSplit });
   const spreadsheetAccess = useSpreadsheetAccess();
@@ -302,13 +318,22 @@ function MenuContent(props: { projectId: string }) {
     ).map((spec) => ({
       label: spec.label,
       Icon: spec.icon,
-      action: () =>
-        createBlock({
+      action: () => {
+        if (spec.blockName === 'chat' && isFeatureEnabled(enableChatV3Agents)) {
+          void openChatWithAgent({
+            type: 'project',
+            id: props.projectId,
+            name: props.name,
+          });
+          return;
+        }
+        return createBlock({
           blockName: spec.blockName,
           loading: spec.loading,
           createFn: () => spec.createFn(props.projectId),
           params: spec.params,
-        }),
+        });
+      },
     }));
 
   return (
@@ -349,7 +374,7 @@ export function useProjectCreateTools(
   return { tools, CreateDialog };
 }
 
-export function ProjectCreateMenu(props: { id: string }) {
+export function ProjectCreateMenu(props: { id: string; name: string }) {
   const [open, setOpen] = createSignal(false);
   return (
     <Dropdown open={open()} onOpenChange={setOpen}>
@@ -365,7 +390,7 @@ export function ProjectCreateMenu(props: { id: string }) {
           <CaretDown />
         </Dropdown.Trigger>
       </div>
-      <MenuContent projectId={props.id} />
+      <MenuContent projectId={props.id} name={props.name} />
     </Dropdown>
   );
 }

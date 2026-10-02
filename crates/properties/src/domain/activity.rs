@@ -33,7 +33,8 @@ fn entity_type(property_entity: &PropertyEntityType) -> Option<EntityType> {
         PropertyEntityType::Company => Some(EntityType::CrmCompany),
         PropertyEntityType::CalendarEvent
         | PropertyEntityType::Contact
-        | PropertyEntityType::User => None,
+        | PropertyEntityType::User
+        | PropertyEntityType::DatabaseRow => None,
     }
 }
 

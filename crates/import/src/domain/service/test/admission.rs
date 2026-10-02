@@ -53,6 +53,8 @@ struct Repo(Arc<Mutex<Ledger>>);
 struct Ledger {
     rows: Vec<ImportEntity>,
     runs: Vec<ImportRun>,
+    team_id: Option<Uuid>,
+    target: Option<ImportTargetReservation>,
 }
 
 impl Repo {
@@ -62,7 +64,11 @@ impl Repo {
             user_id: user().to_string(),
             team_id: None,
             source,
-            foreign_id: Uuid::now_v7().to_string(),
+            foreign_id: if source == ImportSource::Slack {
+                "C0123456789".into()
+            } else {
+                Uuid::now_v7().to_string()
+            },
             status: ImportStatus::Staged,
             initiator: Initiator::Onboarding,
             metadata: serde_json::json!({"title": "A page", "name": "general"}),
@@ -74,6 +80,61 @@ impl Repo {
         };
         self.0.lock().unwrap().rows.push(row.clone());
         row
+    }
+}
+
+// Mixed imports still reserve and complete Slack targets when AI admission is
+// denied. Binding an archive source is outside these billing-policy tests.
+impl CanonicalImportRepo for Repo {
+    async fn source_binding(&self, _: Uuid) -> Result<Option<ImportSourceBinding>> {
+        panic!("admission fixtures must not read canonical bindings")
+    }
+
+    async fn bind_source(
+        &self,
+        _: Uuid,
+        _: Option<&SlackWorkspaceId>,
+        _: bool,
+    ) -> Result<ImportSourceBinding> {
+        panic!("admission fixtures must not bind canonical sources")
+    }
+
+    async fn reserve_target(
+        &self,
+        caller: &MacroUserIdStr<'static>,
+        key: &ImportTargetKey,
+        kind: ImportTargetKind,
+        existing: Option<Uuid>,
+    ) -> Result<ImportTargetReservation> {
+        assert_eq!(caller, &user());
+        assert_eq!(kind, ImportTargetKind::Team);
+        assert_eq!(existing, None);
+        let mut ledger = self.0.lock().unwrap();
+        assert_eq!(Some(key.team_id), ledger.team_id);
+        let target = ledger
+            .target
+            .get_or_insert_with(|| ImportTargetReservation {
+                key: key.clone(),
+                channel_id: Uuid::now_v7(),
+                ready: false,
+            });
+        assert_eq!(&target.key, key);
+        Ok(target.clone())
+    }
+
+    async fn complete_target(
+        &self,
+        key: &ImportTargetKey,
+        channel_id: Uuid,
+        kind: ImportTargetKind,
+    ) -> Result<ImportTargetReservation> {
+        assert_eq!(kind, ImportTargetKind::Team);
+        let mut ledger = self.0.lock().unwrap();
+        let target = ledger.target.as_mut().unwrap();
+        assert_eq!(&target.key, key);
+        assert_eq!(target.channel_id, channel_id);
+        target.ready = true;
+        Ok(target.clone())
     }
 }
 
@@ -227,7 +288,7 @@ impl ImportRepo for Repo {
         Ok(true)
     }
     async fn user_team_id(&self, _: &MacroUserIdStr<'static>) -> Result<Option<Uuid>> {
-        Ok(None)
+        Ok(self.0.lock().unwrap().team_id)
     }
     async fn fail_stale_importing(&self, _: &MacroUserIdStr<'static>, _: i64) -> Result<u64> {
         Ok(0)
@@ -368,11 +429,11 @@ impl EntityCreator for Creator {
         &self,
         _: &MacroUserIdStr<'static>,
         _: &str,
-        _: Option<Uuid>,
+        target: &ImportTargetReservation,
         _: &[String],
-    ) -> anyhow::Result<String> {
+    ) -> anyhow::Result<Uuid> {
         self.0.fetch_add(1, Ordering::SeqCst);
-        Ok(Uuid::now_v7().to_string())
+        Ok(target.channel_id)
     }
 }
 
@@ -691,6 +752,7 @@ async fn delayed_notion_work_rechecks_current_allowance_and_mixed_work_survives(
     *admission.error.lock().unwrap() = None;
     let service = service(admission.clone());
     service.admit_ai(&user()).await.unwrap();
+    service.repo.0.lock().unwrap().team_id = Some(Uuid::now_v7());
     let notion = service.repo.seed(ImportSource::Notion);
     let linear = service.repo.seed(ImportSource::Linear);
     let slack = service.repo.seed(ImportSource::Slack);

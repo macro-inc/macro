@@ -95,7 +95,7 @@ where
                 let scope = match def.definition.owner {
                     PropertyOwner::User { .. } => TagScope::Personal,
                     PropertyOwner::Team { .. } => TagScope::Team,
-                    PropertyOwner::System => return None,
+                    PropertyOwner::Database { .. } | PropertyOwner::System => return None,
                 };
                 let tags = def
                     .property_options

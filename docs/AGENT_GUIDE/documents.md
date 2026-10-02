@@ -11,6 +11,14 @@ Markdown also needs a successful `/sync/document/.../connect` WebSocket upgrade.
 A 403 there indicates the sync origin check, which the local proxy handles for
 HTTPS machine hostnames; verify the proxy configuration before retrying.
 
+## Live database answers
+
+With Databases on, type `/database` and choose **Database** to insert a live answer
+to a question about a database. Answers run with each reader's database access and
+refresh when referenced tables change. See
+[Databases](databases.md#ai-questions-and-live-answers) for the question box, source
+picker, displays, and editing.
+
 ## Spreadsheets
 
 Spreadsheets are an internal pilot controlled by the `enable-spreadsheets` PostHog
@@ -386,6 +394,31 @@ To verify, search for a cached company absent from that REST page, select it, an
 check that the inserted company mention points to the correct company. Also check
 searching by domain and that an open picker updates when companies finish hydrating.
 Discard unsent test drafts rather than sending them.
+
+## Project mentions
+
+With Projects enabled, type `@` followed by a project name in an editor,
+composer or spreadsheet cell. Projects (not folders) come from Quick Access, so
+they appear alongside documents and tasks in the **Documents, Agents, & Tasks**
+section and in entity property pickers that accept projects. The command menu
+keeps its own project search. Selecting one inserts a document mention with the
+project's icon and current name, like a channel mention. Clicking it or
+pressing Enter on it opens the project the way a task mention opens a task:
+in Tasks, under **Projects** › the project (on touch devices, as the project
+view on its own). A project you cannot read shows **No Access**. Pasting
+`/app/initiative/<id>` or a Tasks project link inserts the same mention.
+
+The mention is stored as
+`<m-document-mention>{"documentId":"<initiative id>","blockName":"initiative",…}</m-document-mention>`
+(`project` is a folder). In a document it is tracked as a reference like other
+entity mentions. It is deliberately not a channel-message reference, so
+mentioning a project in a channel never shares the project with the channel's
+members.
+
+To verify, mention a project in a document and in a channel draft, check the
+mention opens the right project, rename the project and reload to see the name
+update, and delete the mention. Discard unsent test drafts rather than sending
+them.
 
 ## CRM associations
 

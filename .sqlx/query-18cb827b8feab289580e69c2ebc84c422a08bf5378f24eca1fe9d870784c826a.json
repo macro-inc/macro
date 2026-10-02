@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE entity_properties SET property_definition_id = $1 WHERE entity_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "18cb827b8feab289580e69c2ebc84c422a08bf5378f24eca1fe9d870784c826a"
+}

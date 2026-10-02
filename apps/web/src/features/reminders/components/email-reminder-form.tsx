@@ -205,7 +205,7 @@ export function EmailReminderForm(props: {
             </Show>
             <p class="text-xs text-ink-muted" role="status">
               {valid()
-                ? formatReminderInstant(selected()!, zone, now)
+                ? formatReminderInstant(selected()!, zone)
                 : 'Choose a future time. Times skipped by a clock change are unavailable.'}
             </p>
             <SegmentedControl<EmailReminderCondition>

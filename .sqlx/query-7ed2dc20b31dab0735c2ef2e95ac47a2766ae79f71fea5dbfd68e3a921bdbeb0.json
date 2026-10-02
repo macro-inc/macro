@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO comms_messages (id, parent_entity_type, parent_entity_id, sender_id, content)\n               VALUES ($1, $2, $3, 'macro|owner@team.com', 'Agent invocation')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7ed2dc20b31dab0735c2ef2e95ac47a2766ae79f71fea5dbfd68e3a921bdbeb0"
+}

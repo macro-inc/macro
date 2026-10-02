@@ -13,13 +13,22 @@ import { useNavigatedFromJK } from '@components/app/useNavigatedFromJK';
 import { useBlockId } from '@core/block';
 import { LoadErrorPanel } from '@core/component/EntityLoadGate';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { nativeNetworkStatus } from '@core/mobile/native-network-status';
 import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
 import type { NotificationSource } from '@notifications/notification-source';
 import { useSearchParams } from '@solidjs/router';
 import { EmptyStatePanel } from '@ui';
-import { createEffect, createSignal, on, Show, useContext } from 'solid-js';
+import {
+  children,
+  createEffect,
+  createSignal,
+  on,
+  type ParentProps,
+  Show,
+  useContext,
+} from 'solid-js';
 import { AgentSessionProvider } from '../agent-session-provider';
 import { useAgentSession } from '../context/AgentSessionContext';
 import { forgetPendingSession } from '../context/pending-session';
@@ -32,6 +41,30 @@ import { AgentSplitHeader } from './AgentSplitHeader';
 import { ArchivedSessionFooter } from './ArchivedSessionFooter';
 import { AgentSidePanelSections } from './sidepanel/AgentSidePanelSections';
 import { Transcript } from './Transcript';
+
+// Keep the editor mounted while another mobile accessory (Changes) is active.
+function AgentComposerRegion(props: ParentProps) {
+  const content = children(() => props.children);
+  return (
+    <FloatRegionOrInline region="accessory">{content()}</FloatRegionOrInline>
+  );
+}
+
+function AgentContentLayout(props: ParentProps) {
+  return (
+    <Show
+      when={isTouchDevice()}
+      fallback={
+        <SidePanel.Layout defaultOpen={false}>
+          <AgentSidePanelSections />
+          {props.children}
+        </SidePanel.Layout>
+      }
+    >
+      <div class="flex size-full min-w-0 flex-col">{props.children}</div>
+    </Show>
+  );
+}
 
 function AgentBlockContent(props: {
   active: boolean;
@@ -133,8 +166,7 @@ function AgentBlockContent(props: {
         <div class="size-full overflow-hidden flex">
           {/* Collapsed by default, like the other conversation-shaped blocks —
             the transcript wants the width; `]` or the header button opens it. */}
-          <SidePanel.Layout defaultOpen={false}>
-            <AgentSidePanelSections />
+          <AgentContentLayout>
             <AgentSplitHeader
               session={session()}
               title={metadata()?.title ?? undefined}
@@ -146,7 +178,7 @@ function AgentBlockContent(props: {
               <Transcript searchTarget={searchTarget()} />
               {/* Full-frame mobile: composer + queue float in the bottom
                   accessory region above the dock; desktop stays inline. */}
-              <FloatRegionOrInline region="accessory">
+              <AgentComposerRegion>
                 {/* Home/chat: re-enable pointer events on the accessory
                     contribution — the float host is pointer-transparent. */}
                 {/* pb matches ChannelInputContainer so the composer sits at
@@ -173,9 +205,9 @@ function AgentBlockContent(props: {
                     </Show>
                   </div>
                 </div>
-              </FloatRegionOrInline>
+              </AgentComposerRegion>
             </AgentChangesSplit>
-          </SidePanel.Layout>
+          </AgentContentLayout>
         </div>
       </StaticMarkdownContext>
     </Show>

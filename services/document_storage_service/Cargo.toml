@@ -95,6 +95,12 @@ channel_labels = { path = "../../crates/channel_labels", features = [
   "postgres",
 ] }
 crm = { path = "../../crates/crm" }
+databases = { path = "../../crates/databases", features = [
+  "entity_mutation",
+  "gateway",
+  "inbound",
+  "postgres",
+] }
 document_sub_type = { path = "../../crates/document_sub_type" }
 documents_hex = { path = "../../crates/documents", package = "documents", features = ["purge"] }
 doppler-config = { workspace = true }
@@ -130,6 +136,7 @@ graphql_scheduled_action = { path = "../../crates/graphql_scheduled_action" }
 harnesses = { path = "../../crates/harnesses" }
 hex = { workspace = true }
 http-body-util = { workspace = true }
+import = { path = "../../crates/import" }
 initiative = { path = "../../crates/initiative", features = ["inbound", "postgres", "resources"] }
 jsonwebtoken = { workspace = true }
 last_online_tracker = { path = "../../crates/last_online_tracker" }
@@ -166,6 +173,7 @@ model_notifications = { path = "../../crates/model_notifications" }
 model_owner = { path = "../../crates/model_owner" }
 model_user = { path = "../../crates/model_user" }
 models_bulk_upload = { path = "../../crates/models_bulk_upload" }
+models_databases = { path = "../../crates/models_databases" }
 models_dcs = { path = "../../crates/models_dcs" }
 models_opensearch = { path = "../../crates/models_opensearch" }
 models_pagination = { path = "../../crates/models_pagination", features = [
@@ -206,6 +214,12 @@ search_service = { path = "../../crates/search_service" }
 secretsmanager_client = { path = "../../crates/secretsmanager_client" }
 serde = { workspace = true }
 serde_json = { workspace = true }
+slack_integration = { path = "../../crates/slack_integration", features = [
+  "gateway",
+  "inbound",
+  "postgres",
+  "s3",
+] }
 soup = { path = "../../crates/soup", features = [
   "axum",
   "inbound",

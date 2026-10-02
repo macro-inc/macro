@@ -153,6 +153,7 @@ fn announcement_reply_target(announcement: &SessionAnnouncement) -> AgentAnnounc
         channel_id: match &announcement.origin_parent {
             MessageParent::Channel(channel_id) => Some(channel_id.to_string()),
             MessageParent::Document(_)
+            | MessageParent::Call(_)
             | MessageParent::Initiative(_)
             | MessageParent::CrmCompany(_)
             | MessageParent::CrmContact(_) => None,
@@ -217,7 +218,7 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
                 &announcement.origin_parent,
             )
             .await?;
-        let content = if announcement.is_coding {
+        let content = if announcement.shows_session_link() {
             self.lexical
                 .compose_agent_announcement(
                     (!announcement.reuse_origin_message)

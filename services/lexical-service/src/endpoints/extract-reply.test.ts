@@ -20,8 +20,15 @@ const target = {
 };
 
 describe('extract reply', () => {
-  it('returns the parent of a leading reply target', async () => {
-    const parent = { type: 'channel', id: 'channel' };
+  it.each([
+    'channel',
+    'document',
+    'initiative',
+    'crm_company',
+    'crm_contact',
+    'call',
+  ])('returns the %s parent of a leading reply target', async (type) => {
+    const parent = { type, id: 'parent-1' };
     const response = await request(
       `<m-reply-target>${JSON.stringify({ parent, ...target })}</m-reply-target>\n\nplease fix`
     );

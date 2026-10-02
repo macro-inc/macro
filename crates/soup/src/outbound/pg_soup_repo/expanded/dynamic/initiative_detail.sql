@@ -23,7 +23,8 @@
             uh."updatedAt"::timestamptz as "viewed_at",
             t.sort_ts as "sort_ts",
             NULL as "is_completed",
-            NULL::timestamptz as "deleted_at"
+            NULL::timestamptz as "deleted_at",
+            NULL::jsonb as "database_row"
         FROM TopItems t
         INNER JOIN initiative i ON i.id::text = t.id
         LEFT JOIN "UserHistory" uh

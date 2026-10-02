@@ -15,6 +15,7 @@ import type {
   DocumentEntity,
   EmailEntity,
   EntityData,
+  InitiativeEntity,
   ProjectEntity,
   TaskEntity,
 } from '@entity';
@@ -32,11 +33,12 @@ export type EntityTypeItemMap = {
   THREAD: EntityItem<EmailEntity>;
   COMPANY: EntityItem<CrmCompanyEntity>;
   CONTACT: EntityItem<CrmContactEntity>;
-  // Native projects use the initiative picker, separate from folder quick access.
-  INITIATIVE: never;
+  INITIATIVE: EntityItem<InitiativeEntity>;
   // Call records aren't entity-reference targets in quickAccess.
   CALL_RECORD: never;
   CALENDAR_EVENT: never;
+  // Database rows aren't entity-reference targets in quickAccess.
+  DATABASE_ROW: never;
 };
 
 /**
@@ -51,11 +53,12 @@ function entityTypeToBuckets(entityType: EntityType): readonly Bucket[] {
     .with('CHAT', () => ['chat'] as const)
     .with('TASK', () => ['task'] as const)
     .with('THREAD', () => ['email'] as const) // Note: emails aren't in quickAccess yet, handled separately
-    .with('INITIATIVE', () => [] as const)
+    .with('INITIATIVE', () => ['initiative'] as const)
     .with('COMPANY', () => ['crm_company'] as const)
     .with('CONTACT', () => ['crm_contact'] as const)
     .with('CALL_RECORD', () => [] as const) // Call records aren't in quickAccess
     .with('CALENDAR_EVENT', () => [] as const) // Calendar events aren't in quickAccess
+    .with('DATABASE_ROW', () => [] as const) // Database rows aren't in quickAccess
     .exhaustive();
   return buckets;
 }

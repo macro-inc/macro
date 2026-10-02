@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO database_view_positions (view_id, row_id, lane, position)\n           VALUES ($1, $2, $3, '80'), ($1, $4, '', '80')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "44d9f4c7e8e4cb6c672b4c93260ede6bf9798f7abaf013b3bd2eeb2911cf0180"
+}

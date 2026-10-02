@@ -19,6 +19,7 @@ export interface BlockMethodRegistry {
   call: EmptySpec;
   calendar: EmptySpec;
   chat: AssertSpec<BlockChatSpec>;
+  database: EmptySpec;
   channel: EmptySpec;
   write: EmptySpec;
   pdf: EmptySpec;
@@ -41,6 +42,7 @@ export interface BlockMethodRegistry {
   automation: EmptySpec;
   pr: EmptySpec;
   agent: EmptySpec;
+  initiative: EmptySpec;
 }
 
 // Type helper to get the method spec for a block name

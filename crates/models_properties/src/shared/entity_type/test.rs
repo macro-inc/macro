@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use super::*;
 use crate::api::PropertyTargetEntityType;
 
@@ -21,6 +23,27 @@ fn initiative_storage_and_target_spelling_is_distinct_from_folder_projects() {
         EntityType::Project
     );
     assert_ne!(EntityType::Initiative, EntityType::Project);
+}
+
+#[test]
+fn database_row_spells_as_the_database_row_enum_label() {
+    assert_eq!(
+        serde_json::to_string(&EntityType::DatabaseRow).unwrap(),
+        "\"DATABASE_ROW\""
+    );
+    assert_eq!(
+        serde_json::to_string(&PropertyTargetEntityType::DatabaseRow).unwrap(),
+        "\"DATABASE_ROW\""
+    );
+    assert_eq!(EntityType::DatabaseRow.to_string(), "database_row");
+    assert_eq!(
+        EntityType::from_str("DATABASE_ROW").unwrap(),
+        EntityType::DatabaseRow
+    );
+    assert_eq!(
+        EntityType::from_str("database_row").unwrap(),
+        EntityType::DatabaseRow
+    );
 }
 
 #[test]
