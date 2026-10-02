@@ -463,6 +463,7 @@ function HeaderActionsOutlet() {
     <Show when={ctx}>
       <div
         ref={ctx?.setHeaderActionsMount}
+        data-side-panel-header-actions
         class="flex shrink-0 items-center gap-1 empty:hidden [&>div]:contents"
       />
     </Show>

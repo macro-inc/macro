@@ -190,7 +190,7 @@ export function ResponsiveBlockToolbar(props: BlockToolbarProps) {
       }
     >
       <SplitHeaderRight>
-        <HeaderIsland>
+        <HeaderIsland class="has-[[data-side-panel-header-actions]:empty]:hidden">
           <SidePanel.HeaderActionsOutlet />
         </HeaderIsland>
       </SplitHeaderRight>
