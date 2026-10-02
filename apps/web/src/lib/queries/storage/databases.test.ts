@@ -7,6 +7,7 @@ import {
   applyDatabaseTableVersions,
   createDatabase,
   fetchViewerDatabases,
+  onDatabaseBatchCommitted,
 } from './databases';
 import { databasesKeys } from './keys';
 
@@ -311,4 +312,154 @@ describe('reading every viewer database once', () => {
       { code: 'FORBIDDEN', message: 'no access' },
     ]);
   });
+});
+
+describe('shared ops cache effects', () => {
+  it('applies repeated schema edits in batch order and advances the version once', async () => {
+    queryClient.setQueryData(key, detail);
+    mock.applyOps.mockReturnValue(
+      okAsync({
+        results: [
+          {
+            kind: 'table',
+            table: 'tasks',
+            tableVersion: 6,
+            change: { kind: 'renamed' },
+          },
+          {
+            kind: 'table',
+            table: 'tasks',
+            tableVersion: 6,
+            change: { kind: 'renamed' },
+          },
+        ],
+        changes: [],
+      })
+    );
+    await applyDatabaseOps('db', [
+      {
+        kind: 'table',
+        table: 'tasks',
+        change: { kind: 'rename', name: 'First', previousName: 'Tasks' },
+      },
+      {
+        kind: 'table',
+        table: 'tasks',
+        change: { kind: 'rename', name: 'Final', previousName: 'First' },
+      },
+    ]);
+    expect(
+      queryClient.getQueryData<DatabaseDetail>(key)?.tables[0].table
+    ).toMatchObject({ name: 'Final', version: 6 });
+  });
+  it('deletes a table and invalidates dependent catalogs for every ops caller', async () => {
+    queryClient.setQueryData(key, detail);
+    const other = databasesKeys.detail('other').queryKey;
+    queryClient.setQueryData(other, detail);
+    mock.applyOps.mockReturnValue(
+      okAsync({
+        results: [
+          {
+            kind: 'table',
+            table: 'tasks',
+            tableVersion: 6,
+            change: { kind: 'deleted' },
+          },
+        ],
+        changes: [],
+      })
+    );
+    await applyDatabaseOps('db', [
+      { kind: 'table', table: 'tasks', change: { kind: 'delete' } },
+    ]);
+    expect(
+      queryClient
+        .getQueryData<DatabaseDetail>(key)
+        ?.tables.map(({ table }) => table.id)
+    ).toEqual(['people']);
+    expect(queryClient.getQueryState(other)?.isInvalidated).toBe(true);
+  });
+  it('advances ordinary row writes without refetching the schema for each cell', async () => {
+    queryClient.setQueryData(key, detail);
+    mock.applyOps.mockReturnValue(
+      okAsync({
+        results: [],
+        changes: [{ table: 'tasks', version: 6, change: 1 }],
+      })
+    );
+    await applyDatabaseOps('db', [
+      {
+        kind: 'rows',
+        table: 'tasks',
+        change: { kind: 'delete', rows: ['row'] },
+      },
+    ]);
+    expect(
+      queryClient.getQueryData<DatabaseDetail>(key)?.tables[0].table.version
+    ).toBe(6);
+    expect(queryClient.getQueryState(key)?.isInvalidated).toBe(false);
+  });
+  it('invalidates optimistic state after a refused batch', async () => {
+    queryClient.setQueryData(key, detail);
+    mock.applyOps.mockReturnValue(
+      errAsync([{ code: 'CONFLICT', message: 'Changed', refusal: null }])
+    );
+    const result = await applyDatabaseOps('db', [
+      { kind: 'table', table: 'tasks', change: { kind: 'delete' } },
+    ]);
+    expect(result.isErr()).toBe(true);
+    expect(queryClient.getQueryData(key)).toEqual(detail);
+    expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true);
+  });
+});
+
+it('announces a schema commit before its slow refresh and a later row commit', async () => {
+  const events: number[] = [];
+  const unsubscribe = onDatabaseBatchCommitted((batch) =>
+    events.push(batch.changes[0].change)
+  );
+  let release!: () => void;
+  const refresh = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const invalidation = vi
+    .spyOn(queryClient, 'invalidateQueries')
+    .mockImplementationOnce(() => refresh);
+  mock.applyOps
+    .mockReturnValueOnce(
+      okAsync({
+        results: [],
+        changes: [{ table: 'tasks', version: 6, change: 10 }],
+      })
+    )
+    .mockReturnValueOnce(
+      okAsync({
+        results: [],
+        changes: [{ table: 'tasks', version: 7, change: 11 }],
+      })
+    );
+  try {
+    const schema = applyDatabaseOps('db', [
+      {
+        kind: 'table',
+        table: 'tasks',
+        change: { kind: 'rename', name: 'Renamed', previousName: 'Tasks' },
+      },
+    ]);
+    await vi.waitFor(() => expect(invalidation).toHaveBeenCalled());
+    await applyDatabaseOps('db', [
+      {
+        kind: 'rows',
+        table: 'tasks',
+        change: { kind: 'delete', rows: ['row'] },
+      },
+    ]);
+    expect(events).toEqual([10, 11]);
+    release();
+    expect((await schema).isOk()).toBe(true);
+  } finally {
+    release();
+    unsubscribe();
+    invalidation.mockRestore();
+  }
 });

@@ -111,7 +111,6 @@ export function updateDatabaseOption(
     .andThen(() =>
       applyOp(
         target.databaseId,
-        target.tableId,
         {
           kind: 'column',
           table: target.tableId,
@@ -136,7 +135,6 @@ export function deleteDatabaseOption(
     .andThen(() =>
       applyOp(
         target.databaseId,
-        target.tableId,
         {
           kind: 'column',
           table: target.tableId,

@@ -1,4 +1,5 @@
 import { queryClient } from '@queries/client';
+import { applyDatabaseOps } from '@queries/storage/databases';
 import { databasesKeys } from '@queries/storage/keys';
 import type { DatabaseOpsError } from '@service-storage/databases';
 import type { ApplyOpsResponse } from '@service-storage/generated/schemas/applyOpsResponse';
@@ -15,8 +16,28 @@ import {
 } from 'neverthrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { toQuerySchema } from '../../database-query/queries/query-source';
-import { renameDatabaseColumn } from './rename-column';
 import { toViewColumn } from './table-rows';
+
+function renameDatabaseColumn(params: {
+  databaseId: string;
+  tableId: string;
+  columnId: string;
+  name: string;
+  previousName: string;
+}) {
+  return applyDatabaseOps(params.databaseId, [
+    {
+      kind: 'column',
+      table: params.tableId,
+      column: params.columnId,
+      change: {
+        kind: 'rename',
+        name: params.name,
+        previousName: params.previousName,
+      },
+    },
+  ]).map(() => undefined);
+}
 
 const transport = vi.hoisted(() => ({ applyOps: vi.fn() }));
 vi.mock('@service-storage/client', () => ({

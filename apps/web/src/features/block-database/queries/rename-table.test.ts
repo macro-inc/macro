@@ -1,4 +1,5 @@
 import { queryClient } from '@queries/client';
+import { applyDatabaseOps } from '@queries/storage/databases';
 import { databasesKeys } from '@queries/storage/keys';
 import type { ApplyOpsResponse } from '@service-storage/generated/schemas/applyOpsResponse';
 import type { DatabaseDetail } from '@service-storage/generated/schemas/databaseDetail';
@@ -7,7 +8,25 @@ import { QueryObserver } from '@tanstack/solid-query';
 import { errAsync, ok, okAsync, type Result, ResultAsync } from 'neverthrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { tableRenameMessage } from '../core/column-schema';
-import { renameDatabaseTable } from './rename-table';
+
+function renameDatabaseTable(params: {
+  databaseId: string;
+  tableId: string;
+  name: string;
+  previousName: string;
+}) {
+  return applyDatabaseOps(params.databaseId, [
+    {
+      kind: 'table',
+      table: params.tableId,
+      change: {
+        kind: 'rename',
+        name: params.name,
+        previousName: params.previousName,
+      },
+    },
+  ]).map(() => undefined);
+}
 
 const transport = vi.hoisted(() => ({ applyOps: vi.fn() }));
 vi.mock('@service-storage/client', () => ({

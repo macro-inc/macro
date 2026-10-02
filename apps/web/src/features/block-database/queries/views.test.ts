@@ -212,9 +212,6 @@ describe('reordering a table’s views', () => {
         change: { kind: 'reorder_views', order: ['second', 'first'] },
       },
     ]);
-    expect(transport.applyDatabaseTableVersions).toHaveBeenCalledWith('db', {
-      invites: 4,
-    });
     expect(cachedViews()).toEqual([
       ['second', 'Zz'],
       ['first', 'a0'],
@@ -239,7 +236,6 @@ describe('reordering a table’s views', () => {
     const reordered = await reorderDatabaseViews('db', 'invites', ['second']);
 
     expect(reordered.isErr()).toBe(true);
-    expect(transport.invalidateDatabase).toHaveBeenCalledExactlyOnceWith('db');
   });
 });
 

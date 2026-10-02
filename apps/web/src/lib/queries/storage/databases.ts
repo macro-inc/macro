@@ -20,6 +20,11 @@ import { ResultAsync } from 'neverthrow';
 import type { Accessor } from 'solid-js';
 import { match, P } from 'ts-pattern';
 import { queryClient } from '../client';
+import {
+  changesDatabaseSchema,
+  commitDatabaseOps,
+  refreshAfterDatabaseOps,
+} from './database-ops-cache';
 import { databasesKeys } from './keys';
 
 const DATABASE_STALE_TIME = 30 * 1000;
@@ -165,7 +170,7 @@ export function applyDatabaseOps(
         id: databaseId,
         request: baseVersions ? { ops, baseVersions } : { ops },
       })
-      .map((response) => {
+      .map(async (response) => {
         const tableVersions = committedTableVersions(
           response.results,
           response.changes
@@ -177,10 +182,23 @@ export function applyDatabaseOps(
             changes: response.changes,
             tableVersions,
           });
+        await commitDatabaseOps(
+          queryClient,
+          databaseId,
+          ops,
+          response.results,
+          tableVersions
+        );
+        // Publish the commit before a slow schema read can let a later write overtake it.
+        if (ops.some(changesDatabaseSchema))
+          await refreshAfterDatabaseOps(queryClient, databaseId, ops);
         return response.results;
       })
       // A refused batch is one error: the first op the service could not apply.
-      .mapErr(([refusal]) => refusal)
+      .mapErr(([refusal]) => {
+        void invalidateDatabase(databaseId);
+        return refusal;
+      })
   );
 }
 

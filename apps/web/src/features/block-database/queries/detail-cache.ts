@@ -1,11 +1,7 @@
 /** The cached database detail, patched as schema, option and view ops are sent and read again when one is refused. */
 import type { DatabaseOp } from '@core/database-sql/generated/types';
 import { queryClient } from '@queries/client';
-import {
-  applyDatabaseOps,
-  applyDatabaseTableVersions,
-  invalidateDatabase,
-} from '@queries/storage/databases';
+import { applyDatabaseOps } from '@queries/storage/databases';
 import { databasesKeys } from '@queries/storage/keys';
 import type { ColumnDetail } from '@service-storage/generated/schemas/columnDetail';
 import type { DatabaseDetail } from '@service-storage/generated/schemas/databaseDetail';
@@ -133,7 +129,6 @@ export function applyOp<
   Change extends ResultChanges[Kind],
 >(
   databaseId: string,
-  tableId: string,
   op: DatabaseOp,
   expected: { kind: Kind; change: Change }
 ): ResultAsync<ResultOf<Kind, Change>, DatabaseOpFailure> {
@@ -145,14 +140,6 @@ export function applyOp<
         return errAsync<ResultOf<Kind, Change>, DatabaseOpFailure>({
           kind: 'unexpected-result',
         });
-      if (result.tableVersion !== undefined)
-        applyDatabaseTableVersions(databaseId, {
-          [tableId]: result.tableVersion,
-        });
       return okAsync(result);
-    })
-    .orElse((failure) => {
-      void invalidateDatabase(databaseId);
-      return errAsync(failure);
     });
 }

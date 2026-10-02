@@ -42,7 +42,7 @@ import {
 } from '../database-mentions';
 import type { BoardPositionsState } from '../primitives/board-layout';
 import { createColumnCasts } from '../queries/column-casts';
-import { updateDatabaseColumns } from '../queries/column-schema';
+import { opColumnKind } from '../queries/column-schema';
 import {
   addDatabaseColumnOptions,
   convertDatabaseColumn,
@@ -50,7 +50,6 @@ import {
 import { createDatabaseRelations } from '../queries/database-relations';
 import { useRelatedDatabaseSync } from '../queries/database-relations-sync';
 import { deleteDatabaseOption, updateDatabaseOption } from '../queries/options';
-import { renameDatabaseColumn } from '../queries/rename-column';
 import { tableChangesOf } from '../queries/table-changes';
 import { createDatabaseRowsSource, toViewColumn } from '../queries/table-rows';
 import {
@@ -285,16 +284,6 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
     tableId: props.tableId,
     version: () => table().table.version,
   });
-  const changeColumns = (
-    mutation: Parameters<typeof updateDatabaseColumns>[0]['mutation'],
-    baseVersion = table().table.version
-  ) =>
-    updateDatabaseColumns({
-      databaseId,
-      tableId: props.tableId,
-      baseVersion,
-      mutation,
-    });
   return (
     <>
       <For each={relatedDatabases()}>
@@ -340,10 +329,21 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
             onChangeColumnType={(columnId, change) =>
               // Checked against the version the menu's dry run read, so a
               // change made since is not converted blind.
-              changeColumns(
-                { kind: 'type', columnId, change },
-                change.baseVersion
-              )
+              applyDatabaseOps(
+                databaseId,
+                [
+                  {
+                    kind: 'column',
+                    table: props.tableId,
+                    column: columnId,
+                    change: {
+                      kind: 'change_type',
+                      to: opColumnKind(databaseId, change.to),
+                    },
+                  },
+                ],
+                { [props.tableId]: change.baseVersion ?? table().table.version }
+              ).map(() => undefined)
             }
             onConvertColumn={(columnId, conversion) =>
               convertDatabaseColumn({
@@ -359,25 +359,47 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
               })
             }
             onDeleteColumn={(columnId) =>
-              changeColumns({ kind: 'delete', columnId })
+              applyDatabaseOps(
+                databaseId,
+                [
+                  {
+                    kind: 'column',
+                    table: props.tableId,
+                    column: columnId,
+                    change: { kind: 'delete' },
+                  },
+                ],
+                { [props.tableId]: table().table.version }
+              ).map(() => undefined)
             }
             onReorderColumns={(columnIds) =>
-              changeColumns({
-                kind: 'order',
-                columnIds: mergeDatabaseColumnOrder(
-                  table().columns.map(({ column }) => column.id),
-                  columnIds
-                ),
-              })
+              applyDatabaseOps(
+                databaseId,
+                [
+                  {
+                    kind: 'table',
+                    table: props.tableId,
+                    change: {
+                      kind: 'reorder_columns',
+                      order: mergeDatabaseColumnOrder(
+                        table().columns.map(({ column }) => column.id),
+                        columnIds
+                      ),
+                    },
+                  },
+                ],
+                { [props.tableId]: table().table.version }
+              ).map(() => undefined)
             }
             onRenameColumn={(columnId, name, previousName) =>
-              renameDatabaseColumn({
-                databaseId,
-                tableId: props.tableId,
-                columnId,
-                name,
-                previousName,
-              })
+              applyDatabaseOps(databaseId, [
+                {
+                  kind: 'column',
+                  table: props.tableId,
+                  column: columnId,
+                  change: { kind: 'rename', name, previousName },
+                },
+              ]).map(() => undefined)
             }
             actionsRef={props.actionsRef}
             renderToolbar={props.renderToolbar}

@@ -3,10 +3,7 @@ import type {
   DatabaseOp,
   OpColumnKind,
 } from '@core/database-sql/generated/types';
-import {
-  applyDatabaseOps,
-  invalidateDatabase,
-} from '@queries/storage/databases';
+import { applyDatabaseOps } from '@queries/storage/databases';
 import { storageServiceClient } from '@service-storage/client';
 import { v7 as uuidv7 } from 'uuid';
 import type {
@@ -47,10 +44,7 @@ export function createDatabaseColumn(params: {
         },
       },
     },
-  ]).map(async () => {
-    await invalidateDatabase(params.databaseId);
-    return id;
-  });
+  ]).map(() => id);
 }
 
 /** Add select options to a column; labels it already has are left out. */
@@ -70,9 +64,7 @@ export function addDatabaseColumnOptions(params: {
         options: params.labels.map((label) => ({ id: uuidv7(), label })),
       },
     },
-  ]).map(async () => {
-    await invalidateDatabase(params.databaseId);
-  });
+  ]).map(() => undefined);
 }
 
 /**
@@ -137,9 +129,6 @@ export function convertDatabaseColumn(params: {
         });
       return applyDatabaseOps(params.databaseId, ops, {
         [table]: conversion.tableVersion,
-      }).map(async () => {
-        await invalidateDatabase(params.databaseId);
-        return id;
-      });
+      }).map(() => id);
     });
 }
