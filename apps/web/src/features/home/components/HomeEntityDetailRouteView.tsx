@@ -1,4 +1,7 @@
-import { EntityDetail } from '@app/components/entity-detail/EntityDetail';
+import {
+  EntityDetail,
+  entityDetailBlockType,
+} from '@app/components/entity-detail/EntityDetail';
 import type { EntityDetailTarget } from '@app/components/entity-detail/entity-detail-target';
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
 import { channelsSearch } from '@app/features/channels-view/channels-route';
@@ -13,6 +16,9 @@ import {
   useSplitDisplayName,
   useSplitPanelOrThrow,
 } from '@components/app/split-layout/layoutUtils';
+import { ShareTrigger } from '@core/component/TopBar/ShareButton';
+import { useDocumentShareModal } from '@core/component/TopBar/shareModal';
+import { useCopyLink } from '@core/util/useCopyLink';
 import { type Accessor, createMemo, Match, Show, Switch } from 'solid-js';
 import { isHomeDocumentType } from '../home-route-schema';
 import { useHomeView } from '../home-view-context';
@@ -84,12 +90,40 @@ function HomeEntityDetailBody(props: {
   value: Accessor<string>;
   navigationRequest: number | string;
 }) {
+  const panel = useSplitPanelOrThrow();
+  const copyViewLink = useCopyLink();
+  const copyLink = () => copyViewLink(window.location.href);
+  const blockType = () =>
+    props.target.type === 'document'
+      ? entityDetailBlockType(props.target)
+      : undefined;
+  const openShare = useDocumentShareModal(() => {
+    const alias = blockType();
+    if (!alias || props.target.type !== 'document') return;
+    return {
+      documentId: props.target.id,
+      blockAlias: alias,
+      copyLink,
+    };
+  });
+
   return (
     <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
       <Show when={props.target.type !== 'channel'}>
         <ViewShell.TopBar>
           <ViewBreadcrumbs.Outlet aria-label="Home location" />
-          <div class="ml-auto">
+          <div class="ml-auto flex shrink-0 items-center gap-2">
+            <Show when={blockType()}>
+              {(alias) => (
+                <ShareTrigger
+                  onClick={openShare}
+                  id={props.target.id}
+                  blockType={alias()}
+                  hotkeyScope={panel.splitHotkeyScope}
+                  copyLink={copyLink}
+                />
+              )}
+            </Show>
             <SidePanel.Toggle />
           </div>
         </ViewShell.TopBar>
