@@ -11,6 +11,8 @@
  * Edits debounce and autosave through `onEdit`, with a flush on blur; there
  * are no save/cancel affordances. Non-prompt entries (compact) are
  * read-only text but keep their remove affordance, which is always visible.
+ * While a turn is in flight, each row offers Steer: that message jumps the
+ * queue and the current turn is cancelled so it runs next.
  */
 
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
@@ -51,6 +53,12 @@ export interface QueuedPromptsProps {
   onEdit: (actionId: string, prompt: string) => void;
   /** Remove a queued action before it dispatches. */
   onRemove: (actionId: string) => void;
+  /**
+   * Interrupt the turn in flight and run this queued action next. Absent
+   * when nothing is in flight: the queue drains on its own once the turn
+   * ends, and the composer's flush control sends the oldest entry.
+   */
+  onSteer?: (actionId: string) => void;
   /** Down past the bottom (next-to-send) row — focus returns to the composer. */
   onNavigateBelow?: () => void;
   /**
@@ -127,6 +135,9 @@ export function QueuedPrompts(props: QueuedPromptsProps) {
                   onMoveDown={() => moveFocus(id, 1)}
                   onEdit={(prompt) => props.onEdit(id, prompt)}
                   onRemove={() => props.onRemove(id)}
+                  onSteer={
+                    props.onSteer ? () => props.onSteer?.(id) : undefined
+                  }
                 />
               )}
             </Show>
@@ -148,6 +159,8 @@ type QueuedRowProps = {
   onMoveDown: () => void;
   onEdit: (prompt: string) => void;
   onRemove: () => void;
+  /** Interrupt the current turn and send this row next. */
+  onSteer?: () => void;
 };
 
 function QueuedRow(props: QueuedRowProps) {
@@ -211,6 +224,19 @@ function QueuedRow(props: QueuedRowProps) {
               {(name) => <> by {name()}</>}
             </Show>
           </span>
+          <Show when={props.onSteer}>
+            <Button
+              variant="ghost"
+              size="xs"
+              label="Steer"
+              tooltip="Interrupt the current turn and send this message next"
+              disabled={props.disabled}
+              onClick={() => props.onSteer?.()}
+              class="shrink-0"
+            >
+              Steer
+            </Button>
+          </Show>
           <Button
             variant="ghost"
             size="icon-sm"

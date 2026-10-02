@@ -65,6 +65,7 @@ export function AgentComposer(props: {
     pending,
     queue,
     sendNext,
+    steer,
     turn,
     registerQuoteInsert,
     initialInput,
@@ -225,6 +226,14 @@ export function AgentComposer(props: {
               onRemove={(actionId) => {
                 if (!readOnly()) void queue.remove(actionId);
               }}
+              onSteer={
+                busy() &&
+                !readOnly() &&
+                turn() !== 'stopping' &&
+                turn() !== 'starting'
+                  ? (actionId) => steer(actionId)
+                  : undefined
+              }
               onNavigateBelow={() => focusInput?.()}
               registerFocusFromBelow={(focus) => {
                 focusQueueBottom = focus;

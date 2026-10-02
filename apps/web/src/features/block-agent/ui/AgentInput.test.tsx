@@ -100,13 +100,6 @@ vi.mock('@phosphor/spinner-gap.svg', () => ({
   default: () => <span data-testid="spinner-icon" />,
 }));
 
-vi.mock(
-  '@phosphor-icons/core/regular/arrow-bend-down-left.svg?component-solid',
-  () => ({
-    default: () => <span data-testid="enter-icon" />,
-  })
-);
-
 beforeEach(() => {
   vi.stubGlobal(
     'ResizeObserver',
@@ -163,7 +156,7 @@ describe('on a touch device', () => {
     expect(onStop).not.toHaveBeenCalled();
 
     fireEvent.click(
-      screen.getByRole('button', { name: 'Send next queued message' })
+      screen.getByRole('button', { name: 'Flush queued messages' })
     );
     expect(onStop).toHaveBeenCalledOnce();
   });
@@ -189,7 +182,7 @@ describe('queued message advancement', () => {
       screen.getByTestId('agent-input-editor').getAttribute('data-disabled')
     ).toBe('true');
     const stop = screen.getByRole('button', {
-      name: 'Send next queued message',
+      name: 'Flush queued messages',
     }) as HTMLButtonElement;
     expect(stop.disabled).toBe(true);
     fireEvent.click(stop);
@@ -202,7 +195,7 @@ describe('queued message advancement', () => {
     expect(onSendNext).not.toHaveBeenCalled();
   });
 
-  it('shows a send action that advances the next queued message', () => {
+  it('shows a ringed send action that flushes the next queued message', () => {
     const onStop = vi.fn();
 
     render(() => (
@@ -210,9 +203,11 @@ describe('queued message advancement', () => {
     ));
 
     const sendNext = screen.getByRole('button', {
-      name: 'Send next queued message',
+      name: 'Flush queued messages',
     });
     expect(sendNext.hasAttribute('disabled')).toBe(false);
+    expect(sendNext.getAttribute('data-intent')).toBe('flush');
+    expect(screen.getByTestId('send-icon')).toBeTruthy();
 
     fireEvent.click(sendNext);
     expect(onStop).toHaveBeenCalledTimes(1);
@@ -261,7 +256,7 @@ describe('queued message advancement', () => {
 
     // Attached files are a draft: both tapping Send and Enter send them.
     expect(
-      screen.queryByRole('button', { name: 'Send next queued message' })
+      screen.queryByRole('button', { name: 'Flush queued messages' })
     ).toBeNull();
     expect(screen.getByRole('button', { name: 'Send' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull();

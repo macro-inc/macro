@@ -360,8 +360,9 @@ export function ChatComposer(props: {
                       >
                         <SendButton
                           appearance="composer"
-                          aria-label="Send next queued message"
-                          tooltip="Send next queued message"
+                          intent="flush"
+                          aria-label="Flush queued messages"
+                          tooltip="Flush queued messages"
                           shortcut="Enter"
                           onClick={sendNext}
                         />

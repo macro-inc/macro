@@ -151,6 +151,18 @@ where
             .map_err(into_session_error)
     }
 
+    async fn steer_queued_control(
+        &self,
+        id: AgentSessionId,
+        action_id: AgentActionId,
+        actor: Option<MacroUserIdStr<'static>>,
+    ) -> agent_session::domain::error::Result<()> {
+        self.execute(id, HarnessCommand::SteerQueued { action_id, actor })
+            .await
+            .map(drop)
+            .map_err(into_session_error)
+    }
+
     async fn set_sandbox_size(
         &self,
         id: AgentSessionId,

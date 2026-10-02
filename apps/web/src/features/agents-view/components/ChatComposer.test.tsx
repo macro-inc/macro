@@ -229,7 +229,7 @@ describe('Chat session input', () => {
       expect(editor.enter?.(undefined, '')).toBe(false);
       expect(stop).not.toHaveBeenCalled();
       fireEvent.click(
-        screen.getByRole('button', { name: 'Send next queued message' })
+        screen.getByRole('button', { name: 'Flush queued messages' })
       );
       expect(stop).toHaveBeenCalledOnce();
     });

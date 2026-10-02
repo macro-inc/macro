@@ -149,6 +149,19 @@ export default function AgentChangesGallery() {
                   setQueueItems(remaining);
                   if (remaining.length === 0) setQueued(false);
                 }}
+                onSteer={(id) =>
+                  setQueueItems((items) => {
+                    const index = items.findIndex(
+                      (item) => item.actionId === id
+                    );
+                    if (index < 0) return items;
+                    const next = items.slice();
+                    const [entry] = next.splice(index, 1);
+                    if (!entry) return items;
+                    next.unshift(entry);
+                    return next;
+                  })
+                }
               />
             </Show>
             <div class="rounded-2xl border border-edge px-4 py-3 text-sm text-ink-placeholder">

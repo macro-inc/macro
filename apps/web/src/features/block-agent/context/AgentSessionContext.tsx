@@ -76,6 +76,12 @@ export type AgentSessionState = {
    * the server would dispatch that head, not the next one.
    */
   sendNext: () => void;
+  /**
+   * Steer one queued message: show it as sent, move it to the front of the
+   * queue, and cancel the turn in flight so it runs next. No-op while the
+   * prompt a previous steer or send-next showed as sent is still unconfirmed.
+   */
+  steer: (actionId: string) => void;
   /** The live requests, and the action that answers each one. */
   interactions: InteractionController;
   /**
