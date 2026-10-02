@@ -284,9 +284,11 @@ impl InfraEnv {
             "http://search-processing-service:8080".into(),
         );
         // Account deletion awaits both owning services from the auth container.
+        // In-network the harness listens on the shared `PORT` like every other
+        // service, not on the 8101 of its `Environment::Local` default.
         env.insert(
             "OVERRIDE_AGENT_HARNESS_SERVICE_URL".into(),
-            "http://agent-harness-service:8101".into(),
+            "http://agent-harness-service:8080".into(),
         );
         env.insert(
             "OVERRIDE_SCHEDULED_ACTION_SERVICE_URL".into(),
