@@ -8,6 +8,8 @@ import type {
   ColumnKind,
   DatabaseDetail,
   DatabaseOp,
+  DatabaseTemplate,
+  DatabaseTemplateId,
   EntityKind,
   ImportTable,
   InferColumnTypeOutcome,
@@ -84,6 +86,17 @@ export type AddColumnOptions = (
 ) & {
   /** The column the new one goes right after; by default, the last one. */
   after?: DatabaseColumn;
+};
+
+/** Options for {@link Database.create}. */
+export type CreateDatabaseOptions = {
+  /** Display name of the database. */
+  name: string;
+  /**
+   * The template that builds it, with its tables, columns, views and sample
+   * rows; by default it starts blank, with one table holding a Name column.
+   */
+  template?: DatabaseTemplateId;
 };
 
 /** Options for {@link Database.changeColumnType}. */
@@ -258,12 +271,19 @@ export class Database extends MacroEntity<DatabaseDetail> {
   /** Create a database owned by the caller. */
   static async create(
     client: MacroClient,
-    options: { name: string }
+    options: CreateDatabaseOptions
   ): Promise<Database> {
     const record = unwrap(
-      await client.storage.createDatabase({ body: { name: options.name } })
+      await client.storage.createDatabase({
+        body: { name: options.name, template: options.template },
+      })
     );
     return new Database(client, record.id);
+  }
+
+  /** The templates a database can be created from, in the order a picker lists them. */
+  static async templates(client: MacroClient): Promise<DatabaseTemplate[]> {
+    return unwrap(await client.storage.listDatabaseTemplates());
   }
 
   /** The databases the caller can see, each with the caller's access level. */

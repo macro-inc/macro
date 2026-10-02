@@ -2332,7 +2332,39 @@ export const CreateChannelResponse = z.object({
   summary: z.string(),
 });
 
-export const CreateDatabase = z.object({ name: z.string() });
+export const CreateDatabase = z.object({
+  name: z.string(),
+  template: z
+    .union([
+      z.any().superRefine((x, ctx) => {
+        const schemas = [
+          z.literal('getting_started'),
+          z.literal('project_tracker'),
+          z.literal('crm'),
+          z.literal('event_planner'),
+          z.literal('content_calendar'),
+          z.literal('reading_list'),
+        ];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
+      z.null(),
+    ])
+    .optional(),
+});
 
 export const CreateDatabaseResponse = z.object({
   id: z.string().uuid(),

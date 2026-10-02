@@ -421,6 +421,16 @@ export type UserToolResponseForToolCalendarEvent =
  */
 export type NewChannelType = 'private' | 'team';
 /**
+ * Which template, by its stable slug.
+ */
+export type DatabaseTemplateId =
+  | 'getting_started'
+  | 'project_tracker'
+  | 'crm'
+  | 'event_planner'
+  | 'content_calendar'
+  | 'reading_list';
+/**
  * External systems items can be imported from.
  */
 export type ImportSource = 'linear' | 'notion' | 'slack';
@@ -3710,12 +3720,18 @@ export interface CreateChannelResponse {
  * Use this when the user asks for a new tracker, list, or table ("make me a table of applicants"). Check ListDatabases first if there is any chance one already exists under that name — a second database with the same name is confusing and there is no merge.
  *
  * The response acknowledges the new database `id` and `name`, with its full schema in `database` including the starter table's id. If `database` is null, creation still succeeded: heed the warning and call DescribeDatabase with the returned id; never repeat CreateDatabase just because schema refresh failed. The usual shape of the work is: CreateDatabase, RenameTable on the starter table when the user named their table, one AddColumn per further column the user described, typed by what it holds (use Name for each row's title rather than adding another), then QueryDatabase with INSERTs for the rows. For more tables, CreateTable only after the starter table is used.
+ *
+ * When what the user wants matches a template, pass its id as `template` instead: the database is then built with that template's tables, columns, views and a few sample rows, and has no "Table 1". Read the response's schema before changing it. The templates are: `project_tracker` (tasks with a status, an owner, a due date and a priority, on a board by status), `crm` (companies, their contacts, and deals on a board by stage), `event_planner` (parties and their invites, with a board of who is coming), `content_calendar` (posts with a channel, an author and a publish date, on a board by status), `reading_list` (books to read, with their author, a status and a rating) and `getting_started` (a few ideas on a board, to try out tables, cards and views).
  */
 export interface CreateDatabase {
   /**
    * Display name, as the user would title it — e.g. "Offsite Guests". The SQL name is derived from this, so prefer what the user actually called it over a SQL-looking identifier.
    */
   name: string;
+  /**
+   * Build the database from this template instead of starting blank. Leave it out unless the user's request matches one of the templates.
+   */
+  template?: DatabaseTemplateId | null;
 }
 /**
  * A committed database creation, independent of its subsequent schema read.
