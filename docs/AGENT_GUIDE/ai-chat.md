@@ -101,12 +101,14 @@ the shimmer.
   Integrations.
   **New conversation** opens the composer. **Conversations** is a mixed list
   of chats and coding sessions, newest first, with one search across both.
-  Chat rows use a chat icon; coding rows use `</>` (the PR status icon when a
-  pull request is linked). Home and the Agents sidebar share these agent rows.
-  Rows have no agent or runtime-status subtext. A session that is starting or
-  whose turn is still running (the agent is working, writing code, or stopping)
-  shows the same three-dot working wave as the transcript in place of the
-  leading icon; the row's accessible name appends `Starting` or `Working`.
+  Sidebar rows carry no kind icon: neither plain chats nor agent sessions,
+  chat or coding. The leading slot holds only a dot that combines activity and
+  unread state (accent while starting or working, pulsing while working, warning
+  while waiting for input), and is empty on a read, dormant row. Home shares
+  these rows but shows a sparkle instead (filled for coding sessions) and keeps
+  its unread dot trailing. Rows have no agent or runtime-status subtext; the
+  row's accessible description reads `Starting`, `Working`, `Waiting for
+  input`, or `Dormant`, plus `Unread`.
   Sessions with a linked PR show
   **#<number>** beneath the title (icon colored by open / merged / closed; no
   status word). Clicking it opens the synced

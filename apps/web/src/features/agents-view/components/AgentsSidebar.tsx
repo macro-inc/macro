@@ -20,7 +20,6 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { MenuItem } from '@core/component/ContextMenu';
 import { useUserId } from '@core/context/user';
 import { unreadFilterFn } from '@entity/utils/filter';
-import ChatIcon from '@phosphor/chat-circle.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import PlugIcon from '@phosphor/plugs-connected.svg';
 import AgentIcon from '@phosphor/sparkle.svg';
@@ -39,6 +38,10 @@ import {
 import { AGENTS_TOUR } from '../tour';
 import { AgentSessionListItem } from '../views/AgentSessionListItem';
 import { AgentSessionListSkeleton } from './AgentSessionListSkeleton';
+import {
+  AgentSessionRow,
+  AgentSessionStatusIndicator,
+} from './AgentSessionRow';
 
 const AGENTS_ACTION_VIEW_CONTEXT: EntityActionViewContext = {
   supportsMarkDone: false,
@@ -117,32 +120,32 @@ function Row(props: {
   active: boolean;
   onOpen: (event: MouseEvent) => void;
 }) {
-  const title = () => props.conversation.name || 'Untitled chat';
+  const unread = () => unreadFilterFn(props.conversation);
   return (
     <Show
       when={props.conversation.type === 'agent_session' && props.conversation}
       fallback={
-        <ViewSidebar.Item
+        // Plain chats have no runtime, so the shared row only carries unread.
+        <AgentSessionRow
+          id={props.conversation.id}
+          title={props.conversation.name || 'Untitled chat'}
+          kind="chat"
+          state="dormant"
           active={props.active}
-          title={title()}
-          data-kind="chat"
-          onClick={props.onOpen}
-        >
-          <ViewSidebar.Icon>
-            <ChatIcon />
-          </ViewSidebar.Icon>
-          <span class="min-w-0 flex-1 truncate">{title()}</span>
-          <span class="shrink-0 text-xs text-ink-extra-muted tabular-nums">
-            {compactAge(conversationTimestamp(props.conversation))}
-          </span>
-        </ViewSidebar.Item>
+          unread={unread()}
+          onOpen={props.onOpen}
+          timestamp={compactAge(conversationTimestamp(props.conversation))}
+          leading={
+            <AgentSessionStatusIndicator state="dormant" unread={unread()} />
+          }
+        />
       }
     >
       {(session) => (
         <AgentSessionListItem
           entity={session()}
           surface="agents"
-          unread={unreadFilterFn(session())}
+          unread={unread()}
           mode={props.mode}
           active={props.active}
           onOpen={props.onOpen}

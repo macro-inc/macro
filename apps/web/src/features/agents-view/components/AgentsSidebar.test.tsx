@@ -157,8 +157,17 @@ describe('mixed Agents sidebar', () => {
     const code = screen.getByRole('button', { name: /Fix build/ });
     const chat = screen.getByRole('button', { name: /Plan launch/ });
     expect(code.closest('[data-kind]')?.getAttribute('data-kind')).toBe('code');
-    expect(chat.getAttribute('data-kind')).toBe('chat');
+    expect(chat.closest('[data-kind]')?.getAttribute('data-kind')).toBe('chat');
     expect(chat.getAttribute('aria-current')).toBe('page');
+    // Neither kind of chat wears an icon in the Agents list; the leading slot
+    // only ever carries the activity/unread dot.
+    for (const row of [code, chat]) {
+      const icon = row
+        .closest('[data-agent-session-row]')
+        ?.querySelector('[data-view-sidebar-icon]');
+      expect(icon).toBeTruthy();
+      expect(icon?.querySelector('svg')).toBeNull();
+    }
     fireEvent.click(code, { shiftKey: true });
     expect(open).toHaveBeenCalledWith(
       conversations[0],
@@ -168,6 +177,44 @@ describe('mixed Agents sidebar', () => {
     expect(open).toHaveBeenLastCalledWith(conversations[1], expect.anything());
     fireEvent.click(screen.getByRole('button', { name: 'New conversation' }));
     expect(create).toHaveBeenCalledOnce();
+  });
+
+  it('marks an unread plain chat with the same leading dot as sessions', () => {
+    unreadFilter.mockReturnValue(true);
+    const view = render(() => (
+      <AgentsSidebar
+        activePage="new"
+        onOpenPage={vi.fn()}
+        {...partitionArchived([
+          { type: 'chat', id: 'chat', name: 'Plan launch', ownerId: 'me' },
+        ])}
+        modeForConversation={() => 'chat'}
+        activeConversationId={undefined}
+        search=""
+        loading={false}
+        error={false}
+        hasNextPage={false}
+        loadingNextPage={false}
+        onNewConversation={vi.fn()}
+        onSearchChange={vi.fn()}
+        onOpenConversation={vi.fn()}
+        onRetry={vi.fn()}
+        onLoadMore={vi.fn()}
+      />
+    ));
+    const dot = screen.getByLabelText('Unread');
+    expect(dot.closest('[data-view-sidebar-icon]')).toBeTruthy();
+    expect(dot.classList.contains('motion-safe:animate-pulse')).toBe(false);
+    expect(
+      screen
+        .getByRole('button', { name: 'Plan launch' })
+        .getAttribute('aria-description')
+    ).toBe('Dormant · Unread');
+    expect(
+      view.container.querySelector(
+        '[data-agent-session-row="chat"] [data-view-sidebar-icon] svg'
+      )
+    ).toBeNull();
   });
 
   it('opens rename and delete on a session or chat right-click', async () => {
