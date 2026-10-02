@@ -354,7 +354,7 @@ pub fn cast_targets(
 }
 
 /// What a reference column points at, as ops name it; `None` for rows of
-/// another table, which a relation holds.
+/// another table, which a column holds as relations.
 pub fn entity_kind(entity_type: models_properties::EntityType) -> Option<EntityKind> {
     use models_properties::EntityType as Stored;
     Some(match entity_type {
@@ -362,6 +362,7 @@ pub fn entity_kind(entity_type: models_properties::EntityType) -> Option<EntityK
         Stored::Document => EntityKind::Document,
         Stored::Task => EntityKind::Task,
         Stored::Company => EntityKind::Company,
+        Stored::Contact => EntityKind::Contact,
         Stored::CallRecord => EntityKind::CallRecord,
         Stored::Channel => EntityKind::Channel,
         Stored::Chat => EntityKind::Chat,
@@ -381,6 +382,7 @@ pub fn entity_type(kind: EntityKind) -> models_properties::EntityType {
         EntityKind::Document => Stored::Document,
         EntityKind::Task => Stored::Task,
         EntityKind::Company => Stored::Company,
+        EntityKind::Contact => Stored::Contact,
         EntityKind::CallRecord => Stored::CallRecord,
         EntityKind::Channel => Stored::Channel,
         EntityKind::Chat => Stored::Chat,

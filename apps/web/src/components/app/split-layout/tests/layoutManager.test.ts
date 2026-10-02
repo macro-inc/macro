@@ -1666,6 +1666,23 @@ describe('layoutManager', () => {
       }
     });
 
+    it('restores a call chat target from old and Drive links', async () => {
+      for (const path of [
+        '/call/call-1?call_message_id=message-1',
+        '/drive/call/call-1?call_message_id=message-1',
+      ]) {
+        const { manager, location, router, dispose } = ingressRouter(path);
+        await router.settled();
+        const split = manager.splits()[0];
+        expect(router.search(split.id, 'call-detail')).toEqual({
+          messageId: ['message-1'],
+        });
+        expect(location.read().pathname).toBe('/drive/call/call-1');
+        router.dispose();
+        dispose();
+      }
+    });
+
     it('preserves canonical transcript search when upgrading an old call link', async () => {
       const { manager, location, router, dispose } = ingressRouter(
         '/call/call-1?s0.call-detail.transcriptId=segment-3&referral_code=code#focus'
@@ -1759,6 +1776,44 @@ describe('layoutManager', () => {
       await router.settled();
       expect(location.read().pathname).toBe(expected);
       expect(location.history()).toHaveLength(1);
+      router.dispose();
+      dispose();
+    });
+
+    it('opens a project like a task: in Tasks, under its Projects tab', async () => {
+      const projectId = '019507e8-14a3-7bc1-8610-419f16bd03a9';
+      const { manager, location, router, dispose } = ingressRouter('/search');
+      await router.settled();
+
+      manager.openWithSplit(
+        { type: 'initiative', id: projectId } as SplitContent,
+        { activate: true }
+      );
+      await router.settled();
+
+      expect(location.read().pathname).toBe(
+        `/tasks/projects/${projectId}/overview`
+      );
+      expect(router.search(manager.splits()[0].id, 'tasks')).toMatchObject({
+        tab: ['projects'],
+      });
+      router.dispose();
+      dispose();
+    });
+
+    it('keeps a project block on touch, like tasks', async () => {
+      const projectId = '019507e8-14a3-7bc1-8610-419f16bd03a9';
+      const { manager, location, router, dispose } = ingressRouter(
+        `/initiative/${projectId}`,
+        { touch: true }
+      );
+      await router.settled();
+
+      expect(location.read().pathname).toBe(`/initiative/${projectId}`);
+      expect(manager.splits()[0].content).toMatchObject({
+        type: 'initiative',
+        id: projectId,
+      });
       router.dispose();
       dispose();
     });

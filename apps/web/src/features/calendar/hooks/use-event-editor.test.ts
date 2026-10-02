@@ -1,5 +1,6 @@
 import { createRoot } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createCalendarEventFormController } from '../components/composer/create-calendar-event-form-controller';
 import {
   calendarEventToEditorInitialValues,
   type EventEditorSubmitValues,
@@ -95,6 +96,203 @@ beforeEach(() => {
   });
   mocks.fetchMeeting.mockResolvedValue({ id: 'meeting-1' });
   mocks.updateMeeting.mockResolvedValue({ id: 'meeting-1' });
+});
+
+describe('editing event times', () => {
+  function editorFor(overrides: Partial<CalendarEvent> = {}) {
+    return createRoot((dispose) => {
+      const event: CalendarEvent = {
+        ...savedEvent,
+        location: '',
+        recurrenceLines: ['RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR'],
+        reminders: {
+          useDefault: false,
+          overrides: [{ method: 'popup', minutes: 10 }],
+        },
+        ...overrides,
+      };
+      const onSaved = vi.fn();
+      const editor = useEventEditor({
+        event: () => event,
+        onSaved,
+        macroCallsEnabled: () => false,
+      });
+      const form = createCalendarEventFormController({
+        initialValue: calendarEventToEditorInitialValues(event),
+        isEdit: true,
+        calendarOptions: editor.calendarOptions,
+        guestOptions: () => [],
+      });
+      return { editor, form, event, onSaved, dispose };
+    });
+  }
+
+  describe.each(['all', 'this_event'] as const)('%s scope', (scope) => {
+    it.each([
+      'RRULE:FREQ=WEEKLY;WKST=SU;INTERVAL=1;BYDAY=MO,TU,WE,TH,FR',
+      'RRULE:BYDAY=FR,TH,WE,TU,MO;FREQ=WEEKLY',
+      'RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR;UNTIL=20261231T180000Z',
+    ])('removes only reminders without rewriting %s', async (rule) => {
+      const { editor, form, onSaved, dispose } = editorFor({
+        recurrenceLines: [rule],
+      });
+      try {
+        form.setReminderMinutes([]);
+        await editor.save(form.submitValues()!, scope);
+        expect(mocks.updateEvent).toHaveBeenCalledOnce();
+        expect(mocks.updateEvent.mock.lastCall?.[0].patch).toEqual({
+          reminders: { useDefault: false, overrides: [] },
+        });
+        expect(onSaved).toHaveBeenCalledOnce();
+      } finally {
+        dispose();
+      }
+    });
+
+    it.each([
+      { label: 'timed', overrides: {} },
+      {
+        label: 'timed with seconds and an explicit offset',
+        overrides: {
+          start: '2026-09-22T10:00:37-04:00',
+          end: '2026-09-22T11:00:42-04:00',
+        },
+      },
+      {
+        label: 'all-day',
+        overrides: {
+          allDay: true,
+          start: '2026-09-22',
+          end: '2026-09-24',
+        },
+      },
+    ])(
+      'preserves $label timing when only reminders change',
+      async ({ overrides }) => {
+        const { editor, form, event, onSaved, dispose } = editorFor(overrides);
+        try {
+          form.setReminderMinutes([5]);
+          const submitted = form.submitValues();
+          expect(submitted).toBeDefined();
+          await editor.save(submitted!, scope);
+
+          expect(mocks.updateEvent).toHaveBeenCalledOnce();
+          const request = mocks.updateEvent.mock.lastCall?.[0];
+          expect(request.scope).toBe(scope);
+          expect(request.recurrenceId).toBe(
+            scope === 'this_event' ? event.occurrenceKey : undefined
+          );
+          expect(request.patch).toEqual({
+            reminders: {
+              useDefault: false,
+              overrides: [{ method: 'popup', minutes: 5 }],
+            },
+          });
+          expect(onSaved).toHaveBeenCalledOnce();
+          expect(mocks.failure).not.toHaveBeenCalled();
+        } finally {
+          dispose();
+        }
+      }
+    );
+
+    it.each(['start', 'end', 'allDay'] as const)(
+      'still sends intentional %s changes',
+      async (field) => {
+        const { editor, form, dispose } = editorFor();
+        try {
+          if (field === 'allDay') form.setAllDay(true);
+          else if (field === 'start') form.setStart('2026-09-21T18:00');
+          else form.setField('end', '2026-10-01T18:30');
+          const submitted = form.submitValues();
+          expect(submitted).toBeDefined();
+          await editor.save(submitted!, scope);
+          expect(mocks.updateEvent.mock.lastCall?.[0].patch.time).toEqual(
+            submitted!.time
+          );
+        } finally {
+          dispose();
+        }
+      }
+    );
+  });
+
+  it.each([
+    {
+      label: 'Google Meet',
+      conferenceUrl: 'https://meet.google.com/abc-defg-hij',
+      conferenceProvider: 'google_meet' as const,
+      location: 'Meeting room',
+      description: '<p>Deploy checklist</p>',
+    },
+    { label: 'Macro call', location: savedEvent.location },
+  ])('sends only reminders on an invited $label event', async (overrides) => {
+    const { editor, form, onSaved, dispose } = editorFor({
+      ...overrides,
+      attendees: [
+        {
+          email: 'organizer@example.com',
+          isOrganizer: true,
+          isSelf: false,
+          isOptional: false,
+          responseStatus: 'accepted',
+        },
+        {
+          email: 'guest@example.com',
+          isOrganizer: false,
+          isSelf: true,
+          isOptional: false,
+          responseStatus: 'accepted',
+        },
+      ],
+    });
+    mocks.updateEvent.mockImplementationOnce(async ({ patch }) => {
+      if (Object.keys(patch).some((field) => field !== 'reminders')) {
+        throw new Error('Forbidden');
+      }
+      return { id: 'event-1' };
+    });
+    try {
+      form.setReminderMinutes([5]);
+      await editor.save(form.submitValues()!, 'all');
+      expect(mocks.updateEvent).toHaveBeenCalledOnce();
+      expect(onSaved).toHaveBeenCalledOnce();
+      expect(mocks.failure).not.toHaveBeenCalled();
+    } finally {
+      dispose();
+    }
+  });
+
+  it('closes an unchanged event without sending an empty patch', async () => {
+    const { editor, form, onSaved, dispose } = editorFor();
+    try {
+      await editor.save(form.submitValues()!, 'all');
+      expect(mocks.updateEvent).not.toHaveBeenCalled();
+      expect(onSaved).toHaveBeenCalledOnce();
+    } finally {
+      dispose();
+    }
+  });
+
+  it.each(['title', 'location', 'description'] as const)(
+    'still sends intentional %s edits and clearing',
+    async (field) => {
+      const { editor, form, dispose } = editorFor({
+        title: 'Prod Deploy',
+        location: 'Meeting room',
+        description: '<p>Checklist</p>',
+      });
+      try {
+        form.setField(field, field === 'title' ? 'Updated deploy' : '');
+        await editor.save(form.submitValues()!, 'all');
+        expect(mocks.updateEvent.mock.lastCall?.[0].patch).toEqual({
+          [field]: field === 'title' ? 'Updated deploy' : '',
+        });
+      } finally {
+        dispose();
+      }
+    }
+  );
 });
 
 describe('scheduling a Macro call', () => {
@@ -296,10 +494,12 @@ describe('scheduling a Macro call', () => {
         description: initial.description,
         conferenceChoice: 'none',
       });
-      expect(mocks.updateEvent.mock.lastCall?.[0].patch.location).toBe(
-        event.location
+      expect(mocks.updateEvent.mock.lastCall?.[0].patch).not.toHaveProperty(
+        'location'
       );
-      expect(mocks.updateEvent.mock.lastCall?.[0].patch.description).toBe('');
+      expect(mocks.updateEvent.mock.lastCall?.[0].patch).not.toHaveProperty(
+        'description'
+      );
       expect(mocks.createMeeting).not.toHaveBeenCalled();
       expect(mocks.updateMeeting).not.toHaveBeenCalled();
     } finally {

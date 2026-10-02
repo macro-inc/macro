@@ -142,6 +142,8 @@ import type { ReorderFavoritesRequest } from './generated/schemas/reorderFavorit
 import type { ReorderPinRequest } from './generated/schemas/reorderPinRequest';
 import type { ReplaceCrmStagesRequest } from './generated/schemas/replaceCrmStagesRequest';
 import type { SaveDocumentResponseData } from './generated/schemas/saveDocumentResponseData';
+import type { SearchContactsParams } from './generated/schemas/searchContactsParams';
+import type { SearchContactsResponse } from './generated/schemas/searchContactsResponse';
 import type { SetChannelLabelRequest } from './generated/schemas/setChannelLabelRequest';
 import type { SetChannelPictureRequest } from './generated/schemas/setChannelPictureRequest';
 import type { SetCompanyNameRequest } from './generated/schemas/setCompanyNameRequest';
@@ -164,7 +166,7 @@ import type { ViewsResponse } from './generated/schemas/viewsResponse';
 import { saveDocumentHandlerResponse } from './generated/zod';
 import type { ItemType } from './itemType';
 
-export type { ItemType } from './itemType';
+export type { HistoryItemType, ItemType } from './itemType';
 export {
   blockNameToItemType,
   DEFAULT_ITEM_TYPE,
@@ -2513,6 +2515,18 @@ export const storageServiceClient = {
     const query = new URLSearchParams({ email });
     return await dssFetch<GetContactByEmailResponse>(
       `/crm/contacts/by-email?${query.toString()}`,
+      { method: 'GET', signal }
+    );
+  },
+  async searchContacts({
+    query,
+    limit,
+    signal,
+  }: SearchContactsParams & { signal?: AbortSignal }) {
+    const params = new URLSearchParams({ query: query ?? '' });
+    if (limit) params.set('limit', String(limit));
+    return await dssFetch<SearchContactsResponse>(
+      `/crm/contacts?${params.toString()}`,
       { method: 'GET', signal }
     );
   },

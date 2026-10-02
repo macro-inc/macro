@@ -244,3 +244,41 @@ fn channel_thread_has_replies_materializes_for_browser_and_server() {
         );
     }
 }
+
+#[test]
+fn crm_document_literals_materialize_for_browser_and_server() {
+    let company_id = "0198a1b2-c3d4-7e5f-8061-728394a5b700";
+    let value = json!({
+        "documentFilter": {"or": {
+            "left": {"literal": {"property": {
+                "propertyDefinitionId": "00000001-0000-0000-0000-00000000000c",
+                "value": {"entityRef": company_id}
+            }}},
+            "right": {"literal": {"emailAttachmentParticipant": {"domain": "acme.com"}}}
+        }}
+    });
+    let ast = materialize_graphql_filter(value.clone()).unwrap();
+    let input: GraphqlEntityFilterAst = serde_json::from_value(value).unwrap();
+    assert_eq!(
+        serde_json::to_value(&ast).unwrap(),
+        serde_json::to_value(input.into_ast().unwrap()).unwrap()
+    );
+
+    let Some(Expr::Or(left, right)) = ast.document_filter.as_deref() else {
+        panic!("expected an OR of the two CRM literals")
+    };
+    assert!(matches!(
+        left.as_ref(),
+        Expr::Literal(DocumentLiteral::Property(PropertiesLiteral {
+            entity_type: None,
+            value: PropertyMatchValue::EntityRef(id),
+            ..
+        })) if id.to_string() == company_id
+    ));
+    assert!(matches!(
+        right.as_ref(),
+        Expr::Literal(DocumentLiteral::EmailAttachmentParticipant(
+            item_filters::ast::email::Email::Domain(domain)
+        )) if domain == "acme.com"
+    ));
+}

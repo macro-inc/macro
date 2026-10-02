@@ -71,6 +71,8 @@ function getEntityTypePluralLabel(
       return 'chats';
     case 'COMPANY':
       return 'companies';
+    case 'CONTACT':
+      return 'contacts';
     case 'THREAD':
       return 'emails';
     case 'TASK':
@@ -213,11 +215,6 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     // For THREAD type, use email data (not in quickAccess yet)
     if (specificEntityType === 'THREAD') {
       return emails().map(threadMapper);
-    }
-
-    // For COMPANY type, return empty (not in quickAccess)
-    if (specificEntityType === 'COMPANY') {
-      return [];
     }
 
     // Convert quickAccess items to CombinedEntity

@@ -414,6 +414,24 @@ impl PropertiesRepo for PropertiesPgRepo {
         .await?)
     }
 
+    #[tracing::instrument(skip(self, references), err)]
+    async fn add_entity_property_references(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        property_definition_id: Uuid,
+        references: Vec<EntityReference>,
+    ) -> Result<EntityPropertyMutationSnapshot, Self::Err> {
+        entity_property_queries::add_entity_property_references(
+            &self.pool,
+            entity_id,
+            entity_type,
+            property_definition_id,
+            references,
+        )
+        .await
+    }
+
     #[tracing::instrument(skip(self))]
     async fn add_entity_property_option(
         &self,
@@ -640,16 +658,6 @@ impl PropertiesRepo for PropertiesPgRepo {
         .fetch_optional(&self.pool)
         .await?;
 
-        match row {
-            None => Ok(None),
-            Some(r) => match r.values {
-                None => Ok(None),
-                Some(json_value) if json_value.is_null() => Ok(None),
-                Some(json_value) => {
-                    let value: PropertyValue = serde_json::from_value(json_value)?;
-                    Ok(Some(value))
-                }
-            },
-        }
+        entity_property_queries::decode_stored_property_value(row.and_then(|row| row.values))
     }
 }

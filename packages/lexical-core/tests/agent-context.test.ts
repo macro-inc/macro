@@ -395,7 +395,8 @@ describe('composeAgentContextPrompt', () => {
     ['initiative', 'a project comment thread'],
     ['crm_company', 'a CRM company comment thread'],
     ['crm_contact', 'a CRM contact comment thread'],
-  ] as const)('names a %s discussion as the origin', (type, surface) => {
+    ['call', 'a call chat thread'],
+  ] as const)('names a %s conversation as the origin', (type, surface) => {
     expect(
       composedContext({
         promptMarkdown: 'tell me more',

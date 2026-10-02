@@ -1686,3 +1686,39 @@ fn database_rows_are_requested_by_naming_a_table_or_a_row_outside_a_not() {
         json!({ "l": { "t": "00000000-0000-0000-0000-00000007ab1e" } })
     );
 }
+
+#[test]
+fn crm_document_literals_round_trip_through_the_rest_ast() {
+    let company_id = "0198a1b2-c3d4-7e5f-8061-728394a5b700";
+    let tree = json!({
+        "|": [
+            { "l": { "prop": {
+                "pd": "00000001-0000-0000-0000-00000000000c",
+                "v": { "er": company_id }
+            } } },
+            { "l": { "eap": { "Domain": "acme.com" } } }
+        ]
+    });
+    let expr: Expr<document::DocumentLiteral> = serde_json::from_value(tree.clone()).unwrap();
+
+    let Expr::Or(left, right) = &expr else {
+        panic!("expected an OR, got {expr:?}")
+    };
+    assert_matches!(
+        left.as_ref(),
+        Expr::Literal(document::DocumentLiteral::Property(
+            properties::PropertiesLiteral {
+                entity_type: None,
+                value: properties::PropertyMatchValue::EntityRef(_),
+                ..
+            }
+        ))
+    );
+    assert_matches!(
+        right.as_ref(),
+        Expr::Literal(document::DocumentLiteral::EmailAttachmentParticipant(
+            email::Email::Domain(domain)
+        )) if domain == "acme.com"
+    );
+    assert_eq!(serde_json::to_value(&expr).unwrap(), tree);
+}

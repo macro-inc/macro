@@ -5410,6 +5410,7 @@ export const QueryDatabaseResponse = z.object({
                   z.literal('DOCUMENT'),
                   z.literal('TASK'),
                   z.literal('COMPANY'),
+                  z.literal('CONTACT'),
                   z.literal('CALL_RECORD'),
                   z.literal('CHANNEL'),
                   z.literal('CHAT'),
@@ -8063,6 +8064,7 @@ export const SetEntityProperty = z.object({
           'call',
           'user',
           'company',
+          'contact',
         ]),
         entityId: z.string(),
       }),
@@ -8084,6 +8086,7 @@ export const SetEntityProperty = z.object({
             'call',
             'user',
             'company',
+            'contact',
           ]),
           entityId: z.string(),
         })

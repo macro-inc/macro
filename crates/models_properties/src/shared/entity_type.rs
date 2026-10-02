@@ -33,9 +33,12 @@ pub enum EntityType {
     CallRecord,
     Channel,
     Chat,
+    /// CRM company.
     Company,
     /// A row of a Macro database table; its cells are its properties.
     DatabaseRow,
+    /// CRM contact.
+    Contact,
     Document,
     /// Initiative, displayed as a Project in the application.
     Initiative,

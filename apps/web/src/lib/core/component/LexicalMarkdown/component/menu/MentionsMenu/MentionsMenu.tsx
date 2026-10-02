@@ -72,6 +72,7 @@ const DEFAULT_DOCUMENT_BUCKETS: EntityBucket[] = [
   'project',
   'chat',
   'database',
+  'initiative',
 ];
 
 type MentionsMenuProps = {

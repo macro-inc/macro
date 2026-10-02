@@ -91,7 +91,8 @@ impl CrmParentReader for PgCrmParentReader {
                 MessageParent::CrmContact(id) => self.contact(id).await?,
                 MessageParent::Channel(_)
                 | MessageParent::Document(_)
-                | MessageParent::Initiative(_) => None,
+                | MessageParent::Initiative(_)
+                | MessageParent::Call(_) => None,
             };
             Ok(facts)
         })

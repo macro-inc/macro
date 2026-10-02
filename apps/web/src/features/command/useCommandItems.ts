@@ -345,7 +345,10 @@ function useCommandsList(
 const QUICK_ACCESS_BUCKETS_BY_CATEGORY: Partial<
   Record<CategoryFilter, Bucket[]>
 > = {
-  all: exclude('person'),
+  // Projects come from the command menu's own server search. CRM contacts
+  // have no view history, so a no-query list would surface the whole team's
+  // contacts; they are reached through their company instead.
+  all: exclude('person', 'initiative', 'crm_contact'),
   channels: ['channel'],
   dms: ['dm'],
   documents: ['note', 'document', 'snippet', 'project', 'database'],

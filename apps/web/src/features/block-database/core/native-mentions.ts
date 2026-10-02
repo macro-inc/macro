@@ -16,6 +16,7 @@ const ENTITY_TYPE_OF_BUCKET: Partial<Record<EntityBucket, DatabaseEntityType>> =
     dm: 'CHANNEL',
     email: 'THREAD',
     crm_company: 'COMPANY',
+    crm_contact: 'CONTACT',
   };
 
 export function databaseMentionFromItem(
@@ -58,6 +59,7 @@ export function databaseMentionScope(
     .with('CHANNEL', () => ({ sources: ['channels'] }))
     .with('THREAD', () => ({ sources: ['emails'] }))
     .with('COMPANY', () => ({ sources: ['companies'] }))
+    .with('CONTACT', () => documentScope(['crm_contact']))
     .with('TASK', () => documentScope(['task']))
     .with('DOCUMENT', () => documentScope(['note', 'snippet', 'document']))
     .with('PROJECT', () => documentScope(['project']))

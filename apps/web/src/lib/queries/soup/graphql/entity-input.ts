@@ -74,7 +74,8 @@ export function buildGraphqlEntitiesSoupInput(
   };
   const count = new Set(
     entities
-      .filter((e) => e.entityType !== 'USER')
+      // Users and CRM contacts are not Soup items.
+      .filter((e) => e.entityType !== 'USER' && e.entityType !== 'CONTACT')
       .map(
         (e) =>
           `${e.entityType === 'TASK' ? 'DOCUMENT' : e.entityType}:${e.entityId}`
@@ -122,8 +123,8 @@ export function buildGraphqlEntitySoupInput(
     .with('DATABASE_ROW', () => ({
       databaseRowFilter: { literal: { id: entityId } },
     }))
-    // Users are not Soup items.
-    .with('USER', () => undefined)
+    // Users and CRM contacts are not Soup items.
+    .with('USER', 'CONTACT', () => undefined)
     .exhaustive();
   if (!targetFilter) return undefined;
 

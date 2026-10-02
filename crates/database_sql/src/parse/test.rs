@@ -996,6 +996,24 @@ fn using_null_is_not_part_of_alter_column() {
 }
 
 #[test]
+fn crm_contacts_remain_typed_entity_references() {
+    assert_eq!(
+        parse("ALTER TABLE deals ALTER COLUMN contact TYPE entity(CONTACT)").unwrap(),
+        Statement::AlterColumnType(AlterColumnType {
+            table: TableName {
+                database: None,
+                table: Identifier("deals".into()),
+            },
+            column: Identifier("contact".into()),
+            to: OpColumnKind::Entity {
+                target: EntityKind::Contact,
+                multi: false,
+            },
+        })
+    );
+}
+
+#[test]
 fn an_entity_type_names_its_kind_and_takes_brackets_for_several() {
     assert_eq!(
         parse("ALTER TABLE deals ALTER COLUMN owner TYPE entity(user)[]").unwrap(),
@@ -1054,7 +1072,7 @@ fn a_bad_alter_says_what_would_have_been_accepted() {
         (
             "ALTER TABLE deals ALTER COLUMN owner TYPE entity(ROBOT)",
             49..54,
-            "unknown entity kind \"ROBOT\"; the kinds are USER, DOCUMENT, TASK, COMPANY, \
+            "unknown entity kind \"ROBOT\"; the kinds are USER, DOCUMENT, TASK, COMPANY, CONTACT, \
              CALL_RECORD, CHANNEL, CHAT, PROJECT, THREAD, CALENDAR_EVENT, INITIATIVE"
                 .into(),
         ),

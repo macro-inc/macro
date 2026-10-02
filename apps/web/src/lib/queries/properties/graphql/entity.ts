@@ -207,6 +207,9 @@ export function toGraphqlPropertyTargetEntityType(
   if (entityType === 'CALENDAR_EVENT') {
     throw new Error('calendar events do not support properties');
   }
+  if (entityType === 'CONTACT') {
+    throw new Error('crm contacts do not support properties');
+  }
   return entityType;
 }
 

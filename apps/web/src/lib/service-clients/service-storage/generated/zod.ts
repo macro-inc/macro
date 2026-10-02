@@ -4222,6 +4222,68 @@ export const setCrmCompanyNameBody = zod
   .describe('Request body for `PUT \/companies\/{company_id}\/name`.');
 
 /**
+ * @summary Search the caller's team's CRM contacts by email or name. Any team member
+may search visible contacts; admin/owner callers also match hidden
+contacts and contacts under hidden companies.
+ */
+export const searchContactsQueryLimitMin = 0;
+
+export const searchContactsQueryParams = zod.object({
+  query: zod
+    .string()
+    .optional()
+    .describe(
+      "Text the contact's email or name must contain (case-insensitive).\nEmpty lists the most recently interacted contacts."
+    ),
+  limit: zod
+    .number()
+    .min(searchContactsQueryLimitMin)
+    .nullish()
+    .describe('Maximum contacts to return (1-500, default 20).'),
+});
+
+export const searchContactsResponse = zod
+  .object({
+    contacts: zod
+      .array(
+        zod
+          .object({
+            companyId: zod
+              .uuid()
+              .describe('The id of the company the contact belongs to.'),
+            createdAt: zod.iso
+              .datetime({})
+              .describe('When the contact record was created.'),
+            email: zod.string().describe("The contact's email address."),
+            firstInteraction: zod.iso
+              .datetime({})
+              .describe('Earliest known interaction with this contact.'),
+            hidden: zod
+              .boolean()
+              .describe(
+                'Whether the contact is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint filters them out); admin\/owner callers see\nhidden contacts so they can render the right toggle state.'
+              ),
+            id: zod.uuid().describe('The id of the contact record.'),
+            lastInteraction: zod.iso
+              .datetime({})
+              .describe('Most recent known interaction with this contact.'),
+            name: zod
+              .string()
+              .nullish()
+              .describe('Display name observed for the contact, if any.'),
+            updatedAt: zod.iso
+              .datetime({})
+              .describe('When the contact record was last updated.'),
+          })
+          .describe(
+            'A CRM contact as returned by `GET \/crm\/companies\/{company_id}\/contacts`.'
+          )
+      )
+      .describe('Matching contacts, most recently interacted first.'),
+  })
+  .describe('Response from searching CRM contacts.');
+
+/**
  * @summary Look up a CRM contact by email in the caller's team. Returns a null
 `contact` when no visible contact exists. Any team member may resolve a
 visible contact; admin/owner callers may also resolve hidden contacts and
@@ -4854,6 +4916,7 @@ export const getDatabaseResponse = zod
                                   'CHAT',
                                   'COMPANY',
                                   'DATABASE_ROW',
+                                  'CONTACT',
                                   'DOCUMENT',
                                   'INITIATIVE',
                                   'PROJECT',
@@ -5745,6 +5808,7 @@ export const applyDatabaseOpsBody = zod
                                             'DOCUMENT',
                                             'TASK',
                                             'COMPANY',
+                                            'CONTACT',
                                             'CALL_RECORD',
                                             'CHANNEL',
                                             'CHAT',
@@ -5883,6 +5947,7 @@ export const applyDatabaseOpsBody = zod
                                     'DOCUMENT',
                                     'TASK',
                                     'COMPANY',
+                                    'CONTACT',
                                     'CALL_RECORD',
                                     'CHANNEL',
                                     'CHAT',
@@ -6111,6 +6176,7 @@ export const applyDatabaseOpsBody = zod
                                                       'DOCUMENT',
                                                       'TASK',
                                                       'COMPANY',
+                                                      'CONTACT',
                                                       'CALL_RECORD',
                                                       'CHANNEL',
                                                       'CHAT',
@@ -6288,6 +6354,7 @@ export const applyDatabaseOpsBody = zod
                                                             'DOCUMENT',
                                                             'TASK',
                                                             'COMPANY',
+                                                            'CONTACT',
                                                             'CALL_RECORD',
                                                             'CHANNEL',
                                                             'CHAT',
@@ -6491,6 +6558,7 @@ export const applyDatabaseOpsBody = zod
                                                                     'DOCUMENT',
                                                                     'TASK',
                                                                     'COMPANY',
+                                                                    'CONTACT',
                                                                     'CALL_RECORD',
                                                                     'CHANNEL',
                                                                     'CHAT',
@@ -8771,6 +8839,7 @@ export const listDatabaseColumnCastsResponseItem = zod
           'CHAT',
           'COMPANY',
           'DATABASE_ROW',
+          'CONTACT',
           'DOCUMENT',
           'INITIATIVE',
           'PROJECT',
@@ -8870,6 +8939,7 @@ export const convertDatabaseColumnBody = zod
                 'DOCUMENT',
                 'TASK',
                 'COMPANY',
+                'CONTACT',
                 'CALL_RECORD',
                 'CHANNEL',
                 'CHAT',
@@ -8994,6 +9064,7 @@ export const convertDatabaseColumnResponse = zod
                                 'DOCUMENT',
                                 'TASK',
                                 'COMPANY',
+                                'CONTACT',
                                 'CALL_RECORD',
                                 'CHANNEL',
                                 'CHAT',
@@ -9101,6 +9172,7 @@ export const inferDatabaseColumnTypeBody = zod
             'CHAT',
             'COMPANY',
             'DATABASE_ROW',
+            'CONTACT',
             'DOCUMENT',
             'INITIATIVE',
             'PROJECT',
@@ -9236,6 +9308,7 @@ export const inferDatabaseColumnTypeResponse = zod
                       'CHAT',
                       'COMPANY',
                       'DATABASE_ROW',
+                      'CONTACT',
                       'DOCUMENT',
                       'INITIATIVE',
                       'PROJECT',
@@ -9439,6 +9512,7 @@ export const getDatabaseRowHistoryResponse = zod
                                     'DOCUMENT',
                                     'TASK',
                                     'COMPANY',
+                                    'CONTACT',
                                     'CALL_RECORD',
                                     'CHANNEL',
                                     'CHAT',
@@ -9580,6 +9654,7 @@ export const getDatabaseRowHistoryResponse = zod
                                     'DOCUMENT',
                                     'TASK',
                                     'COMPANY',
+                                    'CONTACT',
                                     'CALL_RECORD',
                                     'CHANNEL',
                                     'CHAT',
@@ -10314,6 +10389,7 @@ export const createTaskHandlerBody = zod
                             'CHAT',
                             'COMPANY',
                             'DATABASE_ROW',
+                            'CONTACT',
                             'DOCUMENT',
                             'INITIATIVE',
                             'PROJECT',
@@ -10351,6 +10427,7 @@ export const createTaskHandlerBody = zod
                               'CHAT',
                               'COMPANY',
                               'DATABASE_ROW',
+                              'CONTACT',
                               'DOCUMENT',
                               'INITIATIVE',
                               'PROJECT',
@@ -13915,6 +13992,7 @@ export const createInitiativeBody = zod
                             'CHAT',
                             'COMPANY',
                             'DATABASE_ROW',
+                            'CONTACT',
                             'DOCUMENT',
                             'INITIATIVE',
                             'PROJECT',
@@ -13952,6 +14030,7 @@ export const createInitiativeBody = zod
                               'CHAT',
                               'COMPANY',
                               'DATABASE_ROW',
+                              'CONTACT',
                               'DOCUMENT',
                               'INITIATIVE',
                               'PROJECT',
@@ -14523,6 +14602,7 @@ export const getItemsSoupResponse = zod
                                     'CHAT',
                                     'COMPANY',
                                     'DATABASE_ROW',
+                                    'CONTACT',
                                     'DOCUMENT',
                                     'INITIATIVE',
                                     'PROJECT',
@@ -14625,6 +14705,7 @@ export const getItemsSoupResponse = zod
                                                   'CHAT',
                                                   'COMPANY',
                                                   'DATABASE_ROW',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -14875,6 +14956,7 @@ export const getItemsSoupResponse = zod
                                     'CHAT',
                                     'COMPANY',
                                     'DATABASE_ROW',
+                                    'CONTACT',
                                     'DOCUMENT',
                                     'INITIATIVE',
                                     'PROJECT',
@@ -14977,6 +15059,7 @@ export const getItemsSoupResponse = zod
                                                   'CHAT',
                                                   'COMPANY',
                                                   'DATABASE_ROW',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -15153,6 +15236,7 @@ export const getItemsSoupResponse = zod
                                     'CHAT',
                                     'COMPANY',
                                     'DATABASE_ROW',
+                                    'CONTACT',
                                     'DOCUMENT',
                                     'INITIATIVE',
                                     'PROJECT',
@@ -15255,6 +15339,7 @@ export const getItemsSoupResponse = zod
                                                   'CHAT',
                                                   'COMPANY',
                                                   'DATABASE_ROW',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -15422,6 +15507,7 @@ export const getItemsSoupResponse = zod
                                     'CHAT',
                                     'COMPANY',
                                     'DATABASE_ROW',
+                                    'CONTACT',
                                     'DOCUMENT',
                                     'INITIATIVE',
                                     'PROJECT',
@@ -15524,6 +15610,7 @@ export const getItemsSoupResponse = zod
                                                   'CHAT',
                                                   'COMPANY',
                                                   'DATABASE_ROW',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -15755,6 +15842,7 @@ export const getItemsSoupResponse = zod
                                         'CHAT',
                                         'COMPANY',
                                         'DATABASE_ROW',
+                                        'CONTACT',
                                         'DOCUMENT',
                                         'INITIATIVE',
                                         'PROJECT',
@@ -15857,6 +15945,7 @@ export const getItemsSoupResponse = zod
                                                       'CHAT',
                                                       'COMPANY',
                                                       'DATABASE_ROW',
+                                                      'CONTACT',
                                                       'DOCUMENT',
                                                       'INITIATIVE',
                                                       'PROJECT',
@@ -16465,6 +16554,7 @@ export const getItemsSoupResponse = zod
                                     'CHAT',
                                     'COMPANY',
                                     'DATABASE_ROW',
+                                    'CONTACT',
                                     'DOCUMENT',
                                     'INITIATIVE',
                                     'PROJECT',
@@ -16567,6 +16657,7 @@ export const getItemsSoupResponse = zod
                                                   'CHAT',
                                                   'COMPANY',
                                                   'DATABASE_ROW',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -16831,6 +16922,7 @@ export const getItemsSoupResponse = zod
                                         'CHAT',
                                         'COMPANY',
                                         'DATABASE_ROW',
+                                        'CONTACT',
                                         'DOCUMENT',
                                         'INITIATIVE',
                                         'PROJECT',
@@ -16933,6 +17025,7 @@ export const getItemsSoupResponse = zod
                                                       'CHAT',
                                                       'COMPANY',
                                                       'DATABASE_ROW',
+                                                      'CONTACT',
                                                       'DOCUMENT',
                                                       'INITIATIVE',
                                                       'PROJECT',
@@ -17145,6 +17238,7 @@ export const getItemsSoupResponse = zod
                                     'CHAT',
                                     'COMPANY',
                                     'DATABASE_ROW',
+                                    'CONTACT',
                                     'DOCUMENT',
                                     'INITIATIVE',
                                     'PROJECT',
@@ -17247,6 +17341,7 @@ export const getItemsSoupResponse = zod
                                                   'CHAT',
                                                   'COMPANY',
                                                   'DATABASE_ROW',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -17504,6 +17599,7 @@ export const getItemsSoupResponse = zod
                                     'CHAT',
                                     'COMPANY',
                                     'DATABASE_ROW',
+                                    'CONTACT',
                                     'DOCUMENT',
                                     'INITIATIVE',
                                     'PROJECT',
@@ -17606,6 +17702,7 @@ export const getItemsSoupResponse = zod
                                                   'CHAT',
                                                   'COMPANY',
                                                   'DATABASE_ROW',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -17863,6 +17960,7 @@ export const getItemsSoupResponse = zod
                                     'CHAT',
                                     'COMPANY',
                                     'DATABASE_ROW',
+                                    'CONTACT',
                                     'DOCUMENT',
                                     'INITIATIVE',
                                     'PROJECT',
@@ -17965,6 +18063,7 @@ export const getItemsSoupResponse = zod
                                                   'CHAT',
                                                   'COMPANY',
                                                   'DATABASE_ROW',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -18200,6 +18299,7 @@ export const getItemsSoupResponse = zod
                                     'CHAT',
                                     'COMPANY',
                                     'DATABASE_ROW',
+                                    'CONTACT',
                                     'DOCUMENT',
                                     'INITIATIVE',
                                     'PROJECT',
@@ -18302,6 +18402,7 @@ export const getItemsSoupResponse = zod
                                                   'CHAT',
                                                   'COMPANY',
                                                   'DATABASE_ROW',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -19260,6 +19361,7 @@ export const postItemsSoupResponse = zod
                                     'CHAT',
                                     'COMPANY',
                                     'DATABASE_ROW',
+                                    'CONTACT',
                                     'DOCUMENT',
                                     'INITIATIVE',
                                     'PROJECT',
@@ -19362,6 +19464,7 @@ export const postItemsSoupResponse = zod
                                                   'CHAT',
                                                   'COMPANY',
                                                   'DATABASE_ROW',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -19612,6 +19715,7 @@ export const postItemsSoupResponse = zod
                                     'CHAT',
                                     'COMPANY',
                                     'DATABASE_ROW',
+                                    'CONTACT',
                                     'DOCUMENT',
                                     'INITIATIVE',
                                     'PROJECT',
@@ -19714,6 +19818,7 @@ export const postItemsSoupResponse = zod
                                                   'CHAT',
                                                   'COMPANY',
                                                   'DATABASE_ROW',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -19890,6 +19995,7 @@ export const postItemsSoupResponse = zod
                                     'CHAT',
                                     'COMPANY',
                                     'DATABASE_ROW',
+                                    'CONTACT',
                                     'DOCUMENT',
                                     'INITIATIVE',
                                     'PROJECT',
@@ -19992,6 +20098,7 @@ export const postItemsSoupResponse = zod
                                                   'CHAT',
                                                   'COMPANY',
                                                   'DATABASE_ROW',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -20159,6 +20266,7 @@ export const postItemsSoupResponse = zod
                                     'CHAT',
                                     'COMPANY',
                                     'DATABASE_ROW',
+                                    'CONTACT',
                                     'DOCUMENT',
                                     'INITIATIVE',
                                     'PROJECT',
@@ -20261,6 +20369,7 @@ export const postItemsSoupResponse = zod
                                                   'CHAT',
                                                   'COMPANY',
                                                   'DATABASE_ROW',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -20492,6 +20601,7 @@ export const postItemsSoupResponse = zod
                                         'CHAT',
                                         'COMPANY',
                                         'DATABASE_ROW',
+                                        'CONTACT',
                                         'DOCUMENT',
                                         'INITIATIVE',
                                         'PROJECT',
@@ -20594,6 +20704,7 @@ export const postItemsSoupResponse = zod
                                                       'CHAT',
                                                       'COMPANY',
                                                       'DATABASE_ROW',
+                                                      'CONTACT',
                                                       'DOCUMENT',
                                                       'INITIATIVE',
                                                       'PROJECT',
@@ -21202,6 +21313,7 @@ export const postItemsSoupResponse = zod
                                     'CHAT',
                                     'COMPANY',
                                     'DATABASE_ROW',
+                                    'CONTACT',
                                     'DOCUMENT',
                                     'INITIATIVE',
                                     'PROJECT',
@@ -21304,6 +21416,7 @@ export const postItemsSoupResponse = zod
                                                   'CHAT',
                                                   'COMPANY',
                                                   'DATABASE_ROW',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -21568,6 +21681,7 @@ export const postItemsSoupResponse = zod
                                         'CHAT',
                                         'COMPANY',
                                         'DATABASE_ROW',
+                                        'CONTACT',
                                         'DOCUMENT',
                                         'INITIATIVE',
                                         'PROJECT',
@@ -21670,6 +21784,7 @@ export const postItemsSoupResponse = zod
                                                       'CHAT',
                                                       'COMPANY',
                                                       'DATABASE_ROW',
+                                                      'CONTACT',
                                                       'DOCUMENT',
                                                       'INITIATIVE',
                                                       'PROJECT',
@@ -21882,6 +21997,7 @@ export const postItemsSoupResponse = zod
                                     'CHAT',
                                     'COMPANY',
                                     'DATABASE_ROW',
+                                    'CONTACT',
                                     'DOCUMENT',
                                     'INITIATIVE',
                                     'PROJECT',
@@ -21984,6 +22100,7 @@ export const postItemsSoupResponse = zod
                                                   'CHAT',
                                                   'COMPANY',
                                                   'DATABASE_ROW',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -22241,6 +22358,7 @@ export const postItemsSoupResponse = zod
                                     'CHAT',
                                     'COMPANY',
                                     'DATABASE_ROW',
+                                    'CONTACT',
                                     'DOCUMENT',
                                     'INITIATIVE',
                                     'PROJECT',
@@ -22343,6 +22461,7 @@ export const postItemsSoupResponse = zod
                                                   'CHAT',
                                                   'COMPANY',
                                                   'DATABASE_ROW',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -22600,6 +22719,7 @@ export const postItemsSoupResponse = zod
                                     'CHAT',
                                     'COMPANY',
                                     'DATABASE_ROW',
+                                    'CONTACT',
                                     'DOCUMENT',
                                     'INITIATIVE',
                                     'PROJECT',
@@ -22702,6 +22822,7 @@ export const postItemsSoupResponse = zod
                                                   'CHAT',
                                                   'COMPANY',
                                                   'DATABASE_ROW',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -22937,6 +23058,7 @@ export const postItemsSoupResponse = zod
                                     'CHAT',
                                     'COMPANY',
                                     'DATABASE_ROW',
+                                    'CONTACT',
                                     'DOCUMENT',
                                     'INITIATIVE',
                                     'PROJECT',
@@ -23039,6 +23161,7 @@ export const postItemsSoupResponse = zod
                                                   'CHAT',
                                                   'COMPANY',
                                                   'DATABASE_ROW',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -23403,6 +23526,7 @@ export const postItemsSoupAstResponse = zod
                                     'CHAT',
                                     'COMPANY',
                                     'DATABASE_ROW',
+                                    'CONTACT',
                                     'DOCUMENT',
                                     'INITIATIVE',
                                     'PROJECT',
@@ -23505,6 +23629,7 @@ export const postItemsSoupAstResponse = zod
                                                   'CHAT',
                                                   'COMPANY',
                                                   'DATABASE_ROW',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -23755,6 +23880,7 @@ export const postItemsSoupAstResponse = zod
                                     'CHAT',
                                     'COMPANY',
                                     'DATABASE_ROW',
+                                    'CONTACT',
                                     'DOCUMENT',
                                     'INITIATIVE',
                                     'PROJECT',
@@ -23857,6 +23983,7 @@ export const postItemsSoupAstResponse = zod
                                                   'CHAT',
                                                   'COMPANY',
                                                   'DATABASE_ROW',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -24033,6 +24160,7 @@ export const postItemsSoupAstResponse = zod
                                     'CHAT',
                                     'COMPANY',
                                     'DATABASE_ROW',
+                                    'CONTACT',
                                     'DOCUMENT',
                                     'INITIATIVE',
                                     'PROJECT',
@@ -24135,6 +24263,7 @@ export const postItemsSoupAstResponse = zod
                                                   'CHAT',
                                                   'COMPANY',
                                                   'DATABASE_ROW',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -24302,6 +24431,7 @@ export const postItemsSoupAstResponse = zod
                                     'CHAT',
                                     'COMPANY',
                                     'DATABASE_ROW',
+                                    'CONTACT',
                                     'DOCUMENT',
                                     'INITIATIVE',
                                     'PROJECT',
@@ -24404,6 +24534,7 @@ export const postItemsSoupAstResponse = zod
                                                   'CHAT',
                                                   'COMPANY',
                                                   'DATABASE_ROW',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -24635,6 +24766,7 @@ export const postItemsSoupAstResponse = zod
                                         'CHAT',
                                         'COMPANY',
                                         'DATABASE_ROW',
+                                        'CONTACT',
                                         'DOCUMENT',
                                         'INITIATIVE',
                                         'PROJECT',
@@ -24737,6 +24869,7 @@ export const postItemsSoupAstResponse = zod
                                                       'CHAT',
                                                       'COMPANY',
                                                       'DATABASE_ROW',
+                                                      'CONTACT',
                                                       'DOCUMENT',
                                                       'INITIATIVE',
                                                       'PROJECT',
@@ -25347,6 +25480,7 @@ export const postItemsSoupAstResponse = zod
                                     'CHAT',
                                     'COMPANY',
                                     'DATABASE_ROW',
+                                    'CONTACT',
                                     'DOCUMENT',
                                     'INITIATIVE',
                                     'PROJECT',
@@ -25449,6 +25583,7 @@ export const postItemsSoupAstResponse = zod
                                                   'CHAT',
                                                   'COMPANY',
                                                   'DATABASE_ROW',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -25713,6 +25848,7 @@ export const postItemsSoupAstResponse = zod
                                         'CHAT',
                                         'COMPANY',
                                         'DATABASE_ROW',
+                                        'CONTACT',
                                         'DOCUMENT',
                                         'INITIATIVE',
                                         'PROJECT',
@@ -25815,6 +25951,7 @@ export const postItemsSoupAstResponse = zod
                                                       'CHAT',
                                                       'COMPANY',
                                                       'DATABASE_ROW',
+                                                      'CONTACT',
                                                       'DOCUMENT',
                                                       'INITIATIVE',
                                                       'PROJECT',
@@ -26027,6 +26164,7 @@ export const postItemsSoupAstResponse = zod
                                     'CHAT',
                                     'COMPANY',
                                     'DATABASE_ROW',
+                                    'CONTACT',
                                     'DOCUMENT',
                                     'INITIATIVE',
                                     'PROJECT',
@@ -26129,6 +26267,7 @@ export const postItemsSoupAstResponse = zod
                                                   'CHAT',
                                                   'COMPANY',
                                                   'DATABASE_ROW',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -26386,6 +26525,7 @@ export const postItemsSoupAstResponse = zod
                                     'CHAT',
                                     'COMPANY',
                                     'DATABASE_ROW',
+                                    'CONTACT',
                                     'DOCUMENT',
                                     'INITIATIVE',
                                     'PROJECT',
@@ -26488,6 +26628,7 @@ export const postItemsSoupAstResponse = zod
                                                   'CHAT',
                                                   'COMPANY',
                                                   'DATABASE_ROW',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -26745,6 +26886,7 @@ export const postItemsSoupAstResponse = zod
                                     'CHAT',
                                     'COMPANY',
                                     'DATABASE_ROW',
+                                    'CONTACT',
                                     'DOCUMENT',
                                     'INITIATIVE',
                                     'PROJECT',
@@ -26847,6 +26989,7 @@ export const postItemsSoupAstResponse = zod
                                                   'CHAT',
                                                   'COMPANY',
                                                   'DATABASE_ROW',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -27082,6 +27225,7 @@ export const postItemsSoupAstResponse = zod
                                     'CHAT',
                                     'COMPANY',
                                     'DATABASE_ROW',
+                                    'CONTACT',
                                     'DOCUMENT',
                                     'INITIATIVE',
                                     'PROJECT',
@@ -27184,6 +27328,7 @@ export const postItemsSoupAstResponse = zod
                                                   'CHAT',
                                                   'COMPANY',
                                                   'DATABASE_ROW',
+                                                  'CONTACT',
                                                   'DOCUMENT',
                                                   'INITIATIVE',
                                                   'PROJECT',
@@ -27810,6 +27955,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                           'CHAT',
                                           'COMPANY',
                                           'DATABASE_ROW',
+                                          'CONTACT',
                                           'DOCUMENT',
                                           'INITIATIVE',
                                           'PROJECT',
@@ -27912,6 +28058,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                                         'CHAT',
                                                         'COMPANY',
                                                         'DATABASE_ROW',
+                                                        'CONTACT',
                                                         'DOCUMENT',
                                                         'INITIATIVE',
                                                         'PROJECT',
@@ -28168,6 +28315,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                           'CHAT',
                                           'COMPANY',
                                           'DATABASE_ROW',
+                                          'CONTACT',
                                           'DOCUMENT',
                                           'INITIATIVE',
                                           'PROJECT',
@@ -28270,6 +28418,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                                         'CHAT',
                                                         'COMPANY',
                                                         'DATABASE_ROW',
+                                                        'CONTACT',
                                                         'DOCUMENT',
                                                         'INITIATIVE',
                                                         'PROJECT',
@@ -28448,6 +28597,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                           'CHAT',
                                           'COMPANY',
                                           'DATABASE_ROW',
+                                          'CONTACT',
                                           'DOCUMENT',
                                           'INITIATIVE',
                                           'PROJECT',
@@ -28550,6 +28700,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                                         'CHAT',
                                                         'COMPANY',
                                                         'DATABASE_ROW',
+                                                        'CONTACT',
                                                         'DOCUMENT',
                                                         'INITIATIVE',
                                                         'PROJECT',
@@ -28721,6 +28872,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                           'CHAT',
                                           'COMPANY',
                                           'DATABASE_ROW',
+                                          'CONTACT',
                                           'DOCUMENT',
                                           'INITIATIVE',
                                           'PROJECT',
@@ -28823,6 +28975,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                                         'CHAT',
                                                         'COMPANY',
                                                         'DATABASE_ROW',
+                                                        'CONTACT',
                                                         'DOCUMENT',
                                                         'INITIATIVE',
                                                         'PROJECT',
@@ -29071,6 +29224,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                               'CHAT',
                                               'COMPANY',
                                               'DATABASE_ROW',
+                                              'CONTACT',
                                               'DOCUMENT',
                                               'INITIATIVE',
                                               'PROJECT',
@@ -29177,6 +29331,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                                             'CHAT',
                                                             'COMPANY',
                                                             'DATABASE_ROW',
+                                                            'CONTACT',
                                                             'DOCUMENT',
                                                             'INITIATIVE',
                                                             'PROJECT',
@@ -29834,6 +29989,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                           'CHAT',
                                           'COMPANY',
                                           'DATABASE_ROW',
+                                          'CONTACT',
                                           'DOCUMENT',
                                           'INITIATIVE',
                                           'PROJECT',
@@ -29936,6 +30092,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                                         'CHAT',
                                                         'COMPANY',
                                                         'DATABASE_ROW',
+                                                        'CONTACT',
                                                         'DOCUMENT',
                                                         'INITIATIVE',
                                                         'PROJECT',
@@ -30212,6 +30369,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                               'CHAT',
                                               'COMPANY',
                                               'DATABASE_ROW',
+                                              'CONTACT',
                                               'DOCUMENT',
                                               'INITIATIVE',
                                               'PROJECT',
@@ -30318,6 +30476,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                                             'CHAT',
                                                             'COMPANY',
                                                             'DATABASE_ROW',
+                                                            'CONTACT',
                                                             'DOCUMENT',
                                                             'INITIATIVE',
                                                             'PROJECT',
@@ -30536,6 +30695,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                           'CHAT',
                                           'COMPANY',
                                           'DATABASE_ROW',
+                                          'CONTACT',
                                           'DOCUMENT',
                                           'INITIATIVE',
                                           'PROJECT',
@@ -30638,6 +30798,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                                         'CHAT',
                                                         'COMPANY',
                                                         'DATABASE_ROW',
+                                                        'CONTACT',
                                                         'DOCUMENT',
                                                         'INITIATIVE',
                                                         'PROJECT',
@@ -30905,6 +31066,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                           'CHAT',
                                           'COMPANY',
                                           'DATABASE_ROW',
+                                          'CONTACT',
                                           'DOCUMENT',
                                           'INITIATIVE',
                                           'PROJECT',
@@ -31007,6 +31169,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                                         'CHAT',
                                                         'COMPANY',
                                                         'DATABASE_ROW',
+                                                        'CONTACT',
                                                         'DOCUMENT',
                                                         'INITIATIVE',
                                                         'PROJECT',
@@ -31266,6 +31429,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                           'CHAT',
                                           'COMPANY',
                                           'DATABASE_ROW',
+                                          'CONTACT',
                                           'DOCUMENT',
                                           'INITIATIVE',
                                           'PROJECT',
@@ -31368,6 +31532,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                                         'CHAT',
                                                         'COMPANY',
                                                         'DATABASE_ROW',
+                                                        'CONTACT',
                                                         'DOCUMENT',
                                                         'INITIATIVE',
                                                         'PROJECT',
@@ -31605,6 +31770,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                           'CHAT',
                                           'COMPANY',
                                           'DATABASE_ROW',
+                                          'CONTACT',
                                           'DOCUMENT',
                                           'INITIATIVE',
                                           'PROJECT',
@@ -31707,6 +31873,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                                         'CHAT',
                                                         'COMPANY',
                                                         'DATABASE_ROW',
+                                                        'CONTACT',
                                                         'DOCUMENT',
                                                         'INITIATIVE',
                                                         'PROJECT',
@@ -31961,6 +32128,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                           'CHAT',
                                           'COMPANY',
                                           'DATABASE_ROW',
+                                          'CONTACT',
                                           'DOCUMENT',
                                           'INITIATIVE',
                                           'PROJECT',
@@ -32063,6 +32231,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                                         'CHAT',
                                                         'COMPANY',
                                                         'DATABASE_ROW',
+                                                        'CONTACT',
                                                         'DOCUMENT',
                                                         'INITIATIVE',
                                                         'PROJECT',
@@ -32319,6 +32488,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                           'CHAT',
                                           'COMPANY',
                                           'DATABASE_ROW',
+                                          'CONTACT',
                                           'DOCUMENT',
                                           'INITIATIVE',
                                           'PROJECT',
@@ -32421,6 +32591,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                                         'CHAT',
                                                         'COMPANY',
                                                         'DATABASE_ROW',
+                                                        'CONTACT',
                                                         'DOCUMENT',
                                                         'INITIATIVE',
                                                         'PROJECT',
@@ -32599,6 +32770,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                           'CHAT',
                                           'COMPANY',
                                           'DATABASE_ROW',
+                                          'CONTACT',
                                           'DOCUMENT',
                                           'INITIATIVE',
                                           'PROJECT',
@@ -32701,6 +32873,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                                         'CHAT',
                                                         'COMPANY',
                                                         'DATABASE_ROW',
+                                                        'CONTACT',
                                                         'DOCUMENT',
                                                         'INITIATIVE',
                                                         'PROJECT',
@@ -32872,6 +33045,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                           'CHAT',
                                           'COMPANY',
                                           'DATABASE_ROW',
+                                          'CONTACT',
                                           'DOCUMENT',
                                           'INITIATIVE',
                                           'PROJECT',
@@ -32974,6 +33148,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                                         'CHAT',
                                                         'COMPANY',
                                                         'DATABASE_ROW',
+                                                        'CONTACT',
                                                         'DOCUMENT',
                                                         'INITIATIVE',
                                                         'PROJECT',
@@ -33222,6 +33397,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                               'CHAT',
                                               'COMPANY',
                                               'DATABASE_ROW',
+                                              'CONTACT',
                                               'DOCUMENT',
                                               'INITIATIVE',
                                               'PROJECT',
@@ -33328,6 +33504,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                                             'CHAT',
                                                             'COMPANY',
                                                             'DATABASE_ROW',
+                                                            'CONTACT',
                                                             'DOCUMENT',
                                                             'INITIATIVE',
                                                             'PROJECT',
@@ -33985,6 +34162,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                           'CHAT',
                                           'COMPANY',
                                           'DATABASE_ROW',
+                                          'CONTACT',
                                           'DOCUMENT',
                                           'INITIATIVE',
                                           'PROJECT',
@@ -34087,6 +34265,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                                         'CHAT',
                                                         'COMPANY',
                                                         'DATABASE_ROW',
+                                                        'CONTACT',
                                                         'DOCUMENT',
                                                         'INITIATIVE',
                                                         'PROJECT',
@@ -34363,6 +34542,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                               'CHAT',
                                               'COMPANY',
                                               'DATABASE_ROW',
+                                              'CONTACT',
                                               'DOCUMENT',
                                               'INITIATIVE',
                                               'PROJECT',
@@ -34469,6 +34649,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                                             'CHAT',
                                                             'COMPANY',
                                                             'DATABASE_ROW',
+                                                            'CONTACT',
                                                             'DOCUMENT',
                                                             'INITIATIVE',
                                                             'PROJECT',
@@ -34687,6 +34868,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                           'CHAT',
                                           'COMPANY',
                                           'DATABASE_ROW',
+                                          'CONTACT',
                                           'DOCUMENT',
                                           'INITIATIVE',
                                           'PROJECT',
@@ -34789,6 +34971,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                                         'CHAT',
                                                         'COMPANY',
                                                         'DATABASE_ROW',
+                                                        'CONTACT',
                                                         'DOCUMENT',
                                                         'INITIATIVE',
                                                         'PROJECT',
@@ -35056,6 +35239,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                           'CHAT',
                                           'COMPANY',
                                           'DATABASE_ROW',
+                                          'CONTACT',
                                           'DOCUMENT',
                                           'INITIATIVE',
                                           'PROJECT',
@@ -35158,6 +35342,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                                         'CHAT',
                                                         'COMPANY',
                                                         'DATABASE_ROW',
+                                                        'CONTACT',
                                                         'DOCUMENT',
                                                         'INITIATIVE',
                                                         'PROJECT',
@@ -35417,6 +35602,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                           'CHAT',
                                           'COMPANY',
                                           'DATABASE_ROW',
+                                          'CONTACT',
                                           'DOCUMENT',
                                           'INITIATIVE',
                                           'PROJECT',
@@ -35519,6 +35705,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                                         'CHAT',
                                                         'COMPANY',
                                                         'DATABASE_ROW',
+                                                        'CONTACT',
                                                         'DOCUMENT',
                                                         'INITIATIVE',
                                                         'PROJECT',
@@ -35756,6 +35943,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                           'CHAT',
                                           'COMPANY',
                                           'DATABASE_ROW',
+                                          'CONTACT',
                                           'DOCUMENT',
                                           'INITIATIVE',
                                           'PROJECT',
@@ -35858,6 +36046,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                                         'CHAT',
                                                         'COMPANY',
                                                         'DATABASE_ROW',
+                                                        'CONTACT',
                                                         'DOCUMENT',
                                                         'INITIATIVE',
                                                         'PROJECT',
@@ -36145,6 +36334,14 @@ export const messageTimelineResponse = zod
                     type: zod.enum(['crm_contact']),
                   })
                   .describe('A CRM contact.'),
+                zod
+                  .object({
+                    id: zod
+                      .uuid()
+                      .describe('A video call and its persistent chat thread.'),
+                    type: zod.enum(['call']),
+                  })
+                  .describe('A video call and its persistent chat thread.'),
               ])
               .describe(
                 'The entity whose permissions and lifecycle govern a message.'
@@ -36442,6 +36639,18 @@ export const messageTimelineResponse = zod
                                   type: zod.enum(['crm_contact']),
                                 })
                                 .describe('A CRM contact.'),
+                              zod
+                                .object({
+                                  id: zod
+                                    .uuid()
+                                    .describe(
+                                      'A video call and its persistent chat thread.'
+                                    ),
+                                  type: zod.enum(['call']),
+                                })
+                                .describe(
+                                  'A video call and its persistent chat thread.'
+                                ),
                             ])
                             .describe(
                               'The entity whose permissions and lifecycle govern a message.'
@@ -36771,6 +36980,14 @@ export const entityMessageCreateResponse = zod
             type: zod.enum(['crm_contact']),
           })
           .describe('A CRM contact.'),
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .describe('A video call and its persistent chat thread.'),
+            type: zod.enum(['call']),
+          })
+          .describe('A video call and its persistent chat thread.'),
       ])
       .describe('The entity whose permissions and lifecycle govern a message.'),
     reactions: zod
@@ -36919,6 +37136,14 @@ export const entityMessageGetMessageResponse = zod
             type: zod.enum(['crm_contact']),
           })
           .describe('A CRM contact.'),
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .describe('A video call and its persistent chat thread.'),
+            type: zod.enum(['call']),
+          })
+          .describe('A video call and its persistent chat thread.'),
       ])
       .describe('The entity whose permissions and lifecycle govern a message.'),
     reactions: zod
@@ -37071,6 +37296,14 @@ export const entityMessageDeleteMessageResponse = zod
             type: zod.enum(['crm_contact']),
           })
           .describe('A CRM contact.'),
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .describe('A video call and its persistent chat thread.'),
+            type: zod.enum(['call']),
+          })
+          .describe('A video call and its persistent chat thread.'),
       ])
       .describe('The entity whose permissions and lifecycle govern a message.'),
     reactions: zod
@@ -37319,6 +37552,14 @@ export const entityMessageEditResponse = zod
             type: zod.enum(['crm_contact']),
           })
           .describe('A CRM contact.'),
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .describe('A video call and its persistent chat thread.'),
+            type: zod.enum(['call']),
+          })
+          .describe('A video call and its persistent chat thread.'),
       ])
       .describe('The entity whose permissions and lifecycle govern a message.'),
     reactions: zod
@@ -37475,6 +37716,14 @@ export const entityMessageReactResponse = zod
             type: zod.enum(['crm_contact']),
           })
           .describe('A CRM contact.'),
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .describe('A video call and its persistent chat thread.'),
+            type: zod.enum(['call']),
+          })
+          .describe('A video call and its persistent chat thread.'),
       ])
       .describe('The entity whose permissions and lifecycle govern a message.'),
     reactions: zod
@@ -37630,6 +37879,14 @@ export const entityMessageLegacyResponse = zod
             type: zod.enum(['crm_contact']),
           })
           .describe('A CRM contact.'),
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .describe('A video call and its persistent chat thread.'),
+            type: zod.enum(['call']),
+          })
+          .describe('A video call and its persistent chat thread.'),
       ])
       .describe('The entity whose permissions and lifecycle govern a message.'),
     reactions: zod
@@ -37801,6 +38058,14 @@ export const entityMessageGetThreadResponse = zod
                     type: zod.enum(['crm_contact']),
                   })
                   .describe('A CRM contact.'),
+                zod
+                  .object({
+                    id: zod
+                      .uuid()
+                      .describe('A video call and its persistent chat thread.'),
+                    type: zod.enum(['call']),
+                  })
+                  .describe('A video call and its persistent chat thread.'),
               ])
               .describe(
                 'The entity whose permissions and lifecycle govern a message.'
@@ -37954,6 +38219,14 @@ export const entityMessageGetThreadResponse = zod
                 type: zod.enum(['crm_contact']),
               })
               .describe('A CRM contact.'),
+            zod
+              .object({
+                id: zod
+                  .uuid()
+                  .describe('A video call and its persistent chat thread.'),
+                type: zod.enum(['call']),
+              })
+              .describe('A video call and its persistent chat thread.'),
           ])
           .describe(
             'The entity whose permissions and lifecycle govern a message.'

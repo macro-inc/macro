@@ -20,6 +20,31 @@ const records: DatabaseRow[] = [
 ];
 
 describe('database table model', () => {
+  it.each(['asc', 'desc'] as const)(
+    'sets an explicit %s direction even when the column is already sorted that way',
+    (direction) => {
+      createRoot((dispose) => {
+        const onSort = vi.fn();
+        const model = createDatabaseTableModel({
+          columns,
+          rows: records,
+          sort: [
+            { column: 'notes', direction: 'descending' },
+            {
+              column: 'name',
+              direction: direction === 'asc' ? 'ascending' : 'descending',
+            },
+          ],
+          widths: {},
+          onSort,
+        });
+        model.sort('name', direction);
+        expect(onSort).toHaveBeenCalledExactlyOnceWith('name', direction);
+        dispose();
+      });
+    }
+  );
+
   it('keeps SQL order and drafts intact while reflecting sort changes', () => {
     createRoot((dispose) => {
       const [sort, setSort] = createSignal<SortKey[]>([

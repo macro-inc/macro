@@ -1689,6 +1689,64 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn search_contacts_for_team(
+        &self,
+        team_id: &uuid::Uuid,
+        query: &str,
+        limit: i64,
+        include_hidden: bool,
+    ) -> Result<Vec<CrmContact>, CrmError> {
+        // STRPOS keeps the query literal (no LIKE wildcards to escape). Team
+        // scope and hidden-row semantics mirror get_contact_for_team.
+        let rows = sqlx::query!(
+            r#"
+            SELECT
+                ct.id,
+                ct.company_id,
+                ct.email,
+                ct.name,
+                ct.hidden,
+                ct.first_interaction,
+                ct.last_interaction,
+                ct.created_at,
+                ct.updated_at
+            FROM crm_contacts ct
+            JOIN crm_companies co ON co.id = ct.company_id
+            WHERE co.team_id = $1
+              AND ($4 OR (ct.hidden = FALSE AND co.hidden = FALSE))
+              AND (
+                  STRPOS(LOWER(ct.email), LOWER($2)) > 0
+                  OR STRPOS(LOWER(COALESCE(ct.name, '')), LOWER($2)) > 0
+              )
+            ORDER BY ct.last_interaction DESC, ct.id DESC
+            LIMIT $3
+            "#,
+            team_id,
+            query,
+            limit,
+            include_hidden,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        Ok(rows
+            .into_iter()
+            .map(|row| CrmContact {
+                id: row.id,
+                company_id: row.company_id,
+                email: row.email,
+                name: row.name,
+                hidden: row.hidden,
+                first_interaction: row.first_interaction,
+                last_interaction: row.last_interaction,
+                created_at: row.created_at,
+                updated_at: row.updated_at,
+            })
+            .collect())
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn get_contact_by_email_for_team(
         &self,
         team_id: &uuid::Uuid,

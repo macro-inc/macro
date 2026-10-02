@@ -1,4 +1,8 @@
-import { SaveEmailDraftDocument } from '@service-storage/graphql/generated/graphql';
+import {
+  SaveEmailDraftDocument,
+  SetEmailThreadArchivedDocument,
+  UpdateNotificationsDocument,
+} from '@service-storage/graphql/generated/graphql';
 import {
   markGraphqlEmailThreadSeen,
   markGraphqlEmailThreadUnread,
@@ -2556,6 +2560,89 @@ describe('normalizedCacheExchange', () => {
       expect(forwarded[0]?.context.fetch).toBeTypeOf('function');
       expect(host.commits[0]?.transactionId).toBe('restored-1');
     });
+
+    it.each([true, false])(
+      'only advances past an unavailable archived thread when its error is terminal (retryable=%s)',
+      async (retryable) => {
+        vi.useFakeTimers();
+        try {
+          host.seedQueued({
+            uuid: '00000000-0000-4000-8000-000000000001',
+            query: stringifyDocument(SetEmailThreadArchivedDocument),
+            operationName: 'SetEmailThreadArchived',
+            variables: {
+              input: { threadId: 'trashed-thread', archived: true },
+            },
+            data: {
+              setEmailThreadArchived: {
+                __typename: 'GraphqlSoupEmailThread',
+                id: 'trashed-thread',
+                inboxVisible: false,
+              },
+            },
+          });
+          const readResult = {
+            updateNotifications: [
+              {
+                __typename: 'GraphqlNotification',
+                id: 'notification',
+                state: 'SEEN',
+              },
+            ],
+          };
+          host.seedQueued({
+            uuid: '00000000-0000-4000-8000-000000000002',
+            query: stringifyDocument(UpdateNotificationsDocument),
+            operationName: 'UpdateNotifications',
+            variables: {
+              input: {
+                notificationIds: ['notification'],
+                operation: 'MARK_SEEN',
+              },
+            },
+            data: {
+              updateNotifications: [
+                { __typename: 'GraphqlNotification', id: 'notification' },
+              ],
+            },
+          });
+          const { forwarded } = harness(
+            host,
+            (op) =>
+              'threadId' in op.variables!.input
+                ? {
+                    data: undefined,
+                    error: new CombinedError({
+                      graphQLErrors: [
+                        {
+                          message: 'updated email thread is unavailable',
+                          extensions: retryable
+                            ? { code: 'INTERNAL', retryable: true }
+                            : { code: 'NOT_FOUND' },
+                        },
+                      ],
+                    }),
+                  }
+                : { data: readResult },
+            { shouldRetryMutation: shouldRetryGraphqlMutation }
+          );
+          await vi.advanceTimersByTimeAsync(10);
+          if (retryable) {
+            expect(forwarded).toHaveLength(1);
+            expect(host.defers).toHaveLength(1);
+            expect(host.commits).toHaveLength(0);
+          } else {
+            expect(forwarded).toHaveLength(2);
+            expect(host.rollbacks).toEqual(['restored-1']);
+            expect(host.commits).toMatchObject([
+              { transactionId: 'restored-2', data: readResult },
+            ]);
+          }
+        } finally {
+          vi.useRealTimers();
+        }
+      }
+    );
 
     it.each([
       'terminal',

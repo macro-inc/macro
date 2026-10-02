@@ -162,7 +162,7 @@ impl<
 > MessageEventPublisher for DiscussionDelivery<C, A, R, N, S>
 {
     async fn publish(&self, event: MessageEvent) -> Result<(), rootcause::Report> {
-        if !event.parent.is_discussion() {
+        if matches!(event.parent, MessageParent::Channel(_)) {
             return Err(rootcause::report!(
                 "discussion delivery requires an entity parent"
             ));
@@ -174,6 +174,10 @@ impl<
             self.realtime.send(&event, viewers).await
         }
         .await;
+        // Call chat is delivered in the live sidebar, without document comment notifications.
+        if matches!(event.parent, MessageParent::Call(_)) {
+            return realtime;
+        }
         let notification = match &event.change {
             MessageChange::Posted {
                 message,

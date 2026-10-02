@@ -1,3 +1,4 @@
+import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import {
   cleanup,
   fireEvent,
@@ -107,7 +108,10 @@ const property: EntityProperty = {
   value: [{ entity_id: userId, entity_type: 'USER' }],
 };
 
-function setup(existingTask: boolean, value = property) {
+function setup(
+  selfFilter?: { entityType: EntityType; blockId?: string },
+  value = property
+) {
   const onSave = vi.fn(async () => undefined);
   const [editorOpen, setEditorOpen] = createSignal(true);
   const context: PropertyRootContextValue = {
@@ -120,11 +124,7 @@ function setup(existingTask: boolean, value = property) {
   };
   render(() => (
     <PropertyRootContext.Provider value={context}>
-      <EntityEditor
-        selfFilter={
-          existingTask ? { entityType: 'TASK', blockId: 'task-id' } : undefined
-        }
-      />
+      <EntityEditor selfFilter={selfFilter} />
     </PropertyRootContext.Provider>
   ));
   return onSave;
@@ -132,13 +132,29 @@ function setup(existingTask: boolean, value = property) {
 
 afterEach(cleanup);
 
-describe('assigning an agent through task properties', () => {
-  it.each([false, true])(
-    'saves the bot principal alongside the human assignee (existing task: %s)',
-    async (existingTask) => {
-      const onSave = setup(existingTask);
+describe('assigning an agent through task and project properties', () => {
+  it.each([
+    { name: 'new task', selfFilter: undefined },
+    {
+      name: 'existing task',
+      selfFilter: { entityType: 'TASK' as const, blockId: 'task-id' },
+    },
+    { name: 'new project', selfFilter: { entityType: 'INITIATIVE' as const } },
+    {
+      name: 'existing project',
+      selfFilter: { entityType: 'INITIATIVE' as const, blockId: 'project-id' },
+    },
+  ])(
+    'saves the bot principal alongside the human assignee in a $name',
+    async ({ selfFilter }) => {
+      const onSave = setup(selfFilter);
       expect(screen.getByText('Alice')).toBeTruthy();
       expect(screen.getByText('Agent')).toBeTruthy();
+      expect(
+        screen.queryByText(
+          'Agents assigned to this project automatically take on tasks created in or moved into it. Use a shared team agent for tasks added by teammates.'
+        ) !== null
+      ).toBe(selfFilter?.entityType === 'INITIATIVE');
       fireEvent.input(screen.getByPlaceholderText('Add assignees...'), {
         target: { value: 'research' },
       });
@@ -158,32 +174,43 @@ describe('assigning an agent through task properties', () => {
     }
   );
 
-  it('does not resave an unchanged assignment and can remove the agent', async () => {
-    const assigned: EntityProperty = {
-      ...property,
-      value: [{ entity_id: agentId, entity_type: 'USER' }],
-    };
-    const unchanged = setup(true, assigned);
-    fireEvent.click(screen.getByText('Dismiss'));
-    expect(unchanged).not.toHaveBeenCalled();
-    cleanup();
-    const onSave = setup(true, assigned);
-    fireEvent.click(screen.getByText('Research assistant'));
-    fireEvent.click(screen.getByText('Dismiss'));
-    await waitFor(() =>
-      expect(onSave).toHaveBeenCalledExactlyOnceWith(assigned, {
-        valueType: 'ENTITY',
-        refs: null,
-      })
-    );
-  });
+  it.each(['TASK', 'INITIATIVE'] as const)(
+    'does not resave an unchanged assignment and can remove the agent from %s',
+    async (entityType) => {
+      const assigned: EntityProperty = {
+        ...property,
+        value: [{ entity_id: agentId, entity_type: 'USER' }],
+      };
+      const unchanged = setup({ entityType, blockId: 'entity-id' }, assigned);
+      fireEvent.click(screen.getByText('Dismiss'));
+      expect(unchanged).not.toHaveBeenCalled();
+      cleanup();
+      const onSave = setup({ entityType, blockId: 'entity-id' }, assigned);
+      fireEvent.click(screen.getByText('Research assistant'));
+      fireEvent.click(screen.getByText('Dismiss'));
+      await waitFor(() =>
+        expect(onSave).toHaveBeenCalledExactlyOnceWith(assigned, {
+          valueType: 'ENTITY',
+          refs: null,
+        })
+      );
+    }
+  );
 
   it('keeps agents out of unrelated people properties', () => {
-    setup(false, {
-      ...property,
-      propertyDefinitionId: 'custom-people-property',
-    });
+    setup(
+      { entityType: 'INITIATIVE', blockId: 'project-id' },
+      {
+        ...property,
+        propertyDefinitionId: 'custom-people-property',
+      }
+    );
     expect(screen.getByText('Alice')).toBeTruthy();
     expect(screen.queryByText('Research assistant')).toBeNull();
+    expect(
+      screen.queryByText(
+        'Agents assigned to this project automatically take on tasks created in or moved into it. Use a shared team agent for tasks added by teammates.'
+      )
+    ).toBeNull();
   });
 });

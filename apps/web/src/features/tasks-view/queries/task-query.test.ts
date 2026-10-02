@@ -80,3 +80,36 @@ describe('project task membership scope', () => {
     expect(search.body.filters?.document_filters?.document_ids).toEqual(ids);
   });
 });
+
+describe('task reference scope', () => {
+  const reference = {
+    propertyDefinitionId: '00000001-0000-0000-0000-00000000000c',
+    entityId: 'company-1',
+  };
+
+  it('ANDs the referencing property into the list query', () => {
+    const query = buildTaskQuery({ ...options, facets: {}, reference });
+    expect(query.body.df).toEqual({ l: { dst: 'task' } });
+    expect(query.body.propf).toEqual({
+      l: { pd: reference.propertyDefinitionId, v: { er: 'company-1' } },
+    });
+  });
+
+  it('keeps the scope when searching', () => {
+    const request = buildTaskSearchRequest({
+      query: 'renewal',
+      matchType: 'partial',
+      tab: 'team-tasks',
+      userId: 'user',
+      facets: {},
+      reference,
+    });
+    expect(request.body.filters?.property_filters).toEqual([
+      {
+        property_definition_id: reference.propertyDefinitionId,
+        entity_type: 'TASK',
+        entity_ids: ['company-1'],
+      },
+    ]);
+  });
+});

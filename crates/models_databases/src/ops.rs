@@ -471,6 +471,8 @@ pub enum EntityKind {
     Task,
     /// CRM companies.
     Company,
+    /// CRM contacts.
+    Contact,
     /// Call recordings.
     CallRecord,
     /// Channels.

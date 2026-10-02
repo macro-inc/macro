@@ -84,9 +84,55 @@ fn the_message_source_carries_the_persisted_parent_through() {
 }
 
 #[test]
-fn the_trigger_reads_messages_and_properties() {
+fn the_trigger_reads_messages_properties_and_project_membership() {
     assert_eq!(
         MessageTriggerEvents::topics(),
-        ["macro.messages", "macro.properties"]
+        ["macro.messages", "macro.properties", "macro.initiatives"]
     );
+}
+
+#[test]
+fn project_membership_events_keep_their_attribution_and_changes() {
+    use initiative::domain::{events::TaskMembershipChange, models::InitiativeId};
+    let project = InitiativeId::generate();
+    let changes = InitiativeTasksChanged {
+        attribution: Some(initiative::domain::events::InitiativeEventActor {
+            actor: sender(),
+            on_behalf_of: None,
+        }),
+        changes: vec![TaskMembershipChange {
+            task_id: "task-a".into(),
+            from: None,
+            to: Some(project),
+        }],
+        occurred_at: Utc::now(),
+    };
+    let event =
+        InitiativeMacroEvent::new(project, InitiativeTopicEvent::TasksChanged(changes.clone()));
+    let decoded = MessageTriggerEvents::decode(&record(&event))
+        .unwrap()
+        .into_trigger();
+    assert_eq!(decoded.event_type, "initiative.tasks_changed");
+    assert_eq!(decoded.project_tasks, Some(changes));
+    assert!(decoded.assignment.is_none());
+    assert!(decoded.posted.is_none());
+}
+
+#[test]
+fn project_edits_do_not_assign_existing_tasks() {
+    use initiative::domain::{events::InitiativeChange, models::InitiativeId};
+    let project = InitiativeId::generate();
+    let event = InitiativeMacroEvent::new(
+        project,
+        InitiativeTopicEvent::Updated(InitiativeChange {
+            initiative_id: project,
+            attribution: None,
+            occurred_at: Utc::now(),
+        }),
+    );
+    let decoded = MessageTriggerEvents::decode(&record(&event))
+        .unwrap()
+        .into_trigger();
+    assert!(decoded.project_tasks.is_none());
+    assert!(decoded.assignment.is_none());
 }

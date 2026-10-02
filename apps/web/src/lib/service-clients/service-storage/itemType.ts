@@ -16,7 +16,8 @@ export type ItemType =
   | 'calendar_event'
   | 'foreign'
   | 'crm_company'
-  | 'crm_contact';
+  | 'crm_contact'
+  | 'initiative';
 
 /** Item type assumed when a surface has no better information. */
 export const DEFAULT_ITEM_TYPE: ItemType = 'document';
@@ -52,6 +53,7 @@ export function stringToItemType(str: string): ItemType | undefined {
       'project',
       'channel',
       'crm_company',
+      'initiative',
       (itemType) => itemType
     )
     .otherwise(() => undefined);
@@ -69,6 +71,7 @@ export function blockNameToItemType(
       'email',
       'automation',
       'database',
+      'initiative',
       (b) => b
     )
     .with('agent', () => 'agent_session')
@@ -78,6 +81,8 @@ export function blockNameToItemType(
     .with('pr', () => 'foreign')
     .otherwise(() => DEFAULT_ITEM_TYPE);
 }
+
+export type HistoryItemType = (typeof ITEM_TYPES)[number];
 
 /** Item types accepted by user history endpoints. */
 export const ITEM_TYPES = [

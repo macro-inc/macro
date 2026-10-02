@@ -23,6 +23,10 @@ pub mod stages;
 #[cfg(feature = "ports")]
 pub mod auth;
 
+/// Links archived calls to the CRM records of the people on them
+#[cfg(feature = "call_link")]
+pub mod call_links;
+
 /// Port + domain types for CRM company search (name/domain)
 #[cfg(feature = "search")]
 pub mod search_repo;

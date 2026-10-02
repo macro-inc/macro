@@ -12,6 +12,7 @@ const messageParent = z.object({
     'initiative',
     'crm_company',
     'crm_contact',
+    'call',
   ]),
   id: z.string().min(1),
 });

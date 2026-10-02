@@ -7,6 +7,7 @@ import {
 } from '@queries/soup/cache';
 import {
   blockNameToItemType,
+  type HistoryItemType,
   type ItemType,
   isCloudStorageItem,
 } from '@service-storage/client';
@@ -30,6 +31,7 @@ function isSoupEntityTag(
       'foreign',
       'crm_company',
       'crm_contact',
+      'initiative',
       () => false
     )
     .with('document', 'chat', 'project', 'channel', 'call', () => true)
@@ -46,7 +48,9 @@ function isSoupEntityTag(
 // Foreign entities (GitHub PRs) are intentionally omitted: they are not
 // documents, and posting `/history/document/{id}` 401s because ACL looks
 // up a document that does not exist.
-function shouldTrackInUserHistory(itemType: ItemType): boolean {
+function shouldTrackInUserHistory(
+  itemType: ItemType
+): itemType is HistoryItemType {
   return (
     isCloudStorageItem(itemType) ||
     itemType === 'agent_session' ||

@@ -1930,6 +1930,14 @@ input GraphqlDocumentLiteral @oneOf {
 	The updated at option.
 	"""
 	updatedAt: GraphqlDateLiteral
+	"""
+	An entity-property condition on the document or task.
+	"""
+	property: GraphqlFilterPropertiesLiteral
+	"""
+	Uploaded from an email attachment sent by, or to, a matching address.
+	"""
+	emailAttachmentParticipant: GraphqlEmailValue
 }
 
 """
@@ -4185,6 +4193,10 @@ enum GraphqlPropertyEntityType {
 	Database row entity.
 	"""
 	DATABASE_ROW
+	"""
+	CRM contact entity.
+	"""
+	CONTACT
 	"""
 	Document entity.
 	"""

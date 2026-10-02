@@ -89,6 +89,7 @@ export const NonDocumentBlockTypes = [
   'automation',
   'pr',
   'agent',
+  'initiative',
 ] as const as (BlockName | BlockAlias)[];
 
 /**
@@ -149,6 +150,7 @@ const _ValidBlockCombinations: BlockCombinationRules = {
   csv: allBlockNames,
   pr: allBlockNames,
   agent: allBlockNames,
+  initiative: allBlockNames,
 } as const;
 
 // maps block name to valid parents
@@ -178,6 +180,7 @@ export const ValidNestingCombinations: BlockCombinationRules = {
   csv: new Set([]),
   pr: new Set([]),
   agent: new Set([]),
+  initiative: new Set([]),
 };
 
 export const LoadErrors = {
