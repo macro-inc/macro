@@ -142,8 +142,7 @@ export function createDatabaseTableModel(options: DatabaseTableModelOptions) {
   function sort(columnId: string, direction: 'asc' | 'desc' | null) {
     const column = table.getColumn(columnId);
     if (!column) return;
-    if (direction === null) column.clearSorting();
-    else column.toggleSorting(direction === 'desc', true);
+    options.onSort(column.id, direction);
   }
   return {
     table,
