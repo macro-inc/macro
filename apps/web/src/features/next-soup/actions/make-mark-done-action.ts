@@ -27,7 +27,11 @@ import type {
   EntityActionListState,
   EntityActionNavigationHandler,
 } from './entity-action-context';
-import { createGraphqlDoneOperation } from './graphql-done-operation';
+import {
+  createGraphqlDoneOperation,
+  type DoneEntityKey,
+  doneEntityKey,
+} from './graphql-done-operation';
 
 // Valid list views where the mark done should be allowed to run
 const VALID_MARK_DONE_LIST_VIEWS: `${ListView}-${string}`[] = [
@@ -76,7 +80,7 @@ type MarkDoneVariables = {
   emailIds: string[];
   /** Locally known IDs used only for the immediate optimistic cache patch. */
   optimisticNotificationIds: string[];
-  notificationIdsByEntity: ReadonlyMap<string, string[]>;
+  notificationIdsByEntity: ReadonlyMap<DoneEntityKey, string[]>;
   scopeChannelThreads: boolean;
   /** Exact IDs used by undo/redo; entity mutation results are appended here. */
   exactNotificationIds: { current: string[] };
@@ -387,7 +391,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     const targets = useEntityMutations
       ? [
           ...new Map(
-            eligible.map((entity) => [`${entity.type}:${entity.id}`, entity])
+            eligible.map((entity) => [doneEntityKey(entity), entity])
           ).values(),
         ]
       : eligible;
@@ -459,11 +463,11 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
       ? selectiveChannelIds
       : resolved.notificationIds;
 
-    const notificationIdsByEntity = new Map<string, string[]>();
+    const notificationIdsByEntity = new Map<DoneEntityKey, string[]>();
     if (useEntityMutations) {
       for (const entity of targets) {
         notificationIdsByEntity.set(
-          entity.id,
+          doneEntityKey(entity),
           resolveMarkEntitiesDoneVariables({
             entities: [entity],
             notificationSource: source,

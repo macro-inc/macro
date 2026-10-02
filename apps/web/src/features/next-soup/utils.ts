@@ -1649,7 +1649,17 @@ function setRemindersCompleted(
   return reminderIds.map((id) => setReminderCompleted(id, completed));
 }
 
-/** A write receipt is delivered even when another write in the action fails. */
+/**
+ * A write receipt is delivered even when another write in the action fails.
+ * ID-scoped notification receipts keep the explicit requested scope (including
+ * durably queued writes); the backend atomically updates its owned, non-deleted
+ * matches in one statement. Entity-scoped receipts instead carry returned rows
+ * so Undo can discover exact IDs without including later notifications.
+ *
+ * A rejected response is not proof of no persistence: post-commit push-cleanup
+ * lookups can fail, and transport responses can be lost. Retire unacknowledged
+ * display intent; do not guess additional inverse IDs from those failures.
+ */
 export type MarkDoneWriteOutcome =
   | {
       kind: 'email';

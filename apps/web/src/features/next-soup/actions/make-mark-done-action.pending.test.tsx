@@ -17,6 +17,9 @@ import {
 const mocks = vi.hoisted(() => ({
   graphql: true,
   home: false,
+  notificationIdsForEntity: undefined as
+    | ((entity: EntityData) => string[])
+    | undefined,
   done: vi.fn(async (_args: DoneWriteArgs) => [] as string[]),
   undone: vi.fn(async (_args: DoneWriteArgs) => {}),
   report: undefined as typeof reportDoneWriteOutcomes | undefined,
@@ -83,7 +86,9 @@ vi.mock('@app/features/next-soup/utils', () => ({
     emailIds: entities
       .filter(({ type }) => type === 'email')
       .map(({ id }) => id),
-    notificationIds: ['locally-known-id'],
+    notificationIds: mocks.notificationIdsForEntity
+      ? entities.flatMap(mocks.notificationIdsForEntity)
+      : ['locally-known-id'],
     reminderIds: entities
       .filter(({ type }) => type === 'reminder')
       .map(({ id }) => id),
@@ -129,6 +134,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.graphql = true;
   mocks.home = false;
+  mocks.notificationIdsForEntity = undefined;
   mocks.report = undefined;
 });
 afterEach(() => {
@@ -457,7 +463,11 @@ describe('pending GraphQL Done undo', () => {
     });
     expect(mocks.apply.mock.results[1].value.rollback).toHaveBeenCalledOnce();
     expect(mocks.apply.mock.results[0].value.rollback).not.toHaveBeenCalled();
-    expect(mocks.apply.mock.results[2].value.rollback).not.toHaveBeenCalled();
+    // The email/reminder notification writes were no-ops; only the document
+    // notification attempt has an accepted receipt.
+    expect(mocks.apply.mock.results[2].value.rollback).toHaveBeenCalledOnce();
+    expect(mocks.apply.mock.results[3].value.rollback).toHaveBeenCalledOnce();
+    expect(mocks.apply.mock.results[4].value.rollback).not.toHaveBeenCalled();
   });
 
   it.each(['undo', 'redo'] as const)(
@@ -495,6 +505,59 @@ describe('pending GraphQL Done undo', () => {
     }
   );
 
+  it.each(['empty', 'unmatched'] as const)(
+    'releases a %s receipt instead of pinning the hide after discarding Undo',
+    async (receipt) => {
+      mocks.report = (args) =>
+        args.onWriteSettled?.({
+          kind: 'entity-notifications',
+          result: {
+            status: 'fulfilled',
+            value:
+              receipt === 'empty'
+                ? []
+                : [
+                    notificationReceipt('unrelated', {
+                      type: 'document',
+                      id: 'other-document',
+                    }),
+                  ],
+          },
+        });
+      const { action, undo } = mount();
+      await action.execute([
+        { type: 'document', id: 'document-1' } as EntityData,
+      ]);
+      const optimistic = mocks.apply.mock.results[0].value;
+      expect(optimistic.rollback).toHaveBeenCalledOnce();
+      expect(optimistic.settle).not.toHaveBeenCalled();
+      expect(undo.canUndo()).toBe(false);
+      expect(undo.canRedo()).toBe(false);
+      expect(mocks.toast.dismiss).toHaveBeenCalledWith(1);
+    }
+  );
+
+  it('keeps notification snapshots separate for different entity types sharing an id', async () => {
+    mocks.notificationIdsForEntity = (entity) => [
+      `${entity.type}-notification`,
+    ];
+    const { action } = mount();
+    await action.execute([
+      email('same-id'),
+      { type: 'document', id: 'same-id' } as EntityData,
+    ]);
+    expect(mocks.apply).toHaveBeenNthCalledWith(2, {
+      entityIds: [],
+      notificationIds: ['email-notification'],
+      scopeChannelThreads: false,
+    });
+    expect(mocks.apply).toHaveBeenNthCalledWith(3, {
+      entityIds: ['same-id'],
+      notificationIds: ['document-notification'],
+      scopeChannelThreads: false,
+    });
+  });
+
   it('never guesses notification IDs when an early Undo receives a no-op reply', async () => {
     const write = Promise.withResolvers<string[]>();
     mocks.done.mockReturnValueOnce(write.promise);
@@ -523,6 +586,9 @@ describe('pending GraphQL Done undo', () => {
     await undo.undo();
     const changed = mocks.apply.mock.results[0].value;
     const unchanged = mocks.apply.mock.results[1].value;
+    expect(unchanged.rollback).toHaveBeenCalledOnce();
+    expect(unchanged.settle).not.toHaveBeenCalled();
+    expect(changed.rollback).not.toHaveBeenCalled();
     expect(changed.applyUndone).toHaveBeenCalledOnce();
     expect(unchanged.applyUndone).not.toHaveBeenCalled();
     await undo.redo();
