@@ -1,6 +1,7 @@
 import type { EntityData } from '@entity';
 import type { Reminder } from '@service-storage/generated/schemas/reminder';
-import { describe, expect, it } from 'vitest';
+import { QueryObserver } from '@tanstack/solid-query';
+import { describe, expect, it, vi } from 'vitest';
 import { queryClient } from '../client';
 import { reminderKeys } from './keys';
 import {
@@ -18,6 +19,49 @@ it('invalidates cached email revisions after a reminder completion batch', () =>
   expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true);
   queryClient.removeQueries({ queryKey: key });
 });
+
+it.each([false, true])(
+  'refreshes filtered collections while preserving successful unfiltered batches (failure: %s)',
+  async (refetch) => {
+    const collections = [undefined, false, true].map((completed) => {
+      const key = reminderKeys.collection(
+        'batch-refetch-test',
+        completed
+      ).queryKey;
+      const queryFn = vi.fn(async () => 'refreshed');
+      queryClient.setQueryData(key, 'patched');
+      const observer = new QueryObserver(queryClient, {
+        queryKey: key,
+        queryFn,
+        staleTime: Infinity,
+      });
+      const unsubscribe = observer.subscribe(() => {});
+      return { key, queryFn, unsubscribe, completed };
+    });
+    try {
+      invalidateRemindersById(['batch-reminder'], { refetch });
+      await vi.waitFor(() => {
+        for (const { key, queryFn, completed } of collections) {
+          const shouldFetch = refetch || typeof completed === 'boolean';
+          expect(queryFn).toHaveBeenCalledTimes(shouldFetch ? 1 : 0);
+          expect(queryClient.getQueryData(key)).toBe(
+            shouldFetch ? 'refreshed' : 'patched'
+          );
+        }
+      });
+      if (!refetch) {
+        expect(
+          queryClient.getQueryState(collections[0].key)?.isInvalidated
+        ).toBe(true);
+      }
+    } finally {
+      for (const { key, unsubscribe } of collections) {
+        unsubscribe();
+        queryClient.removeQueries({ queryKey: key, exact: true });
+      }
+    }
+  }
+);
 
 const entity = (type: EntityData['type'], id = 'e1') =>
   ({ type, id, name: 'Thing' }) as EntityData;
