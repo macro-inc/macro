@@ -13,7 +13,7 @@ import {
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import { ChannelType } from '@service-storage/generated/schemas/channelType';
 import { ParticipantRole } from '@service-storage/generated/schemas/participantRole';
-import { Panel } from '@ui';
+import { Card, Scroll } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { ChannelBotsPanel } from './ChannelBotsPanel';
 import { ChannelJoinLinkButton } from './ChannelJoinLinkButton';
@@ -141,47 +141,31 @@ export function ChannelParticipantsTab(props: {
     );
   };
 
-  // The mobile bottom chrome (dock + accessory regions) floats over the
-  // layout, so the panel stack has to end above it for the participants list
-  // to scroll clear of it.
   return (
-    <div class="h-full overflow-hidden flex justify-center p-2 touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+0.5rem)]">
-      <div class="max-w-200 size-full flex flex-col gap-2">
-        <Panel depth={2} class="min-h-0 flex-1 overflow-hidden text-ink">
-          <Panel.Header class="justify-between gap-2 px-6">
-            <div class="text-sm font-semibold">Participants</div>
-            <Show when={channelType() === ChannelType.private}>
-              <ChannelJoinLinkButton channelId={props.channelId} />
-            </Show>
-          </Panel.Header>
-          <Panel.Toolbar class="h-15.25 px-2">
-            <ParticipantsSearchInput
-              value={searchQuery()}
-              onInput={setSearchQuery}
-            />
-          </Panel.Toolbar>
-          <Panel.Body>
-            <div class="flex h-full flex-col">
-              <Show when={canManageChannel() && supportsTeamSettings()}>
-                <ChannelTeamSettingsPanel
-                  isTeamChannel={isTeamChannel()}
-                  autoJoinTeam={autoJoinTeam()}
-                  canConvertToTeam={canConvertToTeam()}
-                  conversionUnavailableReason={conversionUnavailableReason()}
-                  disabled={patchChannelMutation.isPending}
-                  onConvertToTeam={convertToTeamChannel}
-                  onAutoJoinTeamChange={updateAutoJoinTeam}
+    <div class="min-h-0 flex-1">
+      <Scroll>
+        <div class="mx-auto flex w-full max-w-3xl flex-col gap-4 p-4 touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+1rem)]">
+          <Card>
+            <Card.Header>
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <Card.Title>Participants</Card.Title>
+                <Show when={channelType() === ChannelType.private}>
+                  <ChannelJoinLinkButton channelId={props.channelId} />
+                </Show>
+              </div>
+            </Card.Header>
+            <Card.Body>
+              <div class="flex flex-col gap-3">
+                <ParticipantsSearchInput
+                  value={searchQuery()}
+                  onInput={setSearchQuery}
                 />
-              </Show>
-              <Show when={isEditable()}>
-                <div class="px-6 py-3 border-b border-edge-muted shrink-0">
+                <Show when={isEditable()}>
                   <ParticipantsAddPanel
                     participants={participants}
                     onAddParticipants={addParticipants}
                   />
-                </div>
-              </Show>
-              <div class="relative min-h-0 flex-1">
+                </Show>
                 <ParticipantsList
                   participants={filteredParticipants}
                   searchQuery={searchQuery}
@@ -191,19 +175,30 @@ export function ChannelParticipantsTab(props: {
                   onRemoveParticipant={removeParticipant}
                 />
               </div>
-            </div>
-          </Panel.Body>
-        </Panel>
-        <Show when={props.botManagementEnabled}>
-          <ChannelBotsPanel
-            channelId={props.channelId}
-            editable={isEditable()}
-            inviteFocusRequest={props.inviteBotFocusRequest}
-            onCreateBot={props.onCreateBot}
-            onOpenBot={props.onOpenBot}
-          />
-        </Show>
-      </div>
+            </Card.Body>
+          </Card>
+          <Show when={canManageChannel() && supportsTeamSettings()}>
+            <ChannelTeamSettingsPanel
+              isTeamChannel={isTeamChannel()}
+              autoJoinTeam={autoJoinTeam()}
+              canConvertToTeam={canConvertToTeam()}
+              conversionUnavailableReason={conversionUnavailableReason()}
+              disabled={patchChannelMutation.isPending}
+              onConvertToTeam={convertToTeamChannel}
+              onAutoJoinTeamChange={updateAutoJoinTeam}
+            />
+          </Show>
+          <Show when={props.botManagementEnabled}>
+            <ChannelBotsPanel
+              channelId={props.channelId}
+              editable={isEditable()}
+              inviteFocusRequest={props.inviteBotFocusRequest}
+              onCreateBot={props.onCreateBot}
+              onOpenBot={props.onOpenBot}
+            />
+          </Show>
+        </div>
+      </Scroll>
     </div>
   );
 }

@@ -7,7 +7,7 @@ import CaretDownIcon from '@phosphor/caret-down.svg';
 import { useBotsQuery } from '@queries/bots/bots';
 import { useAddBotToChannelMutation } from '@queries/channel/channel-bots';
 import type { Bot } from '@service-storage/generated/schemas/bot';
-import { Surface } from '@ui';
+import { Button, InputGroup, Surface } from '@ui';
 import {
   type Component,
   createEffect,
@@ -98,8 +98,8 @@ export function BotInviteSelect(props: {
   };
 
   return (
-    <div class="flex flex-col gap-2 md:flex-row md:items-center">
-      <div class="min-w-0 flex-1">
+    <div class="flex flex-wrap items-center gap-2">
+      <div class="min-w-0 flex-1 basis-60">
         <Combobox<Bot>
           multiple={false}
           options={availableBots()}
@@ -119,15 +119,18 @@ export function BotInviteSelect(props: {
           disabled={botsQuery.isLoading || addBotMutation.isPending}
         >
           <Combobox.Control<Bot> class="block w-full">
-            <div class="flex w-full items-center rounded-lg border border-edge-muted bg-surface px-3 py-2 text-sm text-ink outline-none focus-within:border-accent">
+            <InputGroup>
               <Combobox.Input
+                as={InputGroup.Input}
                 ref={inputRef}
-                class="min-h-7 min-w-0 flex-1 bg-transparent p-1 outline-none placeholder:text-ink-placeholder"
+                aria-label="Search existing bots"
               />
-              <Combobox.Trigger class="ml-2 rounded p-0.5 text-ink-extra-muted outline-none hover:bg-hover hover:text-ink">
-                <CaretDownIcon class="size-3.5" />
-              </Combobox.Trigger>
-            </div>
+              <InputGroup.Addon align="inline-end">
+                <Combobox.Trigger as={InputGroup.Button} aria-label="Show bots">
+                  <CaretDownIcon />
+                </Combobox.Trigger>
+              </InputGroup.Addon>
+            </InputGroup>
           </Combobox.Control>
           <Combobox.Portal>
             <Combobox.Content
@@ -149,14 +152,13 @@ export function BotInviteSelect(props: {
           </Combobox.Portal>
         </Combobox>
       </div>
-      <button
-        type="button"
-        class="w-full shrink-0 rounded-xs bg-accent px-3 py-1.5 text-sm font-medium text-surface transition-colors hover:bg-accent/90 disabled:opacity-50 md:w-[127px]"
+      <Button
+        variant="outline"
         disabled={!selectedBot() || addBotMutation.isPending}
         onClick={() => void inviteBot()}
       >
         {addBotMutation.isPending ? 'Inviting…' : 'Invite bot'}
-      </button>
+      </Button>
     </div>
   );
 }

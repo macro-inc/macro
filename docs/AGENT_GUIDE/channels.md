@@ -880,6 +880,13 @@ Leaving from the channel's call controls switches to `Messages` immediately.
 Disconnect and server cleanup continue after that switch; slow or failed RTC
 teardown must not leave the channel showing the join screen.
 
+`Participants` tab uses content-sized cards for people, team access (when
+available), and bots, with one scrollbar for the page. Search uses the shared
+input group; add, invite, and new-bot actions use neutral outline buttons.
+A short member list and an empty bots section should stay compact at any
+viewport height. Search by email or role and clear the search to restore the
+list; scrolling a long list must also reach the team settings and bots.
+
 `Participants` tab:
 - `Copy invite link`, participant search box.
 - Add: combobox `name@company.com` + `Add Participant` button.

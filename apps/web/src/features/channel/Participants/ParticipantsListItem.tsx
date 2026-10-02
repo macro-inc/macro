@@ -3,18 +3,17 @@ import { idToEmail } from '@core/user';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import IconX from '@phosphor/x.svg';
 import type { ChannelParticipant } from '@queries/channel/types';
-import { Button } from '@ui';
+import { Button, Item } from '@ui';
 import { Show } from 'solid-js';
 
 export function ParticipantsListItem(props: {
   participant: ChannelParticipant;
   currentUserId?: string;
   editable: boolean;
-  isLast?: boolean;
   onClick: (event: MouseEvent) => void | Promise<void>;
   onRemove: () => void;
 }) {
-  const canRemove =
+  const canRemove = () =>
     props.editable &&
     props.currentUserId !== props.participant.user_id &&
     props.participant.role !== 'owner';
@@ -28,52 +27,38 @@ export function ParticipantsListItem(props: {
   );
 
   return (
-    <div
-      class="flex items-center justify-between gap-2 py-2 px-6 text-sm w-full bg-surface hover:bg-hover"
-      classList={{ 'border-b': !props.isLast }}
-      style={{ 'border-color': 'var(--color-edge-muted)' }}
-    >
-      <button
-        {...navigationHandlers}
-        type="button"
-        class="flex min-w-0 flex-1 items-center gap-3 rounded-xs text-left focus:outline-none"
-      >
-        <div class="shrink-0">
-          <UserIcon
-            id={props.participant.user_id}
-            size="lg"
-            isDeleted={false}
-          />
-        </div>
-        <div class="min-w-0 flex-1">
-          <div class="ph-no-capture text-sm font-medium text-ink truncate">
+    <Item>
+      <UserIcon id={props.participant.user_id} size="lg" isDeleted={false} />
+      <Item.Content>
+        <Item.Title>
+          <Button
+            {...navigationHandlers}
+            label={idToEmail(props.participant.user_id)}
+          >
             {idToEmail(props.participant.user_id)}
-          </div>
-          <div class="text-xs text-ink-muted capitalize">
-            {props.participant.role}
-          </div>
-        </div>
-      </button>
+          </Button>
+        </Item.Title>
+        <Item.Description>{props.participant.role}</Item.Description>
+      </Item.Content>
       <Show when={props.editable}>
-        <div class="shrink-0">
+        <Item.Actions>
           <Button
             label={
-              canRemove ? 'Remove participant' : 'Cannot remove participant'
+              canRemove() ? 'Remove participant' : 'Cannot remove participant'
             }
-            variant="ghost"
             size="icon-sm"
-            disabled={!canRemove}
+            disabled={!canRemove()}
             onClick={(event) => {
               event.preventDefault();
               event.stopPropagation();
-              if (!canRemove) return;
+              if (!canRemove()) return;
               props.onRemove();
             }}
           >
             <IconX />
           </Button>
-        </div>
+        </Item.Actions>
       </Show>
-    </div>
+    </Item>
   );
 }
