@@ -93,6 +93,7 @@ pub(super) async fn wedding(pool: &PgPool) -> Wedding {
             name: "Wedding".into(),
             owner_id: user(WOLF),
             acting_bot: None,
+            template: None,
         })
         .await
         .unwrap();

@@ -516,9 +516,8 @@ pub fn settled_column(
     }
 }
 
-/// The entry of a table made whole, by an import or a new database's
-/// starter: its columns and rows, created together. Undoing it removes the
-/// table.
+/// The entry of a table made whole by an import: its columns and rows,
+/// created together. Undoing it removes the table.
 pub fn created_table(
     database_id: DatabaseId,
     table: TableId,

@@ -6,6 +6,7 @@ pub mod catalog;
 pub mod events;
 pub mod journal;
 pub mod models;
+pub mod templates;
 
 #[cfg(feature = "entity_mutation")]
 pub mod entity_mutation;

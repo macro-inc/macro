@@ -24,8 +24,8 @@ use crate::domain::catalog::ColumnEntry;
 use crate::domain::journal::{JournalPlan, Restoration};
 use crate::domain::models::{AppliedOps, CommittedChange};
 use crate::domain::models::{
-    DatabaseView, OpBatch, OpRefusal, PropertyDefinitionId, RowId, ViewId, Write, Writes,
-    WritesOutcome,
+    DatabaseView, NewDatabase, OpBatch, OpRefusal, PropertyDefinitionId, RowId, ViewId, Write,
+    Writes, WritesOutcome,
 };
 use chrono::DateTime;
 
@@ -67,36 +67,77 @@ where
         restoration: &Restoration,
     ) -> Result<AppliedOps, DatabaseError> {
         for _ in 0..MAX_PLANNING_ATTEMPTS {
-            if let Some(applied) = self
-                .plan_and_apply(receipt, viewer, batch, restoration)
+            match self
+                .plan_and_apply(Target::Existing(receipt), viewer, batch, restoration)
                 .await?
             {
-                return Ok(applied);
+                Planned::Applied(applied) => return Ok(applied),
+                Planned::SchemaMoved => {}
+                Planned::StarterTaken => {
+                    return Err(DatabaseError::Repo(
+                        rootcause::report!("a batch on an existing database claimed a starter")
+                            .into_dynamic(),
+                    ));
+                }
             }
         }
         Err(DatabaseError::VersionConflict)
     }
 
-    /// Plan the batch against the schema as it is now and apply it; `None`
-    /// when a table whose schema it changes moved in between, so it must be
-    /// planned again.
+    /// Create `new` and apply `batch` to it, in one transaction: the
+    /// database with every write of the batch, or nothing. `None` when `new`
+    /// is a starter its owner was given already.
+    pub(super) async fn create_with_ops(
+        &self,
+        new: &NewDatabase,
+        viewer: &Viewer,
+        batch: &OpBatch,
+    ) -> Result<Option<AppliedOps>, DatabaseError> {
+        match self
+            .plan_and_apply(Target::New(new), viewer, batch, &Restoration::default())
+            .await?
+        {
+            Planned::Applied(applied) => Ok(Some(applied)),
+            Planned::StarterTaken => Ok(None),
+            // A new database holds only the batch's own tables, which
+            // nothing else can change before it commits.
+            Planned::SchemaMoved => Err(DatabaseError::VersionConflict),
+        }
+    }
+
+    /// Plan the batch against the schema as it is now and apply it.
     async fn plan_and_apply(
         &self,
-        receipt: &EntityAccessReceipt<EditAccessLevel>,
+        target: Target<'_>,
         viewer: &Viewer,
         batch: &OpBatch,
         restoration: &Restoration,
-    ) -> Result<Option<AppliedOps>, DatabaseError> {
+    ) -> Result<Planned, DatabaseError> {
         let OpBatch { ops, base_versions } = batch;
         let ops = ops.as_slice();
-        let database_id = receipt_database_id(receipt)?;
-        let grant = receipt_grant(receipt, AccessLevel::Edit);
-        let entries = self
-            .entries_for(&HashMap::from([(database_id, grant)]))
-            .await?;
-        let Some(database) = entries.first().map(|entry| entry.database.clone()) else {
-            return Err(DatabaseError::NotFound);
+        let (database, grant, entries, attribution) = match target {
+            Target::Existing(receipt) => {
+                let database_id = receipt_database_id(receipt)?;
+                let grant = receipt_grant(receipt, AccessLevel::Edit);
+                let entries = self
+                    .entries_for(&HashMap::from([(database_id, grant)]))
+                    .await?;
+                let Some(database) = entries.first().map(|entry| entry.database.clone()) else {
+                    return Err(DatabaseError::NotFound);
+                };
+                (database, grant, entries, receipt_attribution(receipt))
+            }
+            Target::New(new) => (
+                new.database.clone(),
+                AccessLevel::Owner,
+                Vec::new(),
+                Some(events::Attribution::acting(
+                    viewer.user_id.clone(),
+                    viewer.acting_bot,
+                )),
+            ),
         };
+        let database_id = database.id;
         refuse_foreign_tables(&entries, ops)?;
         for (table, version) in base_versions {
             let entry = entries
@@ -107,9 +148,8 @@ where
                 return Err(DatabaseError::VersionConflict);
             }
         }
-        let attribution = receipt_attribution(receipt);
 
-        let mut found = self.found_for(&entries, viewer, ops).await?;
+        let mut found = self.found_for(database_id, viewer, ops, &entries).await?;
         let rebound: Vec<PropertyDefinitionId> = restoration.rebinds.values().copied().collect();
         if !rebound.is_empty() {
             found.rebound = self
@@ -165,16 +205,31 @@ where
                 schema: catalog::schema_image(&entries),
                 acting_bot: viewer.acting_bot,
             },
+            creates: match target {
+                Target::New(new) => Some(new.clone()),
+                Target::Existing(_) => None,
+            },
         };
         let outcome = self
             .cells
             .apply_writes(&writes)
             .await
             .map_err(repository_error)?;
-        if let WritesOutcome::SchemaMoved(_) = outcome {
-            return Ok(None);
+        match outcome {
+            WritesOutcome::SchemaMoved(_) => return Ok(Planned::SchemaMoved),
+            WritesOutcome::StarterTaken => return Ok(Planned::StarterTaken),
+            _ => {}
         }
         let committed = applied(outcome, ops, &planner.related)?;
+        if let Target::New(new) = target {
+            self.emit(DatabaseMacroEvent::created(DatabaseCreatedMetadata {
+                database_id,
+                owner: viewer.user_id.clone(),
+                name: new.database.name.clone(),
+                created_at: new.database.created_at,
+                attribution: events::Attribution::acting(viewer.user_id.clone(), viewer.acting_bot),
+            }));
+        }
 
         let mut changes: Vec<(DatabaseId, TableId, TableVersion)> = committed
             .table_versions
@@ -190,7 +245,7 @@ where
         }));
         self.publish(attribution, &changes).await;
         let journaled = committed.changes.clone();
-        Ok(Some(AppliedOps {
+        Ok(Planned::Applied(AppliedOps {
             results: op_results(&entries, ops, &writes, committed)?,
             changes: journaled,
         }))
@@ -201,14 +256,11 @@ where
     /// database, and the cells of every column it retypes.
     async fn found_for(
         &self,
-        entries: &[TableEntry],
+        database_id: DatabaseId,
         viewer: &Viewer,
         ops: &[DatabaseOp],
+        entries: &[TableEntry],
     ) -> Result<Found, DatabaseError> {
-        let database_id = entries
-            .first()
-            .map(|entry| entry.database.id)
-            .ok_or(DatabaseError::NotFound)?;
         let mut found = Found::default();
         for op in ops {
             let DatabaseOp::Column {
@@ -428,6 +480,26 @@ where
     }
 }
 
+/// The database a batch applies to.
+#[derive(Clone, Copy)]
+enum Target<'a> {
+    /// One that exists, which the receipt proves the viewer may edit.
+    Existing(&'a EntityAccessReceipt<EditAccessLevel>),
+    /// One the batch creates before its first op, owned by the viewer.
+    New(&'a NewDatabase),
+}
+
+/// What planning and applying a batch came to.
+enum Planned {
+    /// It committed.
+    Applied(AppliedOps),
+    /// A table whose schema it changes moved after it was planned, so it
+    /// must be planned again.
+    SchemaMoved,
+    /// It creates its owner's starter, which they were given already.
+    StarterTaken,
+}
+
 /// Whether a definition belongs to something beyond `database_id`.
 fn shared_beyond(definition: &PropertyDefinitionWithOptions, database_id: DatabaseId) -> bool {
     !matches!(
@@ -522,7 +594,9 @@ fn applied(
             table_versions,
             changes,
         }),
-        WritesOutcome::SchemaMoved(_) => Err(DatabaseError::VersionConflict),
+        WritesOutcome::SchemaMoved(_) | WritesOutcome::StarterTaken => {
+            Err(DatabaseError::VersionConflict)
+        }
         WritesOutcome::TableNotFound(_) => Err(DatabaseError::NotFound),
         WritesOutcome::VersionConflict(_) | WritesOutcome::TablesChanged { .. } => {
             Err(DatabaseError::VersionConflict)

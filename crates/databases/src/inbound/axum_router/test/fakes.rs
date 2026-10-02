@@ -105,15 +105,18 @@ pub(super) fn conversion_router(level: AccessLevel) -> (Router, Arc<RecordingSer
     (router, service)
 }
 
-/// Every databases route, for a caller holding `level` on every database.
-pub(super) fn full_router(level: AccessLevel) -> Router {
-    databases_router::<RecordingService, GrantingAccess, Authorization, ()>(
+/// Every databases route, for a caller holding `level` on every database,
+/// and the service behind them.
+pub(super) fn full_router(level: AccessLevel) -> (Router, Arc<RecordingService>) {
+    let service = Arc::new(RecordingService::default());
+    let router = databases_router::<RecordingService, GrantingAccess, Authorization, ()>(
         DatabasesRouterState::new(
-            Arc::new(RecordingService::default()),
+            service.clone(),
             Arc::new(GrantingAccess(level)),
             authorization_state(),
         ),
-    )
+    );
+    (router, service)
 }
 
 /// Grants every caller the one level it holds.
@@ -229,9 +232,22 @@ pub(super) struct RecordingService {
     pub(super) refusal: Mutex<Option<DatabaseError>>,
     pub(super) conversions: Mutex<Vec<(TableId, ColumnId, ColumnKind)>>,
     pub(super) conversion: Mutex<Option<ColumnConversion>>,
+    pub(super) created: Mutex<Vec<CreateDatabase>>,
 }
 
-const ONLY_OPS: &str = "the routes under test call only apply_ops and column_conversion";
+const ONLY_OPS: &str =
+    "the routes under test call only apply_ops, column_conversion and create_database";
+
+/// The database [`RecordingService`] answers every creation with.
+pub(super) fn created_database() -> Database {
+    Database {
+        id: DatabaseId::from_uuid(Uuid::from_u128(0x0dbb)),
+        name: "Launch".into(),
+        owner_id: USER.into(),
+        created_at: chrono::DateTime::from_timestamp(1_790_000_000, 0).unwrap(),
+        trashed_at: None,
+    }
+}
 
 impl DatabasesService for RecordingService {
     async fn apply_ops(
@@ -295,8 +311,9 @@ impl DatabasesService for RecordingService {
         unimplemented!("{ONLY_OPS}")
     }
 
-    async fn create_database(&self, _: CreateDatabase) -> Result<Database, DatabaseError> {
-        unimplemented!("{ONLY_OPS}")
+    async fn create_database(&self, command: CreateDatabase) -> Result<Database, DatabaseError> {
+        self.created.lock().unwrap().push(command);
+        Ok(created_database())
     }
     async fn list_databases(&self, _: Viewer) -> Result<Vec<ListedDatabase>, DatabaseError> {
         unimplemented!("{ONLY_OPS}")

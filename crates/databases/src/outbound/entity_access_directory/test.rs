@@ -54,6 +54,7 @@ async fn create_database(pool: &PgPool, owner: &MacroUserIdStr<'static>) -> Data
                 name: "Offsite".to_string(),
                 owner_id: owner.clone(),
                 acting_bot: None,
+                template: None,
             },
             FirstTable {
                 name: "Table 1",

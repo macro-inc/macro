@@ -1,4 +1,5 @@
-//! CreateDatabase tool: make a new database with one starter table.
+//! CreateDatabase tool: make a new database, blank with one starter table or
+//! built by a template.
 
 use ai_toolset::{
     AsyncTool, RequestContext, ServiceContext, ToolAnnotated, ToolAnnotations, ToolResult,
@@ -14,6 +15,7 @@ use super::{
 };
 use crate::domain::models::CreateDatabase as CreateDatabaseCommand;
 use crate::domain::ports::DatabasesService;
+use crate::domain::templates::TemplateId;
 
 /// Create a database owned by the current user.
 #[derive(Debug, Deserialize, JsonSchema, Clone)]
@@ -35,7 +37,17 @@ warning and call DescribeDatabase with the returned id; never repeat CreateDatab
 because schema refresh failed. The usual shape of the work is: \
 CreateDatabase, RenameTable on the starter table when the user named their table, one \
 AddColumn per further column the user described, typed by what it holds (use Name for each \
-row's title rather than adding another), then QueryDatabase with INSERTs for the rows. For more tables, CreateTable only after the starter table is used."
+row's title rather than adding another), then QueryDatabase with INSERTs for the rows. For more tables, CreateTable only after the starter table is used.\n\
+\n\
+When what the user wants matches a template, pass its id as `template` instead: the database \
+is then built with that template's tables, columns, views and a few sample rows, and has no \
+\"Table 1\". Read the response's schema before changing it. The templates are: \
+`project_tracker` (tasks with a status, an owner, a due date and a priority, on a board by \
+status), `crm` (companies, their contacts, and deals on a board by stage), `event_planner` \
+(parties and their invites, with a board of who is coming), `content_calendar` (posts with a \
+channel, an author and a publish date, on a board by status), `reading_list` (books to read, \
+with their author, a status and a rating) and `getting_started` (a few ideas on a board, to \
+try out tables, cards and views)."
 )]
 pub struct CreateDatabase {
     /// Display name of the new database.
@@ -45,6 +57,13 @@ pub struct CreateDatabase {
                        it over a SQL-looking identifier."
     )]
     pub name: String,
+    /// The template that builds the database; left out, it starts blank.
+    #[serde(default)]
+    #[schemars(
+        description = "Build the database from this template instead of starting blank. Leave \
+                       it out unless the user's request matches one of the templates."
+    )]
+    pub template: Option<TemplateId>,
 }
 
 impl ToolAnnotated for CreateDatabase {
@@ -89,6 +108,7 @@ where
                 name: self.name.clone(),
                 owner_id: user_id.clone(),
                 acting_bot: Some(service_context.actor),
+                template: self.template,
             })
             .await
             .map_err(database_error)?;

@@ -49,6 +49,7 @@ use crate::domain::models::{
     InferColumnTypeOutcome, ListedDatabase, SavedQueryError, Table, TableVersion, Viewer,
 };
 use crate::domain::ports::DatabasesService;
+use crate::domain::templates::{DatabaseTemplate, TEMPLATES, TemplateId};
 use ops::OpRefusalResponse;
 
 /// Largest table import accepted, in bytes.
@@ -135,6 +136,7 @@ where
             post(create_database_handler::<Service, EntityAccess, Authorization>),
         )
         // Static segments win over `/{id}`, so these never read as a database.
+        .route("/templates", get(list_templates_handler::<Authorization>))
         .route(
             "/queries",
             post(saved_queries::save_query_handler::<Service, EntityAccess, Authorization>),
@@ -206,6 +208,10 @@ pub(crate) fn viewer_of<Authorization>(
 pub struct CreateDatabaseRequest {
     /// Display name.
     pub name: String,
+    /// The template that builds the database; left out, it starts blank.
+    #[serde(default)]
+    #[schema(nullable = false)]
+    pub template: Option<TemplateId>,
 }
 
 /// Path params for the column routes.
@@ -245,8 +251,9 @@ where
     Ok(Json(databases))
 }
 
-/// Create a database owned by the caller; its first table, "Table 1", holds a
-/// "Name" text column.
+/// Create a database owned by the caller. Blank, its first table, "Table 1",
+/// holds a "Name" text column; from a template, the template's tables,
+/// columns, views and sample rows build it, all or nothing.
 #[utoipa::path(
     post,
     tag = "databases",
@@ -277,9 +284,32 @@ where
             name: request.name,
             owner_id: viewer_of(&user).user_id,
             acting_bot: None,
+            template: request.template,
         })
         .await?;
     Ok((StatusCode::CREATED, Json(database)))
+}
+
+/// The templates a database can be created from, in the order a picker
+/// lists them.
+#[utoipa::path(
+    get,
+    tag = "databases",
+    operation_id = "list_database_templates",
+    path = "/databases/templates",
+    responses(
+        (status = 200, body = Vec<DatabaseTemplate>),
+        (status = 401, description = "Missing or invalid credentials", body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(skip_all)]
+pub async fn list_templates_handler<Authorization>(
+    _user: MacroAuthorizationExtractor<Authorization, UserOrInternal>,
+) -> Json<&'static [DatabaseTemplate]>
+where
+    Authorization: MacroAuthorizationService,
+{
+    Json(&TEMPLATES)
 }
 
 /// Schema detail of one database.

@@ -191,6 +191,7 @@ async fn an_order_naming_another_databases_table_is_refused_and_changes_neither(
             name: "Hiring".into(),
             owner_id: viewer().user_id,
             acting_bot: None,
+            template: None,
         })
         .await
         .unwrap();

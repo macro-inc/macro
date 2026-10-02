@@ -23,6 +23,7 @@ async fn discovery_includes_nested_tables_in_tab_order_but_not_private_or_trashe
             name: "Private".into(),
             owner_id: user(STRANGER),
             acting_bot: None,
+            template: None,
         })
         .await
         .unwrap();
@@ -31,6 +32,7 @@ async fn discovery_includes_nested_tables_in_tab_order_but_not_private_or_trashe
             name: "Archived".into(),
             owner_id: user(OWNER),
             acting_bot: None,
+            template: None,
         })
         .await
         .unwrap();
