@@ -560,6 +560,21 @@ async fn background_naming_does_not_overwrite_a_manual_name() {
 }
 
 impl AgentSessionRepo for BlockingPromptLogs {
+    async fn cancel_queued_action(
+        &self,
+        id: AgentSessionId,
+        action: agent_runtime_protocol::domain::action::AgentActionId,
+        remaining: &[crate::domain::model::StoredQueuedAction],
+    ) -> Result<()> {
+        self.repo.cancel_queued_action(id, action, remaining).await
+    }
+    async fn action_completed(
+        &self,
+        id: AgentSessionId,
+        action: agent_runtime_protocol::domain::action::AgentActionId,
+    ) -> Result<bool> {
+        self.repo.action_completed(id, action).await
+    }
     async fn create(&self, params: CreateAgentSessionParams) -> Result<AgentSession> {
         AgentSessionRepo::create(&self.repo, params).await
     }

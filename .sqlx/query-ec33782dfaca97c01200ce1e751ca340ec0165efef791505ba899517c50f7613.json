@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            sp.\"linkShare\" AS link_share,\n            sp.\"linkShareAccessLevel\"::text AS link_share_access_level,\n            COALESCE(\n                array_agg(csp.channel_id ORDER BY csp.channel_id)\n                    FILTER (WHERE csp.channel_id IS NOT NULL),\n                '{}'::text[]\n            ) AS \"channel_ids!\"\n        FROM \"DocumentPermission\" dp\n        JOIN \"SharePermission\" sp ON sp.id = dp.\"sharePermissionId\"\n        LEFT JOIN \"ChannelSharePermission\" csp ON csp.share_permission_id = sp.id\n        WHERE dp.\"documentId\" = $1\n        GROUP BY sp.\"linkShare\", sp.\"linkShareAccessLevel\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "link_share",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "link_share_access_level",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "channel_ids!",
+        "type_info": "TextArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      true,
+      null,
+      null
+    ]
+  },
+  "hash": "ec33782dfaca97c01200ce1e751ca340ec0165efef791505ba899517c50f7613"
+}

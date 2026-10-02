@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO calendar_backfill_jobs (\n            id, email_link_id, kind, grant_version, status\n        )\n        VALUES ($1, $2, 'google_calendar', 1, 'pending')\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "61f112ac14be228793a81deb0a0bc6b88234ed5758a17953d5a3c5cf23b2a76b"
+}

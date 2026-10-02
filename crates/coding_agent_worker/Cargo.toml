@@ -15,6 +15,7 @@ messages = { path = "../messages", features = ["broker"] }
 # owning crates, compiler-checked.
 agent-client-protocol = { workspace = true }
 agent_runtime_protocol = { path = "../agent_runtime_protocol" }
+agent_review_runtime = { path = "../agent_review_runtime" }
 agent_session = { path = "../agent_session" }
 agent_trigger = { path = "../agent_trigger" }
 arboard = { workspace = true }

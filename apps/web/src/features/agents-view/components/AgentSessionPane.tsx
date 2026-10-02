@@ -1,10 +1,8 @@
 import {
-  AgentChangesProvider,
-  AgentChangesSplit,
-  ChangesHandoff,
-  ChangesToggle,
-  ReviewNotesDock,
-} from '@app/features/agent-changes/agent-changes';
+  AgentReviewProvider,
+  ReviewSessionSurface,
+  ReviewToggle,
+} from '@app/features/agent-review/agent-review';
 import { AgentSessionProvider } from '@app/features/block-agent/agent-session-provider';
 import { AgentComposer } from '@app/features/block-agent/component/AgentComposer';
 import { AgentPreviewBanner } from '@app/features/block-agent/component/AgentPreviewBanner';
@@ -225,7 +223,7 @@ function SessionContent(props: {
               />
             )}
           </Show>
-          <ChangesToggle />
+          <ReviewToggle />
           <SidePanel.Toggle />
         </Topbar>
         <div class="relative min-h-0 min-w-0 flex-1">
@@ -283,8 +281,6 @@ function SessionContent(props: {
                         </Show>
                       }
                     >
-                      <ChangesHandoff />
-                      <ReviewNotesDock />
                       <AgentComposer
                         autofocus={!searchTarget()}
                         input={ChatSessionInput}
@@ -318,14 +314,14 @@ export function AgentSessionPane(props: {
 
   return (
     <AgentSessionProvider blockId={props.id} onSessionId={props.onSessionId}>
-      <AgentChangesProvider>
-        <AgentChangesSplit>
+      <AgentReviewProvider>
+        <ReviewSessionSurface>
           <SessionContent
             onDeleted={props.onDeleted}
             notificationSource={props.notificationSource}
           />
-        </AgentChangesSplit>
-      </AgentChangesProvider>
+        </ReviewSessionSurface>
+      </AgentReviewProvider>
     </AgentSessionProvider>
   );
 }

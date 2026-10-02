@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO agent_review_feedback (agent_session_id, message_id)\n            SELECT $1, unnest($2::uuid[]) ON CONFLICT DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e4835897b730d6b7901f50f19e31a5693252a8adb685ec4c56e54963bac5f7c0"
+}

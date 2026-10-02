@@ -1,0 +1,46 @@
+[package]
+name = "diffd-core"
+description = "Pure logic for diffd: snapshots, highlighting, symbols, anchoring, feedback batching"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+schemars.workspace = true
+utoipa.workspace = true
+similar.workspace = true
+tree-sitter = "0.25"
+tree-sitter-highlight = "0.25"
+tree-sitter-tags = "0.25"
+tree-sitter-language = "0.1"
+tree-sitter-rust = "0.24"
+tree-sitter-typescript = "0.23"
+tree-sitter-javascript = "0.25"
+tree-sitter-python = "0.25"
+tree-sitter-go = "0.25"
+tree-sitter-json = "0.24"
+tree-sitter-bash = "0.25"
+tree-sitter-toml-ng = "0.7"
+tree-sitter-yaml = "0.7"
+tree-sitter-c = "0.24"
+tree-sitter-cpp = "0.23"
+tree-sitter-css = "0.25"
+tree-sitter-html = "0.23"
+tree-sitter-nix = "0.3"
+tree-sitter-java = "0.23"
+tree-sitter-ruby = "0.23"
+tree-sitter-lua = "0.5"
+tree-sitter-md = "0.5"
+tree-sitter-sequel = "0.3.11"
+
+[dev-dependencies]
+insta = { version = "1", features = ["json"] }

@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT DISTINCT agent_session_id FROM agent_review_feedback\n            WHERE NOT delivered AND (lease_until IS NULL OR lease_until < now()) LIMIT 32",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "agent_session_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "e26c58cbad6493df48b5bc754d9a9cd2af192adfd9ec41077d0521d17adc7683"
+}

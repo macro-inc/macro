@@ -15,6 +15,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends cmake && \
 
 COPY . .
 
+# The review service uses the same pinned structural engine as workspace captures.
+RUN if [ "$SERVICE_NAME" = "agent_harness_service" ]; then cargo install --locked --version 0.71.0 difftastic --root /review-engine; else mkdir -p /review-engine/bin; fi
+
 # Build the service
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=shared \
   --mount=type=cache,target=/usr/local/cargo/git/db,sharing=shared \
@@ -37,6 +40,7 @@ RUN : \
   && rm -rf /var/lib/apt/lists/*
 
 COPY --chmod=755 --from=builder /app/svc /app/svc
+COPY --from=builder /review-engine/bin/ /usr/local/bin/
 
 ENV PORT=8080
 EXPOSE ${PORT}

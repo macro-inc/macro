@@ -1,0 +1,26 @@
+/* Static spans emitted by the escaped code renderer; all colors use Macro tokens. */
+.review-reader .review-empty-cell {
+  background: repeating-linear-gradient(
+    135deg,
+    transparent,
+    transparent 4px,
+    color-mix(in oklch, var(--color-edge-muted) 35%, transparent) 4px,
+    color-mix(in oklch, var(--color-edge-muted) 35%, transparent) 5px
+  );
+}
+
+.review-reader .review-token-added {
+  background: color-mix(in oklch, var(--color-success) 18%, transparent);
+  border-radius: 2px;
+}
+.review-reader .review-token-deleted {
+  background: color-mix(in oklch, var(--color-failure) 15%, transparent);
+  border-radius: 2px;
+}
+.review-reader .review-syntax-keyword,
+.review-reader .review-syntax-type,
+.review-reader .review-syntax-constant { color: var(--color-accent); }
+.review-reader .review-syntax-string { color: var(--color-success); }
+.review-reader .review-syntax-comment { color: var(--color-ink-subtle); }
+.review-reader .review-syntax-function { color: var(--color-ink); }
+.review-reader .review-syntax-number { color: var(--color-ink-muted); }

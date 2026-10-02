@@ -48,7 +48,17 @@ fn builds_the_configured_tag_when_local_containers_are_on() {
 #[test]
 fn docker_build_args_match_the_cli() {
     let args = build_args(DEFAULT_LOCAL_TAG, Path::new(CONTEXT_REL));
-    assert_eq!(args, ["build", "--tag", DEFAULT_LOCAL_TAG, CONTEXT_REL]);
+    assert_eq!(
+        args,
+        [
+            "build",
+            "--file",
+            "./crates/agent_harness/container/Dockerfile",
+            "--tag",
+            DEFAULT_LOCAL_TAG,
+            CONTEXT_REL
+        ]
+    );
     assert!(
         !args.iter().any(|arg| arg == "--platform"),
         "pinning a platform would qemu Apple Silicon: {args:?}"

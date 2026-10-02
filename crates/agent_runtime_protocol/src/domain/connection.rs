@@ -16,7 +16,8 @@ use tokio::task::JoinSet;
 
 use crate::domain::channel::Channel;
 use crate::domain::schema::v0::{
-    AcpMessage, ModelProbeResult, SystemEvent, ToRuntimeMessage, ToServerMessage,
+    AcpMessage, ModelProbeResult, ReviewCaptureResult, SystemEvent, ToRuntimeMessage,
+    ToServerMessage,
 };
 
 #[cfg(test)]
@@ -50,6 +51,28 @@ pub trait ModelProbeHandler: Send + Sync + 'static {
 impl ModelProbeHandler for () {
     async fn probe(&self) -> Result<Vec<SessionConfigOption>, String> {
         Err("model probing is not configured on this runtime".to_owned())
+    }
+}
+
+/// Captures workspace code separately from ACP messages and tool text.
+pub trait ReviewCaptureHandler: Send + Sync + 'static {
+    /// The service supplies the persisted workspace; implementations constrain its root.
+    fn capture(
+        &self,
+        workspace: String,
+        base: Option<String>,
+        head: Option<String>,
+    ) -> impl Future<Output = ReviewCaptureResult> + Send;
+}
+
+impl ReviewCaptureHandler for () {
+    async fn capture(
+        &self,
+        _: String,
+        _: Option<String>,
+        _: Option<String>,
+    ) -> ReviewCaptureResult {
+        ReviewCaptureResult::Error { message: "This runtime does not expose workspace review snapshots; update macrod or link a pull request".into() }
     }
 }
 
@@ -121,6 +144,16 @@ impl RuntimeConnection {
     where
         H: ModelProbeHandler,
     {
+        Self::connect_with_handlers(channel, model_probes, ())
+    }
+
+    /// Attach independent model and review capabilities to the runtime connection.
+    #[must_use]
+    pub fn connect_with_handlers<H: ModelProbeHandler, R: ReviewCaptureHandler>(
+        channel: RuntimeChannel,
+        model_probes: H,
+        reviews: R,
+    ) -> (Self, AcpChannel) {
         let Channel {
             tx: outbound,
             rx: inbound,
@@ -131,6 +164,7 @@ impl RuntimeConnection {
             outbound.clone(),
             acp_driver,
             Arc::new(model_probes),
+            Arc::new(reviews),
         ));
         (Self { outbound, driver }, acp)
     }
@@ -190,6 +224,9 @@ async fn run_server<H>(
                     ToServerMessage::ModelProbeResponse { .. } => {
                         tracing::warn!("dropping a model probe response without a probe waiter");
                     }
+                    ToServerMessage::ReviewCaptured { .. } | ToServerMessage::ReviewCaptureChunk { .. } => {
+                        tracing::warn!("dropping a review response without a capture waiter");
+                    }
                 }
             }
             message = acp.rx.next(), if acp_open => {
@@ -214,13 +251,15 @@ async fn run_server<H>(
     }
 }
 
-async fn run_runtime<H>(
+async fn run_runtime<H, R>(
     mut inbound: tokio::sync::mpsc::UnboundedReceiver<ToRuntimeMessage>,
     outbound: UnboundedSender<ToServerMessage>,
     mut acp: AcpChannel,
     model_probes: Arc<H>,
+    reviews: Arc<R>,
 ) where
     H: ModelProbeHandler,
+    R: ReviewCaptureHandler,
 {
     // See the matching comment in `run_server`: dropping the ACP channel must
     // not tear down this connection - only an actual transport failure does.
@@ -255,6 +294,14 @@ async fn run_runtime<H>(
                             let _ = outbound.send(ToServerMessage::ModelProbeResponse { result });
                         });
                     }
+                    ToRuntimeMessage::ReviewCapture { request_id, workspace, base, head } => {
+                        let reviews = Arc::clone(&reviews);
+                        let outbound = outbound.clone();
+                        probes.spawn(async move {
+                            let result = reviews.capture(workspace, base, head).await;
+                            send_review_capture(&outbound, request_id, result).await;
+                        });
+                    }
                 }
             }
             result = probes.join_next(), if !probes.is_empty() => {
@@ -275,4 +322,45 @@ async fn run_runtime<H>(
             }
         }
     }
+}
+
+/// Bound each frame below WebSocket limits and yield between chunks so ACP remains responsive.
+async fn send_review_capture(
+    outbound: &tokio::sync::mpsc::UnboundedSender<ToServerMessage>,
+    request_id: String,
+    result: ReviewCaptureResult,
+) {
+    let result = match result {
+        ReviewCaptureResult::Available { capture } => {
+            match tokio::task::spawn_blocking(move || serde_json::to_string(&capture)).await {
+                Ok(Ok(json)) if json.len() <= 256 * 1024 * 1024 => {
+                    let mut start = 0;
+                    while start < json.len() {
+                        let mut end = (start + 256 * 1024).min(json.len());
+                        while !json.is_char_boundary(end) {
+                            end -= 1;
+                        }
+                        if outbound
+                            .send(ToServerMessage::ReviewCaptureChunk {
+                                request_id: request_id.clone(),
+                                chunk: json[start..end].to_owned(),
+                                done: end == json.len(),
+                            })
+                            .is_err()
+                        {
+                            return;
+                        }
+                        start = end;
+                        tokio::time::sleep(std::time::Duration::from_millis(2)).await;
+                    }
+                    return;
+                }
+                _ => ReviewCaptureResult::Error {
+                    message: "Structural capture exceeds the 256 MiB transfer budget".into(),
+                },
+            }
+        }
+        error => error,
+    };
+    let _ = outbound.send(ToServerMessage::ReviewCaptured { request_id, result });
 }

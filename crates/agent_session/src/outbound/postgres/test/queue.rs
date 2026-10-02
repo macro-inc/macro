@@ -108,3 +108,48 @@ async fn a_session_without_a_row_lists_empty(pool: PgPool) {
             .is_empty()
     );
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn cancelled_actions_are_terminal_but_admission_and_dispatch_are_not(pool: PgPool) {
+    let repo = test_repo(&pool);
+    let bot = create_test_bot(&pool).await;
+    let session = create_session(&repo, new_session(bot, None, None)).await;
+    let entry = stored_prompt("review feedback");
+    repo.replace_queued_actions(session.id, &[entry.clone()])
+        .await
+        .unwrap();
+    assert!(
+        !repo
+            .action_completed(session.id, entry.action_id)
+            .await
+            .unwrap()
+    );
+    repo.replace_queued_actions(session.id, &[]).await.unwrap();
+    assert!(
+        !repo
+            .action_completed(session.id, entry.action_id)
+            .await
+            .unwrap(),
+        "dispatch is not delivery"
+    );
+    repo.replace_queued_actions(session.id, &[entry.clone()])
+        .await
+        .unwrap();
+    repo.cancel_queued_action(session.id, entry.action_id, &[])
+        .await
+        .unwrap();
+    assert!(
+        repo.list_queued_actions(session.id)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        repo.action_completed(session.id, entry.action_id)
+            .await
+            .unwrap()
+    );
+    repo.cancel_queued_action(session.id, entry.action_id, &[])
+        .await
+        .unwrap();
+}

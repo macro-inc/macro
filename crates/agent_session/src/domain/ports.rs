@@ -502,6 +502,21 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
     /// Delete an agent session by id.
     fn delete(&self, id: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
 
+    /// Atomically remove a queued action and remember explicit cancellation across retries.
+    fn cancel_queued_action(
+        &self,
+        id: AgentSessionId,
+        action: agent_runtime_protocol::domain::action::AgentActionId,
+        remaining: &[StoredQueuedAction],
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Whether an action was explicitly cancelled or has a durable ACP result/error, across history resets.
+    fn action_completed(
+        &self,
+        id: AgentSessionId,
+        action: agent_runtime_protocol::domain::action::AgentActionId,
+    ) -> impl Future<Output = Result<bool>> + Send;
+
     /// The session's waiting actions, oldest first. Missing row is empty.
     fn list_queued_actions(
         &self,

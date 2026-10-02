@@ -334,8 +334,10 @@ async fn retries_of_queued_and_in_flight_actions_do_not_recheck_quota() {
         CommandOutcome::Queued
     );
     assert_eq!(repo.list_queued_actions(id).await.unwrap().len(), 1);
-    // A fresh replica recognizes a durable queued retry as already admitted.
+    // A fresh replica with a pending turn recognizes the durable queued retry
+    // as already admitted. An idle replica instead attempts recovery dispatch.
     let restarted = harness_sharing_repo(repo.clone()).with_admission(admission.clone());
+    restarted.inner.busy.admit(id);
     assert_eq!(
         restarted
             .execute_here(id, HarnessCommand::Deliver(command.clone()))
@@ -363,6 +365,31 @@ async fn retries_of_queued_and_in_flight_actions_do_not_recheck_quota() {
         CommandOutcome::Completed
     );
     assert_eq!(admission.calls.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn retrying_a_restored_idle_queue_rechecks_quota_before_dispatch() {
+    let (service, repo, admission) = bench(None);
+    let id = session(&repo, BotId::TEST_A, "in-memory", Owner::User(sender())).await;
+    service.inner.busy.admit(id);
+    let command = action(AgentAction::Compact);
+    service
+        .execute_here(id, HarnessCommand::Deliver(command.clone()))
+        .await
+        .unwrap();
+
+    let restarted = harness_sharing_repo(repo.clone()).with_admission(admission.clone());
+    *admission.failure.lock().unwrap() = Some(denied());
+    assert!(matches!(
+        restarted
+            .execute_here(id, HarnessCommand::Deliver(command.clone()))
+            .await,
+        Err(HarnessError::Admission(_))
+    ));
+    assert_eq!(rejected_ids(&restarted), [command.id]);
+    assert!(repo.list_queued_actions(id).await.unwrap().is_empty());
+    assert!(!restarted.inner.busy.is_pending(id));
+    assert_no_provisioning(&restarted);
 }
 
 #[tokio::test]

@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT grant_ciphertext FROM claude_oauth_grants WHERE user_id = 'alice'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "grant_ciphertext",
+        "type_info": "Bytea"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "b99f44b3083e803ed923c27da5de9a9331238e347a15ef0fe95514c7308e8435"
+}

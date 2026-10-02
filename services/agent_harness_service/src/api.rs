@@ -73,6 +73,7 @@ pub struct ApiStates<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes
     routine_sessions: Router,
     capabilities: Router,
     changes: AgentChangesRouterState<Changes, Access, Auth>,
+    reviews: Router,
 }
 
 impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
@@ -100,6 +101,7 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
             routine_sessions: Router::new(),
             capabilities: Router::new(),
             changes,
+            reviews: Router::new(),
         }
     }
 
@@ -124,6 +126,12 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
     /// Attach session-sharing routes with their independent domain service.
     pub fn with_sharing(mut self, router: Router) -> Self {
         self.sharing = router;
+        self
+    }
+
+    /// Attach session-authorized code review routes.
+    pub fn with_reviews(mut self, router: Router) -> Self {
+        self.reviews = router;
         self
     }
 }
@@ -217,7 +225,8 @@ where
         .merge(agent_session_control_router(states.control))
         .merge(agent_session_create_router(states.create))
         .merge(states.sharing)
-        .merge(agent_changes_router(states.changes));
+        .merge(agent_changes_router(states.changes))
+        .merge(states.reviews);
     Router::new()
         .nest("/agent-sessions", agent_sessions)
         .merge(agent_sandbox_size_router(states.read))

@@ -174,6 +174,10 @@ export const createAppViteConfig = (): UserConfigFn => {
           'exceljs',
           'fflate',
           'saxes',
+          // Opening the lazy review map must not trigger an optimizer reload.
+          'cytoscape',
+          'cytoscape-layers',
+          '@dagrejs/dagre',
         ],
         // loro-crdt is a wasm singleton. The app imports it directly (esbuild
         // pre-bundles a copy) while the linked `@loro-mirror/core` workspace

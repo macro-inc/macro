@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "EXPLAIN (FORMAT JSON)\n           SELECT EXISTS (\n               SELECT 1 FROM document_email de WHERE de.document_id = $1\n           )",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "QUERY PLAN",
+        "type_info": "Json"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "52979922be7c21db9eefad112d134e0fae29e097db65e859a19a741b9d7a6632"
+}

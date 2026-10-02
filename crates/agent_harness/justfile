@@ -51,8 +51,8 @@ ensure-daytona:
     if [[ -z "$snapshot" ]]; then
       echo "building snapshot $name (slow: the image bakes two nix dev shells)"
       # `--context .` keeps paths intact instead of flattening container/.
-      ( cd container && daytona snapshot create "$name" \
-          --dockerfile Dockerfile \
+      ( \cd ../.. && daytona snapshot create "$name" \
+          --dockerfile crates/agent_harness/container/Dockerfile \
           --context . \
           --cpu "$cpu" --memory "$memory" --disk "$disk" )
       exit
@@ -113,4 +113,4 @@ build-local force="":
       exit 0
     fi
     echo "building $tag (native platform; flake has x86_64-linux and aarch64-linux)"
-    docker build --tag "$tag" container
+    docker build --file container/Dockerfile --tag "$tag" ../..

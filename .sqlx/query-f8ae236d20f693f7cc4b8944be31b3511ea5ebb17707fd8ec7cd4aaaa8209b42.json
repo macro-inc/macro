@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO comms_entity_mentions\n            (id, source_entity_type, source_entity_id, entity_type, entity_id, user_id, created_at)\n        VALUES\n            ('00000000-0000-0000-0000-00000000e0a1'::uuid, 'doc', 'src-doc',\n             'document', 'doc-generic', 'macro|user-a@test.com', '2024-01-05 00:00:00+00')\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "f8ae236d20f693f7cc4b8944be31b3511ea5ebb17707fd8ec7cd4aaaa8209b42"
+}

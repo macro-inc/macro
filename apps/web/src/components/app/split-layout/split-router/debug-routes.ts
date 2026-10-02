@@ -28,6 +28,8 @@ const debugComponentIds = [
         'agent-ui',
         'agent-replay',
         'agent-changes-ui',
+        'agent-review-ui',
+        'agent-review-integration',
         'diff-view-ui',
       ]
     : []),

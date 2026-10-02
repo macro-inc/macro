@@ -2,10 +2,20 @@
 # sidecar the harness dials.
 
 # Sidecar install
-FROM docker.io/library/rust:1.94.0-slim-bullseye AS sidecar-build
-WORKDIR /build
-COPY sidecar/Cargo.toml sidecar/Cargo.lock ./
-COPY sidecar/src ./src
+FROM docker.io/library/rust:1.94.0-bullseye AS sidecar-build
+RUN cargo install --locked --version 0.71.0 difftastic --root /review-engine
+WORKDIR /crates/agent_harness/container/sidecar
+COPY crates/agent_harness/container/sidecar/Cargo.toml crates/agent_harness/container/sidecar/Cargo.lock ./
+COPY crates/agent_harness/container/sidecar/src ./src
+COPY crates/agent_review_runtime /crates/agent_review_runtime
+COPY vendor/diffd-core /vendor/diffd-core
+# Keep workspace dependency versions identical to Macro without copying its
+# backend members into the standalone sidecar build.
+COPY Cargo.toml /macro-workspace.toml
+RUN awk 'BEGIN {print "[workspace]\nresolver = \"2\"\nmembers = [\"crates/agent_review_runtime\", \"vendor/diffd-core\"]\n"} \
+    /^\[workspace.dependencies\]/ {copy = 1} \
+    copy && /^\[/ && $0 != "[workspace.dependencies]" {exit} \
+    copy {print}' /macro-workspace.toml > /Cargo.toml
 RUN cargo build --locked --release
 
 # Macro nix devshell hard install
@@ -31,7 +41,7 @@ RUN printf '%s\n' \
     nix config show substituters | grep -q 'macro-inc\.cachix\.org'
 
 WORKDIR /env
-COPY flake.nix flake.lock* ./
+COPY crates/agent_harness/container/flake.nix crates/agent_harness/container/flake.lock ./
 
 # The flake exposes x86_64-linux and aarch64-linux. `nix develop` uses the
 # container's arch, so an unpinned `docker build` on Apple Silicon is native.
@@ -77,8 +87,9 @@ ENV PATH=/nix/var/nix/profiles/default/bin:$PATH \
     BASH_ENV=/env/dev-env.sh \
     SHELL=/bin/bash
 
-COPY --from=sidecar-build /build/target/release/acp-sidecar /opt/acp-sidecar
-COPY opencode.json /root/.config/opencode/opencode.json
-COPY SYSTEM.md /etc/macro-agent/SYSTEM.md
+COPY --from=sidecar-build /crates/agent_harness/container/sidecar/target/release/acp-sidecar /opt/acp-sidecar
+COPY --from=sidecar-build /review-engine/bin/difft /opt/difft
+COPY crates/agent_harness/container/opencode.json /root/.config/opencode/opencode.json
+COPY crates/agent_harness/container/SYSTEM.md /etc/macro-agent/SYSTEM.md
 
 CMD ["bash"]

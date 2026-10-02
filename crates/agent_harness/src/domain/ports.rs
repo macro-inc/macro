@@ -464,3 +464,14 @@ pub trait ContainerManager: Send + Sync + 'static {
     /// no container is already in the state this asks for, so it succeeds.
     fn teardown(&self, session: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
 }
+
+/// Read-only access to a managed session's workspace; no transcript traffic.
+pub trait WorkspaceReviewSource: Send + Sync + 'static {
+    /// Capture the session's existing sandbox without starting or mutating it.
+    fn capture_workspace_review(
+        &self,
+        session: AgentSessionId,
+        base: Option<String>,
+        head: Option<String>,
+    ) -> impl Future<Output = Result<Option<serde_json::Value>>> + Send;
+}

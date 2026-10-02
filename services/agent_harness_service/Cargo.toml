@@ -25,6 +25,13 @@ crm = { path = "../../crates/crm", default-features = false, features = ["lookup
 codex_cloud_agents = { path = "../../crates/codex_cloud_agents" }
 codex_connection = { path = "../../crates/codex_connection" }
 agent_changes = { path = "../../crates/agent_changes" }
+agent_review = { path = "../../crates/agent_review" }
+agent_review_runtime = { path = "../../crates/agent_review_runtime" }
+diffd-core.workspace = true
+async-trait.workspace = true
+aws-sdk-s3.workspace = true
+reqwest = { workspace = true, features = ["json"] }
+uuid.workspace = true
 agent_egress = { path = "../../crates/agent_egress" }
 agent_fold = { path = "../../crates/agent_fold" }
 agent_harness = { path = "../../crates/agent_harness" }
@@ -109,6 +116,7 @@ tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 [dev-dependencies]
+agent_review = { path = "../../crates/agent_review", features = ["test-utils"] }
 agent-client-protocol = { workspace = true }
 agent_session = { path = "../../crates/agent_session", features = ["test-utils"] }
 harness_id = { path = "../../crates/harness_id", features = ["test-utils"] }

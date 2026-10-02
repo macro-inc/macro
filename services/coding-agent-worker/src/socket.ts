@@ -47,9 +47,18 @@ export function connect(url: string): Socket {
 }
 
 function isRuntimeMessage(value: unknown): value is ToRuntimeMessage {
+  if (typeof value !== 'object' || value === null || !('type' in value))
+    return false;
+  if (value.type === 'acp') return true;
   return (
-    typeof value === 'object' &&
-    value !== null &&
-    (value as { type?: unknown }).type === 'acp'
+    value.type === 'reviewCapture' &&
+    'request_id' in value &&
+    typeof value.request_id === 'string' &&
+    'workspace' in value &&
+    typeof value.workspace === 'string' &&
+    'base' in value &&
+    (value.base === null || typeof value.base === 'string') &&
+    'head' in value &&
+    (value.head === null || typeof value.head === 'string')
   );
 }

@@ -1,4 +1,4 @@
-import { changesSearch } from '@app/features/agent-changes/changes-search';
+import { reviewSearch } from '@app/features/agent-review/review-search';
 import { agentDetailSearch } from '@app/features/block-agent/agent-route';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { defineRoute } from '@app/lib/split-router';
@@ -114,7 +114,7 @@ export const agentsRoute = defineRoute({
   component: AgentsRouteView,
   remountKey: ({ id }) => id,
   claim: ({ id }) => ({ namespace: 'agent', id }),
-  search: [changesSearch.namespace, agentDetailSearch.namespace],
+  search: [reviewSearch.namespace, agentDetailSearch.namespace],
   toReference: ({ id }) => uuidRouteReference(id, 'agent'),
 });
 
@@ -125,7 +125,7 @@ export const codersRoute = defineRoute({
   component: AgentsRouteView,
   remountKey: ({ id }) => id,
   claim: ({ id }) => ({ namespace: 'agent', id }),
-  search: [changesSearch.namespace, agentDetailSearch.namespace],
+  search: [reviewSearch.namespace, agentDetailSearch.namespace],
   toReference: ({ id }) => uuidRouteReference(id, 'agent'),
 });
 
@@ -137,7 +137,7 @@ export const agentChatsRoute = defineRoute({
   component: AgentsRouteView,
   remountKey: ({ id }) => id,
   claim: ({ id }) => ({ namespace: 'chat', id }),
-  search: [changesSearch.namespace],
+  search: [reviewSearch.namespace],
   toReference: ({ id }) => uuidRouteReference(id, 'chat'),
 });
 

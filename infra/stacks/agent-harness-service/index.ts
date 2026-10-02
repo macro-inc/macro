@@ -52,7 +52,8 @@ const MACRO_API_TOKENS = getMacroApiToken();
 // under `agent-sessions/{session}/changes/`. Only the latest capture is
 // reachable from the database; superseded patches are deleted on capture and
 // a session's last patch is orphaned when the session is deleted, so the
-// lifecycle rule is what reclaims those.
+// lifecycle rule is what reclaims those. Durable review bodies use reviews/;
+// the review cleanup outbox deletes that prefix only after session deletion.
 
 const sessionChangesBucket = createBucket({
   id: `macro-agent-session-changes-${stack}`,
@@ -62,9 +63,11 @@ const sessionChangesBucket = createBucket({
   lifecycleRules: [
     {
       id: 'expire-orphaned-patches',
+      prefix: 'agent-sessions/',
       enabled: true,
       expiration: { days: 90 },
     },
+    { id: 'expire-review-transfers', prefix: 'review-captures/', enabled: true, expiration: { days: 1 } },
   ],
   tags,
 });

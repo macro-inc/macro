@@ -1417,6 +1417,254 @@
         }
       }
     },
+    "/agent-sessions/{session_id}/review": {
+      "get": {
+        "tags": [],
+        "operationId": "view",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session identifier",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "revision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": ["integer", "null"],
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Published review and revision metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agent-sessions/{session_id}/review/capture": {
+      "post": {
+        "tags": [],
+        "operationId": "capture",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session identifier",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Comparison"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Captured review revision",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewLink"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agent-sessions/{session_id}/review/comment": {
+      "post": {
+        "tags": [],
+        "operationId": "comment",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session identifier",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Comment"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Saved review comment and thread link",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewLink"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agent-sessions/{session_id}/review/file": {
+      "get": {
+        "tags": [],
+        "operationId": "file",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session identifier",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "revision",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Source and diff for the selected revision file",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileDiff"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agent-sessions/{session_id}/review/link": {
+      "post": {
+        "tags": [],
+        "operationId": "link",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session identifier",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LinkBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Immutable code citation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewLink"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agent-sessions/{session_id}/review/resolve": {
+      "post": {
+        "tags": [],
+        "operationId": "resolve",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session identifier",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Updated thread resolution",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResolveResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/agent-sessions/{session_id}/sandbox-size": {
       "put": {
         "tags": ["agent-sessions"],
@@ -2368,6 +2616,106 @@
           }
         }
       },
+      "Anchor": {
+        "type": "object",
+        "description": "A durable code link with preserved original context.",
+        "required": [
+          "id",
+          "revision",
+          "original",
+          "excerpt",
+          "current",
+          "status"
+        ],
+        "properties": {
+          "current": {
+            "$ref": "#/components/schemas/Location",
+            "description": "Latest resolved selection."
+          },
+          "excerpt": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Exact selected lines, never replaced by a later capture."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable identity used in URLs."
+          },
+          "original": {
+            "$ref": "#/components/schemas/Location",
+            "description": "Original selection."
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Revision the author was viewing.",
+            "minimum": 0
+          },
+          "status": {
+            "$ref": "#/components/schemas/AnchorStatus",
+            "description": "How the current selection relates to the original."
+          }
+        }
+      },
+      "AnchorStatus": {
+        "type": "string",
+        "description": "Reanchoring outcome; an ambiguous match never silently moves a comment.",
+        "enum": ["current", "moved", "outdated"]
+      },
+      "Annotation": {
+        "type": "object",
+        "description": "An explanation pinned next to code.",
+        "required": ["key", "location", "body"],
+        "properties": {
+          "body": {
+            "type": "string",
+            "description": "Markdown explanation."
+          },
+          "key": {
+            "type": "string",
+            "description": "Stable key, reused to update the explanation."
+          },
+          "location": {
+            "$ref": "#/components/schemas/Location",
+            "description": "Where this explanation belongs."
+          }
+        },
+        "additionalProperties": false
+      },
+      "Author": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A collaborator with session edit access.",
+            "required": ["id", "kind"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Authenticated Macro user identifier."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["user"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The agent belonging to this review's session.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["agent"]
+              }
+            }
+          }
+        ],
+        "description": "Message author, assigned by authentication rather than client JSON."
+      },
       "BotId": {
         "type": "string"
       },
@@ -2552,6 +2900,95 @@
           }
         }
       },
+      "Chapter": {
+        "type": "object",
+        "description": "A chapter authored by the agent. Keys allow idempotent replacement.",
+        "required": ["key", "title", "description", "paths", "focus"],
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "Markdown explanation of why these changes belong together."
+          },
+          "focus": {
+            "$ref": "#/components/schemas/Location",
+            "description": "Initial code selection, validated against the published revision."
+          },
+          "key": {
+            "type": "string",
+            "description": "Stable agent-supplied key."
+          },
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Reading order of repository-relative files."
+          },
+          "title": {
+            "type": "string",
+            "description": "Short title describing intent."
+          }
+        },
+        "additionalProperties": false
+      },
+      "Comment": {
+        "type": "object",
+        "description": "A user comment or reply request.",
+        "required": ["id", "revision", "body"],
+        "properties": {
+          "body": {
+            "type": "string",
+            "description": "Markdown comment text."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "UUID reused for retries."
+          },
+          "location": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Location",
+                "description": "Required for a new thread."
+              }
+            ]
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Revision the user saw.",
+            "minimum": 0
+          },
+          "thread": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Existing thread for a reply; absent creates a new thread."
+          }
+        },
+        "additionalProperties": false
+      },
+      "Comparison": {
+        "type": "object",
+        "description": "What content the runtime should compare. The base is pinned after capture.",
+        "properties": {
+          "base": {
+            "type": ["string", "null"],
+            "description": "Base commit or branch; defaults to HEAD for a new workspace review."
+          },
+          "head": {
+            "type": ["string", "null"],
+            "description": "Optional tip commit; absent keeps the previous workspace tip or follows the PR."
+          },
+          "worktree": {
+            "type": "boolean",
+            "description": "Explicitly switch a fixed-head workspace comparison back to the live worktree."
+          }
+        },
+        "additionalProperties": false
+      },
       "CompleteRequest": {
         "type": "object",
         "description": "One-time manual code. Deliberately does not implement Debug.",
@@ -2719,6 +3156,11 @@
             "description": "Thread the session belongs to; defaults to the message itself, which\nis how a top-level mention roots its own thread."
           }
         }
+      },
+      "Delivery": {
+        "type": "string",
+        "description": "Feedback delivery state backed by a durable outbox.",
+        "enum": ["pending", "queued", "failed"]
       },
       "DiscoverAgentCapabilitiesRequest": {
         "type": "object",
@@ -2891,6 +3333,193 @@
         "description": "What happened to a file, on the wire.",
         "enum": ["added", "modified", "deleted", "renamed"]
       },
+      "FileDiff": {
+        "type": "object",
+        "description": "One file's diff: both sides in full, aligned line by line.",
+        "required": ["path", "status", "added", "removed", "rows", "since"],
+        "properties": {
+          "added": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "collapsed": {
+            "type": ["string", "null"],
+            "description": "Why the file starts collapsed (set by the agent, e.g. \"generated by ts-rs\")."
+          },
+          "details": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Changes the rows can't show: the file mode, line endings, the final\nnewline, a submodule's commit. Short phrases, e.g. \"mode 100644 → 100755\"."
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "What kind of file it is, as diffd can tell by itself: `test`, `generated`."
+          },
+          "language": {
+            "type": ["string", "null"],
+            "description": "Display name of the language, when we recognise it."
+          },
+          "new": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SideText"
+              }
+            ]
+          },
+          "old": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SideText"
+              }
+            ]
+          },
+          "oldPath": {
+            "type": ["string", "null"]
+          },
+          "omitted": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Omitted",
+                "description": "Why the contents aren't shown, when they aren't."
+              }
+            ]
+          },
+          "path": {
+            "type": "string"
+          },
+          "removed": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Row"
+            },
+            "description": "The whole file, aligned: (old line index, new line index), 0-based."
+          },
+          "since": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            },
+            "description": "New-side lines (1-based) that changed since the previous revision."
+          },
+          "status": {
+            "$ref": "#/components/schemas/FileStatus"
+          }
+        }
+      },
+      "FileEntry": {
+        "type": "object",
+        "description": "One file in the manifest, fetched independently by content identity.",
+        "required": ["path", "content", "status", "added", "removed", "labels"],
+        "properties": {
+          "added": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Changed lines on the new side.",
+            "minimum": 0
+          },
+          "collapsed": {
+            "type": ["string", "null"],
+            "description": "Explanation for a collapsed generated file."
+          },
+          "content": {
+            "type": "string",
+            "description": "Session-scoped immutable body identifier."
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Semantic labels from diffd or the agent."
+          },
+          "language": {
+            "type": ["string", "null"],
+            "description": "Language when recognized."
+          },
+          "oldPath": {
+            "type": ["string", "null"],
+            "description": "Original path of a rename."
+          },
+          "omitted": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Omitted",
+                "description": "Why text is unavailable, when omitted by the source."
+              }
+            ]
+          },
+          "path": {
+            "type": "string",
+            "description": "Repository-relative path, including deletions."
+          },
+          "removed": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Changed lines on the old side.",
+            "minimum": 0
+          },
+          "status": {
+            "$ref": "#/components/schemas/FileStatus",
+            "description": "Engine file status."
+          }
+        }
+      },
+      "FileGroup": {
+        "type": "object",
+        "description": "A named set of files the reviewer can hide and reveal together.",
+        "required": ["key", "title", "files"],
+        "properties": {
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Paths, directories, or globs when publishing (e.g. .sqlx/**, **/*.test.ts).\nReads expand these to exact paths in the requested revision."
+          },
+          "hidden": {
+            "type": "boolean",
+            "description": "Whether these files start hidden. The reader can always reveal them."
+          },
+          "key": {
+            "type": "string",
+            "description": "Stable agent-supplied key."
+          },
+          "title": {
+            "type": "string",
+            "description": "Short label, such as Generated or Tests."
+          }
+        },
+        "additionalProperties": false
+      },
+      "FileStatus": {
+        "type": "string",
+        "enum": ["added", "deleted", "modified", "renamed", "unchanged"]
+      },
       "GitRefDto": {
         "type": "object",
         "description": "One end of the compared range.",
@@ -2904,6 +3533,21 @@
             "description": "The commit, when known."
           }
         }
+      },
+      "LinkBody": {
+        "type": "object",
+        "required": ["revision", "location"],
+        "properties": {
+          "location": {
+            "$ref": "#/components/schemas/Location"
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
       },
       "LinkShare": {
         "type": "string",
@@ -2948,6 +3592,34 @@
           }
         }
       },
+      "Location": {
+        "type": "object",
+        "description": "A code reference supplied by a user or agent; lines are one-based, inclusive.",
+        "required": ["path", "side", "line"],
+        "properties": {
+          "endLine": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Last selected line; omitted for a single line.",
+            "minimum": 0
+          },
+          "line": {
+            "type": "integer",
+            "format": "int32",
+            "description": "First selected line.",
+            "minimum": 0
+          },
+          "path": {
+            "type": "string",
+            "description": "Repository-relative path."
+          },
+          "side": {
+            "$ref": "#/components/schemas/Side",
+            "description": "Before or after side."
+          }
+        },
+        "additionalProperties": false
+      },
       "LogDirectionDto": {
         "type": "string",
         "description": "Which way a logged frame travelled, mirroring [`Message`]'s discriminant.",
@@ -2965,6 +3637,42 @@
           "direction": {
             "$ref": "#/components/schemas/LogDirectionDto",
             "description": "Which way the frame travelled."
+          }
+        }
+      },
+      "Message": {
+        "type": "object",
+        "description": "An immutable thread message. Its ID is also its retry key.",
+        "required": ["id", "author", "body", "createdAt"],
+        "properties": {
+          "author": {
+            "$ref": "#/components/schemas/Author",
+            "description": "Server-assigned author."
+          },
+          "body": {
+            "type": "string",
+            "description": "Markdown body."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Time accepted by the review store."
+          },
+          "delivery": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Delivery",
+                "description": "Present for human feedback only."
+              }
+            ]
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Caller-minted UUID reused for network retries."
           }
         }
       },
@@ -3072,6 +3780,11 @@
         "type": "string",
         "description": "Harness names accepted by the model discovery endpoint.",
         "enum": ["in-memory", "cursor", "claude-cloud", "macrod"]
+      },
+      "Omitted": {
+        "type": "string",
+        "description": "Why a file's contents aren't shown.",
+        "enum": ["binary", "tooLarge", "submodule"]
       },
       "PermissionAnswer": {
         "oneOf": [
@@ -3202,6 +3915,235 @@
             "description": "New user-facing name. Leading and trailing whitespace is discarded."
           }
         }
+      },
+      "ResolveBody": {
+        "type": "object",
+        "required": ["thread", "resolved"],
+        "properties": {
+          "resolved": {
+            "type": "boolean"
+          },
+          "thread": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ResolveResponse": {
+        "type": "object",
+        "description": "Result of changing a thread's resolution state.",
+        "required": ["resolved"],
+        "properties": {
+          "resolved": {
+            "type": "boolean",
+            "description": "The saved state."
+          }
+        }
+      },
+      "Review": {
+        "type": "object",
+        "description": "Durable aggregate protected by a compare-and-swap version.",
+        "required": [
+          "id",
+          "sessionId",
+          "version",
+          "title",
+          "summary",
+          "repository",
+          "source",
+          "revisions",
+          "tour",
+          "annotations",
+          "anchors",
+          "threads"
+        ],
+        "properties": {
+          "anchors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Anchor"
+            },
+            "description": "Durable selections."
+          },
+          "annotations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Annotation"
+            },
+            "description": "Current inline explanations."
+          },
+          "fileGroups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FileGroup"
+            },
+            "description": "Current agent-selected file groups."
+          },
+          "id": {
+            "$ref": "#/components/schemas/ReviewId",
+            "description": "Stable review ID."
+          },
+          "repository": {
+            "type": "string",
+            "description": "Repository name or URL."
+          },
+          "revisions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Revision"
+            },
+            "description": "Immutable revision history."
+          },
+          "sessionId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Owning session; never supplied by an MCP tool argument."
+          },
+          "source": {
+            "$ref": "#/components/schemas/SourceKind",
+            "description": "Availability of uncommitted changes."
+          },
+          "summary": {
+            "type": "string",
+            "description": "Agent summary."
+          },
+          "threads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Thread"
+            },
+            "description": "Durable discussion."
+          },
+          "title": {
+            "type": "string",
+            "description": "Display title."
+          },
+          "tour": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Chapter"
+            },
+            "description": "Current reading tour."
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Metadata/activity version, independent of code revisions."
+          }
+        }
+      },
+      "ReviewId": {
+        "type": "string",
+        "format": "uuid",
+        "description": "A stable identity shared by revision links, annotations, and conversations."
+      },
+      "ReviewLink": {
+        "type": "object",
+        "description": "A validated link returned to the agent.",
+        "required": ["reviewId", "revision", "url"],
+        "properties": {
+          "reviewId": {
+            "$ref": "#/components/schemas/ReviewId",
+            "description": "Review identity."
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Code revision, pinned in the URL.",
+            "minimum": 0
+          },
+          "url": {
+            "type": "string",
+            "description": "Canonical Macro URL."
+          }
+        }
+      },
+      "ReviewResponse": {
+        "type": "object",
+        "description": "Review metadata envelope. An empty review is distinct from a failed read.",
+        "properties": {
+          "review": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Review",
+                "description": "Published review, when this session has one."
+              }
+            ]
+          }
+        }
+      },
+      "Revision": {
+        "type": "object",
+        "description": "One immutable revision; older links keep resolving after new captures.",
+        "required": ["number", "createdAt", "comparison", "files", "symbols"],
+        "properties": {
+          "annotations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Annotation"
+            },
+            "description": "Inline explanations belonging to this revision."
+          },
+          "comparison": {
+            "$ref": "#/components/schemas/Comparison",
+            "description": "The comparison that produced the snapshot."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Time this revision was published."
+          },
+          "fileGroups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FileGroup"
+            },
+            "description": "Agent-selected file groups for this revision."
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FileEntry"
+            },
+            "description": "Lazy body references."
+          },
+          "number": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Monotonic, one-based revision number.",
+            "minimum": 0
+          },
+          "symbols": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Symbol"
+            },
+            "description": "Definitions indexed by diffd across the snapshot."
+          },
+          "tour": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Chapter"
+            },
+            "description": "Tour as it was explained for this revision."
+          }
+        }
+      },
+      "Row": {
+        "type": "array",
+        "items": {
+          "type": ["integer", "null"],
+          "format": "int32",
+          "description": "An aligned pair of 0-based line indices; `None` where one side has no line.",
+          "minimum": 0
+        },
+        "description": "An aligned pair of 0-based line indices; `None` where one side has no line.",
+        "maxItems": 2,
+        "minItems": 2
       },
       "SandboxSize": {
         "type": "string",
@@ -3349,6 +4291,52 @@
           }
         }
       },
+      "Side": {
+        "type": "string",
+        "enum": ["old", "new"]
+      },
+      "SideText": {
+        "type": "object",
+        "description": "One side of a file.",
+        "required": ["lines", "syntax", "novel"],
+        "properties": {
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "novel": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "format": "int32",
+                "minimum": 0
+              }
+            },
+            "description": "Per line, flattened `[start, end, …]`: tokens difftastic marks as novel."
+          },
+          "syntax": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "format": "int32",
+                "minimum": 0
+              }
+            },
+            "description": "Per line, flattened `[start, end, class, start, end, class, …]`.\n`class` indexes [`SyntaxClass::ALL`]."
+          }
+        }
+      },
+      "SourceKind": {
+        "type": "string",
+        "description": "Source availability shown honestly by the reader.",
+        "enum": ["workspace", "pullRequest"]
+      },
       "StartResponse": {
         "type": "object",
         "description": "Public PKCE challenge and attempt handle; contains no verifier or provider tokens.",
@@ -3386,6 +4374,92 @@
           "ephemeral": {
             "type": "boolean",
             "description": "Whether reconnecting after service restart is required."
+          }
+        }
+      },
+      "Symbol": {
+        "type": "object",
+        "description": "A definition found by the tags queries: what `gd` jumps to.",
+        "required": [
+          "name",
+          "kind",
+          "file",
+          "side",
+          "line",
+          "start",
+          "end",
+          "lines"
+        ],
+        "properties": {
+          "end": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "file": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Index into [`Snapshot::files`].",
+            "minimum": 0
+          },
+          "kind": {
+            "type": "string",
+            "description": "e.g. \"function\", \"class\", \"method\", \"module\"."
+          },
+          "line": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            },
+            "description": "The whole definition's first and last line (1-based), e.g. a function with its body.",
+            "maxItems": 2,
+            "minItems": 2
+          },
+          "name": {
+            "type": "string"
+          },
+          "side": {
+            "$ref": "#/components/schemas/Side"
+          },
+          "start": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        }
+      },
+      "Thread": {
+        "type": "object",
+        "description": "A discussion whose identity survives revisions.",
+        "required": ["id", "anchor", "resolved", "messages"],
+        "properties": {
+          "anchor": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Anchor in `Review.anchors`."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable thread identity."
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Message"
+            },
+            "description": "Ordered, idempotent messages."
+          },
+          "resolved": {
+            "type": "boolean",
+            "description": "Human-controlled resolution."
           }
         }
       },

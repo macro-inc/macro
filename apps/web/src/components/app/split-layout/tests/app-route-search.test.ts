@@ -22,7 +22,8 @@ vi.mock('@service-connection/websocket', () => ({
 }));
 
 const routes = createRoutesManifest(appSplitRoutes);
-const viewerState = 's0.changes.pane=split';
+const viewerState =
+  's0.review.open=true&s0.review.id=review-1&s0.review.target=anchor-1';
 
 function roundTrip(pathname: string, search: string, committed: boolean) {
   const location = { pathname, search: `?${search}`, hash: '' };
@@ -52,19 +53,27 @@ describe('application route search ownership', () => {
     ['/agents/session-1', 'the agents workspace'],
     ['/coders/session-1', 'a coding session'],
     ['/agent/session-1', 'the agent block'],
-  ])('keeps the changes pane state on %s (%s)', (pathname) => {
-    expect(roundTrip(pathname, viewerState, false)).toContain(viewerState);
-    expect(roundTrip(pathname, viewerState, true)).toContain(viewerState);
+    ['/home/agent/session-1', 'Home'],
+  ])('keeps the review state on %s (%s)', (pathname) => {
+    for (const committed of [false, true]) {
+      const result = new URL(
+        roundTrip(pathname, viewerState, committed),
+        'https://macro.com'
+      );
+      expect(Object.fromEntries(result.searchParams)).toEqual(
+        Object.fromEntries(new URLSearchParams(viewerState))
+      );
+    }
   });
 
-  it('drops the changes pane state of a split whose route does not own it', () => {
+  it('drops the review state of a split whose route does not own it', () => {
     const result = roundTrip(
       '/agents/session-1/~/reviews',
-      's0.changes.pane=split&s1.changes.pane=full',
+      's0.review.open=true&s1.review.open=true',
       true
     );
-    expect(result).toContain('s0.changes.pane=split');
-    expect(result).not.toContain('s1.changes');
+    expect(result).toContain('s0.review.open=true');
+    expect(result).not.toContain('s1.review');
   });
 
   it('drops search keys no route owns', () => {

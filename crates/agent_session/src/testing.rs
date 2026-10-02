@@ -83,6 +83,14 @@ pub struct InMemoryAgentSessionRepo {
     leases: Arc<Mutex<HashMap<AgentSessionId, Lease>>>,
     /// Session -> waiting actions, mirroring `agent_session_queue`.
     queues: Arc<Mutex<HashMap<AgentSessionId, Vec<StoredQueuedAction>>>>,
+    cancelled: Arc<
+        Mutex<
+            std::collections::HashSet<(
+                AgentSessionId,
+                agent_runtime_protocol::domain::action::AgentActionId,
+            )>,
+        >,
+    >,
 }
 
 impl InMemoryAgentSessionRepo {
@@ -489,6 +497,39 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
             .expect("in-memory queue store is not poisoned")
             .remove(&id);
         Ok(())
+    }
+
+    async fn cancel_queued_action(
+        &self,
+        id: AgentSessionId,
+        action: agent_runtime_protocol::domain::action::AgentActionId,
+        remaining: &[StoredQueuedAction],
+    ) -> Result<()> {
+        self.replace_queued_actions(id, remaining).await?;
+        self.cancelled.lock().unwrap().insert((id, action));
+        Ok(())
+    }
+    async fn action_completed(
+        &self,
+        id: AgentSessionId,
+        action: agent_runtime_protocol::domain::action::AgentActionId,
+    ) -> Result<bool> {
+        if self.cancelled.lock().unwrap().contains(&(id, action)) {
+            return Ok(true);
+        }
+        Ok(self.logs.lock().unwrap().get(&id).is_some_and(|logs| {
+            logs.iter().any(|log| {
+                let crate::domain::model::Message::ToServer(message) = &log.entry.content else {
+                    return false;
+                };
+                let Ok(value) = serde_json::to_value(message) else {
+                    return false;
+                };
+                value.get("id").and_then(serde_json::Value::as_str)
+                    == Some(action.as_uuid().to_string().as_str())
+                    && (value.get("result").is_some() || value.get("error").is_some())
+            })
+        }))
     }
 
     async fn list_queued_actions(&self, id: AgentSessionId) -> Result<Vec<StoredQueuedAction>> {

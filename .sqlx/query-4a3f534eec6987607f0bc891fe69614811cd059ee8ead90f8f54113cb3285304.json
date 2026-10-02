@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calendar_backfill_jobs SET started_at = now() - interval '25 minutes', updated_at = now() - interval '20 minutes' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4a3f534eec6987607f0bc891fe69614811cd059ee8ead90f8f54113cb3285304"
+}

@@ -1,4 +1,4 @@
-import { ChangesToggle } from '@app/features/agent-changes/agent-changes';
+import { ReviewToggle } from '@app/features/agent-review/agent-review';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions/use-block-entity-commands';
 import {
   type BlockTool,
@@ -192,8 +192,8 @@ export function AgentSplitHeader(props: {
           <Show when={props.session?.pullRequestUrl}>
             {(url) => <AgentPullRequestChip url={url()} />}
           </Show>
+          <ReviewToggle />
           <Show when={!isMobile()}>
-            <ChangesToggle />
             <For each={tools}>
               {(tool) => (
                 <Show when={!tool.condition || tool.condition()}>

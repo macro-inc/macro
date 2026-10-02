@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO \"SharePermission\" (id, \"linkShare\", \"linkShareAccessLevel\")\n        VALUES ($1, $2, $3::text::\"AccessLevel\")\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a739b150e8173d6d34ec38c129a88f88e6c30ddda7788f65d185d4f41a35c160"
+}

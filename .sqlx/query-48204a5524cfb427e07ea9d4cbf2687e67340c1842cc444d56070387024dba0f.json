@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO user_ai_projection\n            (ai_projection_id, target_id, prompt_hash, status,\n             generated_at, stale_at, last_requested_at, updated_at)\n        VALUES ($1, $2, 'hash_v1', $3, $4, $5, $6, $7)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Timestamptz",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "48204a5524cfb427e07ea9d4cbf2687e67340c1842cc444d56070387024dba0f"
+}

@@ -1183,10 +1183,10 @@ describe('layoutManager', () => {
     });
 
     it.each(['/home/agent/entity', '/agents/entity', '/coders/entity'])(
-      'reuses an agent target inside %s while preserving Changes state',
+      'reuses an agent target inside %s while preserving review state',
       async (path) => {
         const { manager, router, dispose } = ingressRouter(
-          `${path}/~/search?s0.changes.pane=split&s0.changes.style=split`
+          `${path}/~/search?s0.review.open=true&s0.review.id=review-1&s0.review.revision=2`
         );
         await router.settled();
         const [owner, source] = manager.splits();
@@ -1210,9 +1210,10 @@ describe('layoutManager', () => {
           messageTurn: ['0'],
           author: ['agent'],
         });
-        expect(router.search(owner.id, 'changes')).toEqual({
-          pane: ['split'],
-          style: ['split'],
+        expect(router.search(owner.id, 'review')).toEqual({
+          open: ['true'],
+          id: ['review-1'],
+          revision: ['2'],
         });
         router.dispose();
         dispose();

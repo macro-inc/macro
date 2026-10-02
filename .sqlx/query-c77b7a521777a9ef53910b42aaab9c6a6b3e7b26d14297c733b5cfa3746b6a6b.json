@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            \"linkShare\" as link_share,\n            \"linkShareAccessLevel\"::text as link_share_access_level,\n            team_share_access_level::text as team_share_access_level\n        FROM \"SharePermission\"\n        WHERE id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "link_share",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "link_share_access_level",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "team_share_access_level",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      true,
+      null,
+      null
+    ]
+  },
+  "hash": "c77b7a521777a9ef53910b42aaab9c6a6b3e7b26d14297c733b5cfa3746b6a6b"
+}

@@ -20,7 +20,7 @@ use agent_session::{
         ports::{AgentSessionLogRepo, AgentSessionRepo},
         pull_request::SessionPullRequestService,
     },
-    testing::{InMemoryAgentSessionRepo, RecordingRealtime, test_agent_session},
+    testing::{RecordingRealtime, test_agent_session},
 };
 use axum::{
     body::{Body, to_bytes},
@@ -64,8 +64,9 @@ async fn rpc(
 #[tokio::test]
 async fn each_harness_gets_only_internal_tools_and_writes_only_its_session() {
     for harness in ["cursor", "claude-code", "macrod"] {
-        let repo = InMemoryAgentSessionRepo::new();
-        let mut session = test_agent_session(AgentSessionId::new());
+        let fixture = agent_review::testing::Fixture::new();
+        let repo = fixture.sessions.clone();
+        let mut session = test_agent_session(AgentSessionId::TEST_A);
         session.harness = harness.into();
         session.repo_url = Some("git@github.com:org/repo.git".into());
         repo.insert_session(session.clone());
@@ -80,6 +81,7 @@ async fn each_harness_gets_only_internal_tools_and_writes_only_its_session() {
                 repo.clone(),
                 RecordingRealtime::new(),
             )),
+            fixture.service.clone(),
             "localhost".into(),
         );
         assert_eq!(
@@ -122,8 +124,23 @@ async fn each_harness_gets_only_internal_tools_and_writes_only_its_session() {
         )
         .await;
         assert_eq!(status, StatusCode::OK, "{listed}");
-        assert_eq!(listed["result"]["tools"].as_array().unwrap().len(), 1);
-        assert_eq!(listed["result"]["tools"][0]["name"], "set_pull_request");
+        assert_eq!(listed["result"]["tools"].as_array().unwrap().len(), 6);
+        for name in [
+            "set_pull_request",
+            "diff",
+            "diff_link",
+            "diff_annotate",
+            "diff_reply",
+            "diff_feedback",
+        ] {
+            assert!(
+                listed["result"]["tools"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|tool| tool["name"] == name)
+            );
+        }
         let (_, bad) = rpc(app.clone(), Some("secret"), "tools/call", serde_json::json!({
             "name": "set_pull_request", "arguments": {"url": "https://github.com/org/repo/pull/1", "session": other.id.as_uuid()},
         })).await;

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO comms_channels (id, name, channel_type, org_id, owner_id)\n        VALUES ($1, 'Call Access Test', 'public', NULL, $2)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e1b4814b44d61c996848a90e8fb8acf08cdd0eb157ef4b27899fefab51d84268"
+}

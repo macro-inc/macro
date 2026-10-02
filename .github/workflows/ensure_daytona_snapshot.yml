@@ -10,7 +10,10 @@ name: Ensure Daytona Snapshot
     branches:
     - main
     paths:
+    - Cargo.toml
     - crates/agent_harness/container/**
+    - crates/agent_review_runtime/**
+    - vendor/diffd-core/**
     - crates/agent_harness/justfile
     - crates/agent_harness/sandbox_sizes.json
     - nix/cloud-storage.nix
@@ -20,7 +23,10 @@ name: Ensure Daytona Snapshot
     branches:
     - main
     paths:
+    - Cargo.toml
     - crates/agent_harness/container/**
+    - crates/agent_review_runtime/**
+    - vendor/diffd-core/**
     - crates/agent_harness/justfile
     - crates/agent_harness/sandbox_sizes.json
     - nix/cloud-storage.nix
@@ -99,7 +105,7 @@ jobs:
           --platform linux/amd64 \
           "${tags[@]}" \
           --push \
-          crates/agent_harness/container
+          --file crates/agent_harness/container/Dockerfile .
       shell: bash
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

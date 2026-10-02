@@ -34,6 +34,19 @@ export class UpstreamLink {
         this.socket.send({ ...frame, type: 'acp' });
     };
     this.socket.onMessage = (message) => {
+      if (message.type === 'reviewCapture') {
+        this.socket.send({
+          type: 'reviewCaptured',
+          request_id: message.request_id,
+          result: {
+            status: 'error',
+            message:
+              'This worker cannot capture a workspace; use the linked pull request or an updated macrod runtime.',
+          },
+        });
+        return;
+      }
+      if (message.type !== 'acp') return;
       const { type: _type, ...frame } = message;
       console.log(`[upstream ${this.sessionId}] <- acp`, frame);
       if (this.handler) this.handler(frame);

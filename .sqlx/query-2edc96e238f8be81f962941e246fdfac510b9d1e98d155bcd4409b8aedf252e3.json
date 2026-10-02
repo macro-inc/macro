@@ -1,0 +1,27 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE \"SharePermission\"\n            SET team_share_access_level = $1,\n                team_share_team_id = $2\n            WHERE id IN ('sp-d1', 'sp-c1')\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        },
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2edc96e238f8be81f962941e246fdfac510b9d1e98d155bcd4409b8aedf252e3"
+}

@@ -2,6 +2,10 @@
 
 use std::sync::Arc;
 
+use agent_review::{
+    domain::service::Reviews,
+    inbound::toolset::{Diff, DiffAnnotate, DiffFeedback, DiffLink, DiffReply, ReviewToolContext},
+};
 use agent_session::domain::ports::AgentSessionRepo;
 use agent_session::{
     domain::pull_request::SessionPullRequests,
@@ -25,20 +29,35 @@ use rmcp::{
     },
 };
 
+#[path = "internal_mcp/authenticated_session.rs"]
 mod authenticated_session;
 use authenticated_session::AuthenticatedSession;
 
 #[cfg(test)]
+#[path = "internal_mcp/test.rs"]
 mod test;
 
-fn toolset() -> AsyncToolCollection<SessionToolContext> {
-    AsyncToolCollection::new().add_tool::<SetPullRequest, SessionToolContext>()
+#[derive(Clone, axum::extract::FromRef)]
+struct InternalToolContext {
+    session: SessionToolContext,
+    review: ReviewToolContext,
+}
+
+fn toolset() -> AsyncToolCollection<InternalToolContext> {
+    AsyncToolCollection::new()
+        .add_tool::<SetPullRequest, SessionToolContext>()
+        .add_tool::<Diff, ReviewToolContext>()
+        .add_tool::<DiffLink, ReviewToolContext>()
+        .add_tool::<DiffAnnotate, ReviewToolContext>()
+        .add_tool::<DiffReply, ReviewToolContext>()
+        .add_tool::<DiffFeedback, ReviewToolContext>()
 }
 
 /// Build the internal endpoint with per-request session authentication.
 pub fn router<A: AgentSessionRepo + 'static>(
     authority: Arc<A>,
     service: Arc<dyn SessionPullRequests>,
+    reviews: Arc<dyn Reviews>,
     host: String,
 ) -> Router {
     let mut config = StreamableHttpServerConfig::default().with_allowed_hosts([
@@ -54,6 +73,7 @@ pub fn router<A: AgentSessionRepo + 'static>(
         move || {
             Ok(InternalTools {
                 service: service.clone(),
+                reviews: reviews.clone(),
             })
         },
         Arc::new(LocalSessionManager::default()),
@@ -71,6 +91,7 @@ async fn authenticate(session: AuthenticatedSession, mut request: Request, next:
 
 struct InternalTools {
     service: Arc<dyn SessionPullRequests>,
+    reviews: Arc<dyn Reviews>,
 }
 
 impl ServerHandler for InternalTools {
@@ -82,7 +103,7 @@ impl ServerHandler for InternalTools {
         )
         .with_title("Macro Internal MCP");
         info.instructions = Some(
-            "When you create or start working on a pull request, register its URL with Macro using macro_internal.set_pull_request. \
+            "Publish meaningful code changes with macro_internal.diff. Whenever you discuss a change, cite returned review URLs; use macro_internal.diff_link for specific code. Add a reading tour with diff_annotate and answer review feedback inline with diff_reply. Refresh the review after editing. Never fabricate review links. When you create or start working on a pull request, register its URL with Macro using macro_internal.set_pull_request. \
              Save any screenshot or screen recording meant for the user into your artifacts directory and refer to it in prose by file name only, never by a sandbox path: Macro re-hosts uploaded artifacts and cannot reach files anywhere else.".into(),
         );
         info
@@ -136,9 +157,15 @@ impl ServerHandler for InternalTools {
             .map_err(|error| rmcp::ErrorData::invalid_request(error.to_string(), None))?;
         let result = toolset()
             .try_tool_call(
-                SessionToolContext {
-                    service: self.service.clone(),
-                    session: grant.id,
+                InternalToolContext {
+                    session: SessionToolContext {
+                        service: self.service.clone(),
+                        session: grant.id,
+                    },
+                    review: ReviewToolContext {
+                        service: self.reviews.clone(),
+                        session: grant.id,
+                    },
                 },
                 RequestContext::new(owner.clone()),
                 &request.name,

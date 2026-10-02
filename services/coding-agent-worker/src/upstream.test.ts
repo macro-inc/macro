@@ -103,3 +103,24 @@ test('ACP frames sent before the socket opens are queued and flushed on open', (
   ]);
   link.close();
 });
+
+test('unsupported workspace capture returns a correlated error without entering ACP', () => {
+  const { link, socket } = setup();
+  socket.onOpen();
+  const received: unknown[] = [];
+  link.onAcp = (message) => received.push(message);
+  socket.onMessage({
+    type: 'reviewCapture',
+    request_id: 'capture-1',
+    workspace: '/workspace',
+    base: null,
+    head: null,
+  });
+  expect(received).toEqual([]);
+  expect(socket.sent[0]).toMatchObject({
+    type: 'reviewCaptured',
+    request_id: 'capture-1',
+    result: { status: 'error' },
+  });
+  link.close();
+});

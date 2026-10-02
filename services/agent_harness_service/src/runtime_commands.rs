@@ -21,6 +21,7 @@ mod test;
 #[derive(serde::Deserialize)]
 #[serde(untagged)]
 enum RuntimeBusEvent {
+    Reviews(crate::reviews::ReviewRuntimeEvent),
     Models(ModelProbeEvent),
     Command(Box<RuntimeCommandRequest>),
 }
@@ -32,6 +33,7 @@ pub(crate) async fn consume_runtime_commands<Harness>(
     harness_service: Arc<Harness>,
     ready: tokio::sync::watch::Sender<bool>,
     models: MacrodModels,
+    reviews: crate::reviews::ReviewRuntimeBus,
 ) -> anyhow::Result<()>
 where
     Harness: ForwardedCommands,
@@ -69,6 +71,15 @@ where
             }
         };
         let request = match event {
+            RuntimeBusEvent::Reviews(event) => {
+                let reviews = reviews.clone();
+                probes.spawn(async move {
+                    if let Err(error) = reviews.observe(event).await {
+                        tracing::error!(?error, "runtime review event failed");
+                    }
+                });
+                continue;
+            }
             RuntimeBusEvent::Command(request) => *request,
             RuntimeBusEvent::Models(event) => {
                 let models = models.clone();

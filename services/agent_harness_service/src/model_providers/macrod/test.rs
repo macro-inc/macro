@@ -41,7 +41,7 @@ async fn peer() -> Peer {
     let models = MacrodModels::new(Arc::clone(&registry), redis.clone(), Duration::from_secs(2));
     let (ready, mut readiness) = tokio::sync::watch::channel(false);
     let consumer = tokio::spawn(crate::runtime_commands::consume_runtime_commands(
-        redis,
+        redis.clone(),
         ReplicaId::mint(),
         {
             let registry = Arc::clone(&registry);
@@ -50,6 +50,17 @@ async fn peer() -> Peer {
         Arc::new(NoCommands),
         ready,
         models.clone(),
+        crate::reviews::ReviewRuntimeBus::new(
+            Arc::clone(&registry),
+            redis,
+            aws_sdk_s3::Client::from_conf(
+                aws_sdk_s3::config::Builder::new()
+                    .behavior_version_latest()
+                    .region(aws_sdk_s3::config::Region::new("us-east-1"))
+                    .build(),
+            ),
+            "unused-in-probe-tests".into(),
+        ),
     ));
     tokio::time::timeout(Duration::from_secs(2), readiness.wait_for(|ready| *ready))
         .await

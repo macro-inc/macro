@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT sp.\"linkShare\" AS \"link_share?\"\n        FROM \"SharePermission\" sp\n        JOIN call_records cr ON cr.share_permission_id = sp.id\n        WHERE cr.id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "link_share?",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "4e313fa2794da2ab186eb1438062ff18c6789f6c52f166c13b788121d882e518"
+}

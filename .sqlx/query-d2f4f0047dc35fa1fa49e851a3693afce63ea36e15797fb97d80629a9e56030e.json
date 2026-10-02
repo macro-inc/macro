@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT account.sync_status, link.needs_reauth\n        FROM calendar_accounts account\n        JOIN email_links link ON link.id = account.email_link_id\n        WHERE account.id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "sync_status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "needs_reauth",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "d2f4f0047dc35fa1fa49e851a3693afce63ea36e15797fb97d80629a9e56030e"
+}
