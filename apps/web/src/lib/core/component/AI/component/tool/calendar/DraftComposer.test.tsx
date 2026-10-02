@@ -9,14 +9,28 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   calendars: [] as VisibleCalendar[],
   links: [] as Link[],
+  calendarError: false,
+  linksError: false,
+  refetchCalendars: vi.fn(),
+  refetchLinks: vi.fn(),
   startAddInbox: vi.fn(),
   execute: vi.fn(),
 }));
 vi.mock('@queries/calendar/calendars', () => ({
-  useVisibleCalendarsQuery: () => ({ isSuccess: true, data: mocks.calendars }),
+  useVisibleCalendarsQuery: () => ({
+    isSuccess: !mocks.calendarError,
+    isError: mocks.calendarError,
+    data: mocks.calendars,
+    refetch: mocks.refetchCalendars,
+  }),
 }));
 vi.mock('@queries/email/link', () => ({
-  useEmailLinksQuery: () => ({ isSuccess: true, data: { links: mocks.links } }),
+  useEmailLinksQuery: () => ({
+    isSuccess: !mocks.linksError,
+    isError: mocks.linksError,
+    data: { links: mocks.links },
+    refetch: mocks.refetchLinks,
+  }),
 }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'macro|self' }));
 vi.mock('@core/email-link', () => ({
@@ -116,12 +130,44 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.execute.mockResolvedValue(true);
   mocks.startAddInbox.mockResolvedValue(undefined);
+  mocks.calendarError = false;
+  mocks.linksError = false;
   mocks.links = [link('personal'), link('work')];
   mocks.calendars = [calendar('personal'), calendar('work')];
 });
 afterEach(cleanup);
 
 describe('AI calendar draft account selection', () => {
+  it.each([
+    { calendarError: true, linksError: false },
+    { calendarError: false, linksError: true },
+    { calendarError: true, linksError: true },
+  ])(
+    'offers retry instead of consent for failed queries: %j',
+    async (errors) => {
+      Object.assign(mocks, errors);
+      showDraft();
+      expect(screen.getByText('Could not load your calendars.')).not.toBeNull();
+      expect(screen.queryByText(/Wait for it to sync/)).toBeNull();
+      expect(
+        screen.queryByRole('button', {
+          name: /Connect calendar|Reconnect calendar/,
+        })
+      ).toBeNull();
+      expect(
+        screen.getByRole('button', { name: 'Create event' })
+      ).toHaveProperty('disabled', true);
+      await fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+      expect(mocks.refetchCalendars).toHaveBeenCalledTimes(
+        Number(errors.calendarError)
+      );
+      expect(mocks.refetchLinks).toHaveBeenCalledTimes(
+        Number(errors.linksError)
+      );
+      expect(mocks.startAddInbox).not.toHaveBeenCalled();
+    }
+  );
+
   it('defaults to the primary inbox even when a personal calendar is listed first', async () => {
     showDraft();
     await fireEvent.click(screen.getByRole('button', { name: 'Create event' }));

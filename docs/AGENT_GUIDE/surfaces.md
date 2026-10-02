@@ -1239,6 +1239,8 @@ An AI event draft defaults to the primary inbox's primary calendar. If that cale
 is disconnected or still syncing, the draft offers reconnection or an explicit
 calendar choice and disables submission until a usable calendar is selected. It
 does not silently send the invitation from another connected inbox.
+Failed calendar or account queries show `Could not load your calendars.` with
+`Try again`, rather than offering consent or presenting the failure as backfill.
 
 `New event` opens the compact composer with All day in the date/time fields.
 The meeting-link selector lists `Macro call`, `Google Meet`, then `No meeting link`

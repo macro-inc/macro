@@ -96,6 +96,11 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
   const links = () => (linksQuery.isSuccess ? linksQuery.data.links : []);
   const loadingCalendars = () =>
     calendarsQuery.isPending || linksQuery.isPending;
+  const calendarLoadFailed = () => calendarsQuery.isError || linksQuery.isError;
+  const retryCalendarData = () => {
+    if (calendarsQuery.isError) void calendarsQuery.refetch();
+    if (linksQuery.isError) void linksQuery.refetch();
+  };
   const primaryInbox = () =>
     links().find((link) => link.macro_id === userId() && link.is_primary);
   const primaryNeedsAccess = () =>
@@ -210,41 +215,57 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
               class="flex flex-wrap items-center gap-2 text-sm text-ink-muted"
             >
               <Show
-                when={!loadingCalendars()}
-                fallback="Loading your calendars…"
+                when={!calendarLoadFailed()}
+                fallback={
+                  <>
+                    <span>Could not load your calendars.</span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={retryCalendarData}
+                    >
+                      Try again
+                    </Button>
+                  </>
+                }
               >
-                <span>
-                  The requested calendar is unavailable.{' '}
-                  {requestedNeedsAccess()
-                    ? 'Reconnect it or choose another calendar.'
-                    : 'Wait for it to sync or choose another calendar.'}
-                </span>
-                <Show when={requestedNeedsAccess() && requestedInbox()}>
-                  {(link) => (
+                <Show
+                  when={!loadingCalendars()}
+                  fallback="Loading your calendars…"
+                >
+                  <span>
+                    The requested calendar is unavailable.{' '}
+                    {requestedNeedsAccess()
+                      ? 'Reconnect it or choose another calendar.'
+                      : 'Wait for it to sync or choose another calendar.'}
+                  </span>
+                  <Show when={requestedNeedsAccess() && requestedInbox()}>
+                    {(link) => (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          void startAddInbox({
+                            scopes: calendarConsentScopes(link()),
+                            emailAddress: link().email_address,
+                          })
+                        }
+                      >
+                        Reconnect calendar
+                      </Button>
+                    )}
+                  </Show>
+                  <Show when={!requestedInbox()}>
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() =>
-                        void startAddInbox({
-                          scopes: calendarConsentScopes(link()),
-                          emailAddress: link().email_address,
-                        })
+                        void startAddInbox({ scopes: 'gmail_and_calendar' })
                       }
                     >
-                      Reconnect calendar
+                      Connect calendar
                     </Button>
-                  )}
-                </Show>
-                <Show when={!requestedInbox()}>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      void startAddInbox({ scopes: 'gmail_and_calendar' })
-                    }
-                  >
-                    Connect calendar
-                  </Button>
+                  </Show>
                 </Show>
               </Show>
             </div>

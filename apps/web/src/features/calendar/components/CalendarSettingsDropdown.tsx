@@ -112,13 +112,13 @@ function createCalendarSettingsControls(isNarrow: () => boolean) {
     match(account.action)
       .with('enable', () => {
         void startAddInbox({
-          scopes: 'calendar',
+          scopes: account.consentScopes,
           emailAddress: account.emailAddress,
         });
       })
       .with('reconnect', () => {
         void startAddInbox({
-          scopes: 'gmail_and_calendar',
+          scopes: account.consentScopes,
           emailAddress: account.emailAddress,
         });
       })
