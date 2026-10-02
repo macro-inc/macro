@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE slack_import_conversation SET search_dirty_generation = search_dirty_generation + 1,\n                   search_state = 'pending', search_receipt_id = NULL, search_submitted_generation = NULL,\n                   search_updated_at = clock_timestamp(), updated_at = clock_timestamp()\n                   WHERE job_id = $1 AND slack_channel_id = $2 RETURNING search_dirty_generation",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "search_dirty_generation",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "28ec32ca127f48edddced384d3dedf34058409e2ff4932baee7601b157bce83e"
+}

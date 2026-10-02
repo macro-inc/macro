@@ -39,6 +39,7 @@ macro_rules! uuid_id {
         #[doc = $doc]
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
         #[serde(try_from = "Uuid", into = "Uuid")]
+        #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
         pub struct $name(Uuid);
 
         impl TryFrom<Uuid> for $name {
@@ -97,6 +98,7 @@ macro_rules! string_id {
         #[doc = $doc]
         #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
         #[serde(try_from = "String", into = "String")]
+        #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
         pub struct $name(String);
 
         impl $name {
@@ -198,6 +200,8 @@ string_id!(
 /// JSON is a string with six fractional digits, never a floating-point number.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "inbound", schema(value_type = String))]
 pub struct SlackTimestamp(i64);
 
 impl SlackTimestamp {
@@ -259,10 +263,12 @@ impl fmt::Display for SlackTimestamp {
     rename_all = "snake_case",
     rename_all_fields = "camelCase"
 )]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub enum SourceIdentity {
     /// Archive names its Slack workspace; reject a conflicting team binding.
     Known {
         /// Workspace identifier in the archive.
+        #[serde(rename = "sourceId")]
         source_id: SourceId,
     },
     /// Explicit confirmation that an unidentified archive belongs to this team's source.
@@ -273,6 +279,7 @@ pub enum SourceIdentity {
 /// Slack conversation kind. Public Slack channels map to Macro Team, never Public.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub enum ConversationKind {
     /// Team channel with explicit members and auto-join disabled.
     PublicChannel,
@@ -287,6 +294,7 @@ pub enum ConversationKind {
 /// Full selected conversation metadata, persisted before granting any uploads.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct ConversationMetadata {
     /// Stable Slack identity.
     pub slack_channel_id: ConversationId,
@@ -311,6 +319,7 @@ pub struct ConversationMetadata {
 /// Create command. Team identity is deliberately absent.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct CreateImport {
     /// Replay with the same semantic payload returns the original job; changes conflict.
     pub idempotency_token: CreateToken,
@@ -319,12 +328,14 @@ pub struct CreateImport {
     /// Default true at the client; false still requires users and zero-part seals.
     pub include_message_history: bool,
     /// Full, unique selected conversations (at most the configured bound).
+    #[cfg_attr(feature = "inbound", schema(min_items = 1, max_items = 2000))]
     pub conversations: Vec<ConversationMetadata>,
 }
 
 /// Configurable bounds shared with browser staging and enforced again by the worker.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct ImportLimits {
     /// Maximum NDJSON part bytes.
     pub part_bytes: u64,
@@ -373,14 +384,17 @@ impl Default for ImportLimits {
     rename_all_fields = "camelCase",
     deny_unknown_fields
 )]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub enum UploadId {
     /// One normalized users payload from users.json and/or org_users.json.
     Users,
     /// One NDJSON part in a selected conversation.
     ConversationPart {
         /// Selected Slack conversation.
+        #[serde(rename = "slackChannelId")]
         slack_channel_id: ConversationId,
         /// Zero-based part index; sealed manifests must be contiguous.
+        #[serde(rename = "partIndex")]
         part_index: u32,
     },
 }
@@ -388,6 +402,7 @@ pub enum UploadId {
 /// Immutable expected object properties, registered before signing an upload.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct UploadDescriptor {
     /// Manifest identity within this job.
     pub upload: UploadId,
@@ -428,14 +443,17 @@ impl UploadDescriptor {
 /// Batched registration, also used to renew an unchanged descriptor's grant.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct RegisterUploads {
     /// At most 50 descriptors; no duplicate identities in a call.
+    #[cfg_attr(feature = "inbound", schema(max_items = 50))]
     pub descriptors: Vec<UploadDescriptor>,
 }
 
 /// Complete immutable expected part set for one conversation, including zero parts.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct ConversationSeal {
     /// Selected source conversation.
     pub slack_channel_id: ConversationId,
@@ -501,8 +519,10 @@ impl ConversationSeal {
 /// Explicit upload completion; a seal can be submitted separately with an empty list.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct CompleteUploads {
     /// Registered identities to verify against storage (at most 50).
+    #[cfg_attr(feature = "inbound", schema(max_items = 50))]
     pub uploads: Vec<UploadId>,
     /// Optional immutable expected part set; identical retries are idempotent.
     pub seal: Option<ConversationSeal>,
@@ -519,6 +539,7 @@ pub struct JobCommand {
 /// Job lifecycle. Cancellation remains in progress while any lease is active.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub enum JobStatus {
     /// Registration is open; some conversations may already be running.
     Uploading,
@@ -539,6 +560,7 @@ pub enum JobStatus {
 /// Durable per-conversation lifecycle.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub enum ConversationStatus {
     /// Manifest or verified uploads are incomplete.
     AwaitingUploads,
@@ -557,7 +579,11 @@ pub enum ConversationStatus {
 /// Public error codes; never carry raw provider errors, keys, emails or source text.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, thiserror::Error)]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub enum ImportError {
+    /// Creation and upload operations are disabled by server configuration.
+    #[error("Slack imports are disabled")]
+    Disabled,
     /// Malformed command or export data.
     #[error("invalid import input")]
     InvalidInput,
@@ -593,6 +619,7 @@ pub enum ImportError {
 /// Non-fatal, sanitized explanations displayed in admin progress.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub enum ImportWarning {
     /// Creation time resolved from earliest message.
     CreationTimeFromMessage,
@@ -609,6 +636,7 @@ pub enum ImportWarning {
 /// Committed counters, never optimistic browser or uncommitted worker counts.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct ImportCounters {
     /// Source records examined through the committed checkpoint.
     pub processed: u64,
@@ -622,13 +650,15 @@ pub struct ImportCounters {
     pub reactions: u64,
 }
 
-/// Search submission/receipt state. Accepted is not completed indexing.
+/// Search publication/receipt state. Acceptance is not completed publication;
+/// even completed publication still awaits consumer indexing and refresh.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(
     tag = "status",
     rename_all = "snake_case",
     rename_all_fields = "camelCase"
 )]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub enum SearchState {
     /// No committed history requires indexing.
     NotNeeded,
@@ -637,17 +667,19 @@ pub enum SearchState {
     /// Search service accepted the request, but has not completed it.
     Submitted {
         /// Receipt from the search service.
+        #[serde(rename = "receiptId")]
         receipt_id: Uuid,
     },
-    /// Search service reported successful indexing.
+    /// Search service durably published the scope; eventual indexing is separate.
     Completed,
-    /// Indexing failed; retained history must be retried independently.
+    /// Publication failed; retained history must be retried independently.
     Failed,
 }
 
 /// Admin-visible progress for one selected conversation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct ConversationProgress {
     /// Source identity (always visible to the importing team's administrator).
     pub slack_channel_id: ConversationId,
@@ -678,6 +710,7 @@ pub struct ConversationProgress {
 /// Common receipt returned by create, completion, finalize, cancel and progress.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct ImportProgress {
     /// Immutable source confirmation from this job, not the current team binding.
     pub source: SourceIdentity,
@@ -710,6 +743,7 @@ pub struct ImportProgress {
     rename_all = "snake_case",
     rename_all_fields = "camelCase"
 )]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub enum SourceBinding {
     /// No import has bound this team yet.
     Unbound,
@@ -718,6 +752,7 @@ pub enum SourceBinding {
     /// Known Slack workspace; reject mismatches.
     Known {
         /// Bound source identity.
+        #[serde(rename = "sourceId")]
         source_id: SourceId,
     },
 }
@@ -725,6 +760,7 @@ pub enum SourceBinding {
 /// Admin list result, also supplying upload limits before a job exists.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct ImportPage {
     /// At most 50 job receipts, newest first.
     pub jobs: Vec<ImportProgress>,
@@ -739,6 +775,7 @@ pub struct ImportPage {
 /// Signed upload permission returned just before PUT; never persisted as an identity.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct UploadGrant {
     /// Exact immutable descriptor being signed.
     pub descriptor: UploadDescriptor,
@@ -869,7 +906,7 @@ pub enum WorkerOutcome {
 }
 
 /// Natural identity of a message, shared by thread lookup and durable dedupe.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
 pub struct SourceMessageId {
     /// Team's single bound Slack source namespace.
     pub team_id: TeamId,
@@ -879,8 +916,18 @@ pub struct SourceMessageId {
     pub ts: SlackTimestamp,
 }
 
+/// Historical attribution distinguishes an email-mapped user from the platform bot.
+/// The composition root resolves `SystemBot` to the canonical `MACRO_SYSTEM_BOT_ID`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub enum HistoricalSender {
+    /// Raw lowercase-email identity, without roster lookup.
+    User(MacroUserIdStr<'static>),
+    /// Fallback for unknown authors, accompanied by `imported_author`.
+    SystemBot,
+}
+
 /// Converted message passed to the atomic historical sink, not the live send path.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct HistoricalMessage {
     /// Caller-generated UUIDv7; existing source mapping wins across jobs.
     pub id: Uuid,
@@ -894,11 +941,16 @@ pub struct HistoricalMessage {
     /// metadata without promising automatic repair when a later archive supplies it.
     pub orphaned_thread_ts: Option<SlackTimestamp>,
     /// Lowercase raw-email identity or the system bot.
-    pub sender: MacroUserIdStr<'static>,
+    pub sender: HistoricalSender,
     /// Slack display name only for system-bot fallback attribution.
     pub imported_author: Option<String>,
     /// Converted, nonempty Macro markdown (attachment bytes are excluded).
     pub content: String,
+    /// Only user identities emitted by conversion outside code; never rediscover
+    /// these by parsing the serialized body.
+    pub user_mentions: Vec<MacroUserIdStr<'static>>,
+    /// Typed occurrences against the safe initial content, never speculative IDs.
+    pub body_references: Vec<super::slack::references::ReferenceIntent>,
     /// Deterministic source ordering for equal-time historical display.
     pub import_order: u64,
     /// Converted, deduplicated reactions with email-bearing actors only.
@@ -906,7 +958,7 @@ pub struct HistoricalMessage {
 }
 
 /// One silent historical reaction; source message time supplies missing reaction time.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct HistoricalReaction {
     /// Raw lowercase email mapped to a Macro identity.
     pub user_id: MacroUserIdStr<'static>,

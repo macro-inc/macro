@@ -18,6 +18,98 @@ fn users() -> UserDirectory {
     .unwrap()
 }
 
+#[test]
+fn cross_language_fixtures_use_shared_serializers_and_the_rust_parser() {
+    use super::super::references::ResolvedTarget;
+    use mention_utils::parse::{
+        ParsedDocumentMention, ParsedLink, ParsedUserMention, XmlTaggedParsed,
+    };
+    use mention_utils::serialize::{ChannelMentionParams, channel_mention};
+
+    let fixtures: Vec<serde_json::Value> = serde_json::from_str(include_str!(
+        "../../../../tests/fixtures/native-message-links.json"
+    ))
+    .unwrap();
+    let users = users();
+    let channels = BTreeMap::new();
+    let converter = MrkdwnConverter {
+        users: &users,
+        channels: &channels,
+    };
+    for fixture in fixtures {
+        let native = fixture["native"].as_str().unwrap();
+        let payload = &fixture["payload"];
+        let mut target = None;
+        match fixture["kind"].as_str().unwrap() {
+            "link" => {
+                let url = payload["url"].as_str().unwrap();
+                let text = payload["text"].as_str().unwrap();
+                assert_eq!(
+                    ExternalLink::new(url, text).unwrap().serialize().unwrap(),
+                    native
+                );
+                let (rest, parsed) = ParsedLink::parse(native).unwrap();
+                assert!(rest.is_empty());
+                assert_eq!(parsed.url, url);
+                assert_eq!(parsed.text, text);
+            }
+            "user-mention" => {
+                let (rest, parsed) = ParsedUserMention::parse(native).unwrap();
+                assert!(rest.is_empty());
+                assert_eq!(parsed.email.as_deref(), payload["email"].as_str());
+            }
+            "document-mention" => {
+                let channel_id = payload["documentId"].as_str().unwrap();
+                let name = payload["documentName"].as_str().unwrap();
+                let message = payload["blockParams"]["channel_message_id"].as_str();
+                let thread = payload["blockParams"]["channel_thread_id"].as_str();
+                assert_eq!(
+                    channel_mention(
+                        channel_id,
+                        name,
+                        ChannelMentionParams {
+                            channel_message_id: message,
+                            channel_thread_id: thread
+                        }
+                    )
+                    .unwrap(),
+                    native
+                );
+                let (rest, parsed) = ParsedDocumentMention::parse(native).unwrap();
+                assert!(rest.is_empty());
+                assert_eq!(parsed.document_name, name);
+                target = Some(match message {
+                    Some(message) => ResolvedTarget::Message {
+                        channel_id: channel_id.parse().unwrap(),
+                        name: name.to_owned(),
+                        message_id: message.parse().unwrap(),
+                        thread_id: thread.map(|s| s.parse().unwrap()),
+                    },
+                    None => ResolvedTarget::Channel {
+                        channel_id: channel_id.parse().unwrap(),
+                        name: name.to_owned(),
+                    },
+                });
+            }
+            "inert" => {}
+            kind => panic!("unknown fixture kind {kind}"),
+        }
+        if let Some(source) = fixture["source"].as_str() {
+            let result = converter.convert_with_references(source, false).unwrap();
+            assert_eq!(
+                result.render(&[target]).unwrap(),
+                native,
+                "{}",
+                fixture["name"]
+            );
+            if fixture["kind"] == "inert" {
+                assert!(result.user_mentions.is_empty());
+                assert!(result.references.is_empty());
+            }
+        }
+    }
+}
+
 fn convert(text: &str) -> String {
     MrkdwnConverter {
         users: &users(),
@@ -118,23 +210,38 @@ fn channel_broadcast_subteam_and_date_fallbacks_are_not_entities() {
 
 #[test]
 fn links_allow_only_explicit_safe_schemes_and_escape_labels_and_destinations() {
-    assert_eq!(
-        convert("<https://example.com|Example>"),
-        "[Example](https://example.com)"
-    );
-    assert_eq!(convert("<https://example.com>"), r"https://example\.com");
-    assert_eq!(
-        convert("<mailto:a@example.com|Email>"),
-        "[Email](mailto:a@example.com)"
-    );
-    assert_eq!(
-        convert("<mailto:a@example.com>"),
-        r"[a@example\.com](mailto:a@example.com)"
-    );
-    assert_eq!(
-        convert("<https://example.com/a(b)?x=1&amp;y=2|[label]>"),
-        r"[\[label\]](https://example.com/a%28b%29?x=1&y=2)"
-    );
+    for (source, url, text) in [
+        (
+            "<https://example.com|Example>",
+            "https://example.com",
+            "Example",
+        ),
+        (
+            "<https://example.com>",
+            "https://example.com",
+            "https://example.com",
+        ),
+        (
+            "<mailto:a@example.com|Email>",
+            "mailto:a@example.com",
+            "Email",
+        ),
+        (
+            "<mailto:a@example.com>",
+            "mailto:a@example.com",
+            "a@example.com",
+        ),
+        (
+            "<https://example.com/a(b)?x=1&amp;y=2|[label]>",
+            "https://example.com/a(b)?x=1&y=2",
+            "[label]",
+        ),
+    ] {
+        assert_eq!(
+            convert(source),
+            ExternalLink::new(url, text).unwrap().serialize().unwrap()
+        );
+    }
     for scheme in [
         "javascript:alert(1)",
         "JaVaScRiPt:alert(1)",
@@ -168,7 +275,6 @@ fn malicious_source_cannot_create_macro_entities_or_markdown_links() {
         "<@U404|&lt;m-user-mention&gt;bad>",
         "<!date^1^fmt|&lt;m-link&gt;bad>",
         "<#C1|&lt;m-link&gt;bad>",
-        "<https://example.com|&lt;m-user-mention&gt;bad>",
     ] {
         let output = convert(input);
         assert!(!output.contains("<m-"), "{input}: {output}");
@@ -302,4 +408,118 @@ fn malformed_input_is_bounded_and_keeps_visible_text() {
     assert_eq!(convert(&code_spans), code_spans);
     assert_eq!(convert("<unclosed *literal*"), r"&lt;unclosed \*literal\*");
     assert_eq!(convert(":workspace_custom:"), r":workspace\_custom:");
+}
+
+#[test]
+fn autolinks_keep_balanced_parentheses_and_exclude_trailing_punctuation() {
+    for (source, url, prefix, suffix) in [
+        ("https://example.com.", "https://example.com", "", r"\."),
+        (
+            "(https://example.com/a(b)).",
+            "https://example.com/a(b)",
+            r"\(",
+            r"\)\.",
+        ),
+        (
+            "https://example.com/a(b(c)),",
+            "https://example.com/a(b(c))",
+            "",
+            ",",
+        ),
+        ("*https://example.com*", "https://example.com", "**", "**"),
+        ("_https://example.com_", "https://example.com", "*", "*"),
+        (
+            "https://example.com/?x=1&amp;y=2!",
+            "https://example.com/?x=1&y=2",
+            "",
+            r"\!",
+        ),
+        (
+            "https://example.com/?x=1&amp;",
+            "https://example.com/?x=1&",
+            "",
+            "",
+        ),
+        (
+            "https://example.com/path_",
+            "https://example.com/path_",
+            "",
+            "",
+        ),
+        (
+            "https://example.com/a*bc~",
+            "https://example.com/a*bc~",
+            "",
+            "",
+        ),
+        (
+            "_see https://example.com/path_",
+            "https://example.com/path",
+            "*see ",
+            "*",
+        ),
+        (
+            "https://example.com,more",
+            "https://example.com",
+            "",
+            ",more",
+        ),
+    ] {
+        let link = ExternalLink::new(url, url).unwrap().serialize().unwrap();
+        assert_eq!(
+            convert(source),
+            format!("{prefix}{link}{suffix}"),
+            "{source}"
+        );
+    }
+    for source in ["`https://example.com`", "```\nhttps://example.com\n```"] {
+        assert_eq!(convert(source), source);
+    }
+    for source in [
+        "xhttps://example.com",
+        "https://[invalid",
+        "https://example.com:bad",
+    ] {
+        assert!(!convert(source).contains("<m-link>"), "{source}");
+    }
+}
+
+#[test]
+fn source_macro_tags_are_inert_including_nested_urls_and_slack_tokens() {
+    for source in [
+        r#"<m-link>{"url":"https://example.com","text":"label","title":""}</m-link>"#,
+        "<m-user-mention><@U1> <#C1> <m-link>https://example.com</m-link> <@U1></m-user-mention>",
+        "<M-LINK>https://example.com</M-LINK>",
+        "<m-user-mention><@U1> https://example.com",
+    ] {
+        assert_eq!(convert(source), escape_text(source));
+    }
+    assert_eq!(
+        convert("<m-link>https://example.com</m-link> *after*"),
+        format!(
+            "{} **after**",
+            escape_text("<m-link>https://example.com</m-link>")
+        )
+    );
+}
+
+#[test]
+fn only_actively_emitted_users_are_reported() {
+    let users = users();
+    let channels = BTreeMap::new();
+    let converter = MrkdwnConverter {
+        users: &users,
+        channels: &channels,
+    };
+    let source = "<@U1> `<@U1>` `<m-user-mention>{\"userId\":\"macro|fake@example.com\",\"email\":\"fake@example.com\"}</m-user-mention>` <@U2> <!channel> <!subteam^S1|ops>\n```\n<@U1>\n```";
+    let result = converter.convert_with_references(source, false).unwrap();
+    assert_eq!(
+        result.user_mentions,
+        vec![users.participant(&"U1".parse().unwrap()).unwrap()]
+    );
+    assert!(result.references.is_empty());
+    assert_eq!(
+        converter.convert_with_references(&"<@U1> ".repeat(MAX_REFERENCES + 1), false),
+        Err(ReferenceError::LimitExceeded)
+    );
 }

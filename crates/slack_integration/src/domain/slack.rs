@@ -6,5 +6,6 @@
 pub mod export;
 pub mod mrkdwn;
 pub mod reactions;
+pub mod references;
 pub mod threads;
 pub mod users;

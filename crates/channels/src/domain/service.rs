@@ -32,6 +32,8 @@ use models_pagination::{CreatedAt, PaginateOn, Query};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
+mod import;
+
 #[cfg(test)]
 mod test;
 
