@@ -372,6 +372,12 @@ macro.events.on('message.posted', async ({ metadata, target }) => {
 app.post('/webhook', (c) => macro.events.webhook()(c.req.raw));
 ```
 
+Call chat events have `event.target.type === 'call'`, with a `CallRecord` in
+`event.target.call` and a `CallMessage` in `event.target.message`. Read with
+`content()`, or call `reply(body)`, `edit(body)`, and `delete()`. Replies always
+join the call's single chat thread, even when responding to another reply.
+`macro.calls.byId(callId).message(messageId)` creates the same lazy message handle.
+
 # Upgrading to 0.2
 
 Channel messages, document comments, and CRM company and contact comments share

@@ -153,6 +153,7 @@ fn announcement_reply_target(announcement: &SessionAnnouncement) -> AgentAnnounc
         channel_id: match &announcement.origin_parent {
             MessageParent::Channel(channel_id) => Some(channel_id.to_string()),
             MessageParent::Document(_)
+            | MessageParent::Call(_)
             | MessageParent::Initiative(_)
             | MessageParent::CrmCompany(_)
             | MessageParent::CrmContact(_) => None,

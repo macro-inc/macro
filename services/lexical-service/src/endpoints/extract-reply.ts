@@ -1,3 +1,4 @@
+import { REPLY_TARGET_PARENT_TYPES } from '@macro-inc/lexical-core/nodes/ReplyTargetNode';
 import { extractExplicitReply } from '@macro-inc/lexical-core/utils/explicit-reply';
 import { OpenAPIRoute } from 'chanfana';
 import type { Context } from 'hono';
@@ -11,7 +12,7 @@ const extractReplyRequest = z.object({
 
 const replyTarget = z.object({
   parent: z.object({
-    type: z.enum(['channel', 'document']),
+    type: z.enum(REPLY_TARGET_PARENT_TYPES),
     id: z.string(),
   }),
   targetMessageId: z.string(),

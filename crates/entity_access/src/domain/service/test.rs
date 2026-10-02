@@ -2,6 +2,8 @@
 
 #[allow(unused_imports)]
 use super::*;
+
+mod call_session;
 use crate::domain::models::{
     AdminParticipantRole, AdminTeamRole, AnyEntityPermission, BotAccessScope, BotId,
     BotReceiptScope, CallChannelInfo, CommentAccessLevel, EditAccessLevel, EntityAccessAuth,
@@ -32,13 +34,15 @@ struct MockRepo {
     initiative_access: Arc<Mutex<Option<AccessLevel>>>,
     scheduled_action_access: Arc<Mutex<Option<AccessLevel>>>,
     accessible_scheduled_action_ids: Arc<Mutex<Vec<Uuid>>>,
-    agent_session_document: Arc<Mutex<Option<String>>>,
+    agent_session_parent: Arc<Mutex<Option<AgentSessionParent>>>,
     database_access: Arc<Mutex<Option<AccessLevel>>>,
     database_access_list: Arc<Mutex<Vec<(Uuid, AccessLevel)>>>,
     database_row_access: Arc<Mutex<Option<AccessLevel>>>,
     database_row_access_calls: Arc<AtomicUsize>,
     reminder_access: Arc<Mutex<Option<AccessLevel>>>,
     team_entity_access: Arc<Mutex<Option<AccessLevel>>>,
+    team_agent_session_access: Arc<Mutex<Option<AccessLevel>>>,
+    team_entity_requests: Arc<Mutex<Vec<(String, EntityType)>>>,
     team_entity_access_calls: Arc<AtomicUsize>,
     team_channel_role: Arc<Mutex<ChannelRoleResult>>,
     team_channel_role_calls: Arc<AtomicUsize>,
@@ -79,13 +83,15 @@ impl MockRepo {
             initiative_access: Arc::new(Mutex::new(None)),
             scheduled_action_access: Arc::new(Mutex::new(None)),
             accessible_scheduled_action_ids: Arc::new(Mutex::new(Vec::new())),
-            agent_session_document: Arc::default(),
+            agent_session_parent: Arc::default(),
             database_access: Arc::new(Mutex::new(None)),
             database_access_list: Arc::new(Mutex::new(Vec::new())),
             database_row_access: Arc::new(Mutex::new(None)),
             database_row_access_calls: Arc::default(),
             reminder_access: Arc::new(Mutex::new(None)),
             team_entity_access: Arc::new(Mutex::new(None)),
+            team_agent_session_access: Arc::default(),
+            team_entity_requests: Arc::default(),
             team_entity_access_calls: Arc::new(AtomicUsize::new(0)),
             team_channel_role: Arc::new(Mutex::new(ChannelRoleResult::NotFound)),
             team_channel_role_calls: Arc::new(AtomicUsize::new(0)),
@@ -277,8 +283,11 @@ impl MockRepo {
 }
 
 impl AccessRepository for MockRepo {
-    async fn get_agent_session_document(&self, _: &str) -> Result<Option<String>, AccessError> {
-        Ok(self.agent_session_document.lock().await.clone())
+    async fn get_agent_session_parent(
+        &self,
+        _: &str,
+    ) -> Result<Option<AgentSessionParent>, AccessError> {
+        Ok(self.agent_session_parent.lock().await.clone())
     }
 
     async fn get_document_access(
@@ -446,10 +455,17 @@ impl AccessRepository for MockRepo {
         &self,
         _bot_id: BotId,
         _team_id: Uuid,
-        _entity_id: &str,
-        _entity_type: EntityType,
+        entity_id: &str,
+        entity_type: EntityType,
     ) -> Result<Option<AccessLevel>, AccessError> {
         self.team_entity_access_calls.fetch_add(1, Ordering::SeqCst);
+        self.team_entity_requests
+            .lock()
+            .await
+            .push((entity_id.into(), entity_type));
+        if entity_type == EntityType::AgentSession {
+            return Ok(*self.team_agent_session_access.lock().await);
+        }
         Ok(*self.team_entity_access.lock().await)
     }
 
@@ -2537,7 +2553,7 @@ async fn test_get_users_by_entity_project_with_many_users() {
 #[tokio::test]
 async fn document_session_access_tracks_current_document_permission() {
     let repo = MockRepo::new();
-    *repo.agent_session_document.lock().await = Some("doc".into());
+    *repo.agent_session_parent.lock().await = Some(AgentSessionParent::Document("doc".into()));
     let service = EntityAccessServiceImpl::new(repo.clone());
     for (permission, expected) in [
         (Some(AccessLevel::View), Some(AccessLevel::View)),

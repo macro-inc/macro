@@ -187,7 +187,7 @@ impl<
             MessageParent::CrmCompany(_) | MessageParent::CrmContact(_) => {
                 self.crm_context(parent, root).await
             }
-            MessageParent::Channel(_) | MessageParent::Document(_) => {
+            MessageParent::Channel(_) | MessageParent::Document(_) | MessageParent::Call(_) => {
                 self.documents.context(parent, root).await
             }
         }
@@ -227,7 +227,7 @@ impl DiscussionContextReader for PgDiscussionContext {
                     link_share_access: row.link_share_access,
                 }
             }
-            MessageParent::Channel(_) => {
+            MessageParent::Channel(_) | MessageParent::Call(_) => {
                 return Err(rootcause::report!("channel has no discussion context"));
             }
             MessageParent::Initiative(_) => {

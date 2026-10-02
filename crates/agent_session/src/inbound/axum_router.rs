@@ -634,6 +634,7 @@ impl AgentSessionResponse {
             Some(messages::domain::models::MessageParent::Channel(channel_id)) => Some(*channel_id),
             Some(
                 messages::domain::models::MessageParent::Document(_)
+                | messages::domain::models::MessageParent::Call(_)
                 | messages::domain::models::MessageParent::Initiative(_)
                 | messages::domain::models::MessageParent::CrmCompany(_)
                 | messages::domain::models::MessageParent::CrmContact(_),

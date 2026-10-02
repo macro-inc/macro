@@ -28,6 +28,7 @@ async fn standalone_highlight_remains_unthreaded_until_a_message_attaches_it(poo
     let repo = messages::outbound::pg_message_repo::PgMessageRepository::new(pool.clone());
     let root = repo
         .create(CreateMessage {
+            canonical_root_id: None,
             parent: MessageParent::parse("document", "document-with-comments").unwrap(),
             actor: "macro|user@user.com".to_owned().try_into().unwrap(),
             triggered_by: None,

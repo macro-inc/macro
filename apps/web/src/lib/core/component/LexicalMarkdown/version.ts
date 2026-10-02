@@ -26,5 +26,6 @@
  * Version 4.4 - Sep 2026. Expanded agent session mentions are block decorators with node selection.
  * Version 5.0 - Sep 2026. Added CursorSystemNotificationNode (Cursor `<system_notification>` event cards).
  * Version 6.0 - Oct 2026. Added source-only DatabaseQueryNode: a live database answer pointing at a saved query (`queryId`), with its table, title, and table or chart display (bar, line, area, scatter, pie; optional `color` and `stack`).
+ * Version 6.1 - Oct 2026. ReplyTargetNode accepts call, initiative, and CRM message parents.
  */
-export const MARKDOWN_VERSION_COUNTER = 6.0;
+export const MARKDOWN_VERSION_COUNTER = 6.1;

@@ -221,6 +221,47 @@ describe('document discussion controls', () => {
   });
 });
 
+it('offers a durable copy link without write actions for saved call chat', () => {
+  const callMessage: MessageListItem = {
+    ...message,
+    parent: { type: 'call', id: 'call-id' },
+  };
+  const link = 'https://macro.test/app/call/call-id?call_message_id=root';
+  const view = render(() => (
+    <MessageThread data={callMessage} canWrite={false} buildLink={() => link} />
+  ));
+  fireEvent.click(view.getByRole('button', { name: 'Long press message' }));
+  expect(view.queryByRole('button', { name: 'Reply' })).toBeNull();
+  expect(view.queryByRole('button', { name: 'Edit' })).toBeNull();
+  expect(view.queryByRole('button', { name: 'Delete' })).toBeNull();
+  fireEvent.click(view.getByRole('button', { name: 'Copy link' }));
+  expect(mocks.clipboard).toHaveBeenCalledWith(link);
+});
+
+it.each(['user', 'another-participant'])(
+  'offers external call reply actions for messages from %s without opening an inline composer',
+  (senderId) => {
+    const onReply = vi.fn();
+    const callMessage = {
+      ...message,
+      parent: { type: 'call' as const, id: 'call-id' },
+      sender_id: senderId,
+    };
+    const view = render(() => (
+      <MessageThread
+        data={callMessage}
+        canWrite
+        hideReplyInput
+        onReply={onReply}
+      />
+    ));
+    openActions(view);
+    fireEvent.click(view.getByRole('button', { name: 'Reply' }));
+    expect(onReply).toHaveBeenCalledWith({ message: callMessage });
+    expect(view.queryByRole('textbox', { name: 'Reply composer' })).toBeNull();
+  }
+);
+
 describe('linked message highlight', () => {
   it('releases the highlight when the linked message is clicked, keeping the thread expanded', () => {
     const [targetId, setTargetId] = createSignal<string | null>('root');
@@ -291,4 +332,20 @@ it('closes an active project reply composer and editor when comment access is lo
 
   expect(view.queryByRole('textbox', { name: 'Reply composer' })).toBeNull();
   expect(view.queryByText('Editor enabled')).toBeNull();
+});
+
+it('does not offer deletion of another sender’s bot message outside a channel', () => {
+  const view = render(() => (
+    <MessageThread
+      data={{
+        ...message,
+        parent: { type: 'call', id: 'call-id' },
+        sender_id: 'bot|macro',
+      }}
+      canWrite
+    />
+  ));
+  openActions(view);
+  expect(view.queryByRole('button', { name: 'Delete' })).toBeNull();
+  expect(view.getByRole('button', { name: 'Reply' })).toBeTruthy();
 });

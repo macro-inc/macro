@@ -36326,6 +36326,14 @@ export const messageTimelineResponse = zod
                     type: zod.enum(['crm_contact']),
                   })
                   .describe('A CRM contact.'),
+                zod
+                  .object({
+                    id: zod
+                      .uuid()
+                      .describe('A video call and its persistent chat thread.'),
+                    type: zod.enum(['call']),
+                  })
+                  .describe('A video call and its persistent chat thread.'),
               ])
               .describe(
                 'The entity whose permissions and lifecycle govern a message.'
@@ -36623,6 +36631,18 @@ export const messageTimelineResponse = zod
                                   type: zod.enum(['crm_contact']),
                                 })
                                 .describe('A CRM contact.'),
+                              zod
+                                .object({
+                                  id: zod
+                                    .uuid()
+                                    .describe(
+                                      'A video call and its persistent chat thread.'
+                                    ),
+                                  type: zod.enum(['call']),
+                                })
+                                .describe(
+                                  'A video call and its persistent chat thread.'
+                                ),
                             ])
                             .describe(
                               'The entity whose permissions and lifecycle govern a message.'
@@ -36952,6 +36972,14 @@ export const entityMessageCreateResponse = zod
             type: zod.enum(['crm_contact']),
           })
           .describe('A CRM contact.'),
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .describe('A video call and its persistent chat thread.'),
+            type: zod.enum(['call']),
+          })
+          .describe('A video call and its persistent chat thread.'),
       ])
       .describe('The entity whose permissions and lifecycle govern a message.'),
     reactions: zod
@@ -37100,6 +37128,14 @@ export const entityMessageGetMessageResponse = zod
             type: zod.enum(['crm_contact']),
           })
           .describe('A CRM contact.'),
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .describe('A video call and its persistent chat thread.'),
+            type: zod.enum(['call']),
+          })
+          .describe('A video call and its persistent chat thread.'),
       ])
       .describe('The entity whose permissions and lifecycle govern a message.'),
     reactions: zod
@@ -37252,6 +37288,14 @@ export const entityMessageDeleteMessageResponse = zod
             type: zod.enum(['crm_contact']),
           })
           .describe('A CRM contact.'),
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .describe('A video call and its persistent chat thread.'),
+            type: zod.enum(['call']),
+          })
+          .describe('A video call and its persistent chat thread.'),
       ])
       .describe('The entity whose permissions and lifecycle govern a message.'),
     reactions: zod
@@ -37500,6 +37544,14 @@ export const entityMessageEditResponse = zod
             type: zod.enum(['crm_contact']),
           })
           .describe('A CRM contact.'),
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .describe('A video call and its persistent chat thread.'),
+            type: zod.enum(['call']),
+          })
+          .describe('A video call and its persistent chat thread.'),
       ])
       .describe('The entity whose permissions and lifecycle govern a message.'),
     reactions: zod
@@ -37656,6 +37708,14 @@ export const entityMessageReactResponse = zod
             type: zod.enum(['crm_contact']),
           })
           .describe('A CRM contact.'),
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .describe('A video call and its persistent chat thread.'),
+            type: zod.enum(['call']),
+          })
+          .describe('A video call and its persistent chat thread.'),
       ])
       .describe('The entity whose permissions and lifecycle govern a message.'),
     reactions: zod
@@ -37811,6 +37871,14 @@ export const entityMessageLegacyResponse = zod
             type: zod.enum(['crm_contact']),
           })
           .describe('A CRM contact.'),
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .describe('A video call and its persistent chat thread.'),
+            type: zod.enum(['call']),
+          })
+          .describe('A video call and its persistent chat thread.'),
       ])
       .describe('The entity whose permissions and lifecycle govern a message.'),
     reactions: zod
@@ -37982,6 +38050,14 @@ export const entityMessageGetThreadResponse = zod
                     type: zod.enum(['crm_contact']),
                   })
                   .describe('A CRM contact.'),
+                zod
+                  .object({
+                    id: zod
+                      .uuid()
+                      .describe('A video call and its persistent chat thread.'),
+                    type: zod.enum(['call']),
+                  })
+                  .describe('A video call and its persistent chat thread.'),
               ])
               .describe(
                 'The entity whose permissions and lifecycle govern a message.'
@@ -38135,6 +38211,14 @@ export const entityMessageGetThreadResponse = zod
                 type: zod.enum(['crm_contact']),
               })
               .describe('A CRM contact.'),
+            zod
+              .object({
+                id: zod
+                  .uuid()
+                  .describe('A video call and its persistent chat thread.'),
+                type: zod.enum(['call']),
+              })
+              .describe('A video call and its persistent chat thread.'),
           ])
           .describe(
             'The entity whose permissions and lifecycle govern a message.'

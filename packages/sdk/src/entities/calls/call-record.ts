@@ -5,6 +5,7 @@ import { Channel } from '../channels/channel';
 import { FavoritableEntity } from '../entity';
 import { entitySearch } from '../search';
 import { User } from '../users/user';
+import { CallMessage } from './message';
 
 type CallRecordDetail = GetCallRecordResponses[200];
 
@@ -22,6 +23,11 @@ export class CallRecord extends FavoritableEntity<CallRecordDetail> {
   /** A handle to a call record by id. Details load on first access. */
   static byId(client: MacroClient, id: string): CallRecord {
     return new CallRecord(client, id);
+  }
+
+  /** A message in this call's persistent chat. Fields load on first access. */
+  message(id: string): CallMessage {
+    return CallMessage.byId(this.client, this.id, id);
   }
 
   /** The call's display name (user-supplied or AI-generated; unset while active). */

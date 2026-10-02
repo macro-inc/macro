@@ -1666,6 +1666,23 @@ describe('layoutManager', () => {
       }
     });
 
+    it('restores a call chat target from old and Drive links', async () => {
+      for (const path of [
+        '/call/call-1?call_message_id=message-1',
+        '/drive/call/call-1?call_message_id=message-1',
+      ]) {
+        const { manager, location, router, dispose } = ingressRouter(path);
+        await router.settled();
+        const split = manager.splits()[0];
+        expect(router.search(split.id, 'call-detail')).toEqual({
+          messageId: ['message-1'],
+        });
+        expect(location.read().pathname).toBe('/drive/call/call-1');
+        router.dispose();
+        dispose();
+      }
+    });
+
     it('preserves canonical transcript search when upgrading an old call link', async () => {
       const { manager, location, router, dispose } = ingressRouter(
         '/call/call-1?s0.call-detail.transcriptId=segment-3&referral_code=code#focus'

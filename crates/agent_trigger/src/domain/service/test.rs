@@ -2,6 +2,7 @@ use super::*;
 
 #[cfg(feature = "admission")]
 mod admission;
+mod call;
 mod task_assignment;
 
 use agent_session::domain::error::AgentSessionError;
@@ -217,6 +218,7 @@ fn allow_invocation(
                 role: ParticipantRole::Member,
             },
             MessageParent::Document(_)
+            | MessageParent::Call(_)
             | MessageParent::Initiative(_)
             | MessageParent::CrmCompany(_)
             | MessageParent::CrmContact(_) => EntityPermission::AccessLevel {

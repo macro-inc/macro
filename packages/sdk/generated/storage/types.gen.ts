@@ -7724,6 +7724,12 @@ export type MessageParent = {
      */
     id: string;
     type: 'crm_contact';
+} | {
+    /**
+     * A video call and its persistent chat thread.
+     */
+    id: string;
+    type: 'call';
 };
 
 /**

@@ -1059,6 +1059,8 @@ export * from './messageParentOneOfFive';
 export * from './messageParentOneOfFiveType';
 export * from './messageParentOneOfNine';
 export * from './messageParentOneOfNineType';
+export * from './messageParentOneOfOneone';
+export * from './messageParentOneOfOneoneType';
 export * from './messageParentOneOfSeven';
 export * from './messageParentOneOfSevenType';
 export * from './messageParentOneOfThree';

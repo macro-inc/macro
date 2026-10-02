@@ -1,4 +1,4 @@
-//! Invitation use cases. Guests receive room access; signed-in attendees also receive call-only View access.
+//! Invitation use cases. Guests receive room access; signed-in attendees also receive call-only Comment access for chat.
 
 use super::*;
 use crate::domain::meetings::{

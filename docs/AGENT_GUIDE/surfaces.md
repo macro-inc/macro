@@ -1042,6 +1042,15 @@ flag loads or is off, those controls stay hidden and meeting routes do not mount
 call setup. Existing channel calls and the upcoming-events list remain available.
 For local verification, set `VITE_ENABLE_QUICK_CALLS=true` or `false` explicitly.
 
+During a quick or scheduled call, signed-in participants can open **Call chat**
+from its separate button at the far right of the bottom toolbar. Messages persist
+with that call session and are visible in its recording page after it ends.
+Guests do not see chat. The `@` menu includes Macro and available agents;
+mentioning one invokes it in the call thread. Reply on any live message, including
+your own, quotes it in the bottom composer. Verify the reply preserves a draft,
+an agent reply appears, and messages remain in the saved history; starting a
+new session from the same meeting link must start a separate chat thread.
+
 
 Calendar event creation and editing open in a bottom sheet on touch devices,
 with scrollable content above the keyboard. Desktop retains the centered dialog.

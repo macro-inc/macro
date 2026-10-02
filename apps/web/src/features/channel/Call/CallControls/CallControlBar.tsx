@@ -33,7 +33,7 @@ export function CallControlButton(props: {
       aria-pressed={props.pressed}
       disabled={props.disabled}
       onClick={props.onClick}
-      class="size-12"
+      class="size-10 @sm:size-12"
     >
       {props.children}
     </Button>
@@ -174,7 +174,7 @@ export function CallControlBar(props: {
                 ?.focus();
             }
           }}
-          class="h-12 w-6 @sm:w-8"
+          class="h-10 w-5 @sm:h-12 @sm:w-8"
         >
           <CaretUp
             class="size-4 transition-transform duration-200 ease-out motion-reduce:transition-none"

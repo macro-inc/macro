@@ -90,6 +90,9 @@ pub struct MessagePage {
 /// Authenticated create command; attribution fields are never client controlled.
 #[derive(Debug, Clone)]
 pub struct CreateMessage {
+    /// Append to this canonical thread, creating its first message atomically when absent.
+    /// Its root identity is server-owned and overrides the first message's client id.
+    pub canonical_root_id: Option<Uuid>,
     /// Parent with verified actor access.
     pub parent: MessageParent,
     /// Verified actor.
@@ -248,6 +251,14 @@ pub trait MessageRepository: Send + Sync + 'static {
         &self,
         parent: &MessageParent,
         id: Uuid,
+    ) -> impl Future<Output = Result<Option<Message>, MessageError>> + Send;
+    /// Recover a call submission within its authorized parent and original sender.
+    /// Includes tombstones so retries never recreate deleted content.
+    fn get_by_client_message_id(
+        &self,
+        parent: &MessageParent,
+        actor: &ChannelSender<'_>,
+        client_message_id: Uuid,
     ) -> impl Future<Output = Result<Option<Message>, MessageError>> + Send;
     /// Read thread state; returns deleted state so callers can reject writes.
     fn thread(
