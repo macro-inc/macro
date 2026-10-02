@@ -137,34 +137,6 @@ async fn delete_user(
         }
     });
 
-    // Handle stripe user deletion
-    if let Some(stripe_customer_id) = macro_user.stripe_customer_id {
-        tokio::spawn({
-            let stripe_customer_id = stripe_customer_id.clone();
-            let stripe_client = ctx.stripe_client.clone();
-            async move {
-                tracing::trace!(stripe_customer_id, "delete_stripe_customer");
-
-                let customer_id: CustomerId = match stripe_customer_id.parse() {
-                    Ok(id) => id,
-                    Err(e) => {
-                        tracing::error!(error=?e, stripe_customer_id, "unable to parse stripe customer id");
-                        return;
-                    }
-                };
-
-                if let Err(e) = stripe::Customer::delete(&stripe_client, &customer_id).await {
-                    tracing::error!(error=?e, stripe_customer_id, "unable to delete stripe customer");
-                }
-
-                tracing::trace!(
-                    stripe_customer_id,
-                    "delete_stripe_customer complete"
-                );
-            }
-        }.in_current_span());
-    }
-
     // Fixed: Create futures and await them all concurrently
     let user_info_futures = user_ids
         .clone()
@@ -268,6 +240,36 @@ async fn delete_user(
     )
     .await
     .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+
+    // Delete the Stripe customer only once cleanup has succeeded. Deleting the
+    // customer cancels its subscriptions, which would race the team
+    // subscription cancellation that `leave_teams` performs above.
+    if let Some(stripe_customer_id) = macro_user.stripe_customer_id {
+        tokio::spawn({
+            let stripe_customer_id = stripe_customer_id.clone();
+            let stripe_client = ctx.stripe_client.clone();
+            async move {
+                tracing::trace!(stripe_customer_id, "delete_stripe_customer");
+
+                let customer_id: CustomerId = match stripe_customer_id.parse() {
+                    Ok(id) => id,
+                    Err(e) => {
+                        tracing::error!(error=?e, stripe_customer_id, "unable to parse stripe customer id");
+                        return;
+                    }
+                };
+
+                if let Err(e) = stripe::Customer::delete(&stripe_client, &customer_id).await {
+                    tracing::error!(error=?e, stripe_customer_id, "unable to delete stripe customer");
+                }
+
+                tracing::trace!(
+                    stripe_customer_id,
+                    "delete_stripe_customer complete"
+                );
+            }
+        }.in_current_span());
+    }
 
     Ok(())
 }

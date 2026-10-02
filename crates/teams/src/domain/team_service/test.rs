@@ -4062,6 +4062,24 @@ async fn remove_user_from_all_teams_leaves_the_team_the_user_belongs_to() {
 }
 
 #[tokio::test]
+async fn remove_user_from_all_teams_treats_a_vanished_membership_as_left() {
+    let team_id = uuid::Uuid::from_u128(812);
+    let owner = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    let member = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
+    let mut repo = MockTeamRepository::new(Vec::new(), "Team", Arc::new(Mutex::new(Vec::new())));
+    repo.user_teams = vec![account_deletion_team(team_id, &owner)];
+    // No `removed_member`: the repository reports the user is no longer on the team.
+    let remove_user_calls = repo.remove_user_calls.clone();
+    let broker = RecordingEventBroker::default();
+    let service = build_service_with_repo_and_broker(repo, broker.clone());
+
+    service.remove_user_from_all_teams(&member).await.unwrap();
+
+    assert_eq!(*remove_user_calls.lock().unwrap(), 1);
+    assert!(broker.events().is_empty());
+}
+
+#[tokio::test]
 async fn remove_user_from_all_teams_without_a_team_changes_nothing() {
     let user = MacroUserIdStr::parse_from_str("macro|solo@example.com").unwrap();
     let repo = MockTeamRepository::new(Vec::new(), "Team", Arc::new(Mutex::new(Vec::new())));
