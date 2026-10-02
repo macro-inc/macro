@@ -120,7 +120,7 @@ export default defineDoc({
       id: 'user-message',
       title: 'User-sent AI message',
       description:
-        'The shared chat and agent message bubble uses InvertUtil on an ink-colored surface in light themes, and Layer depth={3} for a slightly lighter surface in dark themes.',
+        'The shared chat and agent message bubble uses Layer depth={3} for a slightly lifted surface in the theme’s own palette, with a hairline edge in light themes. Shown here for contrast with the inverted sections below.',
       render: UserMessageDemo,
       fill: true,
       depth: 0,

@@ -1,8 +1,9 @@
 # AI Chat (Agents)
 
-User-sent messages in chat and agent transcripts use an ink-colored bubble with
-`InvertUtil` in light themes. Dark themes use `Layer depth={3}` for the slightly
-lighter bubble with the normal text palette. Preview Markdown and controls at
+User-sent messages in chat and agent transcripts use a `Layer depth={3}` bubble
+in the active theme's own palette: a slightly lifted surface with the normal
+text colors in every theme, plus a hairline `edge-muted` border in light themes.
+They are never ink-colored or inverted. Preview Markdown and controls at
 `/app/debug/ui?ui=invert-util` under **User-sent AI message**.
 
 ## Working with projects
@@ -541,8 +542,9 @@ mentions; its existing attachment capabilities are unchanged. Stop and queued
 message controls remain available.
 
 User messages in both AI systems appear in right-aligned bubbles with rounded
-corners, including on mobile. In dark mode, their fill and text follow the active
-theme; Macro Dark uses a dark gray fill and white text. Long prompts wrap within the bubble;
+corners, including on mobile. Their fill and text follow the active theme in both
+modes: Macro Dark uses a dark gray fill and white text; Paper and Macro Light use
+a near-white fill with dark text and a hairline border. Long prompts wrap within the bubble;
 production chat retains its Show more/Show less and editing controls.
 
 ## Waiting for a response
