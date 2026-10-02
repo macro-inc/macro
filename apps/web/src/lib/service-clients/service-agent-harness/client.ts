@@ -229,6 +229,18 @@ export const agentHarnessServiceClient = {
     ).then((result) => result.map(() => undefined));
   },
 
+  /**
+   * Run a queued action next. Moves it to the front and cancels the turn in
+   * flight so it dispatches ahead of anything queued before it. Answers 404
+   * (`NOT_FOUND`) once the action has dispatched.
+   */
+  steerQueued(sessionId: string, actionId: string) {
+    return fetchWithToken<Record<string, never>>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/queue/${actionId}/steer`,
+      { method: 'POST' }
+    ).then((result) => result.map(() => undefined));
+  },
+
   delete(sessionId: string) {
     return fetchWithToken<Record<string, never>>(
       `${agentHarnessHost}/agent-sessions/${sessionId}`,

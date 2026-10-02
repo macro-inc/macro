@@ -11,8 +11,11 @@ const mocks = vi.hoisted(() => ({
   issue: vi.fn(),
   selectModel: vi.fn(),
   sendNext: vi.fn(),
+  steer: vi.fn(),
+  turn: vi.fn(() => 'idle'),
   editQueued: vi.fn(),
   removeQueued: vi.fn(),
+  steerQueued: vi.fn(),
   upload: vi.fn(),
   consumeNotes: vi.fn(),
   input: undefined as AgentInputProps | undefined,
@@ -52,9 +55,11 @@ vi.mock('../context/AgentSessionContext', () => ({
       ],
       edit: mocks.editQueued,
       remove: mocks.removeQueued,
+      steer: mocks.steerQueued,
     },
     sendNext: mocks.sendNext,
-    turn: () => 'idle',
+    steer: mocks.steer,
+    turn: () => mocks.turn(),
     registerQuoteInsert: vi.fn(),
   }),
 }));
@@ -78,6 +83,7 @@ vi.mock('./PermissionRequest', () => ({ PermissionRequest: () => null }));
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.session = () => ({ canEdit: false });
+  mocks.turn.mockReturnValue('idle');
   mocks.issue.mockResolvedValue({ isErr: () => false });
 });
 afterEach(cleanup);
@@ -113,8 +119,21 @@ describe('view-only session controls', () => {
     expect(mocks.sendNext).not.toHaveBeenCalled();
     expect(mocks.upload).not.toHaveBeenCalled();
     expect(mocks.consumeNotes).not.toHaveBeenCalled();
+    mocks.queued?.onSteer?.('queued-1');
     expect(mocks.editQueued).not.toHaveBeenCalled();
     expect(mocks.removeQueued).not.toHaveBeenCalled();
+    expect(mocks.steer).not.toHaveBeenCalled();
+    expect(mocks.queued?.onSteer).toBeUndefined();
+  });
+
+  it('steers one queued message while a turn is in flight', () => {
+    mocks.session = () => ({ canEdit: true });
+    mocks.turn.mockReturnValue('running');
+    render(() => <AgentComposer />);
+
+    expect(mocks.queued?.onSteer).toEqual(expect.any(Function));
+    mocks.queued?.onSteer?.('queued-1');
+    expect(mocks.steer).toHaveBeenCalledWith('queued-1');
   });
 
   it('reacts to a permission downgrade without remounting', () => {

@@ -220,4 +220,59 @@ describe('queued prompt access', () => {
     expect(onEdit).toHaveBeenCalledWith('queued-1', 'An edited request');
     expect(onRemove).toHaveBeenCalledWith('queued-1');
   });
+
+  it('steers the selected queued message without opening its editor', () => {
+    const onSteer = vi.fn();
+    render(() => (
+      <QueuedPrompts
+        items={[
+          { actionId: 'first', kind: 'prompt', prompt: 'Next to send' },
+          { actionId: 'second', kind: 'prompt', prompt: 'Steer this' },
+        ]}
+        onEdit={vi.fn()}
+        onRemove={vi.fn()}
+        onSteer={onSteer}
+      />
+    ));
+
+    const steer = screen.getAllByRole('button', { name: 'Steer' });
+    expect(steer).toHaveLength(2);
+    // Newest is rendered first; "Steer this" is the second queued entry.
+    fireEvent.click(steer[0]);
+    expect(onSteer).toHaveBeenCalledWith('second');
+    expect(screen.queryByRole('textbox')).toBeNull();
+  });
+
+  it('hides steer when the turn is not in flight and disables it for viewers', () => {
+    const onSteer = vi.fn();
+    const { unmount } = render(() => (
+      <QueuedPrompts
+        items={[
+          { actionId: 'queued-1', kind: 'prompt', prompt: 'Queued request' },
+        ]}
+        onEdit={vi.fn()}
+        onRemove={vi.fn()}
+      />
+    ));
+    expect(screen.queryByRole('button', { name: 'Steer' })).toBeNull();
+    unmount();
+
+    render(() => (
+      <QueuedPrompts
+        disabled
+        items={[
+          { actionId: 'queued-1', kind: 'prompt', prompt: 'Queued request' },
+        ]}
+        onEdit={vi.fn()}
+        onRemove={vi.fn()}
+        onSteer={onSteer}
+      />
+    ));
+    const steer = screen.getByRole('button', {
+      name: 'Steer',
+    }) as HTMLButtonElement;
+    expect(steer.disabled).toBe(true);
+    fireEvent.click(steer);
+    expect(onSteer).not.toHaveBeenCalled();
+  });
 });

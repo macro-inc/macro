@@ -1323,6 +1323,7 @@ async fn run() -> anyhow::Result<()> {
                                 // HTTP, and the turn signals are the harness's own.
                                 HarnessCommand::EditQueued { .. }
                                 | HarnessCommand::RemoveQueued { .. }
+                                | HarnessCommand::SteerQueued { .. }
                                 | HarnessCommand::Turn(_)
                                 | HarnessCommand::SessionStopped { .. } => "agent_trigger.unexpected",
                             };

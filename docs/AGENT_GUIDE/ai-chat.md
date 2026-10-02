@@ -994,17 +994,21 @@ must stay hidden; subsequent live messages must still appear.
   32% of the viewport and 16rem. Click the preview again or press Escape to collapse
   it, retaining edits and editor state. Each row shows a `Queued` label (with `by
   {user}` when someone else queued it —
-  several users can stack prompts in one session's queue) and an always-visible remove
-  (`X`) button. Type in the expanded editor — changes
+  several users can stack prompts in one session's queue), an always-visible remove
+  (`X`) button, and, while a turn is in flight, a `Steer` button. Steering moves
+  that message to the front of the queue and cancels the current turn, so it runs
+  next, ahead of anything queued before it. Type in the expanded editor — changes
   autosave (debounced, and on blur) with no save button. Editing and removal are
   possible only until the entry dispatches; after that the row simply becomes the next
   user message in the transcript.
 - Keyboard: Up at the very start of the composer input moves focus into the
   bottom (next-to-send) queue row; further Up presses walk toward newer entries, Down
   walks back and past the bottom row returns to the input. When the composer is empty
-  and a prompt is queued, its action becomes `Send next queued message` (an Enter
-  symbol); pressing Enter or clicking that button cancels the current turn so the next
-  queued prompt starts immediately. The advance is held — the control reads `Stop` and
+  and a prompt is queued, its action becomes `Flush queued messages` (the send arrow,
+  with a ring so it reads as flushing the queue rather than sending a new message);
+  pressing Enter or clicking that button cancels the current turn so the queue drains
+  in order, oldest first. Steer on a queued row is the interrupt for that one message;
+  flush sends whatever is already next. The advance is held — the control reads `Stop` and
   Enter is inert — while a stop is already in flight or while the prompt the last
   advance sent is still unconfirmed (it shows as a pending bubble); once the server
   confirms that prompt as the running turn, Enter advances the queue again. Two rapid

@@ -335,6 +335,31 @@ impl SessionQueues {
         }
     }
 
+    /// Move a waiting entry to the front, so a steer runs it next.
+    ///
+    /// An entry that is already next is left where it is. Missing entries are
+    /// [`QueueError::NotFound`], the same answer as an edit of something that
+    /// already dispatched.
+    pub fn move_to_front(
+        &self,
+        session: AgentSessionId,
+        action_id: AgentActionId,
+    ) -> Result<(), QueueError> {
+        let mut queue = self.queues.get_mut(&session).ok_or(QueueError::NotFound)?;
+        let position = queue
+            .iter()
+            .position(|entry| entry.action_id == action_id)
+            .ok_or(QueueError::NotFound)?;
+        if position == 0 {
+            return Ok(());
+        }
+        let Some(entry) = queue.remove(position) else {
+            return Err(QueueError::NotFound);
+        };
+        queue.push_front(entry);
+        Ok(())
+    }
+
     /// Remove a waiting entry.
     pub fn remove(
         &self,
