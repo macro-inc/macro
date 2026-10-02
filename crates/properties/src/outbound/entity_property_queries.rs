@@ -83,6 +83,61 @@ async fn upsert_entity_property_in_transaction(
     property_definition_id: Uuid,
     value: Option<PropertyValue>,
 ) -> anyhow::Result<EntityPropertyMutationSnapshot> {
+    mutate_entity_property_in_transaction(
+        tx,
+        entity_id,
+        entity_type,
+        property_definition_id,
+        |_| Ok(value),
+    )
+    .await
+}
+
+/// Append references under the same locks as replacement writes so concurrent
+/// task assignments cannot overwrite each other's assignees.
+pub async fn add_entity_property_references(
+    pool: &Pool<Postgres>,
+    entity_id: &str,
+    entity_type: EntityType,
+    property_definition_id: Uuid,
+    references: Vec<EntityReference>,
+) -> anyhow::Result<EntityPropertyMutationSnapshot> {
+    let mut tx = pool.begin().await?;
+    let snapshot = mutate_entity_property_in_transaction(
+        &mut tx,
+        entity_id,
+        entity_type,
+        property_definition_id,
+        |previous| {
+            let mut current = match previous
+                .filter(|value| !value.is_null())
+                .map(serde_json::from_value::<PropertyValue>)
+                .transpose()?
+            {
+                Some(PropertyValue::EntityRef(current)) => current,
+                None => Vec::new(),
+                Some(_) => anyhow::bail!("Cannot append references to a non-reference value"),
+            };
+            for reference in references {
+                if !current.contains(&reference) {
+                    current.push(reference);
+                }
+            }
+            Ok(Some(PropertyValue::EntityRef(current)))
+        },
+    )
+    .await?;
+    tx.commit().await?;
+    Ok(snapshot)
+}
+
+async fn mutate_entity_property_in_transaction(
+    tx: &mut sqlx::PgConnection,
+    entity_id: &str,
+    entity_type: EntityType,
+    property_definition_id: Uuid,
+    update: impl FnOnce(Option<serde_json::Value>) -> anyhow::Result<Option<PropertyValue>>,
+) -> anyhow::Result<EntityPropertyMutationSnapshot> {
     // Serialize first assignments even when no row exists to lock yet. Keep
     // this separate from the UPSERT so its statement snapshot starts after
     // the preceding writer commits, rather than before waiting for that row.
@@ -95,7 +150,7 @@ async fn upsert_entity_property_in_transaction(
 
     // Other property operations use row locks rather than this advisory lock.
     // Wait for those writers too before the UPSERT captures its previous value.
-    sqlx::query_scalar!(
+    let previous = sqlx::query_scalar!(
         r#"
             SELECT values as "values: serde_json::Value"
             FROM entity_properties
@@ -108,6 +163,8 @@ async fn upsert_entity_property_in_transaction(
     )
     .fetch_optional(&mut *tx)
     .await?;
+
+    let value = update(previous.flatten())?;
 
     let id = macro_uuid::generate_uuid_v7();
 

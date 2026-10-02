@@ -346,6 +346,24 @@ impl PropertiesRepo for PropertiesPgRepo {
         .await
     }
 
+    #[tracing::instrument(skip(self, references), err)]
+    async fn add_entity_property_references(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        property_definition_id: Uuid,
+        references: Vec<EntityReference>,
+    ) -> Result<EntityPropertyMutationSnapshot, Self::Err> {
+        entity_property_queries::add_entity_property_references(
+            &self.pool,
+            entity_id,
+            entity_type,
+            property_definition_id,
+            references,
+        )
+        .await
+    }
+
     #[tracing::instrument(skip(self))]
     async fn add_entity_property_option(
         &self,

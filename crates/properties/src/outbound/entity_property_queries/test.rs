@@ -9,6 +9,110 @@ fn assignment() -> PropertyValue {
     )])
 }
 
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn inherited_agents_preserve_assignees_and_dedupe_retries(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let task_id = Uuid::now_v7().to_string();
+    let human = EntityReference::new("macro|owner@example.com", EntityType::User);
+    let codex = EntityReference::new(
+        bot_id::CODEX_BOT_ID.into_storage_id().as_ref(),
+        EntityType::User,
+    );
+    let macro_agent = EntityReference::new(
+        bot_id::MACRO_NEW_BOT_ID.into_storage_id().as_ref(),
+        EntityType::User,
+    );
+    let existing = PropertyValue::EntityRef(vec![human.clone(), codex.clone()]);
+    upsert_entity_property(
+        &pool,
+        &task_id,
+        EntityType::Task,
+        SystemPropertyKey::ASSIGNEES_UUID,
+        Some(existing.clone()),
+    )
+    .await?;
+
+    let inherited = add_entity_property_references(
+        &pool,
+        &task_id,
+        EntityType::Task,
+        SystemPropertyKey::ASSIGNEES_UUID,
+        vec![codex.clone(), macro_agent.clone(), macro_agent.clone()],
+    )
+    .await?;
+    let combined = Some(PropertyValue::EntityRef(vec![
+        human,
+        codex,
+        macro_agent.clone(),
+    ]));
+    assert_eq!(inherited.previous_value, Some(existing));
+    assert_eq!(inherited.value, combined);
+
+    let repeated = add_entity_property_references(
+        &pool,
+        &task_id,
+        EntityType::Task,
+        SystemPropertyKey::ASSIGNEES_UUID,
+        vec![macro_agent],
+    )
+    .await?;
+    assert_eq!(repeated.previous_value, combined);
+    assert_eq!(repeated.value, combined);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn inherited_agents_merge_with_a_concurrent_assignment(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let task_id = Uuid::now_v7().to_string();
+    let mut tx = pool.begin().await?;
+    let blocker = sqlx::query_scalar!("SELECT pg_backend_pid() AS \"pid!\"")
+        .fetch_one(&mut *tx)
+        .await?;
+    let human = EntityReference::new("macro|owner@example.com", EntityType::User);
+    let existing = PropertyValue::EntityRef(vec![human.clone()]);
+    upsert_entity_property_in_transaction(
+        &mut tx,
+        &task_id,
+        EntityType::Task,
+        SystemPropertyKey::ASSIGNEES_UUID,
+        Some(existing.clone()),
+    )
+    .await?;
+
+    let writer_pool = pool.clone();
+    let writer = tokio::spawn(async move {
+        add_entity_property_references(
+            &writer_pool,
+            &task_id,
+            EntityType::Task,
+            SystemPropertyKey::ASSIGNEES_UUID,
+            vec![EntityReference::new(
+                bot_id::CODEX_BOT_ID.into_storage_id().as_ref(),
+                EntityType::User,
+            )],
+        )
+        .await
+    });
+    wait_for_blocked_writer(&pool, blocker).await?;
+    tx.commit().await?;
+    let inherited = writer.await??;
+    assert_eq!(inherited.previous_value, Some(existing));
+    assert_eq!(
+        inherited.value,
+        Some(PropertyValue::EntityRef(vec![
+            human,
+            EntityReference::new(
+                bot_id::CODEX_BOT_ID.into_storage_id().as_ref(),
+                EntityType::User
+            ),
+        ]))
+    );
+    Ok(())
+}
+
 async fn wait_for_blocked_writer(pool: &Pool<Postgres>, blocker: i32) -> anyhow::Result<()> {
     tokio::time::timeout(std::time::Duration::from_secs(10), async {
         loop {
