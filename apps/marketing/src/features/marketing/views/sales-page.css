@@ -25,8 +25,10 @@ body:has(.tour-page) .site-header-actions { display: none; }
 /* Here the heading leads into the constellation rather than following it. */
 .tour-constellation .unification-copy { margin: 0 auto 32px; }
 .tour-constellation .feature-flow-expanded { margin-bottom: 0; }
-/* OnboardingShell's hero frame: a centered card in the first viewport. */
-.tour-hero { display: flex; align-items: center; justify-content: center; min-height: 100svh; padding: 96px 0 40px; }
+/* OnboardingShell's hero frame, sized to its content (not the full first
+   viewport) so "Replace 27+ apps" follows "Book a demo" 64px below. */
+.tour-hero { display: flex; align-items: center; justify-content: center; padding: 96px 0 0; }
+.homepage-unification.tour-constellation { padding-top: 56px; }
 /* OnboardingShell's tile entrance, which also centers each logo on its point. */
 @keyframes tour-orbit-in { from { opacity: 0; transform: translate(-50%, -40%) scale(.8); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
 .tour-hero .ob-orbit-tile { animation: tour-orbit-in 900ms cubic-bezier(.22,1,.36,1) both; }
