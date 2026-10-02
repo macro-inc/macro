@@ -53,7 +53,11 @@ The worker stack uses Doppler project `slack-import-worker` and selects
 `SLACK_IMPORT_CONCURRENCY` from its synchronized secret. Verify registration and
 restart tasks when changing values. `APP_SECRETS_JSON` can override ordinary
 configuration: do not introduce contradictory values there. No secrets or Doppler
-changes are supplied by this runbook.
+changes are supplied by this runbook. Worker provisioning is separately gated by
+Pulumi's `deploy_slack_import_worker` (default `false`); enable it only after the
+dedicated secret exists, following the [worker rollout guide](../infra/stacks/cloud-storage-service/SLACK_IMPORT_ROLLOUT.md).
+Keep that deployment gate enabled once provisioned; use `SLACK_IMPORT_ENABLED`
+to pause intake without deleting the worker.
 
 DSS may PutObject/GetObject only under `slack-import/*`. HeadObject uses
 **GetObject**, not an invented `s3:HeadObject` permission. The worker needs

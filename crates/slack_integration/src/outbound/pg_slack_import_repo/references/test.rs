@@ -173,17 +173,20 @@ async fn cancellation_expiry_stale_lease_and_cleanup_close_without_reclaim(pool:
             .status,
         JobStatus::Cancelling
     );
+    // Reserve a separate maintenance connection before the obsolete delivery.
+    // Reusing the claim's connection could flush a drop-queued rollback and mask
+    // a lingering job lock from SKIP LOCKED.
+    let mut tx = pool.begin().await.unwrap();
     assert!(matches!(
         repo.claim(&event, Uuid::now_v7().try_into().unwrap())
             .await
             .unwrap(),
         ClaimOutcome::Obsolete
     ));
-    let mut tx = pool.begin().await.unwrap();
     next_in(&mut tx)
         .await
         .unwrap()
-        .unwrap()
+        .expect("obsolete claim must release its job lock before returning")
         .finish(false)
         .await
         .unwrap();

@@ -27,7 +27,7 @@ import {
 import { CalendarReminderDispatchQueue } from './calendar-reminder-dispatch-queue';
 import { ReminderDispatchQueue } from './reminder-dispatch-queue';
 import { SlackImportQueue } from './slack-import-queue';
-import { SlackImportWorker } from './slack-import-worker';
+import { deploySlackImportWorker } from './slack-import-worker';
 import { WafObservability } from './waf-observability';
 
 const tags = {
@@ -213,7 +213,7 @@ const searchProcessingStack = new pulumi.StackReference(
   'slack-import-search-processing',
   { name: `macro-inc/search-processing-service/${stack}` }
 );
-const slackImportWorker = new SlackImportWorker(
+const slackImportWorker = deploySlackImportWorker(
   `slack-import-worker-${stack}`,
   {
     ecsClusterArn: cloudStorageClusterArn,
@@ -230,10 +230,10 @@ const slackImportWorker = new SlackImportWorker(
     tags,
   }
 );
-export const slackImportWorkerRoleArn = slackImportWorker.role.arn;
+export const slackImportWorkerRoleArn = slackImportWorker?.role.arn;
 export const slackImportWorkerServiceName =
-  slackImportWorker.service.service.name;
-export const slackImportWorkerSgId = slackImportWorker.serviceSg.id;
+  slackImportWorker?.service.service.name;
+export const slackImportWorkerSgId = slackImportWorker?.serviceSg.id;
 
 export const docxUploadBucketArn = docxUploadBucket.arn;
 export const docxUploadBucketName = docxUploadBucket.id;

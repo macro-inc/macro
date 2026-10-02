@@ -8,7 +8,10 @@ const secretArn =
   'arn:aws:secretsmanager:us-east-1:123456789012:secret:doppler';
 
 beforeAll(async () => {
-  pulumi.runtime.setAllConfig({ 'aws:region': 'us-east-1' });
+  pulumi.runtime.setAllConfig({
+    'aws:region': 'us-east-1',
+    'cloud-storage-service:deploy_slack_import_worker': 'true',
+  });
   pulumi.runtime.setMocks(
     {
       newResource(args) {
@@ -38,20 +41,23 @@ beforeAll(async () => {
   // Isolate the shared barrel's ESM cycle, keeping the real Doppler/image helpers.
   mock.module('../../packages/shared', () => ({
     stack: 'dev',
+    config: new pulumi.Config('cloud-storage-service'),
     CLOUD_TRAIL_SNS_TOPIC_ARN: 'arn:aws:sns:us-east-1:123456789012:alerts',
   }));
-  const { SlackImportWorker } = await import('./slack-import-worker');
-  new SlackImportWorker('slack-import-worker-dev', {
-    ecsClusterArn: 'cluster',
-    vpc: { vpcId: 'vpc', privateSubnetIds: ['private-subnet'] },
-    workerPolicyArn: 'scoped-worker-policy',
-    stagingBucketName: 'bulk-upload-staging-dev',
-    queueName: 'slack-import-queue-dev',
-    dlqName: 'slack-import-dlq-dev',
-    gatewayUrl: 'https://dev-gateway.macro.com/connection-gateway',
-    searchProcessingUrl: 'https://dev-gateway.macro.com/search-processing',
-    tags: {},
-  });
+  const { deploySlackImportWorker } = await import('./slack-import-worker');
+  expect(
+    deploySlackImportWorker('slack-import-worker-dev', {
+      ecsClusterArn: 'cluster',
+      vpc: { vpcId: 'vpc', privateSubnetIds: ['private-subnet'] },
+      workerPolicyArn: 'scoped-worker-policy',
+      stagingBucketName: 'bulk-upload-staging-dev',
+      queueName: 'slack-import-queue-dev',
+      dlqName: 'slack-import-dlq-dev',
+      gatewayUrl: 'https://dev-gateway.macro.com/connection-gateway',
+      searchProcessingUrl: 'https://dev-gateway.macro.com/search-processing',
+      tags: {},
+    })
+  ).toBeDefined();
   await pulumi.runtime.waitForRPCs();
 });
 
@@ -62,6 +68,36 @@ function resource(type: string): pulumi.runtime.MockResourceArgs {
 }
 
 describe('Slack import Fargate worker', () => {
+  test('default and explicit opt-out create no worker resources or secret lookups', async () => {
+    const { deploySlackImportWorker } = await import('./slack-import-worker');
+    for (const value of [undefined, 'false']) {
+      pulumi.runtime.setAllConfig({
+        'aws:region': 'us-east-1',
+        ...(value === undefined
+          ? {}
+          : { 'cloud-storage-service:deploy_slack_import_worker': value }),
+      });
+      const resourceCount = resources.length;
+      const callCount = calls.length;
+      expect(
+        deploySlackImportWorker('disabled-worker', {
+          ecsClusterArn: 'cluster',
+          vpc: { vpcId: 'vpc', privateSubnetIds: [] },
+          workerPolicyArn: 'policy',
+          stagingBucketName: 'staging',
+          queueName: 'queue',
+          dlqName: 'dlq',
+          gatewayUrl: 'https://gateway.invalid',
+          searchProcessingUrl: 'https://search.invalid',
+          tags: {},
+        })
+      ).toBeUndefined();
+      await pulumi.runtime.waitForRPCs();
+      expect(resources.length).toBe(resourceCount);
+      expect(calls.length).toBe(callCount);
+    }
+  });
+
   test('CI builds the worker and detects import changes in the owning stack', () => {
     const service = servicesConfig.services['document-storage-service'];
     expect(service.stack_path).toBe('infra/stacks/cloud-storage-service/**');

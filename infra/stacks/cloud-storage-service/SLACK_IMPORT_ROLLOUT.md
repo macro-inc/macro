@@ -7,7 +7,13 @@ CI registers `slack_import_worker` under the existing `document-storage-service`
 stack entry (like email's pubsub worker); do not register a second concurrent
 Pulumi deployment for the same stack.
 
-## Operator prerequisites (before deploying)
+## Operator prerequisites (before deploying the worker)
+
+The worker is **not provisioned by default**. The stack's
+`deploy_slack_import_worker` Pulumi config defaults to `false`, so initial
+previews/deployments can create the queues and DSS upload policy without looking
+up a not-yet-provisioned worker Doppler secret. This is a deployment gate, separate
+from the runtime `SLACK_IMPORT_ENABLED` intake flag.
 
 1. Apply the Slack import schema migrations and deploy the scoped search backfill
    API/index changes first. The stack reads `searchProcessingServiceUrl` from
@@ -42,12 +48,22 @@ Pulumi deployment for the same stack.
    `SlackImportQueue`; it does not inherit DSS's permissions. The execution role
    reads the worker's Doppler sync, not the task role.
 
-No remote secrets or resources are created by the source change itself. An
-operator must complete the above registration before a Pulumi deployment.
+No remote secrets are created by the source change itself. After completing the
+above prerequisites, opt in from `infra/stacks/cloud-storage-service/`:
+
+```sh
+pulumi config set deploy_slack_import_worker true --stack <dev-or-prod>
+pulumi preview --stack <dev-or-prod>
+```
+
+Deploy the reviewed change through the normal deployment workflow. Once the
+worker is deployed, keep this gate enabled: setting it to false removes its ECS
+service and associated resources. Pause intake with `SLACK_IMPORT_ENABLED=false`
+instead, so maintenance and DLQ reconciliation continue.
 
 ## Rollout values and checks
 
-- Desired count: **1**; concurrency: **1** (runtime rejects values above 2).
+- When provisioned, desired count: **1**; concurrency: **1** (runtime rejects values above 2).
 - Task: **1024 CPU units / 2048 MiB**. Worker hard limit: 1536 MiB; log router:
   128 MiB; Datadog: 384 MiB. Do not allocate the full task budget to the worker.
 - Worker stop timeout: **120 seconds**. SIGTERM stops intake and drains work.

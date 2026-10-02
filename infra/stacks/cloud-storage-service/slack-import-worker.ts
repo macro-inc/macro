@@ -9,7 +9,7 @@ import {
 import { DEFAULT_CONTINUE_BEFORE_STEADY_STATE } from '../../packages/resources/src/resources/ecs_deployment_defaults';
 import { EcsDeploymentFailureAlarm } from '../../packages/resources/src/resources/ecs_deployment_failure_alarm';
 import { EcrImage } from '../../packages/service/src/ecr';
-import { stack } from '../../packages/shared';
+import { config, stack } from '../../packages/shared';
 import { DopplerEcsEnvironment } from '../../packages/shared/src/doppler_environment';
 
 interface SlackImportWorkerArgs {
@@ -28,6 +28,17 @@ interface SlackImportWorkerArgs {
 }
 
 const SERVICE_NAME = 'slack-import-worker';
+
+/** Opt in only after provisioning the worker's dedicated Doppler sync. */
+export function deploySlackImportWorker(
+  name: string,
+  args: SlackImportWorkerArgs
+): SlackImportWorker | undefined {
+  if (!(config.getBoolean('deploy_slack_import_worker') ?? false)) {
+    return undefined;
+  }
+  return new SlackImportWorker(name, args);
+}
 
 /** Independent, portless ECS consumer; no DSS task role or load balancer. */
 export class SlackImportWorker extends pulumi.ComponentResource {

@@ -177,9 +177,13 @@ impl ExecutionRepo for PgSlackImportRepo {
     async fn claim(&self, event: &ImportEvent, owner: WorkerId) -> PortResult<ClaimOutcome> {
         let mut tx = self.pool.begin().await.map_err(internal)?;
         let Some(job) = lock_execution_job(&mut tx, event.job_id).await? else {
+            tx.rollback().await.map_err(internal)?;
             return Ok(ClaimOutcome::Obsolete);
         };
         if job.cancelled || job.expired || job.terminal {
+            // Drop only queues rollback. Release the job lock before maintenance
+            // can try to reconcile its references with SKIP LOCKED.
+            tx.rollback().await.map_err(internal)?;
             return Ok(ClaimOutcome::Obsolete);
         }
         let generation = number(event.generation)?;
@@ -189,12 +193,15 @@ impl ExecutionRepo for PgSlackImportRepo {
             Uuid::from(event.job_id), event.slack_channel_id.as_str(), generation,
         ).fetch_optional(&mut *tx).await.map_err(internal)?;
         let Some(row) = row else {
+            tx.rollback().await.map_err(internal)?;
             return Ok(ClaimOutcome::Obsolete);
         };
         if row.status == "importing" && row.active == Some(true) {
+            tx.rollback().await.map_err(internal)?;
             return Ok(ClaimOutcome::ActiveLease);
         }
         if !matches!(row.status.as_str(), "queued" | "importing") {
+            tx.rollback().await.map_err(internal)?;
             return Ok(ClaimOutcome::Obsolete);
         }
         if row.attempts >= MAX_ATTEMPTS {
