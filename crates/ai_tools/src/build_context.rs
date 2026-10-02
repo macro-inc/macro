@@ -464,6 +464,8 @@ pub async fn build_tool_service_context_from_env(
         pool.clone(),
     );
 
+    let recorder = ai_usage::pg_recorder_with_enforcement(pool.clone(), enforcement);
+
     Ok(ToolServiceContext {
         search_service_client: search_client.clone(),
         email_service_client: email_ext_client,
@@ -477,6 +479,7 @@ pub async fn build_tool_service_context_from_env(
         image_generation_tool_context: crate::build_image_generation_tool_context(
             &document_tool_context,
             build_image_generator_from_env(),
+            recorder.clone(),
         )?,
         document_tool_context,
         properties_tool_context,
@@ -509,7 +512,7 @@ pub async fn build_tool_service_context_from_env(
         schedule_tool_context: crate::NoOpScheduleContext,
         anthropic_tool_context,
         admission: ai_billing::composition::pg_admission_service(pool.clone(), enforcement),
-        recorder: ai_usage::pg_recorder_with_enforcement(pool.clone(), enforcement),
+        recorder,
         usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
     })
 }
