@@ -103,6 +103,9 @@ pub struct Revision {
     /// Agent-selected file groups for this revision.
     #[serde(default)]
     pub file_groups: Vec<FileGroup>,
+    /// Agent-authored component map for this revision.
+    #[serde(default)]
+    pub graph: Option<ReviewGraph>,
     /// Definitions indexed by diffd across the snapshot.
     #[schemars(with = "Vec<serde_json::Value>")]
     pub symbols: Vec<Symbol>,
@@ -198,6 +201,69 @@ pub struct FileGroup {
     pub hidden: bool,
 }
 
+/// A compact component or data-flow diagram authored by the agent.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ReviewGraph {
+    /// Short description of what the map explains.
+    pub title: String,
+    /// Preferred reading direction; omitted lets the reader fit the available space.
+    pub direction: Option<GraphDirection>,
+    /// Components in reading order (up to 64). An empty list clears the map.
+    pub nodes: Vec<GraphNode>,
+    /// Directed relationships between components.
+    pub edges: Vec<GraphEdge>,
+}
+
+/// Optional agent preference for the diagram's reading direction.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum GraphDirection {
+    /// Read relationships from left to right.
+    LeftToRight,
+    /// Read relationships from top to bottom.
+    TopToBottom,
+}
+
+/// A component linked to its implementation in this revision.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GraphNode {
+    /// Unique component identity within the map.
+    pub id: String,
+    /// Short component name.
+    pub title: String,
+    /// Optional concise explanation of this component's role or change (180 characters).
+    pub description: Option<String>,
+    /// Optional agent-chosen category, such as UI, Runtime, or Storage (32 characters).
+    pub kind: Option<String>,
+    /// Optional containing component ID. Zooming reveals children inside their
+    /// parent. Use up to four levels, from broad components to specific code areas.
+    /// Parent references must exist and cannot form cycles.
+    pub parent: Option<String>,
+    /// Changed paths, directories, or globs belonging to this component.
+    /// Omitted or empty uses the linked file. Reads expand patterns to exact paths;
+    /// the reader derives actual change counts rather than trusting authored totals.
+    #[serde(default)]
+    pub files: Vec<String>,
+    /// Implementation to reveal when clicked.
+    pub location: Location,
+}
+
+/// A relationship, optionally linked to the call site that implements it.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GraphEdge {
+    /// Source component ID.
+    pub from: String,
+    /// Destination component ID.
+    pub to: String,
+    /// Short verb describing the relationship.
+    pub label: String,
+    /// Optional call site to reveal when clicked.
+    pub location: Option<Location>,
+}
+
 /// Review metadata the agent can publish or replace.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -212,6 +278,8 @@ pub struct Presentation {
     pub annotations: Option<Vec<Annotation>>,
     /// Replace file groups; omitted preserves them, [] clears them.
     pub file_groups: Option<Vec<FileGroup>>,
+    /// Replace the component map; omitted preserves it, empty nodes clears it.
+    pub graph: Option<ReviewGraph>,
 }
 
 /// Message author, assigned by authentication rather than client JSON.
@@ -298,6 +366,9 @@ pub struct Review {
     /// Current agent-selected file groups.
     #[serde(default)]
     pub file_groups: Vec<FileGroup>,
+    /// Current component map.
+    #[serde(default)]
+    pub graph: Option<ReviewGraph>,
     /// Durable selections.
     pub anchors: Vec<Anchor>,
     /// Durable discussion.

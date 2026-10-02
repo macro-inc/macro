@@ -87,6 +87,7 @@ impl<S: AgentSessionRepo> ReviewService<S> {
             note.location = anchor.current;
             annotations.push(note);
         }
+        self.relocate_graph(review, revision, files).await?;
         review.tour = tour;
         review.annotations = annotations;
         Ok(())
@@ -192,6 +193,7 @@ impl<S: AgentSessionRepo> ReviewService<S> {
                 tour: vec![],
                 annotations: vec![],
                 file_groups: vec![],
+                graph: None,
                 anchors: vec![],
                 threads: vec![],
             });
@@ -211,6 +213,7 @@ impl<S: AgentSessionRepo> ReviewService<S> {
                     tour: review.tour.clone(),
                     annotations: review.annotations.clone(),
                     file_groups: review.file_groups.clone(),
+                    graph: review.graph.clone(),
                     number,
                     created_at: Utc::now(),
                     comparison: capture.comparison.clone(),
@@ -231,6 +234,7 @@ impl<S: AgentSessionRepo> ReviewService<S> {
                 && presentation.tour.is_none()
                 && presentation.annotations.is_none()
                 && presentation.file_groups.is_none()
+                && presentation.graph.is_none()
             {
                 return Ok(self.url(
                     &review,

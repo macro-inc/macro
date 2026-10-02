@@ -8,6 +8,7 @@ import type { Anchor } from './anchor';
 import type { Annotation } from './annotation';
 import type { Chapter } from './chapter';
 import type { FileGroup } from './fileGroup';
+import type { ReviewGraphProperty } from './reviewGraphProperty';
 import type { ReviewId } from './reviewId';
 import type { Revision } from './revision';
 import type { SourceKind } from './sourceKind';
@@ -23,6 +24,7 @@ export interface Review {
   annotations: Annotation[];
   /** Current agent-selected file groups. */
   fileGroups?: FileGroup[];
+  graph?: ReviewGraphProperty;
   /** Stable review ID. */
   id: ReviewId;
   /** Repository name or URL. */

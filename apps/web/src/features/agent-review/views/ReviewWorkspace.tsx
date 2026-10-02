@@ -19,6 +19,8 @@ import {
   Show,
 } from 'solid-js';
 import { ReviewDiscussion } from '../components/ReviewDiscussion';
+import { ReviewGraph } from '../components/ReviewGraph';
+import { ReviewGraphPreview } from '../components/ReviewGraphPreview';
 import {
   type NavigationTab,
   ReviewNavigation,
@@ -62,6 +64,19 @@ export default function ReviewWorkspace() {
   const chapters = createMemo(() =>
     (model.review()?.tour ?? []).map((chapter) => ({ ...chapter, note: '' }))
   );
+  const overviewCount = () => (model.review()?.graph ? 1 : 0);
+  const [graphFocus, setGraphFocus] = createSignal<string>();
+  const showOverview = (node?: string) => {
+    setGraphFocus(node);
+    model.showOverview();
+    setTab('Walkthrough');
+    setReadingMode('Walkthrough');
+    setSidebar(false);
+  };
+  const chooseStep = (index: number) => {
+    if (index === 0 && overviewCount()) showOverview();
+    else model.chooseChapter(index - overviewCount());
+  };
   const chapterIndex = () => {
     const path = model.target()?.path ?? '';
     const current = model.chapter();
@@ -93,8 +108,8 @@ export default function ReviewWorkspace() {
       { added: 0, removed: 0 }
     )
   );
-  const navigate = (location: CodeLocation) => {
-    model.navigate(location);
+  const navigate = (location: CodeLocation, node?: string) => {
+    model.navigate(location, node);
     setSidebar(false);
   };
   const notes = () => model.review()?.annotations ?? [];
@@ -167,7 +182,7 @@ export default function ReviewWorkspace() {
     scopeId: scope,
     hotkey: '/',
     description: 'Find in file',
-    condition: () => host.open(),
+    condition: () => host.open() && !model.overview(),
     keyDownHandler: () => {
       openSearch();
       return true;
@@ -282,7 +297,8 @@ export default function ReviewWorkspace() {
         } else if (searchOpen()) closeSearch();
         else if (model.composing()) {
           cancelComment();
-        } else host.back();
+        } else if (model.mapOpen() && !model.overview()) model.closeMap();
+        else host.back();
       }}
       ref={(element) => {
         root = element;
@@ -440,15 +456,27 @@ export default function ReviewWorkspace() {
                 setTab(next);
                 if (next === 'Walkthrough' || next === 'Full Diff')
                   setReadingMode(next);
+                const target = model.target();
+                if (next === 'Full Diff' && model.overview() && target)
+                  model.navigate(target);
               }}
               chapters={chapters()}
-              chapter={chapterIndex()}
+              chapter={model.overview() ? -1 : chapterIndex()}
               onChapter={model.chooseChapter}
+              overview={
+                model.review()?.graph
+                  ? {
+                      title: model.review()!.graph!.title,
+                      active: model.overview(),
+                      onSelect: showOverview,
+                    }
+                  : undefined
+              }
               files={files()}
               walkthroughFiles={model.visibleFiles()}
               fileGroups={model.fileGroups()}
               onToggleGroup={model.toggleGroup}
-              activePath={model.target()?.path ?? ''}
+              activePath={model.overview() ? '' : (model.target()?.path ?? '')}
               onFile={(path, chapter) =>
                 batch(() => {
                   if (chapter !== undefined) model.chooseChapter(chapter);
@@ -483,16 +511,34 @@ export default function ReviewWorkspace() {
             />
           </div>
           <main ref={setMain} class="flex min-h-0 min-w-0 flex-1 flex-col">
-            <div class="relative flex min-h-0 flex-1 flex-col">
+            <Show when={model.overview() && model.review()?.graph}>
+              {(graph) => (
+                <ReviewGraph
+                  graph={graph()}
+                  files={files()}
+                  count={chapters().length + 1}
+                  activeNode={graphFocus()}
+                  nextChapter={chapters()[0]?.title}
+                  onNext={() => model.chooseChapter(0)}
+                  onLocation={navigate}
+                />
+              )}
+            </Show>
+            <div
+              class={cn(
+                'relative flex min-h-0 flex-1 flex-col',
+                model.overview() && 'hidden'
+              )}
+            >
               <Show
                 when={tab() === 'Walkthrough' && chapters()[chapterIndex()]}
               >
                 {(chapter) => (
                   <ReviewWalkthrough
                     chapter={chapter()}
-                    index={chapterIndex()}
-                    count={chapters().length}
-                    onChapter={model.chooseChapter}
+                    index={chapterIndex() + overviewCount()}
+                    count={chapters().length + overviewCount()}
+                    onChapter={chooseStep}
                   />
                 )}
               </Show>
@@ -566,7 +612,7 @@ export default function ReviewWorkspace() {
                 <ReviewFiles
                   files={readingFiles()}
                   revision={model.currentRevision()}
-                  active={observing()}
+                  active={observing() && !model.overview()}
                   disabled={
                     model.source.loadedRevision() !== model.currentRevision() ||
                     model.source.manifest.phase() !== 'ready'
@@ -601,6 +647,22 @@ export default function ReviewWorkspace() {
                   This file is absent from revision {model.currentRevision()}.
                   Choose a file or open the original revision in History.
                 </p>
+              </Show>
+              <Show
+                when={
+                  !model.overview() && model.mapOpen() && model.review()?.graph
+                }
+              >
+                {(graph) => (
+                  <ReviewGraphPreview
+                    graph={graph()}
+                    files={files()}
+                    activeNode={model.activeGraphNode()}
+                    onLocation={navigate}
+                    onExpand={() => showOverview(model.activeGraphNode())}
+                    onClose={model.closeMap}
+                  />
+                )}
               </Show>
             </div>
           </main>

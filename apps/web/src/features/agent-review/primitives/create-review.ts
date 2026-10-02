@@ -38,9 +38,23 @@ export function createReview(host: ReviewHost) {
   const [pending, setPending] = createSignal<NewComment>();
   const [notice, setNotice] = createSignal('');
   const [chapter, setChapter] = createSignal(0);
+  const [mapOpen, setMapOpen] = createSignal(false);
+  const [visitedNode, setVisitedNode] = createSignal<string>();
+  const [page, setPage] = createSignal<{
+    kind: 'overview' | 'code';
+    route: string;
+  }>();
   const revision = host.revision;
   const source = host.createSource(revision, host.open);
   const review = source.manifest.value;
+  const overview = () =>
+    Boolean(
+      review()?.graph &&
+        (matchesRoute(page()?.route)
+          ? page()?.kind === 'overview'
+          : !host.target() && !host.thread())
+    );
+  const showOverview = () => setPage({ kind: 'overview', route: route() });
   const latest = () => review()?.revisions.at(-1)?.number;
   const currentRevision = () => revision() ?? latest();
   const [following, setFollowing] = createSignal<boolean>();
@@ -150,21 +164,28 @@ export function createReview(host: ReviewHost) {
     source.manifest.phase() === 'ready' &&
     needsFile() &&
     file.phase() === 'ready';
-  const navigate = (next: CodeLocation) => {
+  const navigate = (next: CodeLocation, node?: string) => {
     if (!revision() && latest()) host.selectRevision(latest()!);
     batch(() => {
+      setPage({ kind: 'code', route: route() });
+      if (node) {
+        setVisitedNode(node);
+        setMapOpen(true);
+      }
       setLocation({ at: next, route: route() });
       setSequence((n) => n + 1);
     });
   };
   const chooseRevision = (number: number) => {
     const previous = target();
+    const kind = overview() ? 'overview' : 'code';
     const next = routeKey(number);
     batch(() => {
       setFollowing(number === latest());
       // The split router can publish its new search state after this call.
       // Preserve both sides of that transition without issuing a code jump.
       setPreservedRoute({ from: route(), to: next });
+      setPage({ kind, route: next });
       if (previous) setLocation({ at: previous, route: next });
       host.selectRevision(number);
     });
@@ -330,6 +351,20 @@ export function createReview(host: ReviewHost) {
     composeRevision,
     pending,
     navigate,
+    overview,
+    showOverview,
+    mapOpen,
+    closeMap: () => setMapOpen(false),
+    activeGraphNode: () => {
+      const nodes = review()?.graph?.nodes ?? [];
+      const matches = (node: (typeof nodes)[number]) =>
+        node.location.path === targetPath() ||
+        Boolean(node.files?.includes(targetPath() ?? ''));
+      return (
+        nodes.find((node) => node.id === visitedNode() && matches(node)) ??
+        nodes.find(matches)
+      )?.id;
+    },
     chapter,
     chooseChapter,
     chooseRevision,

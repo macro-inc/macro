@@ -130,6 +130,104 @@ function setup(initial?: ReviewState, pinned?: number, withCitation = true) {
 }
 
 describe('review navigation and live revisions', () => {
+  const withGraph = () => ({
+    ...snapshot(),
+    graph: {
+      title: 'Request flow',
+      nodes: [{ id: 'main', title: 'Main', location: at(4) }],
+      edges: [],
+    },
+    tour: [
+      {
+        title: 'Reader',
+        description: '',
+        note: '',
+        paths: ['main.rs'],
+        focus: at(7),
+      },
+    ],
+  });
+  it('starts the tour on the overview and keeps code drafts when returning to it', () => {
+    const { result, cleanup } = renderHook(() => setup(withGraph(), 1, false));
+    expect(result.model.overview()).toBe(true);
+    result.model.chooseChapter(0);
+    expect(result.model.overview()).toBe(false);
+    expect(result.model.target()).toEqual(at(7));
+    result.model.begin(at(9));
+    result.model.setDraft('Keep this comment');
+    result.model.showOverview();
+    expect(result.model.overview()).toBe(true);
+    expect(result.model.draft()).toBe('Keep this comment');
+    expect(result.model.composing()).toEqual(at(9));
+    result.model.navigate(at(4));
+    expect(result.model.overview()).toBe(false);
+    expect(result.model.target()).toEqual(at(4));
+    cleanup();
+  });
+  it('opens citations directly in code, including after visiting the overview', () => {
+    const { result, cleanup } = renderHook(() => setup(withGraph(), 1));
+    expect(result.model.overview()).toBe(false);
+    expect(result.model.target()).toEqual(at(12));
+    result.model.showOverview();
+    expect(result.model.overview()).toBe(true);
+    result.host.openLink('same citation');
+    expect(result.model.overview()).toBe(false);
+    expect(result.model.target()).toEqual(at(12));
+    cleanup();
+  });
+  it('opens the corner map from a node and follows its component across code navigation', () => {
+    const data = withGraph();
+    data.graph.nodes.push({
+      id: 'other',
+      title: 'Other',
+      location: { ...at(4), path: 'other.rs' },
+    });
+    const { result, cleanup } = renderHook(() => setup(data, 1, false));
+    expect(result.model.mapOpen()).toBe(false);
+    result.model.navigate(at(4), 'main');
+    expect(result.model.mapOpen()).toBe(true);
+    expect(result.model.activeGraphNode()).toBe('main');
+    result.model.navigate({ ...at(4), path: 'other.rs' }, 'other');
+    expect(result.model.activeGraphNode()).toBe('other');
+    result.model.navigate({ ...at(4), path: 'unrelated.rs' });
+    expect(result.model.activeGraphNode()).toBeUndefined();
+    result.model.closeMap();
+    expect(result.model.mapOpen()).toBe(false);
+    cleanup();
+  });
+  it('preserves the chosen tour page across captures and skips missing graphs', async () => {
+    const data = withGraph();
+    const { result, cleanup } = renderHook(() => setup(data, 1, false));
+    result.setData({
+      ...data,
+      revisions: [...data.revisions, ...snapshot(2).revisions],
+    });
+    await waitFor(() => expect(result.model.currentRevision()).toBe(2));
+    expect(result.model.overview()).toBe(true);
+    result.model.chooseChapter(0);
+    result.setData({
+      ...data,
+      revisions: [
+        ...data.revisions,
+        ...snapshot(2).revisions,
+        ...snapshot(3).revisions,
+      ],
+    });
+    await waitFor(() => expect(result.model.currentRevision()).toBe(3));
+    expect(result.model.overview()).toBe(false);
+    result.model.showOverview();
+    result.setData({ ...snapshot(3), tour: data.tour });
+    expect(result.model.overview()).toBe(false);
+    cleanup();
+  });
+  it('leaves the overview for an incoming citation even within the same revision', () => {
+    const { result, cleanup } = renderHook(() => setup(withGraph(), 1, false));
+    expect(result.model.overview()).toBe(true);
+    result.setTarget('citation');
+    expect(result.model.overview()).toBe(false);
+    expect(result.model.target()).toEqual(at(12));
+    cleanup();
+  });
   it('reopens an identical citation after local navigation', () => {
     const { result, cleanup } = renderHook(() => setup(snapshot(), 1));
     expect(result.model.target()).toEqual(at(12));
@@ -237,7 +335,7 @@ describe('review navigation and live revisions', () => {
   it('preserves the code position when the host publishes a revision route asynchronously', async () => {
     const navigations: string[] = [];
     const { result, cleanup } = renderHook(() => {
-      const value = setup(snapshot(), 1, false);
+      const value = setup(withGraph(), 1, false);
       createEffect(() => navigations.push(value.model.sequence()));
       return value;
     });
@@ -249,10 +347,12 @@ describe('review navigation and live revisions', () => {
     const count = navigations.length;
     result.model.chooseRevision(2);
     expect(result.model.target()).toEqual(at(25));
+    expect(result.model.overview()).toBe(false);
     expect(result.model.sequence()).toBe(sequence);
     expect(navigations).toHaveLength(count);
     await waitFor(() => expect(result.model.currentRevision()).toBe(2));
     expect(result.model.target()).toEqual(at(25));
+    expect(result.model.overview()).toBe(false);
     expect(result.model.sequence()).toBe(sequence);
     expect(navigations).toHaveLength(count);
     cleanup();

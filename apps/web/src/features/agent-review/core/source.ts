@@ -1,7 +1,13 @@
 /** Feature-owned live data and actions; adapters retain transport/cache mechanics. */
 type Accessor<T> = () => T;
 
-import type { Chapter, CodeLocation, FileGroup, ReviewFile } from './model';
+import type {
+  Chapter,
+  CodeLocation,
+  FileGroup,
+  ReviewFile,
+  ReviewGraph,
+} from './model';
 
 export type ReviewEntry = Pick<
   ReviewFile,
@@ -40,6 +46,7 @@ export type ReviewState = {
   tour: Omit<Chapter, 'note'>[];
   annotations: { key: string; body: string; location: CodeLocation }[];
   fileGroups?: FileGroup[];
+  graph?: ReviewGraph | null;
   anchors: {
     id: string;
     revision: number;

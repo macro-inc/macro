@@ -55,6 +55,7 @@
         "@corvu/calendar": "^0.1.2",
         "@corvu/dialog": "^0.2.4",
         "@corvu/drawer": "^0.2.4",
+        "@dagrejs/dagre": "^3.1.1",
         "@date-fns/tz": "^1.4.1",
         "@dinero.js/currencies": "2.0.0-alpha.8",
         "@effect/platform-browser": "4.0.0-rc.111",
@@ -124,6 +125,8 @@
         "async-mutex": "^0.5.0",
         "codemirror": "^6.0.2",
         "colorjs.io": "^0.5.2",
+        "cytoscape": "^3.34.3",
+        "cytoscape-layers": "^3.1.0",
         "d3-array": "^3.2.4",
         "d3-scale": "^4.0.2",
         "d3-shape": "^3.2.0",
@@ -781,6 +784,10 @@
     "@csstools/css-parser-algorithms": ["@csstools/css-parser-algorithms@3.0.5", "", { "peerDependencies": { "@csstools/css-tokenizer": "^3.0.4" } }, "sha512-DaDeUkXZKjdGhgYaHNJTV9pV7Y9B3b644jCLs9Upc3VeNGg6LWARAT6O+Q+/COo+2gg/bM5rhpMAtf70WqfBdQ=="],
 
     "@csstools/css-tokenizer": ["@csstools/css-tokenizer@3.0.4", "", {}, "sha512-Vd/9EVDiu6PPJt9yAh6roZP6El1xHrdvIVGjyBsHR0RYwNHgL7FJPyIIW4fANJNG6FtyZfvlRPpFI4ZM/lubvw=="],
+
+    "@dagrejs/dagre": ["@dagrejs/dagre@3.1.1", "", { "dependencies": { "@dagrejs/graphlib": "4.0.5" } }, "sha512-zroZB1dFOFiGgv4Xcrn1DckB1o4aOikPqD2NDQPV0WM//CXGcS6xiD0rNkqHmw6FEg4tabt4nxPLwgCWT+Vb2A=="],
+
+    "@dagrejs/graphlib": ["@dagrejs/graphlib@4.0.5", "", {}, "sha512-7xrBTqIts3o+PMUZX97wSc+7TUbW+/rULzGNCTP6yooNVDXbzw4Wutg/H/xOutTB/c/k0YqOAavgPh4/Zk9PFA=="],
 
     "@datadog/datadog-ci": ["@datadog/datadog-ci@3.22.2", "", { "dependencies": { "@datadog/datadog-ci-base": "3.22.2", "@datadog/datadog-ci-plugin-aas": "3.22.2", "@datadog/datadog-ci-plugin-cloud-run": "3.22.2", "@datadog/datadog-ci-plugin-deployment": "3.22.2", "@datadog/datadog-ci-plugin-dora": "3.22.2", "@datadog/datadog-ci-plugin-gate": "3.22.2", "@datadog/datadog-ci-plugin-lambda": "3.22.2", "@datadog/datadog-ci-plugin-sarif": "3.22.2", "@datadog/datadog-ci-plugin-sbom": "3.22.2", "@datadog/datadog-ci-plugin-stepfunctions": "3.22.2", "@datadog/datadog-ci-plugin-synthetics": "3.22.2", "axios": "^1.12.1", "chalk": "3.0.0", "clipanion": "^3.2.1", "fast-xml-parser": "^4.4.1", "form-data": "^4.0.4", "js-yaml": "3.13.1", "semver": "^7.5.3", "simple-git": "3.16.0", "typanion": "^3.14.0", "upath": "^2.0.1", "uuid": "^9.0.0" }, "bin": "dist/cli.js" }, "sha512-OejGdY0g+S0/9oJNCueBSU3ZXjNCn+JWhxvx+jroB/FolkOEDESmugludf3/uOjM3mCeuUlGoDhwIAmezF0AvA=="],
 
@@ -2107,6 +2114,10 @@
     "cssstyle": ["cssstyle@4.6.0", "", { "dependencies": { "@asamuzakjp/css-color": "^3.2.0", "rrweb-cssom": "^0.8.0" } }, "sha512-2z+rWdzbbSZv6/rhtvzvqeZQHrBaqgogqt85sqFNbabZOuFbCVFb8kPeEtZjiKkbrm395irpNKiYeFeLiQnFPg=="],
 
     "csstype": ["csstype@3.2.3", "", {}, "sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ=="],
+
+    "cytoscape": ["cytoscape@3.34.3", "", {}, "sha512-yfYGhRcGAntq6YBD583j4n0Eg3jIxvWmZtz/5uz9UYkeIStSlMxuUja+ec5j3iBD8nv1rwaOAYMW09tBdkSeaQ=="],
+
+    "cytoscape-layers": ["cytoscape-layers@3.1.0", "", { "peerDependencies": { "cytoscape": "^3.23.0" } }, "sha512-HhldyRPURRn4axeDsCiKdKqiZN8bcoWjclLXl3kWekDd7Wy4QHo5cntm4W4kxL/R0u8AA9VAfmNB1P7nJ9scew=="],
 
     "d3-array": ["d3-array@3.2.4", "", { "dependencies": { "internmap": "1 - 2" } }, "sha512-tdQAmyA18i4J7wprpYq8ClcxZy3SC31QMeByyCFyRt7BVHdREQZ5lpzoe5mFEYZUWe+oq8HBvk9JjpibyEV4Jg=="],
 

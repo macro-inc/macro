@@ -47,6 +47,28 @@ export type FileGroup = {
   hidden?: boolean;
 };
 
+export type GraphNode = {
+  id: string;
+  title: string;
+  description?: string | null;
+  kind?: string | null;
+  parent?: string | null;
+  files?: string[];
+  location: CodeLocation;
+};
+
+export type ReviewGraph = {
+  title: string;
+  direction?: 'leftToRight' | 'topToBottom' | null;
+  nodes: GraphNode[];
+  edges: {
+    from: string;
+    to: string;
+    label: string;
+    location?: CodeLocation | null;
+  }[];
+};
+
 export type ReviewMessage = {
   id: string;
   author: string;
