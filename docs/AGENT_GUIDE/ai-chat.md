@@ -40,6 +40,8 @@ rotating tips. Its collapsed height matches the New button, with the model
 selector and Send always visible. Tap the input to reveal attachment, microphone
 (when enabled), and repository controls; they collapse again when tapping outside.
 The editor and model picker stay mounted so collapsing preserves the draft.
+Repository and branch pickers keep the composer expanded while their search
+fields are focused, so their anchor stays in place.
 
 With the flag enabled, Home/list composers, search, the create menu, folder AI
 creation, contextual **Chat with AI**, and onboarding prompts all start new agent

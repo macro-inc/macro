@@ -34,6 +34,8 @@ import { createChatComposerTip } from '../primitives/chat-composer-tip';
 export function ChatComposer(props: {
   autoFocus?: boolean;
   collapseOnBlur?: boolean;
+  /** Portaled controls retain their anchor when focus leaves the composer. */
+  controlsOpen?: boolean;
   registerFocus?: (focus: () => void) => void;
   draft: string;
   onDraftChange: (draft: string) => void;
@@ -79,7 +81,11 @@ export function ChatComposer(props: {
   });
   let container: HTMLDivElement | undefined;
   const [focused, setFocused] = createSignal(false);
-  const collapsed = () => isTouchDevice() && props.collapseOnBlur && !focused();
+  const collapsed = () =>
+    isTouchDevice() &&
+    props.collapseOnBlur &&
+    !focused() &&
+    !props.controlsOpen;
   const drawerOpen = () => props.drawerOpen && !collapsed();
   useTouchOutsideToDismissKeyboard(() => container);
   const disabled = () => !!props.blockedReason || props.session?.disabled;

@@ -11,6 +11,7 @@ import {
 } from 'lexical';
 import { createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { RepositoryPicker } from '../views/RepositoryPicker';
 import { ChatComposer, ChatSessionInput } from './ChatComposer';
 
 vi.mock('@core/mobile/isTouchDevice', () => ({
@@ -535,5 +536,61 @@ it.each(['Send', 'Attach files', 'Model'])(
       expect(send).toHaveBeenCalledWith('First line\nSecond line', []);
     fireEvent.pointerDown(document.body);
     expect(clipped()).toBe(true);
+  }
+);
+
+it.each(['Repository', 'Branch'])(
+  'keeps the mobile composer expanded while the portaled %s picker has focus',
+  (control) => {
+    vi.mocked(isTouchDevice).mockReturnValue(true);
+    const [controlsOpen, setControlsOpen] = createSignal(false);
+    const { container } = render(() => (
+      <ChatComposer
+        collapseOnBlur
+        controlsOpen={controlsOpen()}
+        draft="Keep this draft"
+        onDraftChange={() => {}}
+        onSend={() => {}}
+        selector={<button>Model</button>}
+        drawerOpen
+        drawer={
+          <RepositoryPicker
+            onOpenChange={setControlsOpen}
+            repoUrl="https://github.com/macro-inc/macro"
+            branch="main"
+            repositories={[]}
+            repositoriesLoading={false}
+            repositoriesError={false}
+            recentRepositories={[]}
+            branches={['main']}
+            branchesLoading={false}
+            branchesError={false}
+            onRetryRepositories={() => {}}
+            onRetryBranches={() => {}}
+            onSelectRepository={() => {}}
+            onSelectBranch={() => {}}
+          />
+        }
+      />
+    ));
+    const input = screen.getByTestId('editor');
+    fireEvent.focusIn(input);
+    fireEvent.click(screen.getByRole('button', { name: control }));
+    const search = screen.getByRole('combobox');
+    expect(container.contains(search)).toBe(false);
+    fireEvent.focusOut(input, { relatedTarget: search });
+    fireEvent.pointerDown(search);
+    expect(controlsOpen()).toBe(true);
+    expect(
+      container.querySelector('.composer-drawer')?.getAttribute('aria-hidden')
+    ).toBe('false');
+    expect(
+      input
+        .closest('[data-composer-compact]')
+        ?.getAttribute('data-composer-compact')
+    ).toBe('false');
+    fireEvent.click(screen.getAllByRole('option')[0]);
+    expect(controlsOpen()).toBe(false);
+    expect(screen.getByTestId('editor')).toBe(input);
   }
 );

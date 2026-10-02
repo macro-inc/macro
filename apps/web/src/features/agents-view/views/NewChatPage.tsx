@@ -73,6 +73,7 @@ export function NewChatPage(props: {
   const [agentId, setAgentId] = createSignal<string>();
   /** One-shot model from a coding agent's submenu; Macro uses {@link preferredInmem}. */
   const [modelOverride, setModelOverride] = createSignal<string>();
+  const [repositoryPickerOpen, setRepositoryPickerOpen] = createSignal(false);
   // A new conversation starts on Automatic until the caller picks a repository.
   const [repoUrl, setRepoUrl] = createSignal<string | undefined>();
   const persistedDraft = createPersistedComposerDraft();
@@ -263,6 +264,7 @@ export function NewChatPage(props: {
     <ChatComposer
       autoFocus={props.autoFocus}
       collapseOnBlur={props.compact}
+      controlsOpen={repositoryPickerOpen()}
       registerFocus={props.registerFocus}
       draft={draft()}
       onDraftChange={setDraft}
@@ -270,6 +272,7 @@ export function NewChatPage(props: {
       selector={agentSelector()}
       drawer={
         <RepositoryPicker
+          onOpenChange={setRepositoryPickerOpen}
           repoUrl={repoUrl()}
           branch={repoBranch()}
           repositories={reachable.repositories()}
