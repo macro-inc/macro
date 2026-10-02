@@ -10,6 +10,14 @@ import {
 } from '../utils';
 import { applyGraphqlDoneOptimistic } from './graphql-done-optimism';
 
+export type DoneEntityKey = `${EntityData['type']}:${string}`;
+
+export function doneEntityKey(
+  entity: Pick<EntityData, 'type' | 'id'>
+): DoneEntityKey {
+  return `${entity.type}:${entity.id}`;
+}
+
 type Receipt = {
   emailIds: string[];
   notificationIds: string[];
@@ -20,7 +28,7 @@ type Attempt = {
   entity?: EntityData;
   knownNotificationIds: string[];
   rowIds: string[];
-  state: 'pending' | 'done' | 'undone' | 'failed';
+  state: 'pending' | 'done' | 'undone' | 'failed' | 'noop';
   displayDone: boolean;
   receipt?: Receipt;
   optimistic: ReturnType<typeof applyGraphqlDoneOptimistic>;
@@ -30,7 +38,7 @@ type Args = {
   entities: EntityData[];
   emailIds: string[];
   notificationIds: string[];
-  notificationIdsByEntity: ReadonlyMap<string, string[]>;
+  notificationIdsByEntity: ReadonlyMap<DoneEntityKey, string[]>;
   notificationEntities: NotificationEntityRef[];
   scopeChannelThreads: boolean;
 };
@@ -69,7 +77,7 @@ export function createGraphqlDoneOperation(args: Args) {
         (ref) => ref.type === entity.type && ref.id === entity.id
       );
       const notificationIds = (
-        args.notificationIdsByEntity.get(entity.id) ?? []
+        args.notificationIdsByEntity.get(doneEntityKey(entity)) ?? []
       ).filter((id) => {
         if (claimedIds.has(id) || (!entityScoped && !selectiveIds.has(id)))
           return false;
@@ -157,9 +165,11 @@ export function createGraphqlDoneOperation(args: Args) {
               emailIds: [],
               notificationIds: ids,
             };
-          } else if (!attempt.displayDone) {
-            // A sibling's receipt cannot make this no-op undoable. In
-            // particular, don't permanently restore a stale notification row.
+          } else {
+            // No matching receipt justifies neither a hide nor a restoration.
+            // Release this attempt even when Undo was never requested: a stale
+            // reader might otherwise keep the row hidden indefinitely.
+            attempt.state = 'noop';
             attempt.optimistic.rollback();
           }
         }
@@ -266,13 +276,7 @@ export function createGraphqlDoneOperation(args: Args) {
     rollback: () =>
       batch(() => {
         for (const attempt of attempts)
-          if (
-            attempt.state === 'pending' ||
-            (attempt.state === 'done' &&
-              !attempt.receipt &&
-              attempt.displayDone)
-          )
-            failInitial(attempt);
+          if (attempt.state === 'pending') failInitial(attempt);
       }),
     releaseGraphql: () =>
       batch(() => {

@@ -111,12 +111,15 @@ without waiting for the reversal's server reply; changing filters/sort clears
 those view-local restoration snapshots. Home's separate recent-activity inclusion
 rules are unchanged. Test Done/Undo/Redo with delayed replies and verify both flat
 and grouped rows/counts. A failure must roll back only its own local intent.
-Test mixed committed/queued/rejected archives, notification writes, and reminder
-completions, including an archive that fails while its notifications succeed
-(and vice versa). Accepted writes retain Undo; rejected siblings must neither
+Test mixed committed/queued/rejected archives and notification writes,
+including an archive that fails while its notifications succeed (and vice versa). Accepted writes retain Undo; rejected siblings must neither
 reappear in its request nor be retried by Redo. Partial feedback keeps an Undo
-action. A no-op notification target cannot borrow a sibling's returned IDs to
-restore its row. Partial Undo/Redo failures retry only the failed writes.
+action. A reply with no matching notification IDs must release that target's
+optimistic hide and notification overrides immediately, even if Undo was never
+clicked and mounted readers remain stale. Do not wait for acknowledgement or a
+timer when there is no receipt. Accepted siblings keep their own display intent;
+a no-op target cannot borrow their IDs to restore its row. Partial Undo/Redo
+failures retry only the failed writes.
 If every initial write fails, retire its pending Undo/Redo entry and unwind both
 Done and any early Undo overrides. Disposal or clearing history while a reversal
 is pending must not resurrect that entry when its response arrives.
