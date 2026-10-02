@@ -33,6 +33,12 @@ agent/model control to open a searchable bottom sheet. Tap an agent to use its
 default model, or its model arrow to choose a model; **Create agent** opens the
 roster. **Agents** and **Connections** remain reachable from the list.
 
+The mobile Home composer is a filled, rounded input with no placeholder or
+rotating tips. Its collapsed height matches the New button, with the model
+selector and Send always visible. Tap the input to reveal attachment, microphone
+(when enabled), and repository controls; they collapse again when tapping outside.
+The editor and model picker stay mounted so collapsing preserves the draft.
+
 With the flag enabled, Home/list composers, search, the create menu, folder AI
 creation, contextual **Chat with AI**, and onboarding prompts all start new agent
 sessions. Existing legacy chat rows still open their original chats. Contextual

@@ -451,6 +451,61 @@ it('keeps the paperclip visible while the session is unavailable', () => {
   ).toBe(true);
 });
 
+it.each([undefined, 'Describe what you want to build'])(
+  'leaves the mobile editor blank instead of showing placeholder %s',
+  (placeholder) => {
+    vi.mocked(isTouchDevice).mockReturnValue(true);
+    render(() => (
+      <ChatComposer
+        draft=""
+        placeholder={placeholder}
+        onDraftChange={() => {}}
+        onSend={() => {}}
+        selector={<button>Model</button>}
+      />
+    ));
+    expect(screen.getByTestId('editor').textContent).toBe('');
+  }
+);
+
+it('expands Home controls on focus without replacing the editor or model picker', () => {
+  vi.mocked(isTouchDevice).mockReturnValue(true);
+  const { container } = render(() => (
+    <ChatComposer
+      collapseOnBlur
+      draft=""
+      onDraftChange={() => {}}
+      onSend={() => {}}
+      onAttachFiles={() => {}}
+      selector={<button>Model</button>}
+      drawer={<button>Repository</button>}
+      drawerOpen
+    />
+  ));
+  const input = screen.getByTestId('editor');
+  const model = screen.getByRole('button', { name: 'Model' });
+  const attach = screen.getByRole('button', { name: 'Attach files' });
+  const repository = container.querySelector('.composer-drawer');
+  const compact = () => input.closest('[data-composer-compact]');
+
+  expect(compact()?.getAttribute('data-composer-compact')).toBe('true');
+  expect(model.parentElement?.classList.contains('hidden')).toBe(false);
+  expect(attach.parentElement?.classList.contains('hidden')).toBe(true);
+  expect(repository?.getAttribute('aria-hidden')).toBe('true');
+
+  fireEvent.focusIn(input);
+  expect(compact()?.getAttribute('data-composer-compact')).toBe('false');
+  expect(model.parentElement?.classList.contains('hidden')).toBe(false);
+  expect(attach.parentElement?.classList.contains('hidden')).toBe(false);
+  expect(repository?.getAttribute('aria-hidden')).toBe('false');
+
+  fireEvent.pointerDown(document.body);
+  expect(compact()?.getAttribute('data-composer-compact')).toBe('true');
+  expect(repository?.getAttribute('aria-hidden')).toBe('true');
+  expect(screen.getByTestId('editor')).toBe(input);
+  expect(screen.getByRole('button', { name: 'Model' })).toBe(model);
+});
+
 it.each(['Send', 'Attach files', 'Model'])(
   'keeps the expanded Home composer stable through an iOS %s tap',
   (control) => {

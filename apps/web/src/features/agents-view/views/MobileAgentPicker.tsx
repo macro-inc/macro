@@ -26,6 +26,10 @@ export function MobileAgentPicker(props: AgentPickerProps) {
     props.agents.find((agent) => agent.id === MACRO_PERSONA_ID);
   const catalog = createComposerModels(() => browsing() ?? macro());
   const model = () => props.modelOverride ?? props.selected?.defaultModel;
+  const label = () =>
+    props.selected?.id === MACRO_PERSONA_ID
+      ? modelLabel(model())
+      : (props.selected?.name ?? 'Choose agent');
   const matches = (text: string) =>
     text.toLocaleLowerCase().includes(query().trim().toLocaleLowerCase());
   const models = () =>
@@ -56,17 +60,16 @@ export function MobileAgentPicker(props: AgentPickerProps) {
         variant="ghost"
         size="sm"
         aria-label="Agent"
-        class="min-w-0 max-w-full gap-1 px-1 text-sm"
+        title={label()}
+        class="h-[30px] min-w-0 max-w-full gap-1 rounded-full border border-edge-muted bg-ink/5 px-2 text-[12px] font-medium leading-none text-ink-muted"
       >
-        <Show when={props.selected}>
-          {(agent) => <AgentIcon agent={agent()} class="size-4 shrink-0" />}
+        <Show when={props.selected?.id !== MACRO_PERSONA_ID && props.selected}>
+          {(agent) => (
+            <AgentIcon agent={agent()} class="size-[12px] shrink-0" />
+          )}
         </Show>
-        <span class="truncate">
-          {props.selected?.id === MACRO_PERSONA_ID
-            ? modelLabel(model())
-            : (props.selected?.name ?? 'Choose agent')}
-        </span>
-        <CaretDown class="size-3 shrink-0" />
+        <span class="truncate">{label()}</span>
+        <CaretDown class="size-[10px] shrink-0" />
       </MobileDrawer.Trigger>
       <MobileDrawer.Portal>
         <MobileDrawer.Overlay />

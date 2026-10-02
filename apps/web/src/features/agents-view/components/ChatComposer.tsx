@@ -80,6 +80,7 @@ export function ChatComposer(props: {
   let container: HTMLDivElement | undefined;
   const [focused, setFocused] = createSignal(false);
   const collapsed = () => isTouchDevice() && props.collapseOnBlur && !focused();
+  const drawerOpen = () => props.drawerOpen && !collapsed();
   useTouchOutsideToDismissKeyboard(() => container);
   const disabled = () => !!props.blockedReason || props.session?.disabled;
   const canSendNext = () =>
@@ -134,7 +135,12 @@ export function ChatComposer(props: {
 
   const { isCompact } = createComposerLayout(editor.buildHandle().lexical, {
     container: layout,
-    mode: () => (collapsed() ? 'collapsed' : 'auto'),
+    mode: () =>
+      collapsed()
+        ? 'collapsed'
+        : isTouchDevice() && props.collapseOnBlur
+          ? 'expanded'
+          : 'auto',
   });
 
   // Apply host-supplied drafts (Home suggestions) to the existing editor.
@@ -225,7 +231,7 @@ export function ChatComposer(props: {
         <ComposerSurface
           as="div"
           data-agent-composer="chat"
-          class="relative z-10 min-w-0 rounded-[32px] transition-[height] duration-200 ease-[cubic-bezier(0.77,0,0.175,1)] motion-reduce:transition-none"
+          class="relative z-10 min-w-0 rounded-[32px] touch:island touch:bg-chrome transition-[height] duration-200 ease-[cubic-bezier(0.77,0,0.175,1)] motion-reduce:transition-none"
           style={{
             height: height() === undefined ? undefined : `${height()}px`,
           }}
@@ -254,13 +260,15 @@ export function ChatComposer(props: {
                   7.5px padding + half the button/line-height difference. */}
               <div
                 ref={setLayout}
-                data-composer-compact={!props.drawerOpen && isCompact()}
-                data-composer-coding={props.drawerOpen || undefined}
-                class="group/composer flex min-w-0 data-[composer-compact=false]:flex-wrap items-end gap-2 p-[7.5px] pl-3 data-[composer-compact=false]:pb-2.5 data-[composer-compact=false]:px-3 data-[composer-compact=false]:pt-[calc(7.5px_+_(33.75px_-_1.5rem)/2)]"
+                data-composer-compact={!drawerOpen() && isCompact()}
+                data-composer-coding={drawerOpen() || undefined}
+                data-composer-collapsed={collapsed() || undefined}
+                class="group/composer flex min-w-0 data-[composer-compact=false]:flex-wrap items-end gap-2 p-[7.5px] pl-3 data-[composer-compact=false]:pb-2.5 data-[composer-compact=false]:px-3 data-[composer-compact=false]:pt-[calc(7.5px_+_(33.75px_-_1.5rem)/2)] data-[composer-collapsed=true]:h-(--mobile-chrome-button-size) data-[composer-collapsed=true]:items-center data-[composer-collapsed=true]:py-0 data-[composer-collapsed=true]:pl-3.5 data-[composer-collapsed=true]:pr-[9.5px]"
               >
                 <Show when={props.onAttachFiles}>
                   <div
                     data-composer-controls
+                    classList={{ hidden: !!collapsed() }}
                     class="shrink-0 group-data-[composer-compact=false]/composer:order-1"
                   >
                     <Input.AttachFilesAction
@@ -282,7 +290,9 @@ export function ChatComposer(props: {
                     class="h-auto min-h-6 text-base leading-6 [&_[data-markdown-editable]]:min-h-6 [&_[data-markdown-editable]]:outline-none [&_[data-markdown-editable]>.md-p]:my-0 [&_[data-markdown-placeholder]]:max-w-full [&_[data-markdown-placeholder]>p]:m-0 [&_[data-markdown-placeholder]>p]:truncate"
                     config={editor}
                     initialValue={props.draft}
-                    placeholder={props.placeholder ?? tip()}
+                    placeholder={
+                      isTouchDevice() ? '' : (props.placeholder ?? tip())
+                    }
                     refFn={(element) =>
                       element.setAttribute('aria-label', 'Message the agent')
                     }
@@ -299,11 +309,15 @@ export function ChatComposer(props: {
                   aria-label="Composer settings"
                 >
                   <div class="ml-auto flex min-w-0 max-w-full items-center gap-2 [&_.menu]:right-0 [&_.menu]:left-auto [&_.menu-anchor]:min-w-0 [&_.pill]:max-w-full">
-                    {props.selector}
-                    <DictationButton
-                      dictation={dictation}
-                      disabled={disabled()}
-                    />
+                    <div class="flex min-w-0 items-center gap-2">
+                      {props.selector}
+                      <div class={collapsed() ? 'hidden' : 'contents'}>
+                        <DictationButton
+                          dictation={dictation}
+                          disabled={disabled()}
+                        />
+                      </div>
+                    </div>
                     <Show
                       when={
                         (props.session?.busy || canSendNext()) &&
@@ -358,9 +372,9 @@ export function ChatComposer(props: {
         <Show when={props.drawer}>
           <div
             class="composer-drawer"
-            data-open={props.drawerOpen ? '' : undefined}
-            aria-hidden={!props.drawerOpen}
-            inert={!props.drawerOpen}
+            data-open={drawerOpen() ? '' : undefined}
+            aria-hidden={!drawerOpen()}
+            inert={!drawerOpen()}
           >
             <div class="composer-drawer-inner">
               <div
