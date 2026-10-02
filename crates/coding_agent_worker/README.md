@@ -26,3 +26,26 @@ A background reader forwards local TUI turns even without a Macro prompt.
 Complete JSONL records are read in bounded batches. Partial lines wait for the
 next append; truncation or replacement requires a reload. Turn boundaries are
 forwarded in order, including multiple local turns between polls.
+
+### Native controls and MCP
+
+Model selection from Macro applies before native launch. Change a running
+session's model in its native TUI; macrod rejects remote model changes it cannot
+confirm. Unconfirmed prompt submission is reported as an error, never retried by
+pressing Enter. Cancellation sends Escape without a delayed input-clearing key.
+
+Remote permission answers require a recognized approval shortcut, the same
+visible dialog, and the same Herdr state generation. Sign-in prompts and other
+unknown dialogs require native interaction. Herdr does not offer an atomic
+compare-and-send-key operation, so native interaction remains the authority.
+
+Claude receives MCP configuration in a private file. Codex receives per-launch
+MCP overrides; HTTP credentials come from private environment files sourced in
+the native pane, and stdio servers use private launch scripts. This requires a
+Bourne-compatible pane shell. User-wide Codex configuration is unchanged. SSE MCP
+servers are rejected for Codex; use streamable HTTP. Credentials are refreshed on
+native launch/resume, not injected into an already-running process.
+
+Codex's documented [MCP configuration](https://learn.chatgpt.com/docs/extend/mcp?surface=cli)
+and [configuration reference](https://learn.chatgpt.com/docs/config-file/config-reference)
+describe `env_http_headers` and per-server configuration.

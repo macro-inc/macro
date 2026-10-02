@@ -303,3 +303,61 @@ async fn observer_waits_until_the_macro_prompt_response_has_been_sent() {
     );
     adapter.shutdown.cancel();
 }
+
+#[tokio::test]
+async fn a_live_native_session_does_not_pretend_to_change_its_model() {
+    let root = tempfile::tempdir().unwrap();
+    let id = uuid::Uuid::new_v4().to_string();
+    save_transcript(root.path(), &id);
+    let (adapter, _) = test_adapter(root.path());
+    adapter
+        .load_session(&json!({"sessionId":id,"cwd":root.path()}))
+        .await
+        .unwrap();
+    assert!(
+        adapter
+            .request(
+                "session/set_config_option",
+                json!({"sessionId":id,"configId":"model","value":"opus"})
+            )
+            .await
+            .is_err()
+    );
+    assert_eq!(adapter.store.load(&id).unwrap().model, "sonnet");
+    adapter.shutdown.cancel();
+}
+
+#[tokio::test]
+async fn an_unconfirmed_submission_never_sends_an_extra_enter_or_reports_success() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let root = tempfile::tempdir().unwrap();
+    let calls = root.path().join("calls");
+    let script = root.path().join("herdr");
+    std::fs::write(&script, format!("#!/bin/sh\nprintf '%s\\n' \"$*\" >> {}\nprintf '%s\\n' '{{\"result\":{{\"agent\":{{\"agent_status\":\"idle\"}}}}}}'\n", shell_words::quote(&calls.to_string_lossy()))).unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let id = uuid::Uuid::new_v4().to_string();
+    save_transcript(root.path(), &id);
+    let (adapter, _) = test_adapter(root.path());
+    adapter
+        .load_session(&json!({"sessionId":id,"cwd":root.path()}))
+        .await
+        .unwrap();
+    let session = adapter.session(&json!({"sessionId":id})).unwrap();
+    let mut guard = session.live.lock().await;
+    let error = adapter
+        .follow(
+            &HerdrCli::new(script, None),
+            &session,
+            guard.as_mut().unwrap(),
+            &CancellationToken::new(),
+        )
+        .await
+        .unwrap_err();
+    assert!(error.message.contains("did not confirm"));
+    assert!(
+        !std::fs::read_to_string(calls)
+            .unwrap()
+            .contains("send-keys")
+    );
+    adapter.shutdown.cancel();
+}

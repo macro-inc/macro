@@ -62,11 +62,6 @@ const STATUS_EVERY: u32 = 4;
 const SETTLED_CHECKS: u32 = 3;
 const QUIET_START: Duration = Duration::from_secs(20);
 const MISSING_AGENT_CHECKS: u32 = 5;
-/// How long a submitted prompt may show no sign of a turn before the
-/// adapter presses Enter again: a TUI still settling after launch can take
-/// the pasted text but drop the Enter that follows it.
-const SUBMIT_GRACE: Duration = Duration::from_secs(5);
-
 /// Which coding-agent TUI each session runs.
 #[derive(
     Debug,
@@ -291,6 +286,13 @@ struct Session {
     cancel: Mutex<Option<CancellationToken>>,
 }
 
+struct PermissionEpoch(Arc<AtomicU64>);
+impl Drop for PermissionEpoch {
+    fn drop(&mut self) {
+        self.0.fetch_add(1, Ordering::SeqCst);
+    }
+}
+
 struct PromptCancellation<'a>(&'a Mutex<Option<CancellationToken>>);
 
 impl Drop for PromptCancellation<'_> {
@@ -305,7 +307,6 @@ struct Live {
     cwd: PathBuf,
     started: std::time::SystemTime,
     name: String,
-    model: String,
     log: Transcript,
     path: Option<PathBuf>,
     cursor: Cursor,
@@ -376,12 +377,31 @@ impl Adapter {
             .ok_or_else(|| RpcError::invalid(format!("unknown session {id}")))
     }
 
-    fn cancel(&self, params: &Value) {
-        if let Ok(session) = self.session(params)
-            && let Some(cancel) = lock(&session.cancel).as_ref()
-        {
+    fn cancel(self: &Arc<Self>, params: &Value) {
+        let Ok(session) = self.session(params) else {
+            return;
+        };
+        if let Some(cancel) = lock(&session.cancel).as_ref() {
             cancel.cancel();
+            return;
         }
+        let Some(herdr) = self.herdr.clone() else {
+            return;
+        };
+        let name = agent_name(&session.id);
+        let native_id = lock(&session.native_id).clone();
+        tokio::spawn(async move {
+            let Ok(info) = herdr.agent_info(&name).await else {
+                return;
+            };
+            if native_id.is_some()
+                && info.session_id == native_id
+                && matches!(info.status.as_str(), "working" | "blocked")
+                && let Err(error) = herdr.send_keys(&name, &["esc"]).await
+            {
+                tracing::warn!(%error, "could not interrupt native turn");
+            }
+        });
     }
 
     async fn request(self: &Arc<Self>, method: &str, params: Value) -> Result<Value, RpcError> {
@@ -410,7 +430,17 @@ impl Adapter {
                             .iter()
                             .any(|(id, _)| *id == model) =>
                     {
+                        let live = session
+                            .live
+                            .try_lock()
+                            .map_err(|_| RpcError::invalid("cannot change model during a turn"))?;
+                        if live.is_some() && model != *lock(&session.model) {
+                            return Err(RpcError::invalid(
+                                "change the model in the native Herdr session, or select it when starting a new session",
+                            ));
+                        }
                         model.clone_into(&mut lock(&session.model));
+                        self.save(&session, live.as_ref())?;
                         Ok(json!({"configOptions": config_options(self.options.kind, model)}))
                     }
                     _ => Err(RpcError::invalid("unsupported configuration option")),
@@ -512,7 +542,6 @@ impl Adapter {
             cwd: record.cwd.clone(),
             started: std::time::UNIX_EPOCH + Duration::from_secs(record.started),
             name: agent_name(id),
-            model: record.model.clone(),
             log: self.options.kind.log(),
             path: record.transcript,
             cursor: Cursor::default(),
@@ -646,14 +675,6 @@ impl Adapter {
             return Err(RpcError::internal("the Claude Code window did not start"));
         };
 
-        let model = lock(&session.model).clone();
-        if model != live.model && self.options.kind == TuiAgent::Claude {
-            herdr
-                .prompt_agent(&live.name, &format!("/model {model}"))
-                .await?;
-            live.model = model;
-            tokio::time::sleep(Duration::from_secs(1)).await;
-        }
         if live.pending.is_empty() {
             live.pending = self.drain(live)?.into();
         }
@@ -729,6 +750,23 @@ impl Adapter {
                 ]);
             }
         }
+        if kind == TuiAgent::Codex && !session.mcp_servers.is_empty() {
+            let prepared = super::mcp::codex(
+                &self.store.0.join("mcp").join(&session.id),
+                &session.mcp_servers,
+            )
+            .map_err(|error| RpcError::internal(error.to_string()))?;
+            herdr
+                .run_in_pane(
+                    &window.pane_id,
+                    &format!(
+                        ". {}",
+                        shell_words::quote(&prepared.environment.to_string_lossy())
+                    ),
+                )
+                .await?;
+            args.extend(prepared.args);
+        }
         args.extend(self.options.agent_args.iter().cloned());
         let name = agent_name(&session.id);
         let started = std::time::SystemTime::now();
@@ -749,7 +787,6 @@ impl Adapter {
             cwd: session.cwd.clone(),
             started,
             name,
-            model,
             log: self.options.kind.log(),
             path: None,
             cursor: Cursor::default(),
@@ -764,7 +801,7 @@ impl Adapter {
         if servers.is_empty() {
             return Ok(None);
         }
-        let dir = std::env::temp_dir().join("macrod-herdr");
+        let dir = self.store.0.join("mcp");
         std::fs::create_dir_all(&dir).map_err(|error| RpcError::internal(error.to_string()))?;
         let path = dir.join(format!("{}.mcp.json", session.id));
         let body = json!({"mcpServers": servers}).to_string();
@@ -791,25 +828,23 @@ impl Adapter {
         // answer from Macro never presses keys into a different dialog.
         let generation = Arc::new(AtomicU64::new(0));
         let mut asking = false;
-        let mut resubmitted = false;
+        let mut last_output = Instant::now();
+        let mut asked_seq = None;
+        let _epoch = PermissionEpoch(generation.clone());
         loop {
             tokio::select! {
                 () = cancel.cancelled() => {
                     herdr.send_keys(&live.name, &["esc"]).await?;
                     tokio::time::sleep(Duration::from_secs(1)).await;
-                    if self.options.kind == TuiAgent::Claude {
-                        // Claude Code puts an interrupted prompt back in its
-                        // input box; left there, the next prompt is appended
-                        // to it. One Ctrl+C clears the box (two would quit).
-                        herdr.send_keys(&live.name, &["ctrl+c"]).await?;
-                    }
                     self.forward(session, live, &mut open_tool)?;
                     return Ok("cancelled");
                 }
                 () = tokio::time::sleep(POLL) => {}
             }
             let (moved, ended) = self.forward(session, live, &mut open_tool)?;
-            active |= moved;
+            if moved {
+                last_output = Instant::now();
+            }
             if let Some(stop) = ended {
                 return Ok(stop);
             }
@@ -818,7 +853,7 @@ impl Adapter {
             if !ticks.is_multiple_of(STATUS_EVERY) {
                 continue;
             }
-            let status = match herdr.agent_info(&live.name).await {
+            let info = match herdr.agent_info(&live.name).await {
                 Ok(info) => {
                     missing = 0;
                     if info.session_id.is_some() {
@@ -828,7 +863,7 @@ impl Adapter {
                         live.path = self.locate(live, info.session_id.as_deref());
                     }
                     self.save(session, Some(live))?;
-                    info.status
+                    info
                 }
                 Err(error) => {
                     missing += 1;
@@ -840,6 +875,11 @@ impl Adapter {
                     continue;
                 }
             };
+            let status = info.status;
+            if asked_seq.is_some_and(|seq| seq != info.state_change_seq) {
+                asking = false;
+                generation.fetch_add(1, Ordering::SeqCst);
+            }
             if status != "blocked" && std::mem::take(&mut asking) {
                 generation.fetch_add(1, Ordering::SeqCst);
             }
@@ -851,20 +891,24 @@ impl Adapter {
                 "blocked" => {
                     settled = 0;
                     if !std::mem::replace(&mut asking, true) {
+                        asked_seq = Some(info.state_change_seq);
                         let current = generation.fetch_add(1, Ordering::SeqCst) + 1;
                         self.ask_permission(session, live, open_tool.clone(), current, &generation);
                     }
                 }
-                "idle" | "done" if !active && !resubmitted && started.elapsed() >= SUBMIT_GRACE => {
-                    resubmitted = true;
-                    tracing::warn!(agent = %live.name, "prompt shows no activity; pressing Enter again");
-                    herdr.send_keys(&live.name, &["enter"]).await?;
-                }
                 "idle" | "done" => {
                     settled += 1;
-                    if settled >= SETTLED_CHECKS && (active || started.elapsed() > QUIET_START) {
+                    if active
+                        && settled >= SETTLED_CHECKS
+                        && last_output.elapsed() >= Duration::from_secs(3)
+                    {
                         self.forward(session, live, &mut open_tool)?;
                         return Ok("end_turn");
+                    }
+                    if !active && started.elapsed() > QUIET_START {
+                        return Err(RpcError::internal(
+                            "the native TUI did not confirm prompt submission; check its input in Herdr",
+                        ));
                     }
                 }
                 _ => {}
@@ -925,15 +969,25 @@ impl Adapter {
         let blocked = blocked.clone();
         let kind = self.options.kind;
         tokio::spawn(async move {
+            let Ok(before) = herdr.agent_info(&name).await else {
+                return;
+            };
+            let Ok(screen) = herdr.read_agent(&name).await else {
+                return;
+            };
+            let Some(approve_key) = super::controls::approve_key(kind, &screen) else {
+                adapter.notify_update(&session_id, json!({"sessionUpdate":"agent_message_chunk", "content":{"type":"text", "text":"The native agent needs input in Herdr."}}));
+                return;
+            };
+            if before.status != "blocked" {
+                return;
+            }
             let (tool_id, title) = match tool {
                 Some(tool) => tool,
-                None => {
-                    let screen = herdr.read_agent(&name).await.unwrap_or_default();
-                    (
-                        format!("herdr-permission-{generation}"),
-                        permission_title(kind, &screen),
-                    )
-                }
+                None => (
+                    format!("herdr-permission-{generation}"),
+                    permission_title(kind, &screen),
+                ),
             };
             let answer = adapter
                 .call(
@@ -951,12 +1005,33 @@ impl Adapter {
             if blocked.load(Ordering::SeqCst) != generation {
                 return;
             }
-            let allowed = answer
+            let Ok(after) = herdr.agent_info(&name).await else {
+                return;
+            };
+            let Ok(current_screen) = herdr.read_agent(&name).await else {
+                return;
+            };
+            if !super::controls::same_dialog(
+                &screen,
+                &current_screen,
+                before.state_change_seq,
+                after.state_change_seq,
+                &after.status,
+            ) {
+                return;
+            }
+            let key = match answer
                 .as_ref()
                 .and_then(|answer| answer.pointer("/result/outcome/optionId"))
                 .and_then(Value::as_str)
-                == Some("allow");
-            let key = if allowed { "enter" } else { "esc" };
+            {
+                Some("allow") => approve_key,
+                Some("reject") => "esc",
+                _ => return,
+            };
+            if blocked.load(Ordering::SeqCst) != generation {
+                return;
+            }
             if let Err(error) = herdr.send_keys(&name, &[key]).await {
                 tracing::warn!(error = %error, "could not answer the agent's permission dialog");
             }
