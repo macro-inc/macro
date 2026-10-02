@@ -827,7 +827,7 @@ pub trait AgentSessionRealtime {
         event: LogAppended,
     ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
 
-    /// Tell viewers to refetch changed session metadata.
+    /// Tell viewers to refetch changed session metadata and the durable log.
     fn publish_updated(
         &self,
         _session: AgentSessionId,

@@ -1072,7 +1072,10 @@ async fn run() -> anyhow::Result<()> {
         AgentSessionServiceImpl::new(
             session_repo.clone(),
             FoldedMessageService::new(session_repo.clone()),
-            ConnectionGatewayAgentSessionRealtime::new(connection_gateway, session_audience),
+            ConnectionGatewayAgentSessionRealtime::new(
+                connection_gateway.clone(),
+                session_audience.clone(),
+            ),
             NoOpAgentSessionNameGenerator,
             Arc::new(NoOpTurnObserver),
             lifecycle_publisher,
@@ -1186,6 +1189,31 @@ async fn run() -> anyhow::Result<()> {
             }
             if let Err(error) = heartbeat_repo.heartbeat(replica, None).await {
                 tracing::warn!(error = ?error, %replica, "failed to heartbeat harness replica");
+            }
+        }
+    });
+
+    // A hard abort cannot emit a disconnect. Reconcile expired leases so
+    // viewers stop showing a turn as working without issuing another command.
+    let recovery_repo = session_repo.clone();
+    let recovery_realtime = ConnectionGatewayAgentSessionRealtime::new(
+        connection_gateway.clone(),
+        session_audience.clone(),
+    );
+    let recovery = tokio::spawn(async move {
+        let mut ticker =
+            tokio::time::interval(agent_session::domain::ports::REPLICA_HEARTBEAT_INTERVAL);
+        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            ticker.tick().await;
+            if let Err(error) = agent_session::domain::recovery::recover_stale_sessions(
+                &recovery_repo,
+                &recovery_realtime,
+                std::num::NonZeroUsize::new(100).expect("nonzero recovery batch"),
+            )
+            .await
+            {
+                tracing::warn!(error = ?error, "failed to recover abandoned agent sessions");
             }
         }
     });
@@ -1409,6 +1437,7 @@ async fn run() -> anyhow::Result<()> {
     trigger.abort();
     egress_http.abort();
     heartbeat.abort();
+    recovery.abort();
     runtime_commands.abort();
     let stop_failures = container_shutdown.shutdown_all().await;
     if stop_failures > 0 {

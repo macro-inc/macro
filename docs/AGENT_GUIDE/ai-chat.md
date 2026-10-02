@@ -1014,6 +1014,12 @@ scroll several screens up and confirm output does not pull you down. Scroll down
 to reveal the overlay and return to latest. Repeat with a short session and on a
 physical phone while opening/dismissing the keyboard, both at latest and in history.
 
+After a harness server crashes and its lease expires, the session stops showing
+Working and becomes disconnected without requiring a new message. Its transcript
+is preserved; recovery does not replay the prompt or retry tool calls. Open chats
+refresh the durable history while preserving live events arriving during the read,
+so a session that has already resumed stays active.
+
 When a session reconnects using ACP load, the last committed conversation stays
 visible while history is reconstructed. A successful load replaces the transcript
 once, including prompts, thoughts, and tool results; it does not append another

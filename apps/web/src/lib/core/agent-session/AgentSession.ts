@@ -22,6 +22,7 @@ import {
 } from '@core/agent-fold/client';
 import { subscribeSocketSessionStarted } from '@queries/agent-session/queue-sync';
 import type { AgentSessionLogEvent } from '@queries/agent-session/realtime-protocol';
+import { subscribeAgentSessionUpdated } from '@queries/agent-session/session-metadata-sync';
 import type {
   FoldedStreamEvent,
   TurnState,
@@ -134,6 +135,9 @@ export class AgentSession {
   private buffered: FoldInput[] = [];
   private readonly listeners = new Set<AgentSessionListener>();
   private readonly unsubscribeSocket: () => void;
+  private readonly unsubscribeUpdated: () => void;
+  private syncing = false;
+  private resyncRequested = false;
   /**
    * Serializes worker pushes so inputs reach the machine in the order this
    * class saw them, even though each push is its own await.
@@ -162,6 +166,9 @@ export class AgentSession {
     // that arrive during the load are buffered and folded after the snapshot.
     this.unsubscribeSocket = subscribeSocketSessionStarted(() => {
       void this.resync();
+    });
+    this.unsubscribeUpdated = subscribeAgentSessionUpdated((event) => {
+      if (event.agentSessionId === this.id) void this.resync();
     });
     this.trace = new SessionLoadTrace(id);
     this.loading = this.startLoad();
@@ -238,7 +245,7 @@ export class AgentSession {
     // confirms it by content whatever id the harness accepted it under.
     const accepted = result.value.actionId;
     if (accepted !== actionId && action.type !== 'stop') {
-      void this.apply([
+      void this.enqueueAll([
         { kind: 'retracted', actionId },
         {
           kind: 'speculated',
@@ -343,6 +350,7 @@ export class AgentSession {
     this.trace.end('released');
     this.listeners.clear();
     this.unsubscribeSocket();
+    this.unsubscribeUpdated();
     closeSession(this.id);
   }
 
@@ -385,14 +393,10 @@ export class AgentSession {
     await this.apply([{ kind: 'snapshot', rows: log.value.entries }]);
     // Inputs can keep arriving while each push is in flight; drain until a
     // check finds nothing, then flip ready so the next one goes straight in.
-    while (this.buffered.length > 0) {
-      const inputs = this.buffered;
-      this.buffered = [];
-      await this.apply(inputs);
-    }
-    this.ready = true;
+    await this.drainBuffered();
     this.trace.folded(foldStartedAt);
     this.setTurn((await readSession(this.id)).metadata.turn);
+    if (this.resyncRequested) void this.resync();
     return { session: session.value, bot: log.value.bot };
   }
 
@@ -402,10 +406,38 @@ export class AgentSession {
    * and settle any speculation the log confirmed meanwhile.
    */
   private async resync(): Promise<void> {
-    if (!this.ready || this.closed) return;
-    const log = await agentHarnessServiceClient.getLog(this.id);
-    if (log.isErr() || this.closed) return;
-    await this.apply([{ kind: 'snapshot', rows: log.value.entries }]);
+    if (this.closed) return;
+    this.resyncRequested = true;
+    if (!this.ready || this.syncing) return;
+    this.syncing = true;
+    this.ready = false;
+    try {
+      do {
+        this.resyncRequested = false;
+        const log = await agentHarnessServiceClient.getLog(this.id);
+        if (this.closed) return;
+        if (log.isOk())
+          await this.apply([{ kind: 'snapshot', rows: log.value.entries }]);
+      } while (this.resyncRequested);
+    } catch (error: unknown) {
+      console.warn('[agent-session] log could not be refreshed', error);
+    } finally {
+      // A snapshot may predate frames received during its fetch. Replay those
+      // frames after it, retaining speculation and the fold's overlap deduping.
+      await this.drainBuffered();
+      this.syncing = false;
+      if (this.resyncRequested && !this.closed) void this.resync();
+    }
+  }
+
+  private async drainBuffered(): Promise<void> {
+    while (!this.closed && this.buffered.length > 0) {
+      const inputs = this.buffered;
+      this.buffered = [];
+      await this.apply(inputs);
+    }
+    // No await between observing an empty buffer and accepting live inputs.
+    if (!this.closed) this.ready = true;
   }
 
   private enqueue(input: FoldInput): Promise<void> {
