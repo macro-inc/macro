@@ -12,11 +12,26 @@ vi.mock('@core/block', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@core/block')>()),
   useBlockId: () => projectId,
 }));
-vi.mock('@app/features/projects/project-detail', () => ({
-  ProjectDetail: (props: unknown) => {
-    mocks.detail(props);
-    return <p>project detail</p>;
-  },
+vi.mock('@app/features/projects/project-detail', async () => {
+  const { ViewBreadcrumbs } = await import('@app/components/view-shell');
+  const { useTagSets } = await import('@property/tags/tag-sets-context');
+  return {
+    // Throws, as the real view's top bar and task list do, without the
+    // breadcrumb root and tag sets the Tasks view normally supplies.
+    ProjectDetail: (props: unknown) => {
+      mocks.detail(props);
+      useTagSets();
+      return (
+        <>
+          <ViewBreadcrumbs.Outlet />
+          <p>project detail</p>
+        </>
+      );
+    },
+  };
+});
+vi.mock('@queries/properties/tags', () => ({
+  useTagsQuery: () => ({ isPending: false, isFetched: true, data: [] }),
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => mocks.flag,
@@ -70,6 +85,13 @@ describe('initiative block', () => {
     expect(screen.getByText('project detail')).toBeTruthy();
     expect(mocks.detail).toHaveBeenCalledWith({
       route: { id: projectId, section: 'overview' },
+      breadcrumb: {
+        entry: {
+          value: `initiative:${projectId}`,
+          data: { type: 'initiative', id: projectId },
+        },
+        order: 0,
+      },
     });
   });
 
