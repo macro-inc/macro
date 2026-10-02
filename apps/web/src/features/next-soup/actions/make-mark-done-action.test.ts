@@ -204,6 +204,56 @@ describe('makeMarkDoneAction', () => {
     dispose();
   });
 
+  it.each(['resolve', 'reject'] as const)(
+    'waits for the mirror to %s before publishing ordinary Undo',
+    async (settlement) => {
+      const mirror = {
+        type: 'reminder',
+        id: 'mirror',
+        emailFollowup: { threadId: 'thread' },
+      } as EntityData;
+      const ordinary = { type: 'reminder', id: 'ordinary' } as EntityData;
+      let resolveMirror!: () => void;
+      let rejectMirror!: (reason: Error) => void;
+      const pendingMirror = new Promise<void>((resolve, reject) => {
+        resolveMirror = resolve;
+        rejectMirror = reject;
+      });
+      const failure = new Error('mirror failed');
+      const { action, dispose } = createAction();
+      const onUndoHandle = vi.fn();
+      const ordinaryHandle = { dispose: vi.fn() };
+      const options = mocks.undoableOptionsFactory() as {
+        onPushed: (
+          handle: { dispose: () => void },
+          variables: unknown
+        ) => unknown;
+      };
+      mocks.mutateAsync.mockImplementationOnce(() => pendingMirror);
+      mocks.mutateAsync.mockImplementationOnce(async (variables) => {
+        options.onPushed(ordinaryHandle, variables);
+      });
+      try {
+        const result = action
+          .execute([mirror, ordinary], undefined, { onUndoHandle })
+          .catch((error) => error);
+        await Promise.resolve();
+        expect(mocks.mutateAsync).toHaveBeenCalledTimes(1);
+        expect(onUndoHandle).not.toHaveBeenCalled();
+        if (settlement === 'reject') rejectMirror(failure);
+        else resolveMirror();
+        expect(await result).toBe(
+          settlement === 'reject' ? failure : undefined
+        );
+        expect(mocks.mutateAsync).toHaveBeenCalledTimes(2);
+        expect(onUndoHandle).toHaveBeenCalledWith(ordinaryHandle);
+        expect(ordinaryHandle.dispose).not.toHaveBeenCalled();
+      } finally {
+        dispose();
+      }
+    }
+  );
+
   it.each(['mirror', 'ordinary'])(
     'attempts both mixed groups when the %s group fails',
     async (failedId) => {

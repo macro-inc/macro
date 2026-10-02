@@ -282,17 +282,25 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
       (entity) => entity.type === 'reminder' && entity.emailFollowup
     );
     if (mirrors.length > 0 && mirrors.length < targets.length) {
-      const results = await Promise.allSettled([
-        execute(mirrors, undefined, { silent: opts?.silent }),
-        execute(
-          targets.filter((entity) => !mirrors.includes(entity)),
-          restoreFocus,
-          opts
-        ),
-      ]);
-      // Each transaction owns its error feedback and rollback. Wait for both so
-      // a failed mirror cannot suppress ordinary writes or their Undo handle.
-      const failure = results.find((result) => result.status === 'rejected');
+      let failure: { reason: unknown } | undefined;
+      // Settle mirrors first so their non-undoable entry cannot overwrite the
+      // ordinary group's Undo toast or clear its Redo stack after completion.
+      // A failed group must not prevent the remaining writes from being tried.
+      for (const attempt of [
+        () => execute(mirrors, undefined, { silent: opts?.silent }),
+        () =>
+          execute(
+            targets.filter((entity) => !mirrors.includes(entity)),
+            restoreFocus,
+            opts
+          ),
+      ]) {
+        try {
+          await attempt();
+        } catch (reason) {
+          failure ??= { reason };
+        }
+      }
       if (failure) throw failure.reason;
       return;
     }
