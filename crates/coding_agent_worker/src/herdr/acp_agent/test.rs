@@ -153,3 +153,153 @@ fn codex_permission_dialogs_are_titled_from_the_screen() {
         "Codex is asking for permission"
     );
 }
+
+fn test_adapter(root: &Path) -> (Arc<Adapter>, mpsc::UnboundedReceiver<Value>) {
+    let (out, receiver) = mpsc::unbounded_channel();
+    (
+        Arc::new(Adapter {
+            store: Store(root.to_owned()),
+            shutdown: CancellationToken::new(),
+            out,
+            pending: Mutex::new(HashMap::new()),
+            next_id: AtomicU64::new(0),
+            sessions: Mutex::new(HashMap::new()),
+            herdr: None,
+            options: AdapterOptions::default(),
+            home: None,
+            claimed: Mutex::new(std::collections::HashSet::new()),
+        }),
+        receiver,
+    )
+}
+
+fn save_transcript(root: &Path, id: &str) -> PathBuf {
+    let transcript = root.join(format!("{id}.jsonl"));
+    std::fs::write(&transcript, "").unwrap();
+    Store(root.to_owned())
+        .save(&Record {
+            version: 1,
+            id: id.to_owned(),
+            kind: TuiAgent::Claude,
+            cwd: root.to_owned(),
+            model: "sonnet".into(),
+            native_id: Some(id.to_owned()),
+            transcript: Some(transcript.clone()),
+            started: 1,
+        })
+        .unwrap();
+    transcript
+}
+
+fn append_turn(path: &Path, id: &str, prompt: &str) {
+    use std::io::Write as _;
+    let mut file = std::fs::OpenOptions::new().append(true).open(path).unwrap();
+    writeln!(
+        file,
+        "{}",
+        json!({"type":"user", "uuid":format!("{id}-user"), "message":{"content":prompt}})
+    )
+    .unwrap();
+    writeln!(file, "{}", json!({"type":"assistant", "uuid":format!("{id}-agent"), "message":{"content":[{"type":"text", "text":"done"}], "stop_reason":"end_turn"}})).unwrap();
+}
+
+#[tokio::test]
+async fn restore_replays_history_and_observes_local_turns_without_a_macro_prompt() {
+    let root = tempfile::tempdir().unwrap();
+    let id = uuid::Uuid::new_v4().to_string();
+    let transcript = save_transcript(root.path(), &id);
+    append_turn(&transcript, "first", "historical prompt");
+    let (adapter, mut output) = test_adapter(root.path());
+    adapter
+        .load_session(&json!({"sessionId":id, "cwd":root.path(), "mcpServers":[]}))
+        .await
+        .unwrap();
+    let history: Vec<_> = std::iter::from_fn(|| output.try_recv().ok()).collect();
+    assert_eq!(history.len(), 3);
+    assert_eq!(
+        history[0]["params"]["update"]["content"]["text"],
+        "historical prompt"
+    );
+    assert_eq!(history[2]["method"], "_session/turn_complete");
+    append_turn(&transcript, "second", "local prompt");
+    append_turn(&transcript, "third", "another local prompt");
+    let mut live = Vec::new();
+    for _ in 0..6 {
+        live.push(
+            tokio::time::timeout(Duration::from_secs(2), output.recv())
+                .await
+                .unwrap()
+                .unwrap(),
+        );
+    }
+    assert_eq!(
+        live[0]["params"]["update"]["content"]["text"],
+        "local prompt"
+    );
+    assert_eq!(live[2]["method"], "_session/turn_complete");
+    assert_eq!(
+        live[3]["params"]["update"]["content"]["text"],
+        "another local prompt"
+    );
+    assert_eq!(live[5]["method"], "_session/turn_complete");
+    assert!(
+        tokio::time::timeout(Duration::from_millis(400), output.recv())
+            .await
+            .is_err()
+    );
+    adapter.shutdown.cancel();
+}
+
+#[tokio::test]
+async fn restore_rejects_a_different_workspace_or_agent() {
+    let root = tempfile::tempdir().unwrap();
+    let id = uuid::Uuid::new_v4().to_string();
+    save_transcript(root.path(), &id);
+    let (adapter, mut output) = test_adapter(root.path());
+    assert!(
+        adapter
+            .load_session(&json!({"sessionId":id,"cwd":"/other"}))
+            .await
+            .is_err()
+    );
+    assert!(output.try_recv().is_err());
+    let mut record = adapter.store.load(&id).unwrap();
+    record.kind = TuiAgent::Codex;
+    adapter.store.save(&record).unwrap();
+    assert!(
+        adapter
+            .load_session(&json!({"sessionId":id,"cwd":root.path()}))
+            .await
+            .is_err()
+    );
+}
+
+#[tokio::test]
+async fn observer_waits_until_the_macro_prompt_response_has_been_sent() {
+    let root = tempfile::tempdir().unwrap();
+    let id = uuid::Uuid::new_v4().to_string();
+    let transcript = save_transcript(root.path(), &id);
+    let (adapter, mut output) = test_adapter(root.path());
+    adapter
+        .load_session(&json!({"sessionId":id,"cwd":root.path()}))
+        .await
+        .unwrap();
+    let session = adapter.session(&json!({"sessionId":id})).unwrap();
+    session.prompt_pending.store(true, Ordering::SeqCst);
+    append_turn(&transcript, "first", "local prompt");
+    assert!(
+        tokio::time::timeout(Duration::from_millis(400), output.recv())
+            .await
+            .is_err()
+    );
+    session.prompt_pending.store(false, Ordering::SeqCst);
+    let update = tokio::time::timeout(Duration::from_secs(2), output.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        update["params"]["update"]["content"]["text"],
+        "local prompt"
+    );
+    adapter.shutdown.cancel();
+}
