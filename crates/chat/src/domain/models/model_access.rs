@@ -4,11 +4,12 @@
 //! users may use every model in [`CHAT_MODELS`].
 
 /// The chat models offered to users, best-first.
+///
+/// Only the current Anthropic generation is offered; retired Claude ids are
+/// deliberately absent so no surface advertises them.
 pub const CHAT_MODELS: &[&str] = &[
-    "anthropic/claude-sonnet-5",
-    "anthropic/claude-opus-5",
-    "anthropic/claude-fable-5-1",
-    "anthropic/claude-haiku-4-5",
+    "anthropic/claude-sonnet-5-5",
+    "anthropic/claude-opus-5-5",
     "openai/gpt-6-astra",
     "openai/gpt-5.6",
     "openai/gpt-5.6-mini",
@@ -17,7 +18,7 @@ pub const CHAT_MODELS: &[&str] = &[
 ];
 
 /// The default model for professional (paid) users.
-pub const PAID_DEFAULT_MODEL: &str = "anthropic/claude-sonnet-5";
+pub const PAID_DEFAULT_MODEL: &str = "anthropic/claude-sonnet-5-5";
 
 /// The only model available to free (non-professional) users.
-pub const FREE_MODEL: &str = "anthropic/claude-haiku-4-5";
+pub const FREE_MODEL: &str = "anthropic/claude-sonnet-5-5";

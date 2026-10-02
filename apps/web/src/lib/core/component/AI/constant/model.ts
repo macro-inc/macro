@@ -8,12 +8,13 @@ import GoogleIcon from '@phosphor-fill/google-logo-fill.svg';
  * picks the provider) — the backend `AgentModel` enum is intentionally not
  * exposed to the frontend. Reference these constants instead of hardcoding
  * strings.
+ *
+ * Only the current Anthropic generation is offered; retired Claude ids are
+ * absent on purpose, so a persisted chat on one falls back to the default.
  */
 export const Model = {
-  sonnet5: 'anthropic/claude-sonnet-5',
-  opus5: 'anthropic/claude-opus-5',
-  fable51: 'anthropic/claude-fable-5-1',
-  haiku45: 'anthropic/claude-haiku-4-5',
+  sonnet55: 'anthropic/claude-sonnet-5-5',
+  opus55: 'anthropic/claude-opus-5-5',
   gpt6Astra: 'openai/gpt-6-astra',
   gpt56: 'openai/gpt-5.6',
   gpt56Mini: 'openai/gpt-5.6-mini',
@@ -25,20 +26,13 @@ export type Model = (typeof Model)[keyof typeof Model];
 /** Alias kept for existing call sites. */
 export type TModel = Model;
 
-/** Models intentionally hidden from chat model pickers. */
-export function isModelPickerOption(modelId: string): boolean {
-  return modelId !== Model.fable51;
-}
-
 type ExhaustiveMap = {
   [K in TModel]: any;
 };
 
 export const MODEL_PRETTYNAME: ExhaustiveMap = {
-  'anthropic/claude-sonnet-5': 'Sonnet 5',
-  'anthropic/claude-opus-5': 'Opus 5',
-  'anthropic/claude-fable-5-1': 'Fable 5.1',
-  'anthropic/claude-haiku-4-5': 'Haiku 4.5',
+  'anthropic/claude-sonnet-5-5': 'Sonnet 5.5',
+  'anthropic/claude-opus-5-5': 'Opus 5.5',
   'openai/gpt-6-astra': 'GPT-6 Astra',
   'openai/gpt-5.6': 'GPT-5.6',
   'openai/gpt-5.6-mini': 'GPT-5.6 mini',
@@ -46,10 +40,8 @@ export const MODEL_PRETTYNAME: ExhaustiveMap = {
 } as const;
 
 export const MODEL_PROVIDER_ICON: ExhaustiveMap = {
-  'anthropic/claude-sonnet-5': ClaudeIcon,
-  'anthropic/claude-opus-5': ClaudeIcon,
-  'anthropic/claude-fable-5-1': ClaudeIcon,
-  'anthropic/claude-haiku-4-5': ClaudeIcon,
+  'anthropic/claude-sonnet-5-5': ClaudeIcon,
+  'anthropic/claude-opus-5-5': ClaudeIcon,
   'openai/gpt-6-astra': OpenAiIcon,
   'openai/gpt-5.6': OpenAiIcon,
   'openai/gpt-5.6-mini': OpenAiIcon,
@@ -58,17 +50,15 @@ export const MODEL_PROVIDER_ICON: ExhaustiveMap = {
 
 /**
  * How fast each model draws down a paid plan's included AI, relative to the
- * default model (Sonnet 5 = 1). Mirrors the per-token rates in `ai_pricing`
- * (output price, which dominates chat cost): Haiku $5, Sonnet $10, Opus $25,
- * Fable $50, GPT-6 Astra $50, GPT-5.6 $30, GPT-5.6 mini $4.50, Gemini 3.8
- * Flash $3.75 per million tokens. Shown in the picker so choosing a heavy
- * model is a deliberate trade.
+ * default model (Sonnet 5.5 = 1). Mirrors the per-token rates in `ai_pricing`
+ * (output price, which dominates chat cost): Sonnet $10, Opus $25, GPT-6
+ * Astra $50, GPT-5.6 $30, GPT-5.6 mini $4.50, Gemini 3.8 Flash $3.75 per
+ * million tokens. Shown in the picker so choosing a heavy model is a
+ * deliberate trade.
  */
 export const MODEL_USAGE_MULTIPLIER: { [K in TModel]: number } = {
-  'anthropic/claude-sonnet-5': 1,
-  'anthropic/claude-opus-5': 2.5,
-  'anthropic/claude-fable-5-1': 5,
-  'anthropic/claude-haiku-4-5': 0.5,
+  'anthropic/claude-sonnet-5-5': 1,
+  'anthropic/claude-opus-5-5': 2.5,
   'openai/gpt-6-astra': 5,
   'openai/gpt-5.6': 3,
   'openai/gpt-5.6-mini': 0.45,
@@ -86,14 +76,17 @@ export function modelUsageHint(model: TModel): string | undefined {
 }
 
 /** Default model for paid users. */
-export const DEFAULT_MODEL: TModel = Model.sonnet5;
+export const DEFAULT_MODEL: TModel = Model.sonnet55;
 
 /**
  * Default model for free users. Free users aren't entitled to the premium
- * "smart" models (which the backend rejects with a 403), so they start on the
- * fast model instead of Opus.
+ * models (which the backend rejects with a 403), so they start on the
+ * current Sonnet, the only model the free plan may use.
  */
-export const FREE_DEFAULT_MODEL: TModel = Model.haiku45;
+export const FREE_DEFAULT_MODEL: TModel = Model.sonnet55;
+
+/** Models a paid user may select. */
+export const PAID_MODELS: readonly TModel[] = Object.values(Model);
 
 /**
  * Model for database AI: question answering, the database assistant, and chats
@@ -102,19 +95,11 @@ export const FREE_DEFAULT_MODEL: TModel = Model.haiku45;
 export const DATABASE_MODEL: TModel = Model.gemini38Flash;
 
 /**
- * Models a paid user may select. Fable remains a known model so persisted
- * chats can still be parsed, but it is intentionally absent from the picker.
- */
-export const PAID_MODELS: readonly TModel[] =
-  Object.values(Model).filter(isModelPickerOption);
-
-/**
- * Models a free user may select. Free users only get the fast model
- * (`FREE_DEFAULT_MODEL`); every other model is paid-only and shows locked in
- * the selector, where selecting one opens the paywall instead of being sent
- * and rejected by the backend. The heavy models (Opus, Fable, GPT-6 Astra)
- * are on every paid plan; they just draw the included AI down faster, see
- * `MODEL_USAGE_MULTIPLIER`.
+ * Models a free user may select. Free users only get `FREE_DEFAULT_MODEL`;
+ * every other model is paid-only and shows locked in the selector, where
+ * selecting one opens the paywall instead of being sent and rejected by the
+ * backend. The heavy models (Opus, GPT-6 Astra) are on every paid plan; they
+ * just draw the included AI down faster, see `MODEL_USAGE_MULTIPLIER`.
  */
 export const FREE_MODELS: readonly TModel[] = [FREE_DEFAULT_MODEL];
 
@@ -137,10 +122,8 @@ export function databaseModelForPlan(hasPaidAccess: boolean): TModel {
 
 /** Provider serving each model — mirrors the backend `provider` field. */
 export const MODEL_PROVIDER: ExhaustiveMap = {
-  'anthropic/claude-sonnet-5': 'anthropic',
-  'anthropic/claude-opus-5': 'anthropic',
-  'anthropic/claude-fable-5-1': 'anthropic',
-  'anthropic/claude-haiku-4-5': 'anthropic',
+  'anthropic/claude-sonnet-5-5': 'anthropic',
+  'anthropic/claude-opus-5-5': 'anthropic',
   'openai/gpt-6-astra': 'openai',
   'openai/gpt-5.6': 'openai',
   'openai/gpt-5.6-mini': 'openai',

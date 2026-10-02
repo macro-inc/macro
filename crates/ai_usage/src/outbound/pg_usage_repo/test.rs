@@ -37,6 +37,22 @@ async fn seeded_pricing_is_available(pool: PgPool) {
             output: 25.0
         })
     );
+    let price = repo.get_pricing("claude-opus-5-5").await.unwrap();
+    assert_eq!(
+        price,
+        Some(ModelPricing::Tokens {
+            input: 5.0,
+            output: 25.0
+        })
+    );
+    let price = repo.get_pricing("claude-sonnet-5-5").await.unwrap();
+    assert_eq!(
+        price,
+        Some(ModelPricing::Tokens {
+            input: 2.0,
+            output: 10.0
+        })
+    );
     assert_eq!(
         repo.get_pricing("whisper-1").await.unwrap(),
         Some(ModelPricing::Audio { per_minute: 0.006 })

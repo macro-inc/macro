@@ -486,21 +486,21 @@ function ProviderFailureChat() {
   return (
     <ProviderFailureDemo
       label="Provider failure - switch-model fallback"
-      initialModel={Model.opus5}
+      initialModel={Model.opus55}
       availableModels={GALLERY_MODELS}
     />
   );
 }
 
-// Free: all models are shown but only Haiku is available, so there is no
+// Free: all models are shown but only Sonnet is available, so there is no
 // accessible model on another provider — the first failure already shows the
 // outage message (no switch button).
 function FreeProviderFailureChat() {
   return (
     <ProviderFailureDemo
-      label="Provider failure (free) - all shown, only Haiku available"
-      initialModel={Model.haiku45}
-      availableModels={[Model.haiku45]}
+      label="Provider failure (free) - all shown, only Sonnet available"
+      initialModel={Model.sonnet55}
+      availableModels={[Model.sonnet55]}
     />
   );
 }

@@ -186,11 +186,12 @@ the shimmer.
   Macro's models use the same searchable catalog as running sessions: a short
   **Recommended** list and a **More models** submenu grouped by model family,
   followed by **Agents** and **Coding agents** sections. Models have readable
-  names (for example, **Sonnet 5**) and provider or model icons aligned with the
+  names (for example, **Sonnet 5.5**) and provider or model icons aligned with the
   agent icons. The in-memory catalog offers the closed Anthropic and OpenAI chat
   models; Kimi, DeepSeek, Muse, GLM, Qwen, MiniMax, GPT OSS, and Nemotron
-  open-weight models; and Google's **Gemini 3.8 Flash**. Older Sonnet and Opus
-  versions are not offered.
+  open-weight models; and Google's **Gemini 3.8 Flash**. The only Anthropic
+  models are **Sonnet 5.5** and **Opus 5.5**; older Claude versions (Sonnet 5,
+  Opus 5, Fable 5.1, Haiku 4.5) are not offered.
   Selecting a model here selects
   the default runtime and applies that model to the next send, retracting the repository drawer.
   A model chosen from that catalog is remembered in local storage as the
@@ -572,10 +573,10 @@ Desktop composer and conversation body text use 15px type. Mobile keeps its
 existing text sizing.
 
 - Contenteditable composer (placeholder `Ask AI, @mention anything` / `Describe the edit…`).
-- Model picker button showing the current model (e.g. `Haiku 4.5`). Paid plans list
-  `Sonnet 5`, `Opus 5`, `Fable 5.1`, `Haiku 4.5`, `GPT-6 Astra`, `GPT-5.6`, `GPT-5.6 mini`;
+- Model picker button showing the current model (e.g. `Sonnet 5.5`). Paid plans list
+  `Sonnet 5.5`, `Opus 5.5`, `GPT-6 Astra`, `GPT-5.6`, `GPT-5.6 mini`;
   in dev, heavy models carry a `2.5× usage` / `5× usage` hint.
-  On the free plan everything but `Haiku 4.5` is
+  On the free plan everything but `Sonnet 5.5` is
   dimmed with a lock and opens the `Smart models are premium` paywall when clicked.
 - `Send` button (disabled when empty). While streaming it becomes `Stop generating`.
 
@@ -746,14 +747,14 @@ On mobile the composer (and any queued prompts above it) floats in the bottom
 accessory region above the dock — same placement as channel and AI chat — so it
 stays tappable and clear of the home indicator. The box is full width; the text
 sits on top and a footer row holds the model (left, as a provider logo and
-name, e.g. `✳ Sonnet 5 ⌄`) and **Send** (right). On touch devices Enter on the
+name, e.g. `✳ Sonnet 5.5 ⌄`) and **Send** (right). On touch devices Enter on the
 virtual keyboard inserts a newline and never sends; only **Send** submits, the
 same as channel composers. This also applies to the Agents workspace session
 and new-conversation inputs and to the mobile **Ask AI** composer. On desktop
 Enter still sends and Shift+Enter inserts a newline. Tapping the model opens a
 bottom sheet listing every model the same way, with a check on the current one
 — pick a row to switch. Models read as names even when the runtime reports
-only ids: Macro Agent's `anthropic/claude-sonnet-5` shows as **Sonnet 5**. On desktop the
+only ids: Macro Agent's `anthropic/claude-sonnet-5-5` shows as **Sonnet 5.5**. On desktop the
 transcript and composer use the shared channel message width so expanding **Context** only
 grows vertically; your messages are right-aligned bubbles and the model pill
 sits above the box. Tap the session title
@@ -1151,7 +1152,7 @@ There is no periodic PR lookup polling.
 Open the model selector and hover a model to choose its reasoning effort in the
 submenu. Keyboard users open it with Right Arrow; touch users tap the model.
 Cursor and Macro's in-memory agent load the hovered model's own advertised
-choices. The selected label includes the effort, such as `Sonnet 5 · High`;
+choices. The selected label includes the effort, such as `Sonnet 5.5 · High`;
 there is no separate effort control in the input box. Models without effort
 support remain selectable through `Use <model>` (or a desktop click/Enter).
 Default keeps the model's existing behavior.

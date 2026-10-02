@@ -81,7 +81,7 @@ vi.mock('@service-cognition/client', () => ({
 
 const request: ChatSendInput = {
   content: 'Summarize **these documents**\nInclude the key decisions.',
-  model: Model.sonnet5,
+  model: Model.sonnet55,
   attachments: [
     { entity_id: 'document-1', entity_type: 'document' },
     { entity_id: 'project-1', entity_type: 'project' },
