@@ -145,10 +145,18 @@ impl<T: TeamService> UserDeletionGateway for UserDeletionAdapter<T> {
         let Some(customer_id) = customer_id else {
             return Ok(());
         };
-        let customer_id: stripe::CustomerId = customer_id
-            .parse()
-            .map_err(|error| Report::new(error).into_dynamic())
-            .context("invalid stripe customer id")?;
+        let customer_id: stripe::CustomerId = match customer_id.parse() {
+            Ok(customer_id) => customer_id,
+            // Local stacks store placeholder ids: there is nothing in Stripe to
+            // delete, and failing here would block the deletion forever.
+            Err(error) => {
+                tracing::warn!(
+                    error = ?error,
+                    "stripe customer id is not a stripe id; skipping customer deletion"
+                );
+                return Ok(());
+            }
+        };
 
         stripe::Customer::delete(&self.stripe, &customer_id)
             .await
