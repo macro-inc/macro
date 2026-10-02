@@ -16,8 +16,8 @@ export function TeamSetup(props: { children: JSX.Element }) {
           Built for teams.
         </h1>
         <h2 class="mt-6 max-w-[440px] text-sm font-normal leading-6 text-ink-muted text-balance sm:text-[15px]">
-          Invite your team now to make the most of the free plan. Update if you
-          need more AI/storage.
+          Bring your team into one workspace. Choose Guest access or upgrade for
+          more AI and storage.
         </h2>
       </header>
       <div class="mt-9 w-full">{props.children}</div>

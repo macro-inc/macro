@@ -223,7 +223,8 @@ function buildSteps(
     {
       key: 'plan',
       title: 'Choose your plan',
-      subtitle: 'Start free, or pick a paid plan. You can change this anytime.',
+      subtitle:
+        'Join as a Guest, or upgrade to a paid plan. You can change this anytime.',
       wide: true,
       render: (controls) => (
         <PlanStep

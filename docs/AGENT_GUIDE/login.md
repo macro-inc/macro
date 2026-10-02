@@ -87,6 +87,29 @@ Use browser Back to return from GitHub: when the page is restored from BFCache,
 it refreshes link status and restores the retry prompt only if reconnection is
 still needed.
 
+## Public onboarding preview
+
+The standalone marketing development route `/onboarding-preview.html` continues
+from team setup to a final trial screen. The payment card starts with Apple Pay, Google Pay, and the card-number input,
+with no plan header or divider. The card scrolls internally at a maximum of
+360px or half the viewport height. Entering at least 15 digits in the local
+preview input reveals expiration, security code, country, and ZIP previews;
+clearing it hides them again. Use a test number such as `4242 4242 4242 4242`.
+The primary CTA reads `Start 30 day trial`, with the billing and cancellation
+note immediately below it. The quiet `Continue as Guest` scroll cue beneath it
+moves focus to the below-fold Guest and Pro comparison,
+using the same layout as the security details. The table includes email account
+limits, the email watermark, AI, storage, and calls. Each comparison column ends
+with its own compact CTA. `Continue as Guest`
+finishes the preview without a confirmation modal; `Continue with Pro` in the
+comparison returns to the payment section and its heading.
+Reduced-motion users scroll immediately. Wallet buttons only display a
+preview message. The card number stays in the input only and is never sent or
+saved; the remaining fields are display-only. Both plan
+continuation buttons finish the preview at the login URL; they do not purchase a
+subscription. Back returns to team setup. This screen is preview-only and does
+not change the authenticated onboarding or Stripe checkout flow.
+
 ## Mailpit (local email)
 
 - UI: `http://localhost:<mailpit-port>/`

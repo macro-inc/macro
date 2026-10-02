@@ -17,7 +17,7 @@ export type PaidPlanTier = Exclude<PlanTier, 'free'>;
 
 const FREE_PLAN = {
   tier: 'free',
-  name: 'Free',
+  name: 'Guest',
   price: 0,
   highlighted: false,
   aiIncluded: 0,

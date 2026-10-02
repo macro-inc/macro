@@ -88,7 +88,7 @@ export function InviteOfferPanel(props: {
           <ArrowRight class="size-5" />
         </Button>
         <SkipButton
-          label="Continue with Free instead"
+          label="Continue as Guest instead"
           disabled={props.finishing}
           onClick={() => props.onContinueFree()}
         />

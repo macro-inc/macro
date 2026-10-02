@@ -35,7 +35,7 @@ const comparisonRows: ComparisonRow[] = [
     them: '$10–$19 per seat, plus AI at $14–$33',
   },
   {
-    feature: 'Free plan',
+    feature: 'No-cost access',
     macro: 'Full workspace for personal use, with storage and AI limits',
     them: 'Free with storage capped at 60MB and limited AI',
   },
@@ -499,10 +499,9 @@ export default function MacroVsClickUpPost() {
           item, no module matrix.
         </p>
         <p>
-          We also offer a free plan that covers all you need for personal use
-          with some limits on storage and the AI models you can access. Finally,
-          enterprises can get a custom deployment that adds SSO, compliance and
-          self-hosting.
+          You can also join a workspace as a Guest for free, with limits on
+          storage and the AI models you can access. Finally, enterprises can get
+          a custom deployment that adds SSO, compliance and self-hosting.
         </p>
         <p>
           ClickUp's seat price starts lower — $10 to $19 before AI — but the
@@ -601,13 +600,12 @@ export default function MacroVsClickUpPost() {
             </p>
           </PostFaqItem>
 
-          <PostFaqItem question="How do ClickUp and Macro's free plans compare?">
+          <PostFaqItem question="How does Macro Guest access compare with ClickUp's free plan?">
             <p>
               ClickUp's free plan is built for testing the product. You get
               unlimited tasks and members, but storage is capped at 60MB, and
-              you get limited access to AI tools. Our free plan gives you full
-              workspace access with a "Sent with Macro" signature and limits on
-              storage and AI.
+              you get limited access to AI tools. Guest access in Macro is free,
+              with a "Sent with Macro" signature and limits on storage and AI.
             </p>
           </PostFaqItem>
 

@@ -214,7 +214,9 @@ function PlanPicker(props: {
             ? selected() === 'free'
               ? 'Setting up your workspace…'
               : 'Heading to checkout…'
-            : `Continue with ${PLAN_BY_TIER[selected()].name}`}
+            : selected() === 'free'
+              ? 'Continue as Guest'
+              : `Continue with ${PLAN_BY_TIER[selected()].name}`}
           <ArrowRight class="size-5" />
         </Button>
         <SkipButton

@@ -213,11 +213,11 @@ export function RouteChannels() {
             a: 'No. These demos use fictional local data. Messages, edits, and task creation never reach your account.',
           },
           {
-            q: 'Is there a free plan?',
+            q: 'Can I join as a Guest for free?',
             a: (
               <>
-                Yes. See <a href="/pricing">pricing</a> for current plans and
-                limits.
+                Yes. Guest access is free. See <a href="/pricing">pricing</a>{' '}
+                for current access and limits.
               </>
             ),
           },

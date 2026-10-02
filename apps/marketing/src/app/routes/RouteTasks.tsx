@@ -75,11 +75,11 @@ const tasksFaq = [
     ),
   },
   {
-    q: 'Is there a free plan?',
+    q: 'Can I join as a Guest for free?',
     a: (
       <>
-        Yes. Tasks are included alongside email, chat, documents, and AI. See{' '}
-        <a href="/pricing">pricing</a> for current usage limits.
+        Yes. Guest access includes tasks alongside email, chat, documents, and
+        AI. See <a href="/pricing">pricing</a> for current usage limits.
       </>
     ),
   },
