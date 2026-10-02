@@ -101,8 +101,7 @@ export default defineConfig({
       },
       {
         extends: false,
-        plugins: [tsconfigPaths(), solidPlugin()],
-        ssr: { resolve: { conditions: ['browser', 'development'] } },
+        plugins: [tsconfigPaths()],
         test: {
           environment: 'jsdom',
           globals: true,

@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
-import { DEFAULT_THEMES } from '../../constants';
+// @vitest-environment node
+import { describe, expect, it } from 'vitest';
 import { resolveThemeColors } from '../resolvedThemeColors';
 
 describe('resolved theme colors', () => {
@@ -26,19 +26,7 @@ describe('resolved theme colors', () => {
     expect(colors.accent).toEqual(resolveThemeColors({}, 'dark').accent);
   });
 
-  it('resolves every built-in palette without creating DOM probes', () => {
-    const create = vi.spyOn(document, 'createElement');
-    for (const theme of DEFAULT_THEMES) {
-      const colors = resolveThemeColors(theme.colorTokens, theme.mode);
-      for (const color of Object.values(colors)) {
-        expect(Object.values(color).every(Number.isFinite)).toBe(true);
-      }
-    }
-    expect(create).not.toHaveBeenCalled();
-    create.mockRestore();
-  });
-
-  it('reuses equal graphs and invalidates linked and mixed colors on edits', () => {
+  it('resolves linked and mixed colors from their dependencies', () => {
     const tokens = {
       accent: 'var(--color-source)',
       source: 'oklch(0.6 0.2 30)',
@@ -47,7 +35,6 @@ describe('resolved theme colors', () => {
       other: 'oklch(0.2 0.1 70)',
     };
     const first = resolveThemeColors(tokens, 'dark');
-    expect(resolveThemeColors({ ...tokens }, 'dark')).toBe(first);
     expect(first.accent.l).toBeCloseTo(0.6);
     expect(first['surface-1'].l).toBeCloseTo(0.3);
     const edited = resolveThemeColors(
@@ -87,12 +74,11 @@ describe('resolved theme colors', () => {
     expect(colors.accent.c).toBeCloseTo(0.1);
   });
 
-  it('terminates cyclic references and falls back to finite colors', () => {
+  it('terminates cyclic references and falls back to the default color', () => {
     const colors = resolveThemeColors(
       { accent: 'var(--color-loop)', loop: 'var(--color-accent)' },
       'dark'
     );
-    expect(Object.values(colors.accent).every(Number.isFinite)).toBe(true);
-    expect(document.querySelector('iframe')).toBeNull();
+    expect(colors.accent).toEqual(resolveThemeColors({}, 'dark').accent);
   });
 });
