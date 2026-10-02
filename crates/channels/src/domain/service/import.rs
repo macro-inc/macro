@@ -11,7 +11,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use std::collections::HashSet;
 use uuid::Uuid;
 
-impl<R, E, P, M, F> ChannelServiceImpl<R, E, P, M, F>
+impl<R, E, P, F> ChannelServiceImpl<R, E, P, F>
 where
     R: ChannelRepo + HistoricalChannelRepo,
     E: ChannelEventDispatcher,
