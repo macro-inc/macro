@@ -858,6 +858,86 @@ async fn document_mentions_notify_participants_except_sender() {
     assert!(!document_recipients.contains(&sender));
 }
 
+#[tokio::test]
+async fn document_mentions_in_a_reply_notify_only_thread_participants() {
+    let channel_id = Uuid::new_v4();
+    let message_id = Uuid::new_v4();
+    let thread_id = Uuid::new_v4();
+    let sender = user("sender@example.com");
+    let participant = user("participant@example.com");
+    let outsider = user("outsider@example.com");
+    let notifications = FakeNotifications::default();
+    let service = ChannelSideEffectService::new(
+        FakeContext {
+            document_mentions: vec![ChannelDocumentMention {
+                document_name: "Spec".to_string(),
+                owner: sender.clone(),
+                file_type: None,
+                sub_type: None,
+            }],
+            thread_context: ThreadNotificationContext {
+                participants: vec![sender.clone(), participant.clone()],
+                parent_sender_id: Some(participant.clone()),
+            },
+            ..FakeContext::default()
+        },
+        FakeRealtime::default(),
+        notifications.clone(),
+        FakeContacts::default(),
+    );
+    let now = Utc::now();
+
+    service
+        .handle(ChannelEvent::MessagePosted {
+            channel_id,
+            metadata: ChannelMetadata {
+                channel_type: ChannelType::Private,
+                channel_name: "Project".to_string(),
+            },
+            participants: [&sender, &participant, &outsider]
+                .into_iter()
+                .map(|user| ChannelParticipant {
+                    channel_id,
+                    user_id: user.as_ref().to_string(),
+                    role: ParticipantRole::Member,
+                    joined_at: now,
+                    left_at: None,
+                })
+                .collect(),
+            message: MutatedMessage {
+                id: message_id,
+                channel_id,
+                thread_id: Some(thread_id),
+                sender_id: Sender::new_from_user(sender.clone()),
+                triggered_by: None,
+                content: "see this".to_string(),
+                created_at: now,
+                updated_at: now,
+                edited_at: None,
+                deleted_at: None,
+            },
+            mentions: vec![SimpleMention {
+                entity_type: "document".to_string(),
+                entity_id: "doc-1".to_string(),
+            }],
+            has_attachments: false,
+            notification_policy: PostMessageNotificationPolicy::Default,
+        })
+        .await;
+
+    let notification_effects = notifications.effects.lock().unwrap();
+    let document_recipients = notification_effects
+        .iter()
+        .find_map(|effect| match effect {
+            ChannelNotificationEffect::DocumentMention { recipient_ids, .. } => Some(recipient_ids),
+            _ => None,
+        })
+        .expect("expected document mention notification");
+    assert!(document_recipients.contains(&participant));
+    assert!(!document_recipients.contains(&outsider));
+    assert!(!document_recipients.contains(&sender));
+}
+
 #[test]
 fn contact_sync_is_derived_from_private_channel_created() {
     let event = ChannelEvent::ChannelCreated {
