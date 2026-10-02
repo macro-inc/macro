@@ -2,7 +2,7 @@
  * Parse a recorded agent session into the wire entries the fold consumes.
  *
  * Recording, DB row, and realtime event share one frame shape
- * (`crates/agent_fold/src/inbound/wasm.rs`): `{direction, content}` plus
+ * (`crates/folds/agent_fold/src/inbound/wasm.rs`): `{direction, content}` plus
  * attribution. The recorder (`~/.agent_runtime_sessions/<id>.jsonl`) writes
  * `ts` where the log row carries `createdAt`; that re-keying is the whole
  * translation.

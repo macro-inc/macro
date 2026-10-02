@@ -26,7 +26,7 @@ codex_cloud_agents = { path = "../../crates/codex_cloud_agents" }
 codex_connection = { path = "../../crates/codex_connection" }
 agent_changes = { path = "../../crates/agent_changes" }
 agent_egress = { path = "../../crates/agent_egress" }
-agent_fold = { path = "../../crates/agent_fold" }
+agent_fold = { path = "../../crates/folds/agent_fold" }
 agent_harness = { path = "../../crates/agent_harness" }
 agent_inmem = { path = "../../crates/agent_inmem" }
 ai_tools = { path = "../../crates/ai_tools" }
