@@ -41,13 +41,13 @@ agent-client-protocol = { workspace = true }
 # `default-features = false` drops ARP's transport (tokio, axum, tungstenite),
 # which is what lets this crate reach wasm. Native builds are unaffected:
 # whoever else needs the transport turns it back on, and cargo unifies.
-agent_runtime_protocol = { path = "../agent_runtime_protocol", default-features = false }
+agent_runtime_protocol = { path = "../../agent_runtime_protocol", default-features = false }
 chrono = { workspace = true }
 clap = { workspace = true, optional = true }
 lazy-regex = { workspace = true }
-macro_user_id = { path = "../macro_user_id" }
-macro_uuid = { path = "../macro_uuid" }
-non_empty = { path = "../non_empty" }
+macro_user_id = { path = "../../macro_user_id" }
+macro_uuid = { path = "../../macro_uuid" }
+non_empty = { path = "../../non_empty" }
 rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

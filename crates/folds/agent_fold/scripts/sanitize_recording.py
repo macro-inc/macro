@@ -9,7 +9,7 @@ Recordings under ~/.agent_runtime_sessions are real ACP traffic from real
 dev sessions: user prompts, terminal output, file contents. Any of those can
 carry a real credential the user happened to paste, cat, or have echoed back
 by a tool. This finds and replaces them before the file goes anywhere near
-`crates/agent_fold/fixtures/` or a git commit.
+`crates/folds/agent_fold/fixtures/` or a git commit.
 
 Two independent passes, because either alone misses things the other catches:
 
