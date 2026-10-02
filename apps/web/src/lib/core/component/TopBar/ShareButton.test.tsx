@@ -247,21 +247,23 @@ vi.mock('@ui', async () => {
     onChange?: (value: string) => void;
   }>();
   const Container = (props: { children?: JSX.Element }) => props.children;
+  const Button = (props: {
+    children?: JSX.Element;
+    disabled?: boolean;
+    tooltip?: string;
+    onClick?: () => void;
+  }) => (
+    <button
+      disabled={props.disabled}
+      onClick={props.onClick}
+      aria-label={props.tooltip}
+    >
+      {props.children}
+    </button>
+  );
   return {
-    Button: (props: {
-      children?: JSX.Element;
-      disabled?: boolean;
-      tooltip?: string;
-      onClick?: () => void;
-    }) => (
-      <button
-        disabled={props.disabled}
-        onClick={props.onClick}
-        aria-label={props.tooltip}
-      >
-        {props.children}
-      </button>
-    ),
+    Button,
+    CopyButton: Button,
     Panel: Object.assign(Container, { Header: Container, Body: Container }),
     Tooltip: Container,
     Dropdown: Object.assign(Container, {

@@ -36,6 +36,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { buildEntityData } from '@entity';
 import { useThreadQuery } from '@queries/email/thread';
 import { representativeThreadMessage } from '@queries/email/thread-subject';
+import { ButtonGroup } from '@ui';
 import { createMemo, createSignal, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { emailDetailSearch } from '../email-route';
@@ -92,7 +93,17 @@ function EmailDetailHeader(
       <Show when={props.controlsMount}>
         {(mount) => (
           <Portal mount={mount()}>
-            <EmailThreadControls {...controls} />
+            <ButtonGroup variant="outline" size="icon-md" class="touch:hidden">
+              <EmailThreadControls {...controls} />
+              <Show when={props.listNavigation}>
+                {(navigation) => (
+                  <ListNavigationButtons
+                    navigation={navigation()}
+                    class="gap-0"
+                  />
+                )}
+              </Show>
+            </ButtonGroup>
           </Portal>
         )}
       </Show>
@@ -227,10 +238,7 @@ export function EmailDetailView(props: {
             fallback={<EntityDetailBreadcrumbSkeleton />}
           />
           <div class="ml-auto flex shrink-0 items-center gap-1">
-            <div ref={setControlsMount} class="flex items-center gap-0.5" />
-            <div class="touch:hidden">
-              <ListNavigationButtons navigation={listNavigation} />
-            </div>
+            <div ref={setControlsMount} class="flex items-center" />
             <SidePanel.HeaderActionsOutlet />
             <Show when={ENABLE_EMAIL_SHARING}>
               <ShareTrigger

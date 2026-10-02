@@ -321,9 +321,10 @@ function SoupNavigationButtons() {
 /** Shared header controls; each host supplies its current list navigation. */
 export function ListNavigationButtons(props: {
   navigation: ListDetailNavigationTarget;
+  class?: string;
 }) {
   return (
-    <div class="flex items-center gap-0.5">
+    <div class={cn('flex items-center gap-0.5', props.class)}>
       <Button
         size="icon-md"
         label="Previous item"

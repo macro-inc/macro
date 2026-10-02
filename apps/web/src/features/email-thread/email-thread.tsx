@@ -4,9 +4,16 @@ import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useContacts } from '@core/user';
 import { createEffectOnEntityTypeNotification } from '@notifications';
+import { InlineFetchedEntityTagsPill } from '@property/tags';
 import { clearSavedDraftThreadCache } from '@queries/email/draft-cache';
 import type { ThreadQueryTransport } from '@queries/email/thread';
-import { type Accessor, createEffect, createMemo, onCleanup } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  onCleanup,
+  Suspense,
+} from 'solid-js';
 import { useCalendarPreferences } from '../calendar/utils/preferences';
 import { createEmailComposeContext } from '../email-compose/compose-adapter';
 import { createEmailComposeHost } from '../email-compose/compose-host-adapter';
@@ -64,18 +71,33 @@ export function EmailThread(props: EmailThreadProps) {
       createThreadActionAdapter(props.threadId, snapshot),
   };
   const viewContext = {
-    copySubject: (subject: string) => {
-      void navigator.clipboard
-        .writeText(subject)
-        .then(() => compose.notices.feedback.success('Subject copied'))
-        .catch(() =>
-          compose.notices.feedback.failure('Unable to copy subject')
-        );
+    copySubject: async (subject: string) => {
+      try {
+        await navigator.clipboard.writeText(subject);
+        return true;
+      } catch {
+        compose.notices.feedback.failure('Unable to copy subject');
+        return false;
+      }
     },
     thread: threadContext,
     compose,
     composeHost: createEmailComposeHost(),
     rendering: {
+      renderTags: () => (
+        <Suspense
+          fallback={
+            <span class="h-6 w-24 rounded-full bg-skeleton skeleton-shimmer" />
+          }
+        >
+          <InlineFetchedEntityTagsPill
+            entityId={props.threadId()}
+            entityType="THREAD"
+            class="bg-surface-2"
+            showAddButton
+          />
+        </Suspense>
+      ),
       renderInvitation: (
         message: EmailMessage,
         invitation: CalendarInvitation

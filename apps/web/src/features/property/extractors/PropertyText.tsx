@@ -1,6 +1,8 @@
 import { getDisplayNameParts, tryMacroId } from '@core/user';
+import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import { cn } from '@ui';
 import { type JSX, Show } from 'solid-js';
+import { usePropertyEntityDisplay } from '../hooks/usePropertyEntityDisplay';
 import type { Property } from '../types';
 import {
   formatBoolean,
@@ -29,6 +31,8 @@ type Props = {
   class?: string;
   /** Override the rendered text (overrides default extraction). */
   text?: string;
+  /** Resolve a single linked item to its name instead of showing "1 item". */
+  resolveSingleEntity?: boolean;
 };
 
 /**
@@ -57,10 +61,51 @@ export function PropertyText(props: Props) {
     return entities.length === 1 ? entities[0].entity_id : undefined;
   };
 
+  const singleEntity = () => {
+    if (!props.resolveSingleEntity || props.text !== undefined) return;
+    if (!isEntityProperty(props.property)) return;
+    if (props.property.specificEntityType === 'USER') return;
+    const entities = getEntityValues(props.property);
+    return entities.length === 1 ? entities[0] : undefined;
+  };
+
   return (
     <Show
       keyed
-      when={userId()}
+      when={singleEntity()}
+      fallback={<PropertyTextValue {...props} userId={userId()} />}
+    >
+      {(entity) => <EntityPropertyText entity={entity} class={props.class} />}
+    </Show>
+  );
+}
+
+function EntityPropertyText(props: {
+  entity: EntityReference;
+  class?: string;
+}) {
+  const { name, icon } = usePropertyEntityDisplay(
+    () => props.entity.entity_id,
+    () => props.entity.entity_type
+  );
+  return (
+    <span class={cn('inline-flex min-w-0 items-center gap-1.5', props.class)}>
+      <span
+        aria-hidden="true"
+        class="flex size-3.5 shrink-0 items-center justify-center [&_svg]:size-3.5"
+      >
+        {icon()}
+      </span>
+      <span class="truncate">{name()}</span>
+    </span>
+  );
+}
+
+function PropertyTextValue(props: Props & { userId?: string }) {
+  return (
+    <Show
+      keyed
+      when={props.userId}
       fallback={
         <PrimitivePropertyText
           property={props.property}

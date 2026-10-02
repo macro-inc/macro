@@ -8,26 +8,15 @@ import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import {
   GithubPullRequestDetailsRows,
   SidePanel,
-  useSidePanel,
 } from '@components/app/side-panel';
 import { EntityMetadata } from '@components/app/side-panel/EntityMetadata';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
-import { ProgressMeter } from '@core/component/LexicalMarkdown/component/status/Progress';
 import { Wordcount } from '@core/component/LexicalMarkdown/component/status/Wordcount';
-import {
-  $getPinnedProperties,
-  ADD_PINNED_PROPERTY_COMMAND,
-  REMOVE_PINNED_PROPERTY_COMMAND,
-} from '@core/component/LexicalMarkdown/plugins';
 import { Notifications } from '@core/component/Notifications';
 import { References } from '@core/component/References';
-import {
-  enableHistoryComponent,
-  isFeatureEnabled,
-  USE_MACRO_PR_SUMMARY_BLOCK,
-} from '@core/constant/featureFlags';
+import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
 import type { Entity } from '@core/types';
@@ -35,7 +24,6 @@ import type { DateValue } from '@core/util/date';
 import { openExternalUrl } from '@core/util/url';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { useNotificationsForEntity } from '@notifications';
-import CaretRightIcon from '@phosphor/caret-right.svg';
 import {
   getDefaultPinnedProperties,
   SYSTEM_PROPERTY_IDS,
@@ -54,18 +42,9 @@ import {
 import type { EntityType as PropertiesEntityType } from '@service-properties/generated/schemas/entityType';
 import { createCallback } from '@solid-primitives/rootless';
 import { cn, InlineCheckbox } from '@ui';
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  For,
-  onCleanup,
-  Show,
-} from 'solid-js';
+import { createMemo, For, Show } from 'solid-js';
 import { useMarkdownDocument } from '../../context/markdown-document-context';
-import { useHistory } from '../../history/HistoryContext';
-import { HistoryScrubber } from '../../history/HistoryScrubber';
-import { HistorySessionList } from '../../history/HistorySessionList';
+import { createPinnedProperties } from '../../primitives/create-pinned-properties';
 import { DispatchAgentButton } from '../DispatchAgentMenu';
 import { useMarkdownName } from '../MarkdownNameProvider';
 import { TaskDuplicateMatchesSidePanelSection } from '../TaskDuplicateMatches';
@@ -88,6 +67,9 @@ export function MarkdownSidePanelSections() {
     <>
       <SidePanel.HeaderActions>
         <div class="flex shrink-0 items-center gap-1">
+          <Show when={isTask() && !isMobile()}>
+            <DispatchAgentButton showPrimaryLabel />
+          </Show>
           <AskMacroButton
             entity={{
               type: 'document',
@@ -96,9 +78,6 @@ export function MarkdownSidePanelSections() {
               fileType: 'md',
             }}
           />
-          <Show when={isTask() && !isMobile()}>
-            <DispatchAgentButton showPrimaryLabel />
-          </Show>
         </div>
       </SidePanel.HeaderActions>
       <SidePanel.Footer>
@@ -129,11 +108,6 @@ export function MarkdownSidePanelSections() {
           documentName={displayName() ?? ''}
         />
       </SidePanel.Section>
-      <Show when={isFeatureEnabled(enableHistoryComponent)}>
-        <SidePanel.Section id="history" title="History" order={35}>
-          <HistorySectionContent />
-        </SidePanel.Section>
-      </Show>
       <EntityActivitySectionConditional
         entityId={documentId()}
         entityType={propertiesEntityType()}
@@ -146,106 +120,6 @@ export function MarkdownSidePanelSections() {
         <TaskDuplicateMatchesSidePanelSection />
       </Show>
     </>
-  );
-}
-
-function HistorySectionContent() {
-  const history = useHistory();
-  const sidePanel = useSidePanel();
-  const [showSessions, setShowSessions] = createSignal(false);
-
-  createEffect(() => {
-    if (history.isOpen()) {
-      sidePanel?.setOpenSectionIds(['history']);
-    }
-  });
-
-  // Discover whether history exists (to choose between the empty state and
-  // the scrubber) once the user actually expands this accordion section —
-  // nothing inside the section can trigger the load itself, since the
-  // scrubber and "Show activity" toggle only render once sessions exist.
-  createEffect(() => {
-    if (sidePanel?.openSectionIds().includes('history')) {
-      history.requestLoad();
-    }
-  });
-  const isShowingSessions = () => history.isOpen() || showSessions();
-
-  const totalEdits = createMemo(() => {
-    const sessions = history.sessions();
-    if (!sessions) return 0;
-    return sessions.reduce((sum, s) => sum + s.count, 0);
-  });
-
-  return (
-    <Show when={!history.loading.sessions()} fallback={<HistorySkeleton />}>
-      <Show
-        when={totalEdits() > 1 && history.sessions()}
-        fallback={
-          // Don't claim the document has no edits when we couldn't load them.
-          <p
-            class="text-xs text-ink-muted"
-            title={history.error() ?? undefined}
-          >
-            {history.error() ? "Couldn't load history" : 'No history yet'}
-          </p>
-        }
-      >
-        {(sessions) => (
-          <div class="hidden min-w-0 overflow-hidden md:block">
-            <HistoryScrubber compact />
-            <Show when={sessions().length > 0}>
-              <div class="mt-3 min-w-0 border-edge-muted border-t pt-2">
-                <button
-                  type="button"
-                  aria-expanded={isShowingSessions()}
-                  class="flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-ink-muted text-xs hover:bg-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-                  onClick={() => {
-                    history.enter();
-                    setShowSessions(true);
-                  }}
-                >
-                  <CaretRightIcon
-                    class={cn(
-                      'size-3 shrink-0 transition-transform duration-90',
-                      isShowingSessions() && 'rotate-90'
-                    )}
-                  />
-                  <span>
-                    {isShowingSessions() ? 'Activity' : 'Show activity'}
-                  </span>
-                </button>
-                <Show when={isShowingSessions()}>
-                  <HistorySessionList
-                    sessions={sessions()}
-                    selectedAt={history.selectedAt}
-                    onSelect={history.enter}
-                    onViewSessionDiff={(session) => {
-                      if (history.diff.session()?.startMs === session.startMs) {
-                        history.diff.clear();
-                      } else {
-                        history.diff.view(session);
-                      }
-                    }}
-                  />
-                </Show>
-              </div>
-            </Show>
-          </div>
-        )}
-      </Show>
-    </Show>
-  );
-}
-
-function HistorySkeleton() {
-  return (
-    <div
-      aria-hidden="true"
-      class="hidden min-w-0 flex-col gap-2.5 overflow-hidden md:flex"
-    >
-      <div class="skeleton-shimmer h-12 w-full rounded-md bg-skeleton" />
-    </div>
   );
 }
 
@@ -409,40 +283,7 @@ function PropertiesSectionContent(props: {
 
   const entityType: PropertiesEntityType = props.isTask ? 'TASK' : 'DOCUMENT';
 
-  const [pinnedPropertyIds, setPinnedPropertyIds] = createSignal<string[]>([]);
-
-  createEffect(() => {
-    const currentEditor = mdData.editor;
-    if (!currentEditor) return;
-    currentEditor.getEditorState().read(() => {
-      const ids = $getPinnedProperties();
-      setPinnedPropertyIds(ids);
-    });
-
-    const unregister = currentEditor.registerUpdateListener(
-      ({ editorState }) => {
-        editorState.read(() => {
-          const ids = $getPinnedProperties();
-          setPinnedPropertyIds(ids);
-        });
-      }
-    );
-    onCleanup(unregister);
-  });
-
-  const handlePropertyPinned = (propertyId: string) => {
-    const editor = mdData.editor;
-    if (editor) {
-      editor.dispatchCommand(ADD_PINNED_PROPERTY_COMMAND, propertyId);
-    }
-  };
-
-  const handlePropertyUnpinned = (propertyId: string) => {
-    const editor = mdData.editor;
-    if (editor) {
-      editor.dispatchCommand(REMOVE_PINNED_PROPERTY_COMMAND, propertyId);
-    }
-  };
+  const pins = createPinnedProperties(() => mdData.editor);
 
   return (
     <EntityPropertiesSection
@@ -453,10 +294,9 @@ function PropertiesSectionContent(props: {
       defaultPinnedPropertyIds={() =>
         props.isTask ? getDefaultPinnedProperties('task') : []
       }
-      pinnedPropertyIds={pinnedPropertyIds}
+      pinnedPropertyIds={pins.ids}
       pinnedPropertyDefinitionOrder={PINNED_ORDER}
-      onPropertyPinned={handlePropertyPinned}
-      onPropertyUnpinned={handlePropertyUnpinned}
+      onPropertyUnpinned={pins.unpin}
       showTags={false}
     />
   );
@@ -483,20 +323,8 @@ function StatsSectionContent() {
     <Show when={md.wordcountStats}>
       {(stats) => (
         <Wordcount.Root stats={stats()}>
-          <div class="mb-1 flex flex-col gap-1">
-            <div>
-              <Wordcount.Words /> words · <Wordcount.Characters /> characters
-            </div>
-            <Show when={md.progressStats}>
-              {(progressStats) => (
-                <Show when={progressStats().total > 0}>
-                  <div class="flex items-center gap-2">
-                    Progress
-                    <ProgressMeter stats={progressStats()} />
-                  </div>
-                </Show>
-              )}
-            </Show>
+          <div class="mb-1">
+            <Wordcount.Words /> words · <Wordcount.Characters /> characters
           </div>
         </Wordcount.Root>
       )}

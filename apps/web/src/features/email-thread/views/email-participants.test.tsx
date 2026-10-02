@@ -33,7 +33,7 @@ it('keeps participant order and nodes through draft creation, deletion and refet
         value={{
           thread: context,
           compose: createComposeContext(),
-          rendering: {},
+          rendering: { renderTags: () => <button>Add tags</button> },
         }}
       >
         <EmailThreadStateProvider value={state}>
@@ -44,7 +44,11 @@ it('keeps participant order and nodes through draft creation, deletion and refet
   });
   try {
     const original = view.getAllByRole('listitem');
-    expect(original.map((node) => node.textContent)).toEqual(['Sender', 'Me']);
+    expect(original.map((node) => node.textContent)).toEqual([
+      'Add tags',
+      'Sender',
+      'Me',
+    ]);
     for (const snapshot of [
       [draft, sent],
       [sent],
@@ -53,13 +57,17 @@ it('keeps participant order and nodes through draft creation, deletion and refet
     ]) {
       setMessages(structuredClone(snapshot));
       const current = view.getAllByRole('listitem');
-      expect(current.map((node) => node.textContent)).toEqual(['Sender', 'Me']);
+      expect(current.map((node) => node.textContent)).toEqual([
+        'Add tags',
+        'Sender',
+        'Me',
+      ]);
       current.forEach((node, index) => expect(node).toBe(original[index]));
     }
     // Stable keys must still propagate changed contact details.
     setMessages([{ ...sent, from: { ...sent.from!, name: 'Updated' } }]);
-    expect(view.getAllByRole('listitem')[0]).toBe(original[0]);
-    expect(original[0].textContent).toBe('Updated');
+    expect(view.getAllByRole('listitem')[1]).toBe(original[1]);
+    expect(original[1].textContent).toBe('Updated');
   } finally {
     view.unmount();
   }

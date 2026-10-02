@@ -14,7 +14,6 @@ import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { createChat } from '@core/util/create';
 import AgentIcon from '@phosphor/sparkle.svg';
 import type { ChannelType } from '@service-cognition/generated/schemas/channelType';
-import { Button } from '@ui';
 import { createSignal } from 'solid-js';
 
 export { AgentIcon as ChatWithAgentIcon };
@@ -162,19 +161,14 @@ export function ChatWithAgentButton(props: {
     }
   }
   return (
-    <Button
+    <HeaderActionButton
       tooltip={props.label ?? 'Chat with Agent'}
-      variant="outline"
-      size="sm"
+      label={props.label ?? 'Chat'}
+      icon={<AgentIcon />}
       onClick={() => void open()}
       disabled={props.disabled || opening()}
-      aria-busy={opening()}
-      depth={2}
-      class="bg-surface"
-    >
-      <AgentIcon />
-      <span class="text-xs">{props.label ?? 'Chat'}</span>
-    </Button>
+      busy={opening()}
+    />
   );
 }
 

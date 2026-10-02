@@ -1,12 +1,12 @@
 import { analytics } from '@app/lib/analytics';
 import { useChannelTab } from '@channel/Channel/ChannelTabContext';
+import { HeaderActionButton } from '@components/app/HeaderActionButton';
 import { useChannelName, useChannelType } from '@core/context/channels';
 import { isMobile } from '@core/mobile/isMobile';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import PhoneIcon from '@phosphor/phone-call.svg';
 import { useActiveCallQuery } from '@queries/call/call';
 import { ChannelTypeEnum } from '@service-storage/client';
-import { Button, cn, confirmDialog } from '@ui';
+import { cn, confirmDialog } from '@ui';
 import { getOwner, Show } from 'solid-js';
 import { getCallJoinTab, getCallLeaveTab } from './call-tabs';
 import { useCall } from './use-call';
@@ -30,12 +30,6 @@ export function ChannelCallButton(props: { channelId: string }) {
 
   const tooltip = () => (isCallInProgress() ? 'Join Call' : 'Start Call');
   const label = () => (isCallInProgress() ? 'Join' : 'Call');
-
-  const variant = () => {
-    if (isTouchDevice()) return 'ghost';
-    if (isCallInProgress()) return 'success';
-    return 'outline';
-  };
 
   const confirmTitle = () => {
     const name = channelName();
@@ -99,20 +93,13 @@ export function ChannelCallButton(props: { channelId: string }) {
 
   return (
     <Show when={!call.isInThisChannel()}>
-      <Button
+      <HeaderActionButton
         onClick={handleClick}
         tooltip={tooltip()}
-        variant={variant()}
-        size="sm"
-        depth={2}
-        class={cn(
-          !isCallInProgress() && !isTouchDevice() && 'bg-surface',
-          isTouchDevice() && 'active:bg-transparent'
-        )}
-      >
-        <PhoneIcon />
-        <span>{label()}</span>
-      </Button>
+        label={label()}
+        icon={<PhoneIcon />}
+        class={cn(isCallInProgress() && 'text-success')}
+      />
     </Show>
   );
 }

@@ -8,6 +8,7 @@ import { EntityPropertiesSection } from './EntityPropertiesSection';
 type PropertiesContext = ReturnType<typeof usePropertiesContext>;
 const mocks = vi.hoisted(() => ({
   properties: [] as Property[],
+  getProperties: undefined as (() => Property[]) | undefined,
   context: undefined as unknown as PropertiesContext,
   add: vi.fn(),
   remove: vi.fn(),
@@ -58,7 +59,7 @@ vi.mock('@property/editor/hooks/useAllProperties', () => ({
 }));
 vi.mock('@property/hooks', () => ({
   useEntityProperties: () => ({
-    properties: () => mocks.properties,
+    properties: () => mocks.getProperties?.() ?? mocks.properties,
     isLoading: () => false,
     error: () => undefined,
     refetch: mocks.refetch,
@@ -83,7 +84,7 @@ vi.mock('@queries/properties/entity', () => ({
   useBulkSaveEntityPropertiesMutation: () => ({ mutateAsync: mocks.save }),
 }));
 vi.mock('@queries/properties/tags', () => ({
-  useTagsQuery: () => ({ data: [] }),
+  useTagsQuery: () => ({ isSuccess: true, data: [] }),
 }));
 vi.mock('@ui', () => ({
   Button: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
@@ -110,6 +111,7 @@ function field(id: string, value: string | null = null): Property {
 
 beforeEach(() => {
   mocks.properties = [];
+  mocks.getProperties = undefined;
   mocks.add.mockReset().mockResolvedValue(undefined);
   mocks.remove.mockReset().mockResolvedValue(undefined);
   mocks.save.mockReset().mockResolvedValue(undefined);
@@ -183,4 +185,47 @@ it('refreshes native projections after successful add, remove, and save, never b
   mocks.add.mockRejectedValueOnce(new Error('denied'));
   await expect(mocks.context.addProperty!('other')).rejects.toThrow('denied');
   expect(changed).toHaveBeenCalledTimes(3);
+});
+
+it('keeps unpinned assignments visible in the panel when title pins change', () => {
+  mocks.properties = [field('Pinned', 'first'), field('Unpinned', 'second')];
+  const [pins, setPins] = createSignal(['instance-Pinned']);
+  render(() => (
+    <EntityPropertiesSection
+      entityId="document"
+      entityType="DOCUMENT"
+      canEdit
+      showTags={false}
+      defaultPinnedPropertyIds={() => []}
+      pinnedPropertyIds={pins}
+    />
+  ));
+  expect(screen.getByText('"first"')).toBeTruthy();
+  expect(screen.getByText('"second"')).toBeTruthy();
+  setPins([]);
+  expect(screen.getByText('"first"')).toBeTruthy();
+  expect(screen.getByText('"second"')).toBeTruthy();
+  expect(mocks.context.properties()).toHaveLength(2);
+  expect(mocks.remove).not.toHaveBeenCalled();
+});
+
+it('adds side-panel properties without exposing an automatic pin callback', () => {
+  const pins: string[] = [];
+  const [properties, setProperties] = createSignal<Property[]>([]);
+  mocks.getProperties = properties;
+  render(() => (
+    <EntityPropertiesSection
+      entityId="document"
+      entityType="DOCUMENT"
+      canEdit
+      showTags={false}
+      pinnedPropertyIds={() => pins}
+    />
+  ));
+  mocks.context.onPropertyAdded(['Custom']);
+  setProperties([field('Custom', 'saved value')]);
+  mocks.context.onPropertyAdded(['Custom']);
+  expect(screen.getByText('"saved value"')).toBeTruthy();
+  expect(mocks.context.onPropertyPinned).toBeUndefined();
+  expect(pins).toEqual([]);
 });

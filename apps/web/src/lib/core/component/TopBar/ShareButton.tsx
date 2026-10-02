@@ -71,6 +71,7 @@ import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
 import {
   Button,
+  CopyButton,
   cn,
   Dropdown,
   type ManagedDialogProps,
@@ -1613,19 +1614,20 @@ export function ShareTrigger(props: {
 
   const copyLink = createCallback(() => {
     if (props.copyLink) return props.copyLink();
-    copyEntityLink(shareUrl(blockType(), blockId()), {
+    const result = copyEntityLink(shareUrl(blockType(), blockId()), {
       subtext:
         blockType() === 'agent' || blockType() === 'initiative'
           ? undefined
           : SHARE_LINK_SUBTEXT,
     });
     analytics.track('copy_share_link', { blockType: blockType() });
+    return result;
   });
 
   const ShareLinkAction = createMemo(() => ({
     action: (e: MouseEvent | KeyboardEvent) => {
       e.stopPropagation();
-      copyLink();
+      return copyLink();
     },
     icon: IconLink,
   }));
@@ -1671,14 +1673,14 @@ export function ShareTrigger(props: {
         />
       </Tooltip>
 
-      <Button
+      <CopyButton
         variant="ghost"
         tooltip="Copy Share Link"
         size="icon-md"
         onClick={ShareLinkAction().action}
       >
         <Dynamic component={ShareLinkAction().icon} class="size-3.5!" />
-      </Button>
+      </CopyButton>
     </div>
   );
 }

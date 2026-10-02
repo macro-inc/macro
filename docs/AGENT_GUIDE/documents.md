@@ -4,6 +4,26 @@ The document header has separate Share, Copy Share Link, and Side Panel buttons.
 They are borderless with a soft rounded background on hover. Share opens the
 sharing dialog; copying a link is a separate action.
 
+Hover or focus a document title in the header to see its owner, created time,
+and last-updated time. This details card is shared
+by documents, tasks, snippets, canvas, and file blocks; unavailable metadata is
+labeled rather than inferred.
+
+Editable documents show matching **Add tags** and **Add property** pills below
+the title. Once tags are applied, **Add tags** becomes the existing tag name or
+count pill; clicking it reopens the picker. **Add property** opens the shared
+property selector for that document.
+Adding or reselecting a property from the title row pins it there. Adding from
+the side panel leaves it unpinned. The side panel shows all assigned properties,
+including unpinned ones.
+Hover or focus an inline property pill to find **Unpin** (keeps its saved
+value) and **Delete from item** (removes the document's assignment, without
+deleting the shared property definition). Pins are saved with the document.
+
+Markdown code blocks have a **Copy Code** button in both editable and read-only
+views. Successful copies briefly animate the icon to a solid green check-circle;
+they do not show a success toast.
+
 On a local HTTPS stack, document and image downloads use `/local-storage/`
 on the app's HTTPS origin. A request to HTTP localhost indicates a stale
 storage URL or stack configuration; hard-refresh after updating the stack.
@@ -624,6 +644,18 @@ importer runs.
 
 With the flag off, documents behave exactly as described above this section.
 
+## Document history
+
+On desktop, open the title's file menu (**…**) and choose **History**. This
+opens an overlay filling the current document block, with a read-only version
+preview on the left and a timeline graph plus sessions on the right. History is
+no longer a side-panel section and its file-menu item is hidden on mobile.
+Scrub the graph to preview a point in time, or select a session to see its changes.
+**Current version** returns the preview to the live version; **Fork** copies the
+selected version into a separate document. **Close history** or Escape returns
+to the mounted editor without losing its scroll position. The two columns scroll
+independently, and other app splits remain available.
+
 ## Side panel
 
 Right side of a doc (toggle with `Hide/Show Side Panel`):
@@ -638,7 +670,7 @@ Right side of a doc (toggle with `Hide/Show Side Panel`):
   This must also work after background backfills populate more than 128 cached
   Soup variants—tag saves must not scan all cached pages.
   `Properties` → `Add property`.
-- Collapsed sections: `Stats`, `History` (version time-travel), `Activity`.
+- `Activity` is collapsible; document statistics and ownership timestamps appear in the footer.
 - `Activity` lists the same glyph-rail lines as `/app/component/activity` (plain glyphs on a
   thin connector, one line each with long names truncated, compact `17h` / `8d` / `1mo`
   times; consecutive edits fold into one `made 3 edits` line). Past four entries it shows the
