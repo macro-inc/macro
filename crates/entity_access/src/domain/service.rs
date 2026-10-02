@@ -173,7 +173,14 @@ where
                 .get_entity_permission(Some(user_id), entity_id, entity_type, user_org_id)
                 .await;
         }
+        self.get_team_permission(user_id, entity_id).await
+    }
 
+    async fn get_team_permission(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+        entity_id: &str,
+    ) -> Result<EntityPermission, AccessError> {
         let requested_team_id = Uuid::parse_str(entity_id)
             .map_err(|_| AccessError::BadRequest("Invalid team ID format"))?;
         let user_team = self
@@ -515,6 +522,10 @@ where
         user_org_id: Option<i64>,
     ) -> Result<EntityPermission, AccessError> {
         match entity_type {
+            EntityType::Team => {
+                let user_id = user_id.ok_or(AccessError::Unauthorized)?;
+                self.get_team_permission(user_id, entity_id).await
+            }
             EntityType::Document
             | EntityType::Chat
             | EntityType::Project

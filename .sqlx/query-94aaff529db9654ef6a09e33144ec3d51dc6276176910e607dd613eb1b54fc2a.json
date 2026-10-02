@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO slack_import_upload\n                    (job_id, slack_channel_id, part_index, object_key, sha256, byte_length, record_count)\n                   SELECT id, $3, $4, $5, $6, $7, $8 FROM slack_import_job\n                   WHERE team_id = $1 AND id = $2\n                   ON CONFLICT (job_id, slack_channel_id, part_index) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Int4",
+        "Text",
+        "Text",
+        "Int8",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "94aaff529db9654ef6a09e33144ec3d51dc6276176910e607dd613eb1b54fc2a"
+}

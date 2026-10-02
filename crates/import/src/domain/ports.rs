@@ -305,6 +305,19 @@ pub trait CanonicalImportRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<ImportTargetReservation>> + Send;
 }
 
+/// Side-effect-free canonical reads, separate from reservation and legacy listings.
+pub trait ImportTargetReader: Send + Sync + 'static {
+    /// Exact IDs in an explicit bound namespace. At most 500 IDs per call; returns
+    /// one outcome per input, in order. Unknown-source confirmation is not domain
+    /// evidence. Never creates reservations, locks rows, or grants read access.
+    fn lookup_targets(
+        &self,
+        team: Uuid,
+        binding: &ImportSourceBinding,
+        channels: &[super::models::SlackConversationId],
+    ) -> impl Future<Output = Result<Vec<super::models::ImportTargetLookup>>> + Send;
+}
+
 /// System properties to set on an imported task, already normalized to
 /// Macro's vocabulary by the import service (the creator applies them
 /// best-effort — a property that fails to apply never fails the import).

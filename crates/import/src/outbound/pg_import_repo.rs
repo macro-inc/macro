@@ -15,7 +15,8 @@ use std::collections::HashSet;
 use std::str::FromStr;
 use uuid::Uuid;
 
-mod targets;
+/// Canonical target transaction helpers for composition roots.
+pub mod targets;
 
 #[cfg(test)]
 mod test;
