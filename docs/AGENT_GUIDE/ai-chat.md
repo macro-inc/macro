@@ -129,6 +129,22 @@ and selected range; channel-message actions retain the referenced message.
 Add a question and press Send to submit that context. These actions do not create
 legacy cognition chats, regardless of the Agents workspace feature flag.
 
+## Dispatching coding agents from chat
+
+Ask a chat agent to delegate a coding task, including the repository and branch
+when relevant. The agent uses `ListCodingAgents` to discover your available coding
+agents, chooses one using its description and runtime defaults, and calls
+`DispatchCodingAgent` with that agent's ID and a self-contained task prompt.
+The available-agents tool row expands to show the returned names and descriptions.
+
+A successful dispatch starts a separate coding session and displays its live
+Magic Chip directly in the reply, outside collapsed tool groups. The chip follows
+the dispatched turn, including progress, output, permission requests, and a linked
+pull request. **Open session** opens the coding conversation in another split so
+you can follow up there. Reloading the chat restores the same session card.
+Failed dispatches do not show a successful session card. If no coding agents are
+available, configure one in Agents before retrying.
+
 ## Where chats live
 
 The Agents conversation list shows row skeletons after a short delay on first

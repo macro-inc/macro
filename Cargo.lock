@@ -629,6 +629,7 @@ dependencies = [
  "non_empty",
  "opentelemetry",
  "opentelemetry_sdk",
+ "reqwest 0.13.4",
  "rootcause",
  "schemars 1.2.1",
  "serde",
@@ -854,6 +855,7 @@ version = "0.1.0"
 dependencies = [
  "activity",
  "agent",
+ "agent_session",
  "ai_billing",
  "ai_toolset",
  "ai_usage",

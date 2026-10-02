@@ -501,6 +501,10 @@ pub async fn build_tool_service_context_from_env(
             document_storage_service_url,
             crate::mcp_app_catalog::pipedream_client_from_env()?,
         ),
+        coding_agent_tool_context: crate::build_coding_agent_tool_context(
+            macro_service_urls::AgentHarnessServiceUrl::new()?,
+            env.internal_api_key.to_string(),
+        )?,
         project_tool_context,
         initiative_tool_context,
         team_tool_context: crate::tool_context::build_team_tool_context(pool.clone()),

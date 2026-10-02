@@ -10,6 +10,7 @@ pub mod agent_identity;
 pub mod agent_session;
 pub mod channel_mention;
 pub mod citations;
+pub mod coding_agents;
 pub mod connected_toolsets;
 pub mod databases;
 pub mod do_not;
