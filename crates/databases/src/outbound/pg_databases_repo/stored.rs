@@ -107,14 +107,35 @@ pub(super) fn layout(
     })
 }
 
+/// Persisted ops and inverse JSON format, independent of table revisions and
+/// the inverse's restoration-safety version. Legacy rows also use this format.
+pub(super) const JOURNAL_PAYLOAD_VERSION: i32 = 1;
+
+fn require_journal_version(version: i32) -> Result<(), PgDatabasesRepoError> {
+    match version {
+        JOURNAL_PAYLOAD_VERSION => Ok(()),
+        other => Err(PgDatabasesRepoError::UnsupportedJournalPayloadVersion(
+            other,
+        )),
+    }
+}
+
 /// A journaled change's ops.
-pub(super) fn ops(mut stored: Value) -> Result<Vec<DatabaseOp>, PgDatabasesRepoError> {
+pub(super) fn ops(
+    version: i32,
+    mut stored: Value,
+) -> Result<Vec<DatabaseOp>, PgDatabasesRepoError> {
+    require_journal_version(version)?;
     upgrade_lanes(&mut stored)?;
     Ok(serde_json::from_value(stored)?)
 }
 
 /// What undoes a journaled change.
-pub(super) fn inverse(mut stored: Value) -> Result<ChangeInverse, PgDatabasesRepoError> {
+pub(super) fn inverse(
+    version: i32,
+    mut stored: Value,
+) -> Result<ChangeInverse, PgDatabasesRepoError> {
+    require_journal_version(version)?;
     upgrade_lanes(&mut stored)?;
     Ok(serde_json::from_value(stored)?)
 }

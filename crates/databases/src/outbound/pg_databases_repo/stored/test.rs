@@ -100,7 +100,7 @@ fn a_journaled_card_move_and_board_from_before_people_read_in_todays_shape() {
     ]);
 
     assert_eq!(
-        ops(stored).unwrap(),
+        ops(1, stored).unwrap(),
         vec![
             DatabaseOp::View {
                 table: TABLE,
@@ -144,4 +144,30 @@ fn a_journaled_card_move_and_board_from_before_people_read_in_todays_shape() {
             },
         ]
     );
+}
+
+#[test]
+fn journal_payload_version_is_checked_before_interpreting_json() {
+    for version in [0, 2, i32::MAX] {
+        assert!(matches!(
+            ops(version, json!([])),
+            Err(super::PgDatabasesRepoError::UnsupportedJournalPayloadVersion(found)) if found == version
+        ));
+        assert!(matches!(
+            super::inverse(version, json!(null)),
+            Err(super::PgDatabasesRepoError::UnsupportedJournalPayloadVersion(found)) if found == version
+        ));
+    }
+}
+
+#[test]
+fn version_one_preserves_the_existing_inverse_json_contract() {
+    let inverse = crate::domain::journal::ChangeInverse::default();
+    assert_eq!(
+        super::inverse(1, serde_json::to_value(&inverse).unwrap()).unwrap(),
+        inverse
+    );
+    let mut legacy = serde_json::to_value(&inverse).unwrap();
+    legacy.as_object_mut().unwrap().remove("formatVersion");
+    assert_eq!(super::inverse(1, legacy).unwrap().format_version, 0);
 }

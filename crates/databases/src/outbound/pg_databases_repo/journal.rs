@@ -27,8 +27,8 @@ pub(crate) async fn record(
     let mut committed = Vec::with_capacity(entries.len());
     for entry in entries {
         let id = sqlx::query_scalar!(
-            r#"INSERT INTO database_changes (database_id, table_id, version, actor, acting_bot, ops, inverse)
-               VALUES ($1, $2, $3, $4, $5, $6, $7)
+            r#"INSERT INTO database_changes (database_id, table_id, version, actor, acting_bot, ops, inverse, payload_version)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                RETURNING id"#,
             entry.database_id.into_uuid(),
             entry.table.into_uuid(),
@@ -37,6 +37,7 @@ pub(crate) async fn record(
             acting_bot,
             serde_json::to_value(&entry.ops)?,
             serde_json::to_value(&entry.inverse)?,
+            stored::JOURNAL_PAYLOAD_VERSION,
         )
         .fetch_one(&mut *connection)
         .await?;
@@ -190,7 +191,7 @@ pub(crate) async fn row_history(
     row: RowId,
 ) -> Result<Vec<JournaledRowChange>, PgDatabasesRepoError> {
     let records = sqlx::query!(
-        r#"SELECT c.id, c.table_id, c.version, c.actor, c.acting_bot, c.at, c.ops, c.inverse,
+        r#"SELECT c.id, c.table_id, c.version, c.actor, c.acting_bot, c.at, c.ops, c.inverse, c.payload_version,
                   r.kind, r.columns
            FROM database_change_rows r
            JOIN database_changes c ON c.id = r.change_id
@@ -213,8 +214,8 @@ pub(crate) async fn row_history(
                     actor: record.actor,
                     acting_bot: record.acting_bot,
                     at: record.at,
-                    ops: stored::ops(record.ops)?,
-                    inverse: stored::inverse(record.inverse)?,
+                    ops: stored::ops(record.payload_version, record.ops)?,
+                    inverse: stored::inverse(record.payload_version, record.inverse)?,
                 },
                 kind: record
                     .kind
@@ -256,7 +257,7 @@ pub(crate) async fn change(
     change: ChangeId,
 ) -> Result<Option<ChangeRecord>, PgDatabasesRepoError> {
     let records = sqlx::query!(
-        r#"SELECT id, table_id, version, actor, acting_bot, at, ops, inverse
+        r#"SELECT id, table_id, version, actor, acting_bot, at, ops, inverse, payload_version
            FROM database_changes WHERE id = $1 AND database_id = $2"#,
         change.0,
         database_id.into_uuid(),
@@ -273,8 +274,8 @@ pub(crate) async fn change(
                 actor: record.actor,
                 acting_bot: record.acting_bot,
                 at: record.at,
-                ops: stored::ops(record.ops)?,
-                inverse: stored::inverse(record.inverse)?,
+                ops: stored::ops(record.payload_version, record.ops)?,
+                inverse: stored::inverse(record.payload_version, record.inverse)?,
             })
         })
         .collect::<Result<Vec<_>, PgDatabasesRepoError>>()?;
@@ -288,7 +289,7 @@ pub(crate) async fn changes_after(
     version: TableVersion,
 ) -> Result<Vec<ChangeRecord>, PgDatabasesRepoError> {
     let records = sqlx::query!(
-        r#"SELECT id, table_id, version, actor, acting_bot, at, ops, inverse
+        r#"SELECT id, table_id, version, actor, acting_bot, at, ops, inverse, payload_version
            FROM database_changes WHERE table_id = $1 AND version > $2
            ORDER BY version"#,
         table.into_uuid(),
@@ -306,8 +307,8 @@ pub(crate) async fn changes_after(
                 actor: record.actor,
                 acting_bot: record.acting_bot,
                 at: record.at,
-                ops: stored::ops(record.ops)?,
-                inverse: stored::inverse(record.inverse)?,
+                ops: stored::ops(record.payload_version, record.ops)?,
+                inverse: stored::inverse(record.payload_version, record.inverse)?,
             })
         })
         .collect::<Result<Vec<_>, PgDatabasesRepoError>>()?;
