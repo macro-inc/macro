@@ -213,10 +213,25 @@ fn frontend_schemas_build() {
         assert!(names.insert(name), "duplicate frontend tool: {name}");
     }
     assert!(names.contains("QueryDatabase"));
-    assert!(
-        names.contains("CreateTable"),
-        "historical tools remain renderable"
-    );
+    for name in [
+        "CreateDatabase",
+        "CreateTable",
+        "RenameDatabase",
+        "RenameTable",
+        "ReorderTables",
+        "DeleteTable",
+        "AddColumn",
+        "AddColumnOptions",
+        "RenameColumn",
+        "ChangeColumnType",
+        "DeleteColumn",
+        "ReorderColumns",
+    ] {
+        assert!(
+            !names.contains(name),
+            "removed tool {name} must not be generated"
+        );
+    }
 }
 
 #[test]

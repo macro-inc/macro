@@ -1,28 +1,15 @@
 //! Agent tools over the same [`DatabasesService`] port and receipts as the
 //! HTTP routes, so a tool reaches exactly what the API can.
 
-mod add_column;
-mod add_column_options;
-mod change_column_type;
-mod create_database;
-mod create_table;
-mod delete_column;
 mod delete_database_view;
-mod delete_table;
 mod describe_database;
 mod list_databases;
-mod rename_column;
-mod rename_database;
-mod rename_table;
-mod reorder_columns;
-mod reorder_tables;
 mod save_database_view;
-mod write_warning;
 
 #[cfg(test)]
 mod test;
 
-use models_databases::{ColumnId, ColumnKind, DatabaseId, OpResult, OptionId, TableId};
+use models_databases::{ColumnId, DatabaseId, OpResult, OptionId, TableId};
 use std::sync::Arc;
 
 use ai_toolset::{AsyncToolCollection, ToolCallError};
@@ -40,7 +27,7 @@ use models_properties::shared::DataType;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::domain::catalog::{cast_targets, entity_kind, option_labels, sql_table_name};
+use crate::domain::catalog::{cast_targets, option_labels, sql_table_name};
 use crate::domain::models::{
     ColumnConfig, ColumnDetail, DatabaseDetail, DatabaseError, DatabaseView, ListedDatabase,
     OpBatch, TableDetail, Viewer,
@@ -48,31 +35,10 @@ use crate::domain::models::{
 use crate::domain::ports::DatabasesService;
 use crate::domain::receipt::database_receipt;
 
-/// A committed write's schema read-back: the schema, or why it is missing.
-pub(crate) struct SchemaAfterWrite {
-    /// The database's schema after the write, when it could be read.
-    pub(crate) database: Option<ToolDatabaseSchema>,
-    /// Why it could not be.
-    pub(crate) warning: Option<WriteWarnings>,
-}
-
-pub use add_column::{AddColumn, AddColumnResponse};
-pub use add_column_options::{AddColumnOptions, AddColumnOptionsResponse};
-pub use change_column_type::{ChangeColumnType, ChangeColumnTypeResponse};
-pub use create_database::{CreateDatabase, CreateDatabaseResponse};
-pub use create_table::{CreateTable, CreateTableResponse};
-pub use delete_column::{DeleteColumn, DeleteColumnResponse};
 pub use delete_database_view::{DeleteDatabaseView, DeletedDatabaseView};
-pub use delete_table::{DeleteTable, DeleteTableResponse};
 pub use describe_database::DescribeDatabase;
 pub use list_databases::{ListDatabases, ListDatabasesResponse};
-pub use rename_column::{RenameColumn, RenameColumnResponse};
-pub use rename_database::{RenameDatabase, RenameDatabaseResponse};
-pub use rename_table::{RenameTable, RenameTableResponse};
-pub use reorder_columns::{ReorderColumns, ReorderColumnsResponse};
-pub use reorder_tables::{ReorderTables, ReorderTablesResponse};
 pub use save_database_view::{SaveDatabaseView, SavedDatabaseView};
-pub use write_warning::{WriteWarning, WriteWarnings};
 
 /// Service context for the databases AI tools.
 pub struct DatabasesToolContext<Service: DatabasesService, EntityAccess: EntityAccessService> {
@@ -142,28 +108,6 @@ impl<Service: DatabasesService, EntityAccess: EntityAccessService>
     ) -> Result<EntityAccessReceipt<EditAccessLevel>, ToolCallError> {
         self.receipt::<EditAccessLevel>(user_id, database_id, "edit")
             .await
-    }
-
-    /// Schema enrichment follows an already committed mutation. Its failure
-    /// must not make an acknowledged create appear safe to repeat.
-    pub(crate) async fn schema_after_write(
-        &self,
-        user_id: &MacroUserIdStr<'static>,
-        database_id: DatabaseId,
-    ) -> SchemaAfterWrite {
-        match self.current_schema(user_id, database_id).await {
-            Ok(detail) => SchemaAfterWrite {
-                database: Some(detail.into()),
-                warning: None,
-            },
-            Err(error) => SchemaAfterWrite {
-                database: None,
-                warning: Some(WriteWarnings(vec![WriteWarning::SchemaNotRefreshed {
-                    database_id,
-                    cause: error.description,
-                }])),
-            },
-        }
     }
 
     /// The database as the caller sees it now, for tools that must name the
@@ -243,28 +187,6 @@ pub fn databases_toolset<Service: DatabasesService, EntityAccess: EntityAccessSe
         .add_tool::<DeleteDatabaseView, DatabasesToolContext<Service, EntityAccess>>()
 }
 
-/// Historical tool schemas for rendering persisted conversations. Never register this on an agent host.
-pub fn databases_legacy_toolset<Service, EntityAccess>()
--> AsyncToolCollection<DatabasesToolContext<Service, EntityAccess>>
-where
-    Service: DatabasesService,
-    EntityAccess: EntityAccessService,
-{
-    AsyncToolCollection::new()
-        .add_tool::<CreateDatabase, DatabasesToolContext<Service, EntityAccess>>()
-        .add_tool::<CreateTable, DatabasesToolContext<Service, EntityAccess>>()
-        .add_tool::<RenameDatabase, DatabasesToolContext<Service, EntityAccess>>()
-        .add_tool::<RenameTable, DatabasesToolContext<Service, EntityAccess>>()
-        .add_tool::<ReorderTables, DatabasesToolContext<Service, EntityAccess>>()
-        .add_tool::<DeleteTable, DatabasesToolContext<Service, EntityAccess>>()
-        .add_tool::<AddColumn, DatabasesToolContext<Service, EntityAccess>>()
-        .add_tool::<AddColumnOptions, DatabasesToolContext<Service, EntityAccess>>()
-        .add_tool::<RenameColumn, DatabasesToolContext<Service, EntityAccess>>()
-        .add_tool::<ChangeColumnType, DatabasesToolContext<Service, EntityAccess>>()
-        .add_tool::<DeleteColumn, DatabasesToolContext<Service, EntityAccess>>()
-        .add_tool::<ReorderColumns, DatabasesToolContext<Service, EntityAccess>>()
-}
-
 /// Discovery for live document answers. No mutation tools.
 pub fn databases_read_only_toolset<Service, EntityAccess>()
 -> AsyncToolCollection<DatabasesToolContext<Service, EntityAccess>>
@@ -292,24 +214,6 @@ pub(crate) fn table_of(
                 detail.database.id
             ),
             internal_error: anyhow::anyhow!("table not found in database"),
-        })
-}
-
-/// One column of a described table, or an error pointing at DescribeDatabase.
-pub(crate) fn column_of(
-    table: &TableDetail,
-    column_id: ColumnId,
-) -> Result<&ColumnDetail, ToolCallError> {
-    table
-        .columns
-        .iter()
-        .find(|column| column.column.id == column_id)
-        .ok_or_else(|| ToolCallError {
-            description: format!(
-                "Table {} has no column with id {column_id}. Call DescribeDatabase for its columns.",
-                table.table.id
-            ),
-            internal_error: anyhow::anyhow!("column not found in table"),
         })
 }
 
@@ -433,116 +337,6 @@ impl From<DataType> for ColumnType {
             DataType::SelectNumber => ColumnType::SelectNumber,
             DataType::Tag => ColumnType::Tag,
             DataType::Entity => ColumnType::Entity,
-        }
-    }
-}
-
-/// The column type a tool's arguments name: its value type, whether a cell
-/// holds several values, what an entity column points at, and the table a
-/// relation relates to.
-pub(crate) fn column_kind(
-    data_type: ColumnType,
-    is_multi_select: bool,
-    specific_entity_type: Option<ToolEntityType>,
-    relation: Option<(DatabaseId, TableId)>,
-) -> Result<ColumnKind, ToolCallError> {
-    if let Some((database, table)) = relation {
-        if specific_entity_type.is_some() {
-            return Err(ToolCallError {
-                description: "A relation column references rows of linkToTableId; leave \
-                              specificEntityType out."
-                    .into(),
-                internal_error: anyhow::anyhow!("a relation asked for an entity kind"),
-            });
-        }
-        if data_type != ColumnType::Entity {
-            return Err(ToolCallError {
-                description: "A relation column's type is entity; pass dataType entity with \
-                              linkToTableId."
-                    .into(),
-                internal_error: anyhow::anyhow!("a relation asked for another type"),
-            });
-        }
-        return Ok(ColumnKind::Relation { database, table });
-    }
-    if specific_entity_type.is_some() && data_type != ColumnType::Entity {
-        return Err(ToolCallError {
-            description: "specificEntityType is only for dataType entity; for a person column \
-                          pass dataType entity with specificEntityType USER, or leave \
-                          specificEntityType out."
-                .into(),
-            internal_error: anyhow::anyhow!("a non-entity column asked for an entity kind"),
-        });
-    }
-    let multi = is_multi_select;
-    Ok(match data_type {
-        ColumnType::Text => ColumnKind::Text,
-        ColumnType::Number => ColumnKind::Number,
-        ColumnType::Boolean => ColumnKind::Boolean,
-        ColumnType::Date => ColumnKind::Date,
-        ColumnType::Link => ColumnKind::Link,
-        ColumnType::Select => ColumnKind::Select { multi },
-        ColumnType::SelectNumber => ColumnKind::SelectNumber { multi },
-        ColumnType::Tag => ColumnKind::Tag,
-        ColumnType::Entity => {
-            let target = specific_entity_type
-                .and_then(|kind| entity_kind(kind.into()))
-                .ok_or_else(|| ToolCallError {
-                    description: "An entity column needs specificEntityType, what its ids \
-                                  reference: USER for people, DOCUMENT, TASK and so on."
-                        .into(),
-                    internal_error: anyhow::anyhow!("an entity column without its kind"),
-                })?;
-            ColumnKind::Entity { target, multi }
-        }
-    })
-}
-
-/// The kind of Macro entity an entity column references, as the model names
-/// it. A mirror of the property system's entity types, minus database rows:
-/// a relation to another table is made with `linkToTableId`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum ToolEntityType {
-    /// A person.
-    User,
-    /// A document.
-    Document,
-    /// A task.
-    Task,
-    /// A CRM company.
-    Company,
-    /// A call recording.
-    CallRecord,
-    /// A channel.
-    Channel,
-    /// An AI chat.
-    Chat,
-    /// A project folder.
-    Project,
-    /// An email thread.
-    Thread,
-    /// A calendar event.
-    CalendarEvent,
-    /// An initiative, shown as a project in the app.
-    Initiative,
-}
-
-impl From<ToolEntityType> for models_properties::EntityType {
-    fn from(value: ToolEntityType) -> Self {
-        use models_properties::EntityType as Stored;
-        match value {
-            ToolEntityType::User => Stored::User,
-            ToolEntityType::Document => Stored::Document,
-            ToolEntityType::Task => Stored::Task,
-            ToolEntityType::Company => Stored::Company,
-            ToolEntityType::CallRecord => Stored::CallRecord,
-            ToolEntityType::Channel => Stored::Channel,
-            ToolEntityType::Chat => Stored::Chat,
-            ToolEntityType::Project => Stored::Project,
-            ToolEntityType::Thread => Stored::Thread,
-            ToolEntityType::CalendarEvent => Stored::CalendarEvent,
-            ToolEntityType::Initiative => Stored::Initiative,
         }
     }
 }
@@ -677,26 +471,6 @@ pub struct ToolTable {
     #[schemars(with = "Vec<serde_json::Value>")]
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub views: Vec<DatabaseView>,
-}
-
-impl ToolDatabaseSchema {
-    /// The option labels of one column, in order; `None` when the schema
-    /// has no such column.
-    pub(crate) fn column_options(&self, table: TableId, column: ColumnId) -> Option<Vec<String>> {
-        self.tables
-            .iter()
-            .find(|candidate| candidate.id == table)?
-            .columns
-            .iter()
-            .find(|candidate| candidate.id == column)
-            .map(|column| {
-                column
-                    .options
-                    .iter()
-                    .map(|option| option.label.clone())
-                    .collect()
-            })
-    }
 }
 
 /// Everything a model needs to write SQL against one database.

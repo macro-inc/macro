@@ -359,13 +359,11 @@ Its bottom composer contains a database mention and private context identifying
 this database, its current table, and all its tables. Nothing sends automatically.
 Type a question or requested change and send it using the normal chat controls.
 Any chat, not only one opened from a database, can build databases: the assistant
-has `ListDatabases`, `DescribeDatabase`, `QueryDatabase`, `SaveDatabaseQuery`,
-`CreateDatabase`, `RenameDatabase`, `CreateTable`, `RenameTable`, `ReorderTables`,
-`DeleteTable`, `AddColumn` (relation columns via `linkToTableId`, entity
-columns via `specificEntityType`),
-`AddColumnOptions`, `RenameColumn`, `ChangeColumnType`, `DeleteColumn`,
-`ReorderColumns`, and `SaveDatabaseView`. It reads current schema before editing
-and checks actual results before reporting success.
+has six database tools: `ListDatabases`, `DescribeDatabase`, `QueryDatabase`,
+`SaveDatabaseQuery`, `SaveDatabaseView`, and `DeleteDatabaseView`.
+`QueryDatabase` reads and changes rows and handles schema changes through SQL
+(`CREATE`, `ALTER`, and `DROP`). The assistant reads the current schema before
+editing and checks actual results before reporting success.
 
 Query tool rows say what the query did in words (**Read Invites**, **Updated 3
 rows in Guests**, **Changed Price to number**, or **Queried Party Planner**) and

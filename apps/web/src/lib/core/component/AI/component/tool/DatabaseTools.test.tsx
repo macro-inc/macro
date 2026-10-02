@@ -54,7 +54,6 @@ afterEach(() => {
 const databaseId = '01992d2f-8444-7000-8000-000000000001';
 const tableId = '01992d2f-8444-7000-8000-000000000002';
 const columnId = '01992d2f-8444-7000-8000-000000000003';
-const otherColumnId = '01992d2f-8444-7000-8000-000000000005';
 const guestsTableId = '01992d2f-8444-7000-8000-000000000006';
 const invitesTableId = '01992d2f-8444-7000-8000-000000000007';
 
@@ -132,26 +131,6 @@ describe('database schema tool activity', () => {
     expect(screen.getByText('1 table')).toBeTruthy();
   });
 
-  it('renders RenameDatabase with the name the server kept', () => {
-    const rendered = renderTool(
-      databaseToolHandlers.RenameDatabase,
-      'RenameDatabase',
-      { databaseId, name: 'launch ' },
-      { databaseId, name: 'Launch', database }
-    );
-    expect(line(rendered)).toBe('Rename database to Launch');
-  });
-
-  it('renders DeleteTable with the database it left', () => {
-    const rendered = renderTool(
-      databaseToolHandlers.DeleteTable,
-      'DeleteTable',
-      { databaseId, tableId },
-      { databaseId, tableId, database }
-    );
-    expect(line(rendered)).toBe('Delete table from Launch');
-  });
-
   it('renders DeleteDatabaseView with the name of the view it deleted', () => {
     const rendered = renderTool(
       databaseToolHandlers.DeleteDatabaseView,
@@ -160,97 +139,6 @@ describe('database schema tool activity', () => {
       { databaseId, tableId, viewId: 'view-1', name: 'Stages' }
     );
     expect(line(rendered)).toBe('Deleted view Stages');
-  });
-
-  it('renders RenameColumn with its table', () => {
-    const rendered = renderTool(
-      databaseToolHandlers.RenameColumn,
-      'RenameColumn',
-      { databaseId, tableId, columnId, name: 'Status' },
-      { databaseId, tableId, columnId, name: 'Status', database }
-    );
-    expect(line(rendered)).toBe('Rename column to Status in Tickets');
-  });
-
-  it('renders ChangeColumnType with the column name from the schema', () => {
-    const rendered = renderTool(
-      databaseToolHandlers.ChangeColumnType,
-      'ChangeColumnType',
-      {
-        databaseId,
-        tableId,
-        columnId,
-        dataType: 'select',
-        options: ['Open', 'Done'],
-      },
-      {
-        databaseId,
-        tableId,
-        columnId,
-        database,
-      }
-    );
-    expect(line(rendered)).toBe('Change Status to select · Open, Done');
-  });
-
-  it('renders ChangeColumnType before the schema arrives', () => {
-    const rendered = renderTool(
-      databaseToolHandlers.ChangeColumnType,
-      'ChangeColumnType',
-      {
-        databaseId,
-        tableId,
-        columnId,
-        dataType: 'number',
-      }
-    );
-    expect(line(rendered)).toBe('Change column type to number');
-  });
-
-  it('renders DeleteColumn with the table it left', () => {
-    const rendered = renderTool(
-      databaseToolHandlers.DeleteColumn,
-      'DeleteColumn',
-      { databaseId, tableId, columnId: otherColumnId },
-      { databaseId, tableId, columnId: otherColumnId, database }
-    );
-    expect(line(rendered)).toBe('Delete column from Tickets');
-  });
-
-  it('renders ReorderColumns with its table', () => {
-    const rendered = renderTool(
-      databaseToolHandlers.ReorderColumns,
-      'ReorderColumns',
-      { databaseId, tableId, columnIds: [columnId, otherColumnId] },
-      { databaseId, tableId, database }
-    );
-    expect(line(rendered)).toBe('Reorder 2 columns in Tickets');
-  });
-
-  it('renders ReorderTables with its database', () => {
-    const rendered = renderTool(
-      databaseToolHandlers.ReorderTables,
-      'ReorderTables',
-      { databaseId, tableIds: [tableId, otherColumnId] },
-      { databaseId, tableIds: [tableId, otherColumnId], database }
-    );
-    expect(line(rendered)).toBe('Reorder 2 tables in Launch');
-  });
-
-  it('renders a delete without a refreshed schema', () => {
-    const rendered = renderTool(
-      databaseToolHandlers.DeleteColumn,
-      'DeleteColumn',
-      { databaseId, tableId, columnId },
-      {
-        databaseId,
-        tableId,
-        columnId,
-        database: null,
-        warning: 'Call DescribeDatabase before continuing.',
-      }
-    );
-    expect(line(rendered)).toBe('Delete column');
   });
 });
 
