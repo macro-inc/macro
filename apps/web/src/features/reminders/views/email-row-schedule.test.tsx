@@ -6,7 +6,7 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
-import type { JSX, ParentProps } from 'solid-js';
+import { createSignal, type JSX, type ParentProps, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { afterEach, expect, it, vi } from 'vitest';
 import { EmailRowSchedule } from './email-row-schedule';
@@ -30,8 +30,19 @@ vi.mock('@ui', async (importOriginal) => {
   };
 });
 vi.mock('../ReminderEditorSplit', () => ({
-  ReminderDetails: (props: { onClose: () => void }) => (
-    <button onClick={props.onClose}>Cancel</button>
+  ReminderDetails: (props: {
+    reminderId: string;
+    isEmailFollowup: boolean;
+    onClose: () => void;
+  }) => (
+    <Show when={props.reminderId} keyed>
+      {(id) => (
+        <div data-editor-id={id} data-editor-email={props.isEmailFollowup}>
+          <input aria-label="Unsaved note" value={id} />
+          <button onClick={props.onClose}>Cancel</button>
+        </div>
+      )}
+    </Show>
   ),
 }));
 vi.mock('../primitives/reminder-clock', () => ({
@@ -72,4 +83,52 @@ it('keeps the email row and its completion independent from the clock editor', a
     expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull()
   );
   expect(openThread).not.toHaveBeenCalled();
+});
+
+it('pins the editing target and unsaved draft through same-ID and nearest A-to-B summary refreshes', () => {
+  const first: ReminderEntity = {
+    type: 'reminder',
+    id: 'A',
+    name: 'A',
+    description: 'A',
+    ownerId: 'owner',
+    enabled: true,
+    scheduleType: 'once',
+    nextRunAt: '2026-10-02T12:00:00Z',
+  };
+  const [nearest, setNearest] = createSignal(first);
+  render(() => (
+    <EmailRowSchedule reminder={{ nearest: nearest(), count: 2 }} />
+  ));
+  fireEvent.click(screen.getByRole('button', { name: /Remind me:/ }));
+  const note = screen.getByRole('textbox', {
+    name: 'Unsaved note',
+  }) as HTMLInputElement;
+  fireEvent.input(note, { target: { value: 'Keep my draft' } });
+  setNearest({ ...first, nextRunAt: '2026-10-03T12:00:00Z' });
+  expect(screen.getByRole('textbox', { name: 'Unsaved note' })).toBe(note);
+  expect(note.value).toBe('Keep my draft');
+  setNearest({
+    ...first,
+    id: 'B',
+    emailFollowup: {
+      state: 'pending',
+      condition: 'if_no_reply',
+      threadId: 'thread',
+      reminderId: 'B',
+      revision: 'revision',
+      linkId: 'inbox',
+      remindAt: '2026-10-02T12:00:00Z',
+    },
+  });
+  expect(document.querySelector('[data-editor-id="A"]')).toBeTruthy();
+  expect(document.querySelector('[data-editor-id="B"]')).toBeNull();
+  expect(document.querySelector('[data-editor-email="false"]')).toBeTruthy();
+  expect(screen.getByRole('textbox', { name: 'Unsaved note' })).toBe(note);
+  expect(note.value).toBe('Keep my draft');
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  fireEvent.click(screen.getByRole('button', { name: /Returning:/ }));
+  expect(
+    document.querySelector('[data-editor-id="B"][data-editor-email="true"]')
+  ).toBeTruthy();
 });

@@ -161,6 +161,7 @@ function snapInsets(content: HTMLElement) {
 function ScrollablePillTabs<T extends string>(props: PillTabsProps<T>) {
   const [stripRef, setStripRef] = createSignal<HTMLDivElement>();
   const [contentRef, setContentRef] = createSignal<HTMLDivElement>();
+  const stripSize = createElementSize(stripRef);
 
   // Horizontal panning, driven manually from the content row's pointer
   // events: the strip is pointer-events:none (so its shadow halo passes
@@ -291,9 +292,11 @@ function ScrollablePillTabs<T extends string>(props: PillTabsProps<T>) {
       () =>
         [
           props.value,
+          stripSize.width,
           props.items.map((item) => item.value).join('\u0000'),
         ] as const,
       () => {
+        if (!stripSize.width) return;
         queueMicrotask(() => {
           const strip = stripRef();
           const active = strip?.querySelector<HTMLElement>('[data-checked]');

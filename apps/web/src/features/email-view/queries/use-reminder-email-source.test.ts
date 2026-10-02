@@ -3,9 +3,24 @@ import { createRoot } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { EmailViewState } from '../types';
+import { useEmailDetailListNavigation } from '../use-email-detail-list-navigation';
 import { useReminderEmailSource } from './use-reminder-email-source';
 
-const mocks = vi.hoisted(() => ({ collection: vi.fn(), hydration: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  collection: vi.fn(),
+  hydration: vi.fn(),
+  view: vi.fn(),
+  open: vi.fn(),
+  failure: vi.fn(),
+}));
+vi.mock('../email-view-context', () => ({ useEmailView: mocks.view }));
+vi.mock('@core/component/Toast/Toast', () => ({
+  toast: { failure: mocks.failure },
+}));
+vi.mock(
+  '@app/components/list',
+  async () => await import('@app/components/list/use-list-detail-navigation')
+);
 vi.mock('@app/features/soup', async () => ({
   ...(await import('@app/features/soup/filters')),
   ...(await import('@app/features/soup/collection/rows')),
@@ -59,17 +74,40 @@ function mount() {
       isPending: false,
       isPlaceholderData: false,
       isFetching: false,
-      data: { entities: [] as EmailEntity[] },
+      data: { entities: [] as EmailEntity[] } as
+        | { entities: EmailEntity[] }
+        | undefined,
+      error: null as Error | null,
+      refresh: vi.fn(async () => {}),
+    });
+    const [laterHydration, setLaterHydration] = createStore({
+      isPending: true,
+      isPlaceholderData: false,
+      isFetching: true,
+      data: undefined as { entities: EmailEntity[] } | undefined,
       error: null as Error | null,
       refresh: vi.fn(async () => {}),
     });
     mocks.collection.mockReturnValue(collection);
-    mocks.hydration.mockReturnValue(hydration);
+    mocks.hydration
+      .mockReturnValueOnce(hydration)
+      .mockReturnValue(laterHydration);
     const source = useReminderEmailSource(state, {
       tagSets: () => [],
       tagSetsReady: () => true,
     });
-    return { source, setState, collection, setCollection, setHydration };
+    mocks.view.mockReturnValue({ source, openThread: mocks.open });
+    const navigation = useEmailDetailListNavigation(() => 'first');
+    return {
+      source,
+      navigation,
+      setState,
+      collection,
+      setCollection,
+      setHydration,
+      laterHydration,
+      setLaterHydration,
+    };
   });
 }
 function email(id: string): EmailEntity {
@@ -129,7 +167,7 @@ it('surfaces initial hydration failures for retry without fabricating preview ro
   setCollection('data', 'pages', [
     { items: [{ threadId: 'email' }], nextCursor: 'continue' },
   ]);
-  setHydration('error', new Error('Retry hydration'));
+  setHydration({ data: undefined, error: new Error('Retry hydration') });
   expect(source.error()).toEqual(new Error('Retry hydration'));
   expect(source.items().filter((row) => row.kind === 'entity')).toEqual([]);
 });
@@ -144,3 +182,140 @@ vi.mock('@service-connection/websocket', () => ({
   createConnectionBlockWebsocketEffect: vi.fn(),
   createConnectionWebsocketEffect: vi.fn(),
 }));
+
+it('shares the in-flight final-page wait until native hydration publishes the next email', async () => {
+  const {
+    source,
+    navigation,
+    collection,
+    setCollection,
+    setHydration,
+    setLaterHydration,
+  } = mount();
+  setCollection('data', 'pages', [
+    { items: [{ threadId: 'first' }], nextCursor: 'last' },
+  ]);
+  setHydration('data', { entities: [email('first')] });
+  let release!: () => void;
+  collection.fetchNextPage.mockImplementationOnce(
+    () =>
+      new Promise<void>((resolve) => {
+        release = () => {
+          setCollection({
+            hasNextPage: false,
+            isFetchingNextPage: false,
+            data: {
+              pages: [
+                { items: [{ threadId: 'first' }], nextCursor: 'last' },
+                { items: [{ threadId: 'last' }], nextCursor: '' },
+              ],
+            },
+          });
+          resolve();
+        };
+      })
+  );
+  const first = source.loadMore();
+  const nextEmail = navigation.afterReminderSaved?.();
+  const concurrent = source.loadMore();
+  expect(concurrent).toBe(first);
+  let settled = false;
+  void first.then(() => {
+    settled = true;
+  });
+  await Promise.resolve();
+  release();
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(settled).toBe(false);
+  expect(mocks.open).not.toHaveBeenCalled();
+  expect(source.isLoadingMore()).toBe(true);
+  expect(source.hasMore()).toBe(true);
+  expect(source.items().filter((row) => row.kind === 'entity')).toHaveLength(1);
+  setLaterHydration({
+    isPending: false,
+    isFetching: false,
+    data: { entities: [email('last')] },
+  });
+  await first;
+  await nextEmail;
+  expect(mocks.open).toHaveBeenCalledWith({ id: 'last', fallbackName: 'last' });
+  expect(
+    source
+      .items()
+      .flatMap((row) => (row.kind === 'entity' ? [row.entity.id] : []))
+  ).toEqual(['first', 'last']);
+  expect(source.hasMore()).toBe(false);
+  expect(collection.fetchNextPage).toHaveBeenCalledOnce();
+});
+
+it('retains earlier rows and retries failed final-page hydration without fetching past it', async () => {
+  const {
+    source,
+    collection,
+    setCollection,
+    setHydration,
+    laterHydration,
+    setLaterHydration,
+  } = mount();
+  setCollection({
+    hasNextPage: false,
+    data: {
+      pages: [
+        { items: [{ threadId: 'first' }], nextCursor: 'last' },
+        { items: [{ threadId: 'last' }], nextCursor: '' },
+      ],
+    },
+  });
+  setHydration('data', { entities: [email('first')] });
+  setLaterHydration({
+    isPending: false,
+    isFetching: false,
+    error: new Error('Native page failed'),
+  });
+  expect(source.error()).toEqual(new Error('Native page failed'));
+  expect(source.items().map((row) => row.kind)).toEqual([
+    'entity',
+    'load-more',
+  ]);
+  expect(source.hasMore()).toBe(true);
+  laterHydration.refresh.mockImplementationOnce(async () => {
+    setLaterHydration({ error: null, data: { entities: [email('last')] } });
+  });
+  await source.loadMore();
+  expect(laterHydration.refresh).toHaveBeenCalledOnce();
+  expect(collection.fetchNextPage).not.toHaveBeenCalled();
+  expect(source.error()).toBeUndefined();
+  expect(source.items().map((row) => row.kind)).toEqual(['entity', 'entity']);
+  setLaterHydration('error', new Error('Background failure with cached rows'));
+  expect(source.error()).toBeUndefined();
+});
+
+it('rejects a pending navigation wait when the selected inbox changes', async () => {
+  const { source, setCollection, setState, setHydration } = mount();
+  setCollection('data', 'pages', [
+    { items: [{ threadId: 'first' }], nextCursor: 'next' },
+  ]);
+  setHydration({ isPending: true, data: undefined });
+  const pending = source.loadMore();
+  await Promise.resolve();
+  setState('inboxIds', ['another-inbox']);
+  await expect(pending).rejects.toThrow('Email view changed');
+});
+
+it('reconciles live non-read facets and refills while keeping read admission stable', async () => {
+  const { source, collection, setCollection, setState, setHydration } = mount();
+  setState('facets', { done: ['not-done'], read: ['unread'] });
+  setCollection('data', 'pages', [
+    { items: [{ threadId: 'first' }], nextCursor: 'next' },
+  ]);
+  setHydration('data', { entities: [email('first')] });
+  expect(source.items().filter((row) => row.kind === 'entity')).toHaveLength(1);
+  setHydration('data', { entities: [{ ...email('first'), isRead: true }] });
+  expect(source.items().filter((row) => row.kind === 'entity')).toHaveLength(1);
+  collection.refetch.mockClear();
+  setHydration('data', { entities: [{ ...email('first'), done: true }] });
+  expect(source.items().filter((row) => row.kind === 'entity')).toHaveLength(0);
+  await Promise.resolve();
+  expect(collection.refetch).toHaveBeenCalledOnce();
+});

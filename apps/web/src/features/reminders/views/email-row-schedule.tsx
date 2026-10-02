@@ -10,6 +10,12 @@ import { ReminderDetails } from '../ReminderEditorSplit';
 export function EmailRowSchedule(props: { reminder: EmailRowReminder }) {
   const now = useReminderClock();
   const [open, setOpen] = createSignal(false);
+  // Summary polling may choose another nearest reminder while this editor is open.
+  // The activation, not live row metadata, owns this editor session's identity.
+  const [target, setTarget] = createSignal<{
+    id: string;
+    emailFollowup: boolean;
+  }>();
   let opener: HTMLElement | undefined;
   const label = () => {
     const reminder = props.reminder.nearest;
@@ -34,6 +40,10 @@ export function EmailRowSchedule(props: { reminder: EmailRowReminder }) {
             document.activeElement instanceof HTMLElement
               ? document.activeElement
               : undefined;
+          setTarget({
+            id: props.reminder.nearest.id,
+            emailFollowup: !!props.reminder.nearest.emailFollowup,
+          });
           setOpen(true);
         }}
       />
@@ -58,14 +68,16 @@ export function EmailRowSchedule(props: { reminder: EmailRowReminder }) {
           <ActionDialogShell.Header class="px-6 pt-5">
             <ActionDialogShell.Title>Reminder</ActionDialogShell.Title>
           </ActionDialogShell.Header>
-          <Show when={open()}>
-            <Suspense fallback={<p role="status">Loading reminder…</p>}>
-              <ReminderDetails
-                reminderId={props.reminder.nearest.id}
-                isEmailFollowup={!!props.reminder.nearest.emailFollowup}
-                onClose={() => setOpen(false)}
-              />
-            </Suspense>
+          <Show when={open() && target()}>
+            {(selected) => (
+              <Suspense fallback={<p role="status">Loading reminder…</p>}>
+                <ReminderDetails
+                  reminderId={selected().id}
+                  isEmailFollowup={selected().emailFollowup}
+                  onClose={() => setOpen(false)}
+                />
+              </Suspense>
+            )}
           </Show>
         </ActionDialogShell>
       </Dialog>

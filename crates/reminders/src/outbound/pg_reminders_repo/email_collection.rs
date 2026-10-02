@@ -15,6 +15,7 @@ struct StoredEmailReminder {
     #[serde(flatten)]
     reminder: ReminderRow,
     followup: Option<serde_json::Value>,
+    has_followup: bool,
 }
 
 impl PgRemindersRepo {
@@ -31,7 +32,8 @@ impl PgRemindersRepo {
             WITH eligible AS MATERIALIZED (
                 SELECT r.id, r.description, r.entity_type, r.entity_id,
                     r.remind_at, r.cron, r.timezone, r.next_run_at, r.enabled,
-                    r.completed_at, r.created_at, r.updated_at, f.payload AS followup
+                    r.completed_at, r.created_at, r.updated_at, f.payload AS followup,
+                    (f.reminder_id IS NOT NULL) AS has_followup
                 FROM reminder r
                 LEFT JOIN reminder_email_followup f ON f.reminder_id = r.id AND f.user_id = $1
                 WHERE r.user_id = $1 AND r.entity_type = 'email_thread' AND r.entity_id IS NOT NULL
@@ -75,8 +77,8 @@ impl PgRemindersRepo {
                         let item = (|| {
                             let stored: StoredEmailReminder =
                                 serde_json::from_value(value.clone()).ok()?;
-                            let followup = match stored.followup {
-                                Some(payload) => {
+                            let followup = match (stored.has_followup, stored.followup) {
+                                (true, Some(payload)) => {
                                     let record: FollowupRecord =
                                         serde_json::from_value(payload).ok()?;
                                     if record.user_id.as_ref() != user.as_ref()
@@ -87,7 +89,8 @@ impl PgRemindersRepo {
                                     }
                                     Some(record.followup)
                                 }
-                                None => None,
+                                (true, None) => return None,
+                                (false, _) => None,
                             };
                             Some(ReminderCollectionRow {
                                 reminder: stored.reminder.into_reminder().ok()?,

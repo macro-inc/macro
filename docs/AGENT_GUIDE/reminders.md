@@ -159,5 +159,12 @@ For verification, use more than 100 reminders, a long prefix excluded by the
 selected inbox/filter, several reminders on one email, and a shared thread with
 private reminders belonging to different users. A sparse page can still have a
 **Load more** continuation. Follow it rather than treating that page as the end.
+A final page stays loading until its original email rows hydrate. If that page
+fails, earlier rows remain with **Couldn’t load more email. Try again**; retry
+loads the failed page without skipping ahead. In Email, Tab from the grid moves
+through native row controls; Enter on a clock opens its editor without opening
+the email. An open editor keeps the reminder selected at activation even if a
+summary refresh chooses a different nearest reminder.
+
 Check create/edit/remove/undo, reply cancellation, and due return across the Email
 Reminders list and another matching email view without reloading the app.

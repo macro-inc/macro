@@ -36,6 +36,8 @@ const VALID_MARK_DONE_LIST_VIEWS: `${ListView}-${string}`[] = [
   'home-reminders',
   'mail-important',
   'mail-all',
+  // These are original email rows; Done remains email archive, not reminder completion.
+  'mail-reminders',
   'mail-noise',
   'mail-favorites',
   // Calendar lists invite threads from the "all" email view, so done rows

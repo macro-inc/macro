@@ -75,12 +75,17 @@ export function useEmailReminderCollection(
   });
 }
 
+/** Refill facet-filtered pages after email mutations commit. */
+export function invalidateEmailReminderCollection() {
+  return queryClient.invalidateQueries({
+    queryKey: reminderKeys.emailCollection._def,
+  });
+}
+
 /** All owning mutation paths share these two read surfaces. */
 export async function invalidateEmailReminderReads() {
   await Promise.all([
-    queryClient.invalidateQueries({
-      queryKey: reminderKeys.emailCollection._def,
-    }),
+    invalidateEmailReminderCollection(),
     queryClient.invalidateQueries({
       queryKey: reminderKeys.emailSummaries._def,
     }),

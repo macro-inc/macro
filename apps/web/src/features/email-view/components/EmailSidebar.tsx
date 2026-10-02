@@ -101,6 +101,11 @@ export function EmailSidebar() {
       EMAIL_TAB_IDS.filter((id) => id !== 'reminders' || reminders().enabled),
     activeId: () => state.tab,
     setActiveId: setTab,
+    shouldHandleSequentialKeyEvent: (event) =>
+      !(
+        event?.target instanceof Element &&
+        event.target.closest('[role="grid"][aria-label="Email"]')
+      ),
   });
 
   return (

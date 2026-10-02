@@ -9,6 +9,9 @@
  * One bounded set of original thread IDs.
  */
 export interface EmailReminderSummaryRequest {
-  /** At most 100 IDs; absent reminders produce no result. */
+  /**
+   * At most 100 IDs; absent reminders produce no result.
+   * @maxItems 100
+   */
   threadIds: string[];
 }

@@ -270,3 +270,37 @@ async fn email_candidates_skip_malformed_schedule_without_losing_group_or_cursor
         .unwrap();
     assert_eq!(later[0].cursor.thread_id, later_thread);
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn email_candidates_never_downgrade_malformed_workflows_to_generic(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    let repo = PgRemindersRepo::new(pool.clone());
+    let now = at(2026, 10, 2, 12);
+    for payload in [
+        serde_json::Value::Null,
+        serde_json::json!({"invalid": true}),
+    ] {
+        let thread = macro_uuid::generate_uuid_v7();
+        let mirror = attached(&repo, USER_A, thread, now).await;
+        sqlx::query!(
+            "INSERT INTO reminder_email_followup (reminder_id, user_id, thread_id, link_id, state, payload) VALUES ($1, $2, $3, $4, 'pending', $5)",
+            mirror.id, USER_A, thread, macro_uuid::generate_uuid_v7(), payload
+        ).execute(&pool).await.unwrap();
+        let rows = repo
+            .email_candidates(&user(USER_A), Some(&[thread]), None, now, 1)
+            .await
+            .unwrap();
+        assert_eq!(rows.len(), 1);
+        assert!(rows[0].summary.is_none());
+        assert_eq!(rows[0].cursor.thread_id, thread);
+        let generic = attached(&repo, USER_A, thread, now + Duration::hours(1)).await;
+        let rows = repo
+            .email_candidates(&user(USER_A), Some(&[thread]), None, now, 1)
+            .await
+            .unwrap();
+        let summary = rows[0].summary.as_ref().unwrap();
+        assert_eq!(summary.count, 1);
+        assert_eq!(summary.nearest.reminder.id, generic.id);
+        assert!(summary.nearest.email_followup.is_none());
+    }
+}

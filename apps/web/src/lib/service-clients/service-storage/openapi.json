@@ -14336,7 +14336,8 @@
             "schema": {
               "type": ["integer", "null"],
               "format": "int32",
-              "minimum": 0
+              "maximum": 100,
+              "minimum": 1
             }
           }
         ],
@@ -24573,7 +24574,8 @@
               "type": "string",
               "format": "uuid"
             },
-            "description": "At most 100 IDs; absent reminders produce no result."
+            "description": "At most 100 IDs; absent reminders produce no result.",
+            "maxItems": 100
           }
         }
       },

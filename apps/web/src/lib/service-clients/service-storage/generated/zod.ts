@@ -41026,7 +41026,7 @@ export const listReminderCollectionResponse = zod
 /**
  * @summary List original email threads with caller-private reminder work.
  */
-export const listEmailRemindersQueryLimitMin = 0;
+export const listEmailRemindersQueryLimitMax = 100;
 
 export const listEmailRemindersQueryParams = zod.object({
   inboxIds: zod
@@ -41057,7 +41057,8 @@ export const listEmailRemindersQueryParams = zod.object({
     .describe('Continuation from the previous page.'),
   limit: zod
     .number()
-    .min(listEmailRemindersQueryLimitMin)
+    .min(1)
+    .max(listEmailRemindersQueryLimitMax)
     .nullish()
     .describe('Maximum rows (1–100).'),
 });
@@ -41273,10 +41274,13 @@ export const listEmailRemindersResponse = zod
 /**
  * @summary Batch clocks for original email rows without one request per row.
  */
+export const emailReminderSummariesBodyThreadIdsMax = 100;
+
 export const emailReminderSummariesBody = zod
   .object({
     threadIds: zod
       .array(zod.uuid())
+      .max(emailReminderSummariesBodyThreadIdsMax)
       .describe('At most 100 IDs; absent reminders produce no result.'),
   })
   .describe('One bounded set of original thread IDs.');

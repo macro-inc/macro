@@ -4,18 +4,29 @@ import {
   createSoupRowStore,
   createTagFacetContext,
   tagFacetReady,
+  testFacets,
 } from '@app/features/soup';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { enableReminders } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
-import { isEmailEntity } from '@entity';
+import { type EmailEntity, isEmailEntity } from '@entity';
 import { queryReadyGate } from '@queries/gate';
 import { useEmailReminderCollection } from '@queries/reminders/email-collection';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import type { ListEmailRemindersParams } from '@service-storage/generated/schemas/listEmailRemindersParams';
-import { createMemo, indexArray } from 'solid-js';
+import {
+  createComputed,
+  createEffect,
+  createMemo,
+  createRoot,
+  createSignal,
+  indexArray,
+  onCleanup,
+  untrack,
+} from 'solid-js';
+import { EMAIL_FACETS } from '../filters/email-facets';
 import { buildEmailQuery } from './email-query';
 import type {
   EmailDataSource,
@@ -76,7 +87,7 @@ export function useReminderEmailSource(
           {
             tab: 'reminders',
             inboxIds: state.inboxIds,
-            facets: {},
+            facets: state.facets,
             facetContext: tagContext(),
           },
           ids()
@@ -84,12 +95,37 @@ export function useReminderEmailSource(
       () => ({ enabled: active() && ids().length > 0, keepPreviousData: false })
     );
   });
+  const scope = createMemo(() =>
+    JSON.stringify([userId(), active(), filters()])
+  );
+  const [disposed, setDisposed] = createSignal(false);
+  onCleanup(() => setDisposed(true));
+  const usable = (query: ReturnType<typeof useSoupAstItemsQuery>) =>
+    queryReadyGate(query) && !query.isPlaceholderData;
+  const pending = () =>
+    hydration().some(
+      (query, index) =>
+        pages()[index].items.length > 0 && !usable(query) && !query.error
+    );
+  const failed = () =>
+    hydration().filter(
+      (query, index) =>
+        pages()[index].items.length > 0 && !usable(query) && query.error
+    );
+  const matches = (email: EmailEntity) =>
+    testFacets(
+      { ...state.facets, read: [] },
+      EMAIL_FACETS,
+      email,
+      tagContext()
+    );
   const entities = createMemo(() => {
     const byId = new Map(
       hydration().flatMap((query) =>
-        queryReadyGate(query) && !query.isPlaceholderData
-          ? query.data.entities
-              .filter(isEmailEntity)
+        usable(query)
+          ? query
+              .data!.entities.filter(isEmailEntity)
+              .filter(matches)
               .map((entity) => [entity.id, entity] as const)
           : []
       )
@@ -104,46 +140,137 @@ export function useReminderEmailSource(
       })
     );
   });
+  const [loadingMore, setLoadingMore] = createSignal(false);
+  const [loadError, setLoadError] = createSignal<Error>();
+  const error = () =>
+    failed()[0]?.error ??
+    loadError() ??
+    (entities().length === 0 ? (collection.error ?? undefined) : undefined);
+  const hasMore = () =>
+    Boolean(
+      collection.hasNextPage || loadingMore() || pending() || failed().length
+    );
   const built = createMemo((): EmailDataSourceItem[] => {
     const rows: EmailDataSourceItem[] = buildFlatSoupRows(entities());
-    // A sparse server page is not an empty collection. Keep the continuation
-    // visible and reachable by both the virtualizer and keyboard navigation.
-    if (collection.hasNextPage)
+    // A sparse page or an unhydrated final page still has reachable work.
+    if (hasMore())
       rows.push(
         createSoupLoadMoreRow({
           scopeId: 'email:reminders',
-          isLoading: collection.isFetchingNextPage,
+          label: error() ? 'Couldn’t load more email. Try again' : 'Load More',
+          isLoading:
+            loadingMore() || collection.isFetchingNextPage || pending(),
         })
       );
     return rows;
   });
   const items = createSoupRowStore(built);
-  const hydrationPending = () =>
-    hydration().some(
-      (query, index) => pages()[index].items.length > 0 && query.isPending
-    );
+
+  // Every caller waits for the same operation, including native row publication.
+  // Returning a resolved no-op while a fetch is pending makes detail navigation
+  // spin its hasMore loop and can starve the network task itself.
+  let inFlight: Promise<void> | undefined;
+  const waitForHydration = (requestScope: string) =>
+    new Promise<void>((resolve, reject) => {
+      createRoot((dispose) => {
+        createComputed(() => {
+          if (disposed() || scope() !== requestScope) {
+            dispose();
+            reject(new Error('Email view changed while loading'));
+          } else if (!collection.isFetchingNextPage && !pending()) {
+            items();
+            dispose();
+            resolve();
+          }
+        });
+      });
+    });
+  const loadMore = (): Promise<void> => {
+    if (inFlight) return inFlight;
+    const requestScope = scope();
+    setLoadingMore(true);
+    setLoadError(undefined);
+    inFlight = Promise.resolve()
+      .then(async () => {
+        const retries = failed();
+        if (retries.length) {
+          await Promise.all(retries.map((query) => query.refresh()));
+        } else if (
+          !pending() &&
+          collection.hasNextPage &&
+          !collection.isFetchingNextPage
+        ) {
+          const result = await collection.fetchNextPage();
+          if (result?.error) setLoadError(result.error);
+        }
+        await waitForHydration(requestScope);
+      })
+      .catch((cause) => {
+        if (scope() !== requestScope || disposed()) throw cause;
+        setLoadError(
+          cause instanceof Error ? cause : new Error('Email couldn’t be loaded')
+        );
+      })
+      .finally(() => {
+        inFlight = undefined;
+        setLoadingMore(false);
+      });
+    return inFlight;
+  };
+
+  // Optimistic archive/tag changes must remove stale membership immediately.
+  // Refill from the authoritative collection once per changed membership, not
+  // from an unfiltered native page. Read changes intentionally retain admission.
+  let reconciled = '';
+  createEffect(() => {
+    const currentScope = scope();
+    // An intermediate fetch is not evidence that a mismatch disappeared.
+    // Retain the reconciliation signature while any admitted page refreshes.
+    if (
+      hydration().some(
+        (query, index) =>
+          pages()[index].items.length > 0 &&
+          (!usable(query) || query.isFetching)
+      )
+    )
+      return;
+    const missing = hydration().flatMap((query, index) => {
+      if (!usable(query) || query.isFetching) return [];
+      const ids = new Set(
+        query
+          .data!.entities.filter(isEmailEntity)
+          .filter(matches)
+          .map((email) => email.id)
+      );
+      return pages()
+        [index].items.filter((item) => !ids.has(item.threadId))
+        .map((item) => item.threadId);
+    });
+    const signature = JSON.stringify([currentScope, missing]);
+    if (signature === reconciled) return;
+    reconciled = signature;
+    if (missing.length && active()) untrack(() => void collection.refetch());
+  });
+  createEffect(() => {
+    scope();
+    setLoadError(undefined);
+  });
+
   return {
     items,
     isLoading: () =>
       !ready() ||
       collection.isLoading ||
-      (entities().length === 0 && hydrationPending()),
+      (entities().length === 0 && pending()),
     isFetching: () =>
       collection.isFetching || hydration().some((query) => query.isFetching),
-    // Keep usable cached email rows through background failures.
-    error: () =>
-      entities().length > 0
-        ? undefined
-        : (collection.error ??
-          hydration().find((query) => query.error)?.error ??
-          undefined),
-    hasMore: () => collection.hasNextPage,
-    isLoadingMore: () => collection.isFetchingNextPage,
-    loadMore: async () => {
-      if (collection.hasNextPage && !collection.isFetchingNextPage)
-        await collection.fetchNextPage();
-    },
+    error,
+    hasMore,
+    isLoadingMore: () =>
+      loadingMore() || collection.isFetchingNextPage || pending(),
+    loadMore,
     refresh: async () => {
+      setLoadError(undefined);
       await Promise.all([
         collection.refetch(),
         ...hydration().map((query) => query.refresh()),

@@ -40,7 +40,8 @@ export type ListEmailRemindersParams = {
   cursor?: string | null;
   /**
    * Maximum rows (1–100).
-   * @minimum 0
+   * @minimum 1
+   * @maximum 100
    */
   limit?: number | null;
 };

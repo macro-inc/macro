@@ -26,6 +26,7 @@ pub struct EmailReminderParams {
     /// Continuation from the previous page.
     pub cursor: Option<String>,
     /// Maximum rows (1–100).
+    #[param(minimum = 1, maximum = 100)]
     pub limit: Option<u32>,
 }
 
@@ -34,6 +35,7 @@ pub struct EmailReminderParams {
 #[serde(rename_all = "camelCase")]
 pub struct EmailReminderSummaryRequest {
     /// At most 100 IDs; absent reminders produce no result.
+    #[schema(max_items = 100)]
     pub thread_ids: Vec<Uuid>,
 }
 
