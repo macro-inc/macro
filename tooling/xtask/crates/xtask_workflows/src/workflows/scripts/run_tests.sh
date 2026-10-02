@@ -25,7 +25,9 @@ def sample():
         'RUSTC_WRAPPER': os.environ.get('RUSTC_WRAPPER', '<unset>'),
         'RUSTC_WORKSPACE_WRAPPER': os.environ.get('RUSTC_WORKSPACE_WRAPPER', '<unset>'),
     }), flush=True)
-    subprocess.run(['free', '-m'], check=False, timeout=5)
+    diagnostic_environment = dict(os.environ)
+    diagnostic_environment.pop('LD_LIBRARY_PATH', None)
+    subprocess.run(['free', '-m'], check=False, timeout=5, env=diagnostic_environment)
     for resource in ['cpu', 'io', 'memory']:
         path = Path('/proc/pressure') / resource
         if path.exists(): print(str(path) + ': ' + path.read_text().strip(), flush=True)
@@ -41,9 +43,9 @@ def sample():
             if values: print(json.dumps({'cgroup': str(directory), 'values': values}), flush=True)
             if directory == root: break
             directory = directory.parent
-    processes = subprocess.run(['ps', '-eo', 'pid,ppid,comm,state,etimes,pcpu,time,rss,wchan:24', '--sort=-rss'], capture_output=True, text=True, check=False, timeout=5)
+    processes = subprocess.run(['ps', '-eo', 'pid,ppid,comm,state,etimes,pcpu,time,rss,wchan:24', '--sort=-rss'], capture_output=True, text=True, check=False, timeout=5, env=diagnostic_environment)
     print('\n'.join(processes.stdout.splitlines()[:21]), flush=True)
-    compilers = subprocess.run(['ps', '-C', 'rustc', '-o', 'pid=,args='], capture_output=True, text=True, check=False, timeout=5)
+    compilers = subprocess.run(['ps', '-C', 'rustc', '-o', 'pid=,args='], capture_output=True, text=True, check=False, timeout=5, env=diagnostic_environment)
     for compiler in compilers.stdout.splitlines():
         arguments = compiler.split()
         if '--crate-name' in arguments:
