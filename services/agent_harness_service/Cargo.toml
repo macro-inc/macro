@@ -61,6 +61,7 @@ github_pull_requests = { path = "../../crates/github_pull_requests", default-fea
   "s3",
   "service",
 ] }
+mcp_client = { path = "../../crates/mcp_client" }
 pipedream_mcp = { path = "../../crates/pipedream_mcp" }
 url = { workspace = true }
 contacts = { path = "../../crates/contacts" }
