@@ -240,7 +240,7 @@ export function EmailDetailView(props: {
             aria-label="Email location"
             fallback={<EntityDetailBreadcrumbSkeleton />}
           />
-          <div class="ml-auto flex shrink-0 items-center gap-1">
+          <div class="ml-auto flex shrink-0 items-center gap-1 @max-[900px]/split-header:[&_[data-header-action]]:w-8 @max-[900px]/split-header:[&_[data-header-action]]:p-0 @max-[900px]/split-header:[&_[data-header-action-label]]:hidden">
             <div ref={setControlsMount} class="flex items-center" />
             <SidePanel.HeaderActionsOutlet />
             <Show when={ENABLE_EMAIL_SHARING}>

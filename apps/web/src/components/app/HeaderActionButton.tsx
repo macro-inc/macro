@@ -17,6 +17,7 @@ export function HeaderActionButton(props: {
       ref={props.ref}
       variant="ghost"
       size="md"
+      data-header-action
       aria-label={props.label}
       tooltip={props.tooltip}
       onClick={props.onClick}
@@ -28,7 +29,9 @@ export function HeaderActionButton(props: {
       )}
     >
       {props.icon}
-      <span class="@max-[600px]/split-header:hidden">{props.label}</span>
+      <span data-header-action-label class="@max-[600px]/split-header:hidden">
+        {props.label}
+      </span>
     </Button>
   );
 }

@@ -17,7 +17,6 @@ import { Wordcount } from '@core/component/LexicalMarkdown/component/status/Word
 import { Notifications } from '@core/component/Notifications';
 import { References } from '@core/component/References';
 import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
-import { useUserId } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
 import type { Entity } from '@core/types';
 import type { DateValue } from '@core/util/date';
@@ -35,13 +34,9 @@ import {
   type GithubPullRequestWithDetails,
   useDocumentGithubPullRequestsQuery,
 } from '@queries/storage/github-pull-requests';
-import {
-  useDocumentTeamShareQuery,
-  useSetDocumentTeamShareMutation,
-} from '@queries/storage/team-share';
 import type { EntityType as PropertiesEntityType } from '@service-properties/generated/schemas/entityType';
 import { createCallback } from '@solid-primitives/rootless';
-import { cn, InlineCheckbox } from '@ui';
+import { cn } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 import { useMarkdownDocument } from '../../context/markdown-document-context';
 import { createPinnedProperties } from '../../primitives/create-pinned-properties';
@@ -55,7 +50,6 @@ export function MarkdownSidePanelSections() {
   const canEdit = permissions.canEdit;
   const { displayName } = useMarkdownName();
   const isTask = () => kind() === 'task';
-  const isSnippet = () => kind() === 'snippet';
   const canDispatchToAgent = () => isTask() || kind() === 'document';
   const entity = (): Entity => ({
     id: documentId(),
@@ -87,9 +81,6 @@ export function MarkdownSidePanelSections() {
         </Show>
         <DetailsSectionContent documentId={documentId()} />
       </SidePanel.Footer>
-      <Show when={isSnippet()}>
-        <SnippetSharingOwnerSectionConditional documentId={documentId()} />
-      </Show>
       <EntityTagsSection
         entityId={documentId()}
         entityType={propertiesEntityType()}
@@ -121,85 +112,6 @@ export function MarkdownSidePanelSections() {
         <TaskDuplicateMatchesSidePanelSection />
       </Show>
     </>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Sharing Section (snippets)
-// ─────────────────────────────────────────────────────────────────────────────
-
-function SnippetSharingOwnerSectionConditional(props: { documentId: string }) {
-  const currentUserId = useUserId();
-  const metadataQuery = useDocumentMetadataQuery(() => props.documentId);
-
-  const isOwner = createMemo(() => {
-    const ownerId = metadataQuery.data?.owner;
-    const userId = currentUserId();
-    return !!ownerId && !!userId && ownerId === userId;
-  });
-
-  return (
-    <Show when={isOwner()}>
-      <SnippetSharingTeamSectionConditional documentId={props.documentId} />
-    </Show>
-  );
-}
-
-/**
- * "Share with team" toggle for snippets. Only mounted for the snippet owner;
- * sharing grants the owner's team Edit access so teammates can insert and
- * maintain the snippet.
- */
-function SnippetSharingTeamSectionConditional(props: { documentId: string }) {
-  const teamShareQuery = useDocumentTeamShareQuery(() => props.documentId);
-
-  return (
-    <Show when={teamShareQuery.data?.teamId}>
-      <SidePanel.Section id="sharing" title="Sharing" defaultOpen order={15}>
-        <SnippetSharingSectionContent documentId={props.documentId} />
-      </SidePanel.Section>
-    </Show>
-  );
-}
-
-function SnippetSharingSectionContent(props: { documentId: string }) {
-  const teamShareQuery = useDocumentTeamShareQuery(() => props.documentId);
-  const setTeamShare = useSetDocumentTeamShareMutation();
-
-  const isShared = () => teamShareQuery.data?.sharedWithTeam ?? false;
-  const isDisabled = () => setTeamShare.isPending || teamShareQuery.isPending;
-
-  const handleChange = (checked: boolean) => {
-    setTeamShare.mutate({
-      documentId: props.documentId,
-      shareWithTeam: checked,
-    });
-  };
-
-  return (
-    <div class="flex flex-col gap-2 text-xs">
-      <button
-        type="button"
-        role="checkbox"
-        aria-checked={isShared()}
-        disabled={isDisabled()}
-        onClick={() => handleChange(!isShared())}
-        class={cn(
-          'inline-flex items-center gap-2 rounded-md h-7 px-2.5 text-xs select-none w-fit',
-          'border border-ink-muted/[0.08] bg-ink-muted/[0.025]',
-          'text-ink-muted/70 hover:text-ink hover:bg-ink-muted/[0.06]',
-          isShared() && 'text-ink',
-          isDisabled() && 'pointer-events-none opacity-50'
-        )}
-      >
-        <InlineCheckbox checked={isShared()} />
-        <span class="whitespace-nowrap">Share with team</span>
-      </button>
-      <p class="text-ink-muted leading-5">
-        Lets everyone on your team insert this snippet from the ; menu and edit
-        it.
-      </p>
-    </div>
   );
 }
 

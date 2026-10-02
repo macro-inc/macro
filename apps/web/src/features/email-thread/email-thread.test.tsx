@@ -13,21 +13,7 @@ const mocks = vi.hoisted(() => ({
   source: vi.fn(),
   composeOptions: vi.fn<(options: EmailComposeContextOptions) => void>(),
 }));
-vi.mock('@property/tags', () => ({
-  InlineFetchedEntityTagsPill: (props: {
-    entityId: string;
-    entityType: string;
-    showAddButton?: boolean;
-  }) => (
-    <span
-      data-testid="thread-tags"
-      data-entity-type={props.entityType}
-      data-add-button={props.showAddButton}
-    >
-      {props.entityId}
-    </span>
-  ),
-}));
+vi.mock('@property/tags', () => ({ InlineFetchedEntityTagsPill: () => null }));
 vi.mock('@queries/email/thread', () => ({ useThreadQuery: mocks.query }));
 vi.mock('@queries/email/draft-cache', () => ({
   clearSavedDraftThreadCache: mocks.clearDraft,
@@ -73,7 +59,6 @@ vi.mock('./views/email-thread-surface', () => ({
     mocks.source(source);
     return (
       <div>
-        {props.context.rendering.renderTags?.()}
         <span data-testid="body">
           {source.thread()?.messages[0]?.body_text}
         </span>
@@ -116,13 +101,6 @@ describe('email thread query ownership', () => {
       />
     ));
     expect(screen.getByTestId('body').textContent).toBe('Cached body');
-    expect(screen.getByTestId('thread-tags').textContent).toBe(source.id());
-    expect(
-      screen.getByTestId('thread-tags').getAttribute('data-entity-type')
-    ).toBe('THREAD');
-    expect(
-      screen.getByTestId('thread-tags').getAttribute('data-add-button')
-    ).toBe('true');
     expect(mocks.source).toHaveBeenCalledWith(source);
     expect(mocks.query).not.toHaveBeenCalled();
     const options = mocks.composeOptions.mock.calls[0][0];

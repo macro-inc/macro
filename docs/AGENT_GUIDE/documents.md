@@ -4,6 +4,10 @@ The document header has separate Share, Copy Share Link, and Side Panel buttons.
 They are borderless with a soft rounded background on hover. Share opens the
 sharing dialog; copying a link is a separate action.
 
+Snippet owners manage team sharing under **Share → Team access**. The details
+panel has no separate Sharing section. Choose **Edit** to grant the access the
+old snippet toggle provided, or **None** to remove team access.
+
 Hover or focus a document title in the header to see its owner, created time,
 and last-updated time. This details card is shared
 by documents, tasks, snippets, canvas, and file blocks; unavailable metadata is

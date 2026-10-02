@@ -1171,7 +1171,10 @@ export function ShareModal(props: ShareModalProps) {
       ? {
           accessLevel: teamShareAccessLevel(),
           setAccessLevel: setTeamShareAccessLevel,
-          itemNoun: getShareItemNoun(props.itemType),
+          itemNoun:
+            props.blockAlias === 'snippet'
+              ? 'snippet'
+              : getShareItemNoun(props.itemType),
           scopeOptions: teamShareScopeOptionsForItem(props.itemType),
         }
       : undefined;

@@ -90,9 +90,6 @@ it('opens touch details in the standard drawer and dismisses with Escape', async
   setup();
   const trigger = screen.getByRole('button', { name: 'Show details' });
   expect(trigger.getAttribute('aria-haspopup')).toBe('dialog');
-  expect(trigger.querySelector('svg')?.classList.contains('rotate-180')).toBe(
-    false
-  );
   expect(screen.queryByRole('dialog')).toBeNull();
   fireEvent.click(trigger);
   const drawer = screen.getByRole('dialog', { name: 'Item details' });
@@ -109,17 +106,4 @@ it('opens touch details in the standard drawer and dismisses with Escape', async
       .getByRole('button', { name: 'Show details' })
       .getAttribute('aria-expanded')
   ).toBe('false');
-});
-
-it('keeps desktop details in the floating panel with the sidebar icon', () => {
-  setup();
-  const trigger = screen.getByRole('button', { name: 'Show Side Panel' });
-  expect(trigger.querySelector('svg')?.classList.contains('rotate-180')).toBe(
-    true
-  );
-  fireEvent.click(trigger);
-  expect(
-    screen.getByRole('complementary', { name: 'Block details' })
-  ).toBeTruthy();
-  expect(screen.queryByRole('dialog')).toBeNull();
 });

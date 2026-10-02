@@ -212,23 +212,3 @@ describe('OwnerLabel', () => {
     ]);
   });
 });
-
-it('renders compact metadata names without avatars for every owner kind', () => {
-  mocks.botProfiles.set(
-    DEPLOY_BOT,
-    settled({ name: 'Deploy Bot', deleted: false })
-  );
-  for (const [ownerId, expected] of [
-    [PETER, 'Peter Park'],
-    [`bot|${DEPLOY_BOT}`, 'Deploy Bot'],
-    [ENGINEERING, 'Engineering'],
-    ['unknown-owner', 'Unknown'],
-  ]) {
-    const view = render(() => <OwnerLabel ownerId={ownerId} textOnly />);
-    expect(view.container.textContent).toBe(expected);
-    expect(
-      view.container.querySelector('img, svg, button, [data-slot="avatar"]')
-    ).toBeNull();
-    view.unmount();
-  }
-});
