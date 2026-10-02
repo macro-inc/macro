@@ -21,7 +21,6 @@ import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
-import { idToDisplayName } from '@core/user/util';
 import { createUserScopedStorage } from '@core/util/userScopedStorage';
 import {
   onDatabaseBatchCommitted,
@@ -236,20 +235,6 @@ const Block: Component = () => {
       });
       onCleanup(stop);
     },
-    names: {
-      person: idToDisplayName,
-      column: (columnId) => {
-        for (const table of tables()) {
-          const column = table.columns.find(
-            (column) => column.column.id === columnId
-          );
-          if (column) return toViewColumn(column).name;
-        }
-        return 'a column';
-      },
-    },
-    announce: (message, failed) =>
-      failed ? toast.failure(message) : toast.success(message),
     offer: (label, undo) =>
       toast.success(label, { actions: [{ label: 'Undo', onClick: undo }] }),
   });

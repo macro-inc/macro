@@ -14,8 +14,6 @@ import {
   settle,
   take,
   type UndoDirection,
-  type UndoNames,
-  undoMessage,
 } from '../core/undo-stack';
 
 /** What the undo stack needs from its host. */
@@ -29,10 +27,6 @@ export type DatabaseUndoCapabilities = {
   onCommitted: (
     listener: (batch: { ops: DatabaseOp[]; changes: number[] }) => void
   ) => void;
-  /** Words an outcome. */
-  names: UndoNames;
-  /** Tell the viewer what an undo or redo came to. */
-  announce: (message: string, failed: boolean) => void;
   /** Offer an Undo for a destructive batch, on its toast. */
   offer: (label: string, undo: () => void) => void;
 };
@@ -72,12 +66,6 @@ export function createDatabaseUndo(capabilities: DatabaseUndoCapabilities) {
     queue = queue.then(async () => {
       const result = await revert(entry);
       setStack((current) => settle(current, direction, entry, result));
-      capabilities.announce(
-        result === 'failed'
-          ? `That ${direction} could not be sent. Try again.`
-          : undoMessage(direction, result, capabilities.names),
-        result === 'failed' || result.kind !== 'undone'
-      );
     });
     return queue;
   }

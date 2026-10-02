@@ -7,14 +7,7 @@ import {
   recordCommit,
   settle,
   take,
-  undoMessage,
 } from './undo-stack';
-
-const names = {
-  person: (userId: string) =>
-    userId === 'macro|julia@macro.com' ? 'Julia' : userId,
-  column: (columnId: string) => (columnId === 'rsvp' ? 'RSVP' : columnId),
-};
 
 describe('the database undo stack', () => {
   it('pushes each committed batch, and a new edit forgets what could be redone', () => {
@@ -132,36 +125,6 @@ describe('an undo’s outcomes', () => {
       reason: 'row_edited_since',
       by: 'macro|julia@macro.com',
     });
-  });
-
-  it('are worded for the viewer', () => {
-    expect(
-      undoMessage(
-        'undo',
-        {
-          kind: 'undone',
-          changes: [7],
-          skipped: [
-            { row: 'maria', column: 'rsvp', by: 'macro|julia@macro.com' },
-          ],
-        },
-        names
-      )
-    ).toBe('Undid your edit. Julia’s later change to RSVP was kept.');
-    expect(
-      undoMessage(
-        'undo',
-        {
-          kind: 'refused',
-          reason: 'row_edited_since',
-          by: 'macro|julia@macro.com',
-        },
-        names
-      )
-    ).toBe('Can’t undo: Julia edited this row after you added it.');
-    expect(
-      undoMessage('redo', { kind: 'undone', changes: [8], skipped: [] }, names)
-    ).toBe('Redid your edit.');
   });
 });
 

@@ -12,7 +12,6 @@ describe('the database undo controller', () => {
       changes: number[];
     }) => void)[] = [];
     const undone: number[] = [];
-    const announced: [string, boolean][] = [];
     const offered: string[] = [];
     const outcomes: Record<number, UndoOutcome> = {
       3: {
@@ -31,8 +30,6 @@ describe('the database undo controller', () => {
           return okAsync(outcomes[change]!);
         },
         onCommitted: (listener) => commits.push(listener),
-        names: { person: (id) => id, column: (id) => id },
-        announce: (message, failed) => announced.push([message, failed]),
         offer: (label) => offered.push(label),
       })
     );
@@ -57,10 +54,6 @@ describe('the database undo controller', () => {
     expect(afterUndo).toEqual([false, true]);
     expect([undo.canUndo(), undo.canRedo()]).toEqual([true, false]);
     expect(undone).toEqual([3, 4]);
-    expect(announced).toEqual([
-      ['Undid your edit.', false],
-      ['Redid your edit.', false],
-    ]);
   });
 
   it('drops a refused entry off the stack', async () => {
@@ -68,7 +61,6 @@ describe('the database undo controller', () => {
       ops: DatabaseOp[];
       changes: number[];
     }) => void)[] = [];
-    const announced: [string, boolean][] = [];
     const undo = createRoot(() =>
       createDatabaseUndo({
         undoChange: () =>
@@ -78,8 +70,6 @@ describe('the database undo controller', () => {
             by: 'Julia',
           }),
         onCommitted: (listener) => commits.push(listener),
-        names: { person: (id) => id, column: (id) => id },
-        announce: (message, failed) => announced.push([message, failed]),
         offer: () => {},
       })
     );
@@ -88,8 +78,5 @@ describe('the database undo controller', () => {
     await undo.undo();
 
     expect([undo.canUndo(), undo.canRedo()]).toEqual([false, false]);
-    expect(announced).toEqual([
-      ['Can’t undo: Julia edited this row after you added it.', true],
-    ]);
   });
 });

@@ -309,9 +309,8 @@ engine, never SQL text.
 **Cmd/Ctrl+Shift+Z** redoes it: cell edits, added and deleted records, column,
 option and view changes, and card moves, newest first, for this session. While a
 cell editor or another text input has focus, the shortcut stays with its text.
-Undo only reverts your change: an edit someone else made later is kept. A toast
-says what happened, for example "Undid your edit. Julia’s later change to RSVP
-was kept." or "Can’t undo: Julia edited this row after you added it."; a refused
+Undo only reverts your change: an edit someone else made later is kept. Undo
+and redo show no toast; the grid shows what the server returned, and a refused
 undo drops off the stack. Deleting records, a column or an option shows a toast
 with an **Undo** action. Deleting a table cannot be undone.
 
