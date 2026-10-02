@@ -332,7 +332,8 @@ the shimmer.
   Choices come from the installed Codex catalog; the selected effort is confirmed
   from the native session and shown beside the model. Local Herdr changes and
   `/effort` also update this menu. The effort submenu appears once the native
-  session's current effort is known. The menu does not list
+  session starts on the first prompt, before its first reply; a startup screen
+  that temporarily hides the footer is retried during the turn. The menu does not list
   installed native skills or session-switching commands such as `/resume`.
   The agent form retains sharing, name, `@tag`, runtime, default model, connections,
   channels, instructions, and permission policy.

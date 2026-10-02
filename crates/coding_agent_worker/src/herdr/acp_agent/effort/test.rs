@@ -4,6 +4,103 @@ use std::os::unix::fs::PermissionsExt as _;
 
 const PICKER: &str = include_str!("../models/fixtures/codex-effort.txt");
 
+async fn startup_settings(delayed: bool) {
+    let root = tempfile::tempdir().unwrap();
+    std::fs::create_dir(root.path().join(".codex")).unwrap();
+    std::fs::write(
+        root.path().join(".codex/models_cache.json"),
+        json!({"models":[{
+            "slug":"gpt-6-sol", "supported_reasoning_levels":[{"effort":"medium"},{"effort":"high"}]
+        }]})
+        .to_string(),
+    )
+    .unwrap();
+    std::fs::write(
+        root.path().join("footer"),
+        include_str!("../models/fixtures/codex-after.txt"),
+    )
+    .unwrap();
+    if delayed {
+        std::fs::write(root.path().join("delayed"), "").unwrap();
+    }
+    let script = root.path().join("herdr");
+    std::fs::write(
+        &script,
+        include_str!("fixtures/startup.sh")
+            .replace("ROOT", &shell_words::quote(&root.path().to_string_lossy())),
+    )
+    .unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let (mut adapter, mut output) = test_adapter(root.path());
+    let inner = Arc::get_mut(&mut adapter).unwrap();
+    inner.options.kind = TuiAgent::Codex;
+    inner.herdr = Some(HerdrCli::new(script, None));
+    inner.home = Some(root.path().to_owned());
+    // Settings must arrive from the foreground path while the observer is blocked.
+    adapter.shutdown.cancel();
+    let created = adapter.new_session(&json!({"cwd":root.path()})).unwrap();
+    assert_eq!(created["configOptions"].as_array().unwrap().len(), 1);
+    assert!(
+        !root.path().join("started").exists(),
+        "model discovery must remain lazy"
+    );
+    let id = created["sessionId"].as_str().unwrap().to_owned();
+    let session = adapter.session(&json!({"sessionId":id})).unwrap();
+    session.prompt_pending.store(true, Ordering::SeqCst);
+    let prompt = tokio_util::task::AbortOnDropHandle::new(tokio::spawn(async move {
+        adapter
+            .request(
+                "session/prompt",
+                json!({"sessionId":id,"prompt":[{"type":"text","text":"first prompt"}]}),
+            )
+            .await
+    }));
+    let update = tokio::time::timeout(Duration::from_secs(5), output.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        update["params"]["update"]["sessionUpdate"],
+        "config_option_update"
+    );
+    assert_eq!(
+        update["params"]["update"]["configOptions"][0]["currentValue"],
+        "gpt-6-sol"
+    );
+    assert_eq!(
+        update["params"]["update"]["configOptions"][1]["currentValue"],
+        "medium"
+    );
+    assert!(
+        !prompt.is_finished(),
+        "settings must arrive before the first reply"
+    );
+    tokio::time::timeout(Duration::from_secs(2), async {
+        while !root.path().join("submitted").exists() {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .unwrap();
+    let calls = std::fs::read_to_string(root.path().join("calls")).unwrap();
+    let reads: Vec<_> = calls.match_indices("agent read").map(|(i, _)| i).collect();
+    let submitted = calls.find("agent prompt").unwrap();
+    assert!(reads[0] < submitted);
+    assert_eq!(reads.iter().any(|i| *i > submitted), delayed);
+    prompt.abort();
+    let _ = prompt.await;
+}
+
+#[tokio::test]
+async fn first_prompt_publishes_native_effort_before_the_first_reply() {
+    startup_settings(false).await;
+}
+
+#[tokio::test]
+async fn startup_footer_is_retried_while_the_first_prompt_is_running() {
+    startup_settings(true).await;
+}
+
 #[test]
 fn only_standalone_effort_commands_are_intercepted() {
     for text in ["/effort", " /effort status "] {

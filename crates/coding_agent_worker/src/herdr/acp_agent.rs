@@ -693,6 +693,9 @@ impl Adapter {
                 "the native transcript has new activity; retry once it has synchronized",
             ));
         }
+        // The observer cannot acquire this session until the turn ends. Publish
+        // native settings now, while the freshly started composer is visible.
+        self.sync_model(session, live).await;
         if self.options.kind == TuiAgent::Codex
             && let Some(requested) = effort::command(text)
         {
@@ -887,6 +890,12 @@ impl Adapter {
             ticks += 1;
             if !ticks.is_multiple_of(STATUS_EVERY) {
                 continue;
+            }
+            // A startup screen may have hidden the footer before submission.
+            // Retry without waiting for a model response to release the observer.
+            let needs_settings = lock(&session.effort).is_none();
+            if needs_settings {
+                self.sync_model(session, live).await;
             }
             let info = match herdr.agent_info(&live.name).await {
                 Ok(info) => {

@@ -200,7 +200,7 @@ impl Adapter {
                 "native session changed; retry the selection",
             ));
         }
-        let result = tokio::time::timeout(Duration::from_secs(15), async {
+        tokio::time::timeout(Duration::from_secs(15), async {
             herdr
                 .prompt_agent(
                     &live.name,
@@ -255,8 +255,7 @@ impl Adapter {
             RpcError::internal(
                 "model or effort change was not confirmed; check the native picker in Herdr",
             )
-        })?;
-        result
+        })?
     }
 }
 

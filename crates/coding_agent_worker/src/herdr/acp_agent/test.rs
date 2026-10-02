@@ -488,9 +488,14 @@ async fn check_control_delivery(kind: TuiAgent, command: &str, reject: bool) {
         assert!(output.try_recv().is_err());
     }
     let name = agent_name(&id);
+    let settings_read = if kind == TuiAgent::Codex {
+        format!("agent get {name}\nagent read {name} --source visible\n")
+    } else {
+        String::new()
+    };
     assert_eq!(
         std::fs::read_to_string(calls).unwrap(),
-        format!("agent get {name}\nagent prompt {name} {command}\n")
+        format!("agent get {name}\n{settings_read}agent prompt {name} {command}\n")
     );
     assert!(lock(&session.cancel).is_none());
     assert_eq!(adapter.store.load(&id).unwrap().native_id, Some(id));
