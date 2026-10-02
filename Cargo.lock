@@ -4111,6 +4111,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "claude_fold"
+version = "0.1.0"
+dependencies = [
+ "agent_fold",
+ "insta",
+ "serde_json",
+ "workspace-hack",
+]
+
+[[package]]
 name = "clipboard-win"
 version = "5.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4205,10 +4215,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "codex_fold"
+version = "0.1.0"
+dependencies = [
+ "agent_fold",
+ "insta",
+ "serde_json",
+ "workspace-hack",
+]
+
+[[package]]
 name = "coding_agent_worker"
 version = "0.1.0"
 dependencies = [
  "agent-client-protocol",
+ "agent_fold",
  "agent_runtime_protocol",
  "agent_session",
  "agent_trigger",
@@ -4218,6 +4239,8 @@ dependencies = [
  "channels",
  "chrono",
  "clap",
+ "claude_fold",
+ "codex_fold",
  "crossterm 0.28.1",
  "dashmap",
  "eventsource-stream",

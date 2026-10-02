@@ -7,6 +7,9 @@
 //! the assistant message that stops for a reason other than a tool call ends
 //! the turn.
 
+#![deny(missing_docs)]
+
+use agent_fold::domain::transcript::{Fold, LogEvent, truncate};
 use std::collections::HashSet;
 
 use serde_json::{Value, json};
@@ -14,28 +17,16 @@ use serde_json::{Value, json};
 #[cfg(test)]
 mod test;
 
-/// Longest tool output forwarded to Macro, in characters.
-const TOOL_OUTPUT_LIMIT: usize = 4_000;
-
-/// What one transcript line means for the ACP session.
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) enum LogEvent {
-    /// A `session/update` payload to send.
-    Update(Value),
-    /// The turn is over, with this ACP stop reason.
-    TurnEnded(&'static str),
-}
-
 /// Transcript reader state: lines are appended once, but a reader that
 /// reopens the file must not replay them.
 #[derive(Debug, Default)]
-pub(crate) struct ClaudeLog {
+pub struct ClaudeLog {
     seen: HashSet<String>,
 }
 
-impl ClaudeLog {
+impl Fold for ClaudeLog {
     /// Translate one transcript line.
-    pub(crate) fn entry(&mut self, line: &str) -> Vec<LogEvent> {
+    fn entry(&mut self, line: &str) -> Vec<LogEvent> {
         let Ok(entry) = serde_json::from_str::<Value>(line) else {
             return Vec::new();
         };
@@ -52,7 +43,7 @@ impl ClaudeLog {
         };
         match entry.get("type").and_then(Value::as_str) {
             Some("assistant") => assistant(message),
-            Some("user") => tool_results(message),
+            Some("user") => user_message(message),
             _ => Vec::new(),
         }
     }
@@ -89,6 +80,7 @@ fn assistant(message: &Value) -> Vec<LogEvent> {
                         "kind": tool_kind(name),
                         "status": "in_progress",
                         "rawInput": input,
+                        "_meta": {"claudeCode": {"toolName": name}},
                     }))
                 }
                 _ => None,
@@ -103,6 +95,25 @@ fn assistant(message: &Value) -> Vec<LogEvent> {
         _ => None,
     };
     events.extend(stop.map(LogEvent::TurnEnded));
+    events
+}
+
+fn user_message(message: &Value) -> Vec<LogEvent> {
+    let mut events = tool_results(message);
+    let text = match message.get("content") {
+        Some(Value::String(text)) => text.clone(),
+        _ => blocks(message)
+            .filter(|block| block["type"] == "text")
+            .filter_map(|block| block["text"].as_str())
+            .collect::<Vec<_>>()
+            .join("\n"),
+    };
+    if !text.is_empty() {
+        events.push(LogEvent::Update(json!({
+            "sessionUpdate": "user_message_chunk",
+            "content": {"type": "text", "text": text},
+        })));
+    }
     events
 }
 
@@ -139,15 +150,6 @@ fn result_text(content: Option<&Value>) -> String {
             .join("\n"),
         _ => String::new(),
     }
-}
-
-pub(crate) fn truncate(text: &str) -> String {
-    if text.chars().count() <= TOOL_OUTPUT_LIMIT {
-        return text.to_owned();
-    }
-    let mut kept: String = text.chars().take(TOOL_OUTPUT_LIMIT).collect();
-    kept.push_str("\n… [truncated]");
-    kept
 }
 
 fn tool_title(name: &str, input: &Value) -> String {
