@@ -48,6 +48,7 @@ function describeDatabaseQuery(input: {
 }): string {
   const changed = input.result.changesApplied;
   return match(input.result.statement)
+    .with({ kind: 'schema' }, ({ summary }) => summary)
     .with({ kind: 'select' }, () => {
       const read = [
         ...new Set(

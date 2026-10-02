@@ -462,6 +462,25 @@ describe('QueryDatabase results', () => {
 });
 
 describe('QueryDatabase with SQL hidden', () => {
+  it('shows committed schema changes without an empty row result', () => {
+    const summary = 'Created table "Deals".';
+    const rendered = renderTool(
+      databaseToolHandlers.QueryDatabase,
+      'QueryDatabase',
+      { databaseId, sql: 'CREATE TABLE Deals (Name text)' },
+      {
+        results: [],
+        changesApplied: 0,
+        readVersions: [],
+        statement: { kind: 'schema', databaseId, summary },
+        summary,
+      }
+    );
+    expect(line(rendered)).toBe(summary);
+    expect(screen.queryByLabelText('Query results')).toBeNull();
+    expect(screen.queryByRole('button')).toBeNull();
+  });
+
   it('names the table a read used, never the statement', () => {
     const rendered = renderTool(
       databaseToolHandlers.QueryDatabase,

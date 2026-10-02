@@ -7,6 +7,7 @@ async fn describe_needs_a_view_receipt() {
     let (context, calls) = context(FakeAccess::denying());
     let error = DescribeDatabase {
         database_id: DATABASE_ID,
+        include_editing_metadata: true,
     }
     .call(ServiceContext(context), request_context())
     .await

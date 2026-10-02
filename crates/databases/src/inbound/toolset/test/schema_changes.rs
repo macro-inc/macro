@@ -379,6 +379,7 @@ async fn describing_a_column_lists_the_types_it_can_change_to() {
     let (context, _) = context(FakeAccess::granting(AccessLevel::View));
     let schema = DescribeDatabase {
         database_id: DATABASE_ID,
+        include_editing_metadata: true,
     }
     .call(ServiceContext(context), request_context())
     .await

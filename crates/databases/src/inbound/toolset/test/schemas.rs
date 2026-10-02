@@ -103,12 +103,10 @@ fn every_tool_schema_is_valid() {
 /// Every tool has to survive being put in a collection — that is where name
 /// conflicts and schema rejections actually surface.
 #[test]
-fn toolset_builds_with_every_tool() {
-    let toolset = databases_toolset::<FakeService, FakeAccess>();
+fn archival_toolset_keeps_only_retired_tools() {
+    let toolset = databases_legacy_toolset::<FakeService, FakeAccess>();
 
     for name in [
-        "ListDatabases",
-        "DescribeDatabase",
         "CreateDatabase",
         "CreateTable",
         "RenameDatabase",
@@ -121,12 +119,10 @@ fn toolset_builds_with_every_tool() {
         "ChangeColumnType",
         "DeleteColumn",
         "ReorderColumns",
-        "SaveDatabaseView",
-        "DeleteDatabaseView",
     ] {
         assert!(toolset.tools.contains_key(name), "missing {name}");
     }
-    assert_eq!(toolset.tools.len(), 16);
+    assert_eq!(toolset.tools.len(), 12);
     assert!(
         toolset.user_tools.is_empty(),
         "database tools run in the loop, none are user-executed"
@@ -140,4 +136,20 @@ fn the_read_only_toolset_only_discovers() {
     let mut names: Vec<&str> = toolset.tools.keys().map(String::as_str).collect();
     names.sort_unstable();
     assert_eq!(names, ["DescribeDatabase", "ListDatabases"]);
+}
+
+#[test]
+fn runtime_omits_operations_now_exposed_through_sql() {
+    let toolset = databases_toolset::<FakeService, FakeAccess>();
+    let mut names: Vec<_> = toolset.tools.keys().map(String::as_str).collect();
+    names.sort_unstable();
+    assert_eq!(
+        names,
+        [
+            "DeleteDatabaseView",
+            "DescribeDatabase",
+            "ListDatabases",
+            "SaveDatabaseView"
+        ]
+    );
 }

@@ -235,16 +235,22 @@ impl<Service: DatabasesService, EntityAccess: EntityAccessService>
     }
 }
 
-/// Create the databases toolset.
-pub fn databases_toolset<Service, EntityAccess>()
+/// Compact schema/discovery tools; row operations are exposed by the SQL toolset.
+pub fn databases_toolset<Service: DatabasesService, EntityAccess: EntityAccessService>()
+-> AsyncToolCollection<DatabasesToolContext<Service, EntityAccess>> {
+    databases_read_only_toolset()
+        .add_tool::<SaveDatabaseView, DatabasesToolContext<Service, EntityAccess>>()
+        .add_tool::<DeleteDatabaseView, DatabasesToolContext<Service, EntityAccess>>()
+}
+
+/// Historical tool schemas for rendering persisted conversations. Never register this on an agent host.
+pub fn databases_legacy_toolset<Service, EntityAccess>()
 -> AsyncToolCollection<DatabasesToolContext<Service, EntityAccess>>
 where
     Service: DatabasesService,
     EntityAccess: EntityAccessService,
 {
     AsyncToolCollection::new()
-        .add_tool::<ListDatabases, DatabasesToolContext<Service, EntityAccess>>()
-        .add_tool::<DescribeDatabase, DatabasesToolContext<Service, EntityAccess>>()
         .add_tool::<CreateDatabase, DatabasesToolContext<Service, EntityAccess>>()
         .add_tool::<CreateTable, DatabasesToolContext<Service, EntityAccess>>()
         .add_tool::<RenameDatabase, DatabasesToolContext<Service, EntityAccess>>()
@@ -257,8 +263,6 @@ where
         .add_tool::<ChangeColumnType, DatabasesToolContext<Service, EntityAccess>>()
         .add_tool::<DeleteColumn, DatabasesToolContext<Service, EntityAccess>>()
         .add_tool::<ReorderColumns, DatabasesToolContext<Service, EntityAccess>>()
-        .add_tool::<SaveDatabaseView, DatabasesToolContext<Service, EntityAccess>>()
-        .add_tool::<DeleteDatabaseView, DatabasesToolContext<Service, EntityAccess>>()
 }
 
 /// Discovery for live document answers. No mutation tools.
@@ -547,8 +551,7 @@ impl From<ToolEntityType> for models_properties::EntityType {
 #[derive(Debug, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ToolDatabase {
-    /// The database's id. Pass this to DescribeDatabase, CreateTable, or
-    /// AddColumn.
+    /// The database's id. Pass this to DescribeDatabase or QueryDatabase.
     pub id: DatabaseId,
     /// Display name, as the user knows it.
     pub name: String,
@@ -620,12 +623,14 @@ pub struct ToolColumn {
     /// A database-row relationship; distinct from a Macro entity reference.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub relation: Option<ToolRelation>,
-    /// Types ChangeColumnType converts every value to, spelled as SQL types
+    /// Types ALTER COLUMN TYPE converts every value to, spelled as SQL types
     /// (`select[]` is a multi-valued select, `entity(USER)` a person).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub safe_types: Vec<SpelledColumnType>,
     /// Types whose conversion checks each value first and refuses if any does
     /// not fit. Any type in neither list is refused while the column holds
     /// values.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub checked_types: Vec<SpelledColumnType>,
 }
 
@@ -653,7 +658,7 @@ pub struct ToolRelation {
 #[derive(Debug, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ToolTable {
-    /// The table's id. Pass this to AddColumn.
+    /// The table's id, used by saved views and version guards.
     pub id: TableId,
     /// The name to use in SQL, quoted (`FROM "Guests"`).
     pub sql_name: String,
@@ -670,6 +675,7 @@ pub struct ToolTable {
     /// of these names replaces that view.
     // Opaque: the filter tree is recursive, which the web's tool-type generator cannot follow.
     #[schemars(with = "Vec<serde_json::Value>")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub views: Vec<DatabaseView>,
 }
 

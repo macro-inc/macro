@@ -45,6 +45,7 @@
 pub mod ast;
 mod lexer;
 mod parser;
+pub mod schema;
 #[cfg(test)]
 mod test;
 
@@ -87,4 +88,11 @@ struct Span {
 pub fn parse(sql: &str) -> Result<Statement, ParseError> {
     let tokens = lexer::lex(sql)?;
     parser::statement(&tokens, sql.len())
+}
+
+/// Parse a server schema command; ordinary row SQL returns `None`.
+/// Uses the same lexer and name/type grammar as [`parse`].
+pub fn parse_schema(sql: &str) -> Result<Option<schema::SchemaStatement>, ParseError> {
+    let tokens = lexer::lex(sql)?;
+    parser::schema_statement(&tokens, sql.len())
 }

@@ -21,6 +21,14 @@ starts with a mention of the database; the schema and table guidance go to the
 agent privately as session instructions, so the sent bubble shows only what you
 typed. Plans that include the database model run the chat on it.
 
+Database agents discover with `ListDatabases` and `DescribeDatabase`, then use
+`QueryDatabase` for rows and schema commands (`CREATE DATABASE`, `CREATE TABLE`,
+`ALTER`, and `DROP TABLE`). `DescribeDatabase` omits saved-view definitions and
+conversion lists by default; request `includeEditingMetadata: true` when those
+are needed. `SaveDatabaseView` / `DeleteDatabaseView` manage table and kanban
+presentation; `SaveDatabaseQuery` saves a live answer. Document live-answer agents
+remain read-only, including schema commands and database creation.
+
 ## Feature flag
 
 Databases is behind the `enable-databases` PostHog flag. A deployed app reads it

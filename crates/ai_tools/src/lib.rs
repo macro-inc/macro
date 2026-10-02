@@ -29,7 +29,9 @@ use call::inbound::toolset::call_toolset;
 use channels::inbound::toolset::channel_toolset;
 use chat::inbound::toolset::chat_toolset;
 use crm::inbound::toolset::crm_toolset;
-use databases::inbound::toolset::{databases_read_only_toolset, databases_toolset};
+use databases::inbound::toolset::{
+    databases_legacy_toolset, databases_read_only_toolset, databases_toolset,
+};
 use databases_sql::toolset::{QueryDatabase, databases_sql_toolset};
 use display_results::DisplayResults;
 use documents::inbound::toolset::document_toolset;
@@ -227,6 +229,10 @@ pub fn all_tool_frontend_schemas() -> FrontendSchemas {
     frontend_schemas_builder()
         .merge(&tools_for(AiHost::Chat))
         .merge(&read::read_thread())
+        .merge(&databases_legacy_toolset::<
+            ToolDatabasesService,
+            ToolEntityAccessService,
+        >())
         .build()
 }
 
