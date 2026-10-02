@@ -175,7 +175,7 @@ function toGraphqlEntityReference(
   };
 }
 
-function toGraphqlSetPropertyValue(
+export function toGraphqlSetPropertyValue(
   value: SetPropertyValue | null
 ): GraphqlSetPropertyValue | null {
   if (value === null) return null;

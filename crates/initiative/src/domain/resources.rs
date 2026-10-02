@@ -2,12 +2,14 @@
 
 use std::{collections::HashMap, future::Future, pin::Pin};
 
+use macro_user_id::user_id::MacroUserIdStr;
+
 use entity_access::domain::models::{
     EditAccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, ViewAccessLevel,
 };
 
 use super::{
-    models::{InitiativeError, InitiativeId},
+    models::{InitialPropertyValue, InitiativeError, InitiativeId},
     reads::InitiativePropertySnapshot,
 };
 
@@ -20,6 +22,14 @@ pub type ResourceFuture<'a, T> =
 pub trait InitiativeResources: std::fmt::Debug + Send + Sync + 'static {
     /// Initialize the four canonical task-style properties without clearing existing values.
     fn initialize(&self, id: InitiativeId) -> ResourceFuture<'_, ()>;
+    /// Set a new initiative's first property values as its owner, validated by the
+    /// properties service. All or nothing: if any value is rejected, none remain.
+    fn set_initial_properties(
+        &self,
+        owner: MacroUserIdStr<'static>,
+        id: InitiativeId,
+        values: Vec<InitialPropertyValue>,
+    ) -> ResourceFuture<'_, ()>;
     /// Clean up properties after the initiative is deleted using its already-verified capability.
     fn purge(&self, receipt: EntityAccessReceipt<EditAccessLevel>) -> ResourceFuture<'_, ()>;
     /// Return a view capability for a related entity under the same user/bot scope.

@@ -20,10 +20,10 @@ import type { Accessor } from 'solid-js';
 import type { ProjectsContext } from '../context/projects-context';
 import { assignProjectTasks } from '../core/assignment';
 import type { ProjectDetail, TaskProjectReference } from '../core/project';
+import { createProjectMutation } from './create-project';
 import { createProjectTaskMutation } from './create-project-task';
 import { projectKeys } from './keys';
 import { projectDetailQueryOptions } from './project-identity';
-import { toProjectDetail } from './project-model';
 import { projectDefinitionProperties } from './project-properties';
 import { createProjectSoupSource } from './project-soup';
 
@@ -200,14 +200,7 @@ export function createProjectSources(
           ]);
         }
       );
-      const create = useMutation(
-        () => ({
-          mutationFn: async (input: { name: string; shareWithTeam: boolean }) =>
-            toProjectDetail(await throwOnErr(() => client.create(input))),
-          onSuccess: refresh,
-        }),
-        () => cache
-      );
+      const create = createProjectMutation(client, cache, userId);
       const update = useMutation(
         () => ({
           mutationFn: ({

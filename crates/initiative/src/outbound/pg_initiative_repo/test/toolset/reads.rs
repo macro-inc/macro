@@ -12,6 +12,14 @@ impl InitiativeResources for VisibleResources {
     fn initialize(&self, _: InitiativeId) -> ResourceFuture<'_, ()> {
         panic!("read-only fixture")
     }
+    fn set_initial_properties(
+        &self,
+        _: MacroUserIdStr<'static>,
+        _: InitiativeId,
+        _: Vec<crate::domain::models::InitialPropertyValue>,
+    ) -> ResourceFuture<'_, ()> {
+        panic!("read-only fixture")
+    }
     fn purge(&self, _: EntityAccessReceipt<EditAccessLevel>) -> ResourceFuture<'_, ()> {
         panic!("read-only fixture")
     }

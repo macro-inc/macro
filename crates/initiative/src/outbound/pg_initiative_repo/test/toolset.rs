@@ -32,6 +32,14 @@ impl InitiativeResources for UnusedProperties {
     fn initialize(&self, _: InitiativeId) -> ResourceFuture<'_, ()> {
         panic!("unexpected property initialization")
     }
+    fn set_initial_properties(
+        &self,
+        _: MacroUserIdStr<'static>,
+        _: InitiativeId,
+        _: Vec<crate::domain::models::InitialPropertyValue>,
+    ) -> ResourceFuture<'_, ()> {
+        panic!("unexpected initial properties")
+    }
     fn purge(&self, _: EntityAccessReceipt<EditAccessLevel>) -> ResourceFuture<'_, ()> {
         panic!("unexpected property deletion")
     }
