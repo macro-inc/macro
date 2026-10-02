@@ -167,39 +167,23 @@ fn response_omits_an_absent_note() {
 }
 
 #[test]
-fn channel_markup_preserves_the_generated_dimensions_and_static_file() {
-    let id = uuid::Uuid::from_u128(123);
+fn response_forwards_markup_from_the_service() {
     let response = GenerateImageResponse::from(StoredGeneratedImage {
         static_file: crate::domain::models::StoredImage {
-            id,
+            id: uuid::Uuid::from_u128(123),
             url: "https://static.example/file/image".to_string(),
         },
         mime_type: "image/png".to_string(),
         size_bytes: 100,
         width: 1536,
         height: 1024,
+        markdown: "markup returned by Lexical".to_string(),
         note: None,
     });
-    let markdown = response.markdown.unwrap();
-    let data: serde_json::Value = serde_json::from_str(
-        markdown
-            .strip_prefix("<m-image>")
-            .unwrap()
-            .strip_suffix("</m-image>")
-            .unwrap(),
-    )
-    .unwrap();
     assert_eq!(
-        data,
-        serde_json::json!({
-            "url": response.url,
-            "srcType": "sfs",
-            "id": id,
-            "alt": "Generated image",
-            "width": 1536,
-            "height": 1024,
-            "constrainedWidth": 400,
-            "constrainedHeight": 400,
-        })
+        response.markdown.as_deref(),
+        Some("markup returned by Lexical")
     );
+    assert_eq!(response.width, Some(1536));
+    assert_eq!(response.height, Some(1024));
 }

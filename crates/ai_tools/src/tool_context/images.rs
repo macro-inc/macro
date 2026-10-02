@@ -77,6 +77,11 @@ fn build_with_cdn(
         image_generation::domain::service::ImageGenerationServiceImpl::new(
             generator,
             image_generation::outbound::static_files::StaticFileImageStore::new(storage),
+            Arc::new(
+                image_generation::outbound::lexical::LexicalImageMarkdownComposer::new(
+                    documents.lexical_client.clone(),
+                ),
+            ),
         )
         .with_reference_reader(references),
         documents.actor,

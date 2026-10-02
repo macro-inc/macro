@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { SupportedNodeTypes } from '../node-list';
 import { ImageNode } from '../nodes/ImageNode';
 import { INTERNAL_TRANSFORMERS } from '../transformers';
+import { composeImageMarkdown } from '../utils/image-markdown';
 
 describe('generated channel images', () => {
   it('retains dimensions through parsing and message editing before image download', () => {
@@ -29,7 +30,12 @@ describe('generated channel images', () => {
     editor.update(
       () => {
         $convertFromMarkdownString(
-          `<m-image>${JSON.stringify(image)}</m-image>`,
+          composeImageMarkdown({
+            staticFileId: image.id,
+            url: image.url,
+            width: image.width,
+            height: image.height,
+          }),
           INTERNAL_TRANSFORMERS
         );
       },

@@ -144,6 +144,9 @@ fn generate_error(error: GenerateImageError) -> ToolCallError {
         GenerateImageError::Generation(ImageGenerationError::Provider(_)) => {
             "the image model request failed; try again shortly".to_string()
         }
+        GenerateImageError::Markup(_) => {
+            "the image was saved but its channel markup could not be composed".to_string()
+        }
         GenerateImageError::Storage(_) => {
             "the image was generated but could not be saved to Macro".to_string()
         }
@@ -194,21 +197,6 @@ where
 
 impl From<StoredGeneratedImage> for GenerateImageResponse {
     fn from(created: StoredGeneratedImage) -> Self {
-        // Match channel attachment bounds while retaining the intrinsic dimensions.
-        const CHANNEL_IMAGE_MAX_SIZE: u32 = 400;
-        let markdown = format!(
-            "<m-image>{}</m-image>",
-            serde_json::json!({
-                "url": created.static_file.url,
-                "srcType": "sfs",
-                "id": created.static_file.id,
-                "alt": "Generated image",
-                "width": created.width,
-                "height": created.height,
-                "constrainedWidth": CHANNEL_IMAGE_MAX_SIZE,
-                "constrainedHeight": CHANNEL_IMAGE_MAX_SIZE,
-            })
-        );
         Self {
             static_file_id: created.static_file.id.to_string(),
             url: created.static_file.url,
@@ -216,7 +204,7 @@ impl From<StoredGeneratedImage> for GenerateImageResponse {
             size_bytes: created.size_bytes,
             width: Some(created.width),
             height: Some(created.height),
-            markdown: Some(markdown),
+            markdown: Some(created.markdown),
             note: created.note,
         }
     }

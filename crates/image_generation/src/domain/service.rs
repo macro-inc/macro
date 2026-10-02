@@ -5,8 +5,8 @@ use super::models::{
     StoredGeneratedImage,
 };
 use super::ports::{
-    ImageGenerationService, ImageGenerator, ImageReferenceReader, ImageStore,
-    UnconfiguredImageReferenceReader,
+    ImageGenerationService, ImageGenerator, ImageMarkdownComposer, ImageReferenceReader,
+    ImageStore, UnconfiguredImageReferenceReader,
 };
 use model_owner::CreationPrincipal;
 use std::sync::Arc;
@@ -14,19 +14,25 @@ use std::sync::Arc;
 #[cfg(test)]
 mod test;
 
-/// Image generation use case composed from a model provider and static file store.
+/// Image generation use case composed from a provider, static file store, and markup composer.
 pub struct ImageGenerationServiceImpl<Store, References = UnconfiguredImageReferenceReader> {
     generator: Arc<dyn ImageGenerator>,
     store: Store,
+    composer: Arc<dyn ImageMarkdownComposer>,
     references: References,
 }
 
 impl<Store> ImageGenerationServiceImpl<Store> {
-    /// Compose the provider and image-saving capability.
-    pub fn new(generator: Arc<dyn ImageGenerator>, store: Store) -> Self {
+    /// Compose the provider, image-saving capability, and markup serializer.
+    pub fn new(
+        generator: Arc<dyn ImageGenerator>,
+        store: Store,
+        composer: Arc<dyn ImageMarkdownComposer>,
+    ) -> Self {
         Self {
             generator,
             store,
+            composer,
             references: UnconfiguredImageReferenceReader,
         }
     }
@@ -38,6 +44,7 @@ impl<Store, References> ImageGenerationServiceImpl<Store, References> {
         ImageGenerationServiceImpl {
             generator: self.generator,
             store: self.store,
+            composer: self.composer,
             references,
         }
     }
@@ -128,7 +135,13 @@ impl<Store: ImageStore, References: ImageReferenceReader> ImageGenerationService
             })
             .await?;
 
+        let markdown = self
+            .composer
+            .compose_image(&static_file, generated.width, generated.height)
+            .await?;
+
         Ok(StoredGeneratedImage {
+            markdown,
             static_file,
             mime_type: generated.mime_type,
             size_bytes,

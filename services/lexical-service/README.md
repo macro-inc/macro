@@ -26,6 +26,13 @@ Returns the pre-processed document to be uses in the cognition service.
 ## POST /snapshot/markdown
 Accepts `{ "markdown": "..." }` and returns an `application/octet-stream` Loro snapshot equivalent to the markdown block migration path.
 
+## POST /image-markdown
+Accepts `{ "staticFileId": "<uuid>", "url": "https://...", "width": 1536, "height": 1024 }`
+and returns `{ "markdown": "..." }` built from the shared Lexical image node.
+Requires internal authentication. Dimensions must be positive integers. The serialized
+image retains intrinsic dimensions and uses 400px channel attachment bounds.
+Deploy this endpoint before the image-generation backend that calls it.
+
 # Local Development
 `bun run dev` will start the development server with the wrangler env set to 'local' and the port set to 8931. The local
 environment uses 'local' as the INTERNAL_API_SECRET_KEY. There are scripts to run document ids against the local endpoints.
