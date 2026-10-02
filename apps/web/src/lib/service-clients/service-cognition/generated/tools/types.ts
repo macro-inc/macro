@@ -3144,7 +3144,7 @@ export interface BotWebhook {
   webhookUrl: string;
 }
 /**
- * Prepare an event on the user's calendar, inviting any listed attendees through Google Calendar. In Macro chat this tool opens an inline composer so the user can review, edit, and confirm the event; use the tool to present the proposal instead of asking for a redundant confirmation in prose. When the pending call is executed, the event is written to Google immediately and attendees receive invitations. Other clients should confirm attendee events before executing the call.
+ * Prepare an event on the user's calendar, inviting any listed attendees through Google Calendar. In Macro chat this tool opens an inline composer so the user can review, edit, and confirm the event; use the tool to present the proposal instead of asking for a redundant confirmation in prose. When the pending call is executed, the event is written to Google immediately and attendees receive invitations. Other clients should confirm attendee events before executing the call. Do NOT use it for a prompt that came from a channel or document thread — the context block names a conversation parent when it did, and there is no surface to review a draft in: write the event out in your reply, ask whether to create it, and use CreateConfirmedCalendarEvent once the user approves.
  *
  * The event lands on the user's primary calendar unless `calendarId` (from ListCalendars) targets another one. For recurring events pass RFC 5545 lines in `recurrenceLines`, e.g. ["RRULE:FREQ=WEEKLY;BYDAY=MO"]. Returns the created event with its `eventId` for later updates or deletion. Fails if the user has no writable calendar connected.
  *
@@ -3374,6 +3374,53 @@ export interface CreateChannelResponse {
    * Human-readable result summary.
    */
   summary: string;
+}
+/**
+ * Create a calendar event immediately, with no review card or composer. Only for a prompt that came from a channel or document thread (the context block says so), where there is nothing to review a draft in. The event is always shown before it is created, even when the user's request already spelled the whole thing out: in one turn write it into the thread - title, date and time with its time zone, duration, guests, location, Google Meet, recurrence - ask whether to create it, and stop there. Call this tool only in a later turn, once the user has replied approving that specific event, quoting that reply verbatim in userConfirmation. Being asked to schedule something is a request to draft the event, never approval to create it, so a userConfirmation quoting the request that asked you to set it up - rather than the reply approving the event you wrote out - is wrong. Never call it in the agent session view or in chat: use CreateCalendarEvent there, whose review card or composer is the confirmation. Takes the same fields as CreateCalendarEvent; the event is written to Google Calendar at once and any attendees receive invitations.
+ */
+export interface CreateConfirmedCalendarEvent {
+  /**
+   * The event title.
+   */
+  title: string;
+  time: EventTimeInput;
+  /**
+   * Optional event body/description.
+   */
+  description?: string | null;
+  /**
+   * Optional physical or virtual location label.
+   */
+  location?: string | null;
+  /**
+   * Attendees to invite by email. They are notified by Google Calendar as soon as the event is created. Omit for a solo event.
+   */
+  attendees?: AttendeeInput[];
+  /**
+   * Raw RFC 5545 recurrence lines (RRULE, RDATE, EXDATE), e.g. ["RRULE:FREQ=WEEKLY;BYDAY=MO,WE"]. Omit for a one-off event.
+   */
+  recurrenceLines?: string[];
+  /**
+   * Calendar to create the event on, from ListCalendars. Omit to use the user's primary calendar.
+   */
+  calendarId?: string | null;
+  /**
+   * Reminder configuration for the event. Omit to use the selected calendar's defaults.
+   */
+  reminders?: EventRemindersInput | null;
+  /**
+   * Attach a freshly generated Google Meet video conference to the event.
+   */
+  addGoogleMeet?: boolean;
+  eventType?: CalendarEventTypeInput;
+  /**
+   * Out-of-office decline behavior, used only when eventType is "out_of_office". Omit to just block the time; set `autoDeclineMode` to "decline_all" or "decline_new_only" to have Google decline conflicting meetings, optionally with a `declineMessage`.
+   */
+  outOfOffice?: OutOfOfficeInput | null;
+  /**
+   * The user's own message approving this specific event, quoted verbatim - for example their "yes, go ahead" in reply to the event you wrote out for them. It is a reply to your draft, never the earlier request that asked you to schedule something: if the user has not yet seen this event, there is nothing to quote here and the tool must not be called. Required: do not paraphrase it, and never supply it yourself.
+   */
+  userConfirmation: string;
 }
 /**
  * Create a plaintext document or a native Macro spreadsheet. For a workbook use fileExtension spreadsheet, empty fileContent, and isTask false; then ReadSpreadsheet and EditSpreadsheet to populate cells, formulas and sheets. Works without an open editor.

@@ -1874,6 +1874,146 @@ export const CreateChannelResponse = z.object({
   summary: z.string(),
 });
 
+export const CreateConfirmedCalendarEvent = z.object({
+  title: z.string(),
+  time: z.any().superRefine((x, ctx) => {
+    const schemas = [
+      z.object({
+        startsAt: z.string().datetime({ offset: true }),
+        endsAt: z.string().datetime({ offset: true }),
+        timeZone: z.union([z.string(), z.null()]).optional(),
+        kind: z.literal('timed'),
+      }),
+      z.object({
+        startDate: z.string().date(),
+        endDate: z.string().date(),
+        kind: z.literal('allDay'),
+      }),
+    ];
+    const errors = schemas.reduce<z.ZodError[]>(
+      (errors, schema) =>
+        ((result) => (result.error ? [...errors, result.error] : errors))(
+          schema.safeParse(x)
+        ),
+      []
+    );
+    if (schemas.length - errors.length !== 1) {
+      ctx.addIssue({
+        path: ctx.path,
+        code: 'invalid_union',
+        unionErrors: errors,
+        message: 'Invalid input: Should pass single schema',
+      });
+    }
+  }),
+  description: z.union([z.string(), z.null()]).optional(),
+  location: z.union([z.string(), z.null()]).optional(),
+  attendees: z
+    .array(z.object({ email: z.string(), isOptional: z.boolean().optional() }))
+    .optional(),
+  recurrenceLines: z.array(z.string()).optional(),
+  calendarId: z.union([z.string().uuid(), z.null()]).optional(),
+  reminders: z
+    .union([
+      z.object({
+        useDefault: z.boolean(),
+        overrides: z
+          .array(
+            z.object({ method: z.string(), minutes: z.number().int().gte(0) })
+          )
+          .optional(),
+      }),
+      z.null(),
+    ])
+    .optional(),
+  addGoogleMeet: z.boolean().optional(),
+  eventType: z
+    .any()
+    .superRefine((x, ctx) => {
+      const schemas = [z.literal('default'), z.literal('out_of_office')];
+      const errors = schemas.reduce<z.ZodError[]>(
+        (errors, schema) =>
+          ((result) => (result.error ? [...errors, result.error] : errors))(
+            schema.safeParse(x)
+          ),
+        []
+      );
+      if (schemas.length - errors.length !== 1) {
+        ctx.addIssue({
+          path: ctx.path,
+          code: 'invalid_union',
+          unionErrors: errors,
+          message: 'Invalid input: Should pass single schema',
+        });
+      }
+    })
+    .optional(),
+  outOfOffice: z
+    .union([
+      z.object({
+        autoDeclineMode: z
+          .union([
+            z.any().superRefine((x, ctx) => {
+              const schemas = [
+                z.literal('decline_none'),
+                z.literal('decline_all'),
+                z.literal('decline_new_only'),
+              ];
+              const errors = schemas.reduce<z.ZodError[]>(
+                (errors, schema) =>
+                  ((result) =>
+                    result.error ? [...errors, result.error] : errors)(
+                    schema.safeParse(x)
+                  ),
+                []
+              );
+              if (schemas.length - errors.length !== 1) {
+                ctx.addIssue({
+                  path: ctx.path,
+                  code: 'invalid_union',
+                  unionErrors: errors,
+                  message: 'Invalid input: Should pass single schema',
+                });
+              }
+            }),
+            z.null(),
+          ])
+          .optional(),
+        declineMessage: z.union([z.string(), z.null()]).optional(),
+      }),
+      z.null(),
+    ])
+    .optional(),
+  userConfirmation: z.string(),
+});
+
+export const ToolCalendarEvent = z.object({
+  eventId: z.string().uuid(),
+  title: z.string(),
+  start: z.string(),
+  end: z.string(),
+  isAllDay: z.boolean(),
+  timeZone: z.union([z.string(), z.null()]).optional(),
+  location: z.union([z.string(), z.null()]).optional(),
+  description: z.union([z.string(), z.null()]).optional(),
+  status: z.string(),
+  isRecurring: z.boolean(),
+  recurrenceLines: z.array(z.string()),
+  attendees: z.array(
+    z.object({
+      email: z.string(),
+      responseStatus: z.string(),
+      isOrganizer: z.boolean(),
+      isOptional: z.boolean(),
+    })
+  ),
+  attendeeCount: z.number().int().gte(0),
+  organizerEmail: z.union([z.string(), z.null()]).optional(),
+  conferenceUrl: z.union([z.string(), z.null()]).optional(),
+  isReadOnly: z.boolean(),
+  calendarId: z.union([z.string().uuid(), z.null()]).optional(),
+});
+
 export const CreateDocument = z.object({
   documentName: z.string(),
   fileContent: z.string(),
@@ -7076,33 +7216,6 @@ export const UpdateCalendarEvent = z.object({
       z.null(),
     ])
     .optional(),
-});
-
-export const ToolCalendarEvent = z.object({
-  eventId: z.string().uuid(),
-  title: z.string(),
-  start: z.string(),
-  end: z.string(),
-  isAllDay: z.boolean(),
-  timeZone: z.union([z.string(), z.null()]).optional(),
-  location: z.union([z.string(), z.null()]).optional(),
-  description: z.union([z.string(), z.null()]).optional(),
-  status: z.string(),
-  isRecurring: z.boolean(),
-  recurrenceLines: z.array(z.string()),
-  attendees: z.array(
-    z.object({
-      email: z.string(),
-      responseStatus: z.string(),
-      isOrganizer: z.boolean(),
-      isOptional: z.boolean(),
-    })
-  ),
-  attendeeCount: z.number().int().gte(0),
-  organizerEmail: z.union([z.string(), z.null()]).optional(),
-  conferenceUrl: z.union([z.string(), z.null()]).optional(),
-  isReadOnly: z.boolean(),
-  calendarId: z.union([z.string().uuid(), z.null()]).optional(),
 });
 
 export const UpdateInitiative = z.object({
