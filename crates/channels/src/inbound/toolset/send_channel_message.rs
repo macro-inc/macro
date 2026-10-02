@@ -21,7 +21,7 @@ use messages::domain::{
 pub struct SendChannelMessage {
     /// macro markdown
     #[schemars(
-        description = "Message content in macro markdown format. This uses the same syntax as markdown documents"
+        description = "Message content in Macro markdown. Do not leave generated images as inline Markdown; include ![short description](url) for a Macro static file and the channel stores it as an image attachment."
     )]
     pub content: String,
     /// the channel to send to

@@ -55,7 +55,8 @@ its SFS URL without a filename header or document navigation. It preserves its
 aspect ratio and fits the available width. A status appears while generation is
 pending; a failed image load shows “Preview unavailable”. The tool already renders
 the result in chat, so the assistant should not add a document mention or duplicate
-image there. In channel messages, embed the returned URL as a Markdown image.
+image there. In channel messages, include the returned URL as `![description](url)`;
+the channel stores it as an image attachment with dimensions, not as inline Markdown.
 Earlier generations saved as DSS documents still render their original document
 card when viewing historical conversations.
 Refused prompts, provider failures, and hosts without a Google Generative AI key

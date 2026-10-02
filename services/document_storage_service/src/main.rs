@@ -1154,6 +1154,12 @@ async fn run() -> anyhow::Result<()> {
         .with_mention_extractor(lexical_mention_extractor::LexicalMentionExtractor::new(
             lexical_client.clone(),
         ))
+        .with_image_dimensions(lexical_mention_extractor::StaticFileImageDimensions::new(
+            static_file_service_client::StaticFileServiceClient::new(
+                config.internal_api_key.to_string(),
+                StaticFileServiceUrl::new()?.to_string(),
+            ),
+        ))
         .with_references(
             messages::outbound::entity_access_audience::EntityAccessMessageReferences(
                 (*entity_access_service).clone(),

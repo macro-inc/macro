@@ -10326,9 +10326,14 @@ name = "lexical_mention_extractor"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
+ "attachment",
  "lexical_client",
  "messages",
  "rootcause",
+ "static_file_service_client",
+ "tracing",
+ "uuid",
  "workspace-hack",
 ]
 

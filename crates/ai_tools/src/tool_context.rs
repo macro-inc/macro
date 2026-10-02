@@ -391,7 +391,11 @@ fn message_service_with_side_effects(
             )),
         ),
     );
-    Arc::new(shared_message_service(pool, effects, lexical_client))
+    let service = shared_message_service(pool, effects, lexical_client);
+    Arc::new(match images::static_file_image_dimensions() {
+        Some(dimensions) => service.with_image_dimensions(dimensions),
+        None => service,
+    })
 }
 
 /// Build the channel AI tool context wired to `dispatcher`, so messages sent by

@@ -1159,6 +1159,69 @@ async fn bot_posts_and_edits_extract_mentions_and_preserve_trusted_attribution_a
     }
 }
 
+struct FixedImageDimensions;
+
+#[async_trait::async_trait]
+impl MessageImageDimensions for FixedImageDimensions {
+    async fn dimensions(&self, _: Uuid) -> Option<(i32, i32)> {
+        Some((640, 480))
+    }
+}
+
+#[tokio::test]
+async fn posts_lift_markdown_images_onto_the_attachment_path() {
+    let file_id = Uuid::from_u128(0xabc);
+    let repo = fixture();
+    let service = MessageService::new(repo.clone(), Events::default())
+        .with_image_dimensions(FixedImageDimensions);
+    let mut input = post_input();
+    input.content = format!("Here you go.\n\n![](https://static.macro.com/file/{file_id})");
+    service.post(channel_access(), input).await.unwrap();
+    let created = repo.creates.lock().unwrap();
+    assert_eq!(created[0].input.content, "Here you go.");
+    assert_eq!(
+        created[0].input.attachments,
+        vec![NewAttachment {
+            entity_type: "static/image".into(),
+            entity_id: file_id.to_string(),
+            width: Some(640),
+            height: Some(480),
+        }]
+    );
+}
+
+#[tokio::test]
+async fn patches_lift_markdown_images_onto_the_attachment_path() {
+    let file_id = Uuid::from_u128(0xdef);
+    let repo = fixture();
+    let service = MessageService::new(repo.clone(), Events::default())
+        .with_image_dimensions(FixedImageDimensions);
+    service
+        .patch(
+            access("macro|author@example.com", "doc", AccessLevel::Comment),
+            repo.message.id,
+            MessagePatch {
+                content: Some(format!(
+                    "Done.\n\n![diagram](https://cdn.example/file/{file_id}?size=1080)"
+                )),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    let edited = repo.edits.lock().unwrap();
+    assert_eq!(edited[0].content, "Done.");
+    assert_eq!(
+        edited[0].attachments,
+        Some(vec![NewAttachment {
+            entity_type: "static/image".into(),
+            entity_id: file_id.to_string(),
+            width: Some(640),
+            height: Some(480),
+        }])
+    );
+}
+
 #[derive(Clone)]
 struct StrictRepo {
     inner: Repo,

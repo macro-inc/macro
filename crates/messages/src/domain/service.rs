@@ -1,4 +1,9 @@
-use super::{mentions::MessageReferenceKind, models::*, ports::*};
+use super::{
+    markdown_images::{LiftedStaticImage, lift_inline_images},
+    mentions::MessageReferenceKind,
+    models::*,
+    ports::*,
+};
 use channel_sender::ChannelSender;
 use entity_access::domain::models::{
     AdminParticipantRole, CommentAccessLevel, EditAccessLevel, EntityAccessAuth,
@@ -39,6 +44,7 @@ pub struct MessageService<R, E> {
     references: std::sync::Arc<dyn MessageReferenceAccess>,
     mentions: std::sync::Arc<dyn MessageMentionExtractor>,
     groups: std::sync::Arc<dyn MessageGroupRecipients>,
+    image_dimensions: std::sync::Arc<dyn MessageImageDimensions>,
 }
 
 impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
@@ -50,6 +56,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             references: std::sync::Arc::new(DenyMessageReferences),
             mentions: std::sync::Arc::new(NoMessageMentionExtractor),
             groups: std::sync::Arc::new(NoMessageGroups),
+            image_dimensions: std::sync::Arc::new(NoMessageImageDimensions),
         }
     }
 
@@ -69,6 +76,45 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
     pub fn with_mention_extractor(mut self, mentions: impl MessageMentionExtractor) -> Self {
         self.mentions = std::sync::Arc::new(mentions);
         self
+    }
+
+    /// Supply pixel sizes for Markdown images lifted onto the attachment path.
+    pub fn with_image_dimensions(mut self, images: impl MessageImageDimensions) -> Self {
+        self.image_dimensions = std::sync::Arc::new(images);
+        self
+    }
+
+    async fn attachments_from_inline_images(
+        &self,
+        content: &str,
+        existing: &[NewAttachment],
+    ) -> (String, Vec<NewAttachment>) {
+        let lifted = lift_inline_images(content);
+        let mut attachments = existing.to_vec();
+        let mut seen: std::collections::HashSet<(String, String)> = attachments
+            .iter()
+            .map(|attachment| (attachment.entity_type.clone(), attachment.entity_id.clone()))
+            .collect();
+        for LiftedStaticImage { id, width, height } in lifted.images {
+            if attachments.len() >= 10 {
+                break;
+            }
+            let entity_id = id.to_string();
+            if !seen.insert(("static/image".to_string(), entity_id.clone())) {
+                continue;
+            }
+            let (width, height) = match (width, height) {
+                (Some(width), Some(height)) => (Some(width), Some(height)),
+                _ => self.image_dimensions.dimensions(id).await.unzip(),
+            };
+            attachments.push(NewAttachment {
+                entity_type: "static/image".to_string(),
+                entity_id,
+                width,
+                height,
+            });
+        }
+        (lifted.content, attachments)
     }
 
     /// Read the same bounded message timeline for either parent.
@@ -255,6 +301,11 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         let parent = parent_from_receipt(&access)?;
         let actor = actor_from_receipt(&access, &parent)?;
         self.ensure_parent(&parent).await?;
+        let lifted = self
+            .attachments_from_inline_images(&input.content, &input.attachments)
+            .await;
+        input.content = lifted.0;
+        input.attachments = lifted.1;
         if actor.as_bot().is_some() && input.mentions.is_empty() {
             input.mentions = self.mentions.extract(&input.content).await?;
         }
@@ -366,6 +417,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                 current.mentions.clone()
             }
         });
+        let replacing_content = patch.content.is_some();
         let mut input = EditMessage {
             content: patch.content.unwrap_or_else(|| current.content.clone()),
             mentions,
@@ -373,6 +425,27 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             nonce: patch.nonce,
             notification_policy: patch.notification_policy,
         };
+        if replacing_content {
+            let existing = input.attachments.clone().unwrap_or_else(|| {
+                current
+                    .attachments
+                    .iter()
+                    .map(|attachment| NewAttachment {
+                        entity_type: attachment.entity_type.clone(),
+                        entity_id: attachment.entity_id.clone(),
+                        width: attachment.width,
+                        height: attachment.height,
+                    })
+                    .collect()
+            });
+            let (content, next) = self
+                .attachments_from_inline_images(&input.content, &existing)
+                .await;
+            input.content = content;
+            if next != existing {
+                input.attachments = Some(next);
+            }
+        }
         if actor.as_bot().is_some() && input.mentions.is_empty() {
             input.mentions = self.mentions.extract(&input.content).await?;
         }

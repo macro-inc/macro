@@ -266,9 +266,12 @@ bottom of the area carries the other decisions, refusal first: `Dismiss · Open 
 for a tool draft, `Decline · Submit · Open in session` (or `Open` for a URL) for a question.
 Only the session's owner can act; other viewers see the question read-only and the header
 names who is being waited on. Once answered, the area shows the agent's passage again.
-Images made with `GenerateImage` are saved to static file service. The bot embeds
-the returned URL as a Markdown image in its channel reply; generated images have
-no document mention or filename card.
+Images made with `GenerateImage` are saved to static file service. When the bot
+includes the returned URL as a Markdown image in its channel reply, the message
+stores that file as an image attachment with width and height — the same path
+and render as a human upload, including single-click lightbox. Inline Markdown
+images are not shown in the message body. Generated images have no document
+mention or filename card.
 Agent replies may contain mention chips (`<m-document-mention>`) that render like any
 other channel mention. A mention of an image document (PNG, JPG, GIF, SVG, WebP)
 also unfurls beneath the message text as an image card: a header with the filename

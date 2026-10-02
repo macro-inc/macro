@@ -8,6 +8,7 @@ import { splitMessageContent } from './agent-session-link';
 import { useMessage, useSearchHighlightTermsLookup } from './context';
 import { createSearchHighlightOverlay } from './highlightOverlay';
 import { MentionedImages } from './MentionedImages';
+import { liftChannelMarkdownImages } from './markdown-images';
 
 type ContentProps = {
   class?: string;
@@ -19,7 +20,9 @@ export function Content(props: ContentProps) {
 
   // The body only: an agent message's leading session node is chrome the
   // sender line renders (`Message.AgentSessionLink`), not part of the text.
-  const content = createMemo(() => splitMessageContent(message()).body);
+  const content = createMemo(
+    () => liftChannelMarkdownImages(splitMessageContent(message()).body).content
+  );
   const bigEmoji = createMemo(() => isEmojiOnly(content()));
   const terms = createMemo(() => termsLookup?.(message().id));
 

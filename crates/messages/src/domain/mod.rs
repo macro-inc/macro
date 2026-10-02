@@ -12,6 +12,8 @@ pub mod delivery;
 pub mod effects;
 /// Transport-independent committed message facts.
 pub mod events;
+/// Lift Markdown images onto the attachment path.
+pub mod markdown_images;
 /// Parent-independent mention identities.
 pub mod mentions;
 /// Shared message and thread models.

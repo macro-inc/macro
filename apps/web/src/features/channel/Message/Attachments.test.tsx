@@ -28,6 +28,9 @@ vi.mock('./MediaPreview', () => ({ MediaPreview: () => null }));
 vi.mock('@ui', () => ({ cn: () => '' }));
 vi.mock('./context', () => ({
   useMessage: () => () => ({
+    content: '',
+    sender_id: 'macro|author@example.com',
+    created_at: '2026-01-01T00:00:00Z',
     attachments: [
       { entity_type: 'initiative', entity_id: 'launch' },
       { entity_type: 'document', entity_id: 'note' },

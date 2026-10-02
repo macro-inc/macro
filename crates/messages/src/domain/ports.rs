@@ -386,6 +386,22 @@ pub trait MessageMentionExtractor: Send + Sync + 'static {
         content: &'a str,
     ) -> std::pin::Pin<Box<dyn Future<Output = Result<Vec<SimpleMention>, MessageError>> + Send + 'a>>;
 }
+/// Pixel size of a Macro static image used as a message attachment.
+#[async_trait::async_trait]
+pub trait MessageImageDimensions: Send + Sync + 'static {
+    /// Read stored width and height; `None` when they cannot be determined.
+    async fn dimensions(&self, static_file_id: Uuid) -> Option<(i32, i32)>;
+}
+
+/// Attach Markdown images without looking up their pixel size.
+pub struct NoMessageImageDimensions;
+#[async_trait::async_trait]
+impl MessageImageDimensions for NoMessageImageDimensions {
+    async fn dimensions(&self, _: Uuid) -> Option<(i32, i32)> {
+        None
+    }
+}
+
 /// Message compositions that do not create raw bot Markdown.
 pub struct NoMessageMentionExtractor;
 impl MessageMentionExtractor for NoMessageMentionExtractor {

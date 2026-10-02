@@ -34,6 +34,19 @@ pub type ToolImageGenerationService = image_generation::domain::service::ImageGe
 pub type ToolImageGenerationToolContext =
     image_generation::inbound::toolset::ImageGenerationToolContext<ToolImageGenerationService>;
 
+/// Pixel sizes for Markdown images lifted onto the shared message attachment path.
+pub fn static_file_image_dimensions() -> Option<lexical_mention_extractor::StaticFileImageDimensions>
+{
+    Some(lexical_mention_extractor::StaticFileImageDimensions::new(
+        static_file_service_client::StaticFileServiceClient::new(
+            InternalApiKey::new().ok()?.to_string(),
+            macro_service_urls::StaticFileServiceUrl::new()
+                .ok()?
+                .to_string(),
+        ),
+    ))
+}
+
 /// Compose static file uploads and document reference reads for image generation.
 pub fn build_image_generation_tool_context(
     documents: &ToolDocumentToolContext,

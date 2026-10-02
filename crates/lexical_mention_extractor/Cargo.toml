@@ -6,7 +6,12 @@ version = "0.1.0"
 
 [dependencies]
 anyhow = { workspace = true }
+async-trait = { workspace = true }
+attachment = { path = "../attachment" }
 lexical_client = { path = "../lexical_client" }
 messages = { path = "../messages", features = ["ports"] }
 rootcause = { workspace = true }
+static_file_service_client = { path = "../static_file_service_client" }
+tracing = { workspace = true }
+uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

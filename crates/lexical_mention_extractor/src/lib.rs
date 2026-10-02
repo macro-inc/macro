@@ -3,6 +3,10 @@
 //! message content, implementing the `messages` domain's
 //! [`MessageMentionExtractor`] port.
 
+mod image_dimensions;
+
+pub use image_dimensions::StaticFileImageDimensions;
+
 use lexical_client::LexicalClient;
 use messages::domain::{models::SimpleMention, ports::MessageMentionExtractor};
 use std::sync::Arc;

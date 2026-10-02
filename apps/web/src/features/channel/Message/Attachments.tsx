@@ -8,8 +8,10 @@ import { ItemPreview } from '@core/component/ItemPreview';
 import { stringToItemType } from '@service-storage/client';
 import { cn } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
+import { splitMessageContent } from './agent-session-link';
 import { useMessage } from './context';
 import { MediaPreview } from './MediaPreview';
+import { liftChannelMarkdownImages } from './markdown-images';
 
 type AttachmentsProps = {
   class?: string;
@@ -17,9 +19,27 @@ type AttachmentsProps = {
 
 export function Attachments(props: AttachmentsProps) {
   const message = useMessage();
-  const buckets = createMemo(() =>
-    partitionAttachments(message().attachments ?? [])
-  );
+  const buckets = createMemo(() => {
+    const attachments = [...(message().attachments ?? [])];
+    const existing = new Set(
+      attachments.map((attachment) => attachment.entity_id)
+    );
+    for (const image of liftChannelMarkdownImages(
+      splitMessageContent(message()).body
+    ).images) {
+      if (existing.has(image.entity_id)) continue;
+      existing.add(image.entity_id);
+      attachments.push({
+        id: image.entity_id,
+        entity_id: image.entity_id,
+        entity_type: image.entity_type,
+        width: image.width,
+        height: image.height,
+        created_at: message().created_at,
+      });
+    }
+    return partitionAttachments(attachments);
+  });
   const mediaItems = createMemo<MediaItem[]>((previous = []) =>
     mapMediaItems(buckets().mediaAttachments, previous)
   );
