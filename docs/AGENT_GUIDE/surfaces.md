@@ -442,10 +442,15 @@ reconciling an already-open offline draft must preserve its composer and text.
 If local cache initialization fails, ordinary server threads must still load
 through the session's uncached GraphQL client, including the thread being opened.
 In that fallback, leave a thread open and mark it Done/Not Done from its list:
-the open thread must refresh through GraphQL after the committed mutation, including
-its loaded message pages. Disabled/unmounted thread readers must not refetch.
-With the normalized cache active, the shared email record updates the thread
-without an extra network refresh. Neither path relies on REST thread-cache invalidation.
+only the matching open thread refreshes through GraphQL after the committed archive
+mutation, including its loaded message pages. Mark Seen/Unread and generic Soup
+refreshes must not refetch open threads. Disabled/unmounted readers must not refetch.
+Also delay cache initialization failure until after the first identity lookup fails:
+an uncertain server route must then load and participate in archive refreshes,
+while a positively identified unsynced local draft must never be sent to the server.
+Keep already-resolved server aliases through that fallback. With the normalized
+cache active, the shared email record updates the thread without an extra network
+refresh. Neither path relies on REST thread-cache invalidation.
 
 If a saved inbox selection references an unlinked account, successfully loading
 linked accounts resets the filter to All inboxes while preserving an open or

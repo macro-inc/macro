@@ -5,6 +5,7 @@ import type {
 import {
   CombinedError,
   createClient,
+  type Exchange,
   fetchExchange,
   type GraphQLRequest,
   makeOperation,
@@ -13,7 +14,7 @@ import {
 } from '@urql/core';
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { makeSubject } from 'wonka';
+import { filter, makeSubject, pipe } from 'wonka';
 
 vi.mock('@core/constant/featureFlags', () => ({
   enableGraphqlSoup: {},
@@ -151,40 +152,74 @@ describe('open-thread revalidation without normalized caching', () => {
       enabled?: () => boolean;
       messageCount?: number;
       cached?: boolean;
+      threadId?: string;
+      identity?: 'unreadable' | 'local' | 'alias';
+      missingHost?: boolean;
     } = {}
   ) {
     initializeClientMock.mockReset();
     cacheEnabledMock.mockReturnValue(options.cached ?? false);
+    const readIdentity = vi.fn(async () => {
+      if (options.identity === 'unreadable')
+        throw new Error('identity unavailable');
+      const id =
+        options.identity === 'alias'
+          ? 'thread-1'
+          : (options.threadId ?? 'thread-1');
+      return {
+        revision: '1',
+        records: options.identity
+          ? [
+              {
+                recordKey: `GraphqlSoupEmailThread:${id}`,
+                record: {
+                  id,
+                  cacheProjection:
+                    options.identity === 'local' ? null : 'server-capsule',
+                },
+                identity: { pending: options.identity === 'local' },
+              },
+            ]
+          : [],
+      };
+    });
+    let notifyIdentityChange = () => {};
     hostMock.mockReturnValue(
-      options.cached
+      options.cached && !options.missingHost
         ? {
-            readRecordsByKeys: vi.fn(async () => ({
-              revision: '1',
-              records: [],
-            })),
-            onCacheChanged: () => () => {},
+            readRecordsByKeys: readIdentity,
+            onCacheChanged: (callback: () => void) => {
+              notifyIdentityChange = callback;
+              return () => {};
+            },
           }
         : undefined
     );
     const server = { inboxVisible: false, failThreadRead: false };
     const reads: number[] = [];
+    const readIds: string[] = [];
     const fetch = vi.fn(async (_url: unknown, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body)) as {
         operationName: string;
-        variables: { offset?: number; input?: { archived: boolean } };
+        variables: {
+          threadId?: string;
+          offset?: number;
+          input?: { threadId: string; archived: boolean };
+        };
       };
       const respond = (body: unknown) =>
         new Response(JSON.stringify(body), {
           headers: { 'Content-Type': 'application/json' },
         });
       if (body.operationName === 'SetEmailThreadArchived') {
-        server.inboxVisible = !body.variables.input!.archived;
+        const { threadId, archived } = body.variables.input!;
+        if (threadId === 'thread-1') server.inboxVisible = !archived;
         return respond({
           data: {
             setEmailThreadArchived: {
               __typename: 'GraphqlSoupEmailThread',
-              id: 'thread-1',
-              inboxVisible: server.inboxVisible,
+              id: threadId,
+              inboxVisible: !archived,
             },
           },
         });
@@ -193,6 +228,7 @@ describe('open-thread revalidation without normalized caching', () => {
         throw new Error(`Unexpected query ${body.operationName}`);
       const offset = body.variables.offset ?? 0;
       reads.push(offset);
+      readIds.push(body.variables.threadId!);
       if (server.failThreadRead)
         return respond({ errors: [{ message: 'thread refresh failed' }] });
       return respond({
@@ -201,6 +237,7 @@ describe('open-thread revalidation without normalized caching', () => {
             ...cachedPage.user,
             emailThread: {
               ...cachedPage.user.emailThread!,
+              id: body.variables.threadId,
               inboxVisible: server.inboxVisible,
               messages: threadMessages(
                 offset,
@@ -211,10 +248,27 @@ describe('open-thread revalidation without normalized caching', () => {
         },
       });
     });
+    // Model cache-only reads while a cache is active. fetchExchange alone does
+    // not enforce this policy, which is why known local drafts must be disabled
+    // entirely after the session switches to the fetch-only client.
+    const cacheOnlyGuard: Exchange =
+      ({ forward }) =>
+      (operations) =>
+        forward(
+          pipe(
+            operations,
+            filter(
+              (operation) =>
+                operation.kind !== 'query' ||
+                operation.context.requestPolicy !== 'cache-only' ||
+                !cacheEnabledMock()
+            )
+          )
+        );
     const client = createClient({
       url: 'http://example.test/graphql',
       preferGetMethod: false,
-      exchanges: [fetchExchange],
+      exchanges: [cacheOnlyGuard, fetchExchange],
       fetch,
     });
     activeClientMock.mockReturnValue(client);
@@ -230,12 +284,20 @@ describe('open-thread revalidation without normalized caching', () => {
     const root = createRoot((dispose) => ({
       dispose,
       ...createGraphqlEmailThreadQuery(
-        () => 'thread-1',
+        () => options.threadId ?? 'thread-1',
         () => ({ enabled: options.enabled?.() ?? true })
       ),
     }));
     cleanup.push(root.dispose);
-    return { ...root, server, reads, listInboxVisible: () => listInboxVisible };
+    return {
+      ...root,
+      server,
+      reads,
+      readIds,
+      readIdentity,
+      notifyIdentityChange: () => notifyIdentityChange(),
+      listInboxVisible: () => listInboxVisible,
+    };
   }
 
   it('updates an open thread after a list unarchive without a REST-cache wrapper', async () => {
@@ -318,7 +380,104 @@ describe('open-thread revalidation without normalized caching', () => {
     expect(f.server.inboxVisible).toBe(true);
     expect(f.query.error).toBeDefined();
     f.server.failThreadRead = false;
+    await refreshActiveGraphqlSoupQueries({
+      throwOnError: true,
+      target: { kind: 'email-archive', threadId: 'thread-1' },
+    });
+    expect(f.query.data?.pages[0].inbox_visible).toBe(true);
+  });
+
+  it('leaves open threads alone during generic refreshes used by seen/unread and unrelated mutations', async () => {
+    const f = setup();
+    await vi.waitFor(() => expect(f.query.isSuccess).toBe(true));
+    f.server.failThreadRead = true;
     await refreshActiveGraphqlSoupQueries({ throwOnError: true });
+    expect(f.reads).toEqual([0]);
+    expect(f.query.error).toBeNull();
+    await archiveEmailThread({ id: 'another-thread', value: false });
+    expect(f.reads).toEqual([0]);
+    expect(f.query.error).toBeNull();
+  });
+
+  it('refreshes only the matching open thread for archive/unarchive', async () => {
+    const f = setup();
+    const other = createRoot((dispose) => ({
+      dispose,
+      ...createGraphqlEmailThreadQuery(
+        () => 'other-thread',
+        () => ({ enabled: true })
+      ),
+    }));
+    cleanup.push(other.dispose);
+    await vi.waitFor(() =>
+      expect(f.query.isSuccess && other.query.isSuccess).toBe(true)
+    );
+    await archiveEmailThread({ id: 'thread-1', value: false });
+    expect(f.query.data?.pages[0].inbox_visible).toBe(true);
+    expect(f.readIds.filter((id) => id === 'thread-1')).toHaveLength(2);
+    expect(f.readIds.filter((id) => id === 'other-thread')).toHaveLength(1);
+  });
+
+  it.each([false, true])(
+    'recovers uncertain server identity after cache fallback (missing host=%s)',
+    async (missingHost) => {
+      const [cached, setCached] = createSignal(true);
+      const f = setup({ cached: true, identity: 'unreadable', missingHost });
+      cacheEnabledMock.mockImplementation(cached);
+      if (missingHost) await new Promise((resolve) => setTimeout(resolve, 0));
+      else await vi.waitFor(() => expect(f.query.isEnabled).toBe(true));
+      expect(f.reads).toEqual([]); // Unknown while cache is active: no network.
+      setCached(false);
+      await vi.waitFor(() => expect(f.query.isSuccess).toBe(true));
+      expect(f.reads).toEqual([0]);
+      await archiveEmailThread({ id: 'thread-1', value: false });
+      expect(f.query.data?.pages[0].inbox_visible).toBe(true);
+      expect(f.reads).toEqual([0, 0]);
+    }
+  );
+
+  it('keeps a positively known local draft off the network after a later identity failure', async () => {
+    const [cached, setCached] = createSignal(true);
+    const f = setup({
+      cached: true,
+      threadId: 'local-thread',
+      identity: 'local',
+    });
+    cacheEnabledMock.mockImplementation(cached);
+    await vi.waitFor(() => expect(f.query.isEnabled).toBe(true));
+    expect(f.reads).toEqual([]);
+    f.readIdentity.mockImplementationOnce(async () => {
+      setCached(false);
+      throw new Error('cache retired during identity lookup');
+    });
+    f.notifyIdentityChange();
+    await vi.waitFor(() => expect(f.readIdentity).toHaveBeenCalledTimes(2));
+    await refreshActiveGraphqlSoupQueries({
+      throwOnError: true,
+      target: { kind: 'email-archive', threadId: 'local-thread' },
+    });
+    expect(f.reads).toEqual([]);
+  });
+
+  it('preserves a resolved server alias when the cache retires during an identity read', async () => {
+    const [cached, setCached] = createSignal(true);
+    const f = setup({
+      cached: true,
+      threadId: 'local-alias',
+      identity: 'alias',
+    });
+    cacheEnabledMock.mockImplementation(cached);
+    await vi.waitFor(() => expect(f.query.isSuccess).toBe(true));
+    expect(f.resolvedThreadId()).toBe('thread-1');
+    f.readIdentity.mockImplementationOnce(async () => {
+      setCached(false);
+      throw new Error('cache retired during identity lookup');
+    });
+    f.notifyIdentityChange();
+    await vi.waitFor(() => expect(f.readIdentity).toHaveBeenCalledTimes(2));
+    await archiveEmailThread({ id: 'thread-1', value: false });
+    expect(f.resolvedThreadId()).toBe('thread-1');
+    expect(f.readIds.every((id) => id === 'thread-1')).toBe(true);
     expect(f.query.data?.pages[0].inbox_visible).toBe(true);
   });
 });
@@ -356,6 +515,28 @@ describe('fetchGraphqlEmailThread', () => {
     });
     cacheEnabledMock.mockReset();
     cacheEnabledMock.mockReturnValue(true);
+  });
+
+  it('does not fetch a positively identified local draft after its cache retires', async () => {
+    hostMock.mockReturnValue({
+      readRecordsByKeys: vi.fn(async () => {
+        cacheEnabledMock.mockReturnValue(false);
+        return {
+          revision: '1',
+          records: [
+            {
+              recordKey: 'GraphqlSoupEmailThread:local-thread',
+              record: { id: 'local-thread', cacheProjection: null },
+              identity: { pending: true },
+            },
+          ],
+        };
+      }),
+    });
+    await expect(fetchGraphqlEmailThread('local-thread')).rejects.toThrow(
+      'cache is unavailable for this local draft'
+    );
+    expect(queryMock).not.toHaveBeenCalled();
   });
 
   it.each([false, true])(
