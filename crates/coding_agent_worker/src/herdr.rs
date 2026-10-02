@@ -16,9 +16,7 @@
 //! [`acp_agent`]).
 
 pub(crate) mod acp_agent;
-mod claude_log;
 mod cli;
-mod codex_log;
 mod hub;
 mod tap;
 pub(crate) mod wire;

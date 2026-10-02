@@ -30,10 +30,11 @@ use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 
 use super::HerdrSession;
-use super::claude_log::{ClaudeLog, LogEvent};
 use super::cli::{HerdrCli, HerdrError};
-use super::codex_log::CodexLog;
 use super::hub::title_from;
+use agent_fold::domain::transcript::{Fold, LogEvent};
+use claude_fold::ClaudeLog;
+use codex_fold::CodexLog;
 
 /// The subcommand macrod's harness config names to run this adapter.
 pub(crate) const SUBCOMMAND: &str = "herdr-acp";
