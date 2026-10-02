@@ -65,6 +65,54 @@ pub(crate) struct HerdrCli {
 }
 
 impl HerdrCli {
+    /// Let Herdr create and register a fresh worktree from the fetched main ref.
+    pub(crate) async fn create_worktree(
+        &self,
+        source: &Path,
+        path: &Path,
+        branch: &str,
+    ) -> Result<(), HerdrError> {
+        self.run(&[
+            "worktree",
+            "create",
+            "--cwd",
+            &source.to_string_lossy(),
+            "--path",
+            &path.to_string_lossy(),
+            "--branch",
+            branch,
+            "--base",
+            "origin/main",
+            "--no-focus",
+        ])
+        .await
+        .map(drop)
+    }
+
+    /// Reuse Herdr's workspace and its shell pane for a managed session worktree.
+    pub(crate) async fn open_worktree(
+        &self,
+        source: &Path,
+        path: &Path,
+        label: &str,
+        focus: bool,
+    ) -> Result<Window, HerdrError> {
+        let path = path.to_string_lossy();
+        let output = self
+            .run(&[
+                "worktree",
+                "open",
+                "--cwd",
+                &source.to_string_lossy(),
+                "--path",
+                &path,
+                "--label",
+                label,
+                if focus { "--focus" } else { "--no-focus" },
+            ])
+            .await?;
+        parse_window(&output)
+    }
     /// Drive the session the given binary is attached to, opening windows in
     /// `workspace_id` (herdr's focused workspace when absent).
     pub(crate) fn new(bin: impl Into<PathBuf>, workspace_id: Option<String>) -> Self {

@@ -16,8 +16,9 @@
 //! [`acp_agent`]).
 
 pub(crate) mod acp_agent;
-mod cli;
+pub(crate) mod cli;
 mod hub;
+pub(crate) mod repositories;
 mod tap;
 pub(crate) mod wire;
 
@@ -57,6 +58,9 @@ pub(crate) fn herdr_agent(harness: &Harness) -> Option<acp_agent::TuiAgent> {
 
 mod environment {
     macro_env_var::maybe_env_var! {
+        pub struct Home;
+    }
+    macro_env_var::maybe_env_var! {
         pub struct HerdrEnv;
     }
     macro_env_var::maybe_env_var! {
@@ -65,6 +69,14 @@ mod environment {
     macro_env_var::maybe_env_var! {
         pub struct HerdrWorkspaceId;
     }
+}
+
+/// Private state for one paired daemon; shared by its dispatcher and ACP process.
+pub(crate) fn instance_directory(id: impl std::fmt::Display) -> rootcause::Result<PathBuf> {
+    let home = environment::Home::new()
+        .and_then(|value| value.value().map(PathBuf::from))
+        .ok_or_else(|| rootcause::report!("HOME is required for Herdr storage"))?;
+    Ok(home.join(".macrod/herdr").join(id.to_string()))
 }
 
 /// The herdr session macrod was started in.
