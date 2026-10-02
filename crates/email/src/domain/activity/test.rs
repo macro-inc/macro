@@ -7,7 +7,10 @@ use uuid::Uuid;
 use macro_event_broker::Event;
 
 use super::*;
-use crate::domain::events::{MessageSentMetadata, ThreadArchivedMetadata};
+use crate::domain::events::{
+    MessageSentMetadata, ThreadArchivedMetadata, ThreadSpamChangedMetadata, ThreadStarredMetadata,
+    ThreadTrashedMetadata,
+};
 
 fn user(id: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(id.to_string()).expect("valid user id")
@@ -65,25 +68,76 @@ fn provider_synced_send_is_dropped_even_with_an_actor() {
     assert_eq!(event.event.ingest(event.event_id), Ingest::Ignore);
 }
 
+/// Marking a thread done is triage: it must not become the user's latest
+/// touch of the thread, or the own-touch feed carries it back into Home.
 #[test]
-fn provider_sync_archive_is_dropped_but_user_archive_maps() {
-    let archive = |origin| {
+fn archiving_a_thread_is_not_activity() {
+    let archive = |archived, origin| {
         envelope(EmailTopicEvent::ThreadArchived(ThreadArchivedMetadata {
             link_id: Uuid::from_u128(1),
             owner: user("macro|owner@example.com"),
             actor: Some(user("macro|owner@example.com")),
             thread_id: THREAD_ID,
-            archived: true,
+            archived,
             origin,
         }))
     };
 
-    let user_action = archive(EmailEventOrigin::UserAction);
+    for archived in [true, false] {
+        for origin in [EmailEventOrigin::UserAction, EmailEventOrigin::ProviderSync] {
+            let event = archive(archived, origin);
+            assert_eq!(event.event.ingest(event.event_id), Ingest::Ignore);
+        }
+    }
+}
+
+#[test]
+fn trashing_a_thread_is_not_activity() {
+    let event = envelope(EmailTopicEvent::ThreadTrashed(ThreadTrashedMetadata {
+        link_id: Uuid::from_u128(1),
+        owner: user("macro|owner@example.com"),
+        actor: Some(user("macro|owner@example.com")),
+        thread_id: THREAD_ID,
+        trashed: true,
+        origin: EmailEventOrigin::UserAction,
+    }));
+    assert_eq!(event.event.ingest(event.event_id), Ingest::Ignore);
+}
+
+#[test]
+fn marking_a_thread_spam_is_not_activity() {
+    let event = envelope(EmailTopicEvent::ThreadSpamChanged(
+        ThreadSpamChangedMetadata {
+            link_id: Uuid::from_u128(1),
+            owner: user("macro|owner@example.com"),
+            actor: Some(user("macro|owner@example.com")),
+            thread_id: THREAD_ID,
+            spam: true,
+            origin: EmailEventOrigin::UserAction,
+        },
+    ));
+    assert_eq!(event.event.ingest(event.event_id), Ingest::Ignore);
+}
+
+#[test]
+fn provider_sync_star_is_dropped_but_user_star_maps() {
+    let star = |origin| {
+        envelope(EmailTopicEvent::ThreadStarred(ThreadStarredMetadata {
+            link_id: Uuid::from_u128(1),
+            owner: user("macro|owner@example.com"),
+            actor: Some(user("macro|owner@example.com")),
+            thread_id: THREAD_ID,
+            starred: true,
+            origin,
+        }))
+    };
+
+    let user_action = star(EmailEventOrigin::UserAction);
     let Ingest::Insert(activities) = user_action.event.ingest(user_action.event_id) else {
         panic!("expected activities");
     };
     assert_eq!(activities[0].action, Action::Edited);
 
-    let provider = archive(EmailEventOrigin::ProviderSync);
+    let provider = star(EmailEventOrigin::ProviderSync);
     assert_eq!(provider.event.ingest(provider.event_id), Ingest::Ignore);
 }
