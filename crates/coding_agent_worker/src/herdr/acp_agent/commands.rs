@@ -44,15 +44,23 @@ fn available(kind: TuiAgent) -> Value {
         json!({"name": "init", "description": "Create repository instructions with the native agent"}),
     ];
     match kind {
-        TuiAgent::Claude => commands.push(json!({
-            "name": "fast",
-            "description": "Set Claude fast mode; without an argument, opens its controls in Herdr",
-            "input": {"hint": "on|off (optional)"},
-        })),
+        TuiAgent::Claude => commands.extend([
+            json!({
+                "name": "fast",
+                "description": "Set Claude fast mode; without an argument, opens its controls in Herdr",
+                "input": {"hint": "on|off (optional)"},
+            }),
+            json!({
+                "name": "effort",
+                "description": "Set Claude's reasoning effort or view its current level in Herdr",
+                "input": {"hint": "low|medium|high|xhigh|max|auto|status (optional)"},
+            }),
+        ]),
         TuiAgent::Codex => {
             commands.extend([
                 json!({"name": "fast", "description": "Toggle Codex's fast service tier when available for the current model"}),
                 json!({"name": "ultrafast", "description": "Toggle Codex's ultrafast service tier when available for the current model"}),
+                json!({"name": "model", "description": "Open Codex's model and reasoning effort picker in Herdr"}),
             ]);
         }
     }
@@ -72,8 +80,17 @@ pub(super) fn native_control(kind: TuiAgent, text: &str) -> Option<&str> {
     let command = words.next()?;
     let argument = words.next();
     let recognized = match kind {
-        TuiAgent::Claude => command == "/fast" && matches!(argument, None | Some("on" | "off")),
-        TuiAgent::Codex => matches!(command, "/fast" | "/ultrafast") && argument.is_none(),
+        TuiAgent::Claude => match command {
+            "/fast" => matches!(argument, None | Some("on" | "off")),
+            "/effort" => matches!(
+                argument,
+                None | Some("low" | "medium" | "high" | "xhigh" | "max" | "auto" | "status")
+            ),
+            _ => false,
+        },
+        TuiAgent::Codex => {
+            matches!(command, "/fast" | "/ultrafast" | "/model") && argument.is_none()
+        }
     };
     (recognized && words.next().is_none()).then_some(text)
 }

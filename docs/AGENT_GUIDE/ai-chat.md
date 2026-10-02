@@ -319,7 +319,10 @@ the shimmer.
   Codex also offers `/ultrafast`. Macro confirms delivery of speed commands;
   check their result and any confirmation in Herdr. For Claude, use `/fast on`
   or `/fast off`, or bare `/fast` to open its native controls. Available speed
-  tiers depend on the native agent, model, and account. The menu does not list
+  tiers depend on the native agent, model, and account. Claude also offers
+  `/effort` with an optional level, `auto`, or `status`. For Codex, use `/model`
+  and choose the reasoning effort in its Herdr picker. Macro's model dropdown
+  does not currently have a separate effort selector. The menu does not list
   installed native skills or session-switching commands such as `/resume`.
   The agent form retains sharing, name, `@tag`, runtime, default model, connections,
   channels, instructions, and permission policy.

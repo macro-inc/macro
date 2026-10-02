@@ -417,13 +417,18 @@ async fn commands_are_advertised_after_successful_new_and_load_responses() {
 }
 
 #[tokio::test]
-async fn speed_controls_submit_once_and_acknowledge_delivery_without_a_model_turn() {
+async fn native_controls_submit_once_and_acknowledge_delivery_without_a_model_turn() {
     for (kind, command) in [
         (TuiAgent::Claude, "/fast"),
         (TuiAgent::Claude, "/fast on"),
         (TuiAgent::Claude, "/fast off"),
         (TuiAgent::Codex, "/fast"),
         (TuiAgent::Codex, "/ultrafast"),
+        (TuiAgent::Claude, "/effort"),
+        (TuiAgent::Claude, "/effort high"),
+        (TuiAgent::Claude, "/effort auto"),
+        (TuiAgent::Claude, "/effort status"),
+        (TuiAgent::Codex, "/model"),
     ] {
         for reject in [false, true] {
             check_control_delivery(kind, command, reject).await;
