@@ -33,6 +33,10 @@ macro_auth = { path = "../macro_auth" }
 # The owner's `User` row, which carries the FusionAuth id the exchange needs.
 macro_db_client = { path = "../macro_db_client" }
 macro_user_id = { path = "../macro_user_id" }
+# The rows holding the owner's custom (URL-added) MCP servers and their
+# encrypted grants, and the refresh that keeps a grant live. Port and domain
+# service only; the Postgres adapter is the composition root's to build.
+mcp_client = { path = "../mcp_client" }
 model_owner = { path = "../model_owner" }
 # The rows saying which apps an owner connected, and the client that turns one
 # into Pipedream's MCP endpoint plus the headers scoping a call to it.
@@ -51,5 +55,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 anyhow = { workspace = true }
+# Building the stored OAuth grants the custom-server resolver reads.
+rmcp = { workspace = true, features = ["auth"] }
 tokio = { workspace = true, features = ["macros", "rt"] }
 tower = { workspace = true }
