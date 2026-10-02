@@ -1,7 +1,7 @@
 import { getFaviconUrl } from '@app/util/favicon';
 import type { SplitManager } from '@components/app/split-layout/layoutManager';
 import { markdownToPlainText } from '@macro-inc/lexical-core';
-import { themeReactive } from '../theme/signals/themeReactive';
+import { committedThemeAccent } from '../theme/signals/themeSignals';
 import type { PlatformNotificationState } from './components/PlatformNotificationProvider';
 import { isEntityDiscussionEvent } from './entity-discussion';
 import { GITHUB_EVENT_TYPES } from './github-event-types';
@@ -34,11 +34,6 @@ export interface PlatformNotificationData {
 
 const USER_NAME_FALLBACK = 'Someone';
 const DOCUMENT_NAME_FALLBACK = 'Something';
-
-function getAccentColorForIcon(): string {
-  const { l, c, h } = themeReactive.a0;
-  return `oklch(${l[0]()} ${c[0]()} ${h[0]()}deg)`;
-}
 
 /**
  * Who the notification reads as being from. Agent notifications have no user
@@ -74,7 +69,7 @@ export async function toPlatformNotificationData(
   resolveUserName: UserNameResolver,
   resolveDocumentName: DocumentNameResolver
 ): Promise<PlatformNotificationData | null> {
-  const accentColor = getAccentColorForIcon();
+  const accentColor = committedThemeAccent();
   const icon = getFaviconUrl(accentColor);
   const metadata = notification.notification_metadata;
 

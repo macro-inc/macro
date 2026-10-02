@@ -40,7 +40,7 @@ impl<E: SoupEntityEdges> InitiativeMutationRoot<E> {
         let detail = ctx
             .data::<InitiativeGraphqlContext>()?
             .0
-            .create(user.clone(), input.into())
+            .create(user.clone(), input.try_into()?)
             .await
             .map_err(graphql_error)?;
         load_from_soup(

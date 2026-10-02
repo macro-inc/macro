@@ -18548,6 +18548,13 @@
             "type": "string",
             "description": "Display name."
           },
+          "propertyValues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InitialPropertyValue"
+            },
+            "description": "Property values set as the owner within the create. A value the properties\nservice rejects fails the whole create; no initiative is left behind."
+          },
           "shareWithTeam": {
             "type": ["boolean", "null"],
             "description": "Share with the owner's team at create time. Defaults to true; users without\na team create an unshared initiative. Explicit false skips the team grant."
@@ -23388,6 +23395,22 @@
             "format": "int32",
             "description": "Position in the session's log.",
             "minimum": 0
+          }
+        }
+      },
+      "InitialPropertyValue": {
+        "type": "object",
+        "description": "A property value set on a new initiative as part of its create.",
+        "required": ["propertyDefinitionId", "value"],
+        "properties": {
+          "propertyDefinitionId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Property definition to set."
+          },
+          "value": {
+            "$ref": "#/components/schemas/SetPropertyValue",
+            "description": "Value, validated by the properties service like any other property write."
           }
         }
       },

@@ -28,6 +28,14 @@ impl InitiativeResources for FakeResources {
             }
         })
     }
+    fn set_initial_properties(
+        &self,
+        _owner: MacroUserIdStr<'static>,
+        _id: InitiativeId,
+        _values: Vec<crate::domain::models::InitialPropertyValue>,
+    ) -> ResourceFuture<'_, ()> {
+        Box::pin(async { Ok(()) })
+    }
     fn purge(&self, _receipt: EntityAccessReceipt<EditAccessLevel>) -> ResourceFuture<'_, ()> {
         Box::pin(async { Ok(()) })
     }

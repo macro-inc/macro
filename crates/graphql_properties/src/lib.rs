@@ -26,8 +26,9 @@ pub use loaders::{
     PropertiesEntityPropertyReader, entity_properties_loader,
 };
 pub use mutations::{
-    EntityPropertyOptionDelta, EntityPropertyWriter, GraphqlPropertyTargetEntityType,
-    NoOpEntityPropertyWriter, PropertiesEntityPropertyWriter, PropertiesMutationRoot,
+    EntityPropertyOptionDelta, EntityPropertyWriter, GraphqlEntityReferenceInput,
+    GraphqlPropertyTargetEntityType, GraphqlSetPropertyValue, NoOpEntityPropertyWriter,
+    PropertiesEntityPropertyWriter, PropertiesMutationRoot,
 };
 pub use objects::{
     GraphqlBooleanPropertyValue, GraphqlDatePropertyValue, GraphqlEntityReferencePropertyValue,
