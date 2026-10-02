@@ -45,6 +45,28 @@ body:has(.tour-page) .site-header-actions { display: none; }
   .tour-constellation-desktop { display: none; }
   .tour-constellation-mobile { display: block; }
 }
+/* Phones: a true circle. FeatureConstellation's inline left/top put the eight
+   features on hand-tuned points in a wide box, with the core at 48%/46%; here a
+   square box, a centered core, and one feature every 45 degrees (radius 36%). */
+@media (max-width: 767px) {
+  /* Nearly full screen width (the section's own inset would squeeze it), with
+     icons and core sized to the ring so labels clear their neighbors. */
+  .tour-constellation-mobile { --ring: min(100vw - 32px, 360px); display: flex; justify-content: center; }
+  .tour-constellation-mobile .feature-flow { flex: none; width: var(--ring); height: var(--ring); margin-bottom: 40px; }
+  .tour-constellation-mobile .feature-flow-core { left: 50%; top: 50%; width: calc(var(--ring) * .2); height: calc(var(--ring) * .2); }
+  .tour-constellation-mobile .feature-flow-core svg { width: 48%; height: 48%; }
+  .tour-constellation-mobile .feature-flow-icon { width: calc(var(--ring) * .13); height: calc(var(--ring) * .13); }
+  .tour-constellation-mobile .feature-flow-icon svg { width: 44%; height: 44%; }
+  .tour-constellation-mobile .feature-flow-node > span { top: calc(100% + 6px); font-size: 11px; }
+  .tour-constellation-mobile [data-tool-tile=Google], .tour-constellation-mobile .feature-flow-halo:nth-child(1) { left: 14.0% !important; top: 50.0% !important; }
+  .tour-constellation-mobile [data-tool-tile=Slack], .tour-constellation-mobile .feature-flow-halo:nth-child(2) { left: 24.54% !important; top: 24.54% !important; }
+  .tour-constellation-mobile [data-tool-tile=Sheets], .tour-constellation-mobile .feature-flow-halo:nth-child(3) { left: 50.0% !important; top: 14.0% !important; }
+  .tour-constellation-mobile [data-tool-tile=Notion], .tour-constellation-mobile .feature-flow-halo:nth-child(4) { left: 75.46% !important; top: 24.54% !important; }
+  .tour-constellation-mobile [data-tool-tile=Linear], .tour-constellation-mobile .feature-flow-halo:nth-child(5) { left: 86.0% !important; top: 50.0% !important; }
+  .tour-constellation-mobile [data-tool-tile=HubSpot], .tour-constellation-mobile .feature-flow-halo:nth-child(6) { left: 75.46% !important; top: 75.46% !important; }
+  .tour-constellation-mobile [data-tool-tile=GitHub], .tour-constellation-mobile .feature-flow-halo:nth-child(7) { left: 50.0% !important; top: 86.0% !important; }
+  .tour-constellation-mobile [data-tool-tile=Zoom], .tour-constellation-mobile .feature-flow-halo:nth-child(8) { left: 24.54% !important; top: 75.46% !important; }
+}
 /* The homepage's a16z and security badges close the page. */
 .tour-footer { padding: 72px 0 96px; }
 .tour-footer .homepage-open-source-badges { margin: 0; }
