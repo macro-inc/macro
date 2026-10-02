@@ -318,16 +318,16 @@ describe('agent-led new conversation', () => {
     fireEvent.input(
       await screen.findByRole('textbox', { name: 'Search agents and models' }),
       {
-        target: { value: 'Sonnet 5' },
+        target: { value: 'Sonnet 5.5' },
       }
     );
     expect(screen.queryByRole('button', { name: 'Chat default' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Sonnet 5' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Sonnet 5.5' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     expect(send).toHaveBeenCalledWith(
       expect.objectContaining({
-        modelOverride: 'anthropic/claude-sonnet-5',
+        modelOverride: 'anthropic/claude-sonnet-5-5',
       })
     );
   });
