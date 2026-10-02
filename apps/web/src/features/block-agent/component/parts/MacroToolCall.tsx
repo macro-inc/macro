@@ -37,7 +37,7 @@ export function MacroToolCall(props: {
   detail: MacroDetail;
   common: ToolCallCommon;
   grouped?: boolean;
-  context?: ToolCallContext;
+  context: ToolCallContext;
 }): JSX.Element {
   const response = createMemo(() =>
     deserializeToolResponse({
@@ -122,14 +122,15 @@ export function MacroToolCall(props: {
             name={props.common.label}
             json={props.detail.input}
             response={{ json: props.detail.output, name: props.common.label }}
-            chat_id={props.context?.sessionId ?? ''}
-            message_id={props.context?.messageId ?? ''}
-            part_index={props.context?.partIndex ?? 0}
+            chat_id={props.context.sessionId}
+            message_id={props.context.messageId}
+            part_index={props.context.partIndex}
             isComplete={true}
             renderContext={{
               renderContext: {
                 isStreaming: false,
                 grouped: props.grouped ?? true,
+                followedBy: props.context.followedBy,
               },
             }}
           />

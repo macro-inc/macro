@@ -23,6 +23,7 @@ import { ConnectAppNode } from './nodes/ConnectAppNode';
 import { ContactMentionNode } from './nodes/ContactMentionNode';
 import { CursorSystemNotificationNode } from './nodes/CursorSystemNotificationNode';
 import { CustomCodeNode } from './nodes/CustomCodeNode';
+import { DatabaseQueryNode } from './nodes/DatabaseQueryNode';
 import { DateMentionNode } from './nodes/DateMentionNode';
 import { DiffDeleteNode } from './nodes/DiffDeleteNode';
 import { DiffInsertNode } from './nodes/DiffInsertNode';
@@ -72,6 +73,7 @@ export const SupportedNodeTypes = [
   TextNode,
   CodeNode,
   CustomCodeNode,
+  DatabaseQueryNode,
   HeadingNode,
   LinkNode,
   AutoLinkNode,

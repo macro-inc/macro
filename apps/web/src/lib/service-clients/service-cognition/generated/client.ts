@@ -2569,6 +2569,11 @@ export type structuredCompletionResponse402 = {
   status: 402;
 };
 
+export type structuredCompletionResponse403 = {
+  data: StructuredCompletionError;
+  status: 403;
+};
+
 export type structuredCompletionResponse500 = {
   data: StructuredCompletionError;
   status: 500;
@@ -2587,6 +2592,7 @@ export type structuredCompletionResponseError = (
   | structuredCompletionResponse400
   | structuredCompletionResponse401
   | structuredCompletionResponse402
+  | structuredCompletionResponse403
   | structuredCompletionResponse500
   | structuredCompletionResponse503
 ) & {

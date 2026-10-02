@@ -2152,6 +2152,16 @@
               }
             }
           },
+          "403": {
+            "description": "No access to the requested model",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StructuredCompletionError"
+                }
+              }
+            }
+          },
           "500": {
             "description": "Internal error",
             "content": {
@@ -2980,6 +2990,47 @@
           }
         }
       },
+      "DatabaseChange": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["none"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Databases, tables, columns or saved views.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["schema"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["count", "kind"],
+            "properties": {
+              "count": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["rows"]
+              }
+            }
+          }
+        ],
+        "description": "What a successful tool call committed to the user's databases."
+      },
       "DocumentCognitionServiceApiVersion": {
         "type": "string",
         "enum": ["v1", "v2"]
@@ -3075,7 +3126,9 @@
           "skill",
           "agent_session",
           "scheduled_action",
-          "initiative"
+          "initiative",
+          "database",
+          "database_row"
         ]
       },
       "ErrorBody": {
@@ -4667,6 +4720,36 @@
           }
         }
       },
+      "StructuredCompletionOutcome": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "The answer, shaped by the request's `output_schema`.",
+            "required": ["result", "status"],
+            "properties": {
+              "result": {},
+              "status": {
+                "type": "string",
+                "enum": ["completed"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The model failed after committing database changes, so there is no\nanswer but `tool_activity` says what was saved.",
+            "required": ["reason", "status"],
+            "properties": {
+              "reason": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": ["interrupted"]
+              }
+            }
+          }
+        ]
+      },
       "StructuredCompletionRequest": {
         "type": "object",
         "required": ["prompt", "model", "output_schema"],
@@ -4690,15 +4773,64 @@
       },
       "StructuredCompletionResponse": {
         "type": "object",
-        "required": ["result"],
+        "required": ["outcome", "toolActivity"],
         "properties": {
-          "result": {}
+          "outcome": {
+            "$ref": "#/components/schemas/StructuredCompletionOutcome"
+          },
+          "toolActivity": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StructuredToolActivity"
+            },
+            "description": "Actual completed tools, independent of the model's claims."
+          }
+        }
+      },
+      "StructuredToolActivity": {
+        "type": "object",
+        "description": "One tool call the agent finished, and what it did.",
+        "required": ["name", "outcome"],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/ToolOutcome"
+          }
         }
       },
       "TargetType": {
         "type": "string",
         "description": "The kind of entity a projection is materialized for.",
         "enum": ["user", "team"]
+      },
+      "ToolOutcome": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["changes", "status"],
+            "properties": {
+              "changes": {
+                "$ref": "#/components/schemas/DatabaseChange"
+              },
+              "status": {
+                "type": "string",
+                "enum": ["succeeded"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["status"],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": ["failed"]
+              }
+            }
+          }
+        ]
       },
       "ToolSet": {
         "oneOf": [
@@ -4719,6 +4851,26 @@
               "type": {
                 "type": "string",
                 "enum": ["none"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["databases"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["databases_read_only"]
               }
             }
           }

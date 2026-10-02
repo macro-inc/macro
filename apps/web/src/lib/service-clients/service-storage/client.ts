@@ -184,6 +184,7 @@ export {
   stringToItemType,
 } from './itemType';
 
+import { databasesClient } from './databases';
 import type {
   CollabSurfaceResponse,
   CollabSurfaceTokenResponse,
@@ -395,6 +396,9 @@ export const DOCUMENT_NAME_TOO_LONG_CODE = 'DOCUMENT_NAME_TOO_LONG' as const;
 type SlackImportJobArgs = { jobId: JobId; signal?: AbortSignal };
 
 export const storageServiceClient = {
+  /** Macro Databases — see `./databases.ts`. */
+  databases: databasesClient,
+
   async createSlackImport(args: {
     body: SlackCreateRequest;
     signal?: AbortSignal;

@@ -1,3 +1,5 @@
+import { CellMentionEditor } from '@app/components/cell-text-editor/CellMentionEditor';
+import type { CellTextEditorProps } from '@app/components/cell-text-editor/types';
 import {
   type MacroMentionLinkResolver,
   useMacroMentionLinkResolver,
@@ -16,11 +18,7 @@ import {
 } from '@macro-inc/spreadsheet/cell-mentions';
 import ClockIcon from '@phosphor/clock.svg';
 import { For, Suspense } from 'solid-js';
-import { CellMentionEditor } from './components/CellMentionEditor';
-import type {
-  CellTextEditorProps,
-  SpreadsheetMentions,
-} from './context/spreadsheet-mentions';
+import type { SpreadsheetMentions } from './context/spreadsheet-mentions';
 import { SpreadsheetCellLinks } from './spreadsheet-cell-links';
 
 export function linkMentions(

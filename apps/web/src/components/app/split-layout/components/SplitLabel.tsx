@@ -233,6 +233,8 @@ export function BlockItemSplitLabel(props: {
   badges?: JSX.Element;
   /** Rendered after the file name. */
   trailingBadges?: JSX.Element;
+  /** Replaces the static name, e.g. with an inline title editor. */
+  title?: JSX.Element;
 }) {
   const panel = useSplitPanelOrThrow();
   if (!isInBlock())
@@ -283,28 +285,35 @@ export function BlockItemSplitLabel(props: {
           </Show>
           <Show when={props.badges}>{props.badges}</Show>
           <Show
-            when={blockMetadataSignal()}
+            when={props.title}
             fallback={
-              <SplitLabel
-                label={displayName() ?? ''}
-                lockRename={!isOwner() || props.lockRename}
-              />
+              <Show
+                when={blockMetadataSignal()}
+                fallback={
+                  <SplitLabel
+                    label={displayName() ?? ''}
+                    lockRename={!isOwner() || props.lockRename}
+                  />
+                }
+              >
+                {(metadata) => (
+                  <DocumentTitleHoverCard
+                    documentId={metadata().documentId}
+                    name={displayName() ?? ''}
+                    ownerId={metadata().owner}
+                    createdAt={metadata().createdAt}
+                    updatedAt={metadata().updatedAt}
+                  >
+                    <SplitLabel
+                      label={displayName() ?? ''}
+                      lockRename={!isOwner() || props.lockRename}
+                    />
+                  </DocumentTitleHoverCard>
+                )}
+              </Show>
             }
           >
-            {(metadata) => (
-              <DocumentTitleHoverCard
-                documentId={metadata().documentId}
-                name={displayName() ?? ''}
-                ownerId={metadata().owner}
-                createdAt={metadata().createdAt}
-                updatedAt={metadata().updatedAt}
-              >
-                <SplitLabel
-                  label={displayName() ?? ''}
-                  lockRename={!isOwner() || props.lockRename}
-                />
-              </DocumentTitleHoverCard>
-            )}
+            {props.title}
           </Show>
           {props.trailingBadges}
           <div

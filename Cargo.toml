@@ -33,6 +33,10 @@ members = [
   "crates/cursor_api_key",
   "crates/cursor_cloud_agents",
   "crates/claude_cloud_agents",
+  "crates/database_sql",
+  "crates/databases",
+  "crates/databases_sql",
+  "crates/models_databases",
   "crates/embedding",
   "crates/image_generation",
   "crates/dictation",
@@ -216,6 +220,7 @@ dotenvy = "0.15.7"
 ego-tree = "0.6.2"
 either = "1"
 eventsource-stream = "0.2.3"
+fractional_index = { version = "2.0.2", default-features = false }
 futures = "0.3.31"
 getrandom = "0.3"
 glob = "0.3.3"
@@ -250,6 +255,7 @@ livekit-api = { version = "0.4.16", default-features = false, features = [
 ] }
 livekit-protocol = "0.7.2"
 log = "0.4.26"
+logos = "0.16"
 lol_html = "2.4.0"
 lru = "0.16"
 mockall = "0.13"

@@ -26,6 +26,7 @@ function isSoupEntityTag(
       'channel_thread',
       'automation',
       'agent_session',
+      'database',
       'calendar_event',
       'foreign',
       'crm_company',

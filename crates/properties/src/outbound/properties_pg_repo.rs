@@ -146,6 +146,29 @@ impl PropertiesRepo for PropertiesPgRepo {
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn create_database_property_definition(
+        &self,
+        database_id: Uuid,
+        display_name: &str,
+        data_type: DataType,
+        is_multi_select: bool,
+        specific_entity_type: Option<EntityType>,
+    ) -> Result<PropertyDefinition, Self::Err> {
+        Ok(
+            property_definition_queries::create_database_property_definition(
+                &self.pool,
+                macro_uuid::generate_uuid_v7(),
+                database_id,
+                display_name,
+                data_type,
+                is_multi_select,
+                specific_entity_type,
+            )
+            .await?,
+        )
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn delete_property_definition(
         &self,
         property_definition_id: Uuid,
@@ -163,11 +186,56 @@ impl PropertiesRepo for PropertiesPgRepo {
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn get_bindable_property_definition(
+        &self,
+        property_definition_id: Uuid,
+        user_id: &str,
+        database_id: Uuid,
+    ) -> Result<Option<PropertyDefinition>, Self::Err> {
+        property_definition_queries::get_bindable_property_definition(
+            &self.pool,
+            property_definition_id,
+            user_id,
+            database_id,
+        )
+        .await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_editable_property_definition_ids(
+        &self,
+        property_definition_ids: &[Uuid],
+        user_id: &str,
+    ) -> Result<Vec<Uuid>, Self::Err> {
+        property_definition_queries::get_editable_property_definition_ids(
+            &self.pool,
+            property_definition_ids,
+            user_id,
+        )
+        .await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_property_definitions_with_options(
+        &self,
+        property_definition_ids: &[Uuid],
+    ) -> Result<Vec<PropertyDefinitionWithOptions>, Self::Err> {
+        property_definition_queries::get_property_definitions_with_options(
+            &self.pool,
+            property_definition_ids,
+        )
+        .await
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn get_property_options(
         &self,
         property_definition_id: Uuid,
     ) -> Result<Vec<PropertyOption>, Self::Err> {
-        property_option_queries::get_property_options(&self.pool, property_definition_id).await
+        Ok(
+            property_option_queries::get_property_options(&self.pool, property_definition_id)
+                .await?,
+        )
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -336,14 +404,14 @@ impl PropertiesRepo for PropertiesPgRepo {
         property_definition_id: Uuid,
         value: Option<PropertyValue>,
     ) -> Result<EntityPropertyMutationSnapshot, Self::Err> {
-        entity_property_queries::upsert_entity_property(
+        Ok(entity_property_queries::upsert_entity_property(
             &self.pool,
             entity_id,
             entity_type,
             property_definition_id,
             value,
         )
-        .await
+        .await?)
     }
 
     #[tracing::instrument(skip(self, references), err)]

@@ -66,6 +66,11 @@ export type StartPendingSessionOptions = {
   userId?: string;
   /** Model to run on instead of the persona's, set as the session is created. */
   modelOverride?: string;
+  /**
+   * Context the surface opening the session gives the agent: its runtime reads it as
+   * instructions, so neither the composer nor the sent prompt shows it.
+   */
+  instructions?: string;
   /** Opaque harness setting confirmed before the first prompt. */
   effortOverride?: { configId: string; value: string };
   /**
@@ -102,6 +107,7 @@ export function startPendingSession(
       id,
       ...(options.botId ? { botId: options.botId } : {}),
       ...(options.modelOverride ? { model: options.modelOverride } : {}),
+      ...(options.instructions ? { instructions: options.instructions } : {}),
       ...(options.repoUrl
         ? { repoUrl: options.repoUrl, repoBranch: options.repoBranch }
         : {}),

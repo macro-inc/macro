@@ -3,6 +3,7 @@ export const BlockRegistry = [
   'call',
   'calendar',
   'chat',
+  'database',
   'write',
   'pdf',
   'md',

@@ -218,6 +218,7 @@ export default defineConfig({
             'src/lib/utils/**/*.{test,spec}.{ts,tsx}',
             'src/lib/workers/slack-import/**/*.{test,spec}.{ts,tsx}',
             'src/routes/**/*.{test,spec}.{ts,tsx}',
+            'src/observability/**/*.{test,spec}.{ts,tsx}',
           ],
           name: 'app',
         },

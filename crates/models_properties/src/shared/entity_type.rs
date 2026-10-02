@@ -2,15 +2,28 @@
 
 use document_sub_type::DocumentSubType;
 use serde::{Deserialize, Serialize};
-use std::{fmt, str::FromStr};
 use utoipa::ToSchema;
 
 #[cfg(test)]
 mod test;
 
 /// Type of entity that can be referenced by entity properties.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema, PartialEq, Eq, Hash, sqlx::Type)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Serialize,
+    Deserialize,
+    ToSchema,
+    PartialEq,
+    Eq,
+    Hash,
+    sqlx::Type,
+    strum::Display,
+    strum::EnumString,
+)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[strum(serialize_all = "snake_case", ascii_case_insensitive)]
 #[sqlx(
     type_name = "property_entity_type",
     rename_all = "SCREAMING_SNAKE_CASE"
@@ -22,6 +35,8 @@ pub enum EntityType {
     Chat,
     /// CRM company.
     Company,
+    /// A row of a Macro database table; its cells are its properties.
+    DatabaseRow,
     /// CRM contact.
     Contact,
     Document,
@@ -31,50 +46,6 @@ pub enum EntityType {
     Task,
     Thread,
     User,
-}
-
-impl fmt::Display for EntityType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            EntityType::CalendarEvent => write!(f, "calendar_event"),
-            EntityType::CallRecord => write!(f, "call_record"),
-            EntityType::Channel => write!(f, "channel"),
-            EntityType::Chat => write!(f, "chat"),
-            EntityType::Company => write!(f, "company"),
-            EntityType::Contact => write!(f, "contact"),
-            EntityType::Document => write!(f, "document"),
-            EntityType::Initiative => write!(f, "initiative"),
-            EntityType::Project => write!(f, "project"),
-            EntityType::Task => write!(f, "task"),
-            EntityType::Thread => write!(f, "thread"),
-            EntityType::User => write!(f, "user"),
-        }
-    }
-}
-
-#[derive(Debug, Clone, thiserror::Error)]
-#[error("No conversion from {0}")]
-pub struct NoConversion(pub String);
-
-impl FromStr for EntityType {
-    type Err = NoConversion;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_lowercase().as_str() {
-            "calendar_event" => Ok(Self::CalendarEvent),
-            "call_record" => Ok(Self::CallRecord),
-            "channel" => Ok(Self::Channel),
-            "chat" => Ok(Self::Chat),
-            "company" => Ok(Self::Company),
-            "contact" => Ok(Self::Contact),
-            "document" => Ok(Self::Document),
-            "initiative" => Ok(Self::Initiative),
-            "project" => Ok(Self::Project),
-            "task" => Ok(Self::Task),
-            "thread" => Ok(Self::Thread),
-            "user" => Ok(Self::User),
-            other => Err(NoConversion(other.to_owned())),
-        }
-    }
 }
 
 impl From<DocumentSubType> for EntityType {

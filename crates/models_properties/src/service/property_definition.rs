@@ -14,6 +14,7 @@ pub struct PropertyDefinition {
     pub display_name: String,
     pub data_type: DataType,
     pub is_multi_select: bool,
+    #[schema(required = true)]
     pub specific_entity_type: Option<EntityType>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,

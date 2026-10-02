@@ -968,6 +968,7 @@ async fn test_dynamic_filter_document_date_created_at_gt(pool: PgPool) {
         foreign_entity_filter: None,
         reminder_filter: None,
         initiative_filter: None,
+        database_row_filter: None,
         agent_session_filter: None,
         properties_filter: None,
     };
@@ -1067,6 +1068,7 @@ async fn test_dynamic_filter_document_date_created_at_lt(pool: PgPool) {
         foreign_entity_filter: None,
         reminder_filter: None,
         initiative_filter: None,
+        database_row_filter: None,
         agent_session_filter: None,
         properties_filter: None,
     };
@@ -1162,6 +1164,7 @@ async fn test_dynamic_filter_document_date_updated_at_gt(pool: PgPool) {
         foreign_entity_filter: None,
         reminder_filter: None,
         initiative_filter: None,
+        database_row_filter: None,
         agent_session_filter: None,
         properties_filter: None,
     };
@@ -1262,6 +1265,7 @@ async fn test_dynamic_filter_document_date_updated_at_lt(pool: PgPool) {
         foreign_entity_filter: None,
         reminder_filter: None,
         initiative_filter: None,
+        database_row_filter: None,
         agent_session_filter: None,
         properties_filter: None,
     };

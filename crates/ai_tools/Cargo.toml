@@ -39,6 +39,8 @@ contacts = { path = "../contacts", default-features = false, features = [
   "outbound",
 ] }
 crm = { path = "../crm" }
+databases = { path = "../databases", default-features = false, features = ["ai_tools", "gateway", "postgres"] }
+databases_sql = { path = "../databases_sql", features = ["ai_tools"] }
 documents = { path = "../documents", features = ["ai_tools", "attachment", "purge"] }
 email = { path = "../email", features = ["ai_schema", "ai_tools", "axum", "outbound"] }
 email_service_client = { path = "../email_service_client" }

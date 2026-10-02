@@ -33,6 +33,7 @@ import type { BlockOrchestrator } from '@core/orchestrator';
 import type { SearchLocation } from '@entity';
 import { createMemo, createRoot, createSignal } from 'solid-js';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { contentReference } from '../content-reference';
 import {
   createSplitLayout,
   type SplitContent,
@@ -1014,7 +1015,7 @@ describe('layoutManager', () => {
         const onApplied = vi.fn();
         const source = manager.getSplit(manager.splits()[0].id)!;
         const sourceRoute = router.route(source.id);
-        manager.openWithSplit({ type, id: 'entity' } as SplitContent, {
+        manager.openWithSplit(contentReference(type, 'entity'), {
           handle: source,
           preferNewSplit: true,
           search: searchLocationUpdates('entity', target),
@@ -1030,7 +1031,7 @@ describe('layoutManager', () => {
         expect(location.read().pathname).toContain(path);
         expect(onApplied).toHaveBeenCalledOnce();
         const firstRequest = router.search(owner.id, namespace)?.seek;
-        manager.openWithSplit({ type, id: 'entity' } as SplitContent, {
+        manager.openWithSplit(contentReference(type, 'entity'), {
           handle: source,
           preferNewSplit: true,
           search: searchLocationUpdates('entity', target),

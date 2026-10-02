@@ -93,6 +93,43 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         options: Vec<PropertyOption>,
     ) -> impl Future<Output = Result<PropertyDefinition, Self::Err>> + Send;
 
+    /// Create a definition owned by a database, outside the shared user/team namespace.
+    /// The calling database domain service owns authorization and column-type policy.
+    fn create_database_property_definition(
+        &self,
+        database_id: Uuid,
+        display_name: &str,
+        data_type: DataType,
+        is_multi_select: bool,
+        specific_entity_type: Option<EntityType>,
+    ) -> impl Future<Output = Result<PropertyDefinition, Self::Err>> + Send;
+
+    /// A definition a user may bind as a column of `database_id`: a system
+    /// one, their own, one of their teams', or one the database owns.
+    /// `None` for anything else, including a missing definition.
+    fn get_bindable_property_definition(
+        &self,
+        property_definition_id: Uuid,
+        user_id: &str,
+        database_id: Uuid,
+    ) -> impl Future<Output = Result<Option<PropertyDefinition>, Self::Err>> + Send;
+
+    /// The definitions among `property_definition_ids` a user may change:
+    /// their own, or one of their teams'. Never a system one, nor one a
+    /// database owns, whose changes are that database's to authorize.
+    fn get_editable_property_definition_ids(
+        &self,
+        property_definition_ids: &[Uuid],
+        user_id: &str,
+    ) -> impl Future<Output = Result<Vec<Uuid>, Self::Err>> + Send;
+
+    /// Definitions by id with their options, database-owned ones included.
+    /// Missing ids are skipped; authorization is the caller's.
+    fn get_property_definitions_with_options(
+        &self,
+        property_definition_ids: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<PropertyDefinitionWithOptions>, Self::Err>> + Send;
+
     /// Delete a property definition and all associated data (cascades).
     /// A no-op if the definition doesn't exist.
     fn delete_property_definition(

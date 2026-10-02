@@ -1,5 +1,6 @@
 import OpenAiIcon from '@core/component/AI/assets/openai.svg';
 import ClaudeIcon from '@icon/wide-claude.svg';
+import GoogleIcon from '@phosphor-fill/google-logo-fill.svg';
 
 /**
  * Frontend-owned set of model ids. These are the `provider/model` ids the
@@ -16,6 +17,7 @@ export const Model = {
   gpt6Astra: 'openai/gpt-6-astra',
   gpt56: 'openai/gpt-5.6',
   gpt56Mini: 'openai/gpt-5.6-mini',
+  gemini38Flash: 'google/gemini-3.8-flash',
 } as const;
 
 // `Model` is both a value (the const above) and a type (the union of api ids).
@@ -40,6 +42,7 @@ export const MODEL_PRETTYNAME: ExhaustiveMap = {
   'openai/gpt-6-astra': 'GPT-6 Astra',
   'openai/gpt-5.6': 'GPT-5.6',
   'openai/gpt-5.6-mini': 'GPT-5.6 mini',
+  'google/gemini-3.8-flash': 'Gemini 3.8 Flash',
 } as const;
 
 export const MODEL_PROVIDER_ICON: ExhaustiveMap = {
@@ -50,14 +53,16 @@ export const MODEL_PROVIDER_ICON: ExhaustiveMap = {
   'openai/gpt-6-astra': OpenAiIcon,
   'openai/gpt-5.6': OpenAiIcon,
   'openai/gpt-5.6-mini': OpenAiIcon,
+  'google/gemini-3.8-flash': GoogleIcon,
 };
 
 /**
  * How fast each model draws down a paid plan's included AI, relative to the
  * default model (Sonnet 5 = 1). Mirrors the per-token rates in `ai_pricing`
  * (output price, which dominates chat cost): Haiku $5, Sonnet $10, Opus $25,
- * Fable $50, GPT-6 Astra $50, GPT-5.6 $30, GPT-5.6 mini $4.50 per million
- * tokens. Shown in the picker so choosing a heavy model is a deliberate trade.
+ * Fable $50, GPT-6 Astra $50, GPT-5.6 $30, GPT-5.6 mini $4.50, Gemini 3.8
+ * Flash $3.75 per million tokens. Shown in the picker so choosing a heavy
+ * model is a deliberate trade.
  */
 export const MODEL_USAGE_MULTIPLIER: { [K in TModel]: number } = {
   'anthropic/claude-sonnet-5': 1,
@@ -67,6 +72,7 @@ export const MODEL_USAGE_MULTIPLIER: { [K in TModel]: number } = {
   'openai/gpt-6-astra': 5,
   'openai/gpt-5.6': 3,
   'openai/gpt-5.6-mini': 0.45,
+  'google/gemini-3.8-flash': 0.375,
 };
 
 /**
@@ -88,6 +94,12 @@ export const DEFAULT_MODEL: TModel = Model.sonnet5;
  * fast model instead of Opus.
  */
 export const FREE_DEFAULT_MODEL: TModel = Model.haiku45;
+
+/**
+ * Model for database AI: question answering, the database assistant, and chats
+ * opened from a database. Paid-only, like every model but {@link FREE_DEFAULT_MODEL}.
+ */
+export const DATABASE_MODEL: TModel = Model.gemini38Flash;
 
 /**
  * Models a paid user may select. Fable remains a known model so persisted
@@ -116,6 +128,13 @@ export function modelsForPlan(hasPaidAccess: boolean): readonly TModel[] {
   return hasPaidAccess ? PAID_MODELS : FREE_MODELS;
 }
 
+/** {@link DATABASE_MODEL} when the plan includes it, else the plan's default. */
+export function databaseModelForPlan(hasPaidAccess: boolean): TModel {
+  return modelsForPlan(hasPaidAccess).includes(DATABASE_MODEL)
+    ? DATABASE_MODEL
+    : defaultModelForPlan(hasPaidAccess);
+}
+
 /** Provider serving each model — mirrors the backend `provider` field. */
 export const MODEL_PROVIDER: ExhaustiveMap = {
   'anthropic/claude-sonnet-5': 'anthropic',
@@ -125,6 +144,7 @@ export const MODEL_PROVIDER: ExhaustiveMap = {
   'openai/gpt-6-astra': 'openai',
   'openai/gpt-5.6': 'openai',
   'openai/gpt-5.6-mini': 'openai',
+  'google/gemini-3.8-flash': 'google',
 } as const;
 
 /** Options for {@link alternateProviderModel}. */

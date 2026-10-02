@@ -451,6 +451,37 @@ fn attributed_initiative_clears_and_other_system_clears_still_refresh_soup() {
 }
 
 #[test]
+fn a_cell_edit_updates_the_database_row() {
+    let row = "70000000-0000-0000-0000-000000000001";
+    let event = PropertyTopicEvent::EntityPropertyUpdated(EntityPropertyUpdatedMetadata {
+        entity_property_id: Uuid::from_u128(0xe0000000_0000_0000_0000_000000000001),
+        entity_id: row.to_string(),
+        entity_type: PropertyEntityType::DatabaseRow,
+        property_definition_id: Uuid::from_u128(0x5e1ec700_0000_0000_0000_000000000001),
+        actor_user_id: Some(user()),
+        actor: None,
+        on_behalf_of: None,
+        value: None,
+        previous_value: None,
+        updated_at: Utc::now(),
+    });
+
+    let patches = patches_from_property_event(&event);
+
+    assert_eq!(patches.len(), 1);
+    assert!(matches!(patches[0].patch, Patch::Updated(_)));
+    assert_eq!(
+        patch_entity(&patches[0]).entity_type,
+        EntityType::DatabaseRow
+    );
+    assert_eq!(patch_entity(&patches[0]).entity_id, row);
+    assert_eq!(
+        patches[0].access_source.entity_type,
+        EntityType::DatabaseRow
+    );
+}
+
+#[test]
 fn property_events_for_non_property_soup_items_are_ignored() {
     for entity_type in [PropertyEntityType::Channel, PropertyEntityType::User] {
         let event = PropertyTopicEvent::EntityPropertiesCleared(EntityPropertiesClearedMetadata {

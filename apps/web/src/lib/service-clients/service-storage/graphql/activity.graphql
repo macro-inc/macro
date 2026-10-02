@@ -42,6 +42,15 @@ query EntityActivity($input: SoupInput!, $limit: Int) {
 	}
 }
 
+query DatabaseActivity($databaseId: ID!, $limit: Int) {
+	user {
+		id
+		databaseActivity(databaseId: $databaseId, limit: $limit) {
+			...ActivityEventFields
+		}
+	}
+}
+
 fragment EntityActivityFields on GraphqlSoupEntity {
 	__typename
 	id

@@ -26,6 +26,7 @@ use item_filters::{
         channel::{ChannelLiteral, ChannelThreadLiteral, ChannelTypeFilter},
         chat::{ChatLiteral, ChatRole},
         crm_company::CrmCompanyLiteral,
+        database_row::DatabaseRowLiteral,
         date::DateLiteral,
         document::DocumentLiteral,
         email::{Email, EmailLiteral},
@@ -306,6 +307,8 @@ enum GraphqlPropertyEntityType {
     Chat,
     /// Company entity.
     Company,
+    /// Database row entity.
+    DatabaseRow,
     /// CRM contact entity.
     Contact,
     /// Document entity.
@@ -332,6 +335,7 @@ impl TryFrom<GraphqlPropertyEntityType> for PropertyEntityType {
             GraphqlPropertyEntityType::Channel => Self::Channel,
             GraphqlPropertyEntityType::Chat => Self::Chat,
             GraphqlPropertyEntityType::Company => Self::Company,
+            GraphqlPropertyEntityType::DatabaseRow => Self::DatabaseRow,
             GraphqlPropertyEntityType::Document => Self::Document,
             GraphqlPropertyEntityType::Project => Self::Project,
             GraphqlPropertyEntityType::Task => Self::Task,
@@ -379,6 +383,8 @@ pub struct GraphqlEntityFilterAst {
     agent_session_filter: Option<GraphqlAgentSessionExpr>,
     /// The initiative filter to apply. Initiatives are opt-in.
     initiative_filter: Option<GraphqlInitiativeExpr>,
+    /// The database row filter to apply. Rows are opt-in: name a table.
+    database_row_filter: Option<GraphqlDatabaseRowExpr>,
     /// The properties filter to apply.
     properties_filter: Option<GraphqlFilterPropertiesExpr>,
 }
@@ -415,6 +421,7 @@ impl GraphqlEntityFilterAst {
             agent_session_filter: optional_tree(self.agent_session_filter)?,
             properties_filter: optional_tree(self.properties_filter)?,
             initiative_filter: optional_tree(self.initiative_filter)?,
+            database_row_filter: optional_tree(self.database_row_filter)?,
         })
     }
 }
@@ -1300,5 +1307,33 @@ impl IntoFilterExpr<InitiativeLiteral> for GraphqlInitiativeLiteral {
             Self::DueAfter(date) => InitiativeLiteral::DueAfter(GraphqlDateLiteral::parse(date)?),
         };
         Ok(Expr::val(literal))
+    }
+}
+
+filter_expr_input!(
+    GraphqlDatabaseRowExpr,
+    GraphqlDatabaseRowBinaryExpr,
+    GraphqlDatabaseRowLiteral,
+    DatabaseRowLiteral,
+    "DatabaseRowFilterExpr"
+);
+
+/// GraphQL input for selecting database rows through Soup.
+#[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum GraphqlDatabaseRowLiteral {
+    /// Match the rows of a table.
+    TableId(ID),
+    /// Match one row.
+    Id(ID),
+}
+
+impl IntoFilterExpr<DatabaseRowLiteral> for GraphqlDatabaseRowLiteral {
+    fn into_expr(self) -> InputResult<Expr<DatabaseRowLiteral>> {
+        Ok(Expr::val(match self {
+            Self::TableId(id) => DatabaseRowLiteral::TableId(parse_id(id, "tableId")?),
+            Self::Id(id) => DatabaseRowLiteral::Id(parse_id(id, "id")?),
+        }))
     }
 }

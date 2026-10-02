@@ -41,6 +41,7 @@ fn graphiql_source(endpoint: &str) -> String {
         .finish()
 }
 
+#[tracing::instrument(skip_all, name = "graphql.execute")]
 async fn graphql_handler(
     State(state): State<ApiContext>,
     Cached(auth): Cached<

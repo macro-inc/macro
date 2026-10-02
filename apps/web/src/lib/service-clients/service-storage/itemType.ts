@@ -10,6 +10,7 @@ export type ItemType =
   | 'channel_message'
   | 'channel_thread'
   | 'call'
+  | 'database'
   | 'agent_session'
   | 'automation'
   | 'calendar_event'
@@ -43,6 +44,7 @@ export function stringToItemType(str: string): ItemType | undefined {
   return match<string, ItemType | undefined>(str)
     .with('email', 'thread', 'email_thread', () => 'email')
     .with(
+      'database',
       'agent_session',
       'call',
       'calendar_event',
@@ -68,6 +70,7 @@ export function blockNameToItemType(
       'project',
       'email',
       'automation',
+      'database',
       'initiative',
       (b) => b
     )
@@ -91,6 +94,7 @@ export const ITEM_TYPES = [
   'channel_message',
   'channel_thread',
   'call',
+  'database',
   'agent_session',
   'automation',
   'calendar_event',

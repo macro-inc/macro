@@ -68,6 +68,7 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock('@core/constant/featureFlags', () => ({
   enableCrm: {},
+  enableDatabases: {},
   isFeatureEnabled: () => mocks.crmEnabled(),
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
@@ -167,6 +168,9 @@ vi.mock('@queries/soup/recently-viewed', () => ({
 }));
 vi.mock('@queries/storage/instructions-md', () => ({
   useInstructionsMdIdQuery: () => ({ data: undefined }),
+}));
+vi.mock('@queries/storage/databases', () => ({
+  useDatabasesQuery: () => ({ data: [], isSuccess: true }),
 }));
 vi.mock('@service-storage/util/filename', () => ({
   formatDocumentName: (name: string) => name,

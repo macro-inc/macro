@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { parseModel } from '../util/parse';
 import {
   alternateProviderModel,
+  DATABASE_MODEL,
   DEFAULT_MODEL,
+  databaseModelForPlan,
   defaultModelForPlan,
   FREE_DEFAULT_MODEL,
   MODEL_PROVIDER,
@@ -31,6 +33,16 @@ describe('modelsForPlan / defaultModelForPlan', () => {
     // The premium models are *not* in a free user's selectable set.
     expect(free).not.toContain(Model.opus5);
     expect(free).not.toContain(Model.gpt56);
+  });
+});
+
+describe('databaseModelForPlan', () => {
+  it('asks a paid plan for the database model', () => {
+    expect(databaseModelForPlan(true)).toBe(DATABASE_MODEL);
+  });
+
+  it('asks a free plan for its own model, which the service allows', () => {
+    expect(databaseModelForPlan(false)).toBe(FREE_DEFAULT_MODEL);
   });
 });
 
@@ -119,14 +131,23 @@ describe('alternateProviderModel', () => {
     expect(PROVIDER_OF(first!)).toBe('openai');
     current = first!;
 
-    // OpenAI then also fails → there is no un-failed provider left, so we must
-    // NOT bounce the user back to Anthropic (which already failed this session).
+    // OpenAI then also fails → Google is the only provider left.
     failedProviders.add(PROVIDER_OF(current));
     const second = alternateProviderModel(current, {
       candidates,
       failedProviders,
     });
-    expect(second).toBeUndefined();
+    expect(PROVIDER_OF(second!)).toBe('google');
+    current = second!;
+
+    // Google fails too → no un-failed provider is left, so we must NOT bounce
+    // the user back to Anthropic (which already failed this session).
+    failedProviders.add(PROVIDER_OF(current));
+    const third = alternateProviderModel(current, {
+      candidates,
+      failedProviders,
+    });
+    expect(third).toBeUndefined();
   });
 
   it('still avoids the current provider when no failures are recorded', () => {

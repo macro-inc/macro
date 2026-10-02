@@ -30,6 +30,7 @@ import {
   type ComponentMetaMap,
   resolveComponent,
 } from './componentRegistry';
+import { contentReference } from './content-reference';
 import {
   type ContentInstance,
   createContentInstanceRegistry,
@@ -1417,9 +1418,8 @@ export function createSplitLayout(
     type: SplitContentType,
     id: string
   ): SplitHandle | undefined {
-    // A union of more than 25 content types no longer narrows per member.
     const instance = contentInstances.find(
-      contentIdentity({ type, id } as SplitContent)
+      contentIdentity(contentReference(type, id))
     );
     const match = state.splits.find(
       (s) =>

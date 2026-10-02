@@ -309,7 +309,7 @@ function buildSoupProperty(
         ? (property.isSystemProperty ?? false)
         : property.isSystem,
       owner: property.owner,
-      specific_entity_type: property.specificEntityType ?? undefined,
+      specific_entity_type: property.specificEntityType ?? null,
       created_at: now,
       updated_at: now,
     },

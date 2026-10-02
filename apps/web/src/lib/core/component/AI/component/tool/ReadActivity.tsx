@@ -1,3 +1,4 @@
+import { useActivityContext } from '@app/features/activity/context/activity-context';
 import type { FeedEntry } from '@app/features/activity/core/collapse-runs';
 import type {
   ActivityAction,
@@ -29,6 +30,7 @@ function decodeToolEntityType(raw: string): ActivityEntityType {
     .with('email_thread', () => 'email-thread' as const)
     .with('channel', () => 'channel' as const)
     .with('user', () => 'user' as const)
+    .with('database', () => 'database' as const)
     .otherwise((value) => ({ kind: 'unsupported' as const, raw: value }));
 }
 
@@ -102,17 +104,18 @@ const handler = createToolRenderer({
     const [isExpanded, setIsExpanded] = createSignal(
       ctx.renderContext.grouped !== true
     );
+    const activityContext = useActivityContext();
     const activities = () => ctx.response?.data.activities ?? [];
     const entries = createMemo<FeedEntry[]>(() =>
-      activities().map((activity, index) => ({
-        kind: 'single',
-        event: activityEvent(activity, index),
-      }))
+      activities()
+        .map((activity, index) => activityEvent(activity, index))
+        .filter((event) => activityContext.entityTypeShown(event.entityType))
+        .map((event) => ({ kind: 'single', event }))
     );
-    const hasResults = () => activities().length > 0;
+    const hasResults = () => entries().length > 0;
     const statusText = () => {
       if (!ctx.response) return undefined;
-      const count = activities().length;
+      const count = entries().length;
       if (count === 0) return 'No Results';
       if (ctx.response.data.truncated) return `${count}+ activities`;
       if (count === 1) return '1 activity';

@@ -1656,6 +1656,38 @@ fn initiatives_expand_with_properties_without_enabling_legacy_queries() {
 }
 
 #[test]
+fn database_rows_are_requested_by_naming_a_table_or_a_row_outside_a_not() {
+    use database_row::{DatabaseRowLiteral, database_rows_requested};
+    let table = Uuid::from_u128(0x7ab1e);
+    let row = Uuid::from_u128(0x0001);
+
+    assert!(!database_rows_requested(None));
+    assert!(database_rows_requested(Some(&Expr::val(
+        DatabaseRowLiteral::TableId(table)
+    ))));
+    assert!(database_rows_requested(Some(&Expr::or(
+        Expr::val(DatabaseRowLiteral::TableId(table)),
+        Expr::val(DatabaseRowLiteral::Id(row)),
+    ))));
+    assert!(!database_rows_requested(Some(&Expr::is_not(Expr::val(
+        DatabaseRowLiteral::TableId(table)
+    )))));
+    assert!(database_rows_requested(Some(&Expr::and(
+        Expr::val(DatabaseRowLiteral::TableId(table)),
+        Expr::is_not(Expr::val(DatabaseRowLiteral::Id(row))),
+    ))));
+
+    assert_eq!(
+        serde_json::to_value(EntityFilterAst {
+            database_row_filter: Some(Arc::new(Expr::val(DatabaseRowLiteral::TableId(table)))),
+            ..EntityFilterAst::default()
+        })
+        .unwrap()["drf"],
+        json!({ "l": { "t": "00000000-0000-0000-0000-00000007ab1e" } })
+    );
+}
+
+#[test]
 fn crm_document_literals_round_trip_through_the_rest_ast() {
     let company_id = "0198a1b2-c3d4-7e5f-8061-728394a5b700";
     let tree = json!({

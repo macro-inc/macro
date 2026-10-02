@@ -39,7 +39,7 @@ import {
 } from 'solid-js';
 import { match } from 'ts-pattern';
 import { FoldedOutput, ToolCard } from '../../ui';
-import type { ToolCallCommon, ToolCallContext } from './shared';
+import type { ToolCallCommon } from './shared';
 import { TextPart } from './TextPart';
 
 type UserToolDetail = Extract<ToolDetail, { kind: 'user_tool' }>;
@@ -81,7 +81,8 @@ function typedDraft(
 export function UserToolCall(props: {
   detail: UserToolDetail;
   common: ToolCallCommon;
-  context?: ToolCallContext;
+  /** The turn is still in flight, so a sent draft may still be going out. */
+  inFlight: boolean;
 }): JSX.Element {
   const draft = createMemo(() => typedDraft(props.common, props.detail.input));
   const outcome = () => props.detail.outcome;
@@ -115,7 +116,7 @@ export function UserToolCall(props: {
             {(tool) => (
               <EmailDraft
                 email={tool().data as SendEmail}
-                inFlight={props.context?.inFlight ?? false}
+                inFlight={props.inFlight}
               />
             )}
           </Match>

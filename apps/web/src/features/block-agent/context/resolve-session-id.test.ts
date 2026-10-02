@@ -251,6 +251,38 @@ describe('an id whose create is in flight', () => {
     });
   });
 
+  // Context a surface supplies for the agent rides on the session as its
+  // instructions, so the composer and the sent bubble hold only the user's text.
+  it('creates the session with hidden instructions and its model, leaving the draft visible', async () => {
+    create.control.mockResolvedValue({
+      isErr: () => false,
+      value: { actionId: 'action-1', status: 'accepted' },
+    });
+    const placeholder = startPendingSession({
+      initialInput: 'Ask about Offsite ',
+      modelOverride: 'model-2',
+      instructions: 'Use the Offsite database by default.',
+    });
+    expect(agentHarnessServiceClient.create).toHaveBeenLastCalledWith({
+      id: placeholder,
+      model: 'model-2',
+      instructions: 'Use the Offsite database by default.',
+    });
+    await createRoot(async (dispose) => {
+      const resolved = resolveSessionId(() => placeholder);
+      create.resolve?.();
+      await flush();
+      await flush();
+
+      expect(create.control.mock.calls).toEqual([
+        [placeholder, { type: 'setModel', model: 'model-2' }],
+      ]);
+      expect(resolved.initialInput()).toBe('Ask about Offsite ');
+      expect(resolved.sessionId()).toBe(placeholder);
+      dispose();
+    });
+  });
+
   // The prompt shows as sent from the block's own speculation the moment the
   // session exists; the block must not wait for the harness to accept it.
   it('has the session as soon as the create lands, prompt still on the wire', async () => {
