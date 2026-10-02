@@ -1,5 +1,5 @@
 import { SidePanel } from '@components/app/side-panel';
-import { EntityDetailsGrid } from '@components/app/side-panel/EntityDetailsGrid';
+import { EntityMetadata } from '@components/app/side-panel/EntityMetadata';
 import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
 import { PropertyValuePill } from '@property/component/PropertyValuePill';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
@@ -18,6 +18,7 @@ import {
   type ProjectDetail,
   type ProjectSection,
 } from '../core/project';
+import { AddProjectTasks } from './add-project-tasks';
 import {
   ProjectTasksList,
   type ProjectTasksListProps,
@@ -44,6 +45,7 @@ export function ProjectWorkspace(props: {
 }) {
   const definitions = useProjectsContext().createPropertyDefinitionsSource();
   const [deleting, setDeleting] = createSignal(false);
+  const [addingTasks, setAddingTasks] = createSignal(false);
   const [error, setError] = createSignal<string>();
   const canEdit = () => canEditProject(props.project);
   const run = async (action: () => Promise<void>) => {
@@ -58,14 +60,14 @@ export function ProjectWorkspace(props: {
   };
 
   return (
-    <SidePanel.Layout headerToggle={false}>
-      <SidePanel.Section id="details" title="Details" defaultOpen order={0}>
-        <EntityDetailsGrid
+    <SidePanel.Layout headerToggle={false} floating defaultOpen={false}>
+      <SidePanel.Footer>
+        <EntityMetadata
           ownerId={props.project.ownerId}
           createdAt={props.project.createdAt}
           updatedAt={props.project.updatedAt}
         />
-      </SidePanel.Section>
+      </SidePanel.Footer>
       <SidePanel.Section
         id="properties"
         title="Properties"
@@ -89,9 +91,12 @@ export function ProjectWorkspace(props: {
         </Show>
       </SidePanel.Section>
       <Show when={canDeleteProject(props.project)}>
-        <SidePanel.Section id="actions" title="Actions" order={3}>
+        <SidePanel.HeaderActions>
           <Button
+            variant="ghost"
             size="sm"
+            depth={2}
+            class="gap-1.5 border border-edge-muted px-2"
             onClick={() => {
               setError(undefined);
               setDeleting(true);
@@ -99,7 +104,7 @@ export function ProjectWorkspace(props: {
           >
             Delete project
           </Button>
-        </SidePanel.Section>
+        </SidePanel.HeaderActions>
       </Show>
       <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
         <Show when={error()}>
@@ -176,6 +181,7 @@ export function ProjectWorkspace(props: {
                 projectId={props.project.id}
                 onOpenTask={props.onOpenTask}
                 onCreateTask={canEdit() ? props.onCreateTask : undefined}
+                onAddTasks={canEdit() ? () => setAddingTasks(true) : undefined}
               />
             </Match>
           </Switch>
@@ -195,6 +201,12 @@ export function ProjectWorkspace(props: {
               props.onDelete();
             })
           }
+        />
+      </Show>
+      <Show when={addingTasks() && canEdit()}>
+        <AddProjectTasks
+          project={props.project}
+          onClose={() => setAddingTasks(false)}
         />
       </Show>
     </SidePanel.Layout>

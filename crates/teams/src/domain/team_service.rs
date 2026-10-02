@@ -44,11 +44,11 @@ use crate::domain::{
     model::{
         CreateTeamError, CustomerError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError,
         PatchTeamCrmSettingsResponse, PatchTeamRequest, RemoveTeamInviteError,
-        RemoveUserFromTeamError, RestorePermissionsForTeamMembersError,
-        RevokePermissionsForTeamMembersError, SeatPlan, SetTeamMemberPlanError, Team, TeamError,
-        TeamInvite, TeamInviteDetails, TeamMember, TeamMembers, TeamRole, TeamWithMembers,
-        ToggleAutoJoinDomainError, TryJoinTeamByDomainError, is_generic_email_domain,
-        team_slug_from_name,
+        RemoveUserFromAllTeamsError, RemoveUserFromTeamError,
+        RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, SeatPlan,
+        SetTeamMemberPlanError, Team, TeamError, TeamInvite, TeamInviteDetails, TeamMember,
+        TeamMembers, TeamRole, TeamWithMembers, ToggleAutoJoinDomainError,
+        TryJoinTeamByDomainError, is_generic_email_domain, team_slug_from_name,
     },
     open_seat_release::{NoOpOpenSeatRelease, OpenSeatRelease},
     team_analytics::{NoOpTeamAnalytics, TeamAnalytics, TeamAnalyticsEvent},
@@ -411,6 +411,264 @@ where
                 );
             })
             .ok();
+    }
+
+    /// Deletes `team_id` on behalf of `actor_user_id`: cancels the team
+    /// subscription, removes the team and its memberships, publishes
+    /// `team.deleted`, and strips the team subscriber role from members who
+    /// are on no other team.
+    async fn delete_team_as(
+        &self,
+        team_id: uuid::Uuid,
+        actor_user_id: MacroUserIdStr<'static>,
+    ) -> Result<(), DeleteTeamError> {
+        let members = self.team_repository.get_all_team_members(&team_id).await?;
+        let member_user_ids = members
+            .iter()
+            .map(|member| member.user_id.clone().into_owned())
+            .collect();
+
+        let subscription_id = self
+            .team_repository
+            .get_team_subscription_id(&team_id)
+            .await?;
+        if let Some(subscription_id) = subscription_id {
+            // Cancel subscription
+            self.customer_repository
+                .cancel_subscription(&subscription_id)
+                .await
+                .map_err(DeleteTeamError::CustomerError)?;
+        }
+
+        self.team_repository
+            .delete_team(&team_id)
+            .await
+            .map_err(DeleteTeamError::TeamError)?;
+        self.publish_team_event(&TeamMacroEvent::deleted(TeamDeletedMetadata {
+            team_id,
+            actor_user_id,
+            member_user_ids,
+        }));
+
+        // Remove roles for team members
+        let roles = vec![RoleId::TeamSubscriber];
+        let roles = non_empty::NonEmpty::new(roles.as_slice()).unwrap();
+
+        // TODO: speed this up
+        for member in members {
+            if !self
+                .team_repository
+                .is_user_member_of_team(&member.user_id)
+                .await?
+            {
+                self.user_roles_and_permissions_service
+                    .dangerous_remove_roles_from_user(&member.user_id, &roles)
+                    .await
+                    .map_err(DeleteTeamError::RemoveRolesFromUserError)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Removes `user_id` from `team_id` on behalf of `removed_by_id`, rolling
+    /// back every completed side effect when a later one fails.
+    async fn remove_member(
+        &self,
+        team_id: uuid::Uuid,
+        user_id: &MacroUserIdStr<'_>,
+        removed_by_id: MacroUserIdStr<'static>,
+    ) -> Result<(), RemoveUserFromTeamError> {
+        let enterprise = self
+            .team_repository
+            .get_team_enterprise_status(&team_id)
+            .await?;
+
+        let roles_to_remove = team_member_roles_to_remove();
+        let current_roles = self
+            .user_roles_and_permissions_service
+            .get_user_roles(user_id)
+            .await
+            .map_err(RemoveUserFromTeamError::RemoveRolesFromUserError)?;
+        let roles_to_restore: Vec<RoleId> = roles_to_remove
+            .iter()
+            .filter(|role| current_roles.contains(*role))
+            .cloned()
+            .collect();
+
+        let removed_member = match self
+            .team_repository
+            .remove_user_from_team(&team_id, user_id)
+            .await
+        {
+            Ok(removed_member) => removed_member,
+            Err(RemoveUserFromTeamError::UserNotInTeam) => {
+                if let Err(error) = self.open_seat_release.release(team_id, user_id).await {
+                    return Err(RemoveUserFromTeamError::OpenSeatRelease(Box::new(error)));
+                }
+                return Err(RemoveUserFromTeamError::UserNotInTeam);
+            }
+            Err(error) => return Err(error),
+        };
+
+        let subscription_id = if enterprise {
+            None
+        } else {
+            // Free teams have no linked subscription - nothing to decrement.
+            match self
+                .team_repository
+                .get_team_subscription_id(&team_id)
+                .await
+            {
+                Ok(subscription_id) => subscription_id,
+                Err(e) => {
+                    self.team_repository
+                        .rollback_remove_user_from_team(&removed_member)
+                        .await
+                        .inspect_err(|rollback_err| {
+                            tracing::error!(
+                                error=?rollback_err,
+                                "unable to rollback removed team member after getting team subscription failed"
+                            );
+                        })
+                        .ok();
+                    return Err(RemoveUserFromTeamError::TeamError(e));
+                }
+            }
+        };
+
+        if let Some(subscription_id) = subscription_id.as_ref()
+            && let Err(e) = self
+                .customer_repository
+                .decrement_seat_count(subscription_id, removed_member.plan, 1)
+                .await
+        {
+            self.team_repository
+                .rollback_remove_user_from_team(&removed_member)
+                .await
+                .inspect_err(|rollback_err| {
+                    tracing::error!(
+                        error=?rollback_err,
+                        "unable to rollback removed team member after decrementing seat count failed"
+                    );
+                })
+                .ok();
+            return Err(RemoveUserFromTeamError::CustomerError(e));
+        }
+
+        let left_channel_ids = match self
+            .channel_service
+            .leave_by_team_id(&team_id, user_id)
+            .await
+        {
+            Ok(channel_ids) => channel_ids,
+            Err(error) => {
+                if let Some(subscription_id) = subscription_id.as_ref() {
+                    self.customer_repository
+                        .increment_seat_count(subscription_id, removed_member.plan, 1)
+                        .await
+                        .inspect_err(|rollback_err| {
+                            tracing::error!(
+                                error=?rollback_err,
+                                "unable to rollback customer seat count after removing team member from channels failed"
+                            );
+                        })
+                        .ok();
+                }
+                self.team_repository
+                    .rollback_remove_user_from_team(&removed_member)
+                    .await
+                    .inspect_err(|rollback_err| {
+                        tracing::error!(
+                            error=?rollback_err,
+                            "unable to rollback removed team member after removing team member from channels failed"
+                        );
+                    })
+                    .ok();
+                return Err(RemoveUserFromTeamError::TeamError(
+                    channel_error_to_team_error(error),
+                ));
+            }
+        };
+
+        let roles = non_empty::NonEmpty::new(roles_to_remove.as_slice()).unwrap();
+
+        if let Err(e) = self
+            .user_roles_and_permissions_service
+            .dangerous_remove_roles_from_user(user_id, &roles)
+            .await
+        {
+            self.restore_after_channels_left(
+                &removed_member,
+                subscription_id.as_ref(),
+                user_id,
+                &left_channel_ids,
+                "removing team member roles",
+            )
+            .await;
+            return Err(RemoveUserFromTeamError::RemoveRolesFromUserError(e));
+        }
+
+        if let Err(error) = self.open_seat_release.release(team_id, user_id).await {
+            if let Ok(restore) = non_empty::NonEmpty::new(roles_to_restore.as_slice()) {
+                self.user_roles_and_permissions_service
+                    .dangerous_upsert_roles_for_user(user_id, restore)
+                    .await
+                    .inspect_err(|rollback_err| {
+                        tracing::error!(
+                            error = ?rollback_err,
+                            "unable to restore member roles after releasing the open seat failed"
+                        );
+                    })
+                    .ok();
+            }
+            self.restore_after_channels_left(
+                &removed_member,
+                subscription_id.as_ref(),
+                user_id,
+                &left_channel_ids,
+                "releasing the open seat",
+            )
+            .await;
+            return Err(RemoveUserFromTeamError::OpenSeatRelease(Box::new(error)));
+        }
+
+        // Best-effort: ask the email service to tear down CRM rows
+        // sourced from this user's email link. Log and swallow failures
+        // - the removal is already committed and the email-service
+        // handler is idempotent, so a missed enqueue can be retried
+        // without leaving the system in an inconsistent state. Team
+        // deletion is handled separately via the
+        // `crm_companies.team_id` FK cascade and does NOT route through
+        // this enqueuer.
+        if let Err(e) = self
+            .crm_enqueuer
+            .enqueue_depopulate_crm_for_user(&team_id, user_id)
+            .await
+        {
+            tracing::error!(
+                error = ?e,
+                team_id = %team_id,
+                macro_id = %user_id,
+                "Failed to enqueue DepopulateCrmForUser after remove_user_from_team; CRM rows owned by the removed user's link will be left in place until manual cleanup"
+            );
+        }
+
+        self.track_team_analytics_event(TeamAnalyticsEvent::TeamLeft {
+            team_id,
+            member_id: removed_member.user_id.clone().into_owned(),
+            removed_by_id: removed_by_id.clone(),
+            role: removed_member.role,
+        })
+        .await;
+        self.publish_team_event(&TeamMacroEvent::member_removed(TeamMemberRemovedMetadata {
+            team_id,
+            member_id: removed_member.user_id.into_owned(),
+            removed_by: removed_by_id,
+            role: removed_member.role,
+        }));
+
+        Ok(())
     }
 
     #[allow(
@@ -955,196 +1213,7 @@ where
             .clone()
             .into_owned();
 
-        let enterprise = self
-            .team_repository
-            .get_team_enterprise_status(&team_id)
-            .await?;
-
-        let roles_to_remove = team_member_roles_to_remove();
-        let current_roles = self
-            .user_roles_and_permissions_service
-            .get_user_roles(user_id)
-            .await
-            .map_err(RemoveUserFromTeamError::RemoveRolesFromUserError)?;
-        let roles_to_restore: Vec<RoleId> = roles_to_remove
-            .iter()
-            .filter(|role| current_roles.contains(*role))
-            .cloned()
-            .collect();
-
-        let removed_member = match self
-            .team_repository
-            .remove_user_from_team(&team_id, user_id)
-            .await
-        {
-            Ok(removed_member) => removed_member,
-            Err(RemoveUserFromTeamError::UserNotInTeam) => {
-                if let Err(error) = self.open_seat_release.release(team_id, user_id).await {
-                    return Err(RemoveUserFromTeamError::OpenSeatRelease(Box::new(error)));
-                }
-                return Err(RemoveUserFromTeamError::UserNotInTeam);
-            }
-            Err(error) => return Err(error),
-        };
-
-        let subscription_id = if enterprise {
-            None
-        } else {
-            // Free teams have no linked subscription - nothing to decrement.
-            match self
-                .team_repository
-                .get_team_subscription_id(&team_id)
-                .await
-            {
-                Ok(subscription_id) => subscription_id,
-                Err(e) => {
-                    self.team_repository
-                        .rollback_remove_user_from_team(&removed_member)
-                        .await
-                        .inspect_err(|rollback_err| {
-                            tracing::error!(
-                                error=?rollback_err,
-                                "unable to rollback removed team member after getting team subscription failed"
-                            );
-                        })
-                        .ok();
-                    return Err(RemoveUserFromTeamError::TeamError(e));
-                }
-            }
-        };
-
-        if let Some(subscription_id) = subscription_id.as_ref()
-            && let Err(e) = self
-                .customer_repository
-                .decrement_seat_count(subscription_id, removed_member.plan, 1)
-                .await
-        {
-            self.team_repository
-                .rollback_remove_user_from_team(&removed_member)
-                .await
-                .inspect_err(|rollback_err| {
-                    tracing::error!(
-                        error=?rollback_err,
-                        "unable to rollback removed team member after decrementing seat count failed"
-                    );
-                })
-                .ok();
-            return Err(RemoveUserFromTeamError::CustomerError(e));
-        }
-
-        let left_channel_ids = match self
-            .channel_service
-            .leave_by_team_id(&team_id, user_id)
-            .await
-        {
-            Ok(channel_ids) => channel_ids,
-            Err(error) => {
-                if let Some(subscription_id) = subscription_id.as_ref() {
-                    self.customer_repository
-                        .increment_seat_count(subscription_id, removed_member.plan, 1)
-                        .await
-                        .inspect_err(|rollback_err| {
-                            tracing::error!(
-                                error=?rollback_err,
-                                "unable to rollback customer seat count after removing team member from channels failed"
-                            );
-                        })
-                        .ok();
-                }
-                self.team_repository
-                    .rollback_remove_user_from_team(&removed_member)
-                    .await
-                    .inspect_err(|rollback_err| {
-                        tracing::error!(
-                            error=?rollback_err,
-                            "unable to rollback removed team member after removing team member from channels failed"
-                        );
-                    })
-                    .ok();
-                return Err(RemoveUserFromTeamError::TeamError(
-                    channel_error_to_team_error(error),
-                ));
-            }
-        };
-
-        let roles = non_empty::NonEmpty::new(roles_to_remove.as_slice()).unwrap();
-
-        if let Err(e) = self
-            .user_roles_and_permissions_service
-            .dangerous_remove_roles_from_user(user_id, &roles)
-            .await
-        {
-            self.restore_after_channels_left(
-                &removed_member,
-                subscription_id.as_ref(),
-                user_id,
-                &left_channel_ids,
-                "removing team member roles",
-            )
-            .await;
-            return Err(RemoveUserFromTeamError::RemoveRolesFromUserError(e));
-        }
-
-        if let Err(error) = self.open_seat_release.release(team_id, user_id).await {
-            if let Ok(restore) = non_empty::NonEmpty::new(roles_to_restore.as_slice()) {
-                self.user_roles_and_permissions_service
-                    .dangerous_upsert_roles_for_user(user_id, restore)
-                    .await
-                    .inspect_err(|rollback_err| {
-                        tracing::error!(
-                            error = ?rollback_err,
-                            "unable to restore member roles after releasing the open seat failed"
-                        );
-                    })
-                    .ok();
-            }
-            self.restore_after_channels_left(
-                &removed_member,
-                subscription_id.as_ref(),
-                user_id,
-                &left_channel_ids,
-                "releasing the open seat",
-            )
-            .await;
-            return Err(RemoveUserFromTeamError::OpenSeatRelease(Box::new(error)));
-        }
-
-        // Best-effort: ask the email service to tear down CRM rows
-        // sourced from this user's email link. Log and swallow failures
-        // - the removal is already committed and the email-service
-        // handler is idempotent, so a missed enqueue can be retried
-        // without leaving the system in an inconsistent state. Team
-        // deletion is handled separately via the
-        // `crm_companies.team_id` FK cascade and does NOT route through
-        // this enqueuer.
-        if let Err(e) = self
-            .crm_enqueuer
-            .enqueue_depopulate_crm_for_user(&team_id, user_id)
-            .await
-        {
-            tracing::error!(
-                error = ?e,
-                team_id = %team_id,
-                macro_id = %user_id,
-                "Failed to enqueue DepopulateCrmForUser after remove_user_from_team; CRM rows owned by the removed user's link will be left in place until manual cleanup"
-            );
-        }
-
-        self.track_team_analytics_event(TeamAnalyticsEvent::TeamLeft {
-            team_id,
-            member_id: removed_member.user_id.clone().into_owned(),
-            removed_by_id: removed_by_id.clone(),
-            role: removed_member.role,
-        })
-        .await;
-        self.publish_team_event(&TeamMacroEvent::member_removed(TeamMemberRemovedMetadata {
-            team_id,
-            member_id: removed_member.user_id.into_owned(),
-            removed_by: removed_by_id,
-            role: removed_member.role,
-        }));
-
-        Ok(())
+        self.remove_member(team_id, user_id, removed_by_id).await
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -1223,52 +1292,25 @@ where
             .clone()
             .into_owned();
 
-        let members = self.team_repository.get_all_team_members(&team_id).await?;
-        let member_user_ids = members
-            .iter()
-            .map(|member| member.user_id.clone().into_owned())
-            .collect();
+        self.delete_team_as(team_id, actor_user_id).await
+    }
 
-        let subscription_id = self
-            .team_repository
-            .get_team_subscription_id(&team_id)
-            .await?;
-        if let Some(subscription_id) = subscription_id {
-            // Cancel subscription
-            self.customer_repository
-                .cancel_subscription(&subscription_id)
-                .await
-                .map_err(DeleteTeamError::CustomerError)?;
-        }
-
-        self.team_repository
-            .delete_team(&team_id)
-            .await
-            .map_err(DeleteTeamError::TeamError)?;
-        self.publish_team_event(&TeamMacroEvent::deleted(TeamDeletedMetadata {
-            team_id,
-            actor_user_id,
-            member_user_ids,
-        }));
-
-        // Remove roles for team members
-        let roles = vec![RoleId::TeamSubscriber];
-        let roles = non_empty::NonEmpty::new(roles.as_slice()).unwrap();
-
-        // TODO: speed this up
-        for member in members {
-            if !self
-                .team_repository
-                .is_user_member_of_team(&member.user_id)
-                .await?
-            {
-                self.user_roles_and_permissions_service
-                    .dangerous_remove_roles_from_user(&member.user_id, &roles)
-                    .await
-                    .map_err(DeleteTeamError::RemoveRolesFromUserError)?;
+    #[tracing::instrument(skip(self), err)]
+    async fn remove_user_from_all_teams(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<(), RemoveUserFromAllTeamsError> {
+        let teams = self.team_repository.get_user_teams(user_id).await?;
+        for team in teams {
+            let team_id = *team.id();
+            if team.owner_id() == user_id.as_ref() {
+                self.delete_team_as(team_id, user_id.clone().into_owned())
+                    .await?;
+            } else {
+                self.remove_member(team_id, user_id, user_id.clone().into_owned())
+                    .await?;
             }
         }
-
         Ok(())
     }
 

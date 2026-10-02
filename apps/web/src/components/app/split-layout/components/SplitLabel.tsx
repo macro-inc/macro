@@ -1,3 +1,4 @@
+import { DocumentTitleHoverCard } from '@app/components/entity-detail/DocumentTitleHoverCard';
 import { isInBlock, useBlockAliasedName } from '@core/block';
 import {
   ContextMenuContent,
@@ -286,10 +287,30 @@ export function BlockItemSplitLabel(props: {
           <Show
             when={props.title}
             fallback={
-              <SplitLabel
-                label={displayName() ?? ''}
-                lockRename={!isOwner() || props.lockRename}
-              />
+              <Show
+                when={blockMetadataSignal()}
+                fallback={
+                  <SplitLabel
+                    label={displayName() ?? ''}
+                    lockRename={!isOwner() || props.lockRename}
+                  />
+                }
+              >
+                {(metadata) => (
+                  <DocumentTitleHoverCard
+                    documentId={metadata().documentId}
+                    name={displayName() ?? ''}
+                    ownerId={metadata().owner}
+                    createdAt={metadata().createdAt}
+                    updatedAt={metadata().updatedAt}
+                  >
+                    <SplitLabel
+                      label={displayName() ?? ''}
+                      lockRename={!isOwner() || props.lockRename}
+                    />
+                  </DocumentTitleHoverCard>
+                )}
+              </Show>
             }
           >
             {props.title}

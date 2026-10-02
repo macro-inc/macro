@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, database_id, table_id, version, actor, acting_bot, ops, inverse\n           FROM database_changes ORDER BY id",
+  "query": "SELECT id, table_id, version, actor, acting_bot, at, ops, inverse, payload_version\n           FROM database_changes WHERE table_id = $1 AND version > $2\n           ORDER BY version",
   "describe": {
     "columns": [
       {
@@ -10,28 +10,28 @@
       },
       {
         "ordinal": 1,
-        "name": "database_id",
-        "type_info": "Uuid"
-      },
-      {
-        "ordinal": 2,
         "name": "table_id",
         "type_info": "Uuid"
       },
       {
-        "ordinal": 3,
+        "ordinal": 2,
         "name": "version",
         "type_info": "Int8"
       },
       {
-        "ordinal": 4,
+        "ordinal": 3,
         "name": "actor",
         "type_info": "Text"
       },
       {
-        "ordinal": 5,
+        "ordinal": 4,
         "name": "acting_bot",
         "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "at",
+        "type_info": "Timestamptz"
       },
       {
         "ordinal": 6,
@@ -42,21 +42,30 @@
         "ordinal": 7,
         "name": "inverse",
         "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 8,
+        "name": "payload_version",
+        "type_info": "Int4"
       }
     ],
     "parameters": {
-      "Left": []
+      "Left": [
+        "Uuid",
+        "Int8"
+      ]
     },
     "nullable": [
       false,
       false,
       false,
+      true,
+      true,
       false,
-      true,
-      true,
+      false,
       false,
       false
     ]
   },
-  "hash": "4cd05c8e71e48252a5f0600ea66c8198d41179ca751c49976a8b6606b5e8f52b"
+  "hash": "b87379d1d8af9ab91d8265706c310bdf95be8d5f29484807b37bec313438b01d"
 }

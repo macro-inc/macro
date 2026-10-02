@@ -95,6 +95,18 @@ struct Mail {
     reply_on_archive: Option<DateTime<Utc>>,
 }
 impl EmailFollowupMailbox for Mailbox {
+    async fn reminder_threads(
+        &self,
+        _user: MacroUserIdStr<'static>,
+        _receipts: Vec<
+            entity_access::domain::models::EntityAccessReceipt<
+                entity_access::domain::models::ViewAccessLevel,
+            >,
+        >,
+        _filters: &email::domain::followup::ReminderThreadFilter,
+    ) -> Result<Vec<Uuid>, EmailErr> {
+        unreachable!("lifecycle tests do not read email collections")
+    }
     async fn followup_thread(
         &self,
         actor: MacroUserIdStr<'static>,

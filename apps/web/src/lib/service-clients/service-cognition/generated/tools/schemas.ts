@@ -3757,6 +3757,9 @@ export const GenerateImageResponse = z.object({
   url: z.string(),
   mimeType: z.string(),
   sizeBytes: z.number().int().gte(0),
+  width: z.union([z.number().int().gte(0), z.null()]).optional(),
+  height: z.union([z.number().int().gte(0), z.null()]).optional(),
+  markdown: z.union([z.string(), z.null()]).optional(),
   note: z.union([z.string(), z.null()]).optional(),
 });
 

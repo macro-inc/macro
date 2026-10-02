@@ -1,6 +1,7 @@
 import { agentsRouteId } from '@app/features/agents-view/core/route';
 import { startPendingSession } from '@app/features/block-agent/context/pending-session';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { HeaderActionButton } from '@components/app/HeaderActionButton';
 import type { SplitHandle } from '@components/app/split-layout/layoutManager';
 import {
   type ChatAttachmentMention,
@@ -10,7 +11,6 @@ import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import AgentIcon from '@phosphor/sparkle.svg';
 import type { ChannelType } from '@service-cognition/generated/schemas/channelType';
-import { Button } from '@ui';
 import { createSignal } from 'solid-js';
 
 export { AgentIcon as ChatWithAgentIcon };
@@ -145,33 +145,24 @@ export function ChatWithAgentButton(props: {
     }
   }
   return (
-    <Button
+    <HeaderActionButton
       tooltip={props.label ?? 'Chat with Agent'}
-      variant="outline"
-      size="sm"
+      label={props.label ?? 'Chat'}
+      icon={<AgentIcon />}
       onClick={() => void open()}
       disabled={props.disabled || opening()}
-      aria-busy={opening()}
-      depth={2}
-      class="bg-surface"
-    >
-      <AgentIcon />
-      <span class="text-xs">{props.label ?? 'Chat'}</span>
-    </Button>
+      busy={opening()}
+    />
   );
 }
 
 export function AskMacroButton(props: { entity: ChatWithAgentEntity }) {
   return (
-    <Button
+    <HeaderActionButton
       onClick={() => openChatWithAgent(props.entity)}
-      variant="ghost"
-      size="sm"
-      depth={2}
-      class="gap-1.5 border border-edge-muted px-2"
-    >
-      <AgentIcon />
-      <span class="text-xs font-medium">Ask Macro</span>
-    </Button>
+      tooltip="Ask Macro"
+      label="Ask Macro"
+      icon={<AgentIcon />}
+    />
   );
 }

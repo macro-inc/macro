@@ -1325,7 +1325,8 @@ async fn run() -> anyhow::Result<()> {
         reminders::domain::email_followup::reminder_service::EmailRemindersService::new(
             RemindersServiceImpl::new(PgRemindersRepo::new(db.clone())),
             email_followups.clone(),
-        );
+        )
+        .with_entity_access((*entity_access_service).clone());
 
     let document_creator = documents_hex::domain::create::DocumentCreator::new(
         document_service.clone(),

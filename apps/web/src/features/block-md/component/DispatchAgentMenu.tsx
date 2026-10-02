@@ -19,7 +19,7 @@ import { storageServiceClient } from '@service-storage/client';
 import type { MessageThread } from '@service-storage/messages';
 import { createCallback } from '@solid-primitives/rootless';
 import { makePersisted } from '@solid-primitives/storage';
-import { Button, ButtonGroup, Dropdown } from '@ui';
+import { Button, ButtonGroup, CopyButton, Dropdown } from '@ui';
 import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { useMarkdownDocument } from '../context/markdown-document-context';
@@ -184,7 +184,7 @@ type AgentAction = {
   name: string;
   icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
   buttonIcon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
-  execute: (prompt: string) => void;
+  execute: (prompt: string) => unknown;
 };
 
 const COPY_ACTION: AgentAction = {
@@ -192,9 +192,8 @@ const COPY_ACTION: AgentAction = {
   name: 'Copy as prompt',
   icon: CopyIcon,
   buttonIcon: TerminalWindowIcon,
-  execute: (prompt) => {
-    navigator.clipboard.writeText(prompt);
-    toast.success('Prompt copied to clipboard');
+  execute: async (prompt) => {
+    await navigator.clipboard.writeText(prompt);
   },
 };
 
@@ -260,14 +259,22 @@ export function useDispatchAgentAction() {
     return generate(blockId, docName, content, threads);
   });
 
-  const executeAction = async (action: AgentAction) => {
+  const executeAction = async (
+    action: AgentAction,
+    options: { silent?: boolean } = {}
+  ) => {
     try {
       const prompt = await buildPrompt();
-      action.execute(prompt);
+      await action.execute(prompt);
+      if (action.key === 'copy' && !options.silent) {
+        toast.success('Prompt copied to clipboard');
+      }
       setLastUsedKey(action.key);
+      return true;
     } catch (e) {
       console.error('Failed to generate prompt', e);
       toast.failure('Failed to generate prompt');
+      return false;
     }
   };
 
@@ -276,7 +283,7 @@ export function useDispatchAgentAction() {
     isTask,
     lastUsed,
     executeAction,
-    executeLastUsed: () => executeAction(lastUsed()),
+    executeLastUsed: () => executeAction(lastUsed(), { silent: true }),
   };
 }
 
@@ -324,29 +331,32 @@ export function DispatchAgentButton(
   return (
     <Dropdown open={open()} onOpenChange={setOpen}>
       <ButtonGroup
-        variant="ghost"
-        size={props.showPrimaryLabel ? 'sm' : 'icon-sm'}
+        variant="outline"
+        size={props.showPrimaryLabel ? 'md' : 'icon-sm'}
         depth={2}
-        class="rounded-full border border-edge-muted"
+        class={props.showPrimaryLabel ? 'h-8' : undefined}
       >
-        <Button
+        <Dynamic
+          component={lastUsed().key === 'copy' ? CopyButton : Button}
           onClick={executeLastUsed}
           tooltip={lastUsed().name}
-          class="bg-transparent hover:bg-ink/[0.04]"
+          class="@max-[600px]/split-header:w-8 @max-[600px]/split-header:p-0"
         >
           <Dynamic
             component={lastUsed().buttonIcon ?? lastUsed().icon}
-            class="size-3!"
+            class="size-3.5!"
           />
           <Show when={props.showPrimaryLabel}>
-            <span class="max-w-36 truncate text-xs font-medium">
+            <span class="max-w-36 truncate @max-[600px]/split-header:hidden">
               {lastUsed().name}
             </span>
           </Show>
-        </Button>
+        </Dynamic>
         <ButtonGroup.Divider />
         <Dropdown.Trigger
-          class="bg-transparent p-1 hover:bg-ink/[0.04]"
+          variant="outline"
+          size={props.showPrimaryLabel ? 'md' : 'icon-sm'}
+          class="px-2"
           label="Agent options"
         >
           <CaretDown class="size-3.5!" />

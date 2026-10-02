@@ -2,6 +2,7 @@ import CaretDownIcon from '@phosphor/caret-down.svg';
 import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
 import FilterIcon from '@phosphor/funnel-simple.svg';
 import PencilIcon from '@phosphor/pencil-simple.svg';
+import PlusIcon from '@phosphor/plus.svg';
 import { useInFlightEntityPropertyOptions } from '@queries/properties/in-flight-options';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
@@ -337,6 +338,7 @@ export function InlineTagsPill(props: {
   docTags: DocTags;
   class?: string;
   showPlaceholder?: boolean;
+  showAddButton?: boolean;
   /**
    * Fires when the tag picker session (popover or its editor dialog) opens or
    * closes. Callers that hide the pill once it has no tags should collapse on
@@ -351,7 +353,9 @@ export function InlineTagsPill(props: {
     `${tags().length} ${tags().length === 1 ? 'Tag' : 'Tags'}`;
 
   return (
-    <Show when={tags().length > 0 || props.showPlaceholder}>
+    <Show
+      when={tags().length > 0 || props.showPlaceholder || props.showAddButton}
+    >
       <Layer depth={2}>
         <TagPicker
           docTags={props.docTags}
@@ -363,13 +367,23 @@ export function InlineTagsPill(props: {
               // Capped so a long tag label truncates instead of squeezing
               // whatever shares the row with the pill (e.g. a task title).
               'min-w-0 max-w-35 gap-1.5 text-left',
-              tags().length === 0 && 'text-ink-extra-muted',
+              tags().length === 0 &&
+                !props.showAddButton &&
+                'text-ink-extra-muted',
               props.class
             ),
           })}
-          triggerLabel="Change or select tags"
+          triggerLabel={
+            tags().length === 0 && props.showAddButton
+              ? 'Add tags'
+              : 'Change or select tags'
+          }
         >
           <Switch>
+            <Match when={tags().length === 0 && props.showAddButton}>
+              <PlusIcon class="size-3 shrink-0" />
+              <span>Add tags</span>
+            </Match>
             <Match when={tags().length === 0}>
               <span class="inline-flex min-w-0 items-center gap-1.5 opacity-50">
                 <CircleDashedEmpty class="size-3 shrink-0" />
@@ -407,7 +421,9 @@ export function InlineTagsPill(props: {
               </span>
             </Match>
           </Switch>
-          <CaretDownIcon class="size-3 shrink-0 @max-2xl/u-list:hidden" />
+          <Show when={tags().length > 0 || !props.showAddButton}>
+            <CaretDownIcon class="size-3 shrink-0 @max-2xl/u-list:hidden" />
+          </Show>
         </TagPicker>
       </Layer>
     </Show>
@@ -438,6 +454,7 @@ export function InlineFetchedEntityTagsPill(props: {
   entityId: string;
   entityType: EntityType;
   class?: string;
+  showAddButton?: boolean;
 }) {
   const docTags = useDocTags(props.entityId, props.entityType);
   return (
@@ -445,6 +462,7 @@ export function InlineFetchedEntityTagsPill(props: {
       docTags={docTags}
       class={props.class}
       showPlaceholder={props.entityType === EntityType.TASK}
+      showAddButton={props.showAddButton}
     />
   );
 }

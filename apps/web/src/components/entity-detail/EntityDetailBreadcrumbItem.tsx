@@ -8,6 +8,7 @@ import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { useItemRawName } from '@queries/preview';
 import type { ItemEntity } from '@queries/preview/types';
 import { Show } from 'solid-js';
+import { DocumentTitleHoverCard } from './DocumentTitleHoverCard';
 import type {
   EntityDetailNavigationEntry,
   EntityDetailTarget,
@@ -59,6 +60,22 @@ function BreadcrumbItem(props: {
     props.setsSplitDisplayName ? props.name : undefined
   );
 
+  const button = (item: { isActive: () => boolean; onSelect: () => void }) => (
+    <ViewBreadcrumbs.Button
+      class="gap-1.5"
+      isActive={item.isActive()}
+      onClick={item.onSelect}
+      tooltip={props.entry.data.type === 'document' ? undefined : props.name}
+    >
+      <EntityIcon
+        targetType={breadcrumbIcon(props.entry.data)}
+        size="xs"
+        class="shrink-0"
+      />
+      <span class="truncate">{props.name}</span>
+    </ViewBreadcrumbs.Button>
+  );
+
   return (
     <ViewBreadcrumbs.Item
       value={props.entry.value}
@@ -66,19 +83,17 @@ function BreadcrumbItem(props: {
       order={props.order}
     >
       {(item) => (
-        <ViewBreadcrumbs.Button
-          class="gap-1.5"
-          isActive={item.isActive()}
-          onClick={item.onSelect}
-          tooltip={props.name}
+        <Show
+          when={props.entry.data.type === 'document'}
+          fallback={button(item)}
         >
-          <EntityIcon
-            targetType={breadcrumbIcon(props.entry.data)}
-            size="xs"
-            class="shrink-0"
-          />
-          <span class="truncate">{props.name}</span>
-        </ViewBreadcrumbs.Button>
+          <DocumentTitleHoverCard
+            documentId={props.entry.data.id}
+            name={props.name}
+          >
+            {button(item)}
+          </DocumentTitleHoverCard>
+        </Show>
       )}
     </ViewBreadcrumbs.Item>
   );

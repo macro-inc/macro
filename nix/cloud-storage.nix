@@ -398,6 +398,11 @@
           binaries = [ "document_storage_service" ];
         }
         {
+          serviceName = "slack-import-worker";
+          packageName = "slack_import_worker";
+          binaries = [ "slack_import_worker" ];
+        }
+        {
           serviceName = "email-service";
           packageName = "email_service";
           binaries = [
@@ -525,6 +530,27 @@
           value = deployServiceBinaryPackage def;
         }) deployServiceBinaryDefinitions
       );
+
+      # DSS and its worker are separate Cargo packages with separate pruned
+      # source closures, but CI hands both binaries to the same Pulumi stack.
+      # Bundle only the deploy output; local-stack-binaries keeps the worker
+      # opt-in by continuing to use the unbundled deployServiceBinaryPackages.
+      documentStorageDeployBinaries =
+        let
+          cfg = builtins.fromJSON (builtins.readFile ../.github/services-config.json);
+          checkBinaries = pkgs.lib.concatMapStringsSep "\n" (binary: ''
+            test -x "$out/bin/${binary}" || {
+              echo "Missing deploy binary: ${binary}" >&2
+              exit 1
+            }
+          '') cfg.services.document-storage-service.deploy_binaries;
+        in
+        pkgs.runCommand "cloud-storage-document-storage-service-deploy-binaries" { } ''
+          mkdir -p $out/bin
+          cp ${deployServiceBinaryPackages.deploy-service-binaries-document-storage-service}/bin/* $out/bin/
+          cp ${deployServiceBinaryPackages.deploy-service-binaries-slack-import-worker}/bin/* $out/bin/
+          ${checkBinaries}
+        '';
 
       localStackBinaryPackages = pkgs.lib.listToAttrs (
         map (def: {
@@ -1005,6 +1031,9 @@
       }
       // dopplerConfigBinPackages
       // deployServiceBinaryPackages
+      // {
+        deploy-service-binaries-document-storage-service = documentStorageDeployBinaries;
+      }
       // deployLambdaPackages
       // pkgs.lib.optionalAttrs isLinux {
         local-stack-binaries = localStackBinaries;

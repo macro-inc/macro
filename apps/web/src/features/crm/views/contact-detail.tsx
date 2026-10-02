@@ -17,7 +17,7 @@ import { useContactQuery, useIsTeamAdmin } from './use-crm';
  * Root of the contact detail view, laid out like a project: the host's top
  * bar picks the section, Overview shows the contact and its discussion, and
  * the other sections list its emails, files, tasks and calls. Sharing stays
- * in the right-hand SidePanel.
+ * in the floating information panel.
  */
 export function Contact(props: {
   contactId: string;
@@ -46,7 +46,11 @@ export function Contact(props: {
   );
 
   return (
-    <SidePanel.Layout headerToggle={props.headerToggle}>
+    <SidePanel.Layout
+      headerToggle={props.headerToggle}
+      floating
+      defaultOpen={false}
+    >
       <div class="size-full min-h-0 min-w-0">
         <Switch>
           <Match when={section() === 'overview'}>

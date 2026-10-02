@@ -34,6 +34,7 @@ export function FileDetailLayout(props: FileDetailLayoutProps) {
 
   return (
     <SidePanel.Layout
+      floating
       defaultOpen={props.defaultSidePanelOpen ?? false}
       persistKey={`file:${props.documentId}`}
       headerToggle={false}

@@ -155,7 +155,7 @@ function ProjectDetailRouteView() {
       />
       <SplitRouter.Outlet
         fallback={() => (
-          <SidePanel.Root>
+          <SidePanel.Root floating defaultOpen={false}>
             <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
               <ProjectDetail
                 route={{

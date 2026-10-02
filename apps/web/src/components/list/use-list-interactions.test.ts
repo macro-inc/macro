@@ -76,3 +76,50 @@ it('keeps H on entities available for reminders and consumes it on headers', () 
     }
   });
 });
+
+it('lets focused native actions own Enter while preserving ordinary and programmatic list activation', () => {
+  createRoot((dispose) => {
+    try {
+      const activate = vi.fn();
+      const list = createListController({
+        items: () => [{ id: 'email' }],
+        getKey: (row) => row.id,
+        onActivate: activate,
+      });
+      useListInteractions({
+        controller: list,
+        scopeId: 'email',
+        scrollHandle: () => undefined,
+        activation: {
+          shouldHandleKeyEvent: (event) =>
+            !(
+              event?.target instanceof Element &&
+              event.target.closest('button[data-reminder-action]')
+            ),
+        },
+      });
+      list.focus.set('email');
+      const button = document.createElement('button');
+      button.setAttribute('data-reminder-action', '');
+      const event = new KeyboardEvent('keydown', { key: 'Enter' });
+      Object.defineProperty(event, 'target', { value: button });
+      for (const key of ['enter', 'shift+enter']) {
+        const hotkey = vi
+          .mocked(registerHotkey)
+          .mock.calls.find(([options]) => options.hotkey === key)![0];
+        expect(hotkey.keyDownHandler(event)).toBe(false);
+        expect(activate).not.toHaveBeenCalled();
+      }
+      const primary = vi
+        .mocked(registerHotkey)
+        .mock.calls.find(([options]) => options.hotkey === 'enter')![0];
+      expect(
+        primary.keyDownHandler(new KeyboardEvent('keydown', { key: 'Enter' }))
+      ).toBe(true);
+      expect(primary.keyDownHandler()).toBe(true);
+      expect(activate).toHaveBeenCalledTimes(2);
+    } finally {
+      dispose();
+    }
+  });
+});

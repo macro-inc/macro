@@ -583,3 +583,8 @@ describe('makeMarkDoneAction', () => {
     dispose();
   });
 });
+
+it('keeps original Email Reminders rows eligible for the email archive action', async () => {
+  const { canExecuteMarkDoneOnView } = await import('./make-mark-done-action');
+  expect(canExecuteMarkDoneOnView('mail', 'reminders')).toBe(true);
+});

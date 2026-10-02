@@ -12,10 +12,11 @@ import type { EmailThreadContext } from './email-thread-context';
 
 export interface EmailThreadViewContext {
   thread: EmailThreadContext;
-  copySubject?: (subject: string) => void;
+  copySubject?: (subject: string) => void | boolean | Promise<void | boolean>;
   compose: EmailComposeContext;
   composeHost?: EmailComposeHost;
   rendering: {
+    renderTags?: () => JSX.Element;
     renderInvitation?: (
       message: EmailMessage,
       invitation: CalendarInvitation

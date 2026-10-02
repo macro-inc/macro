@@ -611,6 +611,7 @@ pub(crate) type RemindersServiceType =
         PgRemindersRepo,
         DssEmailService,
         reminders::domain::ports::SystemClock,
+        EntityAccessService,
     >;
 
 /// Type alias for the reminders router state.

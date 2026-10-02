@@ -38,9 +38,10 @@ export function SendButton(props: SendButtonProps) {
       tooltip={local.tooltip ?? 'Send'}
       class={cn(
         'border-0 bg-ink text-surface-4 touch:size-7.5',
+        'not-touch:not-disabled:hover:text-surface-4',
         local.appearance === 'composer'
           ? cn(
-              'not-touch:not-disabled:bg-composer-action not-touch:not-disabled:text-composer-action-ink not-touch:light-mode:shadow-none not-touch:light-mode:backdrop-filter-none not-touch:light-mode:after:hidden',
+              'not-touch:not-disabled:bg-composer-action not-touch:not-disabled:text-composer-action-ink not-touch:not-disabled:hover:text-composer-action-ink not-touch:light-mode:shadow-none not-touch:light-mode:backdrop-filter-none not-touch:light-mode:after:hidden',
               local.actionLabel &&
                 'not-touch:w-auto! not-touch:aspect-auto! not-touch:px-3 not-touch:gap-1.5'
             )

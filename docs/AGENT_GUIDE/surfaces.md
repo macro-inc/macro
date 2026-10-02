@@ -309,6 +309,11 @@ arrow-key browsing keeps it open. Preview headers start with **Home >**. Clickin
 sidebar visibility. Use the hamburger to reopen the feed. Mobile continues to
 show the activity list alone.
 
+Document previews opened from Home expose **Share** and **Copy Share Link** before
+the details toggle, including tasks, snippets, skills, canvases, PDFs, images,
+code, and videos. Share uses the selected item's permissions and updates when
+switching items; copied links point to the entity rather than the Home feed.
+
 AI chat, agent, and channel message bodies use 15px text, including thread replies.
 Desktop AI chats, agents, and channel composers share Home's rounded composer
 surface: a muted dark fill or a white light-mode surface with a soft shadow,
@@ -1515,6 +1520,9 @@ the company; click the first breadcrumb to return directly to the originating
 view. Shift-click still opens a contact in a separate split. Direct contact links
 use the standalone contact page.
 Company and contact headers have `Copy link` beside the side-panel toggle.
+Their information panel starts closed and opens as a floating bubble at every
+width, without shrinking the record content. Click outside the bubble or use
+the toggle to dismiss it; the open state is not restored on a later visit.
 It copies the record's direct URL and shows a confirmation toast; this is also
 available in the embedded company and contact breadcrumb header.
 
@@ -2041,6 +2049,36 @@ New conversations confirm selected model and effort settings before sending the
 first message. If startup reports a rejected setting or timeout, the first prompt
 has not been sent. See [effort capabilities](../AGENT_EFFORT.md) for the harness
 contracts and test coverage.
+
+### Floating block information panels
+
+Actions live in the top bar immediately before Share, with consistent compact
+buttons (labels collapse on narrow headers). There are no Actions sections in
+information panels. Markdown/tasks include Ask Macro and document/task dispatch; email
+includes Ask Macro and Create task; PDF and calls include Ask Macro; native
+projects expose Delete project with its existing confirmation dialog.
+
+Standard metadata is quiet, non-collapsible text at the bottom of each panel,
+separated by a muted divider. Owner and available timestamps share one format;
+Markdown adds word/character counts. There is no standard Details or Stats
+disclosure. Agent runtime information remains in its dedicated Session section.
+
+Block information panels float over the right side of the block without changing
+the content width or its centered position. A single rounded bubble fits its
+contents, with `edge-muted` dividers between sections. Its height is capped at
+the block height with internal scrolling. At every width it starts closed and
+acts as a split-local overlay menu on desktop. The top-right sidebar icon, rotated
+180 degrees, opens it, and clicking outside dismisses it. On touch devices the
+control uses the Phosphor info-circle icon and opens the standard bottom drawer
+with a drag handle, scrollable sections, and safe-area/keyboard-aware spacing.
+Dismiss the drawer by swiping down or tapping its backdrop. Opening is never
+restored from saved preferences or triggered by the global chrome shortcut. The 320px bubble enters
+with a slight slide from the right and a 120ms fade;
+closing fades it out in 70ms.
+This applies across Markdown/tasks,
+snippets, email, calls, agents, pull requests, projects, and all file blocks
+including PDFs, images, code, video, canvas, unknown file types, and CRM company
+and contact views (both inside the CRM workspace and in standalone blocks).
 
 ### Email reminders
 

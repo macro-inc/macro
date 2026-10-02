@@ -9571,6 +9571,8 @@ dependencies = [
  "attachment",
  "base64 0.22.1",
  "bot_id",
+ "image",
+ "lexical_client",
  "macro_user_id",
  "model",
  "model-entity",

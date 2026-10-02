@@ -1,4 +1,7 @@
-import { EntityDetail } from '@app/components/entity-detail/EntityDetail';
+import {
+  EntityDetail,
+  entityDetailBlockType,
+} from '@app/components/entity-detail/EntityDetail';
 import type { EntityDetailTarget } from '@app/components/entity-detail/entity-detail-target';
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
 import { channelsSearch } from '@app/features/channels-view/channels-route';
@@ -13,6 +16,8 @@ import {
   useSplitDisplayName,
   useSplitPanelOrThrow,
 } from '@components/app/split-layout/layoutUtils';
+import { ShareTrigger } from '@core/component/TopBar/ShareButton';
+import { useDocumentShareModal } from '@core/component/TopBar/shareModal';
 import { type Accessor, createMemo, Match, Show, Switch } from 'solid-js';
 import { isHomeDocumentType } from '../home-route-schema';
 import { useHomeView } from '../home-view-context';
@@ -84,12 +89,32 @@ function HomeEntityDetailBody(props: {
   value: Accessor<string>;
   navigationRequest: number | string;
 }) {
+  const panel = useSplitPanelOrThrow();
+  const documentShareTarget = () => {
+    const blockAlias = entityDetailBlockType(props.target);
+    return props.target.type === 'document' && blockAlias
+      ? { documentId: props.target.id, blockAlias }
+      : undefined;
+  };
+  const openShare = useDocumentShareModal(documentShareTarget);
+
   return (
     <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
       <Show when={props.target.type !== 'channel'}>
-        <ViewShell.TopBar>
+        <ViewShell.TopBar class="touch:flex">
           <ViewBreadcrumbs.Outlet aria-label="Home location" />
-          <div class="ml-auto">
+          <div class="ml-auto flex items-center gap-1">
+            <SidePanel.HeaderActionsOutlet />
+            <Show when={documentShareTarget()}>
+              {(target) => (
+                <ShareTrigger
+                  onClick={openShare}
+                  id={target().documentId}
+                  blockType={target().blockAlias}
+                  hotkeyScope={panel.splitHotkeyScope}
+                />
+              )}
+            </Show>
             <SidePanel.Toggle />
           </div>
         </ViewShell.TopBar>

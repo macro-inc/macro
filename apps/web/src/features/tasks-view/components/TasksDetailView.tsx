@@ -28,7 +28,8 @@ function TaskDetailTopBar(props: { documentId: string }) {
         aria-label="Task location"
         fallback={<EntityDetailBreadcrumbSkeleton />}
       />
-      <div class="ml-auto flex shrink-0 items-center gap-2">
+      <div class="ml-auto flex shrink-0 items-center gap-1">
+        <SidePanel.HeaderActionsOutlet />
         <ShareTrigger
           onClick={openShare}
           id={props.documentId}
@@ -78,7 +79,7 @@ export function TasksDetailView(props: {
   });
 
   return (
-    <SidePanel.Root>
+    <SidePanel.Root floating>
       <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
         <TaskDetailTopBar documentId={props.task.id} />
         <div class="relative min-h-0 min-w-0 flex-1">

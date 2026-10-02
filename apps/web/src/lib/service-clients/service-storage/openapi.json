@@ -14260,6 +14260,151 @@
         }
       }
     },
+    "/reminders/email/collection": {
+      "get": {
+        "tags": ["reminders"],
+        "summary": "List original email threads with caller-private reminder work.",
+        "operationId": "list_email_reminders",
+        "parameters": [
+          {
+            "name": "inboxIds",
+            "in": "query",
+            "description": "Selected inboxes; omission selects all accessible inboxes.",
+            "required": false,
+            "schema": {
+              "type": ["array", "null"],
+              "items": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          },
+          {
+            "name": "noInboxes",
+            "in": "query",
+            "description": "Explicitly empty inbox selection.",
+            "required": false,
+            "schema": {
+              "type": ["boolean", "null"]
+            }
+          },
+          {
+            "name": "done",
+            "in": "query",
+            "description": "Email archive filter, independent of reminder completion.",
+            "required": false,
+            "schema": {
+              "type": ["boolean", "null"]
+            }
+          },
+          {
+            "name": "read",
+            "in": "query",
+            "description": "Email read status.",
+            "required": false,
+            "schema": {
+              "type": ["boolean", "null"]
+            }
+          },
+          {
+            "name": "calendar",
+            "in": "query",
+            "description": "Restrict to calendar mail.",
+            "required": false,
+            "schema": {
+              "type": ["boolean", "null"]
+            }
+          },
+          {
+            "name": "tags",
+            "in": "query",
+            "description": "Repeated property-definition:select-option UUID pairs.",
+            "required": false,
+            "schema": {
+              "type": ["array", "null"],
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "attachments",
+            "in": "query",
+            "description": "Repeated attachment categories: pdf, image, document.",
+            "required": false,
+            "schema": {
+              "type": ["array", "null"],
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Continuation from the previous page.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum rows (1–100).",
+            "required": false,
+            "schema": {
+              "type": ["integer", "null"],
+              "format": "int32",
+              "maximum": 100,
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailReminderPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/reminders/email/{thread_id}": {
       "get": {
         "tags": ["reminders"],
@@ -24330,6 +24475,46 @@
         "type": "string",
         "description": "When an email follow-up should return the conversation.",
         "enum": ["if_no_reply", "regardless"]
+      },
+      "EmailReminderPage": {
+        "type": "object",
+        "description": "A page of original-email identities and private reminder metadata.",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmailReminderSummary"
+            },
+            "description": "Coalesced rows in nearest-occurrence order."
+          },
+          "nextCursor": {
+            "type": ["string", "null"],
+            "description": "Progress through all examined candidates, absent at exhaustion."
+          }
+        }
+      },
+      "EmailReminderSummary": {
+        "type": "object",
+        "description": "One original thread, coalescing all of its current reminder work.",
+        "required": ["threadId", "nearest", "count"],
+        "properties": {
+          "count": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Number of eligible reminders attached to this thread.",
+            "minimum": 0
+          },
+          "nearest": {
+            "$ref": "#/components/schemas/ReminderCollectionRow",
+            "description": "Nearest eligible occurrence and its owning editor capability."
+          },
+          "threadId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Original email identity, never a mirror reminder identity."
+          }
+        }
       },
       "EmptyResponse": {
         "type": "object",
