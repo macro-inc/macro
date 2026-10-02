@@ -112,3 +112,4 @@ workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 agent-client-protocol = { workspace = true }
 agent_session = { path = "../../crates/agent_session", features = ["test-utils"] }
 harness_id = { path = "../../crates/harness_id", features = ["test-utils"] }
+harnesses = { path = "../../crates/harnesses", default-features = false, features = ["test-utils"] }

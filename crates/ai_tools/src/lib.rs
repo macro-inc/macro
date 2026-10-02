@@ -1,6 +1,7 @@
 #![recursion_limit = "256"]
 
 use activity::inbound::toolset::activity_toolset;
+use agent_session::inbound::toolset::coding_agent_toolset;
 use ai_toolset::AsyncToolCollection;
 use ai_toolset::schema::{FrontendSchemas, ToolSchemaGenerator, frontend_schemas_builder};
 
@@ -64,20 +65,21 @@ pub use tool_context::{
     ToolBotService, ToolBotToolContext, ToolCalendarMutationService, ToolCalendarReadService,
     ToolCalendarToolContext, ToolCallRecordQueryService, ToolCallService, ToolCallToolContext,
     ToolChannelEventDispatcher, ToolChannelMessagesService, ToolChannelToolContext,
-    ToolChatService, ToolChatToolContext, ToolCommsService, ToolCrmService, ToolCrmToolContext,
-    ToolDatabasesService, ToolDatabasesSqlToolContext, ToolDatabasesToolContext,
-    ToolDocumentService, ToolDocumentToolContext, ToolEmailService, ToolEmailToolContext,
-    ToolEntityAccessManagementService, ToolEntityAccessService, ToolEntityCreator,
-    ToolForeignEntityService, ToolFrecencyService, ToolImageGenerationToolContext,
-    ToolImportService, ToolImportToolContext, ToolInitiativeToolContext, ToolMcpSelector,
-    ToolNotificationQueue, ToolNotificationService, ToolNotificationToolContext,
-    ToolPipedreamConnection, ToolProjectService, ToolProjectToolContext, ToolPropertiesService,
-    ToolPropertiesToolContext, ToolRemindersService, ToolRemindersToolContext, ToolServiceContext,
-    ToolSkillService, ToolSkillToolContext, ToolSoupService, ToolSystemPropertiesService,
-    ToolTableEventPublisher, ToolTeamService, ToolTeamToolContext, ToolUserEmailService,
-    ToolViewOnlyDatabasesSqlToolContext, build_activity_tool_context, build_bot_tool_context,
-    build_calendar_tool_context, build_channel_tool_context_with_dispatcher,
-    build_channel_tool_context_with_side_effects, build_channel_tool_context_without_side_effects,
+    ToolChatService, ToolChatToolContext, ToolCodingAgentToolContext, ToolCommsService,
+    ToolCrmService, ToolCrmToolContext, ToolDatabasesService, ToolDatabasesSqlToolContext,
+    ToolDatabasesToolContext, ToolDocumentService, ToolDocumentToolContext, ToolEmailService,
+    ToolEmailToolContext, ToolEntityAccessManagementService, ToolEntityAccessService,
+    ToolEntityCreator, ToolForeignEntityService, ToolFrecencyService,
+    ToolImageGenerationToolContext, ToolImportService, ToolImportToolContext,
+    ToolInitiativeToolContext, ToolMcpSelector, ToolNotificationQueue, ToolNotificationService,
+    ToolNotificationToolContext, ToolPipedreamConnection, ToolProjectService,
+    ToolProjectToolContext, ToolPropertiesService, ToolPropertiesToolContext, ToolRemindersService,
+    ToolRemindersToolContext, ToolServiceContext, ToolSkillService, ToolSkillToolContext,
+    ToolSoupService, ToolSystemPropertiesService, ToolTableEventPublisher, ToolTeamService,
+    ToolTeamToolContext, ToolUserEmailService, ToolViewOnlyDatabasesSqlToolContext,
+    build_activity_tool_context, build_bot_tool_context, build_calendar_tool_context,
+    build_channel_tool_context_with_dispatcher, build_channel_tool_context_with_side_effects,
+    build_channel_tool_context_without_side_effects, build_coding_agent_tool_context,
     build_crm_tool_context, build_databases_sql_tool_context, build_databases_tool_context,
     build_image_generation_tool_context, build_initiative_tool_context,
     build_message_service_with_side_effects, build_message_service_without_side_effects,
@@ -195,6 +197,7 @@ pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
     };
     let toolset = toolset
         .add_subtoolset::<ToolImportToolContext>(import_toolset())
+        .add_subtoolset::<ToolCodingAgentToolContext>(coding_agent_toolset())
         .add_tool::<Subagent, SubagentContext>();
     let toolset = match host {
         AiHost::Chat | AiHost::AgentSession | AiHost::ChannelBot => toolset
@@ -209,9 +212,13 @@ pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
         AiHost::ChannelBot | AiHost::Mcp => toolset,
     };
     let prompt: Box<dyn std::fmt::Display + Send + Sync> = match host {
-        AiHost::Chat => Box::new(&prompt::TOOL_USE_PROMPT),
-        AiHost::AgentSession => Box::new(&prompt::SESSION_TOOL_USE_PROMPT),
-        AiHost::ChannelBot | AiHost::Mcp => Box::new(&prompt::DIRECT_TOOL_USE_PROMPT),
+        AiHost::Chat => Box::new(prompt::TOOL_USE_PROMPT.compose(&prompt::coding_agents::PROMPT)),
+        AiHost::AgentSession => {
+            Box::new(prompt::SESSION_TOOL_USE_PROMPT.compose(&prompt::coding_agents::PROMPT))
+        }
+        AiHost::ChannelBot | AiHost::Mcp => {
+            Box::new(prompt::DIRECT_TOOL_USE_PROMPT.compose(&prompt::coding_agents::PROMPT))
+        }
     };
     ToolSetWithPrompt {
         toolset: Arc::new(toolset),

@@ -6,6 +6,10 @@ use agent_egress::domain::model::{
 };
 use agent_egress::domain::service::EgressService;
 use agent_egress::inbound::axum_router::EgressRouterState;
+use agent_session::domain::coding_agents::{
+    CodingAgent, CodingAgentError, CodingAgentService, DispatchCodingAgentRequest,
+    DispatchedCodingAgent,
+};
 use agent_session::domain::routines::{
     PrepareRoutineSession, PreparedRoutineSession, PromptRoutineSession, RoutineActionStatus,
     RoutinePromptAccepted, RoutineSessionAction, RoutineSessionError, RoutineSessions,
@@ -20,7 +24,10 @@ use macro_authorization::{
     INTERNAL_API_KEY_HEADER, InternalAuthConfig, MacroAuthorizationServiceImpl,
     MacroAuthorizationState, NoBotAuthorizer, NoUserApiKeyAuthorizer, NoopMacroAuthJwtValidator,
 };
-use std::sync::{Arc, Mutex};
+use std::{
+    pin::Pin,
+    sync::{Arc, Mutex},
+};
 use tower::ServiceExt;
 
 #[derive(Default)]
@@ -320,4 +327,88 @@ async fn gateway_egress_keeps_authentication_and_git_basic_challenge() {
         );
     }
     assert!(service.seen.lock().unwrap().is_empty());
+}
+
+impl CodingAgentService for RoutineSessionsSpy {
+    fn list(
+        &self,
+        user_id: macro_user_id::user_id::MacroUserIdStr<'static>,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<CodingAgent>, CodingAgentError>> + Send + '_>> {
+        Box::pin(async move {
+            self.0.lock().unwrap().push(user_id.to_string());
+            Err(CodingAgentError::Forbidden)
+        })
+    }
+
+    fn dispatch(
+        &self,
+        command: DispatchCodingAgentRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<DispatchedCodingAgent, CodingAgentError>> + Send + '_>>
+    {
+        Box::pin(async move {
+            self.0.lock().unwrap().push(command.user_id.to_string());
+            Err(CodingAgentError::Forbidden)
+        })
+    }
+}
+
+#[tokio::test]
+async fn coding_agent_commands_keep_internal_auth_and_user_at_both_mounts() {
+    use agent_session::inbound::coding_agents::{CodingAgentsState, coding_agents_router};
+
+    let service = Arc::new(RoutineSessionsSpy::default());
+    let auth = MacroAuthorizationServiceImpl::new(
+        NoopMacroAuthJwtValidator,
+        InternalAuthConfig {
+            api_key: "internal-test-key".into(),
+            default_user_id: None,
+        },
+        NoBotAuthorizer,
+        NoUserApiKeyAuthorizer,
+    );
+    let app = mount_at_root_and_prefix(
+        coding_agents_router(CodingAgentsState::new(
+            service.clone(),
+            MacroAuthorizationState::new(Arc::new(auth)),
+        )),
+        GATEWAY_PATH_PREFIX,
+    );
+    let user_id = "macro|coding-owner@example.com";
+    for prefix in ["", GATEWAY_PATH_PREFIX] {
+        for (operation, command) in [
+            ("list", serde_json::json!({"user_id":user_id})),
+            (
+                "dispatch",
+                serde_json::json!({
+                    "user_id":user_id,
+                    "agent_id":"01900000-0000-7000-8000-000000000001",
+                    "prompt":"Fix the regression",
+                }),
+            ),
+        ] {
+            for key in [None, Some("wrong"), Some("internal-test-key")] {
+                let before = service.0.lock().unwrap().len();
+                let mut request = Request::builder()
+                    .method("POST")
+                    .uri(format!("{prefix}/internal/coding-agents/{operation}"))
+                    .header("content-type", "application/json");
+                if let Some(key) = key {
+                    request = request.header(INTERNAL_API_KEY_HEADER, key);
+                }
+                let response = app
+                    .clone()
+                    .oneshot(request.body(Body::from(command.to_string())).unwrap())
+                    .await
+                    .unwrap();
+                if key == Some("internal-test-key") {
+                    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+                    assert_eq!(service.0.lock().unwrap().last().unwrap(), user_id);
+                    assert_eq!(service.0.lock().unwrap().len(), before + 1);
+                } else {
+                    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+                    assert_eq!(service.0.lock().unwrap().len(), before);
+                }
+            }
+        }
+    }
 }

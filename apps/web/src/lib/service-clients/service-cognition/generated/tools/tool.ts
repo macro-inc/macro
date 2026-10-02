@@ -112,6 +112,10 @@ type ToolParserMap = {
     call: types.DescribeDatabase;
     response: types.ToolDatabaseSchema;
   };
+  DispatchCodingAgent: {
+    call: types.DispatchCodingAgent;
+    response: types.DispatchedCodingAgent;
+  };
   DisplayResults: {
     call: types.DisplayResults;
     response: types.DisplayResultsResponse;
@@ -156,6 +160,10 @@ type ToolParserMap = {
   ListCalendars: {
     call: types.ListCalendars;
     response: types.ListCalendarsToolResponse;
+  };
+  ListCodingAgents: {
+    call: types.ListCodingAgents;
+    response: types.ListCodingAgentsResponse;
   };
   ListCompanies: {
     call: types.ListCompanies;
@@ -479,6 +487,10 @@ const toolParserMap = {
     call: schemas.DescribeDatabase,
     response: schemas.ToolDatabaseSchema,
   },
+  DispatchCodingAgent: {
+    call: schemas.DispatchCodingAgent,
+    response: schemas.DispatchedCodingAgent,
+  },
   DisplayResults: {
     call: schemas.DisplayResults,
     response: schemas.DisplayResultsResponse,
@@ -529,6 +541,10 @@ const toolParserMap = {
   ListCalendars: {
     call: schemas.ListCalendars,
     response: schemas.ListCalendarsToolResponse,
+  },
+  ListCodingAgents: {
+    call: schemas.ListCodingAgents,
+    response: schemas.ListCodingAgentsResponse,
   },
   ListCompanies: {
     call: schemas.ListCompanies,
@@ -881,6 +897,10 @@ type ToolDataMap = {
     call: types.DescribeDatabase;
     response: types.ToolDatabaseSchema;
   };
+  DispatchCodingAgent: {
+    call: types.DispatchCodingAgent;
+    response: types.DispatchedCodingAgent;
+  };
   DisplayResults: {
     call: types.DisplayResults;
     response: types.DisplayResultsResponse;
@@ -925,6 +945,10 @@ type ToolDataMap = {
   ListCalendars: {
     call: types.ListCalendars;
     response: types.ListCalendarsToolResponse;
+  };
+  ListCodingAgents: {
+    call: types.ListCodingAgents;
+    response: types.ListCodingAgentsResponse;
   };
   ListCompanies: {
     call: types.ListCompanies;

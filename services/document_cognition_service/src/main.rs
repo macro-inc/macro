@@ -721,6 +721,10 @@ async fn main() -> anyhow::Result<()> {
             DocumentStorageServiceUrl::new()?.to_string(),
             pipedream_client.clone(),
         ),
+        coding_agent_tool_context: ai_tools::build_coding_agent_tool_context(
+            macro_service_urls::AgentHarnessServiceUrl::new()?,
+            internal_api_key.clone(),
+        )?,
         project_tool_context,
         initiative_tool_context,
         team_tool_context: ai_tools::build_team_tool_context(db.clone()),

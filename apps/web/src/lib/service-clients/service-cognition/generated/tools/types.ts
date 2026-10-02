@@ -4409,6 +4409,36 @@ export interface DescribeDatabase {
   databaseId: string;
 }
 /**
+ * Start a new coding agent session for a task using an agent returned by ListCodingAgents. Pass a self-contained task with the relevant repository, requirements, findings, and acceptance criteria; the coding agent does not inherit this conversation. Returns a live session reference after its first prompt is accepted, not completed code. Dispatch once per task and do not retry automatically after an uncertain failure.
+ */
+export interface DispatchCodingAgent {
+  /**
+   * The id of the best-suited coding agent from ListCodingAgents
+   */
+  agent_id: string;
+  /**
+   * Self-contained coding task, including the repository, relevant context, requirements, and desired outcome
+   */
+  prompt: string;
+}
+/**
+ * A newly opened session whose first prompt has been accepted.
+ */
+export interface DispatchedCodingAgent {
+  /**
+   * Session to show in a magic chip.
+   */
+  agent_session_id: string;
+  /**
+   * Persona that owns the session's identity.
+   */
+  agent_id: string;
+  /**
+   * Persona display name.
+   */
+  agent_name: string;
+}
+/**
  * Present results to the user as a rich view. The `view` argument is a dynamic-UI view object (a title plus an ordered list of widgets) following the dynamic-UI schema provided to you. The view is rendered immediately in the chat; this tool returns as soon as it is dispatched.
  */
 export interface DisplayResults {
@@ -5243,6 +5273,48 @@ export interface ToolCalendar {
    * Whether events can be created and modified on this calendar.
    */
   isWritable: boolean;
+}
+/**
+ * Find the coding agents available to the current user. Call this before delegating coding work. Choose an agent using its name, description, instructions, runtime, and model, preferring the user's requested agent or the persona best suited to the repository and task. Returns only available coding agents. If none are available, explain that the user needs to connect or configure a coding agent.
+ */
+export type ListCodingAgents = {};
+/**
+ * Available coding personas and their task-selection context.
+ */
+export interface ListCodingAgentsResponse {
+  /**
+   * Personas the user can currently dispatch.
+   */
+  agents: CodingAgent[];
+}
+/**
+ * Information used to choose a coding persona for a task.
+ */
+export interface CodingAgent {
+  /**
+   * Persona id to pass to dispatch.
+   */
+  id: string;
+  /**
+   * User-facing persona name.
+   */
+  name: string;
+  /**
+   * What the persona is intended to do.
+   */
+  description?: string | null;
+  /**
+   * Saved guidance describing the persona's repositories and specialties.
+   */
+  instructions: string;
+  /**
+   * Runtime configured for the persona.
+   */
+  harness: string;
+  /**
+   * Persona's configured default model, absent when the provider chooses it.
+   */
+  model?: string | null;
 }
 /**
  * List the CRM companies tracked by the authenticated user's team, sorted by most recent interaction. Each row includes the company id, name, domains, last interaction time, and its pipeline Stage / Owner / Revenue properties when set. Use the filters to narrow results: `search` for name/domain text, `stage` for pipeline stage, `owner_user_id` for companies owned by a user. Use GetCompany for one company's full details (contacts + all properties), and SetEntityProperty with entity_type=company to move stages or update owner/revenue/custom properties.

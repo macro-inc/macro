@@ -11,6 +11,7 @@ mod agent_runtime_directory;
 mod api;
 mod bots_directory;
 mod coding_agent;
+mod coding_agents;
 mod config;
 mod containers;
 mod external_session_requests;
@@ -631,7 +632,7 @@ async fn run() -> anyhow::Result<()> {
     let codex_journal_pool = pool.clone();
     let codex_manager = agent_harness::outbound::codex::CodexContainerManager::new(
         Arc::new(codex_provider),
-        codex_connections,
+        codex_connections.clone(),
         session_repo.clone(),
         Arc::new(move |id| {
             let journal = Arc::new(
@@ -1115,6 +1116,29 @@ async fn run() -> anyhow::Result<()> {
         session_repo.clone(),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
+    let coding_agents = coding_agents::router(
+        coding_agents::AvailableCodingAgents::new(
+            bots::domain::service::BotServiceImpl::new(
+                PgBotsRepo::new(pool.clone()),
+                broker.clone(),
+            ),
+            PgHarnessRepo::new(pool.clone()),
+            pool.clone(),
+            codex_connections,
+            claude_credentials.clone(),
+        ),
+        agent_session::domain::routines::RoutineSessionsService::new(
+            (*bots_directory).clone(),
+            (*harness).clone(),
+            external_session_requests::BrokerExternalSessionRequests::new(
+                broker.clone(),
+                session_repo.clone(),
+            ),
+            draining_sessions.clone(),
+            (*harness).clone(),
+        ),
+        MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+    );
     let gateway_state = RuntimeGatewayState::new(
         runtimes,
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
@@ -1158,6 +1182,7 @@ async fn run() -> anyhow::Result<()> {
             .with_claude_auth(claude_auth)
             .with_sharing(sharing)
             .with_routine_sessions(routine_sessions)
+            .with_coding_agents(coding_agents)
             .with_capabilities(capabilities),
             http_runtime_commands_readiness,
             http_port,

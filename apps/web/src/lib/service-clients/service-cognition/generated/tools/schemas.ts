@@ -3246,6 +3246,16 @@ export const ToolDatabaseSchema = z.object({
   ),
 });
 
+export const DispatchCodingAgent = z
+  .object({ agent_id: z.string().uuid(), prompt: z.string() })
+  .strict();
+
+export const DispatchedCodingAgent = z.object({
+  agent_session_id: z.string().uuid(),
+  agent_id: z.string().uuid(),
+  agent_name: z.string(),
+});
+
 export const DisplayResults = z.object({ view: z.any() });
 
 export const DisplayResultsResponse = z.object({ message: z.string() });
@@ -4191,6 +4201,21 @@ export const ListCalendarsToolResponse = z.object({
     })
   ),
   summary: z.string(),
+});
+
+export const ListCodingAgents = z.record(z.never());
+
+export const ListCodingAgentsResponse = z.object({
+  agents: z.array(
+    z.object({
+      id: z.string().uuid(),
+      name: z.string(),
+      description: z.union([z.string(), z.null()]).optional(),
+      instructions: z.string(),
+      harness: z.string(),
+      model: z.union([z.string(), z.null()]).optional(),
+    })
+  ),
 });
 
 export const ListCompanies = z.object({

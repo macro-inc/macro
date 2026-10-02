@@ -492,6 +492,11 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             "http://localhost:8086".to_string(),
             None,
         ),
+        coding_agent_tool_context: ai_tools::build_coding_agent_tool_context(
+            macro_service_urls::ServiceUrl::owned("http://localhost:0").into(),
+            "test-internal-api-key".to_string(),
+        )
+        .expect("valid test coding agent context"),
         project_tool_context,
         initiative_tool_context,
         team_tool_context: ai_tools::build_team_tool_context(pool.clone()),
