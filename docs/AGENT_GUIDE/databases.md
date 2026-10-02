@@ -55,6 +55,8 @@ Its type icon stays in place while editing. SQL refers to tables and columns by
 their display names (double-quoted), so a rename changes the name a saved query
 must use.
 
+The current type has a checkmark in **Change type**; selecting it leaves the column unchanged. Types that cannot convert any existing values are omitted, while empty columns can still choose a new type.
+
 The header arrow menu groups schema and view actions. **Change type** checks the
 column's values against Text, Number, Select, Multi-select, Date, Checkbox, URL,
 People, Documents, Tasks, and relations to tables in this database, showing
