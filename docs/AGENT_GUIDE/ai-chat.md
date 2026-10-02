@@ -186,17 +186,21 @@ the shimmer.
   restores the compact input when the draft fits on one line, without remounting
   the editor or losing the draft. Reduced-motion
   preferences disable the animation. The hidden drawer is inert. **Repository**
-  (**Choose repository** until one is picked) opens a searchable list:
-  **Choose automatically**, then the repositories the signed-in user reaches
+  (**Auto-detect** unless a default was saved) opens a searchable list:
+  **Auto-detect**, then the repositories the signed-in user reaches
   through Macro's GitHub App (`GET /agent-repositories` on the agent harness),
-  recently used ones first. A new conversation always starts on **Choose
-  repository** (Automatic); the last used repository is not preselected.
+  recently used ones first. **Settings → Agents → Coding defaults → Default
+  repository** lets the user save a GitHub repository or **Auto-detect** (the
+  initial default). New coding conversations preselect that choice; changing
+  the composer picker overrides it for that conversation. The preference is
+  saved per user on this device. An inaccessible saved repository falls back
+  to Auto-detect.
   Typing filters the list to those reachable repositories. Unlisted GitHub
   URLs and recents the listing no longer carries are not offered. Arrow keys
   move the highlight and Enter or a click picks it; there is no separate
   confirm button. Someone who reaches no repository sees a hint with **Connect
   GitHub**, which opens Settings → Connected. Listed recents are remembered
-  per user in local storage and offered first, without changing the Automatic
+  per user in local storage and offered first, without changing the saved
   default. Automatic selection always chooses an accessible repository, using
   the most recent accessible session repository when the prompt is ambiguous,
   or the first available repository for users without repository history. Questions
