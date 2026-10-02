@@ -17,10 +17,9 @@
 //!
 //! Anyone watching the herdr window can also type into the TUI directly.
 
-use std::collections::HashMap;
-use std::io::{Read as _, Seek as _};
+use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -32,6 +31,8 @@ use tokio_util::sync::CancellationToken;
 use super::HerdrSession;
 use super::cli::{HerdrCli, HerdrError};
 use super::hub::title_from;
+use super::store::{Record, Store, write_private};
+use super::tail::Cursor;
 use agent_fold::domain::transcript::{Fold, LogEvent};
 use claude_fold::ClaudeLog;
 use codex_fold::CodexLog;
@@ -67,7 +68,17 @@ const MISSING_AGENT_CHECKS: u32 = 5;
 const SUBMIT_GRACE: Duration = Duration::from_secs(5);
 
 /// Which coding-agent TUI each session runs.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, clap::ValueEnum)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+    clap::ValueEnum,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub(crate) enum TuiAgent {
     /// Claude Code (`claude`).
     #[default]
@@ -179,6 +190,16 @@ pub async fn run(options: AdapterOptions) -> rootcause::Result<()> {
     });
 
     let herdr = HerdrSession::detect();
+    let home = environment::Home::new().and_then(|home| home.value().map(PathBuf::from));
+    let state_dir = options
+        .state_dir
+        .clone()
+        .or_else(|| {
+            home.as_ref()
+                .map(|home| home.join(".macrod/herdr/standalone"))
+        })
+        .ok_or_else(|| rootcause::report!("HOME or --state-dir is required"))?;
+    let shutdown = CancellationToken::new();
     let adapter = Arc::new(Adapter {
         out: out_tx,
         pending: Mutex::new(HashMap::new()),
@@ -188,10 +209,13 @@ pub async fn run(options: AdapterOptions) -> rootcause::Result<()> {
             .as_ref()
             .map(|herdr| HerdrCli::new(&herdr.bin, herdr.workspace_id.clone())),
         options,
-        home: environment::Home::new().and_then(|home| home.value().map(PathBuf::from)),
+        home,
+        store: Store(state_dir),
+        shutdown: shutdown.clone(),
         claimed: Mutex::new(std::collections::HashSet::new()),
     });
 
+    let mut requests = tokio::task::JoinSet::new();
     let mut lines = BufReader::new(tokio::io::stdin()).lines();
     while let Some(line) = lines.next_line().await? {
         let Ok(message) = serde_json::from_str::<Value>(&line) else {
@@ -203,9 +227,27 @@ pub async fn run(options: AdapterOptions) -> rootcause::Result<()> {
             (Some(method), Some(id)) => {
                 let adapter = adapter.clone();
                 let method = method.to_owned();
-                tokio::spawn(async move {
+                requests.spawn(async move {
+                    let prompt_session = if method == "session/prompt" {
+                        adapter.session(&params).ok()
+                    } else {
+                        None
+                    };
+                    if prompt_session
+                        .as_ref()
+                        .is_some_and(|session| session.prompt_pending.swap(true, Ordering::SeqCst))
+                    {
+                        adapter.respond(
+                            id,
+                            Err(RpcError::invalid("a prompt is already in progress")),
+                        );
+                        return;
+                    }
                     let result = adapter.request(&method, params).await;
                     adapter.respond(id, result);
+                    if let Some(session) = prompt_session {
+                        session.prompt_pending.store(false, Ordering::SeqCst);
+                    }
                 });
             }
             (Some("session/cancel"), None) => adapter.cancel(&params),
@@ -214,12 +256,18 @@ pub async fn run(options: AdapterOptions) -> rootcause::Result<()> {
             (None, None) => {}
         }
     }
+    shutdown.cancel();
+    requests.abort_all();
+    while requests.join_next().await.is_some() {}
+    lock(&adapter.pending).clear();
     drop(adapter);
     let _ = writer.await;
     Ok(())
 }
 
 struct Adapter {
+    store: Store,
+    shutdown: CancellationToken,
     out: mpsc::UnboundedSender<Value>,
     pending: Mutex<HashMap<String, oneshot::Sender<Value>>>,
     next_id: AtomicU64,
@@ -237,8 +285,18 @@ struct Session {
     cwd: PathBuf,
     mcp_servers: Vec<Value>,
     model: Mutex<String>,
+    native_id: Mutex<Option<String>>,
+    prompt_pending: AtomicBool,
     live: tokio::sync::Mutex<Option<Live>>,
     cancel: Mutex<Option<CancellationToken>>,
+}
+
+struct PromptCancellation<'a>(&'a Mutex<Option<CancellationToken>>);
+
+impl Drop for PromptCancellation<'_> {
+    fn drop(&mut self) {
+        lock(self.0).take();
+    }
 }
 
 /// A session's running TUI.
@@ -250,7 +308,8 @@ struct Live {
     model: String,
     log: Transcript,
     path: Option<PathBuf>,
-    offset: u64,
+    cursor: Cursor,
+    pending: VecDeque<LogEvent>,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -292,7 +351,12 @@ impl Adapter {
         let (tx, rx) = oneshot::channel();
         lock(&self.pending).insert(Value::String(id.clone()).to_string(), tx);
         self.send(json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}));
-        rx.await.ok()
+        let answer = tokio::select! {
+            answer = rx => answer.ok(),
+            () = self.shutdown.cancelled() => None,
+        };
+        lock(&self.pending).remove(&Value::String(id).to_string());
+        answer
     }
 
     fn answered(&self, id: &Value, message: Value) {
@@ -325,13 +389,14 @@ impl Adapter {
             "initialize" => Ok(json!({
                 "protocolVersion": 1,
                 "agentCapabilities": {
-                    "loadSession": false,
+                    "loadSession": true,
                     "promptCapabilities": {"image": false, "audio": false, "embeddedContext": false},
                 },
                 "authMethods": [],
                 "agentInfo": {"name": "macrod-herdr", "version": env!("CARGO_PKG_VERSION")},
             })),
-            "session/new" => Ok(self.new_session(&params)),
+            "session/new" => self.new_session(&params),
+            "session/load" => self.load_session(&params).await,
             "session/set_config_option" => {
                 let session = self.session(&params)?;
                 let config = params.get("configId").and_then(Value::as_str);
@@ -365,29 +430,166 @@ impl Adapter {
         }
     }
 
-    fn new_session(&self, params: &Value) -> Value {
+    fn new_session(self: &Arc<Self>, params: &Value) -> Result<Value, RpcError> {
         let id = uuid::Uuid::new_v4().to_string();
         let cwd = params
             .get("cwd")
             .and_then(Value::as_str)
-            .map_or_else(|| PathBuf::from("."), PathBuf::from);
-        let mcp_servers = params
-            .get("mcpServers")
-            .and_then(Value::as_array)
-            .cloned()
-            .unwrap_or_default();
-        lock(&self.sessions).insert(
-            id.clone(),
-            Arc::new(Session {
-                id: id.clone(),
-                cwd,
-                mcp_servers,
-                model: Mutex::new(DEFAULT_MODEL.to_owned()),
-                live: tokio::sync::Mutex::new(None),
-                cancel: Mutex::new(None),
-            }),
-        );
-        json!({"sessionId": id, "configOptions": config_options(self.options.kind, DEFAULT_MODEL)})
+            .map(PathBuf::from)
+            .ok_or_else(|| RpcError::invalid("missing cwd"))?;
+        let session = Arc::new(Session {
+            id: id.clone(),
+            cwd,
+            mcp_servers: params
+                .get("mcpServers")
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default(),
+            model: Mutex::new(DEFAULT_MODEL.to_owned()),
+            native_id: Mutex::new(None),
+            prompt_pending: AtomicBool::new(false),
+            live: tokio::sync::Mutex::new(None),
+            cancel: Mutex::new(None),
+        });
+        self.save(&session, None)?;
+        lock(&self.sessions).insert(id.clone(), session.clone());
+        self.observe(&session);
+        Ok(
+            json!({"sessionId": id, "configOptions": config_options(self.options.kind, DEFAULT_MODEL)}),
+        )
+    }
+
+    fn save(&self, session: &Session, live: Option<&Live>) -> Result<(), RpcError> {
+        self.store
+            .save(&Record {
+                version: 1,
+                id: session.id.clone(),
+                kind: self.options.kind,
+                cwd: session.cwd.clone(),
+                model: lock(&session.model).clone(),
+                native_id: lock(&session.native_id).clone(),
+                transcript: live.and_then(|live| live.path.clone()),
+                started: live
+                    .map(|live| live.started)
+                    .unwrap_or_else(std::time::SystemTime::now)
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs(),
+            })
+            .map_err(|error| RpcError::internal(format!("could not save native session: {error}")))
+    }
+
+    async fn load_session(self: &Arc<Self>, params: &Value) -> Result<Value, RpcError> {
+        let id = params
+            .get("sessionId")
+            .and_then(Value::as_str)
+            .ok_or_else(|| RpcError::invalid("missing sessionId"))?;
+        let existing = lock(&self.sessions).get(id).cloned();
+        if let Some(existing) = &existing {
+            let mut live = existing
+                .live
+                .try_lock()
+                .map_err(|_| RpcError::invalid("cannot reload during a Macro prompt"))?;
+            if existing.prompt_pending.load(Ordering::SeqCst) {
+                return Err(RpcError::invalid("cannot reload during a Macro prompt"));
+            }
+            *live = None;
+            lock(&self.sessions).remove(id);
+        }
+        let record = self.store.load(id).map_err(|error| {
+            RpcError::internal(format!("could not restore native session: {error}"))
+        })?;
+        if record.kind != self.options.kind
+            || params.get("cwd").and_then(Value::as_str).map(Path::new)
+                != Some(record.cwd.as_path())
+        {
+            return Err(RpcError::invalid(
+                "saved session belongs to a different agent or workspace",
+            ));
+        }
+        let mut live = Live {
+            session: id.to_owned(),
+            cwd: record.cwd.clone(),
+            started: std::time::UNIX_EPOCH + Duration::from_secs(record.started),
+            name: agent_name(id),
+            model: record.model.clone(),
+            log: self.options.kind.log(),
+            path: record.transcript,
+            cursor: Cursor::default(),
+            pending: VecDeque::new(),
+        };
+        if live.path.is_none() {
+            live.path = self.locate(&live, record.native_id.as_deref());
+        }
+        let session = Arc::new(Session {
+            id: id.to_owned(),
+            cwd: record.cwd,
+            mcp_servers: params
+                .get("mcpServers")
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default(),
+            model: Mutex::new(record.model.clone()),
+            native_id: Mutex::new(record.native_id),
+            prompt_pending: AtomicBool::new(false),
+            live: tokio::sync::Mutex::new(None),
+            cancel: Mutex::new(None),
+        });
+        // ACP load stages this complete history until our successful response.
+        loop {
+            let offset = live.cursor.offset;
+            self.forward(&session, &mut live, &mut None)?;
+            if offset == live.cursor.offset && live.pending.is_empty() {
+                break;
+            }
+        }
+        *session.live.lock().await = Some(live);
+        lock(&self.sessions).insert(id.to_owned(), session.clone());
+        self.observe(&session);
+        Ok(json!({"configOptions": config_options(self.options.kind, &record.model)}))
+    }
+
+    fn observe(self: &Arc<Self>, session: &Arc<Session>) {
+        let adapter = Arc::downgrade(self);
+        let session = Arc::downgrade(session);
+        let shutdown = self.shutdown.clone();
+        tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    () = shutdown.cancelled() => break,
+                    () = tokio::time::sleep(POLL) => {}
+                }
+                let (Some(adapter), Some(session)) = (adapter.upgrade(), session.upgrade()) else {
+                    break;
+                };
+                if session.prompt_pending.load(Ordering::SeqCst) {
+                    continue;
+                }
+                // A Macro prompt owns the reader until its response is sent.
+                let Ok(mut guard) = session.live.try_lock() else {
+                    continue;
+                };
+                let Some(live) = guard.as_mut() else {
+                    continue;
+                };
+                if let Err(error) = adapter.forward(&session, live, &mut None) {
+                    tracing::warn!(session = %session.id, error = %error.message, "native transcript observation stopped");
+                    adapter.turn_complete(&session.id, "failed");
+                    break;
+                }
+            }
+        });
+    }
+
+    fn turn_complete(&self, session: &str, stop: &str) {
+        let outcome = match stop {
+            "cancelled" => json!({"kind":"cancelled"}),
+            "failed" => {
+                json!({"kind":"failed", "message":"native transcript could not be read; reload the session"})
+            }
+            _ => json!({"kind":"finished"}),
+        };
+        self.send(json!({"jsonrpc":"2.0", "method":"_session/turn_complete", "params":{"sessionId":session, "outcome":outcome}}));
     }
 
     async fn prompt(
@@ -400,10 +602,45 @@ impl Adapter {
         })?;
         let cancel = CancellationToken::new();
         *lock(&session.cancel) = Some(cancel.clone());
+        let _cancellation = PromptCancellation(&session.cancel);
 
         let mut guard = session.live.lock().await;
+        if let Some(live) = guard.as_ref() {
+            match herdr.agent_info(&live.name).await {
+                Ok(info) if matches!(info.status.as_str(), "working" | "blocked") => {
+                    return Err(RpcError::invalid(
+                        "the native session is busy; finish its current turn in Herdr first",
+                    ));
+                }
+                Ok(info) => {
+                    if info.cwd.as_ref().is_some_and(|cwd| cwd != &session.cwd)
+                        || info
+                            .session_id
+                            .as_ref()
+                            .zip(lock(&session.native_id).as_ref())
+                            .is_some_and(|(actual, expected)| actual != expected)
+                    {
+                        return Err(RpcError::invalid(
+                            "Herdr agent identity no longer matches this session",
+                        ));
+                    }
+                }
+                Err(error) if error.missing_agent() => {
+                    let old = guard.take().expect("live session was checked above");
+                    let mut restarted = self.launch(herdr, session, text).await?;
+                    restarted.path = old.path;
+                    restarted.cursor = old.cursor;
+                    restarted.log = old.log;
+                    restarted.pending = old.pending;
+                    *guard = Some(restarted);
+                    self.save(session, guard.as_ref())?;
+                }
+                Err(error) => return Err(error.into()),
+            }
+        }
         if guard.is_none() {
             *guard = Some(self.launch(herdr, session, text).await?);
+            self.save(session, guard.as_ref())?;
         }
         let Some(live) = guard.as_mut() else {
             return Err(RpcError::internal("the Claude Code window did not start"));
@@ -417,17 +654,18 @@ impl Adapter {
             live.model = model;
             tokio::time::sleep(Duration::from_secs(1)).await;
         }
-        // Anything already in the transcript belongs to earlier turns.
-        for event in self.drain(live) {
-            if let LogEvent::Update(update) = event {
-                self.notify_update(&session.id, update);
-            }
+        if live.pending.is_empty() {
+            live.pending = self.drain(live)?.into();
+        }
+        if !live.pending.is_empty() {
+            return Err(RpcError::invalid(
+                "the native transcript has new activity; retry once it has synchronized",
+            ));
         }
         herdr.prompt_agent(&live.name, text).await?;
         let outcome = self.follow(herdr, session, live, &cancel).await;
-        if outcome.is_err() {
-            *guard = None;
-        }
+        *lock(&session.cancel) = None;
+        self.save(session, guard.as_ref())?;
         outcome
     }
 
@@ -462,11 +700,25 @@ impl Adapter {
 
         let model = lock(&session.model).clone();
         let mut args = Vec::new();
-        if model != DEFAULT_MODEL {
+        let resume = lock(&session.native_id).clone();
+        if let Some(id) = &resume {
+            args.extend([
+                if kind == TuiAgent::Claude {
+                    "--resume"
+                } else {
+                    "resume"
+                }
+                .to_owned(),
+                id.clone(),
+            ]);
+        }
+        if model != DEFAULT_MODEL && resume.is_none() {
             args.extend(["--model".to_owned(), model.clone()]);
         }
         if kind == TuiAgent::Claude {
-            args.extend(["--session-id".to_owned(), session.id.clone()]);
+            if resume.is_none() {
+                args.extend(["--session-id".to_owned(), session.id.clone()]);
+            }
             if let Some(mode) = &self.options.permission_mode {
                 args.extend(["--permission-mode".to_owned(), mode.clone()]);
             }
@@ -489,6 +741,9 @@ impl Adapter {
             agent = kind.herdr_kind(),
             "agent started in herdr"
         );
+        if kind == TuiAgent::Claude {
+            *lock(&session.native_id) = Some(session.id.clone());
+        }
         Ok(Live {
             session: session.id.clone(),
             cwd: session.cwd.clone(),
@@ -497,7 +752,8 @@ impl Adapter {
             model,
             log: self.options.kind.log(),
             path: None,
-            offset: 0,
+            cursor: Cursor::default(),
+            pending: VecDeque::new(),
         })
     }
 
@@ -547,12 +803,12 @@ impl Adapter {
                         // to it. One Ctrl+C clears the box (two would quit).
                         herdr.send_keys(&live.name, &["ctrl+c"]).await?;
                     }
-                    self.forward(session, live, &mut open_tool);
+                    self.forward(session, live, &mut open_tool)?;
                     return Ok("cancelled");
                 }
                 () = tokio::time::sleep(POLL) => {}
             }
-            let (moved, ended) = self.forward(session, live, &mut open_tool);
+            let (moved, ended) = self.forward(session, live, &mut open_tool)?;
             active |= moved;
             if let Some(stop) = ended {
                 return Ok(stop);
@@ -565,9 +821,13 @@ impl Adapter {
             let status = match herdr.agent_info(&live.name).await {
                 Ok(info) => {
                     missing = 0;
+                    if info.session_id.is_some() {
+                        *lock(&session.native_id) = info.session_id.clone();
+                    }
                     if live.path.is_none() {
                         live.path = self.locate(live, info.session_id.as_deref());
                     }
+                    self.save(session, Some(live))?;
                     info.status
                 }
                 Err(error) => {
@@ -603,7 +863,7 @@ impl Adapter {
                 "idle" | "done" => {
                     settled += 1;
                     if settled >= SETTLED_CHECKS && (active || started.elapsed() > QUIET_START) {
-                        self.forward(session, live, &mut open_tool);
+                        self.forward(session, live, &mut open_tool)?;
                         return Ok("end_turn");
                     }
                 }
@@ -619,10 +879,13 @@ impl Adapter {
         session: &Session,
         live: &mut Live,
         open_tool: &mut Option<(String, String)>,
-    ) -> (bool, Option<&'static str>) {
+    ) -> Result<(bool, Option<&'static str>), RpcError> {
         let mut moved = false;
         let mut ended = None;
-        for event in self.drain(live) {
+        if live.pending.is_empty() {
+            live.pending = self.drain(live)?.into();
+        }
+        while let Some(event) = live.pending.pop_front() {
             match event {
                 LogEvent::Update(update) => {
                     moved = true;
@@ -633,10 +896,14 @@ impl Adapter {
                     }
                     self.notify_update(&session.id, update);
                 }
-                LogEvent::TurnEnded(stop) => ended = Some(stop),
+                LogEvent::TurnEnded(stop) => {
+                    self.turn_complete(&session.id, stop);
+                    ended = Some(stop);
+                    break;
+                }
             }
         }
-        (moved, ended)
+        Ok((moved, ended))
     }
 
     /// Ask Macro about the TUI's permission dialog, then press the key for
@@ -716,31 +983,20 @@ impl Adapter {
     }
 
     /// Read whole new lines from the session's transcript.
-    fn drain(&self, live: &mut Live) -> Vec<LogEvent> {
+    fn drain(&self, live: &mut Live) -> Result<Vec<LogEvent>, RpcError> {
         if live.path.is_none() {
             live.path = self.locate(live, None);
         }
         let Some(path) = &live.path else {
-            return Vec::new();
+            return Ok(Vec::new());
         };
-        let Ok(mut file) = std::fs::File::open(path) else {
-            return Vec::new();
-        };
-        if file.seek(std::io::SeekFrom::Start(live.offset)).is_err() {
-            return Vec::new();
-        }
-        let mut bytes = Vec::new();
-        if file.read_to_end(&mut bytes).is_err() {
-            return Vec::new();
-        }
-        let Some(end) = bytes.iter().rposition(|byte| *byte == b'\n') else {
-            return Vec::new();
-        };
-        live.offset += end as u64 + 1;
-        String::from_utf8_lossy(&bytes[..end])
-            .lines()
-            .flat_map(|line| live.log.entry(line))
-            .collect()
+        let lines = live.cursor.read(path).map_err(|error| {
+            RpcError::internal(format!("could not read native transcript: {error}"))
+        })?;
+        Ok(lines
+            .into_iter()
+            .flat_map(|line| live.log.entry(&line))
+            .collect())
     }
 }
 
@@ -955,18 +1211,6 @@ fn find_claude_transcript(claude_home: &Path, session: &str) -> Option<PathBuf> 
         .filter_map(Result::ok)
         .map(|project| project.path().join(&file))
         .find(|path| path.is_file())
-}
-
-fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
-    use std::io::Write as _;
-    use std::os::unix::fs::OpenOptionsExt as _;
-    std::fs::OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .mode(0o600)
-        .open(path)?
-        .write_all(bytes)
 }
 
 #[cfg(test)]
