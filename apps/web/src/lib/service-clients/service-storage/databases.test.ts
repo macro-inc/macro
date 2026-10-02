@@ -297,3 +297,48 @@ describe('saved query failures', () => {
     ]);
   });
 });
+
+describe('database templates', () => {
+  it('reads the templates a new database can start from', async () => {
+    fetch.mockResolvedValue(
+      ok([
+        {
+          id: 'crm',
+          name: 'CRM',
+          description: 'Companies, contacts, and deals.',
+          icon: 'handshake',
+        },
+      ])
+    );
+
+    const templates = await databasesClient.templates();
+
+    expect(templates._unsafeUnwrap()).toEqual([
+      {
+        id: 'crm',
+        name: 'CRM',
+        description: 'Companies, contacts, and deals.',
+        icon: 'handshake',
+      },
+    ]);
+    expect(fetch.mock.calls[0][0]).toMatch(/\/databases\/templates$/);
+  });
+
+  it('sends the chosen template with the new database', async () => {
+    fetch.mockResolvedValue(
+      ok({
+        id: 'db',
+        name: 'CRM',
+        owner_id: 'owner',
+        created_at: '',
+        trashed_at: null,
+      })
+    );
+
+    await databasesClient.create({ name: 'CRM', template: 'crm' });
+
+    expect(fetch.mock.calls[0][1]?.body).toBe(
+      JSON.stringify({ name: 'CRM', template: 'crm' })
+    );
+  });
+});
