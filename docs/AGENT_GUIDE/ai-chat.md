@@ -265,7 +265,11 @@ the shimmer.
   use the same growing, initially single-line input with the model selector on
   the right.
   Existing sessions retain their agent and kind; use **New conversation** to
-  choose another. Stop, queued-message advancement, and quoting remain available.
+  choose another. An unsent message in that session — the text and attached
+  files that finished uploading — stays when you leave for a channel, another
+  session, or Home and come back, including after reload. Sending or clearing
+  the input removes only that session's draft. Stop, queued-message advancement,
+  and quoting remain available.
   Archived sessions are read-only: Rename and all message controls are unavailable,
   and an **Unarchive** action replaces the composer at the bottom. Archive /
   Unarchive is also available from the title dropdown.

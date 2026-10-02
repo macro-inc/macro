@@ -55,6 +55,7 @@ vi.mock('../context/AgentSessionContext', () => ({
     },
     sendNext: mocks.sendNext,
     turn: () => 'idle',
+    sessionId: () => 'session-1',
     registerQuoteInsert: vi.fn(),
   }),
 }));
@@ -76,6 +77,7 @@ vi.mock('../ui', () => ({
 vi.mock('./PermissionRequest', () => ({ PermissionRequest: () => null }));
 
 beforeEach(() => {
+  localStorage.clear();
   vi.resetAllMocks();
   mocks.session = () => ({ canEdit: false });
   mocks.issue.mockResolvedValue({ isErr: () => false });

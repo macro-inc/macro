@@ -21,7 +21,11 @@ vi.mock('@core/mobile/isTouchDevice', () => ({
 
 const editor = vi.hoisted(() => ({
   lexical: undefined as LexicalEditor | undefined,
+  text: '',
   clear: vi.fn(),
+  setMarkdown: vi.fn((value: string) => {
+    editor.text = value;
+  }),
   enter: undefined as (() => boolean) | undefined,
   change: undefined as ((markdown: string) => void) | undefined,
 }));
@@ -55,6 +59,8 @@ vi.mock(
         controls: {
           clear: editor.clear,
           focus: vi.fn(),
+          getMarkdown: () => editor.text,
+          setMarkdown: editor.setMarkdown,
         },
         lexical: editor.lexical,
       };
@@ -116,7 +122,9 @@ beforeEach(() => {
       disconnect() {}
     }
   );
+  editor.text = '';
   editor.clear.mockClear();
+  editor.setMarkdown.mockClear();
   editor.enter = undefined;
   editor.change = undefined;
   vi.mocked(isTouchDevice).mockReturnValue(false);

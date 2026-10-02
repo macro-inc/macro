@@ -7,7 +7,6 @@
 
 import { useOptionalAgentChanges } from '@app/features/agent-changes/context/agent-changes-controller';
 import {
-  createInputAttachmentTracker,
   type InputAttachmentData,
   uploadInputAttachments,
 } from '@channel/Input';
@@ -16,6 +15,10 @@ import { uploadFile } from '@core/util/upload';
 import type { AgentAction } from '@service-agent-harness/generated/schemas';
 import { type Component, createSignal, For, Show } from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';
+import {
+  createSessionAttachmentTracker,
+  createSessionComposerDraft,
+} from '../primitives/session-composer-draft';
 import {
   changingConfig,
   changingModel,
@@ -66,7 +69,12 @@ export function AgentComposer(props: {
     turn,
     registerQuoteInsert,
     initialInput,
+    sessionId,
   } = useAgentSession();
+  const persistedDraft = createSessionComposerDraft(
+    sessionId,
+    () => initialInput
+  );
   const changes = useOptionalAgentChanges();
   const readOnly = () => session()?.canEdit === false;
 
@@ -135,7 +143,7 @@ export function AgentComposer(props: {
   // the static file service - documents too, not only media - because the
   // agent can only reach a file by a URL it can fetch. The chips and the
   // upload flow are the channel composer's.
-  const attachmentTracker = createInputAttachmentTracker();
+  const attachmentTracker = createSessionAttachmentTracker(sessionId);
   const attachFiles = (files: File[]) => {
     if (readOnly()) return;
     void uploadInputAttachments({
@@ -226,6 +234,8 @@ export function AgentComposer(props: {
       </For>
       <Input
         initialInput={initialInput}
+        draft={persistedDraft.draft()}
+        onDraftChange={persistedDraft.setDraft}
         placeholder={
           readOnly()
             ? 'You have view-only access to this agent session'
