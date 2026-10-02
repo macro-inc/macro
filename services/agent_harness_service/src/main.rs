@@ -34,6 +34,7 @@ use agent_changes::outbound::github_pull_request::GithubPullRequestDiff;
 use agent_changes::outbound::postgres::PgChangesetRepo;
 use agent_changes::outbound::s3::S3ChangesetBlobStore;
 use agent_egress::domain::service::EgressServiceImpl;
+use agent_egress::outbound::custom_mcp::WithCustomMcp;
 use agent_egress::outbound::forwarder::ReqwestForwarder;
 use agent_egress::outbound::github_tokens::GithubAppTokens;
 use agent_egress::outbound::macro_mcp::{MacroApiTokenSigner, WithMacroMcp};
@@ -133,6 +134,8 @@ use macro_service_urls::{
     AgentHarnessEgressUrl, ConnectionGatewayUrl, LexicalServiceUrl, McpServiceUrl,
     StaticFileServiceUrl,
 };
+use mcp_client::domain::models::AesKey;
+use mcp_client::outbound::pg_server_repo::PgServerRepo;
 use model_providers::{CursorModels, InMemoryModels, MacrodModels, VisibleHarnessAccess};
 use permission_policy::PgPermissionPolicySource;
 use pipedream_mcp::outbound::api::{PipedreamClient, PipedreamConfig};
@@ -380,6 +383,12 @@ async fn run() -> anyhow::Result<()> {
     // connected in Macro is an app the sandbox can reach, with nothing to
     // keep in sync. The rows hold no secrets - Pipedream owns the grants.
     let mcp_connections = Arc::new(PgConnectionRepo::new(pool.clone()));
+    // Custom MCP servers - the ones a person added by URL - in the same rows
+    // document_cognition_service manages, under the same encryption key, so
+    // the proxy can refresh a stored grant and persist what comes back.
+    let mcp_credentials_key = AesKey::try_from(config.mcp_credentials_key_secret_name.as_ref())
+        .context("invalid MCP credentials encryption key")?;
+    let mcp_servers = Arc::new(PgServerRepo::new(pool.clone(), mcp_credentials_key));
 
     // The client that addresses Pipedream's remote MCP server, built from the
     // same credentials `document_cognition_service` uses.
@@ -397,11 +406,15 @@ async fn run() -> anyhow::Result<()> {
     .context("failed to build Pipedream client")?;
 
     // Every session's MCP servers: Macro's own under the reserved `macro`
-    // slug, then the owner's Pipedream connections. The `macro` credential is
-    // signed inline with the same key authentication_service holds; what this
-    // process hands out is always single-user and minutes from expiry.
+    // slug, the owner's custom servers by URL key, then the owner's Pipedream
+    // connections. The `macro` credential is signed inline with the same key
+    // authentication_service holds; what this process hands out is always
+    // single-user and minutes from expiry.
     let mcp_credentials = WithMacroMcp::new(
-        PipedreamMcpCredentials::new(Arc::clone(&mcp_connections), pipedream),
+        WithCustomMcp::new(
+            PipedreamMcpCredentials::new(Arc::clone(&mcp_connections), pipedream),
+            Arc::clone(&mcp_servers),
+        ),
         MacroApiTokenSigner::new(
             pool.clone(),
             config.macro_api_token_issuer.as_ref(),
@@ -740,7 +753,11 @@ async fn run() -> anyhow::Result<()> {
                 .context("egress URL needs a host")?
                 .to_owned(),
         ),
-        EgressProvisioner::new(Arc::clone(&mcp_connections), egress_base_url.clone()),
+        EgressProvisioner::new(
+            Arc::clone(&mcp_connections),
+            Arc::clone(&mcp_servers),
+            egress_base_url.clone(),
+        ),
         claude_cloud_agents::inbound::acp::attach,
     );
     let containers = RoutedContainerManager::new(
@@ -930,8 +947,12 @@ async fn run() -> anyhow::Result<()> {
             ),
             prompt_context,
             prompt_composer,
-            EgressProvisioner::new(Arc::clone(&mcp_connections), egress_base_url)
-                .with_external_base_url(config.external_egress_base_url.clone()),
+            EgressProvisioner::new(
+                Arc::clone(&mcp_connections),
+                Arc::clone(&mcp_servers),
+                egress_base_url,
+            )
+            .with_external_base_url(config.external_egress_base_url.clone()),
             RedisCommandForwarder::new(redis.clone()),
             PgPermissionPolicySource::new(PgBotsRepo::new(pool.clone())),
             PgCodingAgentSource::new(PgBotsRepo::new(pool.clone())),
