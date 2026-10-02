@@ -68,6 +68,7 @@ export function ReminderRowSchedule(props: {
         >
           <Button
             size="icon-sm"
+            data-reminder-action
             disabled={pending() || (!props.onToggleDone && !reschedule())}
             label={
               reschedule()

@@ -34,7 +34,12 @@ export function ReminderScheduleIndicator(props: {
         label={props.label}
         open={focused() ? true : isTouchDevice() ? false : undefined}
       >
-        <Button size="icon-sm" aria-label={props.label} onClick={props.onEdit}>
+        <Button
+          size="icon-sm"
+          data-reminder-action
+          aria-label={props.label}
+          onClick={props.onEdit}
+        >
           <ClockIcon class="size-4" />
         </Button>
       </Tooltip>

@@ -15,6 +15,8 @@ Completion is acknowledgment of an occurrence: a done recurring reminder can
 still have a future schedule. Its quiet completed check and clock appear together.
 Hover/focus reveals the native undo action; incomplete rows reveal Mark done.
 Touch keeps these actions visible. Neither control uses a filled status pill.
+Tab can focus completion and clock buttons; Enter activates that button, while
+Enter on the list row still opens its entity.
 Marking done keeps the row in the unfiltered collection. The explicit Completion
 filter can limit the collection to Done or Not done. These choices are exclusive;
 selecting the active choice again or using Clear all restores the full collection.
