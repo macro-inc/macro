@@ -12,14 +12,8 @@ vi.mock('@macro-inc/lexical-core', () => ({
   markdownToPlainText: (content: string) => content,
 }));
 
-vi.mock('../../theme/signals/themeReactive', () => ({
-  themeReactive: {
-    a0: {
-      l: [() => '0.8'],
-      c: [() => '0.1'],
-      h: [() => '100'],
-    },
-  },
+vi.mock('../../theme/signals/themeSignals', () => ({
+  committedThemeAccent: () => 'oklch(0.8 0.1 100deg)',
 }));
 
 vi.mock('../notification-navigation', () => ({
