@@ -153,8 +153,9 @@ the date, and Tab leaves the selector without changing it.
 Invalid numbers remain in the editor for correction.
 Drag across table cells to select a rectangle, or Shift-click another cell to
 extend from the first cell. Delete or Backspace clears editable cells in that
-rectangle as one undoable change; read-only cells are skipped. Escape clears the
-selection. Other participants see the selected range with a colored outline and
+rectangle as one undoable change; read-only cells are skipped. Newly saved rows
+can be included immediately; unsaved insertion rows are excluded. Escape clears
+the selection. Other participants see the selected range with a colored outline and
 name banner, including when the selection covers several rows and columns.
 
 Arrow keys also move between checkbox and closed select cells without changing

@@ -476,9 +476,9 @@ export function DatabaseRecordsView(props: {
                 props.canEdit
                   ? async (rowIds, columnIds) => {
                       if (!props.canEdit) return false;
-                      const savedRows = rowIds.filter(
-                        (id) => !draftRows.isUnsaved(id)
-                      );
+                      const savedRows = rowIds
+                        .map(draftRows.savedRowId)
+                        .filter((id): id is string => id !== undefined);
                       const writable = columnIds.filter((id) =>
                         columns().some(
                           (column) => column.id === id && canEditCell(column)
@@ -507,8 +507,13 @@ export function DatabaseRecordsView(props: {
                 );
                 // Others see a draft row's cell once it is saved.
                 const rowId = cell && draftRows.savedRowId(cell.rowId);
+                const endRowId = cell?.endRowId
+                  ? draftRows.savedRowId(cell.endRowId)
+                  : undefined;
                 props.onCellFocus?.(
-                  cell && rowId ? { ...cell, rowId } : undefined
+                  cell && rowId && (!cell.endRowId || endRowId)
+                    ? { ...cell, rowId, endRowId }
+                    : undefined
                 );
               }}
               remoteUsers={props.remoteUsers}

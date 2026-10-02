@@ -820,6 +820,96 @@ describe('database table view', () => {
     expect(fixture.source.write).not.toHaveBeenCalled();
   });
 
+  it.each(['clear', 'presence'] as const)(
+    'uses saved row IDs for rectangle %s on a newly created draft',
+    async (operation) => {
+      const fixture = createFakeRowsSource({
+        columns,
+        table: {
+          version: 1,
+          rows: [{ rowId: 'row', cells: { title: 'Plan launch' } }],
+        },
+        view: allRecords,
+      });
+      fixture.persistWrites();
+      const onCellFocus = vi.fn();
+      render(() => (
+        <DatabaseRecordsView
+          name="Projects"
+          source={fixture.source}
+          canEdit
+          view={allRecords}
+          stored={false}
+          addColumn={() => null}
+          onCellFocus={onCellFocus}
+          boardPositions={unplacedCards}
+        />
+      ));
+      fireEvent.click(screen.getByRole('button', { name: /Name: Unnamed/ }));
+      const name = screen.getByRole('textbox', { name: 'Edit Name' });
+      fireEvent.input(name, { target: { value: 'Created from draft' } });
+      fireEvent.keyDown(name, { key: 'Enter' });
+      await waitFor(() =>
+        expect(fixture.source.snapshot()?.rows[1]?.rowId).toBe('created')
+      );
+      await screen.findByRole('button', { name: 'Open Created from draft' });
+      await waitFor(() =>
+        expect(
+          screen
+            .getByRole('button', { name: 'Open Created from draft' })
+            .closest('[data-grid-row-id]')
+            ?.getAttribute('data-grid-row-id')
+        ).toMatch(/^draft:/)
+      );
+      const draft = screen
+        .getByRole('button', { name: 'Open Created from draft' })
+        .closest('[data-grid-row-id]')!;
+      const first = document.querySelector<HTMLElement>(
+        '[data-grid-row-id="row"] [data-grid-column="1"]'
+      )!;
+      const last = draft.querySelector<HTMLElement>('[data-grid-column="2"]')!;
+      first.dispatchEvent(
+        new MouseEvent('pointerdown', { bubbles: true, button: 0 })
+      );
+      document.dispatchEvent(
+        new MouseEvent('pointerup', { bubbles: true, button: 0 })
+      );
+      last.dispatchEvent(
+        new MouseEvent('pointerdown', {
+          bubbles: true,
+          button: 0,
+          shiftKey: true,
+        })
+      );
+      if (operation === 'presence') {
+        expect(onCellFocus).toHaveBeenLastCalledWith({
+          rowId: 'row',
+          columnId: 'title',
+          endRowId: 'created',
+          endColumnId: 'status',
+          editing: false,
+        });
+      } else {
+        fireEvent.keyDown(last, { key: 'Delete' });
+        await waitFor(() =>
+          expect(fixture.source.write).toHaveBeenLastCalledWith(
+            {
+              kind: 'clear',
+              rowIds: ['row', 'created'],
+              columnIds: ['title', 'status'],
+            },
+            2,
+            false
+          )
+        );
+        expect(fixture.source.snapshot()?.rows).toEqual([
+          { rowId: 'row', cells: { title: null, status: null } },
+          { rowId: 'created', cells: { title: null, status: null } },
+        ]);
+      }
+    }
+  );
+
   it('focuses a new column header and edits its cells in a row created from the blank draft', async () => {
     const fixture = createFakeRowsSource({
       columns,
