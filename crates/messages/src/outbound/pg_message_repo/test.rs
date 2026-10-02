@@ -4,6 +4,7 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 const USER: &str = "macro|message-test@example.com";
 
 mod initiative;
+mod schema_drop;
 
 async fn setup(pool: &PgPool) {
     let user_id = macro_uuid::generate_uuid_v7();
@@ -487,7 +488,7 @@ async fn pdf_root_tombstone_keeps_anchor_and_thread_deletion_removes_placeable(p
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(saved.root_id, Some(root.id));
+    assert_eq!(saved.root_id, root.id);
     assert_eq!(saved.x, 0.2);
     repo.delete(&root.parent, root.id).await.unwrap();
     assert_eq!(
@@ -575,7 +576,7 @@ async fn placeable_anchor_creation_is_atomic_with_its_root(pool: PgPool) {
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(anchored.root_id, Some(root.id));
+    assert_eq!(anchored.root_id, root.id);
 
     // Reusing the annotation id fails inside the transaction, so neither the
     // second root nor its thread row survive.
@@ -625,9 +626,7 @@ async fn roots_get_thread_rows_without_the_bookkeeping_trigger(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn channel_rows_get_the_legacy_channel_column_from_the_shim_and_attachments_do_not(
-    pool: PgPool,
-) {
+async fn channel_and_document_attachments_use_message_parent_identity(pool: PgPool) {
     setup(&pool).await;
     let channel = macro_uuid::generate_uuid_v7();
     sqlx::query!(
@@ -653,7 +652,7 @@ async fn channel_rows_get_the_legacy_channel_column_from_the_shim_and_attachment
     document_post.input.attachments.push(attachment);
     let document_message = repo.create(document_post).await.unwrap();
     let columns = sqlx::query!(
-        r#"SELECT m.id, m.channel_id, a.channel_id AS attachment_channel_id
+        r#"SELECT m.id, m.parent_entity_type, m.parent_entity_id, a.entity_id
            FROM comms_messages m JOIN comms_attachments a ON a.message_id = m.id
            WHERE m.id = ANY($1) ORDER BY m.created_at"#,
         &[channel_message.id, document_message.id]
@@ -661,10 +660,11 @@ async fn channel_rows_get_the_legacy_channel_column_from_the_shim_and_attachment
     .fetch_all(&pool)
     .await
     .unwrap();
-    assert_eq!(columns[0].channel_id, Some(channel));
-    assert_eq!(columns[0].attachment_channel_id, None);
-    assert_eq!(columns[1].channel_id, None);
-    assert_eq!(columns[1].attachment_channel_id, None);
+    assert_eq!(columns[0].parent_entity_type, "channel");
+    assert_eq!(columns[0].parent_entity_id, channel.to_string());
+    assert_eq!(columns[1].parent_entity_type, "document");
+    assert_eq!(columns[1].parent_entity_id, "message-doc-a");
+    assert!(columns.iter().all(|row| row.entity_id == "message-doc-b"));
 }
 
 #[cfg(feature = "delivery")]
