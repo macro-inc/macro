@@ -154,7 +154,7 @@ fn codex_permission_dialogs_are_titled_from_the_screen() {
     );
 }
 
-fn test_adapter(root: &Path) -> (Arc<Adapter>, mpsc::UnboundedReceiver<Value>) {
+pub(super) fn test_adapter(root: &Path) -> (Arc<Adapter>, mpsc::UnboundedReceiver<Value>) {
     let (out, receiver) = mpsc::unbounded_channel();
     (
         Arc::new(Adapter {
@@ -173,7 +173,7 @@ fn test_adapter(root: &Path) -> (Arc<Adapter>, mpsc::UnboundedReceiver<Value>) {
     )
 }
 
-fn save_transcript(root: &Path, id: &str) -> PathBuf {
+pub(super) fn save_transcript(root: &Path, id: &str) -> PathBuf {
     let transcript = root.join(format!("{id}.jsonl"));
     std::fs::write(&transcript, "").unwrap();
     Store(root.to_owned())

@@ -37,6 +37,7 @@ use claude_fold::ClaudeLog;
 use codex_fold::CodexLog;
 
 mod commands;
+mod models;
 
 /// The subcommand macrod's harness config names to run this adapter.
 pub(crate) const SUBCOMMAND: &str = "herdr-acp";
@@ -424,33 +425,14 @@ impl Adapter {
             "session/load" => self.load_session(&params).await,
             "session/set_config_option" => {
                 let session = self.session(&params)?;
-                let config = params.get("configId").and_then(Value::as_str);
-                let value = params.get("value").and_then(Value::as_str);
-                match (config, value) {
-                    (Some(MODEL_CONFIG_ID), Some(model))
-                        if self
-                            .options
-                            .kind
-                            .models()
-                            .iter()
-                            .any(|(id, _)| *id == model)
-                            || self.options.model.as_deref() == Some(model) =>
-                    {
-                        let live = session
-                            .live
-                            .try_lock()
-                            .map_err(|_| RpcError::invalid("cannot change model during a turn"))?;
-                        if live.is_some() && model != *lock(&session.model) {
-                            return Err(RpcError::invalid(
-                                "change the model in the native Herdr session, or select it when starting a new session",
-                            ));
-                        }
-                        model.clone_into(&mut lock(&session.model));
-                        self.save(&session, live.as_ref())?;
-                        Ok(json!({"configOptions": config_options(self.options.kind, model)}))
-                    }
-                    _ => Err(RpcError::invalid("unsupported configuration option")),
+                if params.get("configId").and_then(Value::as_str) != Some(MODEL_CONFIG_ID) {
+                    return Err(RpcError::invalid("unsupported configuration option"));
                 }
+                let model = params
+                    .get("value")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| RpcError::invalid("missing model"))?;
+                self.set_model(&session, model).await
             }
             "session/prompt" => {
                 let session = self.session(&params)?;
@@ -495,9 +477,7 @@ impl Adapter {
         self.save(&session, None)?;
         lock(&self.sessions).insert(id.clone(), session.clone());
         self.observe(&session);
-        Ok(
-            json!({"sessionId": id, "configOptions": config_options(self.options.kind, &lock(&session.model))}),
-        )
+        Ok(json!({"sessionId": id, "configOptions": self.model_options(&lock(&session.model))}))
     }
 
     fn save(&self, session: &Session, live: Option<&Live>) -> Result<(), RpcError> {
@@ -586,7 +566,7 @@ impl Adapter {
         *session.live.lock().await = Some(live);
         lock(&self.sessions).insert(id.to_owned(), session.clone());
         self.observe(&session);
-        Ok(json!({"configOptions": config_options(self.options.kind, &record.model)}))
+        Ok(json!({"configOptions": self.model_options(&lock(&session.model))}))
     }
 
     fn observe(self: &Arc<Self>, session: &Arc<Session>) {
@@ -594,6 +574,7 @@ impl Adapter {
         let session = Arc::downgrade(session);
         let shutdown = self.shutdown.clone();
         tokio::spawn(async move {
+            let mut ticks = 0u32;
             loop {
                 tokio::select! {
                     () = shutdown.cancelled() => break,
@@ -612,10 +593,14 @@ impl Adapter {
                 let Some(live) = guard.as_mut() else {
                     continue;
                 };
+                ticks = ticks.wrapping_add(1);
                 if let Err(error) = adapter.forward(&session, live, &mut None) {
                     tracing::warn!(session = %session.id, error = %error.message, "native transcript observation stopped");
                     adapter.turn_complete(&session.id, "failed");
                     break;
+                }
+                if ticks.is_multiple_of(STATUS_EVERY) {
+                    adapter.sync_model(&session, live).await;
                 }
             }
         });
@@ -688,6 +673,12 @@ impl Adapter {
 
         if live.pending.is_empty() {
             live.pending = self.drain(live)?.into();
+        }
+        while let Some(LogEvent::ModelChanged(_)) = live.pending.front() {
+            let Some(LogEvent::ModelChanged(model)) = live.pending.pop_front() else {
+                unreachable!()
+            };
+            self.report_model(session, live, &model)?;
         }
         if !live.pending.is_empty() {
             return Err(RpcError::invalid(
@@ -949,6 +940,9 @@ impl Adapter {
         }
         while let Some(event) = live.pending.pop_front() {
             match event {
+                LogEvent::ModelChanged(model) => {
+                    self.report_model(session, live, &model)?;
+                }
                 LogEvent::Update(update) => {
                     moved = true;
                     // Codex logs a command only once it has run, so its log

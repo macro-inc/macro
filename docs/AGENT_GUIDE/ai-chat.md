@@ -322,7 +322,10 @@ the shimmer.
   tiers depend on the native agent, model, and account. Claude also offers
   `/effort` with an optional level, `auto`, or `status`. For Codex, use `/model`
   and choose the reasoning effort in its Herdr picker. Macro's model dropdown
-  does not currently have a separate effort selector. The menu does not list
+  changes the model of an idle native session after native confirmation and
+  displays the model identified by the session (Codex's live footer, or native
+  transcript metadata). Unexpected native dialogs must be completed in Herdr.
+  It does not currently have a separate effort selector. The menu does not list
   installed native skills or session-switching commands such as `/resume`.
   The agent form retains sharing, name, `@tag`, runtime, default model, connections,
   channels, instructions, and permission policy.

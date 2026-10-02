@@ -30,6 +30,15 @@ impl Fold for CodexLog {
         let Ok(entry) = serde_json::from_str::<Value>(line) else {
             return Vec::new();
         };
+        if entry.get("type").and_then(Value::as_str) == Some("turn_context") {
+            return entry
+                .pointer("/payload/model")
+                .and_then(Value::as_str)
+                .filter(|model| !model.is_empty())
+                .map(|model| LogEvent::ModelChanged(model.to_owned()))
+                .into_iter()
+                .collect();
+        }
         if entry.get("type").and_then(Value::as_str) != Some("event_msg") {
             return Vec::new();
         }
