@@ -43,9 +43,12 @@ vi.mock('@queries/storage/instructions-md', () => ({
   useInstructionsMdIdQuery: useInstructionsMdIdQueryMock,
 }));
 
-vi.mock('@app/lib/graphql-cache', () => ({
+vi.mock('../../../graphql-cache/exchange/record-selection', () => ({
   selectRecords: vi.fn((document) => ({ document })),
   readRecordsByKeys: readRecordsByKeysMock,
+}));
+
+vi.mock('../../../graphql-cache/exchange/normalized-cache-exchange', () => ({
   normalizedCacheResultMetadata: (result: OperationResult) =>
     result.extensions?.__macroNormalizedCache,
 }));
@@ -77,6 +80,7 @@ import {
   disposeChannelNotificationRefresh,
 } from '../../channel/notification-refresh';
 import { getActiveGraphqlSoupRevalidations } from './active-queries';
+import { createSoupLiveQuery } from './create-soup-live-query';
 import { createGraphqlSoupAstItemsQuery } from './items';
 import {
   createGraphqlSoupDeletion,
@@ -181,6 +185,232 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     makeGraphqlSoupInputMock.mockReturnValue({
       initial: { limit: 50, sortMethod: 'UPDATED_AT' },
     });
+  });
+
+  it('owns fetching, continuation arguments, refresh and reset from a Soup declaration', async () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    const filters = {
+      projectFilter: { literal: { projectIdSelf: 'project' } },
+    };
+    const { query, dispose } = createRoot((dispose) => ({
+      dispose,
+      query: createSoupLiveQuery(() => ({
+        filters,
+        sortMethod: 'UPDATED_AT',
+        sortDirection: 'ASC',
+        emailView: 'ALL',
+        limit: 2,
+      })),
+    }));
+    try {
+      expect(fake.executions[0].variables).toEqual({
+        input: {
+          initial: {
+            filters,
+            sortMethod: 'UPDATED_AT',
+            sortDirection: 'ASC',
+            emailView: 'ALL',
+            limit: 2,
+            expand: true,
+          },
+        },
+      });
+      fake.executions[0].next(
+        graphqlSoupPage({ items: [{ id: 'one' }], next_cursor: 'next' })
+      );
+      expect(query.data()?.map((row) => row.id)).toEqual(['one']);
+      const more = query.fetchNextPage();
+      expect(fake.executions[1].variables).toEqual({
+        input: {
+          continuation: {
+            cursor: 'next',
+            sortDirection: 'ASC',
+            emailView: 'ALL',
+            expand: true,
+          },
+        },
+      });
+      fake.executions[1].next(
+        graphqlSoupPage({ items: [{ id: 'two' }], next_cursor: null })
+      );
+      await more;
+      expect(query.data()?.map((row) => row.id)).toEqual(['one', 'two']);
+      query.resetToInitialPage();
+      expect(query.data()?.map((row) => row.id)).toEqual(['one']);
+      const refresh = query.refresh();
+      await vi.waitFor(() => expect(fake.executions).toHaveLength(3));
+      fake.executions[2].next(
+        graphqlSoupPage({ items: [{ id: 'fresh' }], next_cursor: null })
+      );
+      await refresh;
+      expect(query.data()?.map((row) => row.id)).toEqual(['fresh']);
+      expect(mapGraphqlSoupItemMock).not.toHaveBeenCalled();
+      expect(useInstructionsMdIdQueryMock).not.toHaveBeenCalled();
+    } finally {
+      dispose();
+    }
+  });
+
+  it.each(['write', 'hydration'])(
+    'constructs a live baseline from fetched pages and applies %s deltas through the public source',
+    async (kind) => {
+      const fake = makeFakeClient();
+      getGraphqlSoupClientMock.mockReturnValue(fake.client);
+      let revision = REVISION_1;
+      const listeners = new Map<(value: string) => void, boolean>();
+      const record = {
+        __typename: 'GraphqlSoupDocument',
+        id: 'one',
+        documentName: 'Before',
+        createdAt: '2026-01-01T00:00:00Z',
+        updatedAt: '2026-01-01T00:00:00Z',
+      };
+      const key = 'GraphqlSoupDocument:one';
+      getGraphqlSoupCacheHostMock.mockReturnValue({
+        liveQueries: true,
+        currentRevision: async () => revision,
+        entityFilter: entityFilterMock,
+        onCacheChanged: (
+          callback: (value: string) => void,
+          options?: { includeHydration?: boolean }
+        ) => {
+          listeners.set(callback, options?.includeHydration === true);
+          return () => listeners.delete(callback);
+        },
+        onCacheGenerationChanged: () => () => {},
+      });
+      entityFilterMock.mockImplementation(async (args) =>
+        args.liveQuery?.release
+          ? { kind: 'unsupported' }
+          : {
+              kind: 'live-query',
+              revision,
+              reset: !args.liveQuery.since,
+              ...(!args.liveQuery.since ? { keys: [key] } : {}),
+              upserts: !args.liveQuery.since
+                ? [{ recordKey: key, record }]
+                : [],
+              patches: args.liveQuery.since
+                ? [
+                    {
+                      recordKey: key,
+                      fields: [{ path: ['documentName'], value: 'After' }],
+                      identity: { mutationUuid: null, pending: false },
+                    },
+                  ]
+                : [],
+              removed: [],
+              retainedKeys: [],
+              optimistic: false,
+            }
+      );
+      const { query, dispose } = createRoot((dispose) => ({
+        dispose,
+        query: createSoupLiveQuery(() => ({
+          filters: {},
+          sortMethod: 'UPDATED_AT',
+          limit: 50,
+        })),
+      }));
+      try {
+        fake.executions[0].next(
+          graphqlSoupPage({ items: [record], next_cursor: null }),
+          { source: 'live-network', revision }
+        );
+        await vi.waitFor(() =>
+          expect(query.data()?.[0]).toMatchObject({ documentName: 'Before' })
+        );
+        await vi.waitFor(() =>
+          expect(entityFilterMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+              baseline: [{ key, sortTimestamp: record.updatedAt }],
+              liveQuery: expect.anything(),
+            })
+          )
+        );
+        const row = query.data()?.[0];
+        const rows = query.data();
+        revision = REVISION_2;
+        listeners.forEach((includeHydration, callback) => {
+          if (kind === 'write' || includeHydration) callback(revision);
+        });
+        await vi.waitFor(() =>
+          expect(query.data()?.[0]).toMatchObject({ documentName: 'After' })
+        );
+        expect(query.data()?.[0]).toBe(row);
+        expect(query.data()).toBe(rows);
+        expect(readRecordsByKeysMock).not.toHaveBeenCalled();
+        expect(fake.executions).toHaveLength(1);
+      } finally {
+        dispose();
+      }
+    }
+  );
+
+  it('keeps fetched timestamp coverage when a live version of the same row has a different timestamp', async () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    let revision = REVISION_1;
+    let notify = (_revision: string) => {};
+    getGraphqlSoupCacheHostMock.mockReturnValue({
+      currentRevision: async () => revision,
+      entityFilter: entityFilterMock,
+      onCacheChanged: (callback: typeof notify) => {
+        notify = callback;
+        return () => {};
+      },
+      onCacheGenerationChanged: () => () => {},
+    });
+    entityFilterMock.mockImplementation(async () => ({
+      kind: 'reconciled',
+      revision,
+      keys: ['GraphqlSoupDocument:one'],
+      retainedKeys: [],
+      optimistic: false,
+    }));
+    readRecordsByKeysMock.mockImplementation(async () => ({
+      revision,
+      records: [
+        {
+          recordKey: 'GraphqlSoupDocument:one',
+          record: {
+            __typename: 'GraphqlSoupDocument',
+            id: 'one',
+            name: 'Live version',
+            updatedAt: '2026-09-10T00:00:00Z',
+          },
+        },
+      ],
+    }));
+    const { query, dispose } = createRoot((dispose) => ({
+      dispose,
+      query: createGraphqlSoupAstItemsQuery(
+        () => ({ params: { sort_method: 'updated_at' }, body: {} }),
+        () => ({ enabled: true })
+      ),
+    }));
+    try {
+      fake.executions[0].next(
+        graphqlSoupPage({
+          items: [
+            { id: 'one', name: 'Fetched', updatedAt: '2026-09-01T00:00:00Z' },
+          ],
+          next_cursor: 'next',
+        })
+      );
+      revision = REVISION_2;
+      notify(revision);
+      await vi.waitFor(() =>
+        expect(query.data()?.entities[0]?.name).toBe('Live version')
+      );
+      expect(query.data()?.oldestFetchedTimestamp).toBe(
+        Date.parse('2026-09-01T00:00:00Z')
+      );
+      expect(query.hasNextPage()).toBe(true);
+    } finally {
+      dispose();
+    }
   });
 
   it('uses maintained record deltas without rereading the list or its fragments', async () => {
@@ -403,7 +633,9 @@ describe('createGraphqlSoupAstItemsQuery', () => {
         expect(f.query.hasNextPage()).toBe(true);
         const next = f.query.fetchNextPage();
         expect(f.fake.executions[1].variables).toEqual({
-          input: { continuation: { cursor: 'page-2' } },
+          input: {
+            continuation: { cursor: 'page-2', emailView: 'ALL', expand: true },
+          },
         });
         f.fake.executions[1].next(
           graphqlSoupPage({ items: [olderEmail], next_cursor: null }),
@@ -622,7 +854,7 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       );
       await more;
       expect(fake.executions[1].variables).toEqual({
-        input: { continuation: { cursor: 'next' } },
+        input: { continuation: { cursor: 'next', expand: true } },
       });
       for (const entry of getActiveGraphqlSoupRevalidations()) {
         expect(print(entry.document)).toContain('query ChannelListSoup');
@@ -1616,7 +1848,13 @@ describe('createGraphqlSoupAstItemsQuery', () => {
           const pending = query.fetchNextPage();
           await vi.waitFor(() => expect(fake.executions).toHaveLength(2));
           expect(fake.executions[1].variables).toEqual({
-            input: { continuation: { cursor: networkNext } },
+            input: {
+              continuation: {
+                cursor: networkNext,
+                emailView: 'ALL',
+                expand: true,
+              },
+            },
           });
           fake.executions[1].next(
             graphqlSoupPage({ items: [], next_cursor: null }),
@@ -2403,7 +2641,7 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       const nextPage = query.fetchNextPage();
       await vi.waitFor(() => expect(fake.executions).toHaveLength(2));
       expect(fake.executions[1].variables).toEqual({
-        input: { continuation: { cursor: 'server-cursor-2' } },
+        input: { continuation: { cursor: 'server-cursor-2', expand: true } },
       });
       revision = '3';
       notify(revision);
@@ -2568,7 +2806,7 @@ describe('createGraphqlSoupAstItemsQuery', () => {
         const thirdPage = query.fetchNextPage();
         await vi.waitFor(() => expect(fake.executions).toHaveLength(3));
         expect(fake.executions[2].variables).toEqual({
-          input: { continuation: { cursor: 'server-cursor-3' } },
+          input: { continuation: { cursor: 'server-cursor-3', expand: true } },
         });
         revision = '4';
         notify(revision);

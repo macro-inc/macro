@@ -100,9 +100,36 @@ invalidations and gaps in that bounded journal conservatively rebuild the view.
 Views are released on unsubscribe and bounded by an LRU; eviction is safe because
 a subscriber with an unavailable cursor receives a full replacement.
 
-The Solid `createLiveQuery` binding owns subscription, coalescing, cleanup and
-engine-generation recovery, preserving keyed row stores and applying patches in
-one batch. Its first source adapter is a reconciled flat Soup filter:
+For Soup, `createSoupLiveQuery` owns network fetching, server pagination, cache
+baselines, and local fallback selection. Its non-suspending `data()` accessor
+returns reactive GraphQL records; callers do not coordinate cache revisions:
+
+```ts
+const soup = createSoupLiveQuery(() => ({
+  filters: filters(),
+  sortMethod: 'UPDATED_AT',
+  sortDirection: 'DESC',
+  limit: 50,
+}));
+
+// Render soup.data(); live fields update without per-mutation query callbacks.
+await soup.fetchNextPage();
+await soup.refresh();
+```
+
+The source preserves the email view and sort direction on continuation requests.
+It selects maintained views on supporting hosts, uses the shared coherent-page
+reader for Mail and older hosts, and retains network data on local failures.
+Once a maintained view catches up, it owns the displayed rows through field
+updates and rollback. Hydration advances the same authority watermark, and Soup
+selects notification identities so nested state updates can avoid query rereads.
+The legacy REST-shaped Soup facade translates its request and projects these
+records into UI entities through one keyed mapper. Fetched versions remain
+separate from local display versions so pagination coverage cannot drift.
+
+The lower-level Solid `createLiveQuery` binding owns subscription, coalescing,
+cleanup and engine-generation recovery, preserving keyed row stores and applying
+patches in one batch. Its first source adapter is a reconciled flat Soup filter:
 
 ```ts
 const items = createLiveQuery({
