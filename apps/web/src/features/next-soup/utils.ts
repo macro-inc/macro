@@ -131,13 +131,10 @@ import {
   removeSoupEntitiesFromDoneFilteredQueries,
 } from '@queries/soup/cache';
 import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
-import {
-  type GraphqlSoupDoneOverlay,
-  hideGraphqlSoupEntitiesAsDone,
-} from '@queries/soup/graphql/optimistic-done';
 import { emailClient } from '@service-email/client';
 import { isAfter } from 'date-fns';
 import { match } from 'ts-pattern';
+import { applyGraphqlDoneOptimistic } from './actions/graphql-done-optimism';
 import {
   searchLocationTarget,
   searchLocationUpdates,
@@ -1439,7 +1436,13 @@ export function applyEntitiesDoneOptimistic(args: {
   scopeChannelThreads?: boolean;
 }): MarkEntitiesDoneContext {
   const { entityIds, emailIds, notificationIds, reminderIds = [] } = args;
-  const graphql = isFeatureEnabled(enableGraphqlSoup);
+  if (isFeatureEnabled(enableGraphqlSoup)) {
+    return applyGraphqlDoneOptimistic({
+      entityIds,
+      notificationIds,
+      scopeChannelThreads: args.scopeChannelThreads,
+    });
+  }
   const emailIdSet = new Set(emailIds);
   const entityIdSet = new Set(entityIds);
 
@@ -1510,8 +1513,6 @@ export function applyEntitiesDoneOptimistic(args: {
   };
 
   let soupTxn: ReturnType<typeof removeSoupEntities> | null = null;
-  let graphqlDone: GraphqlSoupDoneOverlay | null = null;
-  let rollbackNotifications: ReturnType<typeof setDoneOverride> | undefined;
   let emailRowTxns: { rollback: () => void }[] = [];
   let reminderRowTxns: { rollback: () => void }[] = [];
   const completedStamp = new Date().toISOString();
@@ -1524,18 +1525,6 @@ export function applyEntitiesDoneOptimistic(args: {
       entityIds.length > 0
         ? removeSoupEntitiesFromDoneFilteredQueries(entityIdSet)
         : null;
-    // GraphQL lists never read the REST caches patched here. The entity
-    // notification mutation waits for the server, and even the optimistic
-    // archive only drops a row after its durable enqueue and a list
-    // re-evaluation, so hide the rows locally until the cache catches up.
-    if (graphqlDone) graphqlDone.setDone(true);
-    else if (graphql && entityIds.length > 0) {
-      graphqlDone = hideGraphqlSoupEntitiesAsDone({
-        entityIds,
-        notificationIds,
-        scopeChannelThreads: args.scopeChannelThreads,
-      });
-    }
     // Rows that remain visible flip to the done state.
     emailRowTxns = emailIds.map((id) =>
       optimisticUpdateSoupEntity({
@@ -1555,7 +1544,7 @@ export function applyEntitiesDoneOptimistic(args: {
       })
     );
     filterEmailCache();
-    rollbackNotifications = setDoneOverride(notificationIds, true);
+    setDoneOverride(notificationIds, true);
   };
 
   const rollbackSoup = () => {
@@ -1573,20 +1562,17 @@ export function applyEntitiesDoneOptimistic(args: {
 
   const rollback = () => {
     rollbackSoup();
-    graphqlDone?.release();
     restoreEmailCache();
-    if (graphql) rollbackNotifications?.();
-    else setDoneOverride(notificationIds, undefined);
+    setDoneOverride(notificationIds, undefined);
   };
 
   const applyUndone = () => {
     rollbackSoup();
-    graphqlDone?.setDone(false);
     restoreEmailCache();
     restoreUserNotifications(notificationSnapshots);
     // Force `done=false` — cache may have reconciled to `done=true` from the
     // server, so clearing the override would leave the UI hidden after undo.
-    rollbackNotifications = setDoneOverride(notificationIds, false);
+    setDoneOverride(notificationIds, false);
   };
 
   reapply();
@@ -1595,12 +1581,8 @@ export function applyEntitiesDoneOptimistic(args: {
     rollback,
     reapply,
     applyUndone,
-    settle: (ids) => graphqlDone?.settle(ids),
-    releaseGraphql: () => {
-      if (!graphql) return;
-      graphqlDone?.release();
-      rollbackNotifications?.release();
-    },
+    settle: () => {},
+    releaseGraphql: () => {},
   };
 }
 
@@ -1616,14 +1598,13 @@ export function applyEntitiesNotDoneOptimistic(args: {
   reminderIds?: string[];
 }): { rollback: () => void; settle: () => void } {
   const { emailIds, notificationIds, reminderIds = [] } = args;
-  const graphql = isFeatureEnabled(enableGraphqlSoup);
-  const graphqlDone = graphql
-    ? hideGraphqlSoupEntitiesAsDone({
-        entityIds: [...emailIds, ...reminderIds],
-        notificationIds,
-        done: false,
-      })
-    : undefined;
+  if (isFeatureEnabled(enableGraphqlSoup)) {
+    return applyGraphqlDoneOptimistic({
+      entityIds: [...emailIds, ...reminderIds],
+      notificationIds,
+      done: false,
+    });
+  }
   // Clearing `completedAt` is what returns a reminder to Active or Scheduled
   // (whichever its `nextRunAt` puts it in); both predicates require it unset.
   const reminderRowTxns = reminderIds.map((id) =>
@@ -1641,20 +1622,18 @@ export function applyEntitiesNotDoneOptimistic(args: {
       frecency_score: getSoupEntityById(id)?.frecency_score ?? 0,
     })
   );
-  const rollbackNotifications = setDoneOverride(notificationIds, false);
+  setDoneOverride(notificationIds, false);
 
   return {
-    settle: () => graphqlDone?.settle(),
+    settle: () => {},
     rollback: () => {
-      graphqlDone?.release();
       for (const txn of [...reminderRowTxns].reverse()) {
         txn.rollback();
       }
       for (const txn of [...emailRowTxns].reverse()) {
         txn.rollback();
       }
-      if (graphql) rollbackNotifications?.();
-      else setDoneOverride(notificationIds, undefined);
+      setDoneOverride(notificationIds, undefined);
     },
   };
 }
@@ -1688,10 +1667,13 @@ export async function executeMarkEntitiesDone(args: {
     notificationEntities = [],
     reminderIds = [],
   } = args;
-  await Promise.all([
-    queryClient.cancelQueries({ queryKey: queryKeys.all.email }),
-    queryClient.cancelQueries({ queryKey: notificationKeys.user._def }),
-  ]);
+  const graphql = isFeatureEnabled(enableGraphqlSoup);
+  if (!graphql) {
+    await Promise.all([
+      queryClient.cancelQueries({ queryKey: queryKeys.all.email }),
+      queryClient.cancelQueries({ queryKey: notificationKeys.user._def }),
+    ]);
+  }
 
   let authoritativeNotificationIds: string[] = [];
   const results = await Promise.allSettled([
@@ -1720,6 +1702,16 @@ export async function executeMarkEntitiesDone(args: {
   const rejected = results.find(
     (r): r is PromiseRejectedResult => r.status === 'rejected'
   );
+
+  if (graphql) {
+    // Email/notification writers own normalized rollback and revalidation.
+    // Reminders still use their dedicated completion API, so reconcile their
+    // Soup membership through GraphQL rather than the REST normalizer.
+    invalidateRemindersById(reminderIds, { refetch: rejected !== undefined });
+    if (reminderIds.length > 0) await refreshActiveGraphqlSoupQueries();
+    if (rejected) throw rejected.reason ?? new Error('Failed to mark as done');
+    return authoritativeNotificationIds;
+  }
 
   if (rejected) {
     // Real refetch to reconcile server state with the UI after the caller
@@ -1779,12 +1771,12 @@ export async function executeMarkEntitiesUndone(args: {
 }): Promise<EmailArchiveDisposition> {
   const { emailIds, notificationIds, reminderIds = [] } = args;
   const graphql = isFeatureEnabled(enableGraphqlSoup);
-  await Promise.all([
-    ...(!graphql
-      ? [queryClient.cancelQueries({ queryKey: queryKeys.all.email })]
-      : []),
-    queryClient.cancelQueries({ queryKey: notificationKeys.user._def }),
-  ]);
+  if (!graphql) {
+    await Promise.all([
+      queryClient.cancelQueries({ queryKey: queryKeys.all.email }),
+      queryClient.cancelQueries({ queryKey: notificationKeys.user._def }),
+    ]);
+  }
 
   const [emailResults, otherResults] = await Promise.all([
     Promise.allSettled(
@@ -1808,13 +1800,18 @@ export async function executeMarkEntitiesUndone(args: {
     (r): r is PromiseRejectedResult => r.status === 'rejected'
   );
 
+  if (graphql) {
+    invalidateRemindersById(reminderIds, { refetch: rejected !== undefined });
+    if (reminderIds.length > 0) await refreshActiveGraphqlSoupQueries();
+    if (rejected) throw rejected.reason ?? new Error('Failed to undo');
+    return hasQueuedEmail ? 'queued' : 'committed';
+  }
+
   if (rejected) {
-    // REST retains its legacy batch rollback/reconciliation. GraphQL owns
-    // per-write rollback and revalidation: a sibling rejection must not fetch
-    // replica-stale REST state over an accepted unarchive after it settles.
+    // REST retains its legacy batch rollback/reconciliation.
     invalidateRemindersById(reminderIds, { refetch: true });
     await Promise.all([
-      ...(!graphql && !hasQueuedEmail
+      ...(!hasQueuedEmail
         ? [
             queryClient.invalidateQueries({ queryKey: queryKeys.all.email }),
             ...emailIds.map((id) => invalidateSoupEntity(id)),
@@ -1829,7 +1826,7 @@ export async function executeMarkEntitiesUndone(args: {
   invalidateRemindersById(reminderIds);
 
   await Promise.all([
-    ...(!graphql && !hasQueuedEmail
+    ...(!hasQueuedEmail
       ? [
           queryClient.invalidateQueries({
             queryKey: queryKeys.all.email,
