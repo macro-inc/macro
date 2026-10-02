@@ -76,6 +76,9 @@ impl EgressService for SpyService {
             }
             Some(EgressError::SessionClosed) => Err(EgressError::SessionClosed),
             Some(EgressError::RequestTooLarge) => Err(EgressError::RequestTooLarge),
+            Some(EgressError::UnknownCustomServer(key)) => {
+                Err(EgressError::UnknownCustomServer(key.clone()))
+            }
             Some(EgressError::Upstream(_)) => {
                 Err(EgressError::Upstream(rootcause::report!("unreachable")))
             }
@@ -126,6 +129,38 @@ async fn routes_a_slug_to_an_mcp_target() {
         [EgressTarget::McpServer(McpDestination::Connected(
             McpServerSlug::parse("datadog").expect("slug")
         ))]
+    );
+}
+
+/// A custom server's key rides its own route, and only a key-shaped segment
+/// is routed: anything else is "nothing served here", with no hint about
+/// which of the two it was.
+#[tokio::test]
+async fn routes_a_key_to_a_custom_mcp_target() {
+    let key = CustomMcpServerKey::for_url("https://wiki.example.com/mcp");
+    let service = SpyService::accepting();
+    let response = call(
+        &service,
+        get(&format!("/mcp-custom/{key}"), Some("Bearer session")),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::ACCEPTED);
+    assert_eq!(
+        service.targets(),
+        [EgressTarget::McpServer(McpDestination::Custom(key))]
+    );
+
+    let response = call(
+        &service,
+        get("/mcp-custom/not-a-key", Some("Bearer session")),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    assert_eq!(
+        service.targets().len(),
+        1,
+        "an unparseable key never reaches the service"
     );
 }
 
@@ -213,6 +248,10 @@ async fn maps_each_refusal_to_the_status_that_tells_the_agent_what_to_do() {
             StatusCode::BAD_GATEWAY,
         ),
         (EgressError::RequestTooLarge, StatusCode::PAYLOAD_TOO_LARGE),
+        (
+            EgressError::UnknownCustomServer(CustomMcpServerKey::for_url("https://x.example")),
+            StatusCode::NOT_FOUND,
+        ),
     ] {
         let service = SpyService::refusing(error);
         let response = call(&service, get("/mcp/datadog", Some("Bearer session"))).await;
