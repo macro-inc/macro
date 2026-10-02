@@ -1,8 +1,10 @@
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { constrainImageDimensions } from '@macro-inc/lexical-core/utils/media';
 import ExpandIcon from '@phosphor/arrows-out-simple.svg';
 import { Button, cn } from '@ui';
 import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
 import { MediaImage } from './MediaImage';
+import { MediaImageActions } from './MediaImageActions';
 import { MediaVideo } from './MediaVideo';
 import type { MediaItem } from './media-items';
 
@@ -27,35 +29,42 @@ function MessageImageTile(props: {
     );
 
   return (
-    <button
-      type="button"
-      class="relative flex rounded-2xl border border-edge"
+    <div
+      class="group/media relative flex rounded-2xl border border-edge"
       style={{
         width: dimensions() ? `${dimensions()!.width}px` : undefined,
         'max-width': '100%',
       }}
-      onClick={props.onOpen}
-      aria-label="Open image viewer"
     >
-      <MediaImage.Image
-        src={props.item.src}
-        previewSrc={props.item.previewSrc}
-        class="max-h-[80vh] w-full select-none rounded-2xl object-contain"
-        width={dimensions()?.width ?? props.item.width ?? undefined}
-        height={dimensions()?.height ?? props.item.height ?? undefined}
-        fallback={<MediaImage.Fallback fill={!!dimensions()} />}
-        style={{
-          ...(dimensions()
-            ? {
-                'aspect-ratio': `${dimensions()!.width} / ${dimensions()!.height}`,
-                'max-width': `${dimensions()!.width}px`,
-              }
-            : {
-                'max-width': `${props.large ? SINGLE_IMAGE_MAX_WIDTH : MESSAGE_GALLERY_IMAGE_MAX_WIDTH}px`,
-              }),
-        }}
-      />
-    </button>
+      <button
+        type="button"
+        class="relative flex w-full min-w-0 rounded-2xl"
+        onClick={props.onOpen}
+        aria-label="Open image viewer"
+      >
+        <MediaImage.Image
+          src={props.item.src}
+          previewSrc={props.item.previewSrc}
+          class="max-h-[80vh] w-full select-none rounded-2xl object-contain"
+          width={dimensions()?.width ?? props.item.width ?? undefined}
+          height={dimensions()?.height ?? props.item.height ?? undefined}
+          fallback={<MediaImage.Fallback fill={!!dimensions()} />}
+          style={{
+            ...(dimensions()
+              ? {
+                  'aspect-ratio': `${dimensions()!.width} / ${dimensions()!.height}`,
+                  'max-width': `${dimensions()!.width}px`,
+                }
+              : {
+                  'max-width': `${props.large ? SINGLE_IMAGE_MAX_WIDTH : MESSAGE_GALLERY_IMAGE_MAX_WIDTH}px`,
+                }),
+          }}
+        />
+      </button>
+      <Show when={!isTouchDevice()}>
+        <MediaImageActions item={props.item} />
+      </Show>
+    </div>
   );
 }
 

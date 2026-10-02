@@ -77,6 +77,19 @@ button that copies the whole section; a call that failed is faded, shows the
 error as its subtitle, and adds an `Error` section. Rows for a call still running
 show whatever has arrived so far.
 
+## Inline image actions
+
+An image attached to a channel message renders inline. Hovering it reveals a
+small toolbar at its top right with `Copy image` and `Download image`, the same
+two actions the lightbox offers; both fade out when the pointer leaves and are
+reachable by keyboard focus. Copy writes the full-resolution image to the
+clipboard (`Copied to clipboard`, or `Copied image URL to clipboard` when the
+browser refuses an image write) and Download saves it as
+`image-<attachment id>.<ext>` (`Downloaded image`). Clicking the image itself
+still opens the lightbox. Touch layouts do not get this toolbar: tap the image
+and use the lightbox toolbar instead. Video attachments keep only their
+expand control.
+
 ## Reading channel attachments through MCP
 
 When an agent reads a channel through Macro MCP, `ReadChannelMessages`,
