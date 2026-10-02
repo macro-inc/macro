@@ -9,6 +9,11 @@ import type { AgentAction } from '@service-agent-harness/generated/schemas';
 import { createRoot } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+const refetchSoupEntity = vi.hoisted(() => vi.fn(async () => {}));
+// Session creation refreshes Soup in the background. Keep this unit test at
+// the query boundary so real auth/network work cannot outlive its environment.
+vi.mock('@queries/soup/normalized-cache', () => ({ refetchSoupEntity }));
+
 const create = vi.hoisted(() => ({
   resolve: undefined as ((id?: string) => void) | undefined,
   reject: undefined as (() => void) | undefined,
@@ -111,6 +116,7 @@ const { resolveSessionId } = await import('./resolve-session-id');
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 beforeEach(() => {
+  refetchSoupEntity.mockClear();
   create.control.mockReset();
   create.release.mockReset();
   create.autoConfirm = true;
@@ -143,6 +149,11 @@ describe('an id whose create is in flight', () => {
 
       expect(resolved.sessionId()).toBe(placeholder);
       expect(resolved.pending()).toBe(false);
+      expect(refetchSoupEntity).toHaveBeenCalledExactlyOnceWith(
+        placeholder,
+        'agentSession',
+        { created: true }
+      );
       dispose();
     });
   });
@@ -157,6 +168,11 @@ describe('an id whose create is in flight', () => {
       await flush();
       expect(resolved.sessionId()).toBe('server-minted');
       expect(resolved.pending()).toBe(false);
+      expect(refetchSoupEntity).toHaveBeenCalledExactlyOnceWith(
+        'server-minted',
+        'agentSession',
+        { created: true }
+      );
       dispose();
     });
   });
@@ -172,6 +188,7 @@ describe('an id whose create is in flight', () => {
       expect(resolved.pending()).toBe(false);
       expect(resolved.error()).toBe('Connect GitHub to use this repository.');
       expect(resolved.sessionId()).toBeUndefined();
+      expect(refetchSoupEntity).not.toHaveBeenCalled();
       dispose();
     });
   });
