@@ -343,17 +343,9 @@ export function TaskList(props: TaskListProps) {
     description: 'Add to project…',
     tags: [HotkeyTags.SelectionModification],
     condition: () =>
-      panel.isPanelActive() &&
-      projectsEnabled() &&
-      (selectedTasks().length > 0 || !!focusedTask()),
+      panel.isPanelActive() && projectsEnabled() && selectedTasks().length > 0,
     keyDownHandler: () => {
-      const tasks = selectedTasks();
-      const focused = focusedTask();
-      const ids = tasks.length
-        ? tasks.map((task) => task.id)
-        : focused
-          ? [focused.id]
-          : [];
+      const ids = selectedTasks().map((task) => task.id);
       if (!projectsEnabled() || !ids.length) return false;
       setAssigningProjectTasks(ids);
       return true;
