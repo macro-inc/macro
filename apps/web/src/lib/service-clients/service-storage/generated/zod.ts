@@ -8685,6 +8685,154 @@ export const createInitiativeBody = zod
         'Optional member user ids. Invalid ids fail at the service boundary.'
       ),
     name: zod.string().describe('Display name.'),
+    propertyValues: zod
+      .array(
+        zod
+          .object({
+            propertyDefinitionId: zod
+              .uuid()
+              .describe('Property definition to set.'),
+            value: zod
+              .union([
+                zod
+                  .object({
+                    type: zod.enum(['boolean']),
+                    value: zod.boolean(),
+                  })
+                  .describe('Boolean true\/false value'),
+                zod
+                  .object({
+                    type: zod.enum(['date']),
+                    value: zod.iso.datetime({}),
+                  })
+                  .describe('Date and time value'),
+                zod
+                  .object({
+                    type: zod.enum(['number']),
+                    value: zod.number(),
+                  })
+                  .describe('Numeric value'),
+                zod
+                  .object({
+                    type: zod.enum(['string']),
+                    value: zod.string(),
+                  })
+                  .describe('String\/text value'),
+                zod
+                  .object({
+                    option_id: zod.uuid(),
+                    type: zod.enum(['select_option']),
+                  })
+                  .describe('Select option by ID (for select-type properties)'),
+                zod
+                  .object({
+                    option_ids: zod.array(zod.uuid()),
+                    type: zod.enum(['multi_select_option']),
+                  })
+                  .describe(
+                    'Multiple select options by ID (for multi-select properties)'
+                  ),
+                zod
+                  .object({
+                    reference: zod
+                      .object({
+                        entity_id: zod.string(),
+                        entity_type: zod
+                          .enum([
+                            'CALENDAR_EVENT',
+                            'CALL_RECORD',
+                            'CHANNEL',
+                            'CHAT',
+                            'COMPANY',
+                            'DOCUMENT',
+                            'INITIATIVE',
+                            'PROJECT',
+                            'TASK',
+                            'THREAD',
+                            'USER',
+                          ])
+                          .describe(
+                            'Type of entity that can be referenced by entity properties.'
+                          ),
+                        specific_message_id: zod
+                          .uuid()
+                          .nullish()
+                          .describe(
+                            'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread\/channel\/chat.'
+                          ),
+                      })
+                      .describe(
+                        'Entity reference for entity-type property values.'
+                      ),
+                    type: zod.enum(['entity_reference']),
+                  })
+                  .describe('Entity reference'),
+                zod
+                  .object({
+                    references: zod.array(
+                      zod
+                        .object({
+                          entity_id: zod.string(),
+                          entity_type: zod
+                            .enum([
+                              'CALENDAR_EVENT',
+                              'CALL_RECORD',
+                              'CHANNEL',
+                              'CHAT',
+                              'COMPANY',
+                              'DOCUMENT',
+                              'INITIATIVE',
+                              'PROJECT',
+                              'TASK',
+                              'THREAD',
+                              'USER',
+                            ])
+                            .describe(
+                              'Type of entity that can be referenced by entity properties.'
+                            ),
+                          specific_message_id: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread\/channel\/chat.'
+                            ),
+                        })
+                        .describe(
+                          'Entity reference for entity-type property values.'
+                        )
+                    ),
+                    type: zod.enum(['multi_entity_reference']),
+                  })
+                  .describe(
+                    'Multiple entity references (for multi-select entity properties)'
+                  ),
+                zod
+                  .object({
+                    type: zod.enum(['link']),
+                    url: zod.string(),
+                  })
+                  .describe('Link value'),
+                zod
+                  .object({
+                    type: zod.enum(['multi_link']),
+                    urls: zod.array(zod.string()),
+                  })
+                  .describe(
+                    'Multiple link values (for multi-select link properties)'
+                  ),
+              ])
+              .describe(
+                'Type-safe enum for setting entity property values - provides compile-time validation.'
+              ),
+          })
+          .describe(
+            'A property value set on a new initiative as part of its create.'
+          )
+      )
+      .optional()
+      .describe(
+        'Property values set as the owner within the create. A value the properties\nservice rejects fails the whole create; no initiative is left behind.'
+      ),
     shareWithTeam: zod
       .boolean()
       .nullish()

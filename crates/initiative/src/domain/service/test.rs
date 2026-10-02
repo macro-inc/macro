@@ -2,6 +2,7 @@ use chrono::{TimeZone, Utc};
 
 mod access;
 mod events;
+mod initial_properties;
 mod reads;
 use entity_access::domain::models::{
     AccessLevel, EditAccessLevel, Entity, EntityAccessReceipt, EntityPermission, EntityType,

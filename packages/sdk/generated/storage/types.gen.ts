@@ -3084,6 +3084,11 @@ export type CreateInitiativeRequest = {
      */
     name: string;
     /**
+     * Property values set as the owner within the create. A value the properties
+     * service rejects fails the whole create; no initiative is left behind.
+     */
+    propertyValues?: Array<InitialPropertyValue>;
+    /**
      * Share with the owner's team at create time. Defaults to true; users without
      * a team create an unshared initiative. Explicit false skips the team grant.
      */
@@ -6006,6 +6011,20 @@ export type InFlightTurnSummary = {
      * Position in the session's log.
      */
     turn: number;
+};
+
+/**
+ * A property value set on a new initiative as part of its create.
+ */
+export type InitialPropertyValue = {
+    /**
+     * Property definition to set.
+     */
+    propertyDefinitionId: string;
+    /**
+     * Value, validated by the properties service like any other property write.
+     */
+    value: SetPropertyValue;
 };
 
 /**

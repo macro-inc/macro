@@ -522,6 +522,12 @@ Opens a dialog with a focused `Search...` textbox and bubble-style category radi
 the top hit. Also exposes commands: `Create`, `Change theme`, `MCP setup`. Keys: Tab cycles
 category, Esc closes. The category strip and footer have transparent backgrounds.
 
+In `Change theme`, Up/Down previews the highlighted palette across the open app,
+including channels and spreadsheets. Moving between rows preserves the original
+palette for cancellation without briefly restoring it between previews. Esc
+restores that palette (including unsaved edits); Enter commits the highlighted
+theme. Browser and notification icons change only when a theme is committed.
+
 With the local GraphQL cache enabled, Cmd+K and document/channel `@` mentions
 search cached entities without waiting for a server search. Background hydration
 updates an already-open menu only when a bucket it uses changes. Email/body/tag-only

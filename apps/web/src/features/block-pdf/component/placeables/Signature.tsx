@@ -13,7 +13,7 @@ import {
   onMount,
   Show,
 } from 'solid-js';
-import { themeReactive } from '../../../theme/signals/themeReactive';
+import { resolvedThemeColors } from '../../../theme/signals/themeSignals';
 import { usePdfDocument } from '../../context/pdf-document-context';
 import { usePdfViewer } from '../../context/pdf-viewer-context';
 import { useDeletePlaceable, useModifyPayload } from '../../store/placeables';
@@ -141,7 +141,10 @@ function SignatureEditor(props: SignatureEditorProps) {
             ref={canvasRef}
             // SCUFFED THEMING TODO: this filter is janky af, checks if it's a "darkish" or "lightish" theme, we should handle this better
             style={{
-              filter: themeReactive.b0.l[0]() < 0.5 ? 'invert(1)' : 'none',
+              filter:
+                resolvedThemeColors()['surface-0'].l < 0.5
+                  ? 'invert(1)'
+                  : 'none',
             }}
           />
           <div class="flex flex-row w-full justify-center items-center border-t border-edge">

@@ -219,6 +219,10 @@ input CreateInitiativeInput {
 	Whether to share with the owner's team, defaulting to true.
 	"""
 	shareWithTeam: Boolean
+	"""
+	Initial property values, set in the same create; a rejected value fails it.
+	"""
+	propertyValues: [InitialPropertyValueInput!]
 }
 
 """
@@ -6895,6 +6899,20 @@ input GroupedSoupInput @oneOf {
 	Continue one bin from a cursor returned by a previous grouped query.
 	"""
 	continuation: GroupedSoupContinuationInput
+}
+
+"""
+One property value set when an initiative is created.
+"""
+input InitialPropertyValueInput {
+	"""
+	Property definition to set.
+	"""
+	propertyDefinitionId: ID!
+	"""
+	Value, in the same shape `setEntityProperty` accepts.
+	"""
+	value: GraphqlSetPropertyValue!
 }
 
 """
