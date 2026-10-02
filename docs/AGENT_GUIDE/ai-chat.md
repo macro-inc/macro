@@ -320,8 +320,11 @@ the shimmer.
   check their result and any confirmation in Herdr. For Claude, use `/fast on`
   or `/fast off`, or bare `/fast` to open its native controls. Available speed
   tiers depend on the native agent, model, and account. Claude also offers
-  `/effort` with an optional level, `auto`, or `status`. For Codex, use `/model`
-  and choose the reasoning effort in its Herdr picker. Macro's model dropdown
+  `/effort` with an optional level, `auto`, or `status`. In Codex sessions,
+  `/effort` shows the current effort and available choices in Macro. Send
+  `/effort high` (or another supported level) to change it and wait for native
+  confirmation; `/effort default` restores the model's default. This preserves
+  the current model. `/model` still opens the picker in Herdr. Macro's model dropdown
   changes the model of an idle native session after native confirmation and
   displays the model identified by the session (Codex's live footer, or native
   transcript metadata). Unexpected native dialogs must be completed in Herdr.

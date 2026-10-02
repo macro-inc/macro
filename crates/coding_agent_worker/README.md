@@ -53,9 +53,17 @@ mode message. Claude accepts `/fast on` and `/fast off`; bare `/fast` opens its
 native controls. Codex's speed commands toggle tiers available to its current
 model and account. Claude also advertises `/effort`, with an optional level,
 `auto`, or `status`. Codex advertises `/model`, which opens its native model and
-reasoning effort picker; choose the level in Herdr. These controls need not
+reasoning effort picker; choose the level in Herdr. These native controls need not
 generate an assistant turn, so they do not wait for transcript output. Ordinary
 prompts still require confirmation.
+
+For Codex, `/effort` or `/effort status` reports the active model, effort, and
+available levels directly in Macro. `/effort high` (or another supported level)
+selects that level in the current model's native picker and waits for the footer
+to confirm it. `/effort default` restores the model's catalog default. Explicit
+`max` and `ultra` requests can navigate the advanced reasoning picker. Additional
+warnings or unrecognized dialogs require native interaction; they are not
+accepted automatically. These commands keep the current model and session.
 
 Effort choices are validated by the native agent. Macro's model dropdown only
 projects the ACP model option; it does not currently expose a separate effort

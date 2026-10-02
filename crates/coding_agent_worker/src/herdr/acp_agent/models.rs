@@ -153,6 +153,28 @@ impl Adapter {
         if *lock(&session.model) == model {
             return Ok(json!({"configOptions":self.model_options(model)}));
         }
+        self.native_selection(session, live, model, None).await?;
+        self.report_model(session, live, model)?;
+        Ok(json!({"configOptions":self.model_options(model)}))
+    }
+    /// Drive only the recognized native picker, verifying the resulting setting.
+    pub(super) async fn native_selection(
+        &self,
+        session: &Session,
+        live: &Live,
+        model: &str,
+        effort: Option<&str>,
+    ) -> Result<(), RpcError> {
+        let herdr = self
+            .herdr
+            .as_ref()
+            .ok_or_else(|| RpcError::internal("Herdr is unavailable"))?;
+        let info = herdr.agent_info(&live.name).await?;
+        if !same_session(session, &info) || !matches!(info.status.as_str(), "idle" | "done") {
+            return Err(RpcError::invalid(
+                "finish the current native turn or dialog before changing settings",
+            ));
+        }
         let before = herdr.read_agent(&live.name).await?;
         let check = herdr.agent_info(&live.name).await?;
         if !same_session(session, &check)
@@ -187,11 +209,17 @@ impl Adapter {
                 let screen = herdr.read_agent(&live.name).await?;
                 if (self.options.kind == TuiAgent::Claude || matches!(stage, Stage::Confirmation))
                     && confirmed(self.options.kind, model, &before, &screen)
+                    && effort.is_none_or(|wanted| {
+                        codex_footer(&screen).is_some_and(|(_, actual)| wanted == actual)
+                    })
                 {
                     return Ok(());
                 }
                 if self.options.kind == TuiAgent::Codex
-                    && let Some((key, next)) = picker_key(stage, model, &screen)
+                    && let Some((key, next)) = effort.map_or_else(
+                        || picker_key(stage, model, &screen),
+                        |effort| super::effort::picker_key(stage, model, effort, &screen),
+                    )
                 {
                     let check = herdr.agent_info(&live.name).await?;
                     if !same_session(session, &check)
@@ -209,11 +237,11 @@ impl Adapter {
         })
         .await
         .map_err(|_| {
-            RpcError::internal("model change was not confirmed; check the native picker in Herdr")
+            RpcError::internal(
+                "model or effort change was not confirmed; check the native picker in Herdr",
+            )
         })?;
-        result?;
-        self.report_model(session, live, model)?;
-        Ok(json!({"configOptions":self.model_options(model)}))
+        result
     }
 }
 
@@ -224,7 +252,7 @@ fn valid_model(model: &str) -> bool {
         && !model.chars().any(char::is_control)
 }
 
-fn same_session(session: &Session, info: &super::super::cli::AgentInfo) -> bool {
+pub(super) fn same_session(session: &Session, info: &super::super::cli::AgentInfo) -> bool {
     info.cwd.as_ref().is_none_or(|cwd| cwd == &session.cwd)
         && info
             .session_id
@@ -234,13 +262,14 @@ fn same_session(session: &Session, info: &super::super::cli::AgentInfo) -> bool 
 }
 
 #[derive(Clone, Copy)]
-enum Stage {
+pub(super) enum Stage {
     Model,
     Effort,
     Confirmation,
+    Advanced,
 }
 
-fn picker_key(stage: Stage, model: &str, screen: &str) -> Option<(String, Stage)> {
+pub(super) fn picker_key(stage: Stage, model: &str, screen: &str) -> Option<(String, Stage)> {
     match stage {
         Stage::Model
             if screen
@@ -296,7 +325,11 @@ fn picker_key(stage: Stage, model: &str, screen: &str) -> Option<(String, Stage)
 }
 
 fn codex_footer_model(screen: &str) -> Option<&str> {
-    let (_, footer) = screen.rsplit_once('›')?;
+    codex_footer(screen).map(|(model, _)| model)
+}
+
+pub(super) fn codex_footer(screen: &str) -> Option<(&str, &str)> {
+    let (_, footer) = screen.rsplit_once(['›', '»'])?;
     footer.lines().skip(1).find_map(|line| {
         let (left, _) = line.trim().split_once('·')?;
         let mut words = left.split_whitespace();
@@ -315,7 +348,7 @@ fn codex_footer_model(screen: &str) -> Option<&str> {
                     | "max"
                     | "ultra"
             ))
-        .then_some(model)
+        .then_some((model, effort))
     })
 }
 

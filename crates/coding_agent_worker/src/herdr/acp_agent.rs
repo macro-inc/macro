@@ -37,6 +37,7 @@ use claude_fold::ClaudeLog;
 use codex_fold::CodexLog;
 
 mod commands;
+mod effort;
 mod models;
 
 /// The subcommand macrod's harness config names to run this adapter.
@@ -684,6 +685,24 @@ impl Adapter {
             return Err(RpcError::invalid(
                 "the native transcript has new activity; retry once it has synchronized",
             ));
+        }
+        if self.options.kind == TuiAgent::Codex
+            && let Some(requested) = effort::command(text)
+        {
+            let requested = requested?;
+            let message = tokio::select! {
+                () = cancel.cancelled() => return Ok("cancelled"),
+                result = tokio::time::timeout(Duration::from_secs(20), self.codex_effort(session, live, requested)) => {
+                    result.map_err(|_| RpcError::internal("effort change was not confirmed; check the native session in Herdr"))??
+                }
+            };
+            self.notify_update(
+                &session.id,
+                json!({
+                    "sessionUpdate":"agent_message_chunk", "content":{"type":"text","text":message},
+                }),
+            );
+            return Ok("end_turn");
         }
         herdr.prompt_agent(&live.name, text).await?;
         if let Some(command) = commands::native_control(self.options.kind, text) {

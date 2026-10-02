@@ -60,6 +60,7 @@ fn available(kind: TuiAgent) -> Value {
             commands.extend([
                 json!({"name": "fast", "description": "Toggle Codex's fast service tier when available for the current model"}),
                 json!({"name": "ultrafast", "description": "Toggle Codex's ultrafast service tier when available for the current model"}),
+                json!({"name": "effort", "description": "Show or change this session's Codex reasoning effort in Macro", "input":{"hint":"low|medium|high|xhigh|max|ultra|default|status (optional)"}}),
                 json!({"name": "model", "description": "Open Codex's model and reasoning effort picker in Herdr"}),
             ]);
         }
