@@ -236,6 +236,30 @@ describe('creating a database', () => {
     });
   });
 
+  it('builds it from the chosen template', async () => {
+    mock.create.mockReturnValue(
+      okAsync({
+        id: 'db',
+        name: 'Project tracker',
+        owner_id: 'owner',
+        created_at: '',
+        trashed_at: null,
+      })
+    );
+
+    const created = await createDatabase({
+      name: 'Project tracker',
+      template: 'project_tracker',
+      source: 'launcher',
+    });
+
+    expect(created._unsafeUnwrap()).toBe('db');
+    expect(mock.create).toHaveBeenCalledWith({
+      name: 'Project tracker',
+      template: 'project_tracker',
+    });
+  });
+
   it('hands a refusal back to the caller', async () => {
     mock.create.mockReturnValue(
       errAsync([{ code: 'INVALID_SCHEMA', message: 'name is empty' }])

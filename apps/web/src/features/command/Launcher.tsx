@@ -1,6 +1,7 @@
 import { openAgentComposer } from '@app/features/agents-view/primitives/open-composer';
 import { startPendingSession } from '@app/features/block-agent/context/pending-session';
 import { AGENT_INPUT_TEXT_AREA_ID } from '@app/features/block-agent/ui/AgentInput';
+import { openDatabaseTemplatePicker } from '@app/features/block-database/views/database-template-picker';
 import { createFigDocument } from '@app/features/block-fig/queries/create-fig';
 import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives/use-spreadsheet-access';
 import { createSpreadsheetDocument } from '@app/features/block-spreadsheet/queries/create-spreadsheet';
@@ -423,22 +424,24 @@ export function runCreateAction(
       return;
     case 'database':
       if (!isFeatureEnabled(enableDatabases)) return;
-      createBlock({
-        blockName: 'database',
-        loading: true,
-        createFn: async () => {
-          const created = await createDatabase({
-            name: 'Untitled database',
-            source,
-          });
-          if (created.isErr()) {
-            toast.failure('Could not create the database');
-            return;
-          }
-          return created.value;
-        },
-        shouldInsert,
+      // Opened before the launcher closes, so Escape returns focus to where
+      // the launcher was opened from.
+      openDatabaseTemplatePicker((creation) => {
+        void createBlock({
+          blockName: 'database',
+          loading: true,
+          createFn: async () => {
+            const created = await createDatabase({ ...creation, source });
+            if (created.isErr()) {
+              toast.failure('Could not create the database');
+              return;
+            }
+            return created.value;
+          },
+          shouldInsert,
+        });
       });
+      setCreateMenuOpen(false, false);
       return;
     case 'code':
       createBlock({
