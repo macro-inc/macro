@@ -724,7 +724,7 @@ export function EmailList(props: EmailListProps) {
                                     </Show>
                                     {loadMore().isLoading
                                       ? 'Loading...'
-                                      : loadMore().label}
+                                      : (loadMore().label ?? 'Load More')}
                                   </Button>
                                 </div>
                               </div>
