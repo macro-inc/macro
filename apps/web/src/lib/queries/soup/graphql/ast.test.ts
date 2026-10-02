@@ -443,15 +443,18 @@ describe('makeGraphqlSoupInput', () => {
     ).toThrow('Unsupported GraphQL Soup AST');
   });
 
-  it('rejects email views for grouped queries instead of dropping them', () => {
-    expect(() =>
-      makeGraphqlGroupedSoupInput({
-        params: { limit: 100, sort_method: 'updated_at' },
-        body: { emailView: 'inbox' } as never,
-        groupBy: { type: 'entity_type' },
-      })
-    ).toThrow('Unsupported GraphQL Soup AST');
-  });
+  it.each(['inbox', 'drafts', 'sent', 'all'] as const)(
+    'rejects grouped %s mail, including the date-grouped cached-mail slice',
+    (emailView) => {
+      expect(() =>
+        makeGraphqlGroupedSoupInput({
+          params: { limit: 100, sort_method: 'updated_at' },
+          body: { emailView },
+          groupBy: { type: 'date' },
+        })
+      ).toThrow('email views are not supported by grouped GraphQL Soup yet');
+    }
+  );
 
   it('rejects unknown email views instead of using the GraphQL default', () => {
     expect(() =>
