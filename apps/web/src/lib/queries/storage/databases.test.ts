@@ -544,3 +544,78 @@ it('keeps a column creation successful when its catalog refresh fails', async ()
   expect(mock.applyOps).toHaveBeenCalledOnce();
   expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true);
 });
+
+it('does not refresh the catalog for board card or view order changes', async () => {
+  const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+  mock.applyOps.mockReturnValue(okAsync({ results: [], changes: [] }));
+  const result = await applyDatabaseOps('db', [
+    {
+      kind: 'view',
+      table: 'tasks',
+      view: 'board',
+      change: {
+        kind: 'move_card',
+        row: 'row',
+        lane: { kind: 'none' },
+        before: null,
+        after: null,
+      },
+    },
+  ]);
+  await applyDatabaseOps('db', [
+    {
+      kind: 'table',
+      table: 'tasks',
+      change: { kind: 'reorder_views', order: ['board'] },
+    },
+  ]);
+  expect(result.isOk()).toBe(true);
+  expect(invalidate).not.toHaveBeenCalled();
+  invalidate.mockRestore();
+});
+
+it('does not hold a cell write while refreshing a newly minted option', async () => {
+  let release!: () => void;
+  const refresh = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const invalidate = vi
+    .spyOn(queryClient, 'invalidateQueries')
+    .mockReturnValue(refresh);
+  mock.applyOps.mockReturnValue(okAsync({ results: [], changes: [] }));
+  try {
+    const result = await applyDatabaseOps('db', [
+      {
+        kind: 'column',
+        table: 'tasks',
+        column: 'status',
+        change: {
+          kind: 'add_options',
+          options: [{ id: 'done', label: 'Done' }],
+        },
+      },
+      {
+        kind: 'rows',
+        table: 'tasks',
+        change: {
+          kind: 'update',
+          changes: {
+            kind: 'uniform',
+            rows: ['row'],
+            cells: [
+              {
+                column: 'status',
+                value: { type: 'options', value: [{ label: 'Done' }] },
+              },
+            ],
+          },
+        },
+      },
+    ]);
+    expect(result.isOk()).toBe(true);
+    expect(invalidate).toHaveBeenCalledOnce();
+  } finally {
+    release();
+    invalidate.mockRestore();
+  }
+});

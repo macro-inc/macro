@@ -178,14 +178,23 @@ export function applyDatabaseOps(
             tableVersions,
           });
         applyDatabaseTableVersions(databaseId, tableVersions);
-        // Newly created columns/options must exist before callers focus a header,
-        // select an option, or patch a board (which cancels pending detail reads).
+        // Schema-only creation waits for data callers need to focus or patch views.
+        // A row edit that mints options keeps the write queue moving.
         const createsColumnData = ops.some(
           (op) =>
             op.kind === 'column' &&
-            (op.change.kind === 'create' || op.change.kind === 'add_options')
+            (op.change.kind === 'create' ||
+              (op.change.kind === 'add_options' &&
+                !ops.some((item) => item.kind === 'rows')))
         );
-        if (ops.some((op) => op.kind !== 'rows')) {
+        if (
+          ops.some(
+            (op) =>
+              op.kind === 'column' ||
+              (op.kind === 'table' && op.change.kind !== 'reorder_views') ||
+              op.kind === 'reorder_tables'
+          )
+        ) {
           const global = ops.some(
             (op) =>
               op.kind === 'table' &&
