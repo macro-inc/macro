@@ -5,6 +5,7 @@ mod backfill_completion_service;
 mod backfill_init_service;
 mod backfill_outbox;
 mod config;
+mod inbox_owner;
 mod outbound;
 mod pubsub;
 mod util;

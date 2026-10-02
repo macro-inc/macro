@@ -6,3 +6,6 @@ pub mod invitation_extraction;
 pub mod email_api;
 /// Persistence and provider adapters for scheduled-delivery claims.
 pub mod scheduled_delivery;
+
+/// Account lookups for inbox ownership.
+pub mod inbox_owner;

@@ -149,6 +149,8 @@ pub async fn get_macro_user_id_by_link_id(
 pub struct InProgressUserLink {
     pub macro_user_id: Uuid,
     pub linked_email: Option<String>,
+    /// FusionAuth owner resolved from the verified Google subject during consent.
+    pub google_grant_owner_id: Option<Uuid>,
     /// Scopes Macro placed on the authorization request.
     pub requested_google_scopes: Vec<String>,
     /// Actual scopes returned by Google's token exchange.
@@ -164,6 +166,7 @@ pub async fn get_in_progress_user_link(
             SELECT
                 macro_user_id,
                 linked_email,
+                google_grant_owner_id,
                 requested_google_scopes,
                 granted_google_scopes
             FROM
@@ -179,6 +182,7 @@ pub async fn get_in_progress_user_link(
     Ok(InProgressUserLink {
         macro_user_id: row.macro_user_id,
         linked_email: row.linked_email,
+        google_grant_owner_id: row.google_grant_owner_id,
         requested_google_scopes: row.requested_google_scopes,
         granted_google_scopes: row.granted_google_scopes,
     })
@@ -190,17 +194,20 @@ pub async fn set_linked_google_grant(
     link_id: &uuid::Uuid,
     linked_email: &str,
     granted_google_scopes: &[String],
+    google_grant_owner_id: Uuid,
 ) -> anyhow::Result<()> {
     let result = sqlx::query!(
         r#"
             UPDATE in_progress_user_link
             SET linked_email = $1,
-                granted_google_scopes = $2
+                granted_google_scopes = $2,
+                google_grant_owner_id = $4
             WHERE id = $3
         "#,
         linked_email,
         granted_google_scopes,
-        link_id
+        link_id,
+        google_grant_owner_id
     )
     .execute(db)
     .await?;

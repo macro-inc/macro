@@ -24,6 +24,7 @@ async fn set_linked_email_then_get(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let pre = get_in_progress_user_link(&pool, &link_id).await?;
     assert_eq!(pre.macro_user_id, macro_user_id);
     assert!(pre.linked_email.is_none());
+    assert!(pre.google_grant_owner_id.is_none());
     assert!(pre.requested_google_scopes.is_empty());
     assert!(pre.granted_google_scopes.is_empty());
 
@@ -47,11 +48,19 @@ async fn google_link_records_requested_and_granted_scopes(
 
     let link_id =
         create_in_progress_google_link(&pool, &macro_user_id.to_string(), &requested).await?;
-    set_linked_google_grant(&pool, &link_id, "linked@example.com", &granted).await?;
+    set_linked_google_grant(
+        &pool,
+        &link_id,
+        "linked@example.com",
+        &granted,
+        macro_user_id,
+    )
+    .await?;
 
     let link = get_in_progress_user_link(&pool, &link_id).await?;
     assert_eq!(link.requested_google_scopes, requested);
     assert_eq!(link.granted_google_scopes, granted);
+    assert_eq!(link.google_grant_owner_id, Some(macro_user_id));
     assert_eq!(link.linked_email.as_deref(), Some("linked@example.com"));
 
     Ok(())

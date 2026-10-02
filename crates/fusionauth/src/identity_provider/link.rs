@@ -185,3 +185,44 @@ pub(crate) async fn link_user(
         }
     }
 }
+
+/// Looks up the immutable provider subject rather than guessing its FusionAuth owner.
+pub(super) async fn get_link_by_subject(
+    client: &AuthedClient,
+    base_url: &str,
+    idp_id: &str,
+    subject: &str,
+) -> Result<Option<Link>> {
+    #[derive(serde::Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct Response {
+        identity_provider_link: Link,
+    }
+
+    let response = client
+        .client()
+        .get(format!("{base_url}/api/identity-provider/link"))
+        .query(&[
+            ("identityProviderId", idp_id),
+            ("identityProviderUserId", subject),
+        ])
+        .send()
+        .await
+        .map_err(|_| FusionAuthClientError::from(anyhow::anyhow!("provider link lookup failed")))?;
+    if response.status() == reqwest::StatusCode::NOT_FOUND {
+        return Ok(None);
+    }
+    let response = response.error_for_status().map_err(|_| {
+        FusionAuthClientError::from(anyhow::anyhow!("provider link lookup rejected"))
+    })?;
+    let response: Response = response.json().await.map_err(|_| {
+        FusionAuthClientError::from(anyhow::anyhow!("invalid provider link response"))
+    })?;
+    let link = response.identity_provider_link;
+    if link.identity_provider_id != idp_id || link.identity_provider_user_id != subject {
+        return Err(FusionAuthClientError::from(anyhow::anyhow!(
+            "provider link identity mismatch"
+        )));
+    }
+    Ok(Some(link))
+}

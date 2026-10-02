@@ -230,6 +230,9 @@ async fn main() -> anyhow::Result<()> {
         ConnectionGatewayCalendarRefresh::new(connection_gateway_client, db.clone()),
     ));
     let api_result = api::setup_and_serve(ApiContext {
+        inbox_owners: email_service::inbox_owner::InboxOwnerService {
+            repo: email_service::outbound::inbox_owner::PgInboxOwners(db.clone()),
+        },
         invitation_snapshots: email::outbound::invitation_pg::InvitationPgRepository(db.clone()),
         // calendar_service's sync kill switch rejects RSVP writes itself.
         invitation_resolver: Arc::new(CalendarInvitationResolver::new(PgCalendarRepository::new(

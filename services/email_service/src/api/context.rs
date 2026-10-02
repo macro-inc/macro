@@ -60,6 +60,9 @@ pub(crate) type EmailSvc = EmailServiceImpl<
 
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
+    pub inbox_owners: email_service::inbox_owner::InboxOwnerService<
+        email_service::outbound::inbox_owner::PgInboxOwners,
+    >,
     pub invitation_snapshots: email::outbound::invitation_pg::InvitationPgRepository,
     pub invitation_resolver: Arc<
         calendar_events::domain::invitations::CalendarInvitationResolver<

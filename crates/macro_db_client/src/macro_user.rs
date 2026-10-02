@@ -30,6 +30,8 @@ pub async fn create_macro_user(
 pub struct MacroUser {
     pub id: uuid::Uuid,
     pub username: String,
+    /// The account email; usernames are not necessarily email addresses.
+    pub email: String,
     pub stripe_customer_id: Option<String>,
 }
 
@@ -43,7 +45,7 @@ pub async fn get_macro_user(
     let result = sqlx::query_as!(
         MacroUser,
         r#"
-        SELECT id, username, stripe_customer_id
+        SELECT id, username, email, stripe_customer_id
         FROM macro_user
         WHERE id = $1
         "#,

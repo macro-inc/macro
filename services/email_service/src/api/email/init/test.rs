@@ -2,6 +2,8 @@ use super::*;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
 
+mod recovery;
+
 async fn insert_email_link(pool: &PgPool) -> Uuid {
     let link_id = Uuid::now_v7();
     let email_address = format!("sso-grant-{link_id}@example.com");
@@ -155,6 +157,7 @@ fn calendar_intent_follows_the_consent_request_not_the_grant() {
         .to_vec();
     let gmail_scope = "https://www.googleapis.com/auth/gmail.modify".to_owned();
     let in_progress = |requested: Vec<String>| InProgressUserLink {
+        google_grant_owner_id: None,
         macro_user_id: Uuid::now_v7(),
         linked_email: None,
         requested_google_scopes: requested,

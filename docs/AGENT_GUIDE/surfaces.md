@@ -815,7 +815,16 @@ section when the user can pick one: `All inboxes` or a single address, never sev
 search field, filter menu and preview control. The sidebar lists the inboxes above the
 `New email` button and tabs as plain rows; clicking one shows only that inbox.
 `Connect another account` starts the add-inbox flow from its own row below the
-scrolling list. `New email` prefills From with the selected inbox, or the primary
+scrolling list. If a mailbox has no inbox yet but its Google identity is already linked
+to another Macro account, connecting it preserves that account's Google sign-in and
+grants access only to the selected mailbox. After consent, verify the added address
+appears in the inbox list and that the other account's unrelated inboxes remain absent.
+Reconnecting that delegated mailbox keeps the same ownership. The mailbox need not
+have a Macro profile of its own. If initialization fails after consent, start a new
+`Connect another account` attempt and complete Google consent again; most failures
+discard the temporary setup record. Verify the retry adds one inbox and a later
+reconnect reuses it. This does not promise resuming a consumed setup link in place.
+`New email` prefills From with the selected inbox, or the primary
 inbox when All inboxes is selected; reopening a draft keeps its saved sender.
 If an explicitly selected sending inbox is unavailable, Send reports
 `Unable to find linked email account. Select a sending inbox.` without delivering

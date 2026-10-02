@@ -15,3 +15,6 @@ pub mod config;
 pub mod outbound;
 pub mod pubsub;
 pub mod util;
+
+/// Ownership resolution for OAuth-authorized inboxes.
+pub mod inbox_owner;

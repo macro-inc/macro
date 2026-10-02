@@ -1,6 +1,5 @@
 use anyhow::Context;
 use email_validator::normalize_email;
-use std::borrow::Cow;
 
 use axum::{
     Json,
@@ -14,15 +13,12 @@ use crate::api::{
     context::ApiContext,
     oauth2::{
         OAuthState,
-        account_link::{
-            build_callback_redirect, cleanup_pending_link, replace_identity_provider_grant,
-        },
+        account_link::{build_callback_redirect, cleanup_pending_link},
         format_redirect_uri,
         login::{self},
     },
 };
-use fusionauth::error::FusionAuthClientError;
-use fusionauth::identity_provider::{IdentityProviderLink, LinkUserRequest};
+use authentication_service::service::google_grant::GoogleGrant;
 
 #[cfg(test)]
 mod test;
@@ -73,7 +69,8 @@ async fn link_user(
     // exactly one FusionAuth user, and sign-in resolves through that link. When the linked
     // email belongs to an existing macro user, the link must therefore live on THAT user's FA
     // account — attaching it to the requester would capture the owner's sign-in. Only
-    // mailboxes with no macro user of their own link under the requester.
+    // new identities without a mailbox profile link under the requester. The grant
+    // service preserves an existing subject's owner even when its email has no profile.
     let idp_link_owner =
         match macro_db_client::user::get::get_macro_user_id_by_email(&ctx.db, &user_info_email)
             .await
@@ -88,45 +85,19 @@ async fn link_user(
             }
         };
 
-    // Attempt to create the FA IdP link. Three terminal cases:
-    //   Ok                                  → fresh link created; data-source path downstream.
-    //   Err(alreadyLinked, owned by self)  → idempotent relink; data-source path no-ops downstream.
-    //   Err(alreadyLinked, owned by other) → cross-account add; init promotes to graph edge.
-    // The FA error doesn't distinguish self vs other in the typed variant, but it doesn't need
-    // to — init re-derives ownership via macrodb's User table to pick its dispatch path.
-    match ctx
-        .auth_client
-        .link_user(LinkUserRequest {
-            identity_provider_link: IdentityProviderLink {
-                display_name: user_info_email.clone(),
-                identity_provider_id: Cow::Borrowed(identity_provider_id),
-                identity_provider_user_id: Cow::Borrowed(&user_info.sub),
-                user_id: Cow::Borrowed(&idp_link_owner),
-                token: Cow::Borrowed(&token_response.refresh_token),
-            },
+    let preferred_owner = uuid::Uuid::parse_str(&idp_link_owner)
+        .map_err(|error| (StatusCode::INTERNAL_SERVER_ERROR, error.to_string()))?;
+    let grant_owner = ctx
+        .google_grants
+        .connect(GoogleGrant {
+            identity_provider_id,
+            subject: &user_info.sub,
+            email: &user_info_email,
+            refresh_token: &token_response.refresh_token,
+            preferred_owner,
         })
         .await
-    {
-        Ok(()) => {}
-        Err(FusionAuthClientError::IdentityProviderLinkAlreadyExists) => {
-            // A plain `link_user` leaves the existing grant untouched. Reconnects
-            // replace a stale token when Google returns a fresh one.
-            replace_identity_provider_grant(
-                &ctx.auth_client,
-                identity_provider_id,
-                &idp_link_owner,
-                &user_info_email,
-                &token_response.refresh_token,
-            )
-            .await?;
-        }
-        Err(e) => {
-            return Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("unable to link user {e}"),
-            ));
-        }
-    }
+        .map_err(|error| (StatusCode::INTERNAL_SERVER_ERROR, error.to_string()))?;
 
     // Stash the linked identity and Google's actual grant (which may be a
     // subset of what was requested). /email/init applies these capabilities
@@ -138,6 +109,7 @@ async fn link_user(
         link_id,
         &user_info_email,
         &granted_scopes,
+        grant_owner,
     )
     .await
     .map_err(|e| {

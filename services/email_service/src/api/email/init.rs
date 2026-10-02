@@ -13,9 +13,11 @@ use email::domain::models::UserProvider;
 use email::domain::ports::EmailRepo;
 use email::outbound::EmailPgRepo;
 use email_api_client::domain::models::{EmailApiError, TokenFreshness};
+use email_api_client::domain::ports::{ProviderRateLimiter, ProviderTokenSource};
 use email_service::pubsub::publish_email_event;
-use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
+use macro_authorization::{MacroAuthorizationExtractor, MacroUserAuthentication, UserOrInternal};
 use macro_db_client::in_progress_user_link::InProgressUserLink;
+use macro_event_broker::MacroEventBroker;
 use macro_user_id::email::EmailStr;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::response::ErrorResponse;
@@ -29,8 +31,10 @@ use thiserror::Error;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+mod context;
 #[cfg(test)]
 mod test;
+use context::InitContext;
 
 #[derive(Debug, Error, AsRefStr)]
 pub enum InitError {
@@ -198,12 +202,25 @@ pub async fn handler(
     query: Query<InitParams>,
     authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
 ) -> Result<Response, InitError> {
+    complete_init(
+        &InitContext::from(ctx),
+        query,
+        authorization.authorization.user,
+    )
+    .await
+}
+
+async fn complete_init<T: ProviderTokenSource, L: ProviderRateLimiter, B: MacroEventBroker>(
+    ctx: &InitContext<T, L, B>,
+    query: Query<InitParams>,
+    user: MacroUserAuthentication,
+) -> Result<Response, InitError> {
     // Init runs on every authentication, so its expected no-op outcomes (400s)
     // must not error-log. The span skips the auto err event and the result is
     // classified here, inside the span, where user fields still attach.
     let link_id = query.link_id;
     let db = ctx.db.clone();
-    let result = init_user(ctx, query, authorization).await;
+    let result = init_user(ctx, query, user).await;
     if let Err(e) = &result {
         let status = e.status_code();
         if status.is_server_error() {
@@ -243,16 +260,16 @@ async fn cleanup_in_progress_link_on_failure(
     }
 }
 
-async fn init_user(
-    ctx: ApiContext,
+async fn init_user<T: ProviderTokenSource, L: ProviderRateLimiter, B: MacroEventBroker>(
+    ctx: &InitContext<T, L, B>,
     Query(InitParams {
         link_id,
         force_share,
     }): Query<InitParams>,
-    authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
+    user: MacroUserAuthentication,
 ) -> Result<Response, InitError> {
-    let macro_user_id = authorization.authorization.user.macro_user_id.clone();
-    let user_context = authorization.authorization.user.user_context.clone();
+    let macro_user_id = user.macro_user_id;
+    let user_context = user.user_context;
     let mut completed_google_grant: Option<CompletedGoogleGrant> = None;
     tracing::info!(user_id = %user_context.user_id, ?link_id, "Init called");
 
@@ -276,30 +293,20 @@ async fn init_user(
             InitError::BadRequest("link has not completed authentication yet".to_string())
         })?;
 
-        // Dispatch on whether the linked email already belongs to another macro user.
-        // Same-user → fall through to the data-source path. Cross-user → add a graph
-        // edge instead of creating a duplicate email_links row.
-        //
-        // Distinguish "no user with this email" (Ok(None)) from a transient DB error
-        // (Err) — collapsing the latter to None would silently fall through to the
-        // data-source upsert path and create a duplicate email_links row.
-        let existing_owner =
-            match macro_db_client::user::get::get_user_id_by_email(ctx.db.clone(), &linked_email)
-                .await
-            {
-                Ok(macro_id) => Some(macro_id),
-                Err(sqlx::Error::RowNotFound) => None,
-                Err(e) => {
-                    return Err(InitError::DatabaseError(
-                        anyhow::Error::from(e)
-                            .context("Failed to look up existing macro user by linked_email"),
-                    ));
-                }
-            };
+        let existing_owner = ctx
+            .inbox_owners
+            .resolve(
+                &linked_email,
+                in_progress.google_grant_owner_id,
+                in_progress.macro_user_id,
+            )
+            .await
+            .map_err(|error| InitError::DatabaseError(anyhow::anyhow!("{error:?}")))?;
 
-        if let Some(child_macro_id) = existing_owner.as_deref()
-            && child_macro_id != user_context.user_id
+        if let Some(owner) = existing_owner.as_ref()
+            && owner.macro_id.as_ref() != user_context.user_id
         {
+            let child_macro_id = owner.macro_id.as_ref();
             // Graph path: the linked email belongs to a different macro user. Look the
             // child's inbox up before mutating any state so the in_progress row is only
             // consumed once we know how to proceed.
@@ -335,7 +342,7 @@ async fn init_user(
                     .await
                     .context("Failed to commit graph delegation transaction")?;
 
-                apply_and_consume_calendar_grant(&ctx, child_link.id, link_id, &completed_grant)
+                apply_and_consume_calendar_grant(ctx, child_link.id, link_id, &completed_grant)
                     .await?;
 
                 return Ok((
@@ -348,26 +355,14 @@ async fn init_user(
                     .into_response());
             }
 
-            // Self-link bootstrap: the child macro_user exists but never connected an inbox.
-            // Provision its email_links row entirely under the child's identity: the OAuth
-            // grant (FA IdP link) is attached to the child's fusion user at the OAuth
-            // callback — it is also the child's login identity, so it cannot live under the
-            // primary — and token resolution, scoping, and backfill rate-limiting key off it.
-            // Access for the primary comes from the macro_user_links edge alone.
-            let child_macro_id_owned = MacroUserIdStr::try_from(child_macro_id.to_string())?;
-
-            // `existing_owner` proved a User row exists for this email, so a miss here means
-            // the child account vanished mid-flight. Abort rather than fall back to the
-            // requester's fusion id, which would provision the link under the wrong identity.
-            let child_fusion_id =
-                macro_db_client::user::get::get_macro_user_id_by_email(&ctx.db, &linked_email)
-                    .await
-                    .context("Failed to look up child's fusion id for self-link bootstrap")?
-                    .context("child macro user disappeared before self-link bootstrap")?
-                    .to_string();
-
-            let provisional_link =
-                new_gmail_link(child_fusion_id, child_macro_id_owned, linked_email.clone())?;
+            // Bootstrap the authorized mailbox under the existing grant owner's profile.
+            // The mailbox can be a secondary address with no User row of its own.
+            // Only this mailbox is delegated; the owner's other inboxes remain private.
+            let provisional_link = new_gmail_link(
+                owner.fusionauth_id.to_string(),
+                owner.macro_id.clone(),
+                linked_email.clone(),
+            )?;
             let subscription = ctx
                 .email_api
                 .register_subscription_without_cache(&provisional_link)
@@ -414,7 +409,7 @@ async fn init_user(
                 .context("Failed to check existing link by email")?
             {
                 let applied = apply_and_consume_calendar_grant(
-                    &ctx,
+                    ctx,
                     existing_link.id,
                     link_id,
                     &completed_grant,
@@ -539,7 +534,7 @@ async fn init_user(
                     }
                 }
 
-                apply_and_consume_calendar_grant(&ctx, promoted.link_id, link_id, &completed_grant)
+                apply_and_consume_calendar_grant(ctx, promoted.link_id, link_id, &completed_grant)
                     .await?;
 
                 return Ok((
@@ -626,9 +621,9 @@ async fn init_user(
     };
 
     if let (Some(grant), Some(link_id)) = (completed_google_grant.as_ref(), link_id) {
-        apply_and_consume_calendar_grant(&ctx, link.id, link_id, grant).await?;
+        apply_and_consume_calendar_grant(ctx, link.id, link_id, grant).await?;
     } else if completed_google_grant.is_none() {
-        apply_grant_discovered_from_token(&ctx, &link).await;
+        apply_grant_discovered_from_token(ctx, &link).await;
     }
 
     // Concurrent /email/init calls for the same inbox upsert the same link (ON CONFLICT)
@@ -763,7 +758,14 @@ async fn has_unrecorded_google_grant(db: &sqlx::PgPool, link_id: Uuid) -> bool {
 /// the scopes from Google's tokeninfo endpoint using the link's own token so
 /// SSO-only users still receive calendar sync. Best-effort: a failure here
 /// must never fail authentication, and the next init retries it.
-async fn apply_grant_discovered_from_token(ctx: &ApiContext, link: &link::Link) {
+async fn apply_grant_discovered_from_token<
+    T: ProviderTokenSource,
+    L: ProviderRateLimiter,
+    B: MacroEventBroker,
+>(
+    ctx: &InitContext<T, L, B>,
+    link: &link::Link,
+) {
     if !has_unrecorded_google_grant(&ctx.db, link.id).await {
         return;
     }
@@ -876,8 +878,8 @@ async fn apply_calendar_grant(
         })
 }
 
-async fn apply_and_consume_calendar_grant(
-    ctx: &ApiContext,
+async fn apply_and_consume_calendar_grant<T, L, B>(
+    ctx: &InitContext<T, L, B>,
     email_link_id: Uuid,
     in_progress_link_id: Uuid,
     grant: &CompletedGoogleGrant,

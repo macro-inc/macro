@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT id, username, stripe_customer_id\n        FROM macro_user\n        WHERE id = $1\n        ",
+  "query": "\n        SELECT id, username, email, stripe_customer_id\n        FROM macro_user\n        WHERE id = $1\n        ",
   "describe": {
     "columns": [
       {
@@ -15,6 +15,11 @@
       },
       {
         "ordinal": 2,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
         "name": "stripe_customer_id",
         "type_info": "Text"
       }
@@ -27,8 +32,9 @@
     "nullable": [
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "4b483617cc20e22761392cb54e682762a83c3dbeec3eacfeaadae1ca8aff376c"
+  "hash": "35c73431e8362c0e54791b1146ed13c5e89c14bbf7d8dcca3280b855b1dbcd8e"
 }

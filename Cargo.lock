@@ -6721,6 +6721,7 @@ version = "0.1.0"
 dependencies = [
  "ammonia",
  "anyhow",
+ "authentication_service",
  "authentication_service_client",
  "aws-sdk-s3",
  "aws-sdk-secretsmanager",
@@ -6815,6 +6816,7 @@ dependencies = [
  "utoipa",
  "utoipa-swagger-ui",
  "uuid",
+ "wiremock",
  "workspace-hack",
 ]
 

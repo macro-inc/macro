@@ -133,6 +133,9 @@ pub(crate) struct ApiContext {
     pub db: PgPool,
     pub github_link_service: Arc<GithubLinkServiceType>,
     pub auth_client: Arc<fusionauth::FusionAuthClient>,
+    pub google_grants: authentication_service::service::google_grant::GoogleGrantService<
+        authentication_service::outbound::google_grant::FusionAuthGoogleGrants,
+    >,
     pub microsoft_token_cipher: Option<Arc<dyn MicrosoftTokenCipher>>,
     /// Encrypts users' Cursor API keys.
     pub cursor_api_key_cipher: Arc<dyn CursorApiKeyCipher>,

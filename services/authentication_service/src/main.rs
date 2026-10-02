@@ -541,6 +541,11 @@ async fn main() -> anyhow::Result<()> {
         ApiContext {
             db,
             github_link_service: Arc::new(github_link_service_impl),
+            google_grants: authentication_service::service::google_grant::GoogleGrantService {
+                client: authentication_service::outbound::google_grant::FusionAuthGoogleGrants(
+                    auth_client.clone(),
+                ),
+            },
             auth_client: Arc::new(auth_client),
             microsoft_token_cipher,
             cursor_api_key_cipher,

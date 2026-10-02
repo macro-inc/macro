@@ -5,7 +5,10 @@ use crate::{FusionAuthClient, Result};
 mod link;
 mod login;
 mod lookup;
+mod replace;
 mod search;
+#[cfg(test)]
+mod test;
 mod unlink;
 
 pub use link::{IdentityProviderLink, Link, LinkUserRequest, RetrieveLinkResponse};
@@ -28,6 +31,41 @@ impl FusionAuthClient {
             &self.fusion_auth_base_url,
             user_id,
             idp_id,
+        )
+        .await
+    }
+
+    /// Resolves a Google/provider subject to its existing login identity, regardless of owner.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn get_link_by_subject(&self, idp_id: &str, subject: &str) -> Result<Option<Link>> {
+        link::get_link_by_subject(
+            &self.auth_client,
+            &self.fusion_auth_base_url,
+            idp_id,
+            subject,
+        )
+        .await
+    }
+
+    /// Replaces a grant on its current owner, restoring the previous grant on failure.
+    /// Prefer the immutable provider subject; legacy callers may select by display name
+    /// and leave the existing grant untouched if that display name is not found.
+    #[tracing::instrument(skip(self, display_name, fresh_refresh_token), err)]
+    pub async fn replace_identity_provider_grant(
+        &self,
+        identity_provider_id: &str,
+        link_owner_id: &str,
+        display_name: &str,
+        subject: Option<&str>,
+        fresh_refresh_token: &str,
+    ) -> Result<()> {
+        replace::replace_identity_provider_grant(
+            self,
+            identity_provider_id,
+            link_owner_id,
+            display_name,
+            subject,
+            fresh_refresh_token,
         )
         .await
     }
