@@ -1,6 +1,6 @@
 set positional-arguments
 
-# Android: the launcher fetches pinned Firebase config from Doppler by default.
+# Android: fetch pinned Firebase config and provision missing release signing from Doppler.
 android-dev *ARGS:
     bash scripts/android.sh dev "$@"
 
@@ -114,9 +114,10 @@ local-email: ensure-cache-wasm
 node_heap := "--max-old-space-size=8192"
 cache_wasm_target := justfile_directory() / "../../target/cache-wasm"
 agent_fold_wasm_target := justfile_directory() / "../../target/agent-fold-wasm"
+database_sql_wasm_target := justfile_directory() / "../../target/database-sql-wasm"
 
 [parallel]
-build-wasm: build-cache-wasm build-agent-fold-wasm
+build-wasm: build-cache-wasm build-agent-fold-wasm build-database-sql-wasm
 
 build-dev: build-wasm
     MODE=development NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
@@ -276,6 +277,34 @@ ensure-agent-fold-wasm:
         just --justfile "{{justfile()}}" build-agent-fold-wasm
     fi
 
+# Build the database-sql wasm module (the SQL engine's staged `Query`) into
+# src/lib/core/database-sql/wasm (gitignored).
+build-database-sql-wasm:
+    CARGO_TARGET_DIR="{{database_sql_wasm_target}}" wasm-pack build {{justfile_directory()}}/../../crates/database_sql --target web --release --out-dir {{justfile_directory()}}/src/lib/core/database-sql/wasm
+
+# Dev fast path: build the database-sql wasm pkg only when it is missing or
+# any source it is compiled from is newer than the built artifact: the
+# engine's own and every workspace crate it depends on (the ops come from
+# models_databases), so a changed export is never served stale.
+ensure-database-sql-wasm:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    WASM="{{justfile_directory()}}/src/lib/core/database-sql/wasm/database_sql_bg.wasm"
+    ROOT="{{justfile_directory()}}/../.."
+    if [ ! -f "$WASM" ]; then
+        just --justfile "{{justfile()}}" build-database-sql-wasm
+        exit 0
+    fi
+    CRATES=$(cd "$ROOT" && cargo tree -p database_sql --target wasm32-unknown-unknown -e normal --prefix none --format '{p}' | sed -n 's/.*(\(\/[^)]*\)).*/\1/p' | sort -u)
+    SOURCES=()
+    for crate in $CRATES; do
+        SOURCES+=("$crate/Cargo.toml")
+        [ -d "$crate/src" ] && SOURCES+=("$crate/src")
+    done
+    if [ -n "$(find "${SOURCES[@]}" -newer "$WASM" -print -quit)" ]; then
+        just --justfile "{{justfile()}}" build-database-sql-wasm
+    fi
+
 # Regenerate src/lib/service-clients/service-agent-fold/generated/types.ts
 # from agent_fold's Rust wire types with specta. Run after changing anything
 # under crates/agent_fold/src/inbound/wire.rs. Specta's own output is tabs and
@@ -285,6 +314,14 @@ ensure-agent-fold-wasm:
 gen-agent-fold-types:
     cargo run -p agent_fold --bin export_types
     bunx biome format --write {{justfile_directory()}}/src/lib/service-clients/service-agent-fold/generated/types.ts
+
+# Regenerate src/lib/core/database-sql/generated/types.ts from the
+# database_sql engine's wire types with specta. Run after changing any type
+# that crosses the wasm boundary (see crates/database_sql/src/wasm.rs); biome
+# reformats specta's output for the same reason as gen-agent-fold-types.
+gen-database-sql-types:
+    cargo run -p database_sql --features cli --bin database_sql_types
+    bunx biome format --write {{justfile_directory()}}/src/lib/core/database-sql/generated/types.ts
 
 # Dev fast path: build the wasm pkg only when missing or its version drifts
 # from client/cache-wasm/Cargo.toml (bump that version to push a rebuild to

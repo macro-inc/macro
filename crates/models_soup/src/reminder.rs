@@ -86,7 +86,7 @@ pub struct SoupReminder<T = ()> {
     pub next_run_at: DateTime<Utc>,
     /// When false, the dispatcher skips this reminder.
     pub enabled: bool,
-    /// Set once a one-shot reminder has fired.
+    /// When the owner acknowledged the occurrence; independent of future scheduling.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub completed_at: Option<DateTime<Utc>>,
     /// When the reminder was created.

@@ -20,7 +20,8 @@ fn tag_visible_to(owner: &PropertyOwner, auth: &EntityAccessAuth) -> bool {
             EntityAccessAuth::Unauthenticated => false,
             EntityAccessAuth::Internal => true,
         },
-        PropertyOwner::Team { .. } | PropertyOwner::System => true,
+        // Database columns are visible to whoever can see the row they sit on.
+        PropertyOwner::Team { .. } | PropertyOwner::Database { .. } | PropertyOwner::System => true,
     }
 }
 

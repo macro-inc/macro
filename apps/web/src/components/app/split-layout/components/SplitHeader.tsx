@@ -113,12 +113,19 @@ function getEntitySplitContent(data: EntityDragEvent['draggable']['data']):
             'email',
             'project',
             'call',
-            'automation'
+            'automation',
+            'database'
           ),
         },
         (entity) => ({ type: entity.type, id: entity.id })
       )
       .exhaustive()
+  );
+}
+
+function hasAgentsBackFallback(content: SplitContent) {
+  return (
+    content.type === 'agent' || (isTouchDevice() && content.type === 'chat')
   );
 }
 
@@ -132,10 +139,21 @@ function SplitBackButton() {
       class="p-1 touch:active:bg-transparent"
       label="Go Back"
       hotkey={TOKENS.split.go.back}
-      disabled={!context.handle.canGoBack()}
+      disabled={
+        !context.handle.canGoBack() &&
+        !hasAgentsBackFallback(context.handle.content())
+      }
       onClick={() => {
         if (splitBackInterceptor()?.()) return;
-        context.handle.goBack();
+        if (
+          !context.handle.canGoBack() &&
+          hasAgentsBackFallback(context.handle.content())
+        ) {
+          context.handle.replace({
+            next: { type: 'component', id: 'agents' },
+            mergeHistory: true,
+          });
+        } else context.handle.goBack();
       }}
     >
       <CaretLeft />
@@ -602,7 +620,8 @@ export function SplitHeader(props: {
             <HeaderIsland
               class={cn(
                 'relative gap-0 px-1',
-                (!panel.handle.canGoBack() ||
+                ((!panel.handle.canGoBack() &&
+                  !hasAgentsBackFallback(panel.handle.content())) ||
                   isListViewID(panel.handle.content().id)) &&
                   'hidden'
               )}

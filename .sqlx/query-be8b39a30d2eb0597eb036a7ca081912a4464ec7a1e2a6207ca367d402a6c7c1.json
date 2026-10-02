@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id FROM database_rows WHERE table_id = $1 AND id = ANY($2) ORDER BY id FOR KEY SHARE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "be8b39a30d2eb0597eb036a7ca081912a4464ec7a1e2a6207ca367d402a6c7c1"
+}

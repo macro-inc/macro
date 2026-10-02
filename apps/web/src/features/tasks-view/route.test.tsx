@@ -48,10 +48,15 @@ describe('project routes in Tasks', () => {
         'tasks-project',
       ]);
       expect(routeParams(entry.location.route)).toEqual({ projectId, section });
+      // The same claim as the initiative block, so either view is reused.
       expect(getRouteClaim(manifest, entry.location.route)).toEqual({
-        namespace: 'initiative',
-        id: projectId,
+        namespace: 'block',
+        id: `initiative:${projectId}`,
       });
+      const leaf = entry.location.route.matches.at(-1)!;
+      expect(
+        manifest.byId.get(leaf.id)?.definition.toReference?.(leaf.params)
+      ).toEqual({ type: 'initiative', id: projectId });
     }
   );
 

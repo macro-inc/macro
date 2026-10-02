@@ -1,0 +1,43 @@
+[package]
+edition = "2024"
+name = "databases_sql"
+publish = false
+version = "0.1.0"
+
+[features]
+default = []
+# The SQL agent tools: QueryDatabase and SaveDatabaseQuery.
+ai_tools = ["dep:ai_toolset", "dep:anyhow", "dep:async-trait", "dep:schemars"]
+
+[dependencies]
+ai_toolset = { path = "../ai_toolset", optional = true }
+anyhow = { workspace = true, optional = true }
+async-trait = { workspace = true, optional = true }
+bot_id = { path = "../bot_id" }
+chrono = { workspace = true }
+contacts = { path = "../contacts", default-features = false, features = ["ports"] }
+database_sql = { path = "../database_sql", features = ["schema"] }
+databases = { path = "../databases", default-features = false, features = ["ports"] }
+email = { path = "../email", default-features = false }
+entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
+filter_ast = { path = "../filter_ast" }
+item_filters = { path = "../item_filters", default-features = false }
+macro_user_id = { path = "../macro_user_id" }
+models_databases = { path = "../models_databases" }
+models_grouping = { path = "../models_grouping" }
+models_pagination = { path = "../models_pagination" }
+models_properties = { path = "../models_properties" }
+models_soup = { path = "../models_soup" }
+rootcause = { workspace = true }
+schemars = { workspace = true, optional = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+soup = { path = "../soup", default-features = false, features = ["ports"] }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+model_owner = { path = "../model_owner" }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

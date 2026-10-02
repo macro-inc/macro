@@ -90,6 +90,9 @@ pub struct MessagePage {
 /// Authenticated create command; attribution fields are never client controlled.
 #[derive(Debug, Clone)]
 pub struct CreateMessage {
+    /// Append to this canonical thread, creating its first message atomically when absent.
+    /// Its root identity is server-owned and overrides the first message's client id.
+    pub canonical_root_id: Option<Uuid>,
     /// Parent with verified actor access.
     pub parent: MessageParent,
     /// Verified actor.
@@ -249,6 +252,14 @@ pub trait MessageRepository: Send + Sync + 'static {
         parent: &MessageParent,
         id: Uuid,
     ) -> impl Future<Output = Result<Option<Message>, MessageError>> + Send;
+    /// Recover a call submission within its authorized parent and original sender.
+    /// Includes tombstones so retries never recreate deleted content.
+    fn get_by_client_message_id(
+        &self,
+        parent: &MessageParent,
+        actor: &ChannelSender<'_>,
+        client_message_id: Uuid,
+    ) -> impl Future<Output = Result<Option<Message>, MessageError>> + Send;
     /// Read thread state; returns deleted state so callers can reject writes.
     fn thread(
         &self,
@@ -331,6 +342,32 @@ pub trait MessageRepository: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<MessageParent>, MessageError>> + Send {
         async { Ok(None) }
     }
+}
+
+/// Read-only message targets. Returned identities are not authorization grants.
+pub trait HistoricalMessageReader: Send + Sync + 'static {
+    /// At most 500 distinct IDs. Omit deleted messages, deleted roots, and invalid
+    /// parent/channel relationships. Never create threads or update activity.
+    fn lookup_historical_targets(
+        &self,
+        ids: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<super::historical::HistoricalMessageTarget>, MessageError>> + Send;
+}
+
+/// Silent historical persistence for trusted import compositions. Implementations
+/// atomically persist only messages, thread structure, reactions and user mentions:
+/// no activity, sharing, notifications, bots, contacts, broker or realtime effects.
+/// The caller authorizes the channel and owns source deduplication. Importers that
+/// also commit mappings/checkpoints must compose owning-crate transaction helpers
+/// instead of calling this standalone transaction boundary.
+pub trait HistoricalMessageRepository: Send + Sync + 'static {
+    /// Insert a bounded batch. Existing message IDs reject the whole batch; source
+    /// mappings must be resolved before calling. Roots may precede replies in an
+    /// earlier batch or appear anywhere in this one.
+    fn insert_historical(
+        &self,
+        batch: &super::historical::HistoricalBatch,
+    ) -> impl Future<Output = Result<(), MessageError>> + Send;
 }
 
 /// Publish committed changes, deriving delivery policy from the persisted parent.

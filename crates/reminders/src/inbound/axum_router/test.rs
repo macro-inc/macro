@@ -251,6 +251,11 @@ fn sample_reminder(entity_id: Option<&str>) -> Reminder {
 /// transport input into domain calls can be asserted.
 #[derive(Debug, Clone, PartialEq)]
 enum ServiceCall {
+    Collection {
+        user: String,
+        completed: Option<bool>,
+        limit: Option<u32>,
+    },
     Create {
         description: String,
         entity: Option<(EntityType, String)>,
@@ -326,6 +331,23 @@ fn receipt_entity_pair(
 }
 
 impl RemindersService for FakeRemindersService {
+    async fn list_collection(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        query: crate::domain::collection::CollectionQuery,
+    ) -> Result<crate::domain::collection::ReminderCollectionPage, ReminderError> {
+        self.fail_if_configured()?;
+        self.record(ServiceCall::Collection {
+            user: user.to_string(),
+            completed: query.completed,
+            limit: query.limit,
+        });
+        Ok(crate::domain::collection::ReminderCollectionPage {
+            items: vec![],
+            next_cursor: None,
+        })
+    }
+
     async fn create_reminder(
         &self,
         _user_id: &MacroUserIdStr<'_>,
@@ -1371,4 +1393,39 @@ async fn creating_against_a_missing_entity_says_the_entity_is_missing() {
         !message.contains("reminder"),
         "create failure should not blame a reminder: {message}"
     );
+}
+
+#[tokio::test]
+async fn native_collection_authenticates_and_validates_cursor() {
+    for (path, authenticated, expected) in [
+        ("/collection", false, StatusCode::UNAUTHORIZED),
+        ("/collection?cursor=invalid", true, StatusCode::BAD_REQUEST),
+        ("/collection?completed=true&limit=25", true, StatusCode::OK),
+    ] {
+        let service = FakeRemindersService::default();
+        let router = build_router(service.clone(), FakeEntityAccessService::default());
+        let request = axum::http::Request::get(path);
+        let request = if authenticated {
+            authed(request)
+        } else {
+            request
+        };
+        let response = router
+            .oneshot(request.body(axum::body::Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), expected);
+        if expected == StatusCode::OK {
+            assert!(matches!(
+                service.calls().as_slice(),
+                [ServiceCall::Collection {
+                    completed: Some(true),
+                    limit: Some(25),
+                    ..
+                }]
+            ));
+        } else {
+            assert!(service.calls().is_empty());
+        }
+    }
 }

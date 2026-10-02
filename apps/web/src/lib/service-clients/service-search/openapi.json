@@ -2230,6 +2230,7 @@
           "CHANNEL",
           "CHAT",
           "COMPANY",
+          "DATABASE_ROW",
           "CONTACT",
           "DOCUMENT",
           "INITIATIVE",
@@ -3018,6 +3019,7 @@
           "display_name",
           "data_type",
           "is_multi_select",
+          "specific_entity_type",
           "created_at",
           "updated_at",
           "is_system",
@@ -3130,7 +3132,22 @@
           },
           {
             "type": "object",
-            "description": "System-owned property (no user or team owner).",
+            "description": "Database-scoped property: the definition is a column of one Macro\ndatabase and is invisible to the shared user/team property namespace.",
+            "required": ["database_id", "scope"],
+            "properties": {
+              "database_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "scope": {
+                "type": "string",
+                "enum": ["database"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "System-owned property (no user, team, or database owner).",
             "required": ["scope"],
             "properties": {
               "scope": {
@@ -3140,7 +3157,7 @@
             }
           }
         ],
-        "description": "Defines who owns a property - user-scoped, team-scoped, or system."
+        "description": "Defines who owns a property - user-scoped, team-scoped, database-scoped, or system."
       },
       "PropertyValue": {
         "oneOf": [

@@ -7,6 +7,7 @@ const OWNER_PRINCIPAL_ROW = [
   'automation',
   'calendar_event',
   'chat',
+  'database',
   'document',
   'email',
   'initiative',

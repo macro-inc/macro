@@ -1,4 +1,7 @@
-import { createRoutesManifest } from '@app/lib/split-router/routes';
+import {
+  createRoutesManifest,
+  getRouteClaim,
+} from '@app/lib/split-router/routes';
 import {
   decodeSplitRouterLocation,
   serializeSplitRouterLocation,
@@ -148,6 +151,24 @@ describe('application route mentions', () => {
         `https://dev.macro.com/app/drive/md/${mentionId}/~/reviews`
       )
     ).toBeUndefined();
+  });
+
+  it('treats a routed project and the initiative block as one entity', () => {
+    const claim = (pathname: string) => {
+      const { entries } = decodeSplitRouterLocation({
+        routes,
+        location: { pathname, search: '', hash: '' },
+      });
+      return getRouteClaim(routes, entries[0]!.location.route);
+    };
+    expect(claim(`/tasks/projects/${projectId}/overview`)).toEqual(
+      claim(`/initiative/${projectId}`)
+    );
+    expect(
+      resolveMention(
+        `https://dev.macro.com/app/tasks/projects/${projectId}/overview`
+      )
+    ).toEqual({ id: projectId, block: 'initiative', params: {} });
   });
 
   it('leaves unsupported and invalid destinations as links', () => {

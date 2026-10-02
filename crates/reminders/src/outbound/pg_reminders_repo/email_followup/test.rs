@@ -980,3 +980,97 @@ async fn undo_and_archive_rollback_restore_original_inbox_order(pool: PgPool) {
         service.mailbox.0.lock().unwrap().archive_fails = false;
     }
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn collection_skips_corrupt_email_probe_without_hiding_generic_reminders(pool: PgPool) {
+    use crate::domain::{
+        collection::{CollectionCursor, CollectionQuery},
+        models::{NewReminder, ReminderSchedule},
+    };
+    let service = setup(pool).await;
+    let now = service.clock.now();
+    let created = service
+        .execute(
+            user(),
+            THREAD,
+            set(
+                now + Duration::seconds(100),
+                EmailReminderCondition::Regardless,
+            ),
+        )
+        .await
+        .unwrap();
+    sqlx::query!(
+        "UPDATE reminder_email_followup SET payload = '{}'::jsonb WHERE reminder_id = $1",
+        created.reminder_id,
+    )
+    .execute(&service.repo.pool)
+    .await
+    .unwrap();
+    let mut expected = Vec::new();
+    for i in 0..105 {
+        if i == 100 {
+            continue;
+        }
+        let at = now + Duration::seconds(i);
+        let reminder = service
+            .repo
+            .create_reminder(
+                &user(),
+                &NewReminder {
+                    description: "readable collection row".into(),
+                    entity: None,
+                    schedule: ReminderSchedule::Once { remind_at: at },
+                    next_run_at: at,
+                },
+            )
+            .await
+            .unwrap();
+        expected.push(reminder.id);
+    }
+    let batch = service
+        .repo
+        .list_collection(&user(), &CollectionQuery::default(), now, 101)
+        .await
+        .unwrap();
+    assert_eq!(batch.examined, 101);
+    assert_eq!(batch.items.len(), 100);
+    assert_eq!(
+        batch.last_examined.unwrap().position.id,
+        created.reminder_id
+    );
+    let reminders = RemindersServiceImpl::with_clock(
+        PgRemindersRepo::new(service.repo.pool.clone()),
+        service.clock.clone(),
+    );
+    let first = reminders
+        .list_collection(&user(), CollectionQuery::default())
+        .await
+        .unwrap();
+    assert_eq!(first.items.len(), 100);
+    let second = reminders
+        .list_collection(
+            &user(),
+            CollectionQuery {
+                cursor: Some(
+                    CollectionCursor::decode(first.next_cursor.as_deref().unwrap()).unwrap(),
+                ),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(second.items.len(), 4);
+    assert!(second.next_cursor.is_none());
+    let actual: Vec<_> = first
+        .items
+        .into_iter()
+        .chain(second.items)
+        .map(|row| row.reminder.id)
+        .collect();
+    assert_eq!(actual, expected);
+    assert!(
+        !actual.contains(&created.reminder_id),
+        "a corrupt mirror must never become an ordinary reminder"
+    );
+}

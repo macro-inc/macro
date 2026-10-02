@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE comms_message_threads SET deleted_at = NOW() WHERE root_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "10c975ec9d47e99c1b6416719688e500f90ac0af1a95e50abb44b781f329f859"
+}

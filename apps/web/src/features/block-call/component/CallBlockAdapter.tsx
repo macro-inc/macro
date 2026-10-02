@@ -23,7 +23,7 @@ export function CallBlockAdapter(props: CallBlockProps) {
   const callRecord = useCallRecordQuery(() => callId);
   const blockHandle = blockHandleSignal.get;
   const [searchParams] = useSearchParams();
-  const [routeSearch] = createSearchParams(callDetailSearch);
+  const [routeSearch, setRouteSearch] = createSearchParams(callDetailSearch);
 
   const initialTranscriptId = ((): string | undefined => {
     if (routeSearch.transcriptId) return routeSearch.transcriptId;
@@ -41,6 +41,46 @@ export function CallBlockAdapter(props: CallBlockProps) {
       ? { transcriptId: initialTranscriptId, gen: 0 }
       : undefined
   );
+  const initialMessageId = ((): string | undefined => {
+    if (routeSearch.messageId) return routeSearch.messageId;
+    const fromProps = props[URL_PARAMS.messageId];
+    if (fromProps) return fromProps;
+    if (globalSplitManager()?.splits().length !== 1) return undefined;
+    const fromSearch = searchParams[URL_PARAMS.messageId];
+    return typeof fromSearch === 'string' ? fromSearch : undefined;
+  })();
+  const [messageTarget, setMessageTarget] = createSignal<
+    { id: string; requestKey: number } | undefined
+  >(initialMessageId ? { id: initialMessageId, requestKey: 0 } : undefined);
+  const requestMessageTarget = (id: string | undefined) =>
+    setMessageTarget((previous) =>
+      id ? { id, requestKey: (previous?.requestKey ?? 0) + 1 } : undefined
+    );
+  let routeOwnsMessageTarget = Boolean(routeSearch.messageId);
+  createEffect(
+    on(
+      () => [routeSearch.messageId, routeSearch.seek],
+      () => {
+        if (!routeSearch.messageId) {
+          if (routeOwnsMessageTarget) {
+            routeOwnsMessageTarget = false;
+            setMessageTarget(undefined);
+          }
+          return;
+        }
+        routeOwnsMessageTarget = true;
+        requestMessageTarget(routeSearch.messageId);
+      },
+      { defer: true }
+    )
+  );
+
+  const clearMessageTarget = () => {
+    setMessageTarget(undefined);
+    if (!routeOwnsMessageTarget) return;
+    routeOwnsMessageTarget = false;
+    setRouteSearch({ messageId: undefined }, { history: 'replace' });
+  };
 
   let routeOwnsTarget = Boolean(routeSearch.transcriptId);
   createEffect(
@@ -66,6 +106,9 @@ export function CallBlockAdapter(props: CallBlockProps) {
 
   createMethodRegistration(blockHandle, {
     goToLocationFromParams: async (params: CallBlockProps) => {
+      const messageId = params[URL_PARAMS.messageId];
+      routeOwnsMessageTarget = false;
+      requestMessageTarget(messageId);
       const next = params[URL_PARAMS.transcriptId];
       if (!next) return;
       routeOwnsTarget = false;
@@ -93,6 +136,9 @@ export function CallBlockAdapter(props: CallBlockProps) {
                   record={data()}
                   callId={callId}
                   transcriptTarget={transcriptTarget()}
+                  messageTarget={messageTarget()?.id}
+                  messageTargetRequestKey={messageTarget()?.requestKey}
+                  onClearMessageTarget={clearMessageTarget}
                   showOverlayHeaderGap
                 />
               </div>

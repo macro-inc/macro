@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT slack_ts, message_id, channel_id FROM slack_import_message_map\n               WHERE team_id = $1 AND slack_channel_id = $2 AND slack_ts = ANY($3)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "slack_ts",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "message_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "channel_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int8Array"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "06ce4bdbaea2e34a9704c4f5f721e7c7bdc821de74570592df4b7a4cf55be75a"
+}

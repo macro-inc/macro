@@ -1,8 +1,10 @@
 export const URL_PARAMS = {
   transcriptId: 'call_transcript_id',
+  messageId: 'call_message_id',
 };
 
 export type CallBlockProps = {
+  [URL_PARAMS.messageId]?: string;
   [URL_PARAMS.transcriptId]?: string;
 };
 

@@ -195,7 +195,11 @@ export const projectDetailRoute = defineRoute({
   }),
   component: ProjectDetailRouteView,
   remountKey: ({ projectId }) => projectId,
-  claim: ({ projectId }) => ({ namespace: 'initiative', id: projectId }),
+  claim: ({ projectId }) => ({
+    namespace: 'block',
+    id: `initiative:${projectId}`,
+  }),
+  toReference: ({ projectId }) => uuidRouteReference(projectId, 'initiative'),
   children: [projectTaskRoute],
 });
 

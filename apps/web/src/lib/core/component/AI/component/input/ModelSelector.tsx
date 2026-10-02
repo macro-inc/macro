@@ -46,6 +46,7 @@ const MODEL_DESCRIPTION: Record<TModel, string> = {
   [Model.gpt6Astra]: 'Frontier reasoning for the hardest problems',
   [Model.gpt56]: 'Reasoning, writing, and problem solving',
   [Model.gpt56Mini]: 'Fast help with everyday tasks',
+  [Model.gemini38Flash]: 'Fast answers over data and documents',
 };
 
 export function ModelSelector(props: ModelSelectorProps) {

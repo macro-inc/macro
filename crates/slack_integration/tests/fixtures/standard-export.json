@@ -1,0 +1,13 @@
+{
+  "fixture_notice": "Synthetic export roots; all identities and content are invented.",
+  "channels.json": [
+    {"id":"C100","name":"synthetic-general","created":1700000000,"creator":"U100","members":["U100","U200","U300"],"is_archived":false,"purpose":{"value":"Synthetic"},"future_field":true},
+    {"id":"C101","name":"missing-creation","members":[],"is_archived":true}
+  ],
+  "users.json": [
+    {"id":"U100","name":"alice","real_name":"Alice Example","profile":{"display_name":"Alice","email":"Alice.Example+Archive@GMAIL.COM"}},
+    {"id":"U200","name":"bob","profile":{"display_name":"Bob","email":"BOB@example.test"}},
+    {"id":"U300","name":"duplicate-alice","profile":{"email":"alice.example+archive@gmail.com"}},
+    {"id":"USLACKBOT","name":"slackbot","profile":{"email":"bot@example.test"},"future_field":{}}
+  ]
+}

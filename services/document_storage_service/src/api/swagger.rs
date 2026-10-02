@@ -74,6 +74,36 @@ use collab_surface::domain::models::SurfaceState;
 use collab_surface::inbound::axum_router::{
     CollabSurfaceResponse, CollabSurfaceTokenResponse, EnsureCollabSurfaceRequest,
 };
+use databases::domain::journal::{
+    ColumnChangeKind as DatabaseColumnChangeKind, RowChangeKind as DatabaseRowChangeKind,
+    RowHistoryEntry as DatabaseRowHistoryEntry, SkippedCell as DatabaseSkippedCell,
+    TableChanges as DatabaseTableChanges, TouchedColumn as DatabaseTouchedColumn,
+    TouchedRow as DatabaseTouchedRow, UndoOutcome as DatabaseUndoOutcome,
+    UndoRefusal as DatabaseUndoRefusal,
+};
+use databases::domain::models::CommittedChange as DatabaseCommittedChange;
+use databases::domain::models::{
+    Awareness as DatabaseAwareness, Column as DatabaseColumn, ColumnConfig as DatabaseColumnConfig,
+    ColumnDetail as DatabaseColumnDetail, Database, DatabaseDetail, ListedDatabase,
+    QueryDefinition as DatabaseQueryDefinition, SavedQuery as DatabaseSavedQuery,
+    Table as DatabaseTable, TableDetail as DatabaseTableDetail,
+    TableVersion as DatabaseTableVersion,
+};
+use databases::inbound::axum_router::history::{
+    RowHistoryResponse as DatabaseRowHistoryResponse,
+    UndoChangeResponse as DatabaseUndoChangeResponse,
+};
+use databases::inbound::axum_router::ops::{
+    ApplyOpsRequest as DatabaseApplyOpsRequest, ApplyOpsResponse as DatabaseApplyOpsResponse,
+    OpRefusalResponse as DatabaseOpRefusalResponse,
+};
+use databases::inbound::axum_router::views::ViewPositionsResponse as DatabaseViewPositionsResponse;
+use databases::inbound::axum_router::{
+    CreateDatabaseRequest, saved_queries::SaveQueryRequest as DatabaseSaveQueryRequest,
+};
+use databases::outbound::gateway_event_publisher::{
+    AwarenessRelay as DatabaseAwarenessRelay, TableChanged as DatabaseTableChanged,
+};
 use document_sub_type::DocumentSubType;
 use documents_hex::inbound::axum_router::{
     edit_document::EditDocumentResponse, get_branch_name::BranchNameResponse,
@@ -120,6 +150,30 @@ use model::{
     sync_service::SyncServiceVersionID,
     user_document_view_location::UserDocumentViewLocation,
     version::DocumentStorageServiceApiVersion,
+};
+use models_databases::views::{
+    CardPosition as DatabaseCardPosition, Conjunction as DatabaseFilterConjunction, DatabaseView,
+    DateOperator as DatabaseDateOperator, FilterCondition as DatabaseFilterCondition,
+    FilterGroup as DatabaseFilterGroup, FilterNode as DatabaseFilterNode,
+    FilterTest as DatabaseFilterTest, Lane as DatabaseBoardLane, LaneKey as DatabaseLaneKey,
+    NewView as DatabaseNewView, NumberOperator as DatabaseNumberOperator,
+    PresenceOperator as DatabasePresenceOperator, RequestedLayout as DatabaseRequestedLayout,
+    SetOperator as DatabaseSetOperator, SortDirection as DatabaseSortDirection,
+    SortKey as DatabaseSortKey, TextOperator as DatabaseTextOperator,
+    ViewColumn as DatabaseViewColumn, ViewLayout as DatabaseViewLayout,
+    ViewPosition as DatabaseViewPosition, ViewQuery as DatabaseViewQuery,
+};
+use models_databases::{
+    CellValue as DatabaseCellValue, CellWrite as DatabaseCellWrite,
+    ColumnChange as DatabaseColumnChange, ColumnKind as DatabaseColumnKind,
+    ColumnResult as DatabaseColumnResult, DatabaseOp, EntityKind as DatabaseEntityKind,
+    EntityRef as DatabaseEntityRef, NewColumn as DatabaseNewColumn, NewOption as DatabaseNewOption,
+    OpResult as DatabaseOpResult, OptionRef as DatabaseOptionRef, RowChange as DatabaseRowChange,
+    RowChanges as DatabaseRowChanges, RowsChange as DatabaseRowsChange,
+    RowsResult as DatabaseRowsResult, TableChange as DatabaseTableChange,
+    TableResult as DatabaseTableResult, TakenId as DatabaseTakenId,
+    VersionedTable as DatabaseVersionedTable, ViewChange as DatabaseViewChange,
+    ViewResult as DatabaseViewResult,
 };
 use models_permissions::share_permission::channel_share_permission::UpdateOperation;
 use models_soup::call_record::{SoupCallRecord, SoupCallRecordParticipant};
@@ -368,10 +422,20 @@ use utoipa::OpenApi;
         user_api_key::inbound::axum_router::list_user_api_keys_handler,
         user_api_key::inbound::axum_router::delete_user_api_key_handler,
 
+        // Slack archive imports
+        slack_integration::inbound::axum_router::create::create,
+        slack_integration::inbound::axum_router::uploads::register,
+        slack_integration::inbound::axum_router::uploads::complete,
+        slack_integration::inbound::axum_router::jobs::list,
+        slack_integration::inbound::axum_router::jobs::progress,
+        slack_integration::inbound::axum_router::jobs::finalize,
+        slack_integration::inbound::axum_router::jobs::cancel,
+
         // reminders
         reminders::inbound::axum_router::get_email_followup_handler,
         reminders::inbound::axum_router::set_email_followup_handler,
         reminders::inbound::axum_router::list_reminders_handler,
+        reminders::inbound::axum_router::list_reminder_collection_handler,
         reminders::inbound::axum_router::create_reminder_handler,
         reminders::inbound::axum_router::get_reminder_handler,
         reminders::inbound::axum_router::update_reminder_handler,
@@ -384,6 +448,25 @@ use utoipa::OpenApi;
         initiative::inbound::axum_router::delete::delete_initiative_handler,
         initiative::inbound::axum_router::assign_tasks::assign_initiative_tasks_handler,
         initiative::inbound::axum_router::unassign_task::unassign_initiative_task_handler,
+        // databases
+        databases::inbound::axum_router::list_databases_handler,
+        databases::inbound::starter_router::ensure_starter_handler,
+        databases::inbound::axum_router::create_database_handler,
+        databases::inbound::axum_router::get_database_handler,
+        databases::inbound::axum_router::awareness_handler,
+        databases::inbound::axum_router::ops::apply_ops_handler,
+        databases::inbound::axum_router::views::view_positions_handler,
+        databases::inbound::axum_router::history::row_history_handler,
+        databases::inbound::axum_router::history::undo_change_handler,
+        databases::inbound::axum_router::history::table_changes_handler,
+        databases::inbound::axum_router::transfer::import_table_handler,
+        databases::inbound::axum_router::sharing::get_permissions_handler,
+        databases::inbound::axum_router::sharing::update_permissions_handler,
+        databases::inbound::axum_router::saved_queries::save_query_handler,
+        databases::inbound::axum_router::saved_queries::get_query_handler,
+        databases::inbound::axum_router::casts::column_casts_handler,
+        databases::inbound::axum_router::casts::column_conversion_handler,
+        databases::inbound::axum_router::infer_column_type_handler,
         // collab surfaces
         collab_surface::inbound::axum_router::ensure_surface_handler,
         collab_surface::inbound::axum_router::get_surface_handler,
@@ -544,6 +627,83 @@ use utoipa::OpenApi;
             Reminder,
             RemindersList,
             ReminderSchedule,
+            // databases
+            Database,
+            DatabaseTable,
+            DatabaseColumn,
+            DatabaseColumnConfig,
+            DatabaseTableVersion,
+            ListedDatabase,
+            DatabaseDetail,
+            DatabaseTableDetail,
+            DatabaseColumnDetail,
+            CreateDatabaseRequest,
+            DatabaseAwareness,
+            DatabaseAwarenessRelay,
+            DatabaseTableChanged,
+            DatabaseApplyOpsRequest,
+            DatabaseApplyOpsResponse,
+            DatabaseOpRefusalResponse,
+            DatabaseRowHistoryResponse,
+            DatabaseRowHistoryEntry,
+            DatabaseRowChangeKind,
+            DatabaseUndoChangeResponse,
+            DatabaseUndoOutcome,
+            DatabaseUndoRefusal,
+            DatabaseSkippedCell,
+            DatabaseCommittedChange,
+            DatabaseTableChanges,
+            DatabaseTouchedRow,
+            DatabaseTouchedColumn,
+            DatabaseColumnChangeKind,
+            DatabaseOp,
+            DatabaseTableChange,
+            DatabaseColumnChange,
+            DatabaseRowsChange,
+            DatabaseViewChange,
+            DatabaseCellWrite,
+            DatabaseCellValue,
+            DatabaseRowChanges,
+            DatabaseRowChange,
+            DatabaseOptionRef,
+            DatabaseEntityRef,
+            DatabaseEntityKind,
+            DatabaseColumnKind,
+            DatabaseNewColumn,
+            DatabaseNewOption,
+            DatabaseOpResult,
+            DatabaseTableResult,
+            DatabaseColumnResult,
+            DatabaseRowsResult,
+            DatabaseViewResult,
+            DatabaseTakenId,
+            DatabaseVersionedTable,
+            DatabaseView,
+            DatabaseNewView,
+            DatabaseViewQuery,
+            DatabaseSortKey,
+            DatabaseSortDirection,
+            DatabaseFilterGroup,
+            DatabaseFilterConjunction,
+            DatabaseFilterNode,
+            DatabaseFilterCondition,
+            DatabaseFilterTest,
+            DatabasePresenceOperator,
+            DatabaseTextOperator,
+            DatabaseNumberOperator,
+            DatabaseDateOperator,
+            DatabaseSetOperator,
+            DatabaseViewLayout,
+            DatabaseRequestedLayout,
+            DatabaseViewColumn,
+            DatabaseBoardLane,
+            DatabaseLaneKey,
+            DatabaseCardPosition,
+            DatabaseViewPosition,
+            DatabaseViewPositionsResponse,
+            DatabaseQueryDefinition,
+            DatabaseSavedQuery,
+            DatabaseSaveQueryRequest,
             CreateReminderRequest,
             UpdateReminderRequest,
             InitiativeId,
@@ -810,3 +970,6 @@ use utoipa::OpenApi;
     )
 )]
 pub struct ApiDoc;
+
+#[cfg(test)]
+mod test;

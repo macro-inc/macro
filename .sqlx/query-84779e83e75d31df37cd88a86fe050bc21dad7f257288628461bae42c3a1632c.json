@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO database_changes (database_id, table_id, version, actor, acting_bot, ops, inverse)\n               VALUES ($1, $2, $3, $4, $5, $6, $7)\n               RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8",
+        "Text",
+        "Text",
+        "Jsonb",
+        "Jsonb"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "84779e83e75d31df37cd88a86fe050bc21dad7f257288628461bae42c3a1632c"
+}

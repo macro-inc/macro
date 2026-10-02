@@ -51,6 +51,8 @@ pub enum MessageParent {
     CrmCompany(Uuid),
     /// A CRM contact.
     CrmContact(Uuid),
+    /// A video call and its persistent chat thread.
+    Call(Uuid),
 }
 
 impl MessageParent {
@@ -68,6 +70,7 @@ impl MessageParent {
             "crm_contact" => Ok(Self::CrmContact(
                 entity_id.parse().map_err(|_| InvalidParent)?,
             )),
+            "call" => Ok(Self::Call(entity_id.parse().map_err(|_| InvalidParent)?)),
             _ => Err(InvalidParent),
         }
     }
@@ -80,6 +83,7 @@ impl MessageParent {
             Self::Initiative(_) => "initiative",
             Self::CrmCompany(_) => "crm_company",
             Self::CrmContact(_) => "crm_contact",
+            Self::Call(_) => "call",
         }
     }
 
@@ -87,6 +91,7 @@ impl MessageParent {
     pub fn entity_id(&self) -> String {
         match self {
             Self::Channel(id)
+            | Self::Call(id)
             | Self::Initiative(id)
             | Self::CrmCompany(id)
             | Self::CrmContact(id) => id.to_string(),
@@ -96,7 +101,7 @@ impl MessageParent {
 
     /// Whether messages are presented as comments on an entity.
     pub fn is_discussion(&self) -> bool {
-        !matches!(self, Self::Channel(_))
+        !matches!(self, Self::Channel(_) | Self::Call(_))
     }
 
     /// Entity type whose permissions govern messages on this parent.
@@ -108,6 +113,7 @@ impl MessageParent {
             Self::Initiative(_) => entity_access::domain::models::EntityType::Initiative,
             Self::CrmCompany(_) => entity_access::domain::models::EntityType::CrmCompany,
             Self::CrmContact(_) => entity_access::domain::models::EntityType::CrmContact,
+            Self::Call(_) => entity_access::domain::models::EntityType::Call,
         }
     }
 }

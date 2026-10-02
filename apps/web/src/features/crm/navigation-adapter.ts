@@ -45,7 +45,7 @@ export function createAppCrmNavigation(): ReturnType<
     showCompanies: () => {
       layout.replaceOrInsertSplit({ type: 'component', id: 'companies' });
     },
-    openEmail: (entity) => {
+    openEntity: (entity) => {
       void openEntityInSplitFromUnifiedList(entity, {});
     },
   };

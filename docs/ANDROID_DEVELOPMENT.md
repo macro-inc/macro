@@ -49,7 +49,8 @@ That address is emulator-only; the host-side server check must be skipped.
 
 Build commands embed the production frontend. Outputs are under
 `tauri/src-tauri/gen/android/app/build/outputs/`. The launcher defaults to ARM64.
-Release builds require the signing configuration below and produce signed artifacts.
+Release builds automatically prepare the signing configuration below and produce
+signed artifacts. Debug builds do not fetch release signing credentials.
 
 ## Release signing
 
@@ -61,8 +62,18 @@ and provision them securely for CI.
 Coordinate key replacement with Play Console; do not generate a new key for
 routine builds.
 
-With Doppler access, provision signing from `apps/web` (the private destination
-directory must not already exist):
+`just android-build` preserves existing `gen/android/keystore.properties`
+configuration, including CI-provisioned signing. When it is missing, the launcher
+reuses signing files in `~/.macro-android-signing`, or fetches the existing key
+from Doppler and creates that private directory on the first release build.
+Other worktrees reuse the same directory through their own properties symlink.
+Install the Doppler CLI and authenticate with read access to `android-release/prd`
+(CI can use `DOPPLER_TOKEN`). Missing access fails before compilation.
+Broken symlinks or incomplete signing directories fail without replacing files;
+restore the files or manually provision to a new private directory.
+
+To use a different private location, provision signing from `apps/web` (the
+private destination directory must not already exist):
 
 ```sh
 bun scripts/android-release.ts signing /absolute/private/path/android-signing tauri/src-tauri/gen/android/keystore.properties

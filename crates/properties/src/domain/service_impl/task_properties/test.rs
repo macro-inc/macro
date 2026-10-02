@@ -32,6 +32,27 @@ async fn agents_do_not_require_human_permission_or_notification_services() {
 }
 
 #[tokio::test]
+async fn project_agents_do_not_require_human_collaborator_grants() {
+    let service = PropertiesServiceImpl::new(
+        MockPropertiesRepo::new(),
+        None::<MockPermissionService>,
+        None::<MockNotificationService>,
+    );
+    let access = EditReceipt::dangerously_assert_authenticated_user(
+        MacroUserIdStr::parse_from_str("macro|assigner@example.com").unwrap(),
+        &Uuid::from_u128(1).to_string(),
+        entity_access::domain::models::EntityType::Initiative,
+    );
+    service
+        .handle_initiative_assignees_property(
+            &access,
+            &Some(PropertyValue::EntityRef(vec![agent_reference()])),
+        )
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
 async fn mixed_assignments_grant_access_and_notify_only_humans() {
     let task_id = Uuid::from_u128(1);
     let assignee = MacroUserIdStr::parse_from_str("macro|assignee@example.com").unwrap();

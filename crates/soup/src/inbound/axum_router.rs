@@ -1421,6 +1421,7 @@ impl ApiEntityFilterAst {
             agent_session_filter,
             properties_filter,
             initiative_filter: None,
+            database_row_filter: None,
         })
     }
 }

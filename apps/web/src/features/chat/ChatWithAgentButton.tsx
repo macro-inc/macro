@@ -50,6 +50,10 @@ async function createAndOpenAgent(seed: {
   input?: string;
   /** Sent immediately once the agent session is ready. */
   message?: string;
+  /** The model the session runs on; the caller checks the plan allows it. */
+  model?: string;
+  /** Context for the agent alone, kept out of the composer and the transcript. */
+  instructions?: string;
   /** Replaces this split's content instead of opening a new split. */
   replaceSplit?: SplitHandle;
 }) {
@@ -62,6 +66,8 @@ async function createAndOpenAgent(seed: {
   const id = startPendingSession({
     prompt: seed.message,
     initialInput: seed.message ? undefined : seed.input,
+    ...(seed.model ? { modelOverride: seed.model } : {}),
+    ...(seed.instructions ? { instructions: seed.instructions } : {}),
   });
   const next = {
     type: 'component' as const,
@@ -83,8 +89,16 @@ export async function openChatWithAgent(entity: ChatWithAgentEntity) {
   return createAndOpenAgent({ input });
 }
 
-export async function openChatWithInput(initialInput: string) {
-  await createAndOpenAgent({ input: initialInput });
+/** Open a new agent session with `initialInput` unsent, on `model`, told `instructions` privately. */
+export async function openChatWithInput(
+  initialInput: string,
+  options?: { model?: string; instructions?: string }
+) {
+  await createAndOpenAgent({
+    input: initialInput,
+    model: options?.model,
+    instructions: options?.instructions,
+  });
 }
 
 /**

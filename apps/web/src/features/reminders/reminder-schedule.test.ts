@@ -100,17 +100,16 @@ describe('parseLocalReminderDateTime', () => {
 });
 
 describe('formatReminderInstant', () => {
-  it('includes the relative day, exact date, time, and timezone', () => {
+  it('includes an exact date and time without repeating the local timezone', () => {
     const described = formatReminderInstant(
       new Date('2026-09-22T09:00:00.000Z'),
-      'UTC',
-      new Date('2026-09-21T12:00:00.000Z')
+      'UTC'
     );
 
-    expect(described).toContain('Tomorrow');
+    expect(described).not.toContain('Tomorrow');
     expect(described).toContain('Sep 22');
     expect(described).toMatch(/9:00\sAM/);
-    expect(described).toContain('(UTC)');
+    expect(described).not.toContain('(UTC)');
   });
 
   it('describes persisted schedules for success feedback', () => {
@@ -120,7 +119,7 @@ describe('formatReminderInstant', () => {
         cron: '0 0 9 * * 2-6',
         timezone: 'America/New_York',
       })
-    ).toContain('Weekdays at 9:00 AM');
+    ).toContain('Repeats on weekdays at 9:00 AM');
   });
 
   it('does not invent a cadence for an unsupported custom cron', () => {
@@ -130,7 +129,7 @@ describe('formatReminderInstant', () => {
         cron: '0 */15 9 * * *',
         timezone: 'America/New_York',
       })
-    ).toBe('Custom repeating schedule (America/New_York)');
+    ).toBe('Repeats on a custom schedule');
   });
 });
 
@@ -612,7 +611,7 @@ describe('describeReminderSchedule', () => {
       timezone: 'UTC',
     });
 
-    expect(described).toMatch(/^Weekdays at /);
+    expect(described).toMatch(/^Repeats on weekdays at /);
   });
 
   it('says nothing for a one-shot, whose date is already shown', () => {
@@ -644,7 +643,7 @@ describe('describeReminderWhen', () => {
       nextRunAt: new Date(2026, 7, 10, 9, 0),
     });
 
-    expect(when).toMatch(/^Weekdays at /);
+    expect(when).toMatch(/^Repeats on weekdays at /);
     expect(when).not.toContain('Aug');
   });
 });
@@ -799,4 +798,30 @@ describe('keeping a recurring schedule unchanged', () => {
       )
     ).toBeUndefined();
   });
+});
+
+it('uses a stable zone for recurrence-only text and the actual occurrence for dated row text across DST', () => {
+  const originalTimezone = process.env.TZ;
+  process.env.TZ = 'UTC';
+  try {
+    const schedule = {
+      type: 'recurring' as const,
+      cron: '0 0 9 * * 1',
+      timezone: 'America/New_York',
+    };
+    expect(describeReminderSchedule(schedule)).toBe(
+      'Repeats weekly on Sun at 9:00 AM Eastern Time'
+    );
+    const when = describeReminderWhen({
+      scheduleType: 'recurring',
+      cron: schedule.cron,
+      timezone: schedule.timezone,
+      nextRunAt: '2026-11-01T14:00:00Z',
+    });
+    expect(when).toBe('Repeats weekly on Sun at 9:00 AM EST');
+    expect(when).not.toContain('EDT');
+  } finally {
+    if (originalTimezone === undefined) delete process.env.TZ;
+    else process.env.TZ = originalTimezone;
+  }
 });

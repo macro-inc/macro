@@ -4,8 +4,10 @@
 #[cfg(test)]
 mod test;
 
+mod database_row;
 mod initiative;
 
+use database_row::{build_database_row_filter, database_row_opted_in, database_row_top_clause};
 use initiative::initiative_top_clause;
 pub(in crate::outbound::pg_soup_repo) use initiative::{
     build_initiative_filter, initiative_access_clause, initiative_opted_in,
@@ -24,6 +26,7 @@ use item_filters::ast::{
     chat::ChatLiteral,
     date::DateLiteral,
     document::DocumentLiteral,
+    email::Email,
     project::ProjectLiteral,
     properties::{PropertiesLiteral, PropertyEntityType, PropertyMatchValue},
 };
@@ -33,6 +36,7 @@ use models_pagination::{Query, SimpleSortMethod};
 use models_soup::{
     calendar_event::SoupCalendarEvent,
     chat::SoupChat,
+    database_row::SoupDatabaseRow,
     document::{SoupDocument, SoupDocumentSubType},
     initiative::SoupInitiative,
     item::SoupItem,
@@ -231,7 +235,8 @@ static DOCUMENT_DETAIL_CLAUSE: &str = r#"
                 THEN false
                 ELSE NULL
             END as "is_completed",
-            d."deletedAt"::timestamptz as "deleted_at"
+            d."deletedAt"::timestamptz as "deleted_at",
+            NULL::jsonb as "database_row"
         FROM TopItems t
         INNER JOIN "Document" d ON d.id = t.id
         LEFT JOIN document_sub_type dt ON dt.document_id = d.id
@@ -284,7 +289,8 @@ static CHAT_DETAIL_CLAUSE: &str = r#"
             uh."updatedAt"::timestamptz as "viewed_at",
             t.sort_ts as "sort_ts",
             NULL as "is_completed",
-            c."deletedAt"::timestamptz as "deleted_at"
+            c."deletedAt"::timestamptz as "deleted_at",
+            NULL::jsonb as "database_row"
         FROM TopItems t
         INNER JOIN "Chat" c ON c.id = t.id
         LEFT JOIN "UserHistory" uh
@@ -317,7 +323,8 @@ static PROJECT_DETAIL_CLAUSE: &str = r#"
             uh."updatedAt"::timestamptz as "viewed_at",
             t.sort_ts as "sort_ts",
             NULL as "is_completed",
-            p."deletedAt"::timestamptz as "deleted_at"
+            p."deletedAt"::timestamptz as "deleted_at",
+            NULL::jsonb as "database_row"
         FROM TopItems t
         INNER JOIN "Project" p ON p.id = t.id
         LEFT JOIN "UserHistory" uh
@@ -328,6 +335,8 @@ static PROJECT_DETAIL_CLAUSE: &str = r#"
 "#;
 
 static INITIATIVE_DETAIL_CLAUSE: &str = include_str!("dynamic/initiative_detail.sql");
+
+static DATABASE_ROW_DETAIL_CLAUSE: &str = include_str!("dynamic/database_row_detail.sql");
 
 static DETAIL_SUFFIX: &str = r#"
     )
@@ -369,6 +378,7 @@ static GROUPED_DOCUMENT_DETAIL_CLAUSE: &str = r#"
             END as "is_completed",
             d."deletedAt"::timestamptz as "deleted_at",
             NULL::jsonb as "calendar_event",
+            NULL::jsonb as "database_row",
             gi.group_key as "group_key",
             gi.group_total_count as "group_total_count",
             gi.row_in_group as "row_in_group"
@@ -423,6 +433,7 @@ static GROUPED_CHAT_DETAIL_CLAUSE: &str = r#"
             NULL::boolean as "is_completed",
             c."deletedAt"::timestamptz as "deleted_at",
             NULL::jsonb as "calendar_event",
+            NULL::jsonb as "database_row",
             gi.group_key as "group_key",
             gi.group_total_count as "group_total_count",
             gi.row_in_group as "row_in_group"
@@ -457,6 +468,7 @@ static GROUPED_PROJECT_DETAIL_CLAUSE: &str = r#"
             NULL::boolean as "is_completed",
             p."deletedAt"::timestamptz as "deleted_at",
             NULL::jsonb as "calendar_event",
+            NULL::jsonb as "database_row",
             gi.group_key as "group_key",
             gi.group_total_count as "group_total_count",
             gi.row_in_group as "row_in_group"
@@ -471,6 +483,9 @@ static GROUPED_PROJECT_DETAIL_CLAUSE: &str = r#"
 
 static GROUPED_INITIATIVE_DETAIL_CLAUSE: &str =
     include_str!("dynamic/initiative_grouped_detail.sql");
+
+static GROUPED_DATABASE_ROW_DETAIL_CLAUSE: &str =
+    include_str!("dynamic/database_row_grouped_detail.sql");
 
 static GROUPED_CALENDAR_EVENT_DETAIL_CLAUSE: &str = r#"
         SELECT
@@ -528,6 +543,7 @@ static GROUPED_CALENDAR_EVENT_DETAIL_CLAUSE: &str = r#"
                 'lastReminderFiredAt', event.last_reminder_fired_at,
                 'extra', NULL
             ) as "calendar_event",
+            NULL::jsonb as "database_row",
             gi.group_key as "group_key",
             gi.group_total_count as "group_total_count",
             gi.row_in_group as "row_in_group"
@@ -560,6 +576,7 @@ static GROUPED_EMPTY_COMBINED_CLAUSE: &str = r#"
             NULL::boolean as "is_completed",
             NULL::timestamptz as "deleted_at",
             NULL::jsonb as "calendar_event",
+            NULL::jsonb as "database_row",
             NULL::text as "group_key",
             NULL::bigint as "group_total_count",
             NULL::bigint as "row_in_group"
@@ -898,12 +915,53 @@ pub(in crate::outbound::pg_soup_repo) fn build_document_filter(
         filter_ast::ExprFrame::Literal(DocumentLiteral::UpdatedAt(lit)) => {
             date_predicate(r#"d."updatedAt""#, &lit)
         }
+        filter_ast::ExprFrame::Literal(DocumentLiteral::Property(lit)) => {
+            property_literal_predicate(&lit, "d.id")
+        }
+        filter_ast::ExprFrame::Literal(DocumentLiteral::EmailAttachmentParticipant(email)) => {
+            email_attachment_participant_predicate(&email, "d.id")
+        }
     });
     if formatting.is_empty() {
         String::new()
     } else {
         format!(" AND {}", formatting)
     }
+}
+
+/// Matches documents uploaded from an email attachment whose message was sent
+/// by, or addressed to, an address matching `email`.
+fn email_attachment_participant_predicate(email: &Email, document_id_sql: &str) -> String {
+    let address_predicate = match email {
+        Email::Complete(address) => format!(
+            "LOWER(c.email_address) = {}",
+            sql_string_literal(&address.0.as_ref().to_lowercase())
+        ),
+        Email::Domain(domain) => format!(
+            "LOWER(SPLIT_PART(c.email_address, '@', 2)) = {}",
+            sql_string_literal(&domain.to_lowercase())
+        ),
+        Email::Partial(fragment) => format!(
+            "STRPOS(LOWER(c.email_address), {}) > 0",
+            sql_string_literal(&fragment.to_lowercase())
+        ),
+    };
+    format!(
+        r#"EXISTS (
+            SELECT 1
+            FROM document_email de
+            JOIN email_attachments ea ON ea.id = de.email_attachment_id
+            JOIN email_messages m ON m.id = ea.message_id
+            JOIN LATERAL (
+                SELECT m.from_contact_id AS contact_id
+                UNION ALL
+                SELECT r.contact_id FROM email_message_recipients r WHERE r.message_id = m.id
+            ) participant ON TRUE
+            JOIN email_contacts c ON c.id = participant.contact_id
+            WHERE de.document_id = {document_id_sql}
+            AND {address_predicate}
+        )"#
+    )
 }
 
 /// A single-quoted SQL string literal with embedded quotes doubled. Used for
@@ -1067,34 +1125,8 @@ pub(in crate::outbound::pg_soup_repo) fn build_properties_filter(
         filter_ast::ExprFrame::And(a, b) => format!("({a} AND {b})"),
         filter_ast::ExprFrame::Or(a, b) => format!("({a} OR {b})"),
         filter_ast::ExprFrame::Not(a) => format!("(NOT {a})"),
-        filter_ast::ExprFrame::Literal(PropertiesLiteral {
-            property_definition_id,
-            entity_type,
-            value,
-        }) => {
-            let value_predicate = match value {
-                PropertyMatchValue::SelectOption(option_id) => {
-                    format!("ep_prop.values->'value' ? '{option_id}'")
-                }
-                PropertyMatchValue::EntityRef(entity_id) => {
-                    format!(
-                        "ep_prop.values->'value' @> jsonb_build_array(jsonb_build_object('entity_id', '{entity_id}'))"
-                    )
-                }
-            };
-            let entity_type_clause = match entity_type {
-                Some(et) => format!("AND ep_prop.entity_type = '{et}'"),
-                None => String::new(),
-            };
-            format!(
-                r#"EXISTS (
-                    SELECT 1 FROM entity_properties ep_prop
-                    WHERE ep_prop.entity_id = {entity_id_sql}
-                    {entity_type_clause}
-                    AND ep_prop.property_definition_id = '{property_definition_id}'
-                    AND {value_predicate}
-                )"#
-            )
+        filter_ast::ExprFrame::Literal(literal) => {
+            property_literal_predicate(&literal, entity_id_sql)
         }
     });
     if formatting.is_empty() {
@@ -1102,6 +1134,39 @@ pub(in crate::outbound::pg_soup_repo) fn build_properties_filter(
     } else {
         format!(" AND {}", formatting)
     }
+}
+
+/// An EXISTS check that the entity identified by `entity_id_sql` has a
+/// property value matching `literal`.
+fn property_literal_predicate(literal: &PropertiesLiteral, entity_id_sql: &str) -> String {
+    let PropertiesLiteral {
+        property_definition_id,
+        entity_type,
+        value,
+    } = literal;
+    let value_predicate = match value {
+        PropertyMatchValue::SelectOption(option_id) => {
+            format!("ep_prop.values->'value' ? '{option_id}'")
+        }
+        PropertyMatchValue::EntityRef(entity_id) => {
+            format!(
+                "ep_prop.values->'value' @> jsonb_build_array(jsonb_build_object('entity_id', '{entity_id}'))"
+            )
+        }
+    };
+    let entity_type_clause = match entity_type {
+        Some(et) => format!("AND ep_prop.entity_type = '{et}'"),
+        None => String::new(),
+    };
+    format!(
+        r#"EXISTS (
+            SELECT 1 FROM entity_properties ep_prop
+            WHERE ep_prop.entity_id = {entity_id_sql}
+            {entity_type_clause}
+            AND ep_prop.property_definition_id = '{property_definition_id}'
+            AND {value_predicate}
+        )"#
+    )
 }
 
 pub(in crate::outbound::pg_soup_repo) fn document_filter_needs_task_property_joins(
@@ -1351,6 +1416,11 @@ fn build_query(
             filter_ast.properties_filter.as_deref(),
             &[PropertyEntityType::Initiative],
         );
+    let include_database_rows = database_row_opted_in(filter_ast.database_row_filter.as_deref())
+        && properties_filter_can_apply_to(
+            filter_ast.properties_filter.as_deref(),
+            &[PropertyEntityType::DatabaseRow],
+        );
     let include_documents = !document_filter_is_impossible(filter_ast.document_filter.as_deref())
         && properties_filter_can_apply_to(
             filter_ast.properties_filter.as_deref(),
@@ -1508,6 +1578,18 @@ fn build_query(
         ));
     }
 
+    if include_database_rows {
+        push_union_separator(&mut builder, &mut needs_separator);
+        builder.push(database_row_top_clause(sort_method, false));
+        builder.push(build_database_row_filter(
+            filter_ast.database_row_filter.as_deref(),
+        ));
+        builder.push(build_properties_filter(
+            filter_ast.properties_filter.as_deref(),
+            "r.id::text",
+        ));
+    }
+
     if !needs_separator {
         builder.push(
             "SELECT 'document'::text as item_type, NULL::text as id, NULL::timestamptz as sort_ts WHERE false",
@@ -1565,6 +1647,10 @@ fn build_query(
         push_union_separator(&mut builder, &mut needs_separator);
         builder.push(INITIATIVE_DETAIL_CLAUSE);
     }
+    if include_database_rows {
+        push_union_separator(&mut builder, &mut needs_separator);
+        builder.push(DATABASE_ROW_DETAIL_CLAUSE);
+    }
     if !needs_separator {
         builder.push(
             r#"SELECT
@@ -1591,7 +1677,8 @@ fn build_query(
                 NULL::timestamptz as "viewed_at",
                 NULL::timestamptz as "sort_ts",
                 NULL::boolean as "is_completed",
-                NULL::timestamptz as "deleted_at"
+                NULL::timestamptz as "deleted_at",
+                NULL::jsonb as "database_row"
             WHERE false"#,
         );
     }
@@ -1664,12 +1751,32 @@ struct InitiativeRow {
     viewed_at: Option<DateTime<Utc>>,
 }
 
+#[derive(Debug, FromRow)]
+struct DatabaseRowRow {
+    id: String,
+    user_id: String,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+    database_row: sqlx::types::Json<DatabaseRowPlacement>,
+}
+
+/// Where a row sits, as the detail clauses build it.
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DatabaseRowPlacement {
+    table_id: Uuid,
+    database_id: Uuid,
+    position: String,
+    created_by: Option<String>,
+}
+
 #[derive(Debug)]
 enum SoupRow {
     Document(DocumentRow),
     Chat(ChatRow),
     Project(ProjectRow),
     Initiative(InitiativeRow),
+    DatabaseRow(DatabaseRowRow),
     CalendarEvent(SoupCalendarEvent<()>),
 }
 
@@ -1681,6 +1788,7 @@ impl<'a> FromRow<'a, PgRow> for SoupRow {
             "chat" => Ok(SoupRow::Chat(ChatRow::from_row(row)?)),
             "project" => Ok(SoupRow::Project(ProjectRow::from_row(row)?)),
             "initiative" => Ok(SoupRow::Initiative(InitiativeRow::from_row(row)?)),
+            "database_row" => Ok(SoupRow::DatabaseRow(DatabaseRowRow::from_row(row)?)),
             "calendar_event" => {
                 let value: serde_json::Value = row.try_get("calendar_event")?;
                 let event = serde_json::from_value(value)
@@ -1702,7 +1810,11 @@ impl SoupRow {
                 is_important: row.is_important,
                 status_option_ids: row.status_option_ids.clone(),
             }),
-            Self::Chat(_) | Self::Project(_) | Self::Initiative(_) | Self::CalendarEvent(_) => None,
+            Self::Chat(_)
+            | Self::Project(_)
+            | Self::Initiative(_)
+            | Self::DatabaseRow(_)
+            | Self::CalendarEvent(_) => None,
         }
     }
 
@@ -1832,6 +1944,20 @@ impl SoupRow {
                 viewed_at: row.viewed_at,
                 extra: (),
             }),
+            SoupRow::DatabaseRow(row) => {
+                let placement = row.database_row.0;
+                SoupItem::DatabaseRow(SoupDatabaseRow {
+                    id: row.id.parse().map_err(type_err)?,
+                    table_id: placement.table_id,
+                    database_id: placement.database_id,
+                    position: placement.position,
+                    owner_id: Owner::from_principal_str(&row.user_id).map_err(type_err)?,
+                    created_by: placement.created_by,
+                    created_at: row.created_at,
+                    updated_at: row.updated_at,
+                    extra: (),
+                })
+            }
             SoupRow::CalendarEvent(event) => SoupItem::CalendarEvent(event),
         })
     }
@@ -2021,6 +2147,11 @@ fn build_grouped_query<'a>(
             filter_ast.properties_filter.as_deref(),
             &[PropertyEntityType::Initiative],
         );
+    let include_database_rows = database_row_opted_in(filter_ast.database_row_filter.as_deref())
+        && properties_filter_can_apply_to(
+            filter_ast.properties_filter.as_deref(),
+            &[PropertyEntityType::DatabaseRow],
+        );
     let include_documents = !document_filter_is_impossible(filter_ast.document_filter.as_deref())
         && properties_filter_can_apply_to(
             filter_ast.properties_filter.as_deref(),
@@ -2114,6 +2245,18 @@ fn build_grouped_query<'a>(
         ));
     }
 
+    if include_database_rows {
+        push_union_separator(&mut builder, &mut needs_separator);
+        builder.push(database_row_top_clause(sort_method, true));
+        builder.push(build_database_row_filter(
+            filter_ast.database_row_filter.as_deref(),
+        ));
+        builder.push(build_properties_filter(
+            filter_ast.properties_filter.as_deref(),
+            "r.id::text",
+        ));
+    }
+
     // Fallback when all entity types are filtered out
     if !needs_separator {
         builder.push(
@@ -2195,6 +2338,13 @@ fn build_grouped_query<'a>(
         push_union_separator(&mut builder, &mut combined_needs_separator);
         builder.push(
             GROUPED_INITIATIVE_DETAIL_CLAUSE
+                .replace("GroupedItems gi", &format!("{} gi", source_table)),
+        );
+    }
+    if include_database_rows {
+        push_union_separator(&mut builder, &mut combined_needs_separator);
+        builder.push(
+            GROUPED_DATABASE_ROW_DETAIL_CLAUSE
                 .replace("GroupedItems gi", &format!("{} gi", source_table)),
         );
     }

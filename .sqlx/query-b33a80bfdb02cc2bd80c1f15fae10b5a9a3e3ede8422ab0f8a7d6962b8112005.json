@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, entity_id, values AS \"values: serde_json::Value\", updated_at\n               FROM entity_properties\n               WHERE property_definition_id = $1\n               ORDER BY entity_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "entity_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "values: serde_json::Value",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "b33a80bfdb02cc2bd80c1f15fae10b5a9a3e3ede8422ab0f8a7d6962b8112005"
+}

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)\n           SELECT c.id, 'call', p.user_id, 'user', 'comment'\n           FROM calls c JOIN call_participants p ON p.call_id = c.id\n           WHERE c.id = $1 AND c.channel_id IS NULL AND p.user_id = $2 AND p.left_at IS NULL\n           ON CONFLICT (entity_id, entity_type, source_id, source_type)\n           WHERE granted_from_project_id IS NULL\n           DO UPDATE SET access_level = EXCLUDED.access_level, updated_at = now()\n           WHERE entity_access.access_level = 'view'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "bb6e269e362363da01521d8661e5d5b259f68bf65d4160850649229e69e0b1a9"
+}

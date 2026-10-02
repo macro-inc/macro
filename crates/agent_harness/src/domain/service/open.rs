@@ -481,12 +481,9 @@ where
 
         let defaults = self.defaults.for_bot(bot_id);
         let sandbox_size = self.sessions.user_sandbox_size(&actor).await?;
-        // The same profile the create menu snapshots: a mention states nothing
-        // about how the runtime should work, so the bot's configured
-        // instructions are what it opens with, exactly as a dedicated session
-        // would. Blank instructions are "none" stated clumsily.
-        let instructions =
-            Some(runtime.instructions.clone()).filter(|text| !text.trim().is_empty());
+        // Assignments retain the original task and update policy alongside the
+        // profile instructions, including across later turns and reattachments.
+        let instructions = origin.session_instructions(&runtime.instructions);
 
         // Provisioned before the session exists, because the row is what makes
         // the token mean anything: it carries the hash the proxy recognises.

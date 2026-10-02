@@ -3,19 +3,23 @@
 //!
 //! `message.posted` on `macro.messages` is the source of record: it carries the
 //! persisted parent, so a mention in a document discussion routes like one in a
-//! channel. The consumer also reads `macro.properties` for task assignments.
+//! channel. The consumer also reads properties and project membership changes
+//! for task assignments.
 
 #[cfg(test)]
 mod test;
 
 use super::processing::TriggerInput;
 use super::task_assignment::TaskAssignment;
+use initiative::domain::events::{
+    InitiativeMacroEvent, InitiativeTasksChanged, InitiativeTopicEvent,
+};
 use macro_event_broker::{MacroEvent as _, MacroEventCollection};
 use macro_uuid::Uuid;
 use messages::outbound::broker::{MessageMacroEvent, MessageTopicEvent};
 use properties::domain::events::{PropertyMacroEvent, PropertyTopicEvent};
 
-macro_event_broker::declare_topics!(MessageTriggerEvents: MessageMacroEvent, PropertyMacroEvent);
+macro_event_broker::declare_topics!(MessageTriggerEvents: MessageMacroEvent, PropertyMacroEvent, InitiativeMacroEvent);
 
 /// A decoded broker record from the trigger source.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -29,6 +33,8 @@ pub struct DecodedTrigger {
     pub posted: Option<TriggerInput>,
     /// Newly assigned agents, from a task assignment property update.
     pub assignment: Option<TaskAssignment>,
+    /// Tasks entering or leaving a project; additions inherit project agents.
+    pub project_tasks: Option<InitiativeTasksChanged>,
 }
 
 /// A topic collection whose records may carry a committed post.
@@ -42,6 +48,7 @@ impl TriggerEvents for MessageTriggerEvents {
         let event = match self {
             Self::MessageMacroEvent(event) => event,
             Self::PropertyMacroEvent(event) => return property_trigger(event),
+            Self::InitiativeMacroEvent(event) => return initiative_trigger(event),
         };
         let envelope = event.event();
         let (event_type, posted) = match &envelope.event {
@@ -63,6 +70,7 @@ impl TriggerEvents for MessageTriggerEvents {
             event_type,
             posted,
             assignment: None,
+            project_tasks: None,
         }
     }
 }
@@ -87,5 +95,25 @@ fn property_trigger(event: PropertyMacroEvent) -> DecodedTrigger {
         event_type,
         posted: None,
         assignment,
+        project_tasks: None,
+    }
+}
+
+fn initiative_trigger(event: InitiativeMacroEvent) -> DecodedTrigger {
+    let envelope = event.event();
+    let (event_type, project_tasks) = match &envelope.event {
+        InitiativeTopicEvent::Created(_) => ("initiative.created", None),
+        InitiativeTopicEvent::Updated(_) => ("initiative.updated", None),
+        InitiativeTopicEvent::TasksChanged(changes) => {
+            ("initiative.tasks_changed", Some(changes.clone()))
+        }
+        InitiativeTopicEvent::Purged { .. } => ("initiative.purged", None),
+    };
+    DecodedTrigger {
+        event_id: envelope.event_id,
+        event_type,
+        posted: None,
+        assignment: None,
+        project_tasks,
     }
 }

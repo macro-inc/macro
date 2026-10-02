@@ -103,10 +103,11 @@ function makeFakeClient(): {
     executions.push({
       variables: request.variables,
       next: (page, state) =>
-        subject.next({ operation, data: { page }, ...state } as OperationResult<
-          unknown,
-          GroupSoupQueryVariables
-        >),
+        subject.next({
+          operation,
+          data: { page, user: { id: 'viewer' } },
+          ...state,
+        } as OperationResult<unknown, GroupSoupQueryVariables>),
       fail: (error) =>
         subject.next({ operation, error, stale: false, hasNext: false }),
       get unsubscribed() {

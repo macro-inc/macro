@@ -17,6 +17,7 @@ const stageSoupProperty = (optionId: string): SoupProperty => ({
     is_multi_select: false,
     is_system: true,
     owner: { scope: 'system' },
+    specific_entity_type: null,
     created_at: EPOCH_ZERO,
     updated_at: EPOCH_ZERO,
   },

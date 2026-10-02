@@ -10,6 +10,7 @@ use item_filters::ast::{
     channel::{ChannelLiteral, ChannelThreadLiteral},
     chat::ChatLiteral,
     crm_company::CrmCompanyLiteral,
+    database_row::{DatabaseRowLiteral, database_rows_requested},
     date::DateLiteral,
     document::DocumentLiteral,
     email::EmailLiteral,
@@ -112,6 +113,16 @@ pub mod vocabulary {
     /// Channel partition in the browser-composed profile.
     pub fn channel_partition() -> Token {
         token("channel")
+    }
+
+    /// Database row partition in the browser-composed profile.
+    pub fn database_row_partition() -> Token {
+        token("database_row")
+    }
+
+    /// The table a database row belongs to.
+    pub fn table_id() -> Token {
+        token("table-id")
     }
 
     /// Canonical channel type.
@@ -274,6 +285,11 @@ fn check_soup_flat(
 ) -> Eligibility {
     if ast.initiative_filter.is_some() {
         return Eligibility::Unsupported(UnsupportedReason::Partition("initiative"));
+    }
+    // Rows are opt-in, so a filter that names no table (or only negates one)
+    // selects none of them and needs no rows partition.
+    if !supports_notifications && database_rows_requested(ast.database_row_filter.as_deref()) {
+        return Eligibility::Unsupported(UnsupportedReason::Partition("database_row"));
     }
     if ast.favorites_only == Some(true) {
         return Eligibility::Unsupported(UnsupportedReason::Literal("favorites"));
@@ -586,6 +602,16 @@ fn compile_soup_flat(
         query
             .partitions
             .push(channels::compile(ast.channel_filter.as_deref())?);
+        query.partitions.push(PartitionPredicate {
+            partition: vocabulary::database_row_partition(),
+            predicate: if database_rows_requested(ast.database_row_filter.as_deref()) {
+                compile_expr(ast.database_row_filter.as_deref(), |literal| {
+                    Ok(compile_database_row_literal(literal))
+                })?
+            } else {
+                PredicateExpr::None
+            },
+        });
     }
     Ok(LocalCompileOutcome::Supported(ValidatedIndexQuery::new(
         query,
@@ -788,6 +814,13 @@ fn compile_chat_literal(literal: &ChatLiteral) -> Result<PredicateExpr, CompileE
         ChatLiteral::UpdatedAt(date) => date_expr(vocabulary::updated_at(), date),
         _ => unreachable!("eligibility checked chat literal"),
     })
+}
+
+fn compile_database_row_literal(literal: &DatabaseRowLiteral) -> PredicateExpr {
+    match literal {
+        DatabaseRowLiteral::TableId(id) => exact_uuid(vocabulary::table_id(), id),
+        DatabaseRowLiteral::Id(id) => exact_uuid(vocabulary::id(), id),
+    }
 }
 
 fn exact_uuid(attribute: Token, value: &Uuid) -> PredicateExpr {

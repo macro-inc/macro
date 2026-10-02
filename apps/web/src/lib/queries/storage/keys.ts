@@ -99,6 +99,18 @@ export const teamTaskKeys = createQueryKeys('teamTask', {
   }),
 });
 
+export const databasesKeys = createQueryKeys('databases', {
+  list: null,
+  starter: (userId: string) => ({ queryKey: [userId] }),
+  detail: (databaseId: string) => ({
+    queryKey: [databaseId],
+  }),
+});
+
+export const savedDatabaseQueryKeys = createQueryKeys('saved-database-query', {
+  definition: (queryId: string) => ({ queryKey: [queryId] }),
+});
+
 export const instructionsMdKeys = createQueryKeys('instructionsMd', {
   id: null,
   text: (id: string) => ({

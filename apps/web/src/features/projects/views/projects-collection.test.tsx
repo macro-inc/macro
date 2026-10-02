@@ -143,6 +143,7 @@ function selectProperty(
       id: optionId,
       value: { type: 'string', value: label },
       display_order: index,
+      color: null,
       property_definition_id: id,
       created_at: '',
       updated_at: '',
