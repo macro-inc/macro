@@ -28,6 +28,9 @@ const mocks = vi.hoisted(() => ({
   add: vi.fn(),
   open: vi.fn<typeof openPropertyEditor>(),
 }));
+vi.mock('@app/features/projects/task-project-property', () => ({
+  TaskProjectProperty: () => null,
+}));
 vi.mock('@property/editor/state/propertyEditor', () => ({
   openPropertyEditor: mocks.open,
 }));

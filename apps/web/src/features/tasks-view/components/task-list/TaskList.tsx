@@ -19,6 +19,8 @@ import {
 } from '@app/lib/signals/store-array-updaters';
 import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { HotkeyTags } from '@core/hotkey/constants';
+import { registerHotkey } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   type EntityData,
@@ -61,11 +63,11 @@ import { TaskListEntity } from './TaskListEntity';
 import { TaskListHeader } from './TaskListHeader';
 import { taskGridColumnCount } from './task-grid-template';
 import './task-list.css';
+import { ProjectPropertyCell } from '@app/features/projects/project-property';
 import {
-  ProjectPickerPopover,
-  ProjectPropertyCell,
-} from '@app/features/projects/project-property';
-import { useTaskProjectReferences } from '@app/features/projects/projects';
+  ProjectAssignmentDialog,
+  useTaskProjectReferences,
+} from '@app/features/projects/projects';
 
 function ResponsiveTaskListHeader() {
   const layout = useListLayout();
@@ -227,10 +229,8 @@ export function TaskList(props: TaskListProps) {
     )
   );
   const columnCount = () => taskGridColumnCount(projectsEnabled());
-  const [assigningProjectTasks, setAssigningProjectTasks] = createSignal<{
-    ids: string[];
-    anchor: HTMLElement;
-  }>();
+  const [assigningProjectTasks, setAssigningProjectTasks] =
+    createSignal<string[]>();
   const tasksById = createMemo(() => {
     const tasks = new Map<string, TaskEntityWithProperties>();
     for (const row of visibleRows()) {
@@ -336,6 +336,20 @@ export function TaskList(props: TaskListProps) {
     viewContext: entityActionViewContext,
     splitHandle: panel.handle,
     condition: panel.isPanelActive,
+  });
+
+  registerHotkey({
+    scopeId: panel.splitHotkeyScope,
+    description: 'Add to project…',
+    tags: [HotkeyTags.SelectionModification],
+    condition: () =>
+      panel.isPanelActive() && projectsEnabled() && selectedTasks().length > 0,
+    keyDownHandler: () => {
+      const ids = selectedTasks().map((task) => task.id);
+      if (!projectsEnabled() || !ids.length) return false;
+      setAssigningProjectTasks(ids);
+      return true;
+    },
   });
 
   let restoredScroll = false;
@@ -664,32 +678,13 @@ export function TaskList(props: TaskListProps) {
               selected={selectedTasks()}
               onClear={listInteractions.selection.clear}
               analyticsSource="tasks_view_selection_toolbar"
-            >
-              <Show when={projectsEnabled()}>
-                <Button
-                  size="sm"
-                  class="whitespace-nowrap"
-                  onClick={(event) =>
-                    setAssigningProjectTasks({
-                      ids: selectedTasks().map((task) => task.id),
-                      anchor: event.currentTarget,
-                    })
-                  }
-                >
-                  Set project
-                </Button>
-              </Show>
-            </EntitySelectionToolbar>
+            />
           </Show>
           <Show when={projectsEnabled() && assigningProjectTasks()}>
             {(assigning) => (
-              <ProjectPickerPopover
-                taskIds={assigning().ids}
-                open
-                onOpenChange={(open) => {
-                  if (!open) setAssigningProjectTasks(undefined);
-                }}
-                getAnchorRect={() => assigning().anchor.getBoundingClientRect()}
+              <ProjectAssignmentDialog
+                taskIds={assigning()}
+                onClose={() => setAssigningProjectTasks(undefined)}
               />
             )}
           </Show>

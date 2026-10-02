@@ -1,3 +1,4 @@
+import { TaskProjectProperty } from '@app/features/projects/task-project-property';
 import { ProgressChip } from '@core/component/LexicalMarkdown/component/status/Progress';
 import { AddPropertyButton } from '@property/component/AddPropertyButton';
 import { Modals } from '@property/component/modal';
@@ -145,6 +146,9 @@ export function InlineTaskProperties() {
           </For>
           <Show when={documentKind === 'document' && canEdit()}>
             <AddPropertyButton class="gap-1.5 bg-surface-2" />
+          </Show>
+          <Show when={documentKind === 'task'}>
+            <TaskProjectProperty taskId={blockId} canEdit={canEdit()} />
           </Show>
           <Show when={documentKind === 'task' && state.editor.md.progressStats}>
             {(progressStats) => (
