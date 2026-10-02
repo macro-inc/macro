@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   view: vi.fn(),
   open: vi.fn(),
   failure: vi.fn(),
+  flag: vi.fn(),
 }));
 vi.mock('../email-view-context', () => ({ useEmailView: mocks.view }));
 vi.mock('@core/component/Toast/Toast', () => ({
@@ -29,7 +30,7 @@ vi.mock('@app/features/soup', async () => ({
 }));
 vi.mock('@entity', async () => await import('@entity/types/entity'));
 vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => ({ enabled: true }),
+  useFeatureFlag: () => mocks.flag,
 }));
 vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalNotificationSource: () => ({ notificationsByEntity: () => ({}) }),
@@ -93,6 +94,8 @@ function mount() {
     mocks.hydration
       .mockReturnValueOnce(hydration)
       .mockReturnValue(laterHydration);
+    const [flag, setFlag] = createStore({ enabled: true, loading: false });
+    mocks.flag.mockImplementation(() => flag);
     const source = useReminderEmailSource(state, {
       tagSets: () => [],
       tagSetsReady: () => true,
@@ -101,6 +104,7 @@ function mount() {
     const navigation = useEmailDetailListNavigation(() => 'first');
     return {
       source,
+      setFlag,
       navigation,
       setState,
       collection,
@@ -361,4 +365,15 @@ it('reconciles live non-read facets and refills while keeping read admission sta
   expect(source.items().filter((row) => row.kind === 'entity')).toHaveLength(0);
   await Promise.resolve();
   expect(collection.refetch).toHaveBeenCalledOnce();
+});
+
+it('keeps a restored Reminders view loading until the feature flag resolves', () => {
+  const { source, setFlag } = mount();
+  const options = mocks.collection.mock.calls[0][0];
+  setFlag({ enabled: false, loading: true });
+  expect(source.isLoading()).toBe(true);
+  expect(options().enabled).toBe(false);
+  setFlag({ enabled: true, loading: false });
+  expect(source.isLoading()).toBe(false);
+  expect(options().enabled).toBe(true);
 });

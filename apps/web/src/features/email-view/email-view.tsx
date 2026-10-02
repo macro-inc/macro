@@ -114,7 +114,10 @@ function EmailMobileLayout(props: ParentProps) {
             contentClass="px-(--mobile-chrome-gutter)"
             leading={<EmailFilterDrawer />}
             items={MOBILE_EMAIL_TABS.filter(
-              (tab) => tab.value !== 'reminders' || reminders().enabled
+              (tab) =>
+                tab.value !== 'reminders' ||
+                reminders().enabled ||
+                (reminders().loading && state.tab === 'reminders')
             )}
             value={state.tab}
             onChange={setTab}

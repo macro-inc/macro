@@ -282,6 +282,7 @@ export function useReminderEmailSource(
     reminderForThread: (threadId) => reminders().get(threadId),
     items,
     isLoading: () =>
+      (state.tab === 'reminders' && enabled().loading) ||
       !ready() ||
       collection.isLoading ||
       (entities().length === 0 && pending()),

@@ -60,6 +60,7 @@ function Tab(props: { item: EmailTabItem; onNavigate?: () => void }) {
 }
 
 export function EmailNavigation(props: { onNavigate?: () => void }) {
+  const { state } = useEmailView();
   const reminders = useFeatureFlag(enableReminders);
   return (
     <ViewSidebar.Nav aria-label="Email tabs">
@@ -73,7 +74,10 @@ export function EmailNavigation(props: { onNavigate?: () => void }) {
       </div>
       <For
         each={EMAIL_TABS.slice(2).filter(
-          (tab) => tab.id !== 'reminders' || reminders().enabled
+          (tab) =>
+            tab.id !== 'reminders' ||
+            reminders().enabled ||
+            (reminders().loading && state.tab === 'reminders')
         )}
       >
         {(item) => <Tab item={item} onNavigate={props.onNavigate} />}
@@ -98,7 +102,12 @@ export function EmailSidebar() {
     scopeId: panel.splitHotkeyScope,
     enabled: panel.isPanelActive,
     ids: () =>
-      EMAIL_TAB_IDS.filter((id) => id !== 'reminders' || reminders().enabled),
+      EMAIL_TAB_IDS.filter(
+        (id) =>
+          id !== 'reminders' ||
+          reminders().enabled ||
+          (reminders().loading && state.tab === 'reminders')
+      ),
     activeId: () => state.tab,
     setActiveId: setTab,
     shouldHandleSequentialKeyEvent: (event) =>
