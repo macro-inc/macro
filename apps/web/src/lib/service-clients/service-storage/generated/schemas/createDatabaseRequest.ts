@@ -4,6 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { DatabaseTemplateId } from './databaseTemplateId';
 
 /**
  * Request body for creating a database.
@@ -11,4 +12,6 @@
 export interface CreateDatabaseRequest {
   /** Display name. */
   name: string;
+  /** The template that builds the database; left out, it starts blank. */
+  template?: DatabaseTemplateId;
 }

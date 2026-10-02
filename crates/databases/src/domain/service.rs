@@ -7,6 +7,7 @@ mod infer_column_type;
 mod ops;
 mod saved_queries;
 mod sharing;
+mod templates;
 #[cfg(test)]
 mod test;
 mod transfer;
@@ -509,6 +510,22 @@ where
             name: validate_name(&command.name)?,
             ..command
         };
+        if let Some(template) = command.template {
+            let viewer = Viewer {
+                user_id: command.owner_id,
+                acting_bot: command.acting_bot,
+            };
+            return self
+                .create_from_template(&viewer, command.name, template, false)
+                .await?
+                .map(|(database, _)| database)
+                .ok_or_else(|| {
+                    DatabaseError::Repo(
+                        rootcause::report!("a database that is not a starter was taken")
+                            .into_dynamic(),
+                    )
+                });
+        }
         let database = self
             .repository
             .create_database(&command, FIRST_TABLE)

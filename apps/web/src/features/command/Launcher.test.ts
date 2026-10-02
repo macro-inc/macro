@@ -10,6 +10,10 @@ vi.mock('@app/features/agents-view/primitives/open-composer', () => ({}));
 vi.mock('@app/features/block-agent/context/pending-session', () => ({}));
 vi.mock('@app/features/block-agent/ui/AgentInput', () => ({}));
 vi.mock(
+  '@app/features/block-database/views/database-template-picker',
+  () => ({})
+);
+vi.mock(
   '@app/features/block-spreadsheet/primitives/use-spreadsheet-access',
   () => ({})
 );

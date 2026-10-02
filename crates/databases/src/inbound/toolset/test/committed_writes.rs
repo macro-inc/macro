@@ -29,6 +29,7 @@ async fn creating_database_preserves_committed_identity_when_schema_read_fails()
     let (context, calls) = failed_refresh();
     let response = CreateDatabase {
         name: "Offsite".into(),
+        template: None,
     }
     .call(ServiceContext(context), request_context())
     .await
@@ -45,6 +46,7 @@ async fn creating_database_preserves_success_when_followup_receipt_is_unavailabl
     let (context, calls) = context(FakeAccess::denying());
     let response = CreateDatabase {
         name: "Offsite".into(),
+        template: None,
     }
     .call(ServiceContext(context), request_context())
     .await
@@ -134,6 +136,7 @@ async fn writes_reach_the_service_as_the_contexts_agent_for_the_user() {
 
     CreateDatabase {
         name: "Offsite".into(),
+        template: None,
     }
     .call(ServiceContext(context.clone()), request_context())
     .await
@@ -157,4 +160,46 @@ async fn writes_reach_the_service_as_the_contexts_agent_for_the_user() {
         calls.lock().unwrap().acting_bots,
         [Some(agent), Some(agent), Some(agent)]
     );
+}
+
+#[tokio::test]
+async fn a_template_reaches_the_service_with_the_creation() {
+    use crate::domain::templates::TemplateId;
+
+    let (context, calls) = context(FakeAccess::granting(AccessLevel::Owner));
+    let response = CreateDatabase {
+        name: "Launch".into(),
+        template: Some(TemplateId::ProjectTracker),
+    }
+    .call(ServiceContext(context), request_context())
+    .await
+    .unwrap();
+    assert_eq!(response.id, DATABASE_ID);
+    let calls = calls.lock().unwrap();
+    assert_eq!(calls.created_databases, ["Launch"]);
+    assert_eq!(calls.created_templates, [Some(TemplateId::ProjectTracker)]);
+}
+
+#[test]
+fn the_tool_names_every_template_and_takes_its_slug() {
+    use crate::domain::templates::{TEMPLATES, TemplateId};
+
+    let schema = serde_json::to_value(schemars::schema_for!(CreateDatabase)).unwrap();
+    let description = schema["description"].as_str().unwrap();
+    for template in &TEMPLATES {
+        assert!(
+            description.contains(&format!("`{}`", template.id)),
+            "the description names {}",
+            template.id
+        );
+    }
+    let tool: CreateDatabase = serde_json::from_value(serde_json::json!({
+        "name": "Guests",
+        "template": "event_planner",
+    }))
+    .unwrap();
+    assert_eq!(tool.template, Some(TemplateId::EventPlanner));
+    let blank: CreateDatabase =
+        serde_json::from_value(serde_json::json!({"name": "Guests"})).unwrap();
+    assert_eq!(blank.template, None);
 }

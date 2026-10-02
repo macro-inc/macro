@@ -105,6 +105,7 @@ async fn an_agent_is_attributed_as_acting_for_the_user() {
         name: "Agent Offsite".into(),
         owner_id: user(OWNER),
         acting_bot: Some(agent),
+        template: None,
     })
     .await
     .unwrap();

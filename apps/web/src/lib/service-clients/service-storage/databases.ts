@@ -21,6 +21,7 @@ import type { ColumnConversion } from './generated/schemas/columnConversion';
 import type { CreateDatabaseRequest } from './generated/schemas/createDatabaseRequest';
 import type { Database } from './generated/schemas/database';
 import type { DatabaseDetail } from './generated/schemas/databaseDetail';
+import type { DatabaseTemplate } from './generated/schemas/databaseTemplate';
 import type { ErrorResponse } from './generated/schemas/errorResponse';
 import type { ImportTable } from './generated/schemas/importTable';
 import type { InferColumnTypeOutcome } from './generated/schemas/inferColumnTypeOutcome';
@@ -184,6 +185,11 @@ export const databasesClient = {
 
   list() {
     return databasesFetch<ListedDatabase[]>('/databases');
+  },
+
+  /** The templates a new database can start from, in picker order. */
+  templates() {
+    return databasesFetch<DatabaseTemplate[]>('/databases/templates');
   },
 
   ensureStarter() {

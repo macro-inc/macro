@@ -4672,12 +4672,24 @@ export const listDatabasesResponseItem = zod
 export const listDatabasesResponse = zod.array(listDatabasesResponseItem);
 
 /**
- * @summary Create a database owned by the caller; its first table, "Table 1", holds a
-"Name" text column.
+ * @summary Create a database owned by the caller. Blank, its first table, "Table 1",
+holds a "Name" text column; from a template, the template's tables,
+columns, views and sample rows build it, all or nothing.
  */
 export const createDatabaseBody = zod
   .object({
     name: zod.string().describe('Display name.'),
+    template: zod
+      .enum([
+        'getting_started',
+        'project_tracker',
+        'crm',
+        'event_planner',
+        'content_calendar',
+        'reading_list',
+      ])
+      .optional()
+      .describe('Which template, by its stable slug.'),
   })
   .describe('Request body for creating a database.');
 
@@ -4759,6 +4771,35 @@ export const ensureStarterHandlerResponse = zod
   .describe(
     'Starter result. A missing database means the user already started or removed it.'
   );
+
+/**
+ * @summary The templates a database can be created from, in the order a picker
+lists them.
+ */
+export const listDatabaseTemplatesResponseItem = zod
+  .object({
+    description: zod.string().describe('What it is for, in a sentence.'),
+    icon: zod
+      .enum(['sparkle', 'kanban', 'handshake', 'confetti', 'calendar', 'books'])
+      .describe('The icon a template is shown with.'),
+    id: zod
+      .enum([
+        'getting_started',
+        'project_tracker',
+        'crm',
+        'event_planner',
+        'content_calendar',
+        'reading_list',
+      ])
+      .describe('Which template, by its stable slug.'),
+    name: zod
+      .string()
+      .describe('Its name, which a database made from it takes by default.'),
+  })
+  .describe('What a template builds into a new database.');
+export const listDatabaseTemplatesResponse = zod.array(
+  listDatabaseTemplatesResponseItem
+);
 
 /**
  * @summary Schema detail of one database.

@@ -35,7 +35,7 @@ Never use text for people or for Macro items: a typed name links to nothing and 
 
 Each structure tool returns the refreshed schema.
 
-- `CreateDatabase` makes a database whose starter table, “Table 1”, has a “Name” title column. Rename it with `RenameTable` to the first table the user asked for instead of adding a tab. `RenameDatabase` retitles a database.
+- `CreateDatabase` makes a database whose starter table, “Table 1”, has a “Name” title column. Rename it with `RenameTable` to the first table the user asked for instead of adding a tab. When the request matches one of its templates (project tracker, CRM, event planner, content calendar, reading list), pass `template` instead to get its tables, columns, views and sample rows, and read the schema it returns before changing it. `RenameDatabase` retitles a database.
 - `CreateTable`, `RenameTable`, `DeleteTable` and `ReorderTables` add, retitle, remove and order tabs; a database keeps at least one.
 - `AddColumn`, `RenameColumn`, `DeleteColumn` and `ReorderColumns` do the same for columns. `AddColumn` takes `specificEntityType` for an entity column (`USER` for a person column).
 - `AddColumnOptions` adds labels to a select or tag column; a write naming a label the column lacks is refused.

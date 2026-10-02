@@ -28,6 +28,8 @@ mod schema_ops;
 mod sharing;
 #[cfg(feature = "gateway")]
 mod tables;
+#[cfg(feature = "gateway")]
+mod templates;
 mod transfer;
 #[cfg(feature = "gateway")]
 mod undo;
@@ -140,6 +142,7 @@ async fn commit(
             related_rows: Vec::new(),
             expected_versions: Vec::new(),
             journal: crate::domain::journal::JournalPlan::default(),
+            creates: None,
         })
         .await
         .expect("the batch should run");
@@ -176,6 +179,7 @@ async fn fixture(pool: &PgPool) -> (PgDatabasesRepo<PropertiesPgRepo>, Table, Uu
                 name: "Summer Offsite".to_string(),
                 owner_id: user(),
                 acting_bot: None,
+                template: None,
             },
             FirstTable {
                 name: "Table 1",
@@ -222,6 +226,7 @@ async fn a_new_database_starts_with_a_title_column_that_infers_its_type(pool: Pg
                 name: "Hiring".to_string(),
                 owner_id: user(),
                 acting_bot: None,
+                template: None,
             },
             FirstTable {
                 name: "Table 1",

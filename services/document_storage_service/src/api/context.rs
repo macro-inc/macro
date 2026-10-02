@@ -522,15 +522,10 @@ pub(crate) type DatabasesServiceType =
 pub(crate) type DssDatabasesState =
     DatabasesRouterState<DatabasesServiceType, EntityAccessService, AuthorizationService>;
 
-/// Database onboarding composes transaction-capable owning domain adapters.
+/// Database onboarding: the databases service gives the starter template.
 pub(crate) type DssDatabaseStarterState =
     databases::inbound::starter_router::DatabaseStarterRouterState<
-        databases::domain::starter::DatabaseStarterServiceImpl<
-            databases::outbound::pg_starter::PgDatabaseStarterRepo<
-                properties::outbound::properties_pg_repo::PropertiesPgRepo,
-            >,
-            DssEventBroker,
-        >,
+        DatabasesServiceType,
         AuthorizationService,
     >;
 

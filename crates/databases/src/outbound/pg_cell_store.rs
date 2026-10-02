@@ -26,7 +26,10 @@ use crate::domain::models::{
 };
 use crate::domain::ports::CellStore;
 use crate::outbound::pg_databases_repo::schema::{self, Inserted, Removed};
-use crate::outbound::pg_databases_repo::{PgDatabasesRepoError, journal, rows, views};
+use crate::outbound::pg_databases_repo::{
+    PgDatabasesRepoError, insert_owned_database, journal, rows, views,
+};
+use crate::outbound::pg_starter::{self, StarterClaim};
 
 /// [`CellStore`] over the properties repository, with the pool its batches
 /// open their transaction on.
@@ -179,6 +182,24 @@ where
         // Returning before the commit drops the transaction, which rolls
         // everything back.
         let mut transaction = self.pool.begin().await?;
+
+        if let Some(new) = &writes.creates {
+            let owner = new.database.owner_id.as_str();
+            if new.starter {
+                match pg_starter::claim_starter(&mut transaction, owner).await? {
+                    StarterClaim::Claimed => {}
+                    StarterClaim::Given => return Ok(WritesOutcome::StarterTaken),
+                    StarterClaim::OwnsDatabase => {
+                        transaction.commit().await?;
+                        return Ok(WritesOutcome::StarterTaken);
+                    }
+                }
+            }
+            insert_owned_database(&mut transaction, &new.database).await?;
+            if new.starter {
+                pg_starter::record_starter(&mut transaction, owner, new.database.id).await?;
+            }
+        }
 
         // Parent locks precede table locks, as every writer takes them.
         if !schema::lock_database(

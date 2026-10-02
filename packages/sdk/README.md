@@ -193,6 +193,18 @@ await database.reorderTables(tables.toReversed());
 await (await database.table('Table 1'))?.delete();
 ```
 
+A database can also start from a template, which builds its tables, columns,
+views and a few sample rows in the same transaction that creates it:
+
+```ts
+const templates = await macro.databases.templates();
+// [{ id: 'project_tracker', name: 'Project tracker', description, icon }, …]
+const launch = await macro.databases.create({
+  name: 'Launch',
+  template: 'project_tracker',
+});
+```
+
 Changing a column's type, reordering columns, and deleting a column send the
 table version last read as the batch's base version: if the table changed
 since, the server refuses with a 409 and nothing is written.

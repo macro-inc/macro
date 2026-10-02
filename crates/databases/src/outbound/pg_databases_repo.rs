@@ -17,6 +17,8 @@ pub(crate) mod views;
 
 use std::collections::HashMap;
 
+use chrono::SubsecRound;
+
 use models_databases::position::{Position, PositionError, key_between};
 use uuid::Uuid;
 
@@ -139,53 +141,31 @@ fn position_after(last: Option<&Position>) -> Result<Position, PositionError> {
     key_between(last, None)
 }
 
-/// Insert a database, its first table and its owner's grant inside
-/// `transaction`, so no database can exist that nobody can open.
+/// Insert a database and its owner's grant inside `transaction`, so no
+/// database can exist that nobody can open.
 pub(crate) async fn insert_owned_database(
     transaction: &mut Transaction<'static, Postgres>,
-    database_id: DatabaseId,
-    name: &str,
-    owner_id: &str,
-    table_id: TableId,
-    table_name: &str,
-) -> Result<Database, PgDatabasesRepoError> {
-    let position = position_after(None)?;
-    let database: Database = sqlx::query_as!(
-        DatabaseRecord,
-        r#"
-            INSERT INTO databases (id, name, owner_id)
-            VALUES ($1, $2, $3)
-            RETURNING id, name, owner_id, created_at, trashed_at
-            "#,
-        database_id.into_uuid(),
-        name,
-        owner_id,
-    )
-    .fetch_one(&mut **transaction)
-    .await?
-    .into();
+    database: &Database,
+) -> Result<(), PgDatabasesRepoError> {
     sqlx::query!(
-        r#"
-            INSERT INTO database_tables (id, database_id, name, position)
-            VALUES ($1, $2, $3, $4)
-            "#,
-        table_id.into_uuid(),
-        database_id.into_uuid(),
-        table_name,
-        position.as_str(),
+        "INSERT INTO databases (id, name, owner_id, created_at) VALUES ($1, $2, $3, $4)",
+        database.id.into_uuid(),
+        database.name,
+        database.owner_id,
+        database.created_at,
     )
     .execute(&mut **transaction)
     .await?;
     entity_access_db_utils::insert_entity_access_row(
         transaction,
-        database_id.as_uuid(),
+        database.id.as_uuid(),
         EntityType::Database,
-        owner_id,
+        &database.owner_id,
         EntityAccessSourceType::User,
         AccessLevel::Owner,
     )
     .await?;
-    Ok(database)
+    Ok(())
 }
 
 /// Insert a column placement bound to `definition_id` inside `transaction`;
@@ -271,15 +251,28 @@ where
         first_table: FirstTable,
     ) -> Result<Database, Self::Error> {
         let mut transaction = self.pool.begin().await?;
+        let database = Database {
+            id: DatabaseId::new(),
+            name: command.name.clone(),
+            owner_id: command.owner_id.to_string(),
+            // Stored to the microsecond, so the answer matches what reads return.
+            created_at: chrono::Utc::now().trunc_subsecs(6),
+            trashed_at: None,
+        };
+        insert_owned_database(&mut transaction, &database).await?;
         let table_id = TableId::new();
-        let database = insert_owned_database(
-            &mut transaction,
-            DatabaseId::new(),
-            &command.name,
-            command.owner_id.as_ref(),
-            table_id,
+        let table_position = position_after(None)?;
+        sqlx::query!(
+            r#"
+            INSERT INTO database_tables (id, database_id, name, position)
+            VALUES ($1, $2, $3, $4)
+            "#,
+            table_id.into_uuid(),
+            database.id.into_uuid(),
             first_table.name,
+            table_position.as_str(),
         )
+        .execute(&mut *transaction)
         .await?;
         let title = self
             .properties
@@ -308,6 +301,21 @@ where
         .await?;
         transaction.commit().await?;
         Ok(database)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn starter_database(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<Option<DatabaseId>, Self::Error> {
+        Ok(sqlx::query_scalar!(
+            r#"SELECT d.id FROM database_starter_seeds s JOIN databases d ON d.id = s.database_id
+                   WHERE s.user_id = $1 AND d.trashed_at IS NULL"#,
+            user_id.as_ref(),
+        )
+        .fetch_optional(&self.pool)
+        .await?
+        .map(DatabaseId::from_uuid))
     }
 
     /// Returns the row whether or not it is trashed; the domain decides what a

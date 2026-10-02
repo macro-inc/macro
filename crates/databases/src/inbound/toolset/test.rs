@@ -51,6 +51,8 @@ struct Calls {
     listed: usize,
     described: usize,
     created_databases: Vec<String>,
+    /// The template each creation asked for.
+    created_templates: Vec<Option<crate::domain::templates::TemplateId>>,
     renamed_databases: Vec<String>,
     /// The agent each attributed write reached the service as.
     acting_bots: Vec<Option<BotId>>,
@@ -164,6 +166,7 @@ impl DatabasesService for FakeService {
     ) -> Result<Database, DatabaseError> {
         let mut calls = self.calls.lock().unwrap();
         calls.created_databases.push(command.name);
+        calls.created_templates.push(command.template);
         calls.acting_bots.push(command.acting_bot);
         Ok(database())
     }

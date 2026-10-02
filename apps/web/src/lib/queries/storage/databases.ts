@@ -12,6 +12,8 @@ import type {
 } from '@service-storage/databases';
 import type { CommittedChange } from '@service-storage/generated/schemas/committedChange';
 import type { DatabaseDetail } from '@service-storage/generated/schemas/databaseDetail';
+import type { DatabaseTemplate } from '@service-storage/generated/schemas/databaseTemplate';
+import type { DatabaseTemplateId } from '@service-storage/generated/schemas/databaseTemplateId';
 import type { ListedDatabase } from '@service-storage/generated/schemas/listedDatabase';
 import type { OpResult } from '@service-storage/generated/schemas/opResult';
 import type { UndoOutcome } from '@service-storage/generated/schemas/undoOutcome';
@@ -35,6 +37,18 @@ export function useDatabasesQuery() {
   const flag = useFeatureFlag(enableDatabases);
   return useQuery(() => ({
     ...databaseListQueryOptions,
+    enabled: flag().enabled,
+  }));
+}
+
+/** The templates a new database can start from; they are code on the server, so they never go stale. */
+export function useDatabaseTemplatesQuery() {
+  const flag = useFeatureFlag(enableDatabases);
+  return useQuery(() => ({
+    queryKey: databasesKeys.templates.queryKey,
+    queryFn: (): Promise<DatabaseTemplate[]> =>
+      throwOnErr(() => storageServiceClient.databases.templates()),
+    staleTime: Infinity,
     enabled: flag().enabled,
   }));
 }
@@ -268,14 +282,18 @@ export function applyDatabaseTableVersions(
   );
 }
 
-/** Create a database; the service gives it a first table with a Name column. */
+/**
+ * Create a database. Blank, the service gives it a first table with a Name column;
+ * from a template, it returns once the template's tables, views and sample rows exist.
+ */
 export function createDatabase(params: {
   name: string;
+  template?: DatabaseTemplateId;
   /** UI surface the creation originated from, for analytics. */
   source?: string;
 }): ResultAsync<string, ResultError<DatabaseSchemaErrorCode>[]> {
   return storageServiceClient.databases
-    .create({ name: params.name })
+    .create({ name: params.name, template: params.template })
     .map(async ({ id }) => {
       analytics.track('create_entity', {
         entityType: 'database',

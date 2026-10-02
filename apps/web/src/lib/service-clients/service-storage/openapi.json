@@ -6255,7 +6255,7 @@
       },
       "post": {
         "tags": ["databases"],
-        "summary": "Create a database owned by the caller; its first table, \"Table 1\", holds a\n\"Name\" text column.",
+        "summary": "Create a database owned by the caller. Blank, its first table, \"Table 1\",\nholds a \"Name\" text column; from a template, the template's tables,\ncolumns, views and sample rows build it, all or nothing.",
         "operationId": "create_database",
         "requestBody": {
           "content": {
@@ -6462,6 +6462,38 @@
           },
           "500": {
             "description": "Provisioning failed; safe to retry"
+          }
+        }
+      }
+    },
+    "/databases/templates": {
+      "get": {
+        "tags": ["databases"],
+        "summary": "The templates a database can be created from, in the order a picker\nlists them.",
+        "operationId": "list_database_templates",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DatabaseTemplate"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -21491,6 +21523,10 @@
           "name": {
             "type": "string",
             "description": "Display name."
+          },
+          "template": {
+            "$ref": "#/components/schemas/DatabaseTemplateId",
+            "description": "The template that builds the database; left out, it starts blank."
           }
         }
       },
@@ -22784,6 +22820,53 @@
           }
         ],
         "description": "One write to a database: its tables, columns, options, rows or views,\ngrouped by the resource it changes. A request's ops apply in order and\ntogether, or not at all, and every op names a table of the database the\nrequest is for (or, creating one, adds it there)."
+      },
+      "DatabaseTemplate": {
+        "type": "object",
+        "description": "What a template builds into a new database.",
+        "required": ["id", "name", "description", "icon"],
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "What it is for, in a sentence."
+          },
+          "icon": {
+            "$ref": "#/components/schemas/DatabaseTemplateIcon",
+            "description": "Its icon."
+          },
+          "id": {
+            "$ref": "#/components/schemas/DatabaseTemplateId",
+            "description": "Its stable slug."
+          },
+          "name": {
+            "type": "string",
+            "description": "Its name, which a database made from it takes by default."
+          }
+        }
+      },
+      "DatabaseTemplateIcon": {
+        "type": "string",
+        "description": "The icon a template is shown with.",
+        "enum": [
+          "sparkle",
+          "kanban",
+          "handshake",
+          "confetti",
+          "calendar",
+          "books"
+        ]
+      },
+      "DatabaseTemplateId": {
+        "type": "string",
+        "description": "Which template, by its stable slug.",
+        "enum": [
+          "getting_started",
+          "project_tracker",
+          "crm",
+          "event_planner",
+          "content_calendar",
+          "reading_list"
+        ]
       },
       "DatabaseView": {
         "type": "object",

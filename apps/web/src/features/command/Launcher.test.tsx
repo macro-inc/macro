@@ -1,5 +1,6 @@
 import { MemoryRouter, Route } from '@solidjs/router';
 import { cleanup, render } from '@solidjs/testing-library';
+import { ok } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
@@ -7,7 +8,10 @@ const host = vi.hoisted(() => ({
   popoverSplit: vi.fn(),
   openWithSplit: vi.fn(),
   createFolder: vi.fn(),
+  createDatabase: vi.fn(),
+  openDatabaseTemplatePicker: vi.fn(),
   projectFlag: (): boolean | undefined => true,
+  databaseFlag: false,
 }));
 
 vi.mock('@components/app/split-layout/layout', () => ({
@@ -21,6 +25,12 @@ vi.mock('@queries/storage/projects', () => ({
 vi.mock('@app/features/agents-view/primitives/open-composer', () => ({}));
 vi.mock('@app/features/block-agent/context/pending-session', () => ({}));
 vi.mock('@app/features/block-agent/ui/AgentInput', () => ({}));
+vi.mock('@app/features/block-database/views/database-template-picker', () => ({
+  openDatabaseTemplatePicker: host.openDatabaseTemplatePicker,
+}));
+vi.mock('@queries/storage/databases', () => ({
+  createDatabase: host.createDatabase,
+}));
 vi.mock(
   '@app/features/block-spreadsheet/primitives/use-spreadsheet-access',
   () => ({ useSpreadsheetAccess: () => () => false })
@@ -44,7 +54,8 @@ vi.mock('@app/lib/analytics/posthog', () => ({
 vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
   isFeatureEnabled: (flag: { key: string }) =>
-    flag.key === 'enable-projects' && host.projectFlag() === true,
+    (flag.key === 'enable-projects' && host.projectFlag() === true) ||
+    (flag.key === 'enable-databases' && host.databaseFlag),
 }));
 vi.mock('@block-automation/component', () => ({}));
 vi.mock('@block-md/observability', () => ({}));
@@ -73,6 +84,7 @@ import {
 
 beforeEach(() => {
   host.projectFlag = () => true;
+  host.databaseFlag = false;
 });
 afterEach(() => {
   cleanup();
@@ -166,4 +178,55 @@ it('keeps the existing Folder action separate from Project creation', async () =
     parentId: undefined,
   });
   expect(host.popoverSplit).not.toHaveBeenCalled();
+});
+
+it('asks what a new database starts from before creating anything', () => {
+  host.databaseFlag = true;
+  setCreateMenuOpen(true);
+  host.openDatabaseTemplatePicker.mockImplementationOnce(() => {
+    // The picker takes focus ownership before the launcher closes.
+    expect(createMenuOpen()).toBe(true);
+  });
+
+  runCreateAction('database');
+
+  expect(host.openDatabaseTemplatePicker).toHaveBeenCalledOnce();
+  expect(createMenuOpen()).toBe(false);
+  expect(host.createDatabase).not.toHaveBeenCalled();
+  expect(host.openWithSplit).not.toHaveBeenCalled();
+});
+
+it('creates and opens the database from the chosen template', async () => {
+  host.databaseFlag = true;
+  const replace = vi.fn();
+  host.openWithSplit.mockReturnValueOnce({ split: { replace } });
+  host.createDatabase.mockResolvedValueOnce(ok('database-id'));
+
+  runCreateAction('database', { shouldInsert: true });
+  const [onChoose] = host.openDatabaseTemplatePicker.mock.calls[0];
+  onChoose({ name: 'CRM', template: 'crm' });
+
+  await vi.waitFor(() => {
+    expect(replace).toHaveBeenCalledExactlyOnceWith({
+      next: { type: 'database', id: 'database-id', params: undefined },
+      mergeHistory: true,
+      referredFrom: 'launcher',
+    });
+  });
+  expect(host.openWithSplit).toHaveBeenCalledExactlyOnceWith(
+    { type: 'component', id: 'loading' },
+    { referredFrom: 'launcher', preferNewSplit: true }
+  );
+  expect(host.createDatabase).toHaveBeenCalledExactlyOnceWith({
+    name: 'CRM',
+    template: 'crm',
+    source: 'create_menu',
+  });
+});
+
+it('offers no database picker while databases are off', () => {
+  runCreateAction('database');
+
+  expect(host.openDatabaseTemplatePicker).not.toHaveBeenCalled();
+  expect(host.createDatabase).not.toHaveBeenCalled();
 });
