@@ -204,6 +204,42 @@ describe('makeMarkDoneAction', () => {
     dispose();
   });
 
+  it.each(['mirror', 'ordinary'])(
+    'attempts both mixed groups when the %s group fails',
+    async (failedId) => {
+      const mirror = {
+        type: 'reminder',
+        id: 'mirror',
+        emailFollowup: { threadId: 'thread' },
+      } as EntityData;
+      const ordinary = { type: 'reminder', id: 'ordinary' } as EntityData;
+      const failure = new Error(`${failedId} failed`);
+      mocks.mutateAsync.mockImplementationOnce(async () => {
+        if (failedId === 'mirror') throw failure;
+      });
+      mocks.mutateAsync.mockImplementationOnce(async () => {
+        if (failedId === 'ordinary') throw failure;
+      });
+      const { action, dispose } = createAction();
+      const onUndoHandle = vi.fn();
+      try {
+        await expect(
+          action.execute([mirror, ordinary], undefined, { onUndoHandle })
+        ).rejects.toBe(failure);
+        expect(mocks.mutateAsync).toHaveBeenCalledTimes(2);
+        expect(mocks.mutateAsync.mock.calls[1][0]).toMatchObject({
+          entities: [ordinary],
+          onUndoHandle,
+        });
+        expect(mocks.mutateAsync.mock.calls[0][0]).toMatchObject({
+          entities: [mirror],
+        });
+      } finally {
+        dispose();
+      }
+    }
+  );
+
   it('uses the agent-session entity target while GraphQL Soup is enabled', async () => {
     mocks.graphqlSoupEnabled.mockReturnValue(true);
     mocks.resolveMarkEntitiesDoneVariables.mockReturnValue({

@@ -282,12 +282,18 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
       (entity) => entity.type === 'reminder' && entity.emailFollowup
     );
     if (mirrors.length > 0 && mirrors.length < targets.length) {
-      await execute(mirrors, undefined, { silent: opts?.silent });
-      await execute(
-        targets.filter((entity) => !mirrors.includes(entity)),
-        restoreFocus,
-        opts
-      );
+      const results = await Promise.allSettled([
+        execute(mirrors, undefined, { silent: opts?.silent }),
+        execute(
+          targets.filter((entity) => !mirrors.includes(entity)),
+          restoreFocus,
+          opts
+        ),
+      ]);
+      // Each transaction owns its error feedback and rollback. Wait for both so
+      // a failed mirror cannot suppress ordinary writes or their Undo handle.
+      const failure = results.find((result) => result.status === 'rejected');
+      if (failure) throw failure.reason;
       return;
     }
 
