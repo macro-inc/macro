@@ -6,6 +6,9 @@ use crate::{
     error::{FusionAuthClientError, GenericErrorResponse},
 };
 
+#[cfg(test)]
+mod test;
+
 /// Structured shape of FusionAuth validation error responses.
 /// See https://fusionauth.io/docs/v1/tech/apis/errors
 #[derive(serde::Deserialize, Debug, Default)]
@@ -27,6 +30,14 @@ impl FusionAuthErrorBody {
             .values()
             .flatten()
             .any(|e| e.code.starts_with("[alreadyLinked]"))
+    }
+
+    /// Returns true if FusionAuth rejected the link because no user has the requested id.
+    fn is_missing_user(&self) -> bool {
+        self.field_errors
+            .values()
+            .flatten()
+            .any(|e| e.code == "[invalid]userId")
     }
 }
 
@@ -168,13 +179,20 @@ pub(crate) async fn link_user(
                 })
             })?;
 
-            if serde_json::from_str::<FusionAuthErrorBody>(&body)
-                .ok()
+            let error_body = serde_json::from_str::<FusionAuthErrorBody>(&body).ok();
+            if error_body
                 .as_ref()
                 .is_some_and(FusionAuthErrorBody::is_already_linked)
             {
                 tracing::info!(body=%body, "fusionauth idp link already exists");
                 return Err(FusionAuthClientError::IdentityProviderLinkAlreadyExists);
+            }
+            if error_body
+                .as_ref()
+                .is_some_and(FusionAuthErrorBody::is_missing_user)
+            {
+                tracing::error!(body=%body, "fusionauth idp link target user does not exist");
+                return Err(FusionAuthClientError::UserDoesNotExist);
             }
 
             tracing::error!(body=%body, "unexpected response from fusionauth");
