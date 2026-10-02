@@ -13,6 +13,7 @@ function mentionTypeLabel(type: DatabaseEntityType): string {
     .with('CHAT', () => 'Chat')
     .with('THREAD', () => 'Email')
     .with('COMPANY', () => 'Company')
+    .with('CONTACT', () => 'Contact')
     .with('CALL_RECORD', () => 'Call')
     .with('CALENDAR_EVENT', () => 'Event')
     .with('DATABASE_ROW', () => 'Row')

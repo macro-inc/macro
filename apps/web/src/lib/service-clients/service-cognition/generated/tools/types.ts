@@ -910,6 +910,7 @@ export type EntityKind =
   | 'DOCUMENT'
   | 'TASK'
   | 'COMPANY'
+  | 'CONTACT'
   | 'CALL_RECORD'
   | 'CHANNEL'
   | 'CHAT'

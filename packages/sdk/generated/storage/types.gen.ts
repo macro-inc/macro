@@ -5532,7 +5532,7 @@ export type EntityFilters = {
 /**
  * A kind of Macro entity a reference column can point at.
  */
-export type EntityKind = 'USER' | 'DOCUMENT' | 'TASK' | 'COMPANY' | 'CALL_RECORD' | 'CHANNEL' | 'CHAT' | 'PROJECT' | 'THREAD' | 'CALENDAR_EVENT' | 'INITIATIVE';
+export type EntityKind = 'USER' | 'DOCUMENT' | 'TASK' | 'COMPANY' | 'CONTACT' | 'CALL_RECORD' | 'CHANNEL' | 'CHAT' | 'PROJECT' | 'THREAD' | 'CALENDAR_EVENT' | 'INITIATIVE';
 
 /**
  * A user's permission for an entity, discriminated by entity kind.

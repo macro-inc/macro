@@ -185,6 +185,7 @@ function referenceCount(type: DatabaseEntityType, count: number): string {
     .with('CHAT', () => ['chat', 'chats'])
     .with('THREAD', () => ['email', 'emails'])
     .with('COMPANY', () => ['company', 'companies'])
+    .with('CONTACT', () => ['contact', 'contacts'])
     .with('CALL_RECORD', () => ['call', 'calls'])
     .with('CALENDAR_EVENT', () => ['event', 'events'])
     .with('DATABASE_ROW', () => ['linked record', 'linked records'])

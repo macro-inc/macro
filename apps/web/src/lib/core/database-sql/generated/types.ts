@@ -466,6 +466,8 @@ export type EntityKind =
   | 'TASK'
   /**  CRM companies. */
   | 'COMPANY'
+  /**  CRM contacts. */
+  | 'CONTACT'
   /**  Call recordings. */
   | 'CALL_RECORD'
   /**  Channels. */
@@ -803,6 +805,8 @@ export type OpEntityKind =
   | 'TASK'
   /**  CRM companies. */
   | 'COMPANY'
+  /**  CRM contacts. */
+  | 'CONTACT'
   /**  Call recordings. */
   | 'CALL_RECORD'
   /**  Channels. */

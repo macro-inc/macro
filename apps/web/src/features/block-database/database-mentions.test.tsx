@@ -121,6 +121,13 @@ function setup(overrides: Partial<DatabaseMentionPickerProps> = {}) {
 }
 
 describe('native database mention adapter', () => {
+  it('restricts CRM contacts to the contact bucket', () => {
+    expect(databaseMentionScope('CONTACT')).toEqual({
+      sources: ['documents'],
+      documentBuckets: ['crm_contact'],
+    });
+  });
+
   it('uses canonical data IDs for users and tasks, not search index IDs', () => {
     expect(databaseMentionFromItem(ada)).toEqual({
       id: 'macro|ada@example.com',

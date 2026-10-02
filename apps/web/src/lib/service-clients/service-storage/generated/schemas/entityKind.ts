@@ -16,6 +16,7 @@ export const EntityKind = {
   DOCUMENT: 'DOCUMENT',
   TASK: 'TASK',
   COMPANY: 'COMPANY',
+  CONTACT: 'CONTACT',
   CALL_RECORD: 'CALL_RECORD',
   CHANNEL: 'CHANNEL',
   CHAT: 'CHAT',

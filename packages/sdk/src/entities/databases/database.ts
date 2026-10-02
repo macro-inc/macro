@@ -162,6 +162,7 @@ const entityLabels: Record<EntityKind, string> = {
   DOCUMENT: 'Documents',
   TASK: 'Tasks',
   COMPANY: 'Companies',
+  CONTACT: 'Contacts',
   CALL_RECORD: 'Calls',
   CHANNEL: 'Channels',
   CHAT: 'Chats',
