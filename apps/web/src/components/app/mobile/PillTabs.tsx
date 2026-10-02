@@ -297,7 +297,7 @@ function ScrollablePillTabs<T extends string>(props: PillTabsProps<T>) {
         ] as const,
       () => {
         if (!stripSize.width) return;
-        queueMicrotask(() => {
+        const frame = requestAnimationFrame(() => {
           const strip = stripRef();
           const active = strip?.querySelector<HTMLElement>('[data-checked]');
           if (!strip || !active) return;
@@ -312,14 +312,15 @@ function ScrollablePillTabs<T extends string>(props: PillTabsProps<T>) {
           const itemRight = itemLeft + itemRect.width;
           const viewRight = strip.scrollLeft + strip.clientWidth;
           if (itemLeft - minLeft < strip.scrollLeft) {
-            strip.scrollTo({ left: itemLeft - minLeft, behavior: 'smooth' });
+            strip.scrollTo({ left: itemLeft - minLeft, behavior: 'instant' });
           } else if (itemRight + padRight > viewRight) {
             strip.scrollTo({
               left: itemRight + padRight - strip.clientWidth,
-              behavior: 'smooth',
+              behavior: 'instant',
             });
           }
         });
+        onCleanup(() => cancelAnimationFrame(frame));
       }
     )
   );
