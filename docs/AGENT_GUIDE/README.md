@@ -1,11 +1,13 @@
 # Agent Guide to the Macro App
 
-How an automated agent (driving a real browser via the chrome-devtools MCP server, or
-observing via the Grafana MCP server) should operate the Macro web app. Everything here was
-verified live against a local stack (`just run_local`).
+How an automated agent should operate Macro. The native iPhone guide covers the
+SwiftUI/UIKit client and its isolated fixtures. The web guides cover browser
+operation and observability, with examples verified against a local stack
+(`just run_local`).
 
 | File | Contents |
 | --- | --- |
+| [native-ios.md](native-ios.md) | Standalone native iPhone app: navigation, messaging, calendar, email, agents, settings, and fixture verification |
 | [login.md](login.md) | Passwordless login end to end, Mailpit, known crash + recovery |
 | [navigation.md](navigation.md) | Routes, sidebar, command menu, keyboard model, splits |
 | [documents.md](documents.md) | Creating docs, typing in the editor, AI edit, comments, side panel |
