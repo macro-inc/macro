@@ -361,3 +361,16 @@ async fn an_unconfirmed_submission_never_sends_an_extra_enter_or_reports_success
     );
     adapter.shutdown.cancel();
 }
+
+#[test]
+fn configured_models_are_advertised_even_when_not_in_the_builtin_catalog() {
+    let options = config_options(TuiAgent::Codex, "custom-model");
+    assert_eq!(options[0]["currentValue"], "custom-model");
+    assert!(
+        options[0]["options"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|option| option["value"] == "custom-model")
+    );
+}

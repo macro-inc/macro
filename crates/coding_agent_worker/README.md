@@ -49,3 +49,17 @@ native launch/resume, not injected into an already-running process.
 Codex's documented [MCP configuration](https://learn.chatgpt.com/docs/extend/mcp?surface=cli)
 and [configuration reference](https://learn.chatgpt.com/docs/config-file/config-reference)
 describe `env_http_headers` and per-server configuration.
+
+### Setup
+
+Start macrod inside Herdr and choose **Claude Code in herdr** or **Codex in
+herdr** in Quickstart. Select a workspace directory containing your existing
+clones and pair with Macro. Native CLI authentication and Git credentials are
+reused. Each instance has one configuration, with no profiles to choose per run.
+
+The Config tab adds **Model** (empty uses the native default), **Extra args**
+(shell-style quoting), **Storage** (empty uses automatic instance storage), and
+**Open sessions** (foreground or background). Switching agents clears the
+previous agent's model and extra arguments. Storage and focus preferences remain.
+Session metadata stays in the instance directory even with custom worktree storage.
+Choose a repository in Macro's composer; local sessions always start from `main`.

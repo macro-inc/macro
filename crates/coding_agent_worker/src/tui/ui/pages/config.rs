@@ -7,13 +7,14 @@ use super::super::layout::render_input;
 use super::super::theme::{ACCENT, DIM, WARN, card, focus_marker, focus_style};
 use crate::config::IdentityScope;
 use crate::tui::app::{App, Mode};
-use crate::tui::config_form::SETTINGS;
+use crate::tui::config_form::settings;
 
 pub(super) fn render(frame: &mut Frame, app: &App, area: Rect) {
     let block = card(format!("macrod.toml  ·  {}", app.config_path.display()));
     let inner = block.inner(area);
     frame.render_widget(block, area);
-    for (index, setting) in SETTINGS.iter().enumerate() {
+    let settings = settings(&app.config);
+    for (index, setting) in settings.iter().enumerate() {
         let selected = index == app.selected_setting;
         let row = Rect {
             y: inner.y + index as u16,
@@ -55,13 +56,13 @@ pub(super) fn render(frame: &mut Frame, app: &App, area: Rect) {
         frame.render_widget(
             Paragraph::new("Warning: agents can run commands and edit files without approval.\nApplies at next pairing.")
                 .style(Style::new().fg(WARN)),
-            Rect { y: inner.y + SETTINGS.len() as u16 + 2, height: 2, ..inner },
+            Rect { y: inner.y + settings.len() as u16 + 2, height: 2, ..inner },
         );
     }
     if app.config.identity.scope == IdentityScope::Team {
         let warning = Rect {
             x: inner.x,
-            y: inner.y + SETTINGS.len() as u16 + 1,
+            y: inner.y + settings.len() as u16 + 1,
             width: inner.width,
             height: 1,
         };
