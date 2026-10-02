@@ -460,6 +460,8 @@ async fn check_control_delivery(kind: TuiAgent, command: &str, reject: bool) {
         .load_session(&json!({"sessionId":id,"cwd":root.path()}))
         .await
         .unwrap();
+    // Loading may inspect the native footer; only command delivery is under test.
+    std::fs::write(&calls, "").unwrap();
     let session = adapter.session(&json!({"sessionId":id})).unwrap();
     let outcome = tokio::time::timeout(Duration::from_secs(2), adapter.prompt(&session, command))
         .await

@@ -14,6 +14,7 @@ const LEVELS: &[(&str, &str)] = &[
     ("ultra", "Ultra"),
 ];
 const FOOTER: &str = "Press enter to confirm or esc to go back";
+pub(super) const CONFIG_ID: &str = "reasoning_effort";
 
 /// Never reinterpret multiline prompts or longer prose as a setting change.
 pub(super) fn command(text: &str) -> Option<Result<Option<&str>, RpcError>> {
@@ -40,6 +41,77 @@ pub(super) fn command(text: &str) -> Option<Result<Option<&str>, RpcError>> {
 }
 
 impl Adapter {
+    /// Return the complete ACP snapshot consumed by Macro's model/effort menu.
+    /// Until the native footer confirms an effort, don't guess from defaults.
+    pub(super) fn session_options(&self, session: &Session) -> Value {
+        let model = lock(&session.model).clone();
+        let mut options = self.model_options(&model);
+        if self.options.kind == TuiAgent::Codex
+            && let Some(current) = lock(&session.effort).as_deref()
+            && let Some(preset) = self.codex_preset(&model)
+            && let Some(levels) = preset["supported_reasoning_levels"].as_array()
+        {
+            let mut choices: Vec<_> = levels
+                .iter()
+                .filter_map(|level| {
+                    let value = level["effort"].as_str()?;
+                    let name = LEVELS.iter().find(|(id, _)| *id == value)?.1;
+                    Some(json!({"value":value,"name":name}))
+                })
+                .collect();
+            if !choices.is_empty() {
+                if !choices.iter().any(|choice| choice["value"] == current) {
+                    choices.push(json!({"value":current,"name":current}));
+                }
+                options
+                    .as_array_mut()
+                    .expect("model options are an array")
+                    .push(json!({
+                        "id":CONFIG_ID,"name":"Reasoning effort","category":"thought_level",
+                        "type":"select","currentValue":current,"options":choices,
+                    }));
+            }
+        }
+        options
+    }
+
+    fn codex_preset(&self, model: &str) -> Option<Value> {
+        let bytes = std::fs::read(self.home.as_ref()?.join(".codex/models_cache.json")).ok()?;
+        let cache: Value = serde_json::from_slice(&bytes).ok()?;
+        cache["models"]
+            .as_array()?
+            .iter()
+            .find(|entry| entry["slug"] == model)
+            .cloned()
+    }
+
+    pub(super) async fn set_effort(
+        &self,
+        session: &Session,
+        value: &str,
+    ) -> Result<Value, RpcError> {
+        tokio::time::timeout(Duration::from_secs(20), async {
+            if session.prompt_pending.load(Ordering::SeqCst) {
+                return Err(RpcError::invalid("cannot change effort during a turn"));
+            }
+            let guard = tokio::time::timeout(Duration::from_secs(3), session.live.lock())
+                .await
+                .map_err(|_| RpcError::invalid("native session is busy; retry the selection"))?;
+            if session.prompt_pending.load(Ordering::SeqCst) {
+                return Err(RpcError::invalid("cannot change effort during a turn"));
+            }
+            let live = guard.as_ref().ok_or_else(|| {
+                RpcError::invalid("start the native session before selecting effort")
+            })?;
+            self.codex_effort(session, live, Some(value)).await?;
+            Ok(json!({"configOptions":self.session_options(session)}))
+        })
+        .await
+        .map_err(|_| {
+            RpcError::internal("effort change was not confirmed; check the native session in Herdr")
+        })?
+    }
+
     pub(super) async fn codex_effort(
         &self,
         session: &Session,
@@ -62,15 +134,8 @@ impl Adapter {
                 "cannot read Codex's active model and effort; return to its composer in Herdr",
             )
         })?;
-        let catalog = self
-            .home
-            .as_ref()
-            .and_then(|home| std::fs::read(home.join(".codex/models_cache.json")).ok())
-            .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok());
-        let preset = catalog
-            .as_ref()
-            .and_then(|cache| cache["models"].as_array())
-            .and_then(|models| models.iter().find(|entry| entry["slug"] == model));
+        let preset = self.codex_preset(model);
+        let preset = preset.as_ref();
         let choices: Vec<_> = preset
             .and_then(|preset| preset["supported_reasoning_levels"].as_array())
             .into_iter()
@@ -78,6 +143,7 @@ impl Adapter {
             .filter_map(|level| level["effort"].as_str())
             .collect();
         let Some(requested) = requested else {
+            self.report_settings(session, live, model, Some(current))?;
             let options = if choices.is_empty() {
                 "Use /effort <level>, e.g. /effort high. The native picker validates availability."
                     .to_owned()
@@ -102,7 +168,9 @@ impl Adapter {
         } else {
             requested
         };
-        if !choices.is_empty() && !choices.contains(&wanted) {
+        if !LEVELS.iter().any(|(id, _)| *id == wanted)
+            || (!choices.is_empty() && !choices.contains(&wanted) && current != wanted)
+        {
             return Err(RpcError::invalid(format!(
                 "{model} supports: {}",
                 choices.join(", ")
@@ -112,7 +180,7 @@ impl Adapter {
             self.native_selection(session, live, model, Some(wanted))
                 .await?;
         }
-        self.report_model(session, live, model)?;
+        self.report_settings(session, live, model, Some(wanted))?;
         Ok(format!(
             "Codex is now using **{wanted}** effort with **{model}**."
         ))

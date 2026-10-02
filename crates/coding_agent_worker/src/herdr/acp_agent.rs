@@ -287,6 +287,7 @@ struct Session {
     cwd: PathBuf,
     mcp_servers: Vec<Value>,
     model: Mutex<String>,
+    effort: Mutex<Option<String>>,
     native_id: Mutex<Option<String>>,
     prompt_pending: AtomicBool,
     live: tokio::sync::Mutex<Option<Live>>,
@@ -426,14 +427,17 @@ impl Adapter {
             "session/load" => self.load_session(&params).await,
             "session/set_config_option" => {
                 let session = self.session(&params)?;
-                if params.get("configId").and_then(Value::as_str) != Some(MODEL_CONFIG_ID) {
-                    return Err(RpcError::invalid("unsupported configuration option"));
-                }
-                let model = params
+                let value = params
                     .get("value")
                     .and_then(Value::as_str)
-                    .ok_or_else(|| RpcError::invalid("missing model"))?;
-                self.set_model(&session, model).await
+                    .ok_or_else(|| RpcError::invalid("missing configuration value"))?;
+                match params.get("configId").and_then(Value::as_str) {
+                    Some(MODEL_CONFIG_ID) => self.set_model(&session, value).await,
+                    Some(effort::CONFIG_ID) if self.options.kind == TuiAgent::Codex => {
+                        self.set_effort(&session, value).await
+                    }
+                    _ => Err(RpcError::invalid("unsupported configuration option")),
+                }
             }
             "session/prompt" => {
                 let session = self.session(&params)?;
@@ -471,6 +475,7 @@ impl Adapter {
                     .unwrap_or_else(|| DEFAULT_MODEL.to_owned()),
             ),
             native_id: Mutex::new(None),
+            effort: Mutex::new(None),
             prompt_pending: AtomicBool::new(false),
             live: tokio::sync::Mutex::new(None),
             cancel: Mutex::new(None),
@@ -478,7 +483,7 @@ impl Adapter {
         self.save(&session, None)?;
         lock(&self.sessions).insert(id.clone(), session.clone());
         self.observe(&session);
-        Ok(json!({"sessionId": id, "configOptions": self.model_options(&lock(&session.model))}))
+        Ok(json!({"sessionId": id, "configOptions": self.session_options(&session)}))
     }
 
     fn save(&self, session: &Session, live: Option<&Live>) -> Result<(), RpcError> {
@@ -551,6 +556,7 @@ impl Adapter {
                 .cloned()
                 .unwrap_or_default(),
             model: Mutex::new(record.model.clone()),
+            effort: Mutex::new(None),
             native_id: Mutex::new(record.native_id),
             prompt_pending: AtomicBool::new(false),
             live: tokio::sync::Mutex::new(None),
@@ -564,10 +570,11 @@ impl Adapter {
                 break;
             }
         }
+        self.sync_model(&session, &live).await;
         *session.live.lock().await = Some(live);
         lock(&self.sessions).insert(id.to_owned(), session.clone());
         self.observe(&session);
-        Ok(json!({"configOptions": self.model_options(&lock(&session.model))}))
+        Ok(json!({"configOptions": self.session_options(&session)}))
     }
 
     fn observe(self: &Arc<Self>, session: &Arc<Session>) {
